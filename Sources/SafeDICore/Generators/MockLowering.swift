@@ -18,83 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Stage D1's shadow: while `observer` is set, which only the tests do, `generateMockCode` lowers each mock root again from
-/// its finished generator tree (`ScopeGenerator.lowerMockRoot(context:)`) and hands the observer how that lowering compares
-/// with the code the emitter generated. What the tool returns is always the emitter's: the lowering reads only finished
-/// generators and the module's frozen maps, and writes nothing they hold, so setting the observer changes no output.
-public enum MockLoweringShadow {
-	/// Called once per mock root the module generates code for, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (Comparison) -> Void)?
-
-	/// How the lowering of one mock root compares with the code the emitter generated for it.
-	public struct Comparison: Sendable, Equatable {
-		/// The mocked type, as the generated code spells it.
-		public let mockedType: String
-		public let outcome: Outcome
-		/// What the comparison compares: the root's mock code unless set.
-		public let subject: Subject
-
-		public init(mockedType: String, outcome: Outcome, subject: Subject = .mockCode) {
-			self.mockedType = mockedType
-			self.outcome = outcome
-			self.subject = subject
-		}
-	}
-
-	/// What one comparison compares.
-	public enum Subject: Sendable, Equatable {
-		/// A mock root's code as the emitter generates it, before the configuration structs are merged into it.
-		case mockCode
-		/// A mock root's code with the configuration struct of its own type merged into it, as the tool returns it.
-		case mergedCode
-		/// The module's shared configuration code (`MockGenerationResult.mockConfigurationCode`), absent included.
-		case moduleConfigurations
-		// D1 lane hook (lane B): the imports of that code, read from the records (`MockLowering+Configurations.swift`).
-		/// The declarations the module's shared configuration code builds whose modules it imports
-		/// (`MockGenerationResult.mockConfigurationFulfillers`), one per line in sorted order, none included.
-		case moduleConfigurationFulfillers
-		// D1 lane hook (lane D): the one-way check read from the records (`MockLowering+OneWay.swift`).
-		/// The module's diagnostics of types built both with and without their hand-written mocks
-		/// (`validateConfigurationsAreBuiltOneWay`), none included.
-		case oneWayDiagnostics
-		// D1 lane hook (lane D): `query needs` read from the lowering's signature (`MockLowering+Signature.swift`).
-		/// The uncovered parameters `query needs` reports of a mock root (`MockRootParameters.flatUncoveredParameters`).
-		case queryNeeds
-	}
-
-	public enum Outcome: Sendable, Equatable {
-		/// The lowering's code is the emitter's, byte for byte.
-		case identical
-		/// The lowering's code differs from the emitter's, first at `line` (counted from 1): `emitted` is the emitter's line
-		/// there and `lowered` the lowering's, `nil` past either one's end.
-		case differs(line: Int, emitted: String?, lowered: String?)
-		/// The lowering met a construct whose rule it does not lower yet.
-		case unsupported(MockLowering.Rule)
-	}
-
-	/// How `lowered` compares with `emitted`, byte for byte, line by line.
-	public static func outcome(comparing lowered: MockLowering.Result, with emitted: String) -> Outcome {
-		switch lowered {
-		case let .unsupported(rule):
-			return .unsupported(rule)
-		case let .lowered(loweredCode, _):
-			guard !loweredCode.utf8.elementsEqual(emitted.utf8) else { return .identical }
-			let emittedLines = emitted.split(separator: "\n", omittingEmptySubsequences: false)
-			let loweredLines = loweredCode.split(separator: "\n", omittingEmptySubsequences: false)
-			let index = zip(emittedLines, loweredLines).enumerated()
-				.first { !$0.element.0.utf8.elementsEqual($0.element.1.utf8) }?.offset
-				?? min(emittedLines.count, loweredLines.count)
-			return .differs(
-				line: index + 1,
-				emitted: index < emittedLines.count ? String(emittedLines[index]) : nil,
-				lowered: index < loweredLines.count ? String(loweredLines[index]) : nil,
-			)
-		}
-	}
-}
-
-/// Stage D1's lowering of a mock root's code from its finished generator tree, which replaces the mock emitter once it
-/// generates every root's code byte for byte (`/mnt/project-files/designs/generator-architecture/d1-design-note.md`).
+/// Mock generation: lowers each mock root's code from its finished generator tree, reading the generators and the
+/// module's frozen maps and writing nothing they hold.
 public enum MockLowering {
 	/// A rule of mock generation, as the lowering reports one it does not lower yet: the first such construct it meets in
 	/// a root decides the root's outcome, so a gap is counted, never guessed at.

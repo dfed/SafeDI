@@ -1055,7 +1055,7 @@ extension MockLowering {
 			indent: String,
 			lines: inout [String],
 		) -> BuiltNodeStart {
-			let (instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = built
+			let (instantiable, property, _, erasedToConcreteExistential, _, seamCall) = built
 			let renamedFunctionName = pendingRenamedFunctionName
 			pendingRenamedFunctionName = nil
 			// A mock builds every seam inline, so no scope of its tree calls one.

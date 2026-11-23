@@ -486,59 +486,6 @@ extension MockLowering.ConfigurationRecord {
 	private static let builderDocumentation = "Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used."
 }
 
-extension MockLoweringShadow {
-	/// How the configurations lowered from `roots`' records compare with those the emitter generated: one comparison of
-	/// each root's merged code, then one of the module's shared configuration code, `emittedConfigurationCode`.
-	static func configurationComparisons(
-		of roots: [MockLowering.LoweredRoot],
-		emittedConfigurationCode: String?,
-		// D1 lane hook (lane B): the imports of the emitter's shared configuration code.
-		emittedConfigurationFulfillers: Set<FulfillerImports.Fulfiller>,
-		mockConditionalCompilation: String?,
-		sendableConfigurationTypeNames: Set<String>,
-		publicMockContext: PublicMockContext?,
-	) -> [Comparison] {
-		var comparisons = [Comparison]()
-		switch MockLowering.configurationCode(
-			of: roots,
-			mockConditionalCompilation: mockConditionalCompilation,
-			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-			publicMockContext: publicMockContext,
-		) {
-		case let .lowered((mergedCodes, configurationCode, fulfillers)):
-			for (root, mergedCode) in zip(roots, mergedCodes) {
-				comparisons.append(Comparison(
-					mockedType: root.mockedType.asSource,
-					outcome: outcome(comparing: .lowered(mergedCode), with: root.emittedMergedCode),
-					subject: .mergedCode,
-				))
-			}
-			comparisons.append(Comparison(
-				mockedType: "",
-				outcome: outcome(comparing: .lowered(configurationCode ?? ""), with: emittedConfigurationCode ?? ""),
-				subject: .moduleConfigurations,
-			))
-			comparisons.append(Comparison(
-				mockedType: "",
-				outcome: outcome(comparing: .lowered(Self.lines(of: fulfillers)), with: Self.lines(of: emittedConfigurationFulfillers)),
-				subject: .moduleConfigurationFulfillers,
-			))
-		case let .unsupported(rule):
-			for root in roots {
-				comparisons.append(Comparison(mockedType: root.mockedType.asSource, outcome: .unsupported(rule), subject: .mergedCode))
-			}
-			comparisons.append(Comparison(mockedType: "", outcome: .unsupported(rule), subject: .moduleConfigurations))
-			comparisons.append(Comparison(mockedType: "", outcome: .unsupported(rule), subject: .moduleConfigurationFulfillers))
-		}
-		return comparisons
-	}
-
-	/// `fulfillers`, one per line, in sorted order.
-	private static func lines(of fulfillers: Set<FulfillerImports.Fulfiller>) -> String {
-		fulfillers.map(\.shadowDescription).sorted().joined(separator: "\n")
-	}
-}
-
 extension MockLowering.DefaultField {
 	// D1 lane hook (lane C): a default-valued field of a configuration `@Sendable`-typed.
 	/// The field's parameter of a configuration `@Sendable`-typed, at `indent`, and the field its storage holds: a closure

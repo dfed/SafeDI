@@ -131,32 +131,3 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError.ConfigurationBuil
 		)
 	}
 }
-
-extension MockLoweringShadow {
-	/// How the one-way check read from `roots`' records compares with the emitter's, whose diagnostics are
-	/// `emittedDiagnostics`, in source order: one comparison for the module.
-	static func oneWayComparison(
-		of roots: [(mockedType: TypeDescription, lowered: MockLowering.Result)],
-		mockDeclarationLocations: [TypeDescription: Set<Dependency.DeclarationLocation?>],
-		emittedDiagnostics: [SourceDiagnostic],
-	) -> Comparison {
-		switch MockLowering.configurationsBuiltTwoWays(of: roots, mockDeclarationLocations: mockDeclarationLocations) {
-		case let .lowered(conflicts):
-			let loweredDiagnostics = conflicts.flatMap(\.sourceDiagnostics).sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			return Comparison(
-				mockedType: "",
-				outcome: outcome(comparing: .lowered(Self.text(of: loweredDiagnostics)), with: Self.text(of: emittedDiagnostics)),
-				subject: .oneWayDiagnostics,
-			)
-		case let .unsupported(rule):
-			return Comparison(mockedType: "", outcome: .unsupported(rule), subject: .oneWayDiagnostics)
-		}
-	}
-
-	/// Each diagnostic on a line of its own, its location before its message.
-	private static func text(of diagnostics: [SourceDiagnostic]) -> String {
-		diagnostics.map { diagnostic in
-			"\(diagnostic.location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "-"): \(diagnostic.message)"
-		}.joined(separator: "\n")
-	}
-}

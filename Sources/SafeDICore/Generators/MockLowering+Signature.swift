@@ -338,7 +338,7 @@ extension ScopeGenerator {
 			}
 			let receivedLabels = receivedProperties.map(\.label)
 			guard !receivedProperties.contains(where: { property in
-				guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { return false }
+				guard property.typeDescription.lazilyInstantiatedInstanceType != nil else { return false }
 				return receivedLabels.count(where: { $0 == property.label }) > 1
 			}) else { return .unsupported(.wrapper) }
 		} else {
@@ -892,42 +892,5 @@ extension ScopeGenerator {
 			passedUpBuilderFamilies: passedUpBuilderFamilies,
 			builderFunctionNames: builderFunctionNames,
 		)
-	}
-}
-
-extension MockLoweringShadow {
-	/// How the uncovered parameters `query needs` reports of the mock root `mockRoot`, whose mocked type is `instantiable`,
-	/// read from the lowering's signature, compare with `emitted`, the emitter's (`MockRootParameters.flatUncoveredParameters`).
-	static func queryComparison(
-		of mockRoot: ScopeGenerator,
-		instantiable: Instantiable,
-		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
-		emitted: [ScopeGenerator.MockRootParameters.UncoveredParameter],
-	) async -> Comparison {
-		let outcome = await mockRoot.queryNeedsOutcome(of: instantiable, flatParameterMockDefaults: flatParameterMockDefaults, comparingWith: text(of: emitted))
-		return Comparison(mockedType: instantiable.concreteInstantiable.asSource, outcome: outcome, subject: .queryNeeds)
-	}
-
-	/// Each parameter on a line of its own, as `query needs` reads it: its name, type, instantiated type and creating types.
-	fileprivate static func text(of parameters: [ScopeGenerator.MockRootParameters.UncoveredParameter]) -> String {
-		parameters.map { parameter in
-			"\(parameter.label): \(parameter.typeSource) (\(parameter.instantiatedType.asSource)) created by \(parameter.creatingTypes.map(\.asSource).joined(separator: ", "))"
-		}.joined(separator: "\n")
-	}
-}
-
-extension ScopeGenerator {
-	/// How the uncovered parameters of this mock root's lowered signature compare with `emittedText`.
-	fileprivate func queryNeedsOutcome(
-		of instantiable: Instantiable,
-		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
-		comparingWith emittedText: String,
-	) -> MockLoweringShadow.Outcome {
-		switch lowerRootSignature(of: instantiable, flatParameterMockDefaults: flatParameterMockDefaults) {
-		case let .lowered(signature):
-			MockLoweringShadow.outcome(comparing: .lowered(MockLoweringShadow.text(of: signature.uncoveredRootParameters)), with: emittedText)
-		case let .unsupported(rule):
-			.unsupported(rule)
-		}
 	}
 }
