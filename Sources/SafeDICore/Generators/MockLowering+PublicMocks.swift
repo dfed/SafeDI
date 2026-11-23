@@ -140,8 +140,7 @@ extension ScopeGenerator {
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
 	) -> MockLowering.Result {
-		// The uncovered parameters of a public mock are not lowered yet.
-		guard let publicMockContext = context.publicMockContext, signature.uncoveredParameters.isEmpty else { return .unsupported(.publicMockRoot) }
+		guard let publicMockContext = context.publicMockContext else { return .unsupported(.publicMockRoot) }
 		// Each dependency the mock promotes to its root is an optional parameter, named as the node's binding, which the walk
 		// binds the node from. A name the parameters take apart from the binding's is not lowered yet.
 		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
@@ -278,7 +277,7 @@ extension ScopeGenerator {
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedParameters: signature.flatReceivedParameters.map { (property: $0.property, name: $0.name) },
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
-			flatUncoveredParameters: [],
+			flatUncoveredParameters: signature.uncoveredRootParameters,
 			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides,
 			wrapperParameterByInstance: [:],
