@@ -430,7 +430,7 @@ extension MockLowering {
 		var configurationRecords = [ConfigurationRecord]()
 		/// The default-valued parameters of each type's hand-written mock, by concrete type, whose defaults the fields of the
 		/// type's configuration take (`MockLowering+Defaults.swift`).
-		var handWrittenMockDefaultParameters = [TypeDescription: [ScopeGenerator.MockParameterNode.DefaultParameter]]()
+		var handWrittenMockDefaultParameters = [TypeDescription: [ScopeGenerator.DefaultParameter]]()
 		/// The constructions the walk has worked out, which every later node of the same type and declaration shares, as the
 		/// emitter's nodes share theirs (`ScopeGenerator.MockConstructions`).
 		var mockConstructions = ScopeGenerator.MockConstructions()

@@ -188,7 +188,7 @@ extension ScopeGenerator {
 		context: PublicMockContext,
 		cycleEdges: Set<CycleEdge>,
 		requiresSendable: Bool,
-		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+		handWrittenMockDefaultParameters: [DefaultParameter],
 	) -> String {
 		let concreteType = node.concreteType
 		let admittedModules: Set<String?> = [context.moduleName, context.moduleNameByType[concreteType]]
@@ -290,11 +290,11 @@ extension ScopeGenerator {
 	/// The default-valued parameters of `node`, each with the expression a public mock resolves it with: its type's
 	/// hand-written mock's default of the same label and type when the mock declares one, as the type's internal
 	/// configuration struct resolves it, whichever way the node is built. Each is in its public mock form
-	/// (`MockParameterNode.DefaultParameter.publicMockForm`).
+	/// (`DefaultParameter.publicMockForm`).
 	static func publicDefaultParameters(
 		of node: MockParameterNode,
-		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
-	) -> [MockParameterNode.DefaultParameter] {
+		handWrittenMockDefaultParameters: [DefaultParameter],
+	) -> [DefaultParameter] {
 		node.defaultParameters.map { defaultParameter in
 			let handWrittenDefault = handWrittenMockDefaultParameters.first(where: {
 				$0.isDefault(forParameterLabeled: defaultParameter.label, ofType: defaultParameter.typeDescription)
@@ -412,12 +412,12 @@ extension ScopeGenerator {
 		constructionNodes: [MockParameterNode],
 		requiresSendable: Bool,
 		context: PublicMockContext,
-		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+		handWrittenMockDefaultParameters: [DefaultParameter],
 	) -> [String] {
 		let concreteType = node.concreteType
 		let admittedModules: Set<String?> = [context.moduleName, context.moduleNameByType[concreteType]]
 		/// The defaults of `constructionNode` whose providers its construction function's callers can call.
-		func providedDefaultParameters(of constructionNode: MockParameterNode) -> [MockParameterNode.DefaultParameter] {
+		func providedDefaultParameters(of constructionNode: MockParameterNode) -> [DefaultParameter] {
 			publicDefaultParameters(of: constructionNode, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
 				.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
 		}
@@ -426,7 +426,7 @@ extension ScopeGenerator {
 		// both resolve to the hand-written mock's (`publicDefaultParameters`), and an optional value type is the declared
 		// one, so two providers of one label differ in the type they return, and each call resolves to the provider its
 		// argument's type selects (`SafeDIToolPublicMockSharedConstructionTests`).
-		var providers = [MockParameterNode.DefaultParameter]()
+		var providers = [DefaultParameter]()
 		for defaultParameter in ([node] + constructionNodes).flatMap(providedDefaultParameters(of:))
 			where !providers.contains(where: {
 				$0.label == defaultParameter.label
@@ -465,7 +465,7 @@ extension ScopeGenerator {
 	private static func publicConstructionFunction(
 		for node: MockParameterNode,
 		builderType: String,
-		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+		handWrittenMockDefaultParameters: [DefaultParameter],
 	) -> [String] {
 		let concreteType = node.concreteType
 		let dependencyLabels = Set(node.dependencies.map(\.property.label))
@@ -563,74 +563,9 @@ struct PublicMockEmission: Sendable {
 	/// `@Sendable` closure.
 	let sendableConfigurationTypeNames: Set<String>
 
-	/// The emission beneath the mock root's level, where no node is built for a received dependency.
-	var beneathRoot: PublicMockEmission {
-		PublicMockEmission(promotedParameterNames: [:], context: context, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
-	}
 }
 
 extension ScopeGenerator {
-	/// The arguments a public mock passes the construction function of `node`, which needs a configuration: each of its
-	/// call-site arguments, a default read from its configuration where the override is reachable, or else `nil` for a
-	/// non-optional default, which the function resolves, and the provider's value for an optional one.
-	static func publicBuilderArguments(
-		for node: MockParameterNode,
-		nodePath: String,
-		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
-		uncoveredDependencyNames: [String: [TypeDescription: String]],
-		sendableOverrideExtractor: SendableOverrideExtractor?,
-		overrideReachable: Bool,
-		emission: PublicMockEmission,
-		bindingNamesPassedByName: [String: String],
-	) -> [String] {
-		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
-		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
-		let defaultParametersByLabel = Dictionary(grouping: node.defaultParameters, by: \.label).compactMapValues(\.first)
-		let relativePath = GeneratedCodeText.overrideRelativePath(of: nodePath)
-		let storesDefaultsAsClosures = emission.sendableConfigurationTypeNames.contains(node.concreteType.asSource)
-		return node.callSiteArguments.map { argument in
-			if let dependency = dependenciesByLabel[argument.innerLabel] {
-				return dependencyArgument(
-					argument,
-					of: dependency,
-					for: node,
-					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
-					uncoveredDependencyNames: uncoveredDependencyNames,
-					bindingNamesPassedByName: bindingNamesPassedByName,
-				)
-			} else if overrideReachable {
-				let expression = if let sendableOverrideExtractor {
-					sendableOverrideExtractor.extract("\(nodePath).\(argument.label)", localNameSuffix: "\(relativePath)_\(argument.label)")
-				} else {
-					"\(nodePath).\(argument.label)"
-				}
-				return storesDefaultsAsClosures ? "\(expression)()" : expression
-			} else if let defaultParameter = defaultParametersByLabel[argument.label]?.publicMockForm,
-			          defaultParameter.valueTypeDescription.isOptional,
-			          defaultParameter.defaultExpression != "nil"
-			{
-				// No configuration holds the default beneath a pruned edge, so the provider evaluates it.
-				return "\(node.concreteType.asSource).\(PublicMockContext.providerName(label: argument.label))()"
-			} else {
-				return "nil"
-			}
-		}
-	}
-
-	/// The expression that builds `node`, which needs a configuration, in a public mock: a call of its construction
-	/// function (`publicConstructionFunctions`), passed `overrideExpression`'s builder, wrapped in the existential an
-	/// erased node is declared as.
-	static func publicConstructionExpression(
-		for node: MockParameterNode,
-		overrideExpression: String?,
-		arguments: [String],
-	) -> String {
-		let labeledArguments = zip(node.callSiteArguments, arguments).map { argument, value in
-			"\(argument.innerLabel.spelledAsArgumentLabel): \(value)"
-		} + ["\(ReservedName.configurationBuilderPropertyName): \(overrideExpression ?? "nil")"]
-		let call = "\(node.concreteType.asSource).\(publicConstructionFunctionName(of: node))(\(labeledArguments.joined(separator: ", ")))"
-		return node.erasedToConcreteExistential ? "\(node.concreteExistentialType.asSource)(\(call))" : call
-	}
 
 	/// An expression that evaluates to the value the caller passed as `parameterName`, when it passed one, and
 	/// otherwise to `construction`, which may be an `if` expression itself.
@@ -1353,40 +1288,6 @@ extension ScopeGenerator {
 			}
 		}
 		return lines
-	}
-}
-
-extension ScopeGenerator {
-	/// The `public struct SafeDIOverrides` of a public mock: a member for each node at the mock root's level, as an
-	/// internal mock's holds it, each as visible as its types, with an initializer for each access a member has. The
-	/// mocked type's own default-valued parameters are parameters of `mock()` (`publicMockPlan`).
-	static func publicSafeDIOverridesStruct(
-		rootChildren: [MockParameterNode],
-		rootLabelMap: [String: [TypeDescription: String]],
-		mockedType: Instantiable,
-		context: PublicMockContext,
-		indent: String,
-	) -> String {
-		// A child whose call can hand its override closure no builder a person writes has no member
-		// (`MockParameterNode.offersOverrideClosure`).
-		let members = MockParameterNode.inInlineOrder(rootChildren.filter(\.offersOverrideClosure)).map { child in
-			publicMember(
-				for: child,
-				named: disambiguatedLabel(for: child, labelMap: rootLabelMap),
-				context: context,
-				admittedModules: [context.moduleName, mockedType.moduleName, context.moduleNameByType[child.concreteType]],
-				requiresSendable: false,
-			)
-		}
-		var lines = [String]()
-		lines.append("\(indent)/// Overrides for the mock dependency tree.")
-		// `nonisolated`, as the module-level configuration is: in a module whose declarations default to the main actor, a
-		// mocked type on the main actor would put it there, where another module's configuration, whose default builds it,
-		// cannot reach it.
-		lines.append("\(indent)nonisolated public struct \(ReservedName.mockOverridesTypeName) {")
-		lines.append(contentsOf: publicStructBody(members: members, indent: "\(indent)\(standardIndent)"))
-		lines.append("\(indent)}")
-		return lines.joined(separator: "\n")
 	}
 }
 

@@ -183,9 +183,9 @@ extension DependencyTreeGenerator {
 		// The mock's arguments are matched to the dependencies of the entry under the concrete type, which a
 		// `mockOnly` declaration's mock is merged into, so a dependency's argument never counts as a default.
 		let handWrittenMockDefaultParameters = typeDescriptionToFulfillingInstantiableMap.values
-			.reduce(into: [TypeDescription: [ScopeGenerator.MockParameterNode.DefaultParameter]]()) { result, instantiable in
+			.reduce(into: [TypeDescription: [ScopeGenerator.DefaultParameter]]()) { result, instantiable in
 				guard let mockInitializer = instantiable.mockInitializer else { return }
-				result[instantiable.concreteInstantiable] = ScopeGenerator.MockParameterNode.DefaultParameter.defaultParameters(
+				result[instantiable.concreteInstantiable] = ScopeGenerator.DefaultParameter.defaultParameters(
 					of: mockInitializer,
 					dependencies: (typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable).dependencies,
 				)
@@ -728,60 +728,6 @@ extension DependencyTreeGenerator {
 		)
 	}
 
-	/// Rejects a type that generated mocks build both with its hand-written mock and without it, when the two
-	/// constructions need different `SafeDIMockConfiguration` structs. Mocks generate one struct per type, so the
-	/// construction the struct does not describe would not compile.
-	///
-	/// A property is built with its type's hand-written mock only when the mock returns a type the property accepts
-	/// (see `createMockTypeDescriptionToScopeMapping`), so a mock that returns one of the type's additional types
-	/// builds some of its properties and not others. A construction that needs no struct is built from a closure
-	/// typed by its property, so it never conflicts.
-	///
-	/// A node beneath an edge in `cycleEdges` reads no overrides from its struct, so it is not compared (see
-	/// `ScopeGenerator.collectConfigurationNodesByConstruction`).
-	///
-	/// - Parameters:
-	///   - configurationNodesByConstruction: Each mock root's `ScopeGenerator.MockTreeSummary.configurationNodesByConstruction`,
-	///     the roots in concrete type order, so the properties a diagnostic names are the same on every run.
-	///   - mockDeclarationLocations: `mockDeclarationLocationsOfTypesWithHandWrittenMocks()`.
-	/// - Returns: For each type with a hand-written mock, the first node that reads its struct. When the type
-	///   is built both ways, the two kinds of node read the same struct, so either describes it.
-	private static func validateConfigurationsAreBuiltOneWay(
-		configurationNodesByConstruction: [[ScopeGenerator.BuiltMockParameterNode]],
-		mockDeclarationLocations: [TypeDescription: Set<Dependency.DeclarationLocation?>],
-	) throws -> [TypeDescription: ScopeGenerator.MockParameterNode] {
-		guard !mockDeclarationLocations.isEmpty else { return [:] }
-
-		var firstNodes = [ScopeGenerator.ConstructedType: ScopeGenerator.BuiltMockParameterNode]()
-		for builtNode in configurationNodesByConstruction.joined() {
-			let constructedType = ScopeGenerator.ConstructedType(concreteType: builtNode.node.concreteType, usesMockInitializer: builtNode.node.useMockInitializer)
-			firstNodes[constructedType] = firstNodes[constructedType] ?? builtNode
-		}
-
-		let conflicts = mockDeclarationLocations.keys.compactMap { concreteType -> DependencyTreeGeneratorError.ConfigurationBuiltTwoWays? in
-			guard let builtByMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: true)],
-			      let builtWithoutMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: false)],
-			      builtByMock.node.configurationRequirements != builtWithoutMock.node.configurationRequirements
-			else { return nil }
-			return DependencyTreeGeneratorError.ConfigurationBuiltTwoWays(
-				concreteType: concreteType,
-				mockDeclarationLocations: Array(mockDeclarationLocations[concreteType, default: []]),
-				builtByMock: .init(of: builtByMock),
-				builtWithoutMock: .init(of: builtWithoutMock),
-			)
-		}
-		guard conflicts.isEmpty else {
-			throw DependencyTreeGeneratorError.configurationBuiltTwoWays(conflicts)
-		}
-		// Without a conflict, a type built both ways reads one struct either way; prefer the `init`-built node so the
-		// choice does not depend on dictionary order.
-		return mockDeclarationLocations.keys.reduce(into: [TypeDescription: ScopeGenerator.MockParameterNode]()) { result, concreteType in
-			let builtWithoutMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: false)]
-			let builtByMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: true)]
-			result[concreteType] = (builtWithoutMock ?? builtByMock)?.node
-		}
-	}
-
 	/// Where each type with a hand-written mock declares it, by the type's concrete type.
 	private func mockDeclarationLocationsOfTypesWithHandWrittenMocks() -> [TypeDescription: Set<Dependency.DeclarationLocation?>] {
 		var mockDeclarationLocations = [TypeDescription: Set<Dependency.DeclarationLocation?>]()
@@ -789,115 +735,6 @@ extension DependencyTreeGenerator {
 			mockDeclarationLocations[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
 		}
 		return mockDeclarationLocations
-	}
-
-	/// A mock root's generated code, with the nodes of the types whose `SafeDIMockConfiguration`
-	/// struct its tree needs, in the order the root reaches them.
-	private struct GeneratedMockRoot {
-		let root: GeneratedRoot
-		let configurationTypes: ScopeGenerator.ConfigurationTypes
-		/// Whether the root's mock is public, whose tree reads module-level configurations rather than the types' own.
-		let isPublicMock: Bool
-		/// For a public mock, the first node its tree builds with each construction of each type
-		/// (`ScopeGenerator.collectPublicConstructionNodes`); empty for an internal mock.
-		let publicConstructionNodes: [ScopeGenerator.MockParameterNode]
-	}
-
-	/// The configurations `roots`, sorted by type and all of one kind, need beneath their repeated ancestors, each with the
-	/// root whose tree holds the node it is generated from, in the order the roots' trees reach them: a struct for each
-	/// type a construction there reads (`ScopeGenerator.ConfigurationTypes.nodesBeneathRepeatedAncestors`) and for each
-	/// type whose configuration one of those structs nests, transitively, unless the roots configure the type above every
-	/// repeated ancestor, where its struct is generated as before.
-	///
-	/// Beneath repeated ancestors no check makes a type's two constructions agree (`validateConfigurationsAreBuiltOneWay`
-	/// reads no node beneath a cycle edge), so a type's struct is generated from a node built with its initializer (or
-	/// `instantiate(…)`) wherever one is, whose construction is the one that reads the struct afresh, and otherwise from one
-	/// built with its hand-written mock: which root sorts first never decides it. The nested configurations follow the
-	/// nodes so chosen, and choosing can find another construction of a nested type, so the two repeat until no node is new.
-	private static func configurationsBeneathRepeatedAncestors(
-		ofRoots roots: [GeneratedMockRoot],
-		cycleEdges: Set<ScopeGenerator.CycleEdge>,
-	) -> [(result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)] {
-		let typesConfiguredAbove = Set(roots.flatMap { $0.configurationTypes.nodes.map(\.concreteType) })
-		var candidates = [(result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)]()
-		var candidateConstructions = Set<ScopeGenerator.ConstructedType>()
-		func addCandidate(_ node: ScopeGenerator.MockParameterNode, of result: GeneratedMockRoot) -> Bool {
-			let isNew = !typesConfiguredAbove.contains(node.concreteType)
-				&& candidateConstructions.insert(ScopeGenerator.ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)).inserted
-			if isNew {
-				candidates.append((result: result, configurationType: node))
-			}
-			return isNew
-		}
-		for result in roots {
-			for node in result.configurationTypes.nodesBeneathRepeatedAncestors {
-				_ = addCandidate(node, of: result)
-			}
-		}
-		var readTypes = [TypeDescription]()
-		for candidate in candidates where !readTypes.contains(candidate.configurationType.concreteType) {
-			readTypes.append(candidate.configurationType.concreteType)
-		}
-
-		var chosenNodes = [TypeDescription: (result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)]()
-		var neededTypes = Set<TypeDescription>()
-		var foundCandidate: Bool
-		repeat {
-			chosenNodes = [:]
-			for candidate in candidates {
-				let type = candidate.configurationType.concreteType
-				if let chosen = chosenNodes[type] {
-					if chosen.configurationType.useMockInitializer, !candidate.configurationType.useMockInitializer {
-						chosenNodes[type] = candidate
-					}
-				} else {
-					chosenNodes[type] = candidate
-				}
-			}
-			foundCandidate = false
-			neededTypes = Set(readTypes)
-			var typesToWalk = readTypes
-			while let type = typesToWalk.popLast() {
-				if let chosen = chosenNodes[type] {
-					for child in ScopeGenerator.childrenWithNestedConfigurations(of: chosen.configurationType, cycleEdges: cycleEdges) where !typesConfiguredAbove.contains(child.concreteType) {
-						if addCandidate(child, of: chosen.result) {
-							foundCandidate = true
-						}
-						if neededTypes.insert(child.concreteType).inserted {
-							typesToWalk.append(child.concreteType)
-						}
-					}
-				}
-			}
-		} while foundCandidate
-
-		var typesInOrder = [TypeDescription]()
-		for candidate in candidates where neededTypes.contains(candidate.configurationType.concreteType) && !typesInOrder.contains(candidate.configurationType.concreteType) {
-			typesInOrder.append(candidate.configurationType.concreteType)
-		}
-		return typesInOrder.compactMap { chosenNodes[$0] }
-	}
-
-	/// A type's `SafeDIMockConfiguration` struct, emitted in an extension of the type.
-	private struct ConfigurationExtension {
-		let typeName: String
-		let structCode: String
-	}
-
-	private func generateMockConfigurationCode(
-		configurationExtensions: [ConfigurationExtension],
-		publicConfigurationDeclarations: [String] = [],
-		mockConditionalCompilation: String?,
-	) -> String {
-		let extensions = configurationExtensions.map { configurationExtension in
-			"extension \(configurationExtension.typeName) {\n\(configurationExtension.structCode)\n}"
-		}
-		let body = (extensions + publicConfigurationDeclarations).joined(separator: "\n\n")
-		if let mockConditionalCompilation {
-			return "#if \(mockConditionalCompilation)\n\(body)\n#endif\n"
-		} else {
-			return "\(body)\n"
-		}
 	}
 
 	/// Computes the set of `(parent, child)` type-reference edges that, when removed,
@@ -1541,18 +1378,5 @@ extension DependencyTreeGenerator {
 		}
 		guard !typesNoDeclarationCanFulfill.isEmpty else { return }
 		throw noInstantiableFoundErrors(of: typesNoDeclarationCanFulfill)
-	}
-}
-
-extension DependencyTreeGenerator.DependencyTreeGeneratorError.ConfigurationBuiltTwoWays.BuiltConstruction {
-	/// The construction the emitter's `builtNode` describes.
-	init(of builtNode: ScopeGenerator.BuiltMockParameterNode) {
-		self.init(
-			property: builtNode.node.property,
-			parent: builtNode.parent.asSource,
-			mockRoot: builtNode.mockRoot,
-			customMockName: builtNode.node.customMockName,
-			isExtensionBased: builtNode.node.isExtensionBased,
-		)
 	}
 }
