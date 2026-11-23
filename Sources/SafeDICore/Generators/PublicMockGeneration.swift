@@ -913,6 +913,8 @@ extension ScopeGenerator {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		// D1 lane hook (lane C): the mock lowering, which reads no parameter tree, hands the receivers' modules it finds.
 		receiverModulesByLabel givenReceiverModulesByLabel: [String: Set<String?>]? = nil,
+		// D1 lane hook (lane C): and the families its calls fill, with the names the narrowest tier's body declares.
+		filledFamilies givenFilledFamilies: (families: [ScopeGenerator.FilledFamily], namesInBody: Set<String>)? = nil,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -1073,6 +1075,7 @@ extension ScopeGenerator {
 		// The optional builders follow the required ones, so that no required builder's position moves.
 		let optionalBuilders = publicMockOptionalBuilders(
 			parameterTree: parameterTree,
+			filledFamilies: givenFilledFamilies,
 			requiredBuilders: builders,
 			otherParameters: (leadingParameters + optionalReceivedParameters).map { (label: $0.name, access: $0.access) }
 				+ (hasOverrides ? [(label: ReservedName.mockOverridesParameterName, access: AccessLevel.public)] : []),
@@ -1120,13 +1123,15 @@ extension ScopeGenerator {
 	/// among themselves; a label a parameter of the tier has takes `_`. Each is as visible as the type it builds.
 	static func publicMockOptionalBuilders(
 		parameterTree: [MockTreeItem],
+		// D1 lane hook (lane C): the mock lowering, which reads no parameter tree, hands the families and the body's names.
+		filledFamilies givenFilledFamilies: (families: [FilledFamily], namesInBody: Set<String>)? = nil,
 		requiredBuilders: [SeamSignature.Builder],
 		otherParameters: [(label: String, access: AccessLevel)],
 		widestTier: AccessLevel,
 		access: (TypeDescription) -> AccessLevel,
 	) -> [PublicMockParameter] {
-		let fillPlaces = fillPlaces(in: parameterTree.propertyNodes)
-		let filledFamilies = filledFamilies(of: fillPlaces.calls)
+		let fillPlaces = givenFilledFamilies == nil ? fillPlaces(in: parameterTree.propertyNodes) : (places: [], declaredLabels: [], calls: [])
+		let filledFamilies = givenFilledFamilies?.families ?? filledFamilies(of: fillPlaces.calls)
 		guard !filledFamilies.isEmpty else { return [] }
 		let requiredHoleTypes = requiredBuilders.map(\.enumKey.holeType).uniqued().sorted { lhs, rhs in
 			let lhsKey: (String, String) = (lhs.instantiatedType.asSource, lhs.builtType.asSource)
@@ -1144,6 +1149,7 @@ extension ScopeGenerator {
 		var namesInBody = Set<String>(otherParameters.map(\.label))
 		namesInBody.formUnion(requiredBuilders.map(\.internalName))
 		namesInBody.formUnion(fillPlaces.declaredLabels)
+		namesInBody.formUnion(givenFilledFamilies?.namesInBody ?? [])
 		var nodesToVisit = parameterTree.propertyNodes
 		while let node = nodesToVisit.popLast() {
 			namesInBody.insert(functionName(toBuildPropertyNamed: node.propertyLabel))
