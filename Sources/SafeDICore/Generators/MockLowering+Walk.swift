@@ -239,12 +239,11 @@ extension ScopeGenerator {
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
 		lines.append("}")
-		let code = lines.joined(separator: "\n")
-		return if let mockConditionalCompilation = context.mockConditionalCompilation {
-			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
-		} else {
-			code
+		if let mockConditionalCompilation = context.mockConditionalCompilation {
+			lines.insert("#if \(mockConditionalCompilation)", at: 0)
+			lines.append("#endif")
 		}
+		return MockLowering.joinedLines(lines)
 	}
 
 	/// The mock's `SafeDIOverrides`: the member that configures each node, in generation order.
@@ -1348,6 +1347,20 @@ extension MockLowering {
 			}
 			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: "\(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"))"]
 		}
+	}
+
+	/// `lines` joined by newlines, in storage sized once for all of them: a mock's code can run to megabytes, which
+	/// `joined(separator:)` grows into by copying.
+	static func joinedLines(_ lines: [String]) -> String {
+		var code = ""
+		code.reserveCapacity(lines.reduce(lines.count) { $0 + $1.utf8.count })
+		for (index, line) in lines.enumerated() {
+			if index > 0 {
+				code.append("\n")
+			}
+			code.append(line)
+		}
+		return code
 	}
 
 	/// A node of a mock's tree: one that builds its type, an alias of a value bound before it, or a call of another module's
