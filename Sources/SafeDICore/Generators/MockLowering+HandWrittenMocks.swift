@@ -93,4 +93,11 @@ extension MockLowering {
 		}
 		return optionalFormRenames
 	}
+
+	/// The dependency a construction passes `argument`: the one of its label, whatever its type, as the emitter matches
+	/// them (`generateReturnArgumentList`, `resolveBuilderArguments`), so a hand-written mock whose parameter is typed
+	/// other than the dependency of its label is passed it as generated code passes it.
+	static func dependency(passedTo argument: Initializer.Argument, among dependencies: [Dependency]) -> Dependency? {
+		dependencies.first { $0.property.label == argument.innerLabel }
+	}
 }
