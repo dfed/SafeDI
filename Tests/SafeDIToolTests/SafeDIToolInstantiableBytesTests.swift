@@ -56,7 +56,8 @@ struct SafeDIToolInstantiableBytesTests {
 		// `Instantiable` keeps its rarely set fields in a box its layout lists as unwritten, and writes each of them
 		// under its own name, so a field added to the box without being listed in the layout fails here.
 		let screen = try #require(declaredInstantiables().first)
-		let box = try #require(Mirror(reflecting: screen).children.first { $0.label == "rarelySetFields" }?.value)
+		let storedFields = try storedFields(of: screen)
+		let box = try #require(Mirror(reflecting: storedFields).children.first { $0.label == "rarelySetFields" }?.value)
 		let boxedValue = try #require(Mirror(reflecting: box).children.first?.value)
 		let fields = try #require(Mirror(reflecting: boxedValue).children.first { $0.label == "fields" }?.value)
 		guard case let .structure(writtenFields, _) = Instantiable.binaryLayout else {
@@ -69,7 +70,29 @@ struct SafeDIToolInstantiableBytesTests {
 		} == ["declaredName"])
 	}
 
+	@Test
+	func binaryLayout_writesEachStoredFieldButItsTypesAndBox_whenInstantiableKeepsItsFieldsInStorage() throws {
+		// `Instantiable` keeps every field in one storage object its layout lists as unwritten, and writes each of them
+		// under its own name, so a field added to the storage without being listed in the layout fails here.
+		let screen = try #require(declaredInstantiables().first)
+		let storedFields = try storedFields(of: screen)
+		guard case let .structure(writtenFields, _) = Instantiable.binaryLayout else {
+			Issue.record("Instantiable is a struct, but its layout lists cases")
+			return
+		}
+
+		#expect(Mirror(reflecting: storedFields).children.compactMap(\.label).filter { label in
+			!writtenFields.contains { $0.name == label }
+		} == ["instantiableTypes", "rarelySetFields"])
+	}
+
 	// MARK: Private
+
+	/// The fields `Instantiable` keeps in its storage object.
+	private func storedFields(of instantiable: Instantiable) throws -> Any {
+		let storage = try #require(Mirror(reflecting: instantiable).children.first { $0.label == "storage" }?.value)
+		return try #require(Mirror(reflecting: storage).children.first { $0.label == "fields" }?.value)
+	}
 
 	/// What a file holds for the fixture's declarations. Bytes that change here change every scan cache and `.safedi`
 	/// file, which `BinaryFile.schemaFingerprint` must then change with.
