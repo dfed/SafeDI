@@ -1341,20 +1341,17 @@ extension MockLowering {
 			"(\(builderParameterTypes)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
 		}
 
-		/// The type of the closure the node's configuration holds to override how it is built, which returns the concrete
-		/// type, since every node of the type shares the configuration.
-		var concreteBuilderClosureType: String {
-			"(\(builderParameterTypes)) -> \(instantiable.concreteInstantiable.asSource)"
-		}
-
 		/// The types of the values the node's override is handed, joined: one per argument its construction is passed, which
 		/// leaves out a parameter left to its default (`ScopeGenerator.MockParameterNode.callSiteArguments`).
-		/// What builds the node: its type's hand-written mock, or its initializer.
-		private var constructionInitializer: Initializer? {
-			usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer
+		private var builderParameterTypes: String {
+			Self.builderParameterTypes(of: instantiable, usesMockInitializer: usesMockInitializer)
 		}
 
-		private var builderParameterTypes: String {
+		// D1 lane hook (lane C): a configuration record spells them from what it keeps.
+		/// The types of the values the override of a node built with `instantiable`, with its hand-written mock where
+		/// `usesMockInitializer` and else its initializer, is handed, joined.
+		static func builderParameterTypes(of instantiable: Instantiable, usesMockInitializer: Bool) -> String {
+			let constructionInitializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer
 			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
 			return (constructionInitializer?.arguments ?? []).filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
@@ -1845,12 +1842,16 @@ extension MockLowering.ConfigurationRecord {
 			usesMockInitializer: node.usesMockInitializer,
 			// A child's field is the one the overrides hold for a node at the root: its override, its configuration, or the
 			// overrides of the public mock it calls.
-			childFields: children.compactMap { child in
-				child.overridesField.map { field in
-					ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm)
+			// D1 lane hook (lane C): a built child's field is spelled where a configuration is generated from the record.
+			childFieldSources: children.compactMap { child in
+				if case let .built(childNode) = child {
+					return .built(bindingName: childNode.bindingName, hasConfiguration: childNode.hasConfiguration, requiresSendable: childNode.requiresSendable, instantiable: childNode.instantiable, usesMockInitializer: childNode.usesMockInitializer, propertyType: childNode.property.typeDescription)
+				}
+				return child.overridesField.map { field in
+					.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm))
 				}
 			},
-			concreteBuilderClosureType: node.concreteBuilderClosureType,
+			instantiable: node.instantiable,
 			defaultFields: node.defaultFields,
 		)
 	}

@@ -139,10 +139,12 @@ public enum MockLowering {
 		let concreteType: TypeDescription
 		/// Whether the node is built with its type's hand-written mock.
 		let usesMockInitializer: Bool
-		/// The configuration's fields for the node's children, in the order its initializer takes them.
-		let childFields: [ChildField]
-		/// The type of the closure that overrides how the node is built, returning its concrete type.
-		let concreteBuilderClosureType: String
+		// D1 lane hook (lane C): a record keeps what spells its fields, which only the record a configuration is generated
+		// from spells, once per type rather than once per node.
+		/// What spells the configuration's fields for the node's children, in the order its initializer takes them.
+		let childFieldSources: [ChildFieldSource]
+		/// The concrete type the node builds, whose construction's parameters the closure that overrides it is handed.
+		let instantiable: Instantiable
 		// D1 lane hook (lane D): a public mock's node, whose type's module-level configuration and construction functions are
 		// lowered in `MockLowering+PublicConfigurations.swift`.
 		/// Where a public mock builds the node, the construction it builds the node's type with: `nil` in an internal mock.
@@ -156,6 +158,49 @@ public enum MockLowering {
 		// D1 lane hook (lane D): a node beneath a repeated ancestor (`MockLowering+Configurations.swift`).
 		/// Where the node is beneath a node whose type repeats one around it, what the module's choice of such a node reads.
 		var beneathRepeatedAncestor: BeneathRepeatedAncestor?
+
+		/// The configuration's fields for the node's children, in the order its initializer takes them.
+		var childFields: [ChildField] {
+			childFieldSources.map(\.childField)
+		}
+
+		/// The type of the closure that overrides how the node is built, returning its concrete type.
+		var concreteBuilderClosureType: String {
+			"(\(MockLowering.ConstantNode.builderParameterTypes(of: instantiable, usesMockInitializer: usesMockInitializer))) -> \(concreteType.asSource)"
+		}
+
+		/// What spells a child's field: a node the tree builds, spelled when the field is read, or a field already spelled.
+		enum ChildFieldSource: Sendable, Equatable {
+			/// A node built with `instantiable`, bound as `bindingName`, whose field is its configuration where
+			/// `hasConfiguration`, else an optional builder closure returning `propertyType`, `@Sendable` where
+			/// `requiresSendable`.
+			case built(bindingName: String, hasConfiguration: Bool, requiresSendable: Bool, instantiable: Instantiable, usesMockInitializer: Bool, propertyType: TypeDescription)
+			case spelled(ChildField)
+
+			var childField: ChildField {
+				switch self {
+				case let .built(bindingName, hasConfiguration, requiresSendable, instantiable, usesMockInitializer, propertyType):
+					let configuredTypeName = instantiable.concreteInstantiable.asSource
+					if hasConfiguration {
+						let typeSource = "\(configuredTypeName).\(ScopeGenerator.MockParameterNode.configurationStructName)"
+						return ChildField(name: bindingName, typeSource: typeSource, defaultValue: ".init()", sendableForm: .init(typeSource: typeSource, defaultValue: ".init()", configuredTypeName: configuredTypeName))
+					} else {
+						let builderClosureType = "(\(MockLowering.ConstantNode.builderParameterTypes(of: instantiable, usesMockInitializer: usesMockInitializer))) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
+						return ChildField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendableForm: .init(typeSource: "(@Sendable \(builderClosureType))?", defaultValue: "nil", configuredTypeName: nil))
+					}
+				case let .spelled(childField):
+					return childField
+				}
+			}
+
+			/// Whether the field has no form the lowering spells in a configuration `@Sendable`-typed.
+			var lacksSendableForm: Bool {
+				switch self {
+				case .built: false
+				case let .spelled(childField): childField.sendableForm == nil
+				}
+			}
+		}
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
 		struct ChildField: Sendable, Equatable {
