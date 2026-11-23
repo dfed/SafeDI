@@ -107,11 +107,10 @@ extension MockLowering.Walk {
 	/// The fields of the configuration of a node of `instantiable` for its construction's default-valued parameters, with
 	/// the defaults the type's hand-written mock declares. A node built with its type's hand-written mock
 	/// (`usesMockInitializer`) takes the mock's default-valued parameters.
-	mutating func configurationDefaultFields(of instantiable: Instantiable, usesMockInitializer: Bool) -> MockLowering.Lowering<[MockLowering.DefaultField]> {
+	mutating func configurationDefaultFields(of instantiable: Instantiable, usesMockInitializer: Bool) -> [MockLowering.DefaultField] {
 		let construction = mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer)
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
-		let defaultFields = construction.defaultParameters.map { MockLowering.DefaultField(of: $0, handWrittenMockDefaultParameters: handWrittenDefaults) }
-		return .lowered(defaultFields)
+		return construction.defaultParameters.map { MockLowering.DefaultField(of: $0, handWrittenMockDefaultParameters: handWrittenDefaults) }
 	}
 
 	/// Whether a construction of a node of `instantiable` reads an argument from the node's configuration: a default-valued

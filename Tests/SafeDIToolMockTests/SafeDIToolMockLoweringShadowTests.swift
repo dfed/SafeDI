@@ -66,35 +66,29 @@ struct SafeDIToolMockLoweringShadowTests: ~Copyable {
 
 	@Test
 	func outcome_isIdentical_whenLoweredCodeEqualsEmittedCodeByteForByte() {
-		#expect(MockLoweringShadow.outcome(comparing: .lowered("a\nb"), with: "a\nb") == .identical)
+		#expect(MockLoweringShadow.outcome(comparing: "a\nb", with: "a\nb") == .identical)
 	}
 
 	@Test
 	func outcome_namesFirstDifferingLine_whenLoweredCodeDiffers() {
-		#expect(MockLoweringShadow.outcome(comparing: .lowered("a\nc\nd"), with: "a\nb\nd") == .differs(line: 2, emitted: "b", lowered: "c"))
+		#expect(MockLoweringShadow.outcome(comparing: "a\nc\nd", with: "a\nb\nd") == .differs(line: 2, emitted: "b", lowered: "c"))
 	}
 
 	@Test
 	func outcome_namesLineAfterShorterCode_whenOneCodeExtendsTheOther() {
-		#expect(MockLoweringShadow.outcome(comparing: .lowered("a"), with: "a\nb") == .differs(line: 2, emitted: "b", lowered: nil))
-		#expect(MockLoweringShadow.outcome(comparing: .lowered("a\nb"), with: "a") == .differs(line: 2, emitted: nil, lowered: "b"))
+		#expect(MockLoweringShadow.outcome(comparing: "a", with: "a\nb") == .differs(line: 2, emitted: "b", lowered: nil))
+		#expect(MockLoweringShadow.outcome(comparing: "a\nb", with: "a") == .differs(line: 2, emitted: nil, lowered: "b"))
 	}
 
 	@Test
-	func outcome_isUnsupported_whenLoweringMeetsUnportedRule() {
-		#expect(MockLoweringShadow.outcome(comparing: .unsupported(.wrapper), with: "a") == .unsupported(.wrapper))
-	}
-
-	@Test
-	func reportLine_listsDifferencesAndUnsupportedRoots_whenTallied() {
+	func reportLine_listsDifferences_whenTallied() {
 		let tally = MockLoweringShadowChecks.Tally()
 		tally.record(MockLoweringShadow.Comparison(mockedType: "A", outcome: .identical))
 		tally.record(MockLoweringShadow.Comparison(mockedType: "B", outcome: .differs(line: 4, emitted: "x", lowered: nil)))
-		tally.record(MockLoweringShadow.Comparison(mockedType: "C", outcome: .unsupported(.wrapper)))
 		tally.record(MockLoweringShadow.Comparison(mockedType: "D", outcome: .identical))
 
 		#expect(tally.reportLine == """
-		mock-lowering: 2/4 roots identical (50.0%); 1 differ; unsupported: wrapper 1
+		mock-lowering: 2/3 roots identical (66.7%); 1 differ
 		  B line 4:
 		    emitted: x
 		    lowered: (end)

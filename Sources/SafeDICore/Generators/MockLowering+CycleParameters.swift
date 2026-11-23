@@ -23,13 +23,12 @@
 extension MockLowering {
 	/// The arguments a call of the builder function that `generator`'s node declares or closes on passes its cycle
 	/// parameters, where the node is built: `nil` for one the node is built where nothing provides, a lazy wrapper's
-	/// instance, or the binding of the label; or `nil` where a binding is none of `scope`'s, such as an override the
-	/// mock's root binds. `unavailableProperties` are what the node is passed `nil` for where its level builds it
+	/// instance, or the binding of the label. `unavailableProperties` are what the node is passed `nil` for where its level builds it
 	/// (`ScopeGenerator.OrderedChild.unavailableProperties`), a parameter it passes `nil` among them, as the emitter's
 	/// `cycleParameterArgumentUnavailableProperties` reads them. `renames` are the names the mock binds a label apart
 	/// under, and `lazilyInstantiatedNames` the wrappers it binds around the instances it is passed, as
 	/// `mockCycleParameterArguments` reads them.
-	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]]) -> [String]? {
+	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]]) -> [String] {
 		let lazilyInstantiatedInstanceProperties = generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
 		for parameter in generator.cycleParameters {
@@ -44,8 +43,7 @@ extension MockLowering {
 				let wrapperName = [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].lazy.compactMap { renames[label]?[.simple(name: $0, generics: [instanceType])] }.first
 				value = "\(wrapperName ?? label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
-				guard Self.scope(scope, provides: parameter.property, unavailableProperties: [], lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties) else { return nil }
-				// D1 lane hook (lane B): the binding the label is named apart under (`mockCycleParameterArguments`).
+				// The binding the label is named apart under (`mockCycleParameterArguments`).
 				value = lazilyInstantiatedNames[label]?[parameter.property.typeDescription] ?? renames[label]?[parameter.property.typeDescription] ?? renames[label]?[parameter.property.asUnwrappedProperty.typeDescription] ?? label
 			}
 			arguments.append("\(label.spelledAsArgumentLabel): \(value)")

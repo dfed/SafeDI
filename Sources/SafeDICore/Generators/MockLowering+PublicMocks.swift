@@ -19,15 +19,13 @@
 // SOFTWARE.
 
 extension ScopeGenerator {
-	/// The public mock of `instantiable`, this root's mocked type, or the first rule it meets that the lowering does not lower
-	/// yet. A mock that takes no parameter and builds nothing but the type is the `mock()` and `__safeDI_mock()` pair, whose
+	/// The public mock of `instantiable`, this root's mocked type, under `publicMockContext`. A mock that takes no parameter and builds nothing but the type is the `mock()` and `__safeDI_mock()` pair, whose
 	/// guard hashes its empty signature; a mock with a tree is lowered by the walk (`lowerMockRootWithTree(of:context:)`),
 	/// which hands its nodes to `publicMockWithTree`.
-	func lowerPublicMockRoot(of instantiable: Instantiable, context: MockContext) async throws -> MockLowering.Result {
-		guard let publicMockContext = context.publicMockContext else { return .unsupported(.publicMockRoot) }
+	func lowerPublicMockRoot(of instantiable: Instantiable, publicMockContext: PublicMockContext, context: MockContext) async throws -> MockLowering.Result {
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
-		      // D1 lane hook (lane C): the type's own hand-written mock builds it where it has one.
+		      // The type's own hand-written mock builds it where it has one.
 		      let initializer = MockLowering.rootConstructionInitializer(of: instantiable),
 		      initializer.arguments.isEmpty
 		else {
@@ -69,9 +67,9 @@ extension ScopeGenerator {
 		\(Self.guardEnumDeclaration(extending: typeName, named: plan.guardTypeName))
 		"""
 		return if let mockConditionalCompilation = context.mockConditionalCompilation {
-			.lowered("#if \(mockConditionalCompilation)\n\(code)\n#endif")
+			MockLowering.Result(code: "#if \(mockConditionalCompilation)\n\(code)\n#endif")
 		} else {
-			.lowered(code)
+			MockLowering.Result(code: code)
 		}
 	}
 
@@ -125,11 +123,12 @@ extension ScopeGenerator {
 	/// The public mock of `instantiable`, whose tree's top-level nodes are `nodes`, in generation order, bound by
 	/// `bindingLines`, as `generateMockRootCode` emits it for a public mock: its `public` `SafeDIOverrides` where a node is
 	/// built, the `mock()` and `__safeDI_mock` pair of each tier, which takes `signature`'s parameters, the overrides last,
-	/// the narrowest tier's binding each node and returning the type built from them, and the guard enum; or the first rule
-	/// it meets that the lowering does not lower yet.
+	/// the narrowest tier's binding each node and returning the type built from them, and the guard enum. `plan` is the plan
+	/// the walk named the promoted nodes' parameters and the calls' builders from.
 	func publicMockWithTree(
 		of instantiable: Instantiable,
-		plan: PublicMockPlan?,
+		plan: PublicMockPlan,
+		publicMockContext: PublicMockContext,
 		signature: MockLowering.RootSignature,
 		nodes: [MockLowering.TreeNode],
 		bindingLines: [String],
@@ -139,18 +138,6 @@ extension ScopeGenerator {
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
 	) -> MockLowering.Result {
-		// D1 lane hook (lane B): the plan the walk named the promoted nodes' parameters and the calls' builders from.
-		guard let publicMockContext = context.publicMockContext, let plan else { return .unsupported(.publicMockRoot) }
-		// Each dependency the mock promotes to its root is an optional parameter, which the walk binds the node from.
-		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
-		for node in nodes where promotedProperties.contains(node.property) {
-			switch node {
-			case .built, .publicMockCall:
-				continue
-			case .alias, .cycleClosing:
-				return .unsupported(.publicMockRoot)
-			}
-		}
 		let indent = Self.standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -195,8 +182,8 @@ extension ScopeGenerator {
 		}
 		var body = plan.defaultResolutions
 		body.append(contentsOf: bindingLines)
-		// D1 lane hook (lane C): the mocked type's own hand-written mock builds it where it has one, and `mock()` returns what
-		// that mock returns (lane D's `MockLowering+HandWrittenMocks.swift`).
+		// The mocked type's own hand-written mock builds it where it has one, and `mock()` returns what that mock returns
+		// (`MockLowering+HandWrittenMocks.swift`).
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
 			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
 		} ?? Instantiable.incorrectlyConfiguredComment
@@ -218,7 +205,7 @@ extension ScopeGenerator {
 		} else {
 			code
 		}
-		return .lowered(lowered, configurations: configurations)
+		return MockLowering.Result(code: lowered, configurations: configurations)
 	}
 
 	/// The plan of the public mock of `instantiable`, whose root's signature is `signature`, that promotes `promotedNodes`,
@@ -255,7 +242,7 @@ extension ScopeGenerator {
 				)
 			}
 		}
-		// D1 lane hook (lane C): a value the tree receives lazily is taken as the wrapper it receives, keyed by its instance,
+		// A value the tree receives lazily is taken as the wrapper it receives, keyed by its instance,
 		// whose hand-written mock the wrapper defaults to (`ScopeGenerator.publicMockWrapperParameters`).
 		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
 		var flatReceivedParameters = [(property: Property, name: String)]()
@@ -347,15 +334,12 @@ extension MockLowering {
 
 extension MockLowering.ConstantNode {
 	/// The lines that end a public mock's configured node's builder function, which returns a call of its type's
-	/// construction function handed the builder its override at `overridePath` reads, and bind the node; or the first rule
-	/// they meet that the lowering does not lower yet.
-	func publicBuilderFunctionEndLines(children: [MockLowering.TreeNode], overrideRead overridePath: String?, indent: String) -> MockLowering.Lowering<[String]> {
-		// The node passes its construction function every argument the function takes.
+	/// construction function handed the builder its override at `overridePath` reads, and bind the node.
+	func publicBuilderFunctionEndLines(children: [MockLowering.TreeNode], overrideRead overridePath: String?, indent: String) -> [String] {
 		let record = MockLowering.PublicConstructionRecord(of: self, children: children)
-		guard record.arguments.count == arguments.count else { return .unsupported(.defaultValuedParameter) }
 		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
-		// D1 lane hook (lane C): an instantiator's builder function writes `return` only before statements of its own, as
-		// `builderFunctionEndLines` says, its defaults' reads included.
+		// An instantiator's builder function writes `return` only before statements of its own, as `builderFunctionEndLines`
+		// says, its defaults' reads included.
 		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || !isWrapped ? "return " : ""
 		let erasedTo: TypeDescription? = if isErased {
 			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
@@ -366,15 +350,15 @@ extension MockLowering.ConstantNode {
 		var lines = ["\(bodyIndent)\(returnPrefix)\(call)"]
 		lines.append("\(indent)}")
 		lines.append(contentsOf: promotedBindingLines(indent: indent))
-		return .lowered(lines)
+		return lines
 	}
 }
 
 /// Stage D1's lowering of lane C's family: public mock roots, the sites of their holes, the payloads and members bound before
 /// a node, the fills of their calls, and the calls of other modules' public mocks.
 extension MockLowering.Walk {
-	/// The node of `generator`, a site of a hole or a fill, whose statements are appended to `lines`, or the first rule it
-	/// meets.
+	/// The node of `generator`, a site of a hole, whose statements are appended to `lines`; `nil` for any other generator,
+	/// which builds no node.
 	@inline(never)
 	mutating func placeOrFillNode(
 		of generator: ScopeGenerator,
@@ -382,11 +366,8 @@ extension MockLowering.Walk {
 		path _: String,
 		indent: String,
 		lines: inout [String],
-	) async -> MockLowering.Lowering<MockLowering.TreeNode> {
-		switch generator.scopeData {
-		case let .hole(property, erasedToConcreteExistential, site):
-			guard let site else { return .unsupported(.holeSite) }
-			guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+	) async -> MockLowering.TreeNode? {
+		guard case let .hole(property, erasedToConcreteExistential, site?) = generator.scopeData else { return nil }
 			// A site held in a wrapper builds it around the function its level names, apart from a function a cycle-closing
 			// scope beneath refers to (`ScopeGenerator.mockLoweringBuilderFunctionNames`).
 			let holeFunctionName = pendingRenamedFunctionName
@@ -403,7 +384,7 @@ extension MockLowering.Walk {
 				by: indent,
 			))
 			// The site binds its property from the builder, as an alias binds its own: no override reads it.
-			return .lowered(.alias(MockLowering.AliasBinding(
+			return .alias(MockLowering.AliasBinding(
 				property: property,
 				bindingName: property.label,
 				fulfillingProperty: Property(label: site.builderLabel, typeDescription: site.builtType),
@@ -412,9 +393,6 @@ extension MockLowering.Walk {
 				isOnlyIfAvailable: false,
 				isBoundToNil: false,
 				declarationReference: nil,
-			)))
-		case .root, .fill, .property, .alias:
-			return .unsupported(.fill)
-		}
+			))
 	}
 }

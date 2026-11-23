@@ -54,12 +54,6 @@ public enum MockLoweringShadowChecks {
 		public init() {}
 
 		public func record(_ comparison: MockLoweringShadow.Comparison) {
-			if case let .unsupported(rule) = comparison.outcome,
-			   let rules = ProcessInfo.processInfo.environment["SAFEDI_MOCK_LOWERING_LIST_RULES"],
-			   rules.split(separator: ",").contains(Substring(rule.rawValue))
-			{
-				print("mock-lowering unsupported (\(rule.rawValue)): \(comparison.mockedType) in \(Test.current?.name ?? "?")")
-			}
 			if self === Tally.process, case .differs = comparison.outcome {
 				print("mock-lowering differs: \(comparison.mockedType) in \(Test.current?.name ?? "?")")
 			}
@@ -73,8 +67,8 @@ public enum MockLoweringShadowChecks {
 			}
 		}
 
-		/// The share of mock roots whose lowering is byte-identical, with the differing and unsupported roots, the latter
-		/// by rule in rule order: `mock-lowering: 12/40 roots identical (30.0%); 3 differ; unsupported: not yet ported 25`.
+		/// The share of mock roots whose lowering is byte-identical, with the differing roots:
+		/// `mock-lowering: 37/40 roots identical (92.5%); 3 differ`.
 		public var reportLine: String {
 			lock.withLock {
 				state.reportLine(prefix: "mock-lowering", noun: "roots")
@@ -108,7 +102,6 @@ public enum MockLoweringShadowChecks {
 		private struct State {
 			var identical = 0
 			var differing = 0
-			var unsupportedByRule = [String: Int]()
 			var firstDifferences = [MockLoweringShadow.Comparison]()
 
 			mutating func record(_ comparison: MockLoweringShadow.Comparison) {
@@ -120,22 +113,13 @@ public enum MockLoweringShadowChecks {
 					if firstDifferences.count < Tally.differencesKept {
 						firstDifferences.append(comparison)
 					}
-				case let .unsupported(rule):
-					unsupportedByRule[rule.rawValue, default: 0] += 1
 				}
 			}
 
 			func reportLine(prefix: String, noun: String?) -> String {
-				let unsupported = unsupportedByRule.values.reduce(0, +)
-				let total = identical + differing + unsupported
+				let total = identical + differing
 				let share = total == 0 ? 0 : Double(identical) * 100 / Double(total)
 				var line = "\(prefix): \(identical)/\(total) \(noun.map { "\($0) " } ?? "")identical (\(String(format: "%.1f", share))%); \(differing) differ"
-				let unsupportedRules = MockLowering.Rule.allCases.compactMap { rule in
-					unsupportedByRule[rule.rawValue].map { "\(rule.rawValue) \($0)" }
-				}
-				if !unsupportedRules.isEmpty {
-					line += "; unsupported: " + unsupportedRules.joined(separator: ", ")
-				}
 				for difference in firstDifferences {
 					guard case let .differs(lineNumber, emitted, lowered) = difference.outcome else { continue }
 					line += "\n  \(difference.mockedType) line \(lineNumber):\n    emitted: \(emitted ?? "(end)")\n    lowered: \(lowered ?? "(end)")"

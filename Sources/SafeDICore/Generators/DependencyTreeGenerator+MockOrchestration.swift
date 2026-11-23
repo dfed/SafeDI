@@ -239,28 +239,22 @@ extension DependencyTreeGenerator {
 		// The second whole-module gate, not run by `requirements(of:)`: a type whose constructions read its configuration
 		// two ways is rejected, read from the records of every root's lowering. It runs after the roots are lowered, so
 		// that an error lowering a root is reported first.
-		let configurationsBuiltTwoWays = MockLowering.configurationsBuiltTwoWays(
+		let conflicts = MockLowering.configurationsBuiltTwoWays(
 			of: loweredRoots.map { (mockedType: $0.lowered.mockedType, lowered: $0.lowered.lowered) },
 			mockDeclarationLocations: mockDeclarationLocations,
 		)
-		if case let .lowered(conflicts) = configurationsBuiltTwoWays, !conflicts.isEmpty {
+		if !conflicts.isEmpty {
 			throw DependencyTreeGeneratorError.configurationBuiltTwoWays(conflicts)
 		}
 
-		var generatedRoots = loweredRoots.map(\.root)
-		var mockConfigurationCode: String?
-		var mockConfigurationFulfillers = Set<FulfillerImports.Fulfiller>()
-		if case let .lowered((mergedCodes, configurationCode, configurationFulfillers)) = MockLowering.configurationCode(
+		let (mergedCodes, mockConfigurationCode, mockConfigurationFulfillers) = MockLowering.configurationCode(
 			of: loweredRoots.map(\.lowered),
 			mockConditionalCompilation: mockConditionalCompilation,
 			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			publicMockContext: publicMockContext,
-		) {
-			generatedRoots = zip(generatedRoots, mergedCodes).map { root, code in
-				GeneratedRoot(typeDescription: root.typeDescription, sourceFilePath: root.sourceFilePath, code: code, fulfillers: root.fulfillers)
-			}
-			mockConfigurationCode = configurationCode
-			mockConfigurationFulfillers = configurationFulfillers
+		)
+		let generatedRoots = zip(loweredRoots.map(\.root), mergedCodes).map { root, code in
+			GeneratedRoot(typeDescription: root.typeDescription, sourceFilePath: root.sourceFilePath, code: code, fulfillers: root.fulfillers)
 		}
 
 		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.

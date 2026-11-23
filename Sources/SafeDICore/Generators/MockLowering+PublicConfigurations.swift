@@ -75,18 +75,17 @@ extension MockLowering {
 
 	/// The module-level configurations of `records`' types, each followed by its type's construction functions: one per
 	/// type, described by the first record of the type, with a function for the first record of each construction, the
-	/// initializer's before the hand-written mock's; or the first rule a record meets that the lowering does not lower yet.
-	/// `records` are every public mock root's, in root order, each root's in the order its walk finished them.
+	/// initializer's before the hand-written mock's. `records` are every public mock root's, in root order, each root's in the order its walk finished them.
 	static func publicConfigurationDeclarations(
 		of records: [PublicConstructionRecord],
 		context: PublicMockContext,
-		// D1 lane hook (lane C): the configurations `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
+		// The configurations `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
 		// module has (`MockContext.sendableConfigurationTypeNames`).
 		sendableConfigurationTypeNames: Set<String>,
-	) -> Lowering<(declarations: [String], fulfillers: Set<FulfillerImports.Fulfiller>)> {
+	) -> (declarations: [String], fulfillers: Set<FulfillerImports.Fulfiller>) {
 		var recordsByType = [TypeDescription: [PublicConstructionRecord]]()
 		var typesInOrder = [TypeDescription]()
-		// D1 lane hook (lane C): the types every root configures above its repeated ancestors, then those configured only
+		// The types every root configures above its repeated ancestors, then those configured only
 		// beneath them (`DependencyTreeGenerator.configurationsBeneathRepeatedAncestors`).
 		for record in records.filter(\.describesConfiguration) + records.filter({ !$0.describesConfiguration }) {
 			if recordsByType[record.concreteType] == nil {
@@ -95,7 +94,7 @@ extension MockLowering {
 			recordsByType[record.concreteType, default: []].append(record)
 		}
 		var declarations = [String]()
-		// D1 lane hook (lane B): the declarations each construction builds, and the mocked type of the root whose record
+		// The declarations each construction builds, and the mocked type of the root whose record
 		// introduced the type, as `generateMockCode` records them for every construction it declares a function for.
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		for type in typesInOrder {
@@ -118,7 +117,7 @@ extension MockLowering {
 			fulfillers.formUnion(constructionRecords.flatMap(\.fulfillers))
 			fulfillers.formUnion([typeRecords.first?.mockedTypeFulfiller].compactMap(\.self))
 		}
-		return .lowered((declarations: declarations, fulfillers: fulfillers))
+		return (declarations: declarations, fulfillers: fulfillers)
 	}
 
 	/// The module-level configuration `record` describes, named `configurationTypeName`, and the extension of its type that
@@ -271,7 +270,7 @@ extension MockLowering.PublicConstructionRecord {
 	init(of node: MockLowering.ConstantNode, children: [MockLowering.TreeNode]) {
 		// The arguments the construction is passed, which leave out a parameter left to its default
 		// (`ScopeGenerator.MockConstruction.callSiteArguments`).
-		// D1 lane hook (lane C): or its hand-written mock, which a public mock builds it with too.
+		// Or its hand-written mock, which a public mock builds it with too.
 		let construction = ScopeGenerator.MockConstruction(instantiable: node.instantiable, useMockInitializer: node.usesMockInitializer, builderTypesDeclaredEscaping: [])
 		self.init(
 			concreteType: construction.concreteType,
@@ -279,7 +278,7 @@ extension MockLowering.PublicConstructionRecord {
 			isExtensionBased: construction.isExtensionBased,
 			customMockName: construction.customMockName,
 			constructionIsolation: construction.constructionIsolation,
-			// D1 lane hook (lane C): what the hand-written mock returns, for a node built with it
+			// What the hand-written mock returns, for a node built with it
 			// (`MockParameterNode.constructionReturnType`).
 			constructionReturnType: construction.constructionReturnType,
 			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },

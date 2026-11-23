@@ -49,15 +49,15 @@ public enum MockLoweringShadow {
 		case mergedCode
 		/// The module's shared configuration code (`MockGenerationResult.mockConfigurationCode`), absent included.
 		case moduleConfigurations
-		// D1 lane hook (lane B): the imports of that code, read from the records (`MockLowering+Configurations.swift`).
+		// The imports of that code, read from the records (`MockLowering+Configurations.swift`).
 		/// The declarations the module's shared configuration code builds whose modules it imports
 		/// (`MockGenerationResult.mockConfigurationFulfillers`), one per line in sorted order, none included.
 		case moduleConfigurationFulfillers
-		// D1 lane hook (lane D): the one-way check read from the records (`MockLowering+OneWay.swift`).
+		// The one-way check read from the records (`MockLowering+OneWay.swift`).
 		/// The module's diagnostics of types built both with and without their hand-written mocks
 		/// (`validateConfigurationsAreBuiltOneWay`), none included.
 		case oneWayDiagnostics
-		// D1 lane hook (lane D): `query needs` read from the lowering's signature (`MockLowering+Signature.swift`).
+		// `query needs` read from the lowering's signature (`MockLowering+Signature.swift`).
 		/// The uncovered parameters `query needs` reports of a mock root (`MockRootParameters.flatUncoveredParameters`).
 		case queryNeeds
 	}
@@ -68,71 +68,37 @@ public enum MockLoweringShadow {
 		/// The lowering's code differs from the emitter's, first at `line` (counted from 1): `emitted` is the emitter's line
 		/// there and `lowered` the lowering's, `nil` past either one's end.
 		case differs(line: Int, emitted: String?, lowered: String?)
-		/// The lowering met a construct whose rule it does not lower yet.
-		case unsupported(MockLowering.Rule)
 	}
 
 	/// How `lowered` compares with `emitted`, byte for byte, line by line.
-	public static func outcome(comparing lowered: MockLowering.Result, with emitted: String) -> Outcome {
-		switch lowered {
-		case let .unsupported(rule):
-			return .unsupported(rule)
-		case let .lowered(loweredCode, _):
-			guard !loweredCode.utf8.elementsEqual(emitted.utf8) else { return .identical }
-			let emittedLines = emitted.split(separator: "\n", omittingEmptySubsequences: false)
-			let loweredLines = loweredCode.split(separator: "\n", omittingEmptySubsequences: false)
-			let index = zip(emittedLines, loweredLines).enumerated()
-				.first { !$0.element.0.utf8.elementsEqual($0.element.1.utf8) }?.offset
-				?? min(emittedLines.count, loweredLines.count)
-			return .differs(
-				line: index + 1,
-				emitted: index < emittedLines.count ? String(emittedLines[index]) : nil,
-				lowered: index < loweredLines.count ? String(loweredLines[index]) : nil,
-			)
-		}
+	public static func outcome(comparing loweredCode: String, with emitted: String) -> Outcome {
+		guard !loweredCode.utf8.elementsEqual(emitted.utf8) else { return .identical }
+		let emittedLines = emitted.split(separator: "\n", omittingEmptySubsequences: false)
+		let loweredLines = loweredCode.split(separator: "\n", omittingEmptySubsequences: false)
+		let index = zip(emittedLines, loweredLines).enumerated()
+			.first { !$0.element.0.utf8.elementsEqual($0.element.1.utf8) }?.offset
+			?? min(emittedLines.count, loweredLines.count)
+		return .differs(
+			line: index + 1,
+			emitted: index < emittedLines.count ? String(emittedLines[index]) : nil,
+			lowered: index < loweredLines.count ? String(loweredLines[index]) : nil,
+		)
 	}
 }
 
 /// Stage D1's lowering of a mock root's code from its finished generator tree, which replaces the mock emitter once it
 /// generates every root's code byte for byte (`/mnt/project-files/designs/generator-architecture/d1-design-note.md`).
 public enum MockLowering {
-	/// A rule of mock generation, as the lowering reports one it does not lower yet: the first such construct it meets in
-	/// a root decides the root's outcome, so a gap is counted, never guessed at.
-	public enum Rule: String, Sendable, CaseIterable {
-		/// A public mock's root (`generateMock: .public`): its tiers, builders and guard.
-		case publicMockRoot = "public mock root"
-		/// A call of another module's public mock: its level functions, fills and override closure.
-		case publicMockCall = "public mock call"
-		/// A site of a public mock's hole, which its builder builds.
-		case holeSite = "hole site"
-		/// A fill of another module's public mock's place, or a root built again inside one.
-		case fill
-		/// A hand-written mock, of the mocked type or of a type its tree builds.
-		case handWrittenMock = "hand-written mock"
-		/// A default-valued parameter of a construction.
-		case defaultValuedParameter = "default-valued parameter"
-		/// A parameter of `mock()` other than the overrides: forwarded, received or instantiated values the mock cannot build.
-		case flatParameter = "flat parameter"
-		/// A receive or override only if available.
-		case onlyIfAvailable = "only if available"
-		/// An alias, or a receive the walk does not trace to a sibling.
-		case alias
-		/// `fulfilledByType:`, `erasedToConcreteExistential:`, or a property typed other than the type it builds.
-		case erasure
-		/// An instantiator, `LazilyInstantiated` or other wrapper, or a type that forwards values.
-		case wrapper
-		/// A cycle-closing node.
-		case cycle
-		/// Two nodes of one label.
-		case siblingLabelCollision = "sibling label collision"
-	}
+	/// A mock root's code, with the configurations its tree's nodes are configured by, in the order its walk finished them
+	/// (`ConfigurationRecord`), from which the configuration structs are lowered.
+	public struct Result: Sendable, Equatable {
+		let code: String
+		let configurations: [ConfigurationRecord]
 
-	public enum Result: Sendable, Equatable {
-		/// The root's code, with the configurations its tree's nodes are configured by, in the order its walk finished
-		/// them (`ConfigurationRecord`).
-		// D1 lane hook (lane D): the records the configuration structs are lowered from.
-		case lowered(String, configurations: [ConfigurationRecord] = [])
-		case unsupported(Rule)
+		init(code: String, configurations: [ConfigurationRecord] = []) {
+			self.code = code
+			self.configurations = configurations
+		}
 	}
 
 	/// A configuration a node of a mock's tree is configured by: what the `SafeDIMockConfiguration` of its concrete type,
@@ -143,28 +109,28 @@ public enum MockLowering {
 		let concreteType: TypeDescription
 		/// Whether the node is built with its type's hand-written mock.
 		let usesMockInitializer: Bool
-		// D1 lane hook (lane C): a record keeps what spells its fields, which only the record a configuration is generated
+		// A record keeps what spells its fields, which only the record a configuration is generated
 		// from spells, once per type rather than once per node.
 		/// What spells the configuration's fields for the node's children, in the order its initializer takes them.
 		let childFieldSources: [ChildFieldSource]
-		// D1 lane hook (lane C): a record keeps the parameters its override closure is handed, not the node's whole
+		// A record keeps the parameters its override closure is handed, not the node's whole
 		// `Instantiable`, which building each record would copy.
 		/// The parameters of the node's construction that the closure that overrides it is handed.
 		let builderParameters: MockLowering.BuilderParameters
-		// D1 lane hook (lane D): a public mock's node, whose type's module-level configuration and construction functions are
+		// A public mock's node, whose type's module-level configuration and construction functions are
 		// lowered in `MockLowering+PublicConfigurations.swift`.
 		/// Where a public mock builds the node, the construction it builds the node's type with: `nil` in an internal mock.
 		var publicConstruction: PublicConstructionRecord?
-		// D1 lane hook (lane D): the fields for the node's construction's default-valued parameters.
+		// The fields for the node's construction's default-valued parameters.
 		/// The configuration's fields for the node's construction's default-valued parameters, after its children's.
 		var defaultFields = [DefaultField]()
-		// D1 lane hook (lane D): what the one-way check reads of the node (`MockLowering+OneWay.swift`).
+		// What the one-way check reads of the node (`MockLowering+OneWay.swift`).
 		/// The construction the node builds its type with, as the one-way check reads it.
 		var oneWayConstruction: OneWayConstruction?
-		// D1 lane hook (lane D): a node beneath a repeated ancestor (`MockLowering+Configurations.swift`).
+		// A node beneath a repeated ancestor (`MockLowering+Configurations.swift`).
 		/// Where the node is beneath a node whose type repeats one around it, what the module's choice of such a node reads.
 		var beneathRepeatedAncestor: BeneathRepeatedAncestor?
-		// D1 lane hook (lane B): what a configuration generated from the record makes the shared configuration file import.
+		// What a configuration generated from the record makes the shared configuration file import.
 		/// The declarations whose modules code that builds the node's type for its property needs imported, where it does
 		/// not name them (`FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)`).
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -202,14 +168,6 @@ public enum MockLowering {
 					return childField
 				}
 			}
-
-			/// Whether the field has no form the lowering spells in a configuration `@Sendable`-typed.
-			var lacksSendableForm: Bool {
-				switch self {
-				case .built: false
-				case let .spelled(childField): childField.sendableForm == nil
-				}
-			}
 		}
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
@@ -217,9 +175,8 @@ public enum MockLowering {
 			let name: String
 			let typeSource: String
 			let defaultValue: String
-			// D1 lane hook (lane C): the field in a configuration `@Sendable`-typed, where the lowering spells it.
 			/// The field in a configuration `@Sendable`-typed (`ScopeGenerator.configurationField`'s `parentRequiresSendable`),
-			/// or `nil` where the lowering does not spell it yet.
+			/// or `nil` for a node that has none there.
 			var sendableForm: SendableForm?
 
 			/// A child's field in a configuration `@Sendable`-typed: a `@Sendable` closure, which is `Sendable`, or the
@@ -252,12 +209,12 @@ public enum MockLowering {
 		let constructionIsolation: String?
 		/// What the construction returns: the concrete type, or what a hand-written mock returns.
 		let constructionReturnType: TypeDescription
-		// D1 lane hook (lane C): a node beneath a repeated configured ancestor records only the construction it builds
+		// A node beneath a repeated configured ancestor records only the construction it builds
 		// with, which declares a construction function (`ScopeGenerator.collectPublicConstructionNodes`).
 		/// Whether the record describes the type's module-level configuration too, as the node that records the
 		/// configuration's does.
 		var describesConfiguration = true
-		// D1 lane hook (lane B): what the construction function and the module-level configuration make the shared file
+		// What the construction function and the module-level configuration make the shared file
 		// import: the record's own fulfillers, and the mocked type of the root whose walk recorded it.
 		/// The declarations whose modules the construction's code needs imported (`ConfigurationRecord.fulfillers`).
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -306,7 +263,7 @@ public enum MockLowering {
 		let mockedType: TypeDescription
 		let lowered: Result
 		let emittedMergedCode: String
-		// D1 lane hook (lane B): a mock of a type of another module extends that type, whose module a configuration of the
+		// A mock of a type of another module extends that type, whose module a configuration of the
 		// mock's tree in the shared file needs imported.
 		/// The mocked type's declaration, with its module, where SafeDI knows one.
 		var mockedTypeFulfiller: FulfillerImports.Fulfiller?
@@ -314,31 +271,34 @@ public enum MockLowering {
 }
 
 extension ScopeGenerator {
-	/// This mock root's code, lowered from its finished generator tree, or the first rule it meets that the lowering does
-	/// not lower yet.
-	// D1 lane hook (lane E): the walk rethrows what the steps it shares with the emitter throw, which replace the emitter's
-	// errors at the switch.
+	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
+	/// emitter throw.
 	func lowerMockRoot(context: MockContext) async throws -> MockLowering.Result {
-		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.publicMockRoot) }
-		// D1 lane hook (lane C): a public mock's root (`MockLowering+PublicMocks.swift`).
-		guard instantiable.generateMock != .public else { return try await lowerPublicMockRoot(of: instantiable, context: context) }
-		guard propertiesToGenerate.isEmpty,
-		      instantiable.dependencies.isEmpty,
-		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
-		else { return try await lowerMockRootWithTree(of: instantiable, context: context) }
-		return .lowered(Self.mockWithoutTree(of: instantiable, context: context))
+		// A mock root's scope is always a root's.
+		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
+		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
+			// A public mock's root (`MockLowering+PublicMocks.swift`).
+			return try await lowerPublicMockRoot(of: instantiable, publicMockContext: publicMockContext, context: context)
+		} else if propertiesToGenerate.isEmpty,
+		          instantiable.dependencies.isEmpty,
+		          (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
+		{
+			return MockLowering.Result(code: Self.mockWithoutTree(of: instantiable, context: context))
+		} else {
+			return try await lowerMockRootWithTree(of: instantiable, context: context)
+		}
 	}
 
 	/// The mock of a type whose `mock()` takes no parameter and builds nothing but the type: one call of its hand-written
 	/// mock, its `instantiate()` or its initializer.
-	// D1 lane hook (lane B): the mocked type's own receives only if available that nothing above provides, passed `nil`.
+	// The mocked type's own receives only if available that nothing above provides, passed `nil`.
 	static func mockWithoutTree(of instantiable: Instantiable, context: MockContext, passingNilTo unavailableProperties: Set<Property> = []) -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		let returnType = (instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource
 		let argumentList = (instantiable.mockInitializer ?? instantiable.initializer)?
 			.createMockInitializerArgumentList(given: instantiable.dependencies, unavailableProperties: unavailableProperties)
-			// D1 lane hook (lane D): a type whose declaration the macro rejects is built with the comment that says so.
+			// A type whose declaration the macro rejects is built with the comment that says so.
 			?? Instantiable.incorrectlyConfiguredComment
 		let construction = if instantiable.mockInitializer != nil {
 			"\(typeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)(\(argumentList))"
