@@ -26,15 +26,16 @@ extension ScopeGenerator {
 	/// (`stemsOfOptionalBuilders`) apart from `safeDIOverrides`, in label order.
 	///
 	/// A public mock names each builder as its plan does (`optionalBuilderNames`, by family), apart from every name of its body.
-	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		var calls = [MockLowering.FilledCallBuilders.Call]()
 		var filledCalls = [FilledCall]()
 		var namesFillsDeclare = Set<String>()
 		// The places inside the calls' fills, each a place of the builder `mock()` takes for its hole type and family, in the
 		// order the calls are generated (`fillPlaces(in:)`).
 		var fillPlaces = [FillPlace]()
-		// What the mock's root level declares, which a fill reading a value of the caller's scope reads.
-		var rootLevelProperties = Set<Property>()
+		// What the mock's root level declares, which a fill reading a value of the caller's scope reads: what `mock()` binds
+		// before its tree, and the root's children.
+		var rootLevelProperties = rootBoundProperties
 		for child in orderedChildren {
 			if let property = child.generator.property {
 				rootLevelProperties.insert(property)
