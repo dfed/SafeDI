@@ -1410,7 +1410,11 @@ extension MockLowering {
 					: .init(typeSource: "(@Sendable \(node.builderClosureType))?", defaultValue: "nil", configuredTypeName: nil)
 			case let .cycleClosing(_, _, concreteType):
 				.init(typeSource: "\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)", defaultValue: ".init()", configuredTypeName: concreteType.asSource)
-			case .alias, .publicMockCall:
+			// D1 lane hook (lane C): a call's member in a configuration `@Sendable`-typed is a `@Sendable` closure
+			// (`publicMockOverridesMember(sendable:)`).
+			case let .publicMockCall(call):
+				call.sendableConfigurationFieldForm
+			case .alias:
 				nil
 			}
 		}

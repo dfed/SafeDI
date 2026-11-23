@@ -611,6 +611,18 @@ extension MockLowering {
 				nil
 			}
 		}
+
+		/// The member that configures the call in a configuration `@Sendable`-typed, always a `@Sendable` closure
+		/// (`ScopeGenerator.configurationField(of:named:parentRequiresSendable:sendableConfigurationTypeNames:)`).
+		var sendableConfigurationFieldForm: ConfigurationRecord.ChildField.SendableForm? {
+			if call.takesOverrides {
+				.init(typeSource: "(@Sendable () -> \(calledType.asSource).\(ReservedName.mockOverridesTypeName))?", defaultValue: "nil", configuredTypeName: nil)
+			} else if let overrideClosureType {
+				.init(typeSource: "(@Sendable \(overrideClosureType))?", defaultValue: "nil", configuredTypeName: nil)
+			} else {
+				nil
+			}
+		}
 	}
 }
 
