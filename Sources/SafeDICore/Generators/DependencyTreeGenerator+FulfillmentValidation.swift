@@ -2431,7 +2431,8 @@ extension DependencyTreeGenerator {
 			throw DependencyTreeGeneratorError.renamesContradictingOwnProperties(Array(renamesContradictingOwnProperties))
 		}
 		if !unfulfillableProperties.isEmpty {
-			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
+			let ownAccessProof = ownAccessProof()
+			throw DependencyTreeGeneratorError.unfulfillableProperties(unfulfillableProperties.map { $0.withForwardingAccess(proof: ownAccessProof.proof) })
 		}
 		if !hiddenReceivedProperties.isEmpty {
 			throw DependencyTreeGeneratorError.hiddenReceivedProperties(Self.reportingEachSeamsChainOnce(hiddenReceivedProperties, seamTypes: generatedSeamTypes))

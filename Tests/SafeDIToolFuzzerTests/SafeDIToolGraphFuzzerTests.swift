@@ -7525,7 +7525,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xA165FCDA8A1CA6FB
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD0C61D568DCBD395
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -7890,11 +7890,6 @@ struct SafeDIToolGraphFuzzerTests {
 			+ (seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason] ?? [])).sorted()
 		return seeds.isEmpty ? nil : GraphFuzzerKnownIssue(reason: knownIssue.reason, signatures: knownIssue.signatures, seeds: seeds)
 	} + [
-		GraphFuzzerKnownIssue(
-			reason: remedyForwardsTypeNarrowerThanForwardingTypeReason,
-			signatures: [.macroRejectsFixture(containing: "type alias cannot be declared public because its underlying type uses")],
-			seeds: [316, 954],
-		),
 		GraphFuzzerKnownIssue(
 			reason: labelSortedPassThroughReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
@@ -9299,7 +9294,6 @@ struct SafeDIToolGraphFuzzerTests {
 	static let remedyRelabelLeavesSeamLabelInTwoFormsReason = "An error at a receive that a declaration of its label hides advises relabeling the hiding declaration, which leaves a seam's tree receiving the label in two forms, which a seam rejects (\"Receive `t0Builder` the same way in every type of the tree\"; seed 1935: relabeling `t0Builder: SendableInstantiator<S1935_T0>` on `S1935_T2` leaves `S1935_T1` receiving `t0Builder: Instantiator<S1935_T0>?` and `S1935_T4` receiving `t0Builder: Instantiator<S1935_T0>`)"
 	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled, or a dependency cycle through the wrapper's type (seed 871: `FormsUser` -> `FormsScreen` -> `FormsUser`; remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let valueOracleSendableTreeReceivingInstantiatorReason = "A value-oracle fixture limit: a root's mock accepts a `SendableInstantiator` tree that receives a non-`Sendable` `Instantiator` from outside, which production rejects under any host, so the fixture that calls the mock beside production is rejected (Intended: an oracle limit, not a SafeDI defect; seed 2764: `S2764_Root1` builds `t3Builder: SendableInstantiator<S2764_T1>`, and `S2764_T1` receives `t2Builder: Instantiator<S2764_T2>`, which cannot be received inside a `@Sendable` function)"
-	static let remedyForwardsTypeNarrowerThanForwardingTypeReason = "A forward-receive remedy the tool accepts declares `@Forwarded let x: X` on a `public` type whose initializer is narrower, where `X` is `package` or `internal`, and the macro declares `ForwardedProperties` at the type’s own access, `public typealias ForwardedProperties = X`, which does not compile (\"type alias cannot be declared public because its underlying type uses a package type\"); the advice cannot know the type’s access, so the typealias should take the narrowest of the type’s access and the forwarded types’ (seam seeds 316 and 954: `ProofLock`, `public` with a `package` or `internal` initializer, forwards `proofPin: ProofPin`, `package` or `internal`). Minimal graph: `public final class Lock` with `package init(pin: Pin)` declares `@Forwarded let pin: Pin`, and `Pin` is `package`"
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). Naming every declaration whose `@Sendable` chain reaches the receive leaves out, in the base corpus's seeds 1436 and 4829, a root that reaches it on a chain that is not `@Sendable`, or the mock of a type that receives it"
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of

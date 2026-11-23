@@ -5469,6 +5469,110 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_omitsForwardingRemedy_whenReceivedTypeIsLessAccessibleThanReceiver() async {
+		// A `public` type that forwards a `package` value cannot compile: its `ForwardedProperties` typealias must be
+		// `public`, and could not name `Missing`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. No @Instantiable declaration fulfills `Missing`, so SafeDI cannot instantiate it. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(grandchild: Grandchild) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let grandchild: Grandchild
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Grandchild: Instantiable {
+					    package init(missing: Missing) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let missing: Missing
+					}
+
+					package struct Missing {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersForwardingRemedy_whenReceivedTypeIsAsAccessibleAsInternalReceiver() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. No @Instantiable declaration fulfills `Missing`, so SafeDI cannot instantiate it. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it, and declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix. Or declare `@Forwarded let missing: Missing` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					struct Root: Instantiable {
+					    init(child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					struct Child: Instantiable {
+					    init(grandchild: Grandchild) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let grandchild: Grandchild
+					}
+					""",
+					"""
+					@Instantiable
+					struct Grandchild: Instantiable {
+					    init(missing: Missing) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let missing: Missing
+					}
+
+					struct Missing {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_reportsErrorAtEveryReferencingDeclaration_whenNoInstantiableFound() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -7602,6 +7706,46 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					@Instantiable
 					public final class Session: Instantiable {
 					    public init(userID: String) { self.userID = userID }
+					    @Forwarded let userID: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_saysWhyReceiverCannotForwardReceivedProperty_whenReceivedTypeWithForwardedPropertiesIsLessAccessibleThanReceiver() async {
+		// A `public` type that forwards a `package` value cannot compile: its `ForwardedProperties` typealias must be
+		// `public`, and could not name `Session`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `session: Session` is not @Instantiated or @Forwarded in chain: Root -> Child. `Session` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. `Child` can forward it only once `Session` is at least as accessible as `Child`."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    package init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					package final class Session: Instantiable {
+					    package init(userID: String) { self.userID = userID }
 					    @Forwarded let userID: String
 					}
 					""",
