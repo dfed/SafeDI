@@ -26,7 +26,7 @@ extension ScopeGenerator {
 	/// (`stemsOfOptionalBuilders`) apart from `safeDIOverrides`, in label order.
 	///
 	/// A public mock names each builder as its plan does (`optionalBuilderNames`, by family), apart from every name of its body.
-	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, rootBindingNames: [String: [TypeDescription: String]], optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		var calls = [MockLowering.FilledCallBuilders.Call]()
 		var filledCalls = [FilledCall]()
 		var namesFillsDeclare = Set<String>()
@@ -36,9 +36,11 @@ extension ScopeGenerator {
 		// What the mock's root level declares, which a fill reading a value of the caller's scope reads: what `mock()` binds
 		// before its tree, and the root's children.
 		var rootLevelProperties = rootBoundProperties
+		var rootChildLabels = Set<String>()
 		for child in orderedChildren {
 			if let property = child.generator.property {
 				rootLevelProperties.insert(property)
+				rootChildLabels.insert(property.label)
 			}
 		}
 		for child in orderedChildren where child.generator.publicMockCall != nil && child.generator.fillsABuilder {
@@ -52,8 +54,12 @@ extension ScopeGenerator {
 			// A fill that reads a value of the caller's scope reads what the mock binds or offers for it.
 			for fill in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater).map(\.generator) {
 				// A fill that reads a value the mock root binds apart from its label rebinds it, which is not lowered yet.
+				// A fill that reads the caller's own value from a root binding named apart from its label binds the label to that
+				// name, which is lowered where a parameter or an override is named apart, never a root child the walk names apart.
 				guard case .fill = fill.scopeData,
-				      fill.fillCallerReads.mockRootBindingByLabel.isEmpty,
+				      fill.fillCallerReads.mockRootBindingByLabel.allSatisfy({ label, property in
+				      	!rootChildLabels.contains(label) && rootBindingNames[label]?[property.typeDescription] != nil
+				      }),
 				      fill.receivedProperties.allSatisfy({ rootLevelProperties.contains($0) || rootLevelProperties.contains($0.asUnwrappedProperty) })
 				else { return .unsupported(.fill) }
 			}
@@ -200,7 +206,7 @@ extension ScopeGenerator {
 		var filledCallBuilders = MockLowering.FilledCallBuilders(
 			calls: calls,
 			parameters: parameters,
-			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: fillPlaceBindingsByGenerator, holeBuildersByCall: holeBuildersByCall, holeBuildersByInlinePlace: holeBuildersByInlinePlaceInFills),
+			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: fillPlaceBindingsByGenerator, rootBindingNames: rootBindingNames, holeBuildersByCall: holeBuildersByCall, holeBuildersByInlinePlace: holeBuildersByInlinePlaceInFills),
 		)
 		filledCallBuilders.families = families
 		filledCallBuilders.namesFillsDeclare = namesFillsDeclare
