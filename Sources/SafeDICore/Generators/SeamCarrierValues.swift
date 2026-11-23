@@ -156,11 +156,6 @@ struct SeamCarrierValues: Sendable {
 		endsByLevel[level] ?? []
 	}
 
-	/// The run of `level` before the one that ends at `end`.
-	func previousEnd(ofLevel level: String, before end: Int) -> Int? {
-		endsByLevel[level]?.last { $0 < end }
-	}
-
 	/// How a member takes its case's values.
 	struct Use: Sendable {
 		let level: String

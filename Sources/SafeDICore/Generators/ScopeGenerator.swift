@@ -2665,8 +2665,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			switch returnType {
 			case let .nested(name, parentType, generics) where ReservedName.namesLevelType(name) && generics.count == 1:
 				.nested(name: name, parentType: parentType, generics: [carried(carriedType, through: generics[0])])
-			case let .simple(name, generics) where ReservedName.namesLevelType(name) && generics.count == 1:
-				.simple(name: name, generics: [carried(carriedType, through: generics[0])])
+			// A level a route carries is always spelled qualified: a carrier by its seam, which another module fills, and a
+			// builder struct by its enum.
 			case .void, .simple, .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .variadic, .unknown:
 				carriedType
 			}

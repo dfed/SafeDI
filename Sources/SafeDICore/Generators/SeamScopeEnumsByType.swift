@@ -514,8 +514,8 @@ extension DependencyTreeGenerator {
 			case .place, .fill:
 				return false
 			}
-			guard let component = componentByKey[enumKey] else { return false }
-			return componentByKey[heldKey] == component
+			// `componentByKey` holds every key of this hole type's enums, `enumKey` among them.
+			return componentByKey[heldKey] == componentByKey[enumKey]
 		}
 		/// The step of `caseOfProperty`'s case, whose payload the seam's tree binds before building the last property of
 		/// `bindingPrefix`, or builds where the place or the call is, when `bindingPrefix` is `nil`.
