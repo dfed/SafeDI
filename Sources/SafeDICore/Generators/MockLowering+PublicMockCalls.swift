@@ -131,7 +131,7 @@ extension ScopeGenerator {
 		var passedUpHoleTypes = [(holeType: SeamSignature.HoleType, receivedProperty: Property)]()
 		if passesUpBuilders {
 			// Beside places inside the fills, which claim their families' builders first, a builder passed up is not lowered yet.
-			guard fillPlaces.isEmpty, optionalBuilderNames == nil, passedUpBuilders.count > 0 else { return .unsupported(.publicMockCall) }
+			guard fillPlaces.isEmpty, optionalBuilderNames == nil, !passedUpBuilders.isEmpty else { return .unsupported(.publicMockCall) }
 			for builder in passedUpBuilders {
 				guard let firstProperty = builder.properties.first, let family = passedUpFamilies[firstProperty]?.family, passedUpBuilderByFamily[family] == nil else { return .unsupported(.publicMockCall) }
 				passedUpBuilderByFamily[family] = builder
