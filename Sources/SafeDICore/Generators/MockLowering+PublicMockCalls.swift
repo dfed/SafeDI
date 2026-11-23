@@ -251,8 +251,8 @@ extension ScopeGenerator {
 	/// `PublicMockCall.passedUpBuilders` and `passedUpBuildersCapturedBySendableFunctions` find them; or the first rule the
 	/// builders meet. Walked with a stack, since a tree can be as deep as the module has types.
 	// D1 lane hook (lane C): the lowering's signature names a builder per family (`seamMockBuilders`).
-	func passedUpBuilderFamilies(of generators: [ScopeGenerator]) -> MockLowering.Lowering<[Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)]> {
-		var familyByProperty = [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)]()
+	func passedUpBuilderFamilies(of generators: [ScopeGenerator]) -> MockLowering.Lowering<[Property: MockLowering.PassedUpBuilderFamily]> {
+		var familyByProperty = [Property: MockLowering.PassedUpBuilderFamily]()
 		// Each generator with whether a `@Sendable` builder function encloses it.
 		var generatorsToVisit = generators.map { ($0, false) }
 		while let (generator, isInsideSendableFunction) = generatorsToVisit.popLast() {
@@ -270,7 +270,12 @@ extension ScopeGenerator {
 					// One property passed up in two families is not lowered yet.
 					guard familyByProperty[property].map({ $0.family.holeType == family.holeType }) ?? true else { return .unsupported(.publicMockCall) }
 					let isSendable = family.isSendable || familyByProperty[property]?.family.isSendable == true
-					familyByProperty[property] = (MockRootParameters.SeamMockBuilder.Family(holeType: family.holeType, isSendable: isSendable), isCaptured)
+					let placeProperties = (familyByProperty[property]?.placeProperties ?? []) + MockRootParameters.SeamMockBuilder.PassedUpBuilder(family: family, calledBuilders: [(builder, publicMockCall.calledBuilders)]).placeProperties
+					familyByProperty[property] = MockLowering.PassedUpBuilderFamily(
+						family: MockRootParameters.SeamMockBuilder.Family(holeType: family.holeType, isSendable: isSendable),
+						isCapturedBySendableFunction: isCaptured,
+						placeProperties: placeProperties,
+					)
 				}
 			}
 			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators.map { ($0, capturesSendably) })
@@ -594,6 +599,15 @@ extension MockLowering.Walk {
 }
 
 extension MockLowering {
+	/// The family of a builder a call of another module's public mock passes up, by the property the call's leaf receives it
+	/// as: whether a `@Sendable` builder function captures it, and the properties of the places the called builders reach, in
+	/// the order of the calls (`SeamMockBuilder.PassedUpBuilder.placeProperties`).
+	struct PassedUpBuilderFamily {
+		let family: ScopeGenerator.MockRootParameters.SeamMockBuilder.Family
+		let isCapturedBySendableFunction: Bool
+		let placeProperties: [Property]
+	}
+
 	/// A node of a mock's tree that calls another module's public mock, which builds the node's whole tree.
 	struct PublicMockCallNode {
 		let property: Property
