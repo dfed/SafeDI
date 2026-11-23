@@ -6505,6 +6505,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// family it reads that it applied none to.
 		var remedyCounts = [GraphFuzzerRemedyKind: (judged: Int, failed: Int)]()
 		var unremediedSiteCount = 0
+		var acceptedRemedyCount = 0
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in the run's seed order, so the report and
@@ -6650,6 +6651,9 @@ struct SafeDIToolGraphFuzzerTests {
 								if remedyRun.failureLine != nil {
 									remedyCounts[remedyRun.remedy.kind, default: (0, 0)].failed += 1
 								}
+								if case .accepted = remedyRun.outcome {
+									acceptedRemedyCount += 1
+								}
 							}
 							if case let .rejected(diagnostics) = result.outcome {
 								unremediedSiteCount += GraphFuzzerRemedies.unremediedSiteCount(of: result.fixture, diagnostics: diagnostics)
@@ -6758,12 +6762,12 @@ struct SafeDIToolGraphFuzzerTests {
 		if let pinnedValueOracleCounts = corpus.valueOracleCounts {
 			report.append("value-oracle \(corpus.name) \(valueOracleCounts.reportField) \(pinnedValueOracleCounts.reportField)")
 		}
-		// The remedy oracle's judgments by kind, as `judged/failed`, and the sites it applied no remedy to, which no pin checks:
-		// the remedy oracle's unit tests hold a representative of each kind. It reads base and seam corpus graphs, in one
-		// module or split.
+		// The remedy oracle's judgments by kind, as `judged/failed`, the sites it applied no remedy to, and the remedied graphs
+		// the tool accepts, whose code the run compiles, which no pin checks: the remedy oracle's unit tests hold a
+		// representative of each kind. It reads base and seam corpus graphs, in one module or split.
 		if corpus.features.isEmpty || corpus.features == [.generateDependencyTree] {
 			let counts = GraphFuzzerRemedyKind.allCases.map { "\($0.rawValue)=\(remedyCounts[$0]?.judged ?? 0)/\(remedyCounts[$0]?.failed ?? 0)" }.joined(separator: ",")
-			report.append("remedies \(corpus.name) \(counts) unremedied=\(unremediedSiteCount)")
+			report.append("remedies \(corpus.name) \(counts) unremedied=\(unremediedSiteCount) accepted=\(acceptedRemedyCount)")
 		}
 		// What the run cost: its wall seconds, the CPU seconds of the test process and of its child processes, and for each
 		// phase the seconds batches spent in it, the CPU seconds of the processes it ran, and their number, which ci.yml's

@@ -3278,6 +3278,72 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		#expect(run.failureLine == "The forward-receive remedy, which receives `t2` with `@Forwarded`, leaves at `S1_T1.t2` in S1_T1.swift: \(introduced)")
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles a remedied graph only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func results_reportTheRemedyKind_whenTheToolAcceptsTheRemediedGraphAndItsGeneratedCodeDoesNotCompile() async throws {
+		// The forwarded receive leaves `S1_Parent`, which no root builds, building `S1_T1` as a constant, which the mock
+		// of `S1_Mocked` builds without the value `S1_T1` now forwards: the tool accepts it, and the mock does not compile.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: Instantiator<S1_T1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_Parent: Instantiable {
+				public init(t1: S1_T1) {
+					self.t1 = t1
+				}
+
+				@Instantiated let t1: S1_T1
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class S1_Mocked: Instantiable {
+				public init(parent: S1_Parent) {
+					self.parent = parent
+				}
+
+				@Received let parent: S1_Parent
+			}
+			""",
+		])
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [], multiModuleRenamings: [])
+		#expect(runs.remedyRuns.map(\.remedy.kind) == [.forwardReceive])
+
+		let failure = try #require(try await GraphFuzzerOracle.results(of: [runs]).first?.failure)
+
+		#expect(failure.kind == .generatedCodeDoesNotCompile)
+		#expect(failure.details.hasPrefix("The forward-receive remedy, which receives `t2` with `@Forwarded`, is accepted at `S1_T1.t2` in S1_T1.swift, and the remedied graph's generated code does not compile"))
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unremediedSiteCount_countsAnErrorOfAFamilyTheOracleReads_whenItIsAtALineThatIsNoPropertyOfAFinalClass() {

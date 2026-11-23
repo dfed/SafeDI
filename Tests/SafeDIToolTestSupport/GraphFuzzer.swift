@@ -14917,14 +14917,17 @@ enum GraphFuzzerOracle {
 	/// The oracle's verdict on graphs the tool already ran.
 	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own.
 	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = []) async throws -> [GraphFuzzerResult] {
-		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil }
+		// The remedied graphs the tool accepts compile in the same invocations, each under a prefix of its own, and a failure
+		// of one is its seed's (`GraphFuzzerRemedyVariant`).
+		let remedyVariants = remedyVariants(of: toolRuns.filter { $0.runsDifferFailure == nil })
+		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil } + remedyVariants.map(\.compiledRuns)
 		// A graph that fails as a debug build is reported as one, unless only its hand-written call fails there and its code
 		// fails as a release build.
 		let compilationFailures: [UInt64: GraphFuzzerFailure] = if compileVerificationIsEnabled {
 			try await GraphFuzzerPhaseAccount.measuring(.compiles) {
-				try await self.compilationFailures(of: compiledRuns).merging(self.compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, releaseFailure in
+				try await attributingFailures(of: remedyVariants, in: self.compilationFailures(of: compiledRuns).merging(self.compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, releaseFailure in
 					debugFailure.kind == .builderCallDoesNotCompile && releaseFailure.kind != .builderCallDoesNotCompile ? releaseFailure : debugFailure
-				}
+				})
 			}
 		} else {
 			[:]
