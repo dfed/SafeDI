@@ -662,6 +662,7 @@ extension MockLowering {
 				holeBuildersByInlinePlace: fillPlaceBindings.holeBuildersByInlinePlace,
 			)
 		}
+
 		/// The name `mock()` binds each builder a call passes up under, by the property the call's leaf receives it as.
 		var passedUpBuilderNames: [Property: String] = [:]
 		/// The families of hole type the calls fill, in the order `filledFamilies(of:)` gives, which a public mock's plan names.
