@@ -80,14 +80,8 @@ extension ScopeGenerator {
 		})
 		// D1 lane hook (lane E): what `mock()` binds under its label before its tree, which a call's fill reads.
 		let rootBoundProperties = signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties)
-		// D1 lane hook (lane E): the names `mock()` binds a parameter, an override or a wrapper apart from its label under, which
-		// a fill reading the caller's own value binds the label to (`FillPlaceBindings.rootBindingNames`).
-		var rootBindingNames = signature.renamesByLabelAndType
-		for (label, names) in signature.lazilyInstantiatedBindingNamesByLabelAndType {
-			rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
-		}
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
-		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, rootBindingNames: rootBindingNames) {
+		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
@@ -95,7 +89,7 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
 		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
-			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, rootBindingNames: rootBindingNames, optionalBuilderNames: optionalBuilderNames) {
+			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
 			case let .lowered(filledCallBuilders):
 				walk.filledCallBuilders = filledCallBuilders
 			case let .unsupported(rule):
@@ -465,6 +459,13 @@ extension MockLowering {
 			}
 			if bodyLabels.isEmpty {
 				rootRenames = renames
+				// D1 lane hook (lane E): a fill reading the caller's own value from the root's binding binds its label to the name
+				// the root binds it apart under: a parameter, an override, a node of the level, or a wrapper `mock()` makes.
+				var rootBindingNames = renames
+				for (label, names) in lazilyInstantiatedNames {
+					rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
+				}
+				filledCallBuilders.bindingRootNames(rootBindingNames)
 				// D1 lane hook (lane B): the names the root's property nodes are bound under, which a rebinding of the mocked
 				// type's own receive would redeclare.
 				for (generator, bindingName) in zip(generators, bindingNames) {
