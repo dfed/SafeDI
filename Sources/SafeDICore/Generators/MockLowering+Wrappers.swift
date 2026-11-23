@@ -46,7 +46,11 @@ extension MockLowering.Walk {
 				)
 			}
 		}
-		levelNames.append(GeneratedNameAllocator(reserving: functionNames))
+		// D1 lane hook (lane C): and the locals the mock's body reads its `@Sendable` autoclosure parameters into, which the
+		// scopes inside a `@Sendable` function call.
+		var names = GeneratedNameAllocator(reserving: functionNames)
+		names.reserve(sendableAutoclosureNames.values.map(MockLowering.sendableAutoclosureLocalName(of:)))
+		levelNames.append(names)
 	}
 
 	/// Ends the level `enterLevel(of:)` started.

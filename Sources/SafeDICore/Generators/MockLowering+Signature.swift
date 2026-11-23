@@ -72,6 +72,9 @@ extension MockLowering {
 		let lazilyInstantiatedBindings: [(name: String, value: String)]
 		/// The name each receive of such a wrapper, by label and type, is passed by, never bound again under its label.
 		let lazilyInstantiatedBindingNamesByLabelAndType: [String: [TypeDescription: String]]
+		// D1 lane hook (lane B): the labels the builder functions of the root's tree declare, which a root alias named apart
+		// is named apart from too (`renamingAliases`' reserved names).
+		let namesDeclaredInBuilderFunctions: Set<String>
 
 		/// The wrappers `mock()` binds, in each form their receives read, which the tree's receives of them find in scope.
 		var lazilyInstantiatedProperties: Set<Property> {
@@ -127,6 +130,7 @@ extension MockLowering {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				lazilyInstantiatedBindings: lazilyInstantiatedBindings,
 				lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+				namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 			)
 		}
 
@@ -134,6 +138,23 @@ extension MockLowering {
 		/// `label: Type = default` text) listed among the flat received parameters as the emitter lists a seam's own mock's
 		/// builders: each before the first flat received parameter whose property's label sorts after the builder's, the rest
 		/// after the last, before the uncovered parameters.
+		// D1 lane hook (lane C): the names of the `@Sendable` autoclosure parameters, by the property each stands for.
+		var sendableAutoclosureNames: [Property: String] {
+			var names = [Property: String]()
+			for parameter in uncoveredRootParameters where parameter.isSendableAutoclosure {
+				names[parameter.property] = parameter.label
+			}
+			return names
+		}
+
+		/// The lines that read each `@Sendable` autoclosure parameter into a local before any builder function, which the
+		/// types that instantiate its value call (`ScopeGenerator.SendableAutoclosureParameter`).
+		func sendableAutoclosureLocalBindingLines(indent: String) -> [String] {
+			uncoveredRootParameters.filter(\.isSendableAutoclosure).map { parameter in
+				"\(indent)let \(MockLowering.sendableAutoclosureLocalName(of: parameter.label)) = \(parameter.label)"
+			}
+		}
+
 		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = []) -> [String] {
 			var lines = (forwardedParameters + rootDefaultParameters).map { line(of: $0, indent: indent) }
 			var buildersToList = builders[...]
@@ -175,10 +196,9 @@ extension ScopeGenerator {
 	) -> MockLowering.Lowering<MockLowering.RootSignature> {
 		var forwardedParameters = [MockLowering.RootSignature.Parameter]()
 		for dependency in instantiable.dependencies.sorted(by: { $0.property < $1.property }) where dependency.source == .forwarded {
-			// A forwarded wrapper declares the forms of its instance beside it, which the tree's receives read.
-			guard dependency.property.propertyType.isConstant else { return .unsupported(.wrapper) }
-			// The default the initializer gives the parameter of its label wins over the hand-written mock its type has.
-			let constructionDefault = instantiable.initializer?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
+			// The default the construction (the type's own hand-written mock, else its initializer) gives the parameter of its
+			// label wins over the hand-written mock the parameter's type has.
+			let constructionDefault = MockLowering.rootConstructionInitializer(of: instantiable)?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
 			forwardedParameters.append(MockLowering.RootSignature.Parameter(
 				property: dependency.property,
 				defaultExpression: constructionDefault ?? flatParameterMockDefaults[dependency.property.typeDescription]?.expression,
@@ -186,12 +206,12 @@ extension ScopeGenerator {
 		}
 		var rootDefaultParameters = [MockLowering.RootSignature.Parameter]()
 		for (argument, defaultExpression) in Self.defaultValuedMockParameterArguments(of: instantiable) {
-			// `mock()` takes an `@autoclosure` as one and passes its call, so the value is evaluated where the type is built.
-			guard argument.typeDescription.strippingEscaping.autoclosureValueType == nil else { return .unsupported(.defaultValuedParameter) }
+			// `mock()` takes an `@autoclosure` as one and passes its call, so the value is evaluated where the type is built. A
+			// throwing one is taken as one that does not throw, since `mock()` calls it outside any function that throws.
 			rootDefaultParameters.append(MockLowering.RootSignature.Parameter(
 				property: Property(label: argument.label, typeDescription: argument.typeDescription),
 				defaultExpression: defaultExpression,
-				typeSource: argument.typeDescription.asFunctionParameter.asSource,
+				typeSource: argument.typeDescription.autoclosureTakenWithoutThrowing.asFunctionParameter.asSource,
 			))
 		}
 		// D1 lane hook (lane C): the mock takes no parameter or override for what only calls of other modules' public mocks
@@ -221,13 +241,21 @@ extension ScopeGenerator {
 		// lowered yet. An internal mock takes the wrapper's instance by value and binds the wrapper apart from its label
 		// (`generateMockRootCode`'s `lazilyInstantiatedReceivedProperties`), where the tree provides neither the wrapper nor
 		// its instance and the mocked type forwards no form of the label.
+		let tree = treeNames(of: instantiable)
+		let mockedTypeUncoveredWrapperInstances = Set(tree.mockedTypeUncoveredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty))
 		var wrappedReceivedProperties = [Property]()
 		if instantiable.generateMock == .public {
+			// A by-value form of a non-optional wrapper's instance is read through the wrapper the mock takes.
+			for wrapper in receivedProperties where wrapper.typeDescription.lazilyInstantiatedInstanceType != nil && !wrapper.typeDescription.isOptional {
+				let instance = wrapper.asValidatedForDependencyCycles
+				guard !receivedProperties.contains(where: { $0 != wrapper && $0.label == wrapper.label && $0.typeDescription.lazilyInstantiatedInstanceType != nil }) else { continue }
+				receivedProperties.remove(instance)
+				receivedProperties.remove(instance.asOptionalProperty)
+			}
 			let receivedLabels = receivedProperties.map(\.label)
 			guard !receivedProperties.contains(where: { property in
 				guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { return false }
 				return receivedLabels.count(where: { $0 == property.label }) > 1
-					|| flatParameterMockDefaults[instanceType.unwrapped] != nil
 			}) else { return .unsupported(.wrapper) }
 		} else {
 			for property in receivedProperties where property.typeDescription.lazilyInstantiatedInstanceType != nil {
@@ -235,13 +263,14 @@ extension ScopeGenerator {
 				      !isFulfilledByForwardedProperty(property)
 				else { continue }
 				let instance = property.asValidatedForDependencyCycles
-				// An instance the mocked type itself instantiates, which the mock may not build, is not lowered yet.
-				guard !instantiable.dependencies.contains(where: { dependency in
-					guard case .instantiated = dependency.source else { return false }
-					return dependency.property == instance.asUnwrappedProperty || dependency.lazilyInstantiatedInstanceProperty == instance.asUnwrappedProperty
-				}) else { return .unsupported(.wrapper) }
-				// A wrapper whose instance the tree provides is not made from it: the mock takes the wrapper as it is.
-				guard !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
+				// An instance the mocked type instantiates and the mock cannot build is the parameter `mock()` takes, which the
+				// wrapper is made from. The instance of a wrapper the mocked type instantiates and the mock cannot build provides
+				// only that wrapper, so the mock takes the instance too, as it builds a wrapper of the other kind beside one it
+				// builds. Any other instance the tree provides is not made into the wrapper: the mock takes the wrapper as it is.
+				guard tree.mockedTypeUncoveredProperties.contains(instance.asUnwrappedProperty)
+					|| mockedTypeUncoveredWrapperInstances.contains(instance.asUnwrappedProperty)
+					|| !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+				else { continue }
 				// The instance of one beside a property of its label and type the mocked type forwards is named apart from it,
 				// which the lowering does not lower yet.
 				guard !isFulfilledByForwardedProperty(instance) else { return .unsupported(.wrapper) }
@@ -265,6 +294,9 @@ extension ScopeGenerator {
 						.map(\.asValidatedForDependencyCycles.asUnwrappedProperty),
 				)
 		}
+		// D1 lane hook (lane B): only a property node binds a non-optional value for its optional form; an alias only if
+		// available binds an optional one (`generateMockRootCode`'s `isProvidedByTree`).
+		let rootPropertyNodes = Set(tree.rootPropertyNodes)
 		let receivedNonOptionalProperties = Set(receivedProperties.filter { !$0.typeDescription.isOptional })
 		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableReceivedProperties = [Property]()
@@ -275,8 +307,10 @@ extension ScopeGenerator {
 			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
 			else { continue }
 			// A node the mock promotes for an optional receive binds its non-optional value, which provides this one.
-			guard property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
-			guard !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
+			guard property.typeDescription.isOptional || !rootPropertyNodes.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
+			guard mockedTypeUncoveredWrapperInstances.contains(property.asUnwrappedProperty)
+				|| !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+			else { continue }
 			// A property every receiver receives only if available is an override, defaulting to `nil`; one any requires is a
 			// parameter.
 			if onlyIfAvailableUnwrappedReceivedProperties.contains(property.asUnwrappedProperty) {
@@ -285,7 +319,6 @@ extension ScopeGenerator {
 				flatReceivedProperties.append(property)
 			}
 		}
-		let tree = treeNames(of: instantiable)
 		let uncoveredParameters = tree.uncoveredParameters
 		let forwardedAndDefaultLabels = Set(forwardedParameters.map(\.name)).union(rootDefaultParameters.map(\.name))
 		let treeBindingNames = Self.bindingNames(of: tree.rootPropertyNodes, besideParametersKeepingTheirLabels: forwardedAndDefaultLabels)
@@ -356,11 +389,6 @@ extension ScopeGenerator {
 		for property in wrappedReceivedProperties where !lazilyInstantiatedPropertiesToBind.contains(property.asUnwrappedProperty) {
 			lazilyInstantiatedPropertiesToBind.append(property.asUnwrappedProperty)
 		}
-		// An instance the mocked type instantiates and the mock cannot build is the parameter the wrapper is made from, which
-		// the lowering does not bind yet.
-		guard !lazilyInstantiatedPropertiesToBind.contains(where: { property in
-			uncoveredParameters.contains { $0.property == property.asValidatedForDependencyCycles }
-		}) else { return .unsupported(.wrapper) }
 		let lazilyInstantiatedBindingNames = Self.namesApart(
 			preferredNames: lazilyInstantiatedPropertiesToBind.map { property in
 				"\(property.label)_\(property.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")".spelledAsJoinedIdentifier
@@ -385,6 +413,11 @@ extension ScopeGenerator {
 			// The parameter may be named apart from its label; an optional instance, or an override, is mapped.
 			if let index = flatReceivedProperties.firstIndex(of: instanceProperty) {
 				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(flatReceivedNames[index]) }"))
+			} else if tree.mockedTypeUncoveredProperties.contains(instanceProperty),
+			          let index = uncoveredParameters.firstIndex(where: { $0.property == instanceProperty })
+			{
+				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
+				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(uncoveredNames[index]) }"))
 			} else if let index = flatReceivedProperties.firstIndex(of: Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))) {
 				lazilyInstantiatedBindings.append((bindingName, "\(flatReceivedNames[index]).map { instance in \(wrapperTypeSource) { instance } }"))
 			} else {
@@ -417,9 +450,9 @@ extension ScopeGenerator {
 		// A type that generates its dependency tree takes a builder for each hole type of its places in place of their
 		// parameters (`seamMockBuilders`), which lane C's family lowers.
 		guard !instantiable.generatesDependencyTree || uncoveredParameters.isEmpty else { return .unsupported(.holeSite) }
-		// A value a type built in a `@Sendable` builder function instantiates is a `@Sendable` autoclosure, which `mock()`
-		// reads into a local and each type that instantiates it calls; the lowering builds neither yet.
-		guard !uncoveredParameters.contains(where: \.isSendableAutoclosure) else { return .unsupported(.wrapper) }
+		// D1 lane hook (lane C): a value a type built in a `@Sendable` builder function instantiates is a `@Sendable`
+		// autoclosure, which `mock()` reads into a local and each type that instantiates it calls
+		// (`RootSignature.sendableAutoclosureLocalBindingLines(indent:)`, `Walk.sendableAutoclosureNames`).
 		let namedUncoveredParameters = zip(uncoveredParameters, uncoveredNames).map { parameter, name in
 			MockRootParameters.UncoveredParameter(
 				property: parameter.property,
@@ -435,7 +468,7 @@ extension ScopeGenerator {
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedParameters: flatReceivedParameters,
 			uncoveredParameters: namedUncoveredParameters.map {
-				MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.typeSource, name: $0.label)
+				MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \($0.typeSource)" : $0.typeSource, name: $0.label)
 			},
 			uncoveredRootParameters: namedUncoveredParameters,
 			sharedValueDocumentation: namedUncoveredParameters.flatMap(\.sharedValueDocumentation),
@@ -445,6 +478,7 @@ extension ScopeGenerator {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lazilyInstantiatedBindings: lazilyInstantiatedBindings,
 			lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 		)
 		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
@@ -487,6 +521,8 @@ extension ScopeGenerator {
 		/// The labels of the dependencies of every node of the tree, which its builder function declares
 		/// (`namesDeclaredInBuilderFunctions(of:)`).
 		let namesDeclaredInBuilderFunctions: Set<String>
+		/// The `@Instantiated` dependencies of the mocked type itself that the mock cannot build.
+		let mockedTypeUncoveredProperties: Set<Property>
 	}
 
 	/// The names in the tree of the mocked type, `instantiable`, that the names of `mock()`'s parameters are chosen from. The
@@ -577,7 +613,9 @@ extension ScopeGenerator {
 			}
 		}
 		// The mocked type is built in the body of `mock()`, outside every builder function.
+		var mockedTypeUncoveredProperties = Set<Property>()
 		for dependency in instantiable.dependencies where isInstantiated(dependency) && !builtProperties.contains(dependency.property) {
+			mockedTypeUncoveredProperties.insert(dependency.property)
 			add(dependency, createdBy: instantiable.concreteInstantiable, at: [], isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
 		}
 		var visits = Array(rootChildren.reversed())
@@ -628,7 +666,8 @@ extension ScopeGenerator {
 			parameters.append(MockRootParameters.UncoveredParameter(
 				property: property,
 				label: property.label,
-				typeSource: typesDeclaredEscaping.contains(property.typeDescription)
+				// D1 lane hook (lane C): a `@Sendable` autoclosure spells the value it returns, which `@escaping` cannot apply to.
+				typeSource: !propertiesInstantiatedInSendableFunction.contains(property) && typesDeclaredEscaping.contains(property.typeDescription)
 					? property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
 					: typeSource,
 				instantiatedType: dependency.asInstantiatedType,
@@ -644,6 +683,7 @@ extension ScopeGenerator {
 				return property
 			},
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
+			mockedTypeUncoveredProperties: mockedTypeUncoveredProperties,
 		)
 	}
 }
