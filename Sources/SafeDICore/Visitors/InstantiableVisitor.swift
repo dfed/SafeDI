@@ -655,33 +655,33 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			if let instantiableType, let instantiableDeclarationType {
 				// Selecting the initializer validates each candidate against the dependencies, so it is selected once.
 				let canonicalConstructionInitializer = canonicalConstructionInitializer
-				return [
-					Instantiable(
-						instantiableType: instantiableType,
-						isRoot: isRoot,
-						generatesDependencyTree: generatesDependencyTree,
-						initializer: canonicalConstructionInitializer,
-						otherInitializers: otherConstructionInitializers(besides: canonicalConstructionInitializer),
-						additionalInstantiables: additionalInstantiables,
-						dependencies: dependencies,
-						declarationType: instantiableDeclarationType.asDeclarationType,
-						access: instantiableAccess,
-						enclosingTypeAccess: enclosingTypeAccess,
-						enclosingExtensionAccess: enclosingExtensionAccess,
-						generatedInitializerAttributes: generatedInitializerAttributes,
-						mockAttributes: mockAttributes,
-						declarationIsolation: declarationIsolation,
-						generateMock: generateMock,
-						mockGenerationArgumentRange: mockGenerationArgumentRange,
-						mockOnly: mockOnly,
-						mockInitializer: mockInitializer,
-						mockReturnType: mockReturnType,
-						customMockName: customMockName,
-						mockDeclarationLocation: mockDeclarationLocation,
-						mockDeclarationAccess: mockDeclarationAccess,
-						declarationLocation: instantiableDeclarationLocation,
-					),
-				]
+				return [Instantiable(
+					instantiableType: instantiableType,
+					isRoot: isRoot,
+					generatesDependencyTree: generatesDependencyTree,
+					initializer: canonicalConstructionInitializer,
+					otherInitializers: otherConstructionInitializers(besides: canonicalConstructionInitializer),
+					additionalInstantiables: additionalInstantiables,
+					dependencies: dependencies,
+					declarationType: instantiableDeclarationType.asDeclarationType,
+					access: instantiableAccess,
+					enclosingTypeAccess: enclosingTypeAccess,
+					enclosingExtensionAccess: enclosingExtensionAccess,
+					generatedInitializerAttributes: generatedInitializerAttributes,
+					mockAttributes: mockAttributes,
+					declarationIsolation: declarationIsolation,
+					generateMock: generateMock,
+					mockGenerationArgumentRange: mockGenerationArgumentRange,
+					mockOnly: mockOnly,
+					mockInitializer: mockInitializer,
+					mockReturnType: mockReturnType,
+					customMockName: customMockName,
+					mockDeclarationLocation: mockDeclarationLocation,
+					mockDeclarationAccess: mockDeclarationAccess,
+					declarationLocation: instantiableDeclarationLocation,
+					conformanceListNamesSendable: conformanceListNamesSendable,
+					conformanceListNamesOtherTypes: conformanceListNamesOtherTypes,
+				)]
 			} else {
 				return []
 			}
@@ -758,6 +758,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	private var instantiableAccess = AccessDeclaration(level: .internal)
 	/// See `Instantiable.declarationIsolation`.
 	private var declarationIsolation: String?
+	/// See `Instantiable.conformanceListNamesSendable`.
+	private var conformanceListNamesSendable = false
+	/// See `Instantiable.conformanceListNamesOtherTypes`.
+	private var conformanceListNamesOtherTypes = false
 
 	/// Whether the walk reports `diagnostics`, which only the macro reads: SafeDITool, which evaluates `#if` blocks, trusts
 	/// what the macro rejects, so its walk skips the checks whose only result is a diagnostic.
@@ -914,6 +918,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processModifiers(on: node)
 		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
 		declarationIsolation = Initializer.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
+		for inheritedType in node.inheritanceClause?.inheritedTypes ?? [] {
+			let conformance = inheritedType.type.typeDescription
+			if Self.isSendable(conformance) {
+				conformanceListNamesSendable = true
+			} else if !Self.isInstantiable(conformance) {
+				conformanceListNamesOtherTypes = true
+			}
+		}
 
 		return .visitChildren
 	}
@@ -982,6 +994,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				],
 			))
 		}
+	}
+}
+
+extension InstantiableVisitor {
+	/// Whether `conformance`, an entry of a declaration’s conformance list, is `Sendable` as the compiler checks it.
+	fileprivate static func isSendable(_ conformance: TypeDescription) -> Bool {
+		conformance == .simple(name: "Sendable") || conformance == .nested(name: "Sendable", parentType: .simple(name: "Swift"))
+	}
+
+	/// Whether `conformance`, an entry of a type declaration’s conformance list, is SafeDI’s `Instantiable`. Only an
+	/// extension spells `@retroactive`.
+	fileprivate static func isInstantiable(_ conformance: TypeDescription) -> Bool {
+		conformance == .simple(name: "Instantiable") || conformance == .nested(name: "Instantiable", parentType: .simple(name: "SafeDI"))
 	}
 }
 
