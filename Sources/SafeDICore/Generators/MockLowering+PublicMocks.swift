@@ -405,6 +405,7 @@ extension MockLowering.ConstantNode {
 extension MockLowering.Walk {
 	/// The node of `generator`, a site of a hole or a fill, whose statements are appended to `lines`, or the first rule it
 	/// meets.
+	@inline(never)
 	mutating func placeOrFillNode(
 		of generator: ScopeGenerator,
 		inScope _: Set<Property>,
