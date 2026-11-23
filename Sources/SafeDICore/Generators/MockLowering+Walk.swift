@@ -1344,20 +1344,7 @@ extension MockLowering {
 		/// The types of the values the node's override is handed, joined: one per argument its construction is passed, which
 		/// leaves out a parameter left to its default (`ScopeGenerator.MockParameterNode.callSiteArguments`).
 		private var builderParameterTypes: String {
-			Self.builderParameterTypes(of: instantiable, usesMockInitializer: usesMockInitializer)
-		}
-
-		// D1 lane hook (lane C): a configuration record spells them from what it keeps.
-		/// The types of the values the override of a node built with `instantiable`, with its hand-written mock where
-		/// `usesMockInitializer` and else its initializer, is handed, joined.
-		static func builderParameterTypes(of instantiable: Instantiable, usesMockInitializer: Bool) -> String {
-			let constructionInitializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer
-			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
-			return (constructionInitializer?.arguments ?? []).filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
-					.asFunctionParameter(amongTypesDeclaredEscaping: [])
-					.asSource
-			}.joined(separator: ", ")
+			MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesMockInitializer).spelled
 		}
 
 		/// The configuration that configures the node's children and the node.
@@ -1845,15 +1832,40 @@ extension MockLowering.ConfigurationRecord {
 			// D1 lane hook (lane C): a built child's field is spelled where a configuration is generated from the record.
 			childFieldSources: children.compactMap { child in
 				if case let .built(childNode) = child {
-					return .built(bindingName: childNode.bindingName, hasConfiguration: childNode.hasConfiguration, requiresSendable: childNode.requiresSendable, instantiable: childNode.instantiable, usesMockInitializer: childNode.usesMockInitializer, propertyType: childNode.property.typeDescription)
+					return .built(bindingName: childNode.bindingName, hasConfiguration: childNode.hasConfiguration, requiresSendable: childNode.requiresSendable, concreteType: childNode.instantiable.concreteInstantiable, builderParameters: MockLowering.BuilderParameters(of: childNode.instantiable, usesMockInitializer: childNode.usesMockInitializer), propertyType: childNode.property.typeDescription)
 				}
 				return child.overridesField.map { field in
 					.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm))
 				}
 			},
-			instantiable: node.instantiable,
+			builderParameters: MockLowering.BuilderParameters(of: node.instantiable, usesMockInitializer: node.usesMockInitializer),
 			defaultFields: node.defaultFields,
 		)
+	}
+}
+
+extension MockLowering {
+	/// The parameters of a node's construction that the closure overriding how the node is built is handed: every argument
+	/// of its construction initializer but one left to its default that no dependency names. It holds the two arrays it
+	/// reads rather than the node's `Instantiable`, so a configuration record copies two references, not a declaration.
+	struct BuilderParameters: Sendable, Equatable {
+		init(of instantiable: Instantiable, usesMockInitializer: Bool) {
+			arguments = (usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer)?.arguments ?? []
+			dependencies = instantiable.dependencies
+		}
+
+		/// The parameters' types, spelled as the closure's parameter list.
+		var spelled: String {
+			let dependencyLabels = Set(dependencies.map(\.property.label))
+			return arguments.filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+					.asFunctionParameter(amongTypesDeclaredEscaping: [])
+					.asSource
+			}.joined(separator: ", ")
+		}
+
+		private let arguments: [Initializer.Argument]
+		private let dependencies: [Dependency]
 	}
 }
 

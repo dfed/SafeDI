@@ -143,8 +143,10 @@ public enum MockLowering {
 		// from spells, once per type rather than once per node.
 		/// What spells the configuration's fields for the node's children, in the order its initializer takes them.
 		let childFieldSources: [ChildFieldSource]
-		/// The concrete type the node builds, whose construction's parameters the closure that overrides it is handed.
-		let instantiable: Instantiable
+		// D1 lane hook (lane C): a record keeps the parameters its override closure is handed, not the node's whole
+		// `Instantiable`, which building each record would copy.
+		/// The parameters of the node's construction that the closure that overrides it is handed.
+		let builderParameters: MockLowering.BuilderParameters
 		// D1 lane hook (lane D): a public mock's node, whose type's module-level configuration and construction functions are
 		// lowered in `MockLowering+PublicConfigurations.swift`.
 		/// Where a public mock builds the node, the construction it builds the node's type with: `nil` in an internal mock.
@@ -166,26 +168,26 @@ public enum MockLowering {
 
 		/// The type of the closure that overrides how the node is built, returning its concrete type.
 		var concreteBuilderClosureType: String {
-			"(\(MockLowering.ConstantNode.builderParameterTypes(of: instantiable, usesMockInitializer: usesMockInitializer))) -> \(concreteType.asSource)"
+			"(\(builderParameters.spelled)) -> \(concreteType.asSource)"
 		}
 
 		/// What spells a child's field: a node the tree builds, spelled when the field is read, or a field already spelled.
 		enum ChildFieldSource: Sendable, Equatable {
-			/// A node built with `instantiable`, bound as `bindingName`, whose field is its configuration where
-			/// `hasConfiguration`, else an optional builder closure returning `propertyType`, `@Sendable` where
+			/// A node of `concreteType`, bound as `bindingName`, whose field is its configuration where `hasConfiguration`,
+			/// else an optional builder closure handed `builderParameters` and returning `propertyType`, `@Sendable` where
 			/// `requiresSendable`.
-			case built(bindingName: String, hasConfiguration: Bool, requiresSendable: Bool, instantiable: Instantiable, usesMockInitializer: Bool, propertyType: TypeDescription)
+			case built(bindingName: String, hasConfiguration: Bool, requiresSendable: Bool, concreteType: TypeDescription, builderParameters: MockLowering.BuilderParameters, propertyType: TypeDescription)
 			case spelled(ChildField)
 
 			var childField: ChildField {
 				switch self {
-				case let .built(bindingName, hasConfiguration, requiresSendable, instantiable, usesMockInitializer, propertyType):
-					let configuredTypeName = instantiable.concreteInstantiable.asSource
+				case let .built(bindingName, hasConfiguration, requiresSendable, concreteType, builderParameters, propertyType):
+					let configuredTypeName = concreteType.asSource
 					if hasConfiguration {
 						let typeSource = "\(configuredTypeName).\(ScopeGenerator.MockParameterNode.configurationStructName)"
 						return ChildField(name: bindingName, typeSource: typeSource, defaultValue: ".init()", sendableForm: .init(typeSource: typeSource, defaultValue: ".init()", configuredTypeName: configuredTypeName))
 					} else {
-						let builderClosureType = "(\(MockLowering.ConstantNode.builderParameterTypes(of: instantiable, usesMockInitializer: usesMockInitializer))) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
+						let builderClosureType = "(\(builderParameters.spelled)) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
 						return ChildField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendableForm: .init(typeSource: "(@Sendable \(builderClosureType))?", defaultValue: "nil", configuredTypeName: nil))
 					}
 				case let .spelled(childField):
