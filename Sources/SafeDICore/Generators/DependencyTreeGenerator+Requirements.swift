@@ -152,6 +152,17 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
+		// Stage D1's shadow, which only the tests set: the uncovered parameters read from the lowering's signature, compared
+		// with those above.
+		// D1 lane hook (lane D): compared in `MockLowering+Signature.swift`.
+		if let shadowObserver = MockLoweringShadow.observer {
+			await shadowObserver(MockLoweringShadow.queryComparison(
+				of: mockRoot,
+				instantiable: instantiable,
+				flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
+				emitted: parameters.flatUncoveredParameters,
+			))
+		}
 
 		// The declarations the mock calls, each once, in the order the mock reaches them.
 		var declarations = [TypeRequirements.Declaration]()

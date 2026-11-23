@@ -53,6 +53,9 @@ public enum MockLoweringShadow {
 		/// The module's diagnostics of types built both with and without their hand-written mocks
 		/// (`validateConfigurationsAreBuiltOneWay`), none included.
 		case oneWayDiagnostics
+		// D1 lane hook (lane D): `query needs` read from the lowering's signature (`MockLowering+Signature.swift`).
+		/// The uncovered parameters `query needs` reports of a mock root (`MockRootParameters.flatUncoveredParameters`).
+		case queryNeeds
 	}
 
 	public enum Outcome: Sendable, Equatable {
