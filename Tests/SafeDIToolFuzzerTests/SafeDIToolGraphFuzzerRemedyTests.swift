@@ -3346,6 +3346,85 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func edit_removesParameterFromHandWrittenMock_whenRemedyRemovesPropertyTheMockTakes() throws {
+		var files = try #require(GraphFuzzerRemedies.Files(Self.typeWithHandWrittenMock))
+
+		#expect(files.edit(typeNamed: "S1_T1") { properties in properties.filter { $0.label != "t0" } })
+		#expect(files.contents == [
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2, flag: Bool = true) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+
+				#if DEBUG
+				public static func mock(t2: S1_T2, flag: Bool = true) -> S1_T1 {
+					S1_T1(t2: t2, flag: flag)
+				}
+				#endif
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func edit_retypesParameterOfHandWrittenMock_whenRemedyRetypesPropertyTheMockTakes() throws {
+		var files = try #require(GraphFuzzerRemedies.Files(Self.typeWithHandWrittenMock))
+
+		#expect(files.edit(typeNamed: "S1_T1") { properties in
+			properties.map { $0.label == "t2" ? GraphFuzzerRemedyProperty(attribute: "@Received", label: "t2", type: "SendableInstantiator<S1_T2>") : $0 }
+		})
+		#expect(files.contents == [
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t0: S1_T0, t2: SendableInstantiator<S1_T2>, flag: Bool = true) {
+					self.t0 = t0
+					self.t2 = t2
+				}
+
+				@Received let t0: S1_T0
+				@Received let t2: SendableInstantiator<S1_T2>
+
+				#if DEBUG
+				public static func mock(t0: S1_T0, t2: SendableInstantiator<S1_T2>, flag: Bool = true) -> S1_T1 {
+					S1_T1(t0: t0, t2: t2, flag: flag)
+				}
+				#endif
+			}
+			""",
+		])
+	}
+
+	/// A type with a hand-written mock that takes its initializer's parameters and passes each on, as the base corpus's
+	/// mock vocabulary draws one.
+	private static let typeWithHandWrittenMock = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+		"""
+		@Instantiable
+		public final class S1_T1: Instantiable {
+			public init(t0: S1_T0, t2: S1_T2, flag: Bool = true) {
+				self.t0 = t0
+				self.t2 = t2
+			}
+
+			@Received let t0: S1_T0
+			@Received let t2: S1_T2
+
+			#if DEBUG
+			public static func mock(t0: S1_T0, t2: S1_T2, flag: Bool = true) -> S1_T1 {
+				S1_T1(t0: t0, t2: t2, flag: flag)
+			}
+			#endif
+		}
+		""",
+	])
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unremediedSiteCount_countsAnErrorOfAFamilyTheOracleReads_whenItIsAtALineThatIsNoPropertyOfAFinalClass() {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""

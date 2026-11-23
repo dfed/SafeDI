@@ -8934,7 +8934,7 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
 				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 618, 649,
-				653, 677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
+				653, 677, 697, 825, 832, 833, 884, 909, 944, 946,
 			],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -9294,6 +9294,8 @@ struct SafeDIToolGraphFuzzerTests {
 	static let remedyRelabelLeavesSeamLabelInTwoFormsReason = "An error at a receive that a declaration of its label hides advises relabeling the hiding declaration, which leaves a seam's tree receiving the label in two forms, which a seam rejects (\"Receive `t0Builder` the same way in every type of the tree\"; seed 1935: relabeling `t0Builder: SendableInstantiator<S1935_T0>` on `S1935_T2` leaves `S1935_T1` receiving `t0Builder: Instantiator<S1935_T0>?` and `S1935_T4` receiving `t0Builder: Instantiator<S1935_T0>`)"
 	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled, or a dependency cycle through the wrapper's type (seed 871: `FormsUser` -> `FormsScreen` -> `FormsUser`; remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let valueOracleSendableTreeReceivingInstantiatorReason = "A value-oracle fixture limit: a root's mock accepts a `SendableInstantiator` tree that receives a non-`Sendable` `Instantiator` from outside, which production rejects under any host, so the fixture that calls the mock beside production is rejected (Intended: an oracle limit, not a SafeDI defect; seed 2764: `S2764_Root1` builds `t3Builder: SendableInstantiator<S2764_T1>`, and `S2764_T1` receives `t2Builder: Instantiator<S2764_T2>`, which cannot be received inside a `@Sendable` function)"
+	static let remedyForwardedReceiveBuiltAsConstantInMockReason = "A forward-receive remedy the tool accepts leaves a type no root reaches building the receiver as a constant, which production would report (\"Declare it as `Instantiator<T>`.\") and a mock that builds that type does not, so the mock builds the receiver without the value it now forwards and does not compile (results_reportTheRemedyKind_whenTheToolAcceptsTheRemediedGraphAndItsGeneratedCodeDoesNotCompile; minimal graph: `Child` declares `@Forwarded let value: Value`, `Parent` declares `@Instantiated let child: Child`, and `Root`, with `generateMock: true`, declares `@Received let parent: Parent`, which no root builds; its mock writes `Child(value: value)` with no `value` in scope). Production checks the builder only in the types a root reaches, and a mock only on the mock root’s own children"
+	static let remedyForwardedReceiveAdvisesWrapperThatIsNotSendableReason = "An error at a constant `@Instantiated` property whose type now forwards a value advises \"Declare it as `Instantiator<T>`.\" by the property’s own wrapper kind alone, so inside a type that conforms to `Sendable` it names the wrapper that is not `Sendable`, and a forward-receive remedy that follows it leaves a fixture that does not compile (\"stored property … of 'Sendable'-conforming class … has non-Sendable type 'Instantiator<…>'\"); there it should name `SendableInstantiator<T>`, and likewise for the erased and lazy forms. Minimal graph: `Child` declares `@Forwarded let value: Value`, and `Parent`, a `final class` that conforms to `Sendable`, declares `@Instantiated let child: Child`"
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). Naming every declaration whose `@Sendable` chain reaches the receive leaves out, in the base corpus's seeds 1436 and 4829, a root that reaches it on a chain that is not `@Sendable`, or the mock of a type that receives it"
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
@@ -9452,6 +9454,16 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: remedyDeclarationClosesCycleThroughRootReason,
 			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
 			seeds: [4_864],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyForwardedReceiveBuiltAsConstantInMockReason,
+			signatures: [.compilerError(containing: "The forward-receive remedy, ")],
+			seeds: [907],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyForwardedReceiveAdvisesWrapperThatIsNotSendableReason,
+			signatures: [.macroRejectsFixture(containing: "has non-Sendable type 'Instantiator<")],
+			seeds: [1_071],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySendableWrapperNamesOneDeclarationReason,

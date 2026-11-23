@@ -1555,6 +1555,27 @@ enum GraphFuzzerRemedies {
 				regionEnd = max(regionEnd, lastPropertyLineIndex)
 			}
 			let parameters = editedProperties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + otherParameters
+			// A hand-written mock that takes the initializer's parameters and passes each on (the mock vocabulary's) takes
+			// the edited ones, so that it still compiles beside the edited initializer. It follows the properties, so its
+			// line indices hold after the edit's own replacement below.
+			let initializerParameters = String(initializerLine[parametersStart.upperBound..<parametersEnd.lowerBound])
+			let mockSignatureSuffix = ") -> \(typeName) {"
+			for mockIndex in typeDeclaration.lines where mockIndex > regionEnd && mockIndex + 1 < typeDeclaration.lines.upperBound {
+				let mockLine = lines[mockIndex]
+				guard let mockParametersStart = mockLine.range(of: "static func "),
+				      mockLine.hasSuffix(mockSignatureSuffix),
+				      let openingParenthesis = mockLine[mockParametersStart.upperBound...].firstIndex(of: "("),
+				      mockLine[mockLine.index(after: openingParenthesis)..<mockLine.index(mockLine.endIndex, offsetBy: -mockSignatureSuffix.count)] == initializerParameters
+				else { continue }
+				let callLine = lines[mockIndex + 1]
+				let callPrefix = String(callLine.prefix { $0 == "\t" || $0 == " " }) + "\(typeName)("
+				guard callLine.hasPrefix(callPrefix), callLine.hasSuffix(")") else { continue }
+				let otherArguments = GraphFuzzerOracle.topLevelParameters(String(callLine.dropFirst(callPrefix.count).dropLast()))
+					.map { $0.trimmingCharacters(in: .whitespaces) }
+					.filter { argument in !propertyLabels.contains(argument.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)) }
+				lines[mockIndex] = String(mockLine[...openingParenthesis]) + parameters.joined(separator: ", ") + mockSignatureSuffix
+				lines[mockIndex + 1] = callPrefix + (editedProperties.map { "\($0.label): \($0.label)" } + otherArguments).joined(separator: ", ") + ")"
+			}
 			let initializerPrefix = String(initializerLine[..<parametersStart.upperBound])
 			let body = editedProperties.map { "\(indentation)\tself.\($0.label) = \($0.label)" } + otherBodyLines
 			var region = [String]()
