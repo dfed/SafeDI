@@ -327,11 +327,14 @@ extension MockLowering {
 		/// function a body between a cycle closer and the node it repeats declares under that node's label would hide the
 		/// node's function from the closer.
 		var bodyLabels = [Set<String>]()
-		// D1 lane hook (lane B): the labels of the nodes each body declares a builder function for, which a cycle-closing
-		// node, declaring none, is not among.
-		/// The labels of the children of each body of `bodyLabels` that build a property, which a closer's reference could
-		/// resolve to.
-		var bodyBuiltLabels = [Set<String>]()
+		// D1 lane hook (lane B): the names of the builder functions each body declares, which a cycle-closing node, declaring
+		// none, is not among.
+		/// The names of the builder functions the nodes of each body of `bodyLabels` declare, which a closer's reference
+		/// could resolve to.
+		var bodyFunctionNames = [Set<String>]()
+		/// The name the level renames the builder function of the node the walk is about to build to
+		/// (`ScopeGenerator.mockLoweringBuilderFunctionNames(of:boundAs:enclosingFunctionNames:)`), which that node takes.
+		var pendingRenamedFunctionName: String?
 		/// The names a receive is handed in place of its label, by label and then type: a node named apart from a sibling
 		/// that shares its label (`ScopeGenerator.disambiguatePropertyLabels(for:)`), which its receivers bind again under
 		/// the label in their builder functions, until a declaration of the label hides it.
@@ -469,8 +472,30 @@ extension MockLowering {
 					rootPropertyNodeBindingNames.insert(bindingName)
 				}
 			}
+			// D1 lane hook (lane B): a level whose nodes take part in a cycle renames a builder function that would hide an
+			// enclosing one a cycle-closing node beneath refers to, as the emitter does.
+			// Each declaration's ancestors are listed under its one label, innermost last, which the closer resolves to.
+			let enclosingFunctionNames = Dictionary(
+				ancestorDeclarationsByLabel.values.joined()
+					.filter { $0.functionName != MockLowering.builderFunctionName(boundAs: $0.declaration.property.label) }
+					.map { ($0.declaration, $0.functionName) },
+			) { _, innerFunctionName in innerFunctionName }
+			let renamedFunctionNames = ScopeGenerator.mockLoweringBuilderFunctionNames(of: generators, boundAs: bindingNames, enclosingFunctionNames: enclosingFunctionNames)
+			// A loop member's functions are named from its binding (`MockLowering.loopMembers`), so a loop is not lowered
+			// renamed yet, nor a level whose hole held in a wrapper, the one node with a declaration that builds no property,
+			// the emitter names among its nodes' functions.
+			let renamesFunction = renamedFunctionNames?.contains(where: { $0 != nil }) ?? false
+			guard !renamesFunction || !loops.contains(where: { $0 != nil }) && !generators.contains(where: { $0.declaration != nil && $0.mockLoweringBuiltProperty == nil }) else { return .unsupported(.cycle) }
+			if !bodyFunctionNames.isEmpty {
+				var functionNames = Set<String>()
+				for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
+					guard case let .property(_, property, _, _, isPropertyCycle, _) = generator.scopeData, !isPropertyCycle else { continue }
+					functionNames.insert(renamedFunctionNames?[index] ?? MockLowering.builderFunctionName(boundAs: bindingName ?? property.label))
+				}
+				bodyFunctionNames[bodyFunctionNames.count - 1] = functionNames
+			}
 			// D1 lane hook (lane B): the level's names, which a `@Sendable` builder function's locals are kept apart from.
-			enterLevel(of: generators, boundAs: bindingNames)
+			enterLevel(of: generators, boundAs: bindingNames, renamedFunctionNames: renamedFunctionNames)
 			defer { leaveLevel() }
 			// D1 lane hook (lane B): the loops of builders among the level's children, each emitted as one unit.
 			let enclosingLoopMembers = loopMembers
@@ -493,6 +518,7 @@ extension MockLowering {
 				unavailableProperties = orderedChildren[index].unavailableProperties
 				propertiesGeneratedLater = orderedChildren[index].propertiesGeneratedLater
 				var memberLines = [String]()
+				pendingRenamedFunctionName = renamedFunctionNames?[index]
 				// D1 lane hook: kinds of node (instantiators, wrappers, aliases, holes, calls).
 				let lowering: Lowering<TreeNode>
 				if membership == nil {
@@ -510,7 +536,10 @@ extension MockLowering {
 					lowering = .unsupported(.cycle)
 				}
 				loopMembership = nil
-				switch lowering {
+				// A node that builds its type in no builder function of its own leaves its level's name for it unread.
+				let leavesRenamedFunctionNameUnread = pendingRenamedFunctionName != nil
+				pendingRenamedFunctionName = nil
+				switch leavesRenamedFunctionNameUnread ? .unsupported(.cycle) : lowering {
 				case let .lowered(node):
 					nodes.append(node)
 					scope.insert(node.property)
@@ -692,15 +721,15 @@ extension MockLowering {
 			indent: String,
 			lines: inout [String],
 		) -> Lowering<TreeNode> {
-			// The node is the nearest declaration of the label around the closer, and no body between the two declares
-			// another node of it, so the closer reads the node's function by the name it is built with: its label's, or the
-			// name the node's level names it apart by (`BuilderFunctionNames.enclosingFunctionNames`). A lazy wrapper closes
+			// The node is the innermost declaration around the closer of the one it repeats, and every body between the two
+			// names its builder functions apart from that node's (`ScopeGenerator.mockLoweringBuilderFunctionNames`), so the
+			// closer reads the node's function by the name it is built with: its label's, or the name its level renames it
+			// to or names it apart by (`BuilderFunctionNames.enclosingFunctionNames`). A lazy wrapper closes
 			// on a constant declaration of its instance, and a constant on a lazy wrapper's, by the same function.
 			guard seamCall == nil,
 			      generator.closedOnDeclaration?.concreteType == instantiable.concreteInstantiable,
-			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last,
-			      closedOn.declaration == generator.closedOnDeclaration,
-			      !bodyBuiltLabels[closedOn.bodyLevel..<(bodyBuiltLabels.count - 1)].contains(where: { $0.contains(property.label) })
+			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last(where: { $0.declaration == generator.closedOnDeclaration }),
+			      !bodyFunctionNames[closedOn.bodyLevel...].contains(where: { $0.contains(closedOn.functionName) })
 			else { return .unsupported(.cycle) }
 			let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
 			// D1 lane hook (lane B): a closer of any wrapper kind hands the function to its wrapper, inside a `@Sendable`
@@ -751,6 +780,8 @@ extension MockLowering {
 			lines: inout [String],
 		) async -> Lowering<ConstantNode> {
 			let (instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = built
+			let renamedFunctionName = pendingRenamedFunctionName
+			pendingRenamedFunctionName = nil
 			// A mock builds every seam inline, so no scope of its tree calls one.
 			guard seamCall == nil else { return .unsupported(.publicMockCall) }
 			let cycleNodeKey = MockLowering.cycleNodeKey(of: property, builtAs: instantiable)
@@ -928,6 +959,7 @@ extension MockLowering {
 				defaultFields: defaultFields,
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
+			node.renamedFunctionName = renamedFunctionName
 			node.sendableAutoclosureBindingNames = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureNames[$0] }
 			// D1 lane hook (lane C): a node a public mock promotes at its root's level reads its caller's value first.
 			if parentConcreteType == nil, promotedProperties.contains(property) {
@@ -966,10 +998,8 @@ extension MockLowering {
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
 			ancestorDeclarationsByLabel[property.label, default: []].append((ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), functionName: node.functionName, bodyLevel: bodyLabels.count))
 			bodyLabels.append(Set(childGenerators.compactMap(\.property?.label)))
-			bodyBuiltLabels.append(Set(childGenerators.compactMap { child in
-				guard case let .property(_, property, _, _, isPropertyCycle, _) = child.scopeData, !isPropertyCycle else { return nil }
-				return property.label
-			}))
+			// The level's names are known once `children(of:…)` names its nodes, which fills this.
+			bodyFunctionNames.append([])
 			let siblingLabels = labels
 			labels = []
 			let enclosingParentConcreteType = parentConcreteType
@@ -1001,7 +1031,7 @@ extension MockLowering {
 			labels = siblingLabels
 			ancestorDeclarationsByLabel[property.label]?.removeLast()
 			bodyLabels.removeLast()
-			bodyBuiltLabels.removeLast()
+			bodyFunctionNames.removeLast()
 			if insertedAncestor {
 				ancestorTypes.remove(cycleNodeKey)
 			}
@@ -1284,9 +1314,14 @@ extension MockLowering {
 			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource : property.typeDescription.asSource
 		}
 
+		// D1 lane hook (lane B): the name the node's level renames its builder function to, apart from an enclosing function
+		// a cycle-closing node beneath refers to.
+		/// The name of the node's builder function where its level renames it, else `nil`.
+		var renamedFunctionName: String?
+
 		/// The name of the node's builder function.
 		var functionName: String {
-			MockLowering.builderFunctionName(boundAs: bindingName)
+			renamedFunctionName ?? MockLowering.builderFunctionName(boundAs: bindingName)
 		}
 
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.

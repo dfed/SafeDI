@@ -31,10 +31,14 @@ extension MockLowering.Walk {
 	/// Starts a level of the walk whose nodes are `generators`: its allocator of names holds the builder functions the
 	/// level declares, and inside a `@Sendable` builder function the extractor keeps its locals apart from those and from
 	/// the builder functions the level's nodes declare in their own bodies, before any read there is named.
-	mutating func enterLevel(of generators: [ScopeGenerator], boundAs bindingNames: [String?]) {
-		// A node named apart from a sibling declares its function under its name.
-		let functionNames = Set(zip(generators, bindingNames).compactMap { generator, bindingName in
-			Self.builderFunctionName(of: generator).map { functionName in bindingName.map { MockLowering.builderFunctionName(boundAs: $0) } ?? functionName }
+	/// - Parameter renamedFunctionNames: The names the level renames its nodes' builder functions to, where it renames any.
+	mutating func enterLevel(of generators: [ScopeGenerator], boundAs bindingNames: [String?], renamedFunctionNames: [String?]?) {
+		// A node named apart from a sibling declares its function under its name, and a node the level renames under the
+		// name it renames it to.
+		let functionNames = Set(generators.indices.compactMap { index in
+			Self.builderFunctionName(of: generators[index]).map { functionName in
+				renamedFunctionNames?[index] ?? bindingNames[index].map { MockLowering.builderFunctionName(boundAs: $0) } ?? functionName
+			}
 		})
 		if let sendableOverrideExtractor {
 			sendableOverrideExtractor.reserve(functionNames)
