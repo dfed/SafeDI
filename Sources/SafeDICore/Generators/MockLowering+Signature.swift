@@ -72,6 +72,9 @@ extension MockLowering {
 		let lazilyInstantiatedBindings: [(name: String, value: String)]
 		/// The name each receive of such a wrapper, by label and type, is passed by, never bound again under its label.
 		let lazilyInstantiatedBindingNamesByLabelAndType: [String: [TypeDescription: String]]
+		// D1 lane hook (lane B): the labels the builder functions of the root's tree declare, which a root alias named apart
+		// is named apart from too (`renamingAliases`' reserved names).
+		let namesDeclaredInBuilderFunctions: Set<String>
 
 		/// The wrappers `mock()` binds, in each form their receives read, which the tree's receives of them find in scope.
 		var lazilyInstantiatedProperties: Set<Property> {
@@ -127,6 +130,7 @@ extension MockLowering {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				lazilyInstantiatedBindings: lazilyInstantiatedBindings,
 				lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+				namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 			)
 		}
 
@@ -290,6 +294,9 @@ extension ScopeGenerator {
 						.map(\.asValidatedForDependencyCycles.asUnwrappedProperty),
 				)
 		}
+		// D1 lane hook (lane B): only a property node binds a non-optional value for its optional form; an alias only if
+		// available binds an optional one (`generateMockRootCode`'s `isProvidedByTree`).
+		let rootPropertyNodes = Set(tree.rootPropertyNodes)
 		let receivedNonOptionalProperties = Set(receivedProperties.filter { !$0.typeDescription.isOptional })
 		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableReceivedProperties = [Property]()
@@ -300,7 +307,7 @@ extension ScopeGenerator {
 			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
 			else { continue }
 			// A node the mock promotes for an optional receive binds its non-optional value, which provides this one.
-			guard property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
+			guard property.typeDescription.isOptional || !rootPropertyNodes.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
 			guard mockedTypeUncoveredWrapperInstances.contains(property.asUnwrappedProperty)
 				|| !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
 			else { continue }
@@ -477,6 +484,7 @@ extension ScopeGenerator {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lazilyInstantiatedBindings: lazilyInstantiatedBindings,
 			lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 		)
 		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).

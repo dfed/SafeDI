@@ -50,12 +50,12 @@ extension MockLowering {
 
 		init(
 			of node: ConstantNode,
+			construction: ScopeGenerator.MockConstruction,
 			children: [TreeNode],
 			parentConcreteType: String?,
 			isBeneathCycleEdge: Bool,
 			walkOrder: Int,
 		) {
-			let construction = ScopeGenerator.MockConstruction(instantiable: node.instantiable, useMockInitializer: node.usesMockInitializer, builderTypesDeclaredEscaping: [])
 			property = node.property
 			self.parentConcreteType = parentConcreteType
 			customMockName = construction.customMockName

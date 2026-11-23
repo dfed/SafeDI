@@ -24,9 +24,10 @@ extension MockLowering {
 	/// The arguments a call of the builder function that `generator`'s node declares or closes on passes its cycle
 	/// parameters, where the node is built: `nil` for one the node is built where nothing provides, a lazy wrapper's
 	/// instance, or the binding of the label; or `nil` where a binding is none of `scope`'s, such as an override the
-	/// mock's root binds.
-	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>, renames: [String: [TypeDescription: String]]) -> [String]? {
-		let unavailableProperties = generator.unavailableOptionalProperties
+	/// mock's root binds. `unavailableProperties` are what the node is passed `nil` for where its level builds it
+	/// (`ScopeGenerator.OrderedChild.unavailableProperties`), a parameter it passes `nil` among them, as the emitter's
+	/// `cycleParameterArgumentUnavailableProperties` reads them.
+	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]]) -> [String]? {
 		let lazilyInstantiatedInstanceProperties = generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
 		for parameter in generator.cycleParameters {
