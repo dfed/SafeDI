@@ -5167,6 +5167,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lazilyInstantiatedInstanceProperties
 	}
 
+	// D1 lane hook (lane D): the mock lowering reads whether an alias reads the instance of a `LazilyInstantiated` its scope
+	// holds.
+	nonisolated var mockLoweringFulfillingPropertyIsLazilyInstantiatedInstance: Bool {
+		fulfillingPropertyIsLazilyInstantiatedInstance
+	}
+
 	// D1 lane hook (lane B): the mock lowering reads which cycle arguments pass a lazy wrapper's instance.
 	/// `callSiteLazilyInstantiatedInstanceProperties`, read by the mock lowering.
 	nonisolated var mockLoweringCallSiteLazilyInstantiatedInstanceProperties: Set<Property> {
@@ -9058,6 +9064,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				else { return nil }
 				return (builder, MockRootParameters.SeamMockBuilder.Family(holeType: builder.enumKey.holeType, isSendable: builder.enumKey.isSendable || isInsideSendableFunction))
 			}
+		}
+
+		// D1 lane hook (lane E): every builder the call passes a function an enclosing call declares, re-entering it, its
+		// root level function's or a level's beneath it (`PublicMockLevelFunctions.Member.reentry`).
+		/// The number of builders the call passes a level function or dispatcher an enclosing call declares, by name.
+		var reenteringBuilderCount: Int {
+			generator.builderCallArguments.count { $0.builderStruct == nil && $0.enclosingFill != nil }
 		}
 
 		/// Each builder the call passes the level function of an enclosing call's builder, re-entering it, with the nearest

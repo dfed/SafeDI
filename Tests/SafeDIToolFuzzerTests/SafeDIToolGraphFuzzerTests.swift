@@ -3610,6 +3610,32 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1155() async throws {
+		// A `customMock` whose argument takes a dependency the generated mock passes it by label. Stage D1's lowering once
+		// matched the argument by label and type, left the argument out, and differed from the emitter.
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_155, reportLine: "mock-lowering: 6/6 roots identical (100.0%); 0 differ")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1341() async throws {
+		// `T3`'s `customMock(t1Builder:t3:)` takes `t3`, the `S1341_T3` the type receives under its own label, which the
+		// generated mock passes `t3: t3`. Stage D1's lowering once left that argument out.
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_341, reportLine: "mock-lowering: 12/12 roots identical (100.0%); 0 differ")
+	}
+
+	/// Expects stage D1's lowering of the mock roots of `seed`'s graph to tally `reportLine` against the emitter's code.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func expectMockLoweringIdenticalToEmitter(forSeed seed: UInt64, reportLine: String) async throws {
+		let tally = MockLoweringShadowChecks.Tally()
+		_ = try await MockLoweringShadowChecks.$tally.withValue(tally) {
+			try await GraphFuzzerOracle.results(forSeeds: [seed])
+		}
+		#expect(tally.reportLine == reportLine)
+	}
+
+	@Test
 	func fixture_drawsMockOnlyExtensionBeforeMockedStructServiceThatTypesReceive_forSeed0() {
 		// Every root instantiates `Service`, a `struct` with `generateMock: true` in a mixed graph, and `T0` and `T2`
 		// receive it. Its `mockOnly` extension, under `#if DEBUG` before its production declaration, names `preview()`
