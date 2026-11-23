@@ -53,15 +53,15 @@ extension ScopeGenerator {
 		}
 		rootLevelProperties = addingInstances(of: rootLevelProperties)
 		// The calls that fill builders, in the order the walk reaches them (depth first, each level in generation order), each
-		// with what the levels above it declare, which a fill reading a value of the caller's scope reads. A call inside a `@Sendable` builder function is not lowered yet.
-		var callsInWalkOrder = [(child: OrderedChild, declaredAbove: Set<Property>)]()
+		// with what the levels above it declare, which a fill reading a value of the caller's scope reads. A call is made
+		// inside a `@Sendable` function where an enclosing builder function, or its own, is one (`requiresSendable`).
+		var callsInWalkOrder = [(child: OrderedChild, declaredAbove: Set<Property>, requiresSendable: Bool)]()
 		var childrenToVisit = orderedChildren.reversed().map { (child: $0, declaredAbove: rootLevelProperties, isInsideSendableFunction: false) }
 		while let (child, declaredAbove, isInsideSendableFunction) = childrenToVisit.popLast() {
 			let generator = child.generator
 			if generator.publicMockCall != nil {
 				guard generator.fillsABuilder else { continue }
-				guard !isInsideSendableFunction else { return .unsupported(.fill) }
-				callsInWalkOrder.append((child, declaredAbove))
+				callsInWalkOrder.append((child, declaredAbove, isInsideSendableFunction || generator.buildsInSendableFunction))
 				continue
 			}
 			guard case let .property(instantiable, _, _, _, false, _) = generator.scopeData else { continue }
@@ -71,11 +71,10 @@ extension ScopeGenerator {
 			let nestedIsInsideSendableFunction = isInsideSendableFunction || generator.buildsInSendableFunction
 			childrenToVisit.append(contentsOf: grandchildren.reversed().map { ($0, nestedDeclaredAbove, nestedIsInsideSendableFunction) })
 		}
-		for (child, declaredAbove) in callsInWalkOrder {
+		for (child, declaredAbove, requiresSendable) in callsInWalkOrder {
 			let generator = child.generator
 			guard let publicMockCall = generator.publicMockCall,
 			      publicMockCall.passedUpBuilders.isEmpty,
-			      !generator.buildsInSendableFunction,
 			      !generator.declaresCycleParameters,
 			      generator.reboundProperties.isEmpty
 			else { return .unsupported(.fill) }
@@ -90,12 +89,12 @@ extension ScopeGenerator {
 			// A place inside a fill takes a required builder, which an internal mock takes (a public mock's are places of its own
 			// tree). A call inside a fill is generated with the fill, reading the builders `mock()` takes for the places it fills
 			// as the call does.
-			let callPlaces = generator.fillPlaces(insideSendableFunction: false)
+			let callPlaces = generator.fillPlaces(insideSendableFunction: requiresSendable)
 			guard optionalBuilderNames == nil || callPlaces.places.isEmpty else { return .unsupported(.fill) }
 			fillPlaces += callPlaces.places.map { place in
 				FillPlace(generator: place.generator, dependency: place.dependency, isInsideSendableFunction: place.isInsideSendableFunction, order: fillPlaces.count + place.order)
 			}
-			let filledCall = FilledCall(generator: generator, isInsideSendableFunction: false, enclosingCalls: [])
+			let filledCall = FilledCall(generator: generator, isInsideSendableFunction: requiresSendable, enclosingCalls: [])
 			guard filledCall.filledBuilders.count == publicMockCall.builders.count else { return .unsupported(.fill) }
 			for callInsideFill in callPlaces.calls {
 				guard let calledMock = callInsideFill.generator.publicMockCall,
