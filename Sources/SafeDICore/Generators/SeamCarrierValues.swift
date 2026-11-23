@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// How a seam's carriers hand a level's values to their members: the one place that decides it, which the carrier's
 /// declaration, the seam's tree and the caller's carrier all read, each computing it from the same enums.
 ///
