@@ -713,20 +713,85 @@ def source_targets(description):
     return sorted(targets)
 
 
-def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps):
-    """What `--pre-push` prints, and whether every step passed."""
+def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps, inherited=0):
+    """What `--pre-push` prints, and whether every step passed. `inherited` is how many tests fail on the head that
+    fail on the base too: they do not stop a push, and the result says how many there are."""
     lines = ["Pre-push block", f"head: {head} ({branch}), {commits} commit(s) measured from {base}", f"toolchain: {toolchain}: this says nothing of another Swift or platform"]
     ready = True
     if uncommitted:
         lines.append("uncommitted changes in the checkout: they are not this head's, and no check saw them")
         ready = False
-    for name in ("lint", "changed-line coverage", "whole-tree coverage", "release build"):
+    for name in ("lint", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
         text, passed, details = steps.get(name, ("not run", False, []))
         lines.append(f"{name}: {text}")
         lines += [f"  {detail}" for detail in details]
         ready = ready and passed
-    lines.append("result: " + ("PUSH" if ready else "DO NOT PUSH"))
+    lines.append("result: " + ((f"PUSH (inherited failures: {inherited})" if inherited else "PUSH") if ready else "DO NOT PUSH"))
     return "\n".join(lines), ready
+
+
+# A Swift Testing line opens with a symbol that differs by platform and terminal, then one or more spaces. A test
+# that fails says "recorded an issue" for each issue and then "failed after"; a known issue says "recorded a known
+# issue" and does not fail it. "Test run with 5 tests failed after" is the run's own line, not a test's.
+SWIFT_TESTING_FAILED = re.compile(r"^(?:\S+\s+)?Test (?!run with )(.+?) (?:failed after |recorded an issue )")
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+XCTEST_FAILED = re.compile(r"^Test Case '-?\[?(?:\w+\.)?(\w+)[ .](\w+)\]?' failed")
+
+
+def failed_tests(lines):
+    """The tests a `swift test` run printed as failed, each once, in the order printed: a Swift Testing test by the
+    name it prints, which does not say its suite, and an XCTest test as `Class.method`, which macOS and Linux spell
+    differently. A test that only recorded known issues passed, and a process that crashed names none."""
+    names = []
+    for line in lines:
+        line = ANSI_ESCAPE.sub("", line).strip()
+        match = SWIFT_TESTING_FAILED.match(line)
+        if match:
+            names.append(match.group(1))
+        else:
+            match = XCTEST_FAILED.match(line)
+            if match:
+                names.append(f"{match.group(1)}.{match.group(2)}")
+    return list(dict.fromkeys(names))
+
+
+def run_statuses(text):
+    """(`swift test`'s status, the report's status) from the coverage script's status file, or None when the script
+    ended before writing one."""
+    fields = dict(field.split("=", 1) for field in (text or "").split() if "=" in field)
+    try:
+        return int(fields["tests"]), int(fields["report"])
+    except (KeyError, ValueError):
+        return None
+
+
+def tests_step(status_code, statuses, failed, base_failed, lines, compiled=""):
+    """The block's `tests` step and how many of the head's failures the base has too. Only a test that fails on the
+    head and not on the base stops a push: a branch stacked on a base with failing tests inherits them, and they
+    are that base's to fix. `base_failed` is None when the base's results are not known; every failure is then new.
+    Tests are told apart by name, so two suites' tests of one name are one. `compiled` says which tests ran with
+    their generated code compiled: the whole suite runs without, so a test whose verdict rests on that compile
+    passes there whatever the code, and a reader must know which verdicts are real."""
+    compiled = f"; {compiled}" if compiled else ""
+    if statuses is None:
+        if status_code == 0:
+            return (f"passed{compiled}", True, []), 0
+        return (f"failed: the run ended before its tests could be read{compiled}", False, [line[:240] for line in lines[-8:]]), 0
+    if statuses[0] == 0:
+        return (f"passed{compiled}", True, []), 0
+    if not failed:
+        return (f"failed (swift test exited {statuses[0]}): no failing test could be read from the output, as after a crash or a build error{compiled}", False, [line[:240] for line in lines[-8:]]), 0
+    new = [name for name in failed if base_failed is None or name not in base_failed]
+    inherited = [name for name in failed if name not in new]
+    text = f"{len(failed)} failed: {len(new)} new on head, {len(inherited)} also failing on base"
+    if base_failed is None:
+        text += "; the base's results are not known, so every failure counts as new"
+    text += compiled
+    details = []
+    for title, names in (("new on head:", new), ("also failing on base:", inherited)):
+        if names:
+            details += [title] + [f"  {name[:200]}" for name in names[:20]] + ([f"  and {len(names) - 20} more"] if len(names) > 20 else [])
+    return (text, not new, details), len(inherited)
 
 
 # Lines "Check Line Coverage on Linux" leaves out of its counts (UNCOUNTED_TEXT in Scripts/unexecuted-lines.py).
@@ -832,41 +897,68 @@ def measured_on_one_platform(platform=sys.platform):
     return f"measured on {this} only; CI also counts {other}, so push over a listed line only by saying in the pull request why {other} executes it"
 
 
+def passed_compile_checks_path():
+    """The file of compile checks that passed on this machine (`SAFEDI_COMPILE_CHECK_PASSED_CACHE`). One file serves
+    every head: a check's key covers everything its result depends on, the compiler included."""
+    return caches_directory() / "SafeDIPreReview" / "passed-compile-checks.txt"
+
+
+NO_TEST_FILE = "the change touches no test file"
+
+
+def compiled_tests(status_code, statuses, seconds, lines):
+    """What the second pass adds to the whole suite's verdict: the suites the change touches, run again with their
+    generated code compiled. Gives what the `tests` step says of it, `swift test`'s status there (0 when nothing
+    ran) and the tests that failed there."""
+    if any(NO_TEST_FILE in line for line in lines):
+        return "generated code not compiled: the change touches no test file, so CI is the first to compile it", 0, []
+    said = f"generated code compiled in the suites the change touches only ({duration(seconds)}); every other test ran with its compile skipped"
+    if statuses is not None and statuses[0] == 0:
+        return said, 0, []
+    return said, (statuses[0] if statuses is not None else status_code) or 1, failed_tests(lines)
+
+
 def base_counts_path(base):
     return caches_directory() / "SafeDIPreReview" / "coverage" / f"{base}-{sys.platform}.json"
 
 
 def whole_suite_counts(runner, worktree, script, commit):
-    """The counts of the whole suite at the commit the worktree is checked out at, generated code not compiled, or
-    the reason there are none. `script` is the head's coverage script, so that an older base is measured the same
+    """The counts of the whole suite at the commit the worktree is checked out at, generated code not compiled, and
+    the tests that failed there, or the reason there are none. `script` is the head's coverage script, so that an older base is measured the same
     way; measured from the commit itself, its own report lists nothing."""
     environment = {**os.environ, "SAFEDI_SKIP_COMPILE_CHECK": "1"}
     (pathlib.Path(worktree.path) / ".build/coverage/full.lcov").unlink(missing_ok=True)
     completed = subprocess.run(runner + ["bash", str(script), "--full", commit], capture_output=True, text=True, cwd=worktree.path, pass_fds=(worktree.lock,), env=environment)
     lcov = pathlib.Path(worktree.path) / ".build/coverage/full.lcov"
-    if completed.returncode != 0 or not lcov.exists():
-        last = [line for line in (completed.stdout + completed.stderr).splitlines() if line.strip()][-1:]
-        return None, f"the whole suite did not give a report (status {completed.returncode}): {' '.join(last)[:200]}"
-    return source_counts(lcov.read_text(), worktree.path), None
+    lines = [line.strip() for line in (completed.stdout + completed.stderr).splitlines() if line.strip()]
+    failed = failed_tests(lines)
+    # A run whose tests failed still gives counts, from the tests that ran, when each failure is a test's and none
+    # is a crash, which writes no counts.
+    if not lcov.exists() or (completed.returncode != 0 and not failed):
+        return None, None, f"the whole suite did not give a report (status {completed.returncode}): {' '.join(lines[-1:])[:200]}"
+    return source_counts(lcov.read_text(), worktree.path), failed, None
 
 
 def base_counts_of(runner, worktree, base, head):
     """The base's whole-suite counts on this platform: from the cache, or measured once in the worktree, which is
-    checked out at the base for it and back at the head after. Gives the counts, or None and the reason."""
+    checked out at the base for it and back at the head after. Gives the counts and the tests that failed on the
+    base, or None, None and the reason."""
     cached = base_counts_path(base)
     if cached.exists():
-        return json.loads(cached.read_text()), None
+        kept = json.loads(cached.read_text())
+        # A file kept before failing tests were recorded holds the counts alone, and was kept only when none failed.
+        return (kept["counts"], kept["failed_tests"], None) if "failed_tests" in kept else (kept, [], None)
     script = cached.parent / "changed-line-coverage.sh"
     cached.parent.mkdir(parents=True, exist_ok=True)
     script.write_text(output_of("git", "show", f"{head}:Scripts/changed-line-coverage.sh"))
     try:
         prepare_worktree(worktree.path, base)
-        counts, reason = whole_suite_counts(runner, worktree, script, base)
+        counts, failed, reason = whole_suite_counts(runner, worktree, script, base)
     finally:
         prepare_worktree(worktree.path, head)
     if counts is not None:
-        cached.write_text(json.dumps(counts))
-    return counts, reason
+        cached.write_text(json.dumps({"counts": counts, "failed_tests": failed}))
+    return counts, failed, reason
 
 
 def report_text(path):
@@ -944,8 +1036,9 @@ def pre_push(arguments, top, head, status):
         started, base_was_kept = time.time(), base_counts_path(base).exists()
         if not base_was_kept:
             print(f"pre-review: {time.strftime('%H:%M:%S')} measuring the whole suite on the base {base[:9]}, once for this machine", file=sys.stderr, flush=True)
-        base_counts, no_base_counts = base_counts_of(runner, worktree, base, head)
+        base_counts, base_failed, no_base_counts = base_counts_of(runner, worktree, base, head)
         base_seconds = time.time() - started
+        inherited = [0]
 
         def coverage():
             # The whole suite, not only the suites the change touches: a line the change did not touch can lose its
@@ -954,7 +1047,13 @@ def pre_push(arguments, top, head, status):
             # The base's report, or an earlier run's, must not be read as this run's.
             lcov.unlink(missing_ok=True)
             status_code, seconds, lines = timed(runner + ["Scripts/changed-line-coverage.sh", "--full", arguments.base], worktree)
-            steps["changed-line coverage"] = (f"{'passed' if status_code == 0 else 'failed'}, {duration(seconds)}", status_code == 0, [] if status_code == 0 else coverage_details(status_code, lines, report_text(pathlib.Path(worktree.path) / ".build/coverage/report.txt")))
+            statuses = run_statuses(report_text(pathlib.Path(worktree.path) / ".build/coverage/status.txt"))
+            failed = failed_tests(lines)
+            # The report's own status where the script got as far as writing it: a failing test also ends the script
+            # with a status, and the tests step is where that is judged.
+            covered = statuses[1] == 0 if statuses else status_code == 0
+            report_status = 1 if statuses else status_code
+            steps["changed-line coverage"] = (f"{'passed' if covered else 'failed'}, {duration(seconds)}", covered, [] if covered else coverage_details(report_status, lines, report_text(pathlib.Path(worktree.path) / ".build/coverage/report.txt")))
             if base_counts is None:
                 steps["whole-tree coverage"] = (f"not compared, {duration(base_seconds)}: {no_base_counts}", False, [])
             elif not lcov.exists():
@@ -968,6 +1067,19 @@ def pre_push(arguments, top, head, status):
                     steps["whole-tree coverage"] = (f"failed ({measured}): {len(lost)} line(s) the change did not touch ran in a test on {base[:9]} and run in none now; {measured_on_one_platform()}", False, texts + ([f"and {len(lost) - 20} more"] if len(lost) > 20 else []))
                 else:
                     steps["whole-tree coverage"] = (f"passed ({measured}): every untouched line a test ran on {base[:9]} still runs in one", True, [])
+            # Last, since it replaces the reports read above: the suites the change touches again, with their
+            # generated code compiled. The run above skips that compile, so a test whose verdict rests on it passed
+            # there whatever the code. It reuses the build, and skips each check that already passed on this machine.
+            passed_checks = passed_compile_checks_path()
+            passed_checks.parent.mkdir(parents=True, exist_ok=True)
+            compiled_code, compiled_seconds, compiled_lines = timed(runner + ["Scripts/changed-line-coverage.sh", "--compile-checks", "--first-only", arguments.base], worktree, {**os.environ, "SAFEDI_COMPILE_CHECK_PASSED_CACHE": str(passed_checks)})
+            compiled, compiled_status, compiled_failed = compiled_tests(compiled_code, run_statuses(report_text(pathlib.Path(worktree.path) / ".build/coverage/status.txt")), compiled_seconds, compiled_lines)
+            if compiled_status != 0:
+                statuses = (statuses[0] or compiled_status, statuses[1]) if statuses is not None else None
+                status_code = status_code or compiled_status
+                failed = list(dict.fromkeys(failed + compiled_failed))
+                lines = lines + compiled_lines
+            steps["tests"], inherited[0] = tests_step(status_code, statuses, failed, base_failed, lines, compiled)
 
         def release():
             status_code, seconds, lines = release_build(runner, worktree, sys.platform.startswith("linux"))
@@ -985,7 +1097,7 @@ def pre_push(arguments, top, head, status):
             thread.start()
         for thread in threads:
             thread.join()
-    text, ready = pre_push_block(head, output_of("git", "rev-parse", "--abbrev-ref", "HEAD"), f"{arguments.base} at {base[:9]}", int(output_of("git", "rev-list", "--count", f"{base}..HEAD")), bool(status), toolchain, steps)
+    text, ready = pre_push_block(head, output_of("git", "rev-parse", "--abbrev-ref", "HEAD"), f"{arguments.base} at {base[:9]}", int(output_of("git", "rev-list", "--count", f"{base}..HEAD")), bool(status), toolchain, steps, inherited[0])
     print(text)
     sys.exit(0 if ready else 1)
 
@@ -1024,10 +1136,10 @@ def save(record):
     path.write_text(json.dumps(record, indent=1))
 
 
-def timed(arguments, worktree):
+def timed(arguments, worktree, environment=None):
     """A command's exit status, its seconds, and the lines it printed, run in the scratch worktree."""
     started = time.time()
-    completed = subprocess.run(arguments, capture_output=True, text=True, cwd=worktree.path, pass_fds=(worktree.lock,))
+    completed = subprocess.run(arguments, capture_output=True, text=True, cwd=worktree.path, pass_fds=(worktree.lock,), env=environment)
     lines = [line.strip() for line in (completed.stdout + completed.stderr).splitlines() if line.strip()]
     return completed.returncode, time.time() - started, lines
 
@@ -2133,7 +2245,7 @@ def self_test():
         {"Sources/A.swift": {"3": 0, "4": 0, "6": 0, "11": 0, "12": 0, "22": 0}, "Sources/B.swift": {"1": 0, "2": 0}, "Sources/New.swift": {"1": 0}, "Sources/Unrecorded.swift": {"1": 0}},
         hunks,
     ), [("Sources/A.swift", 3), ("Sources/A.swift", 6), ("Sources/A.swift", 22), ("Sources/B.swift", 1)])
-    passed_steps = {"lint": ("passed, 50 s", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    passed_steps = {"lint": ("passed, 50 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
     expect("a whole-tree failure names the platform that measured it and the one CI also counts", [measured_on_one_platform("linux"), measured_on_one_platform("darwin")], [
         "measured on Linux only; CI also counts macOS, so push over a listed line only by saying in the pull request why macOS executes it",
         "measured on macOS only; CI also counts Linux, so push over a listed line only by saying in the pull request why Linux executes it",
@@ -2143,6 +2255,7 @@ def self_test():
         "head: abc (lane), 2 commit(s) measured from origin/main at 123",
         "toolchain: Swift 6.4: this says nothing of another Swift or platform",
         "lint: passed, 50 s",
+        "tests: passed",
         "changed-line coverage: passed, 5 min 9 s",
         "whole-tree coverage: passed (base from the cache): every untouched line a test ran on 123 still runs in one",
         "release build: passed, 2 min 0 s",
@@ -2153,6 +2266,62 @@ def self_test():
     expect("a failed coverage report is given from its file, cut to twenty lines and its total", (len(details), details[0], details[-1]), (21, "Sources/A.swift:1: x", "and 11 more, then: 0 changed file(s) the report does not record"))
     expect("a failed test run gives the last lines printed", coverage_details(2, [str(number) for number in range(20)], report_file), [str(number) for number in range(12, 20)])
     expect("so does a failure that wrote no report", coverage_details(1, ["a", "b"], None), ["a", "b"])
+    test_log = [
+        "\u2718 Test first() recorded an issue at A.swift:3:5: Expectation failed",
+        "\u2718 Test first() failed after 0.1 seconds with 1 issue.",
+        "\u2718 Test known() passed after 0.1 seconds with 1 known issue.",
+        "\u2718 Suite ATests failed after 0.2 seconds with 1 issue.",
+        "Test Case '-[SafeDIMacrosTests.BTests testSecond]' failed (0.1 seconds).",
+        "Test Case 'BTests.testSecond' failed (0.1 seconds)",
+        "Test Case 'BTests.testThird' passed (0.1 seconds)",
+        "\u2718 Test \"a display name\" failed after 0.1 seconds with 2 issues.",
+        "\U00100884  Test spaced(value:) recorded an issue with 1 argument value \u2192 3 at A.swift:9:5: Expectation failed",
+        "\x1b[31m\u2718\x1b[0m Test colored() failed after 0.1 seconds with 1 issue.",
+        "\u2718 Test quiet() recorded a known issue at A.swift:3:5: Expectation failed",
+        "\u2718 Test run with 5 tests failed after 1.0 seconds with 4 issues.",
+    ]
+    expect(
+        "the failing tests of a run, each once, an XCTest test spelled alike on both platforms, whatever symbol and spacing open a line",
+        failed_tests(test_log),
+        ["first()", "BTests.testSecond", '"a display name"', "spaced(value:)", "colored()"],
+    )
+    expect("the script's status file gives the two statuses apart, and none when it is missing or cut short", [run_statuses("tests=1 report=0\n"), run_statuses(None), run_statuses("tests=1")], [(1, 0), None, None])
+    expect("a run whose tests passed", tests_step(0, (0, 1), [], [], []), (("passed", True, []), 0))
+    expect(
+        "failures the base has too do not stop a push, and are counted",
+        tests_step(1, (1, 0), ["first()", "second()"], ["second()", "first()", "other()"], []),
+        (("2 failed: 0 new on head, 2 also failing on base", True, ["also failing on base:", "  first()", "  second()"]), 2),
+    )
+    expect(
+        "one failure the base lacks stops it, and is listed apart from the inherited ones",
+        tests_step(1, (1, 0), ["first()", "second()"], ["second()"], []),
+        (("2 failed: 1 new on head, 1 also failing on base", False, ["new on head:", "  first()", "also failing on base:", "  second()"]), 1),
+    )
+    expect(
+        "with the base's results unknown every failure is new",
+        tests_step(1, (1, 0), ["first()"], None, []),
+        (("1 failed: 1 new on head, 0 also failing on base; the base's results are not known, so every failure counts as new", False, ["new on head:", "  first()"]), 0),
+    )
+    expect("a run that failed and named no test, as a crash does, is not a pass", tests_step(1, (1, 0), [], ["first()"], ["a", "b"]), (("failed (swift test exited 1): no failing test could be read from the output, as after a crash or a build error", False, ["a", "b"]), 0))
+    expect("nor is a run that ended before the status file", tests_step(2, None, [], [], ["a"]), (("failed: the run ended before its tests could be read", False, ["a"]), 0))
+    expect("the step says which tests compiled their generated code, whatever its verdict", [tests_step(0, (0, 0), [], [], [], "note")[0][0], tests_step(1, (1, 0), ["first()"], ["first()"], [], "note")[0][0], tests_step(1, (1, 0), [], [], [], "note")[0][0][-6:]], ["passed; note", "1 failed: 0 new on head, 1 also failing on base; note", "; note"])
+    expect(
+        "the second pass, with generated code compiled: nothing to run, a pass, a failure, and a run cut short",
+        [
+            compiled_tests(0, (0, 0), 1, ["the change touches no test file, so there is no suite to run"]),
+            compiled_tests(0, (0, 0), 61, []),
+            compiled_tests(1, (1, 0), 61, [test_log[1]]),
+            compiled_tests(2, None, 61, ["error: build failed"]),
+        ],
+        [
+            ("generated code not compiled: the change touches no test file, so CI is the first to compile it", 0, []),
+            ("generated code compiled in the suites the change touches only (1 min 1 s); every other test ran with its compile skipped", 0, []),
+            ("generated code compiled in the suites the change touches only (1 min 1 s); every other test ran with its compile skipped", 1, ["first()"]),
+            ("generated code compiled in the suites the change touches only (1 min 1 s); every other test ran with its compile skipped", 2, []),
+        ],
+    )
+    expect("a block whose only failures are inherited says to push and how many there are", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "tests": ("2 failed: 0 new on head, 2 also failing on base", True, [])}, inherited=2)[0].splitlines()[-1], "result: PUSH (inherited failures: 2)")
+    expect("inherited failures do not turn another step's failure into a push", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "lint": ("failed", False, [])}, inherited=2)[0].splitlines()[-1], "result: DO NOT PUSH")
     failed_steps = {**passed_steps, "release build": ("failed, 2 min 0 s: 1 warning(s) in SafeDI's own sources", False, [build_log[0]])}
     expect("a failed step gives its lines and says not to push", pre_push_block("abc", "lane", "b", 1, False, "t", failed_steps)[0].splitlines()[-3:], ["release build: failed, 2 min 0 s: 1 warning(s) in SafeDI's own sources", f"  {build_log[0]}", "result: DO NOT PUSH"])
     expect("a step that did not run, and uncommitted changes, are not a pass", [pre_push_block("abc", "lane", "b", 1, False, "t", {"lint": ("passed", True, [])})[1], pre_push_block("abc", "lane", "b", 1, True, "t", passed_steps)[1]], [False, False])
