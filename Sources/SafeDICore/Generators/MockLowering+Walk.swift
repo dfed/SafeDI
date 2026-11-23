@@ -300,6 +300,7 @@ extension MockLowering {
 		var labelsNoAliasBindsAgain: Set<String> {
 			bodyLabels.isEmpty ? rootLabels : rootLabels.subtracting(rootOverrideNames)
 		}
+
 		/// The declarations built around the node the walk is at, by label, innermost last: a node of a label one of them
 		/// has binds it again in its own builder function, which hides the farther one, as Swift's lookup does.
 		var ancestorDeclarationsByLabel = [String: [(declaration: ScopeGenerator.BuiltDeclaration, functionName: String, bodyLevel: Int)]]()
