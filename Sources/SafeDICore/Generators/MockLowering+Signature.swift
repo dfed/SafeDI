@@ -72,6 +72,9 @@ extension MockLowering {
 		let lazilyInstantiatedBindings: [(name: String, value: String)]
 		/// The name each receive of such a wrapper, by label and type, is passed by, never bound again under its label.
 		let lazilyInstantiatedBindingNamesByLabelAndType: [String: [TypeDescription: String]]
+		// D1 lane hook (lane B): the labels the builder functions of the root's tree declare, which a root alias named apart
+		// is named apart from too (`renamingAliases`' reserved names).
+		let namesDeclaredInBuilderFunctions: Set<String>
 
 		/// The wrappers `mock()` binds, in each form their receives read, which the tree's receives of them find in scope.
 		var lazilyInstantiatedProperties: Set<Property> {
@@ -127,6 +130,7 @@ extension MockLowering {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				lazilyInstantiatedBindings: lazilyInstantiatedBindings,
 				lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+				namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 			)
 		}
 
@@ -471,6 +475,7 @@ extension ScopeGenerator {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			lazilyInstantiatedBindings: lazilyInstantiatedBindings,
 			lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 		)
 		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
