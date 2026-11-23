@@ -4899,7 +4899,7 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_safeDIBuilder = safeDIOverrides.clockBoxBuilder.clock.safeDIBuilder
 			        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_zone = safeDIOverrides.clockBoxBuilder.clock.zone
 			        let __safeDI_clockBoxBuilder__safeDIBuilder = safeDIOverrides.clockBoxBuilder.safeDIBuilder
-			        @Sendable func __safeDI_clockBoxBuilder() -> ClockBox {
+			        @Sendable nonisolated func __safeDI_clockBoxBuilder() -> ClockBox {
 			            func __safeDI_clock() -> Clock {
 			                return SystemClock.__safeDI_mock(zone: __safeDI_clockBoxBuilder__clockBoxBuilder_clock_zone(), safeDIBuilder: __safeDI_clockBoxBuilder__clockBoxBuilder_clock_safeDIBuilder)
 			            }
@@ -4956,7 +4956,7 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        let __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_safeDIBuilder = safeDIOverrides.systemClockBoxBuilder.systemClock.safeDIBuilder
 			        let __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_zone = safeDIOverrides.systemClockBoxBuilder.systemClock.zone
 			        let __safeDI_systemClockBoxBuilder__safeDIBuilder = safeDIOverrides.systemClockBoxBuilder.safeDIBuilder
-			        @Sendable func __safeDI_systemClockBoxBuilder() -> SystemClockBox {
+			        @Sendable nonisolated func __safeDI_systemClockBoxBuilder() -> SystemClockBox {
 			            func __safeDI_systemClock() -> SystemClock {
 			                return SystemClock.__safeDI_init(zone: __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_zone(), safeDIBuilder: __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_safeDIBuilder)
 			            }
@@ -5170,7 +5170,7 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_safeDIBuilder = safeDIOverrides.clockBoxBuilder.clock.safeDIBuilder
 				        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_zone = safeDIOverrides.clockBoxBuilder.clock.zone
 				        let __safeDI_clockBoxBuilder__safeDIBuilder = safeDIOverrides.clockBoxBuilder.safeDIBuilder
-				        @Sendable func __safeDI_clockBoxBuilder() -> ClockBox {
+				        @Sendable nonisolated func __safeDI_clockBoxBuilder() -> ClockBox {
 				            func __safeDI_clock() -> Clock {
 				                return SystemClock.__safeDI_mock(zone: __safeDI_clockBoxBuilder__clockBoxBuilder_clock_zone(), safeDIBuilder: __safeDI_clockBoxBuilder__clockBoxBuilder_clock_safeDIBuilder)
 				            }
@@ -5227,7 +5227,7 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				        let __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_safeDIBuilder = safeDIOverrides.systemClockBoxBuilder.systemClock.safeDIBuilder
 				        let __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_zone = safeDIOverrides.systemClockBoxBuilder.systemClock.zone
 				        let __safeDI_systemClockBoxBuilder__safeDIBuilder = safeDIOverrides.systemClockBoxBuilder.safeDIBuilder
-				        @Sendable func __safeDI_systemClockBoxBuilder() -> SystemClockBox {
+				        @Sendable nonisolated func __safeDI_systemClockBoxBuilder() -> SystemClockBox {
 				            func __safeDI_systemClock() -> SystemClock {
 				                return SystemClock.__safeDI_init(zone: __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_zone(), safeDIBuilder: __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_safeDIBuilder)
 				            }

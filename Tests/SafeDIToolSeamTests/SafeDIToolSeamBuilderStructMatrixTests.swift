@@ -1219,7 +1219,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        func __safeDI_inner() -> Inner {
 		            let __safeDI_gadgetSendableBuilder_inner_serviceSendableBuilder = __safeDI_gadgetSendableBuilder.inner_serviceSendableBuilder(SafeDISendableScope_Gadget.inner_serviceSendableBuilder_Values())
 		            _ = Inner.__safeDI_Inner_EEB1BEED56691F66.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_serviceSendableBuilder_Innermost_Detail_Scope_service(_ scope: Innermost.SafeDIScope_Service.Detail_Scope.service_Values, __safeDI_inner_serviceSendableBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Innermost_Detail_Scope_service(_ scope: Innermost.SafeDIScope_Service.Detail_Scope.service_Values, __safeDI_inner_serviceSendableBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
 		                let logger = scope.logger
 		                func __safeDI_service() -> DefaultService {
 		                    let gadget: any Gadget = __safeDI_inner_serviceSendableBuilder.gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())
@@ -2292,7 +2292,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                }
 		                return { _ in __safeDI_held() }
 		            }
-		            @Sendable func __safeDI_panelSendableBuilder_Host_Worker_Scope_panel(_ scope: Host.SafeDIScope_Panel.Worker_Scope.panel_Values) -> Panel {
+		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Worker_Scope_panel(_ scope: Host.SafeDIScope_Panel.Worker_Scope.panel_Values) -> Panel {
 		                func __safeDI_panel() -> DefaultPanel {
 		                    let tag = Tag()
 		                    return DefaultPanel(tag: tag)

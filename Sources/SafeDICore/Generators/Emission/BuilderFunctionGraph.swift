@@ -61,8 +61,6 @@ struct BuilderNode: Sendable {
 	let name: String
 	/// Whether the function is written `@Sendable`.
 	let isSendable: Bool
-	/// Whether a `@Sendable` function is also written `nonisolated` (`ScopeGenerator.localFunctionPrefix`).
-	let isNonisolated: Bool
 	/// In order: the forwarded properties, sorted, then the cycle parameters, in the order the body first receives them.
 	let parameters: [Property]
 	/// The types a parameter is declared `@escaping` for (`ScopeGenerator.typesDeclaredEscaping`).
@@ -84,7 +82,7 @@ struct BuilderNode: Sendable {
 	func spelled(after prefix: String = "", followedBy suffix: String = "") -> GeneratedCode {
 		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		return .sequence([
-			.text("\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {\n"),
+			.text("\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable))func \(name)(\(parameterList)) -> \(returnType.asSource) {\n"),
 			.lines(body.statements),
 			.text("\n\(ScopeGenerator.standardIndent)\(body.returnKeyword)\(value.spelled)\(lineEnd)\n}\n\(suffix)"),
 		])

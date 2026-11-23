@@ -439,25 +439,26 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 	}
 
 	/// The dependency tree of a chain of `depth` features instantiated through an `Instantiator`: a builder function
-	/// for each feature, nested in the function that builds the feature before it.
+	/// for each feature, each declared in the root's body.
 	private static func instantiatorChainDependencyTree(depth: Int) -> String {
 		var lines = [
 			"extension Root {",
 			"    public init() {",
 			"        let service = Service()",
 		]
-		for index in 0..<depth {
-			lines.append("\(indentation(2 + index))func __safeDI_feature\(index)() -> Feature\(index) {")
-		}
-		lines.append("\(indentation(2 + depth))Feature\(depth - 1)(service: service)")
-		for index in (0..<depth).reversed() {
-			lines.append("\(indentation(2 + index))}")
-			lines.append("\(indentation(2 + index))let feature\(index) = Instantiator<Feature\(index)>(__safeDI_feature\(index))")
-			if index > 0 {
-				lines.append("\(indentation(2 + index))return Feature\(index - 1)(service: service, feature\(index): feature\(index))")
+		// Every builder function is declared in the root's body, the one each feature's own wrapper calls first.
+		for index in Array(1..<depth) + [0] {
+			lines.append("        func __safeDI_feature\(index)() -> Feature\(index) {")
+			if index == depth - 1 {
+				lines.append("            Feature\(index)(service: service)")
+			} else {
+				lines.append("            let feature\(index + 1) = Instantiator<Feature\(index + 1)>(__safeDI_feature\(index + 1))")
+				lines.append("            return Feature\(index)(service: service, feature\(index + 1): feature\(index + 1))")
 			}
+			lines.append("        }")
 		}
 		lines += [
+			"        let feature0 = Instantiator<Feature0>(__safeDI_feature0)",
 			"        self.init(service: service, feature0: feature0)",
 			"    }",
 			"}",
@@ -466,23 +467,26 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 	}
 
 	/// The dependency tree of a chain of `depth` constant features beside a lazily instantiated `LazyService`: a builder
-	/// function for each feature that instantiates another, nested in the function that builds the feature before it.
+	/// function for each feature that instantiates another, each declared in the root's body.
 	private static func constantChainDependencyTree(depth: Int) -> String {
 		var lines = [
 			"extension Root {",
 			"    public init() {",
 			"        let service = Service()",
 		]
-		for index in 0..<(depth - 1) {
-			lines.append("\(indentation(2 + index))func __safeDI_feature\(index)() -> Feature\(index) {")
-		}
-		lines.append("\(indentation(1 + depth))let feature\(depth - 1) = Feature\(depth - 1)(service: service)")
-		for index in (0..<(depth - 1)).reversed() {
-			lines.append("\(indentation(3 + index))return Feature\(index)(service: service, feature\(index + 1): feature\(index + 1))")
-			lines.append("\(indentation(2 + index))}")
-			lines.append("\(indentation(2 + index))let feature\(index): Feature\(index) = __safeDI_feature\(index)()")
+		// Every builder function is declared in the root's body; the last feature is built in place by the one before it.
+		for index in Array(1..<(depth - 1)) + [0] {
+			lines.append("        func __safeDI_feature\(index)() -> Feature\(index) {")
+			if index == depth - 2 {
+				lines.append("            let feature\(index + 1) = Feature\(index + 1)(service: service)")
+			} else {
+				lines.append("            let feature\(index + 1): Feature\(index + 1) = __safeDI_feature\(index + 1)()")
+			}
+			lines.append("            return Feature\(index)(service: service, feature\(index + 1): feature\(index + 1))")
+			lines.append("        }")
 		}
 		lines += [
+			"        let feature0: Feature0 = __safeDI_feature0()",
 			"        func __safeDI_lazyService() -> LazyService {",
 			"            LazyService()",
 			"        }",

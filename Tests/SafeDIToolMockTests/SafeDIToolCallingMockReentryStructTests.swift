@@ -2342,7 +2342,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Book {
 			        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			        @Sendable func __safeDI_pageBuilder() -> Page {
+			        @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
 			            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceSendableBuilder.pageBuilder(SafeDISendableMockScope_Service.pageBuilder_Values()))
 			        }
 			        let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
@@ -2420,7 +2420,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Book {
 			        _ = Page.__safeDI_Page_mock_D554EC7204DBF437.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			        @Sendable func __safeDI_pageBuilder() -> Page {
+			        @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
 			            Page.__safeDI_mock(loggerBuilder: __safeDI_loggerSendableBuilder.pageBuilder(SafeDISendableMockScope_Logger.pageBuilder_Values()), serviceBuilder: __safeDI_serviceSendableBuilder.pageBuilder(SafeDISendableMockScope_Service.pageBuilder_Values()))
 			        }
 			        let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
@@ -2501,7 +2501,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Book {
 			        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			        @Sendable func __safeDI_pageBuilder() -> Page {
+			        @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
 			            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceSendableBuilder.pageBuilder(SafeDISendableMockScope_Service.pageBuilder_Values()))
 			        }
 			        let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
@@ -2568,7 +2568,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
-			            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let analytics: any Analytics = analyticsSendableBuilder()
 			                    func __safeDI_book() -> Book {
@@ -2643,7 +2643,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
-			            @Sendable func __safeDI_loggerBuilder_Page_logger() -> any Logger {
+			            @Sendable nonisolated func __safeDI_loggerBuilder_Page_logger() -> any Logger {
 			                func __safeDI_logger() -> DefaultLogger {
 			                    let analytics: any Analytics = analyticsSendableBuilder()
 			                    return DefaultLogger(analytics: analytics)
@@ -2651,7 +2651,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                let logger: any Logger = __safeDI_logger()
 			                return logger
 			            }
-			            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    func __safeDI_book() -> Book {
 			                        @Sendable nonisolated func __safeDI_loggerSendableBuilder_Book() -> Book.SafeDISendableMockScope_Logger.__safeDI_Builder<any Logger> {
@@ -2730,7 +2730,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
-			            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    func __safeDI_book() -> Book {
 			                        func __safeDI_storeBuilder_Book_store(_ scope: Book.SafeDIMockScope_Store.store_Values) -> any Store {
@@ -2814,7 +2814,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
-			            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    func __safeDI_chapter() -> Chapter {
 			                        func __safeDI_storeBuilder_Chapter_store() -> any Store {
@@ -2902,7 +2902,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
-			            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let analytics: any Analytics = analyticsSendableBuilder()
 			                    func __safeDI_chapter() -> Chapter {
@@ -2989,10 +2989,10 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
-			            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let analytics: any Analytics = analyticsSendableBuilder()
-			                    @Sendable func __safeDI_pageBuilder() -> Page {
+			                    @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
 			                        Page.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page())
 			                    }
 			                    let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
@@ -3100,7 +3100,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableMockScope_Analytics.page_serviceBuilder_Values())
-			            @Sendable func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder = __safeDI_page_serviceBuilder.book_serviceSendableBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.book_serviceSendableBuilder_Values())
 			                    func __safeDI_book() -> Book {
@@ -3237,7 +3237,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_loggerBuilder = __safeDI_analyticsSendableBuilder.page_loggerBuilder(SafeDISendableMockScope_Analytics.page_loggerBuilder_Values())
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableMockScope_Analytics.page_serviceBuilder_Values())
-			            @Sendable func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let __safeDI_analyticsSendableBuilder_book_loggerSendableBuilder = __safeDI_page_serviceBuilder.book_loggerSendableBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.book_loggerSendableBuilder_Values())
 			                    let __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder = __safeDI_page_serviceBuilder.book_serviceSendableBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.book_serviceSendableBuilder_Values())
@@ -3256,7 +3256,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                let service: any Service = __safeDI_service()
 			                return service
 			            }
-			            @Sendable func __safeDI_loggerBuilder_Page_logger(_ scope: Page.SafeDIMockScope_Logger.logger_Values, __safeDI_page_loggerBuilder: SafeDIMockScope_Analytics.DefaultLogger_Scope.__safeDI_Builder<any Analytics>) -> any Logger {
+			            @Sendable nonisolated func __safeDI_loggerBuilder_Page_logger(_ scope: Page.SafeDIMockScope_Logger.logger_Values, __safeDI_page_loggerBuilder: SafeDIMockScope_Analytics.DefaultLogger_Scope.__safeDI_Builder<any Analytics>) -> any Logger {
 			                func __safeDI_logger() -> DefaultLogger {
 			                    let analytics: any Analytics = __safeDI_page_loggerBuilder.analytics(SafeDIMockScope_Analytics.DefaultLogger_Scope.analytics_Values())
 			                    return DefaultLogger(analytics: analytics)
@@ -3381,7 +3381,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableMockScope_Analytics.page_serviceBuilder_Values())
-			            @Sendable func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder = __safeDI_page_serviceBuilder.book_serviceSendableBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.book_serviceSendableBuilder_Values())
 			                    let __safeDI_analyticsSendableBuilder_book_storeBuilder = __safeDI_page_serviceBuilder.book_storeBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.book_storeBuilder_Values())
@@ -3523,7 +3523,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableMockScope_Analytics.page_serviceBuilder_Values())
-			            @Sendable func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let __safeDI_analyticsSendableBuilder_chapter_storeBuilder = __safeDI_page_serviceBuilder.chapter_storeBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.chapter_storeBuilder_Values())
 			                    func __safeDI_chapter() -> Chapter {
@@ -3669,7 +3669,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableMockScope_Analytics.page_serviceBuilder_Values())
-			            @Sendable func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let __safeDI_analyticsSendableBuilder_chapter_storeBuilder = __safeDI_page_serviceBuilder.chapter_storeBuilder(SafeDIMockScope_Analytics.DefaultService_Scope.chapter_storeBuilder_Values())
 			                    func __safeDI_chapter() -> Chapter {
@@ -3819,7 +3819,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableMockScope_Analytics.page_serviceBuilder_Values())
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder_Sendable = __safeDI_analyticsSendableBuilder.page_serviceBuilder_Sendable(SafeDISendableMockScope_Analytics.page_serviceBuilder_Sendable_Values())
-			            @Sendable func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, __safeDI_page_serviceBuilder: SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
 			                        let __safeDI_analyticsSendableBuilder_pageBuilder_serviceBuilder = __safeDI_analyticsSendableBuilder_page_serviceBuilder_Sendable.pageBuilder_serviceBuilder(SafeDISendableMockScope_Analytics.DefaultService_Scope.pageBuilder_serviceBuilder_Values())

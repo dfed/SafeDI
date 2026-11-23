@@ -2166,12 +2166,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchild() -> Grandchild {
+		            let recreated = Recreated()
+		            let greatGrandchild = GreatGrandchild(recreated: recreated)
+		            return Grandchild(greatGrandchild: greatGrandchild, recreated: recreated)
+		        }
 		        func __safeDI_child() -> Child {
-		            func __safeDI_grandchild() -> Grandchild {
-		                let recreated = Recreated()
-		                let greatGrandchild = GreatGrandchild(recreated: recreated)
-		                return Grandchild(greatGrandchild: greatGrandchild, recreated: recreated)
-		            }
 		            let grandchild: Grandchild = __safeDI_grandchild()
 		            let recreated = Recreated()
 		            return Child(grandchild: grandchild, recreated: recreated)
@@ -2249,15 +2249,15 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let recreated = Recreated()
+		        func __safeDI_grandchild() -> Grandchild {
+		            let greatGrandchild: GreatGrandchild = __safeDI_greatGrandchild()
+		            return Grandchild(greatGrandchild: greatGrandchild)
+		        }
+		        func __safeDI_greatGrandchild() -> GreatGrandchild {
+		            let recreated = Recreated()
+		            return GreatGrandchild(recreated: recreated)
+		        }
 		        func __safeDI_child() -> Child {
-		            func __safeDI_grandchild() -> Grandchild {
-		                func __safeDI_greatGrandchild() -> GreatGrandchild {
-		                    let recreated = Recreated()
-		                    return GreatGrandchild(recreated: recreated)
-		                }
-		                let greatGrandchild: GreatGrandchild = __safeDI_greatGrandchild()
-		                return Grandchild(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchild: Grandchild = __safeDI_grandchild()
 		            return Child(grandchild: grandchild, recreated: recreated)
 		        }
@@ -2344,19 +2344,19 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let recreated = Recreated()
+		        func __safeDI_grandchild() -> Grandchild {
+		            let greatGrandchild: GreatGrandchild = __safeDI_greatGrandchild()
+		            return Grandchild(greatGrandchild: greatGrandchild)
+		        }
+		        func __safeDI_greatGrandchild() -> GreatGrandchild {
+		            let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
+		            return GreatGrandchild(greatGreatGrandchild: greatGreatGrandchild, recreated: recreated)
+		        }
+		        func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
+		            let recreated = Recreated()
+		            return GreatGreatGrandchild(recreated: recreated)
+		        }
 		        func __safeDI_child() -> Child {
-		            func __safeDI_grandchild() -> Grandchild {
-		                func __safeDI_greatGrandchild() -> GreatGrandchild {
-		                    func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
-		                        let recreated = Recreated()
-		                        return GreatGreatGrandchild(recreated: recreated)
-		                    }
-		                    let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
-		                    return GreatGrandchild(greatGreatGrandchild: greatGreatGrandchild, recreated: recreated)
-		                }
-		                let greatGrandchild: GreatGrandchild = __safeDI_greatGrandchild()
-		                return Grandchild(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchild: Grandchild = __safeDI_grandchild()
 		            return Child(grandchild: grandchild)
 		        }
@@ -2453,30 +2453,26 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchild(recreated: Recreated) -> Grandchild {
+		            let greatGrandchildA: GreatGrandchildA = __safeDI_greatGrandchildA(recreated: recreated)
+		            let greatGrandchildB: GreatGrandchildB = __safeDI_greatGrandchildB()
+		            return Grandchild(greatGrandchildA: greatGrandchildA, greatGrandchildB: greatGrandchildB)
+		        }
+		        func __safeDI_greatGrandchildA(recreated: Recreated) -> GreatGrandchildA {
+		            let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
+		            return GreatGrandchildA(greatGreatGrandchild: greatGreatGrandchild, recreated: recreated)
+		        }
+		        func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
+		            let recreated = Recreated()
+		            return GreatGreatGrandchild(recreated: recreated)
+		        }
+		        func __safeDI_greatGrandchildB() -> GreatGrandchildB {
+		            let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
+		            return GreatGrandchildB(greatGreatGrandchild: greatGreatGrandchild)
+		        }
 		        func __safeDI_child() -> Child {
 		            let recreated = Recreated()
-		            func __safeDI_grandchild() -> Grandchild {
-		                func __safeDI_greatGrandchildA() -> GreatGrandchildA {
-		                    func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
-		                        let recreated = Recreated()
-		                        return GreatGreatGrandchild(recreated: recreated)
-		                    }
-		                    let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
-		                    return GreatGrandchildA(greatGreatGrandchild: greatGreatGrandchild, recreated: recreated)
-		                }
-		                let greatGrandchildA: GreatGrandchildA = __safeDI_greatGrandchildA()
-		                func __safeDI_greatGrandchildB() -> GreatGrandchildB {
-		                    func __safeDI_greatGreatGrandchild() -> GreatGreatGrandchild {
-		                        let recreated = Recreated()
-		                        return GreatGreatGrandchild(recreated: recreated)
-		                    }
-		                    let greatGreatGrandchild: GreatGreatGrandchild = __safeDI_greatGreatGrandchild()
-		                    return GreatGrandchildB(greatGreatGrandchild: greatGreatGrandchild)
-		                }
-		                let greatGrandchildB: GreatGrandchildB = __safeDI_greatGrandchildB()
-		                return Grandchild(greatGrandchildA: greatGrandchildA, greatGrandchildB: greatGrandchildB)
-		            }
-		            let grandchild: Grandchild = __safeDI_grandchild()
+		            let grandchild: Grandchild = __safeDI_grandchild(recreated: recreated)
 		            return Child(grandchild: grandchild, recreated: recreated)
 		        }
 		        let child: Child = __safeDI_child()
@@ -2577,36 +2573,36 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
-		            func __safeDI_grandchildA() -> GrandchildA {
-		                let recreated = Recreated()
-		                let greatGrandchild = GreatGrandchild(recreated: recreated)
-		                return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
-		            }
+		        @Sendable nonisolated func __safeDI_grandchildA() -> GrandchildA {
+		            let recreated = Recreated()
+		            let greatGrandchild = GreatGrandchild(recreated: recreated)
+		            return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
+		        }
+		        @Sendable nonisolated func __safeDI_grandchildB(recreated: Recreated) -> GrandchildB {
+		            let greatGrandchild = GreatGrandchild(recreated: recreated)
+		            return GrandchildB(greatGrandchild: greatGrandchild)
+		        }
+		        @Sendable nonisolated func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
 		            let grandchildA: GrandchildA = __safeDI_grandchildA()
-		            func __safeDI_grandchildB() -> GrandchildB {
-		                let greatGrandchild = GreatGrandchild(recreated: recreated)
-		                return GrandchildB(greatGrandchild: greatGrandchild)
-		            }
-		            let grandchildB: GrandchildB = __safeDI_grandchildB()
+		            let grandchildB: GrandchildB = __safeDI_grandchildB(recreated: recreated)
 		            return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
 		        }
 		        let childABuilder = SendableErasedInstantiator<Recreated, ChildAProtocol> {
 		            __safeDI_childABuilder(recreated: $0)
 		        }
 		        let recreated = Recreated()
+		        func __safeDI_grandchildA_() -> GrandchildA {
+		            let recreated = Recreated()
+		            let greatGrandchild = GreatGrandchild(recreated: recreated)
+		            return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
+		        }
+		        func __safeDI_grandchildB_() -> GrandchildB {
+		            let greatGrandchild = GreatGrandchild(recreated: recreated)
+		            return GrandchildB(greatGrandchild: greatGrandchild)
+		        }
 		        func __safeDI_childB() -> ChildB {
-		            func __safeDI_grandchildA() -> GrandchildA {
-		                let recreated = Recreated()
-		                let greatGrandchild = GreatGrandchild(recreated: recreated)
-		                return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
-		            }
-		            let grandchildA: GrandchildA = __safeDI_grandchildA()
-		            func __safeDI_grandchildB() -> GrandchildB {
-		                let greatGrandchild = GreatGrandchild(recreated: recreated)
-		                return GrandchildB(greatGrandchild: greatGrandchild)
-		            }
-		            let grandchildB: GrandchildB = __safeDI_grandchildB()
+		            let grandchildA: GrandchildA = __safeDI_grandchildA_()
+		            let grandchildB: GrandchildB = __safeDI_grandchildB_()
 		            return ChildB(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
 		        }
 		        let childB: ChildB = __safeDI_childB()
@@ -2713,30 +2709,30 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchildAA() -> GrandchildAA {
+		            let greatGrandchild = GreatGrandchild()
+		            return GrandchildAA(greatGrandchild: greatGrandchild)
+		        }
+		        func __safeDI_grandchildAB() -> GrandchildAB {
+		            let greatGrandchild = GreatGrandchild()
+		            return GrandchildAB(greatGrandchild: greatGrandchild)
+		        }
 		        func __safeDI_childA() -> ChildA {
-		            func __safeDI_grandchildAA() -> GrandchildAA {
-		                let greatGrandchild = GreatGrandchild()
-		                return GrandchildAA(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchildAA: GrandchildAA = __safeDI_grandchildAA()
-		            func __safeDI_grandchildAB() -> GrandchildAB {
-		                let greatGrandchild = GreatGrandchild()
-		                return GrandchildAB(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchildAB: GrandchildAB = __safeDI_grandchildAB()
 		            return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		        }
 		        let childA: ChildA = __safeDI_childA()
+		        func __safeDI_grandchildBA() -> GrandchildBA {
+		            let greatGrandchild = GreatGrandchild()
+		            return GrandchildBA(greatGrandchild: greatGrandchild)
+		        }
+		        func __safeDI_grandchildBB() -> GrandchildBB {
+		            let greatGrandchild = GreatGrandchild()
+		            return GrandchildBB(greatGrandchild: greatGrandchild)
+		        }
 		        func __safeDI_childB() -> ChildB {
-		            func __safeDI_grandchildBA() -> GrandchildBA {
-		                let greatGrandchild = GreatGrandchild()
-		                return GrandchildBA(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchildBA: GrandchildBA = __safeDI_grandchildBA()
-		            func __safeDI_grandchildBB() -> GrandchildBB {
-		                let greatGrandchild = GreatGrandchild()
-		                return GrandchildBB(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchildBB: GrandchildBB = __safeDI_grandchildBB()
 		            return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
 		        }
@@ -3107,36 +3103,33 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchildAA() -> GrandchildAA {
+		            let greatGrandchild = GreatGrandchild()
+		            return GrandchildAA(greatGrandchild: greatGrandchild)
+		        }
+		        func __safeDI_grandchildAB() -> GrandchildAB {
+		            let greatGrandchild = GreatGrandchild()
+		            return GrandchildAB(greatGrandchild: greatGrandchild)
+		        }
 		        func __safeDI_childA() -> ChildA {
-		            func __safeDI_grandchildAA() -> GrandchildAA {
-		                let greatGrandchild = GreatGrandchild()
-		                return GrandchildAA(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchildAA: GrandchildAA = __safeDI_grandchildAA()
-		            func __safeDI_grandchildAB() -> GrandchildAB {
-		                let greatGrandchild = GreatGrandchild()
-		                return GrandchildAB(greatGrandchild: greatGrandchild)
-		            }
 		            let grandchildAB: GrandchildAB = __safeDI_grandchildAB()
 		            return ChildA(grandchildAA: grandchildAA, grandchildAB: grandchildAB)
 		        }
 		        let childA: ChildA = __safeDI_childA()
+		        func __safeDI_grandchildBA() -> GrandchildBA {
+		            let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+		            return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
+		        }
+		        @Sendable nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+		            GreatGrandchild()
+		        }
+		        func __safeDI_grandchildBB() -> GrandchildBB {
+		            let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
+		            return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
+		        }
 		        func __safeDI_childB() -> ChildB {
-		            func __safeDI_grandchildBA() -> GrandchildBA {
-		                @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
-		                    GreatGrandchild()
-		                }
-		                let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
-		                return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
-		            }
 		            let grandchildBA: GrandchildBA = __safeDI_grandchildBA()
-		            func __safeDI_grandchildBB() -> GrandchildBB {
-		                @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
-		                    GreatGrandchild()
-		                }
-		                let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
-		                return GrandchildBB(greatGrandchildInstantiator: greatGrandchildInstantiator)
-		            }
 		            let grandchildBB: GrandchildBB = __safeDI_grandchildBB()
 		            return ChildB(grandchildBA: grandchildBA, grandchildBB: grandchildBB)
 		        }
@@ -4314,18 +4307,22 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        let networkService: NetworkService = DefaultNetworkService()
 		        let authService: AuthService = DefaultAuthService(networkService: networkService)
-		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
-		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-		                #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
-		                let userVendor: UserVendor = userManager
-		                #sourceLocation()
-		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                    EditProfileViewController(userVendor: userVendor, userManager: userManager)
-		                }
-		                let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
-		                return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		        func __safeDI_profileViewControllerBuilder(userManager: UserManager) -> ProfileViewController {
+		            #sourceLocation(file: "\(output.fixtures["ProfileViewController.swift"])", line: 7)
+		            let userVendor: UserVendor = userManager
+		            #sourceLocation()
+		            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+		                __safeDI_editProfileViewControllerBuilder(userVendor: userVendor, userManager: userManager)
 		            }
-		            let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
+		            return ProfileViewController(userVendor: userVendor, editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		        }
+		        func __safeDI_editProfileViewControllerBuilder(userVendor: UserVendor, userManager: UserManager) -> EditProfileViewController {
+		            EditProfileViewController(userVendor: userVendor, userManager: userManager)
+		        }
+		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
+		            let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+		                __safeDI_profileViewControllerBuilder(userManager: userManager)
+		            }
 		            return LoggedInViewController(userManager: userManager, profileViewControllerBuilder: profileViewControllerBuilder)
 		        }
 		        let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
@@ -4529,14 +4526,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchildBuilder(iterator: IndexingIterator<Array<Element>>) -> Grandchild {
+		            #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
+		            let anyIterator: AnyIterator<Element> = AnyIterator<Element>(iterator)
+		            #sourceLocation()
+		            return Grandchild(anyIterator: anyIterator)
+		        }
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
-		            func __safeDI_grandchildBuilder() -> Grandchild {
-		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		                let anyIterator: AnyIterator<Element> = AnyIterator<Element>(iterator)
-		                #sourceLocation()
-		                return Grandchild(anyIterator: anyIterator)
+		            let grandchildBuilder = Instantiator<Grandchild> {
+		                __safeDI_grandchildBuilder(iterator: iterator)
 		            }
-		            let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
 		            return Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
 		        }
 		        let childBuilder = Instantiator<Child> {
@@ -4599,14 +4598,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchildBuilder(iterator: IndexingIterator<Array<Element>>) -> Grandchild {
+		            #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
+		            let anyIterator: AnyIterator<Element>? = AnyIterator<Element>(iterator)
+		            #sourceLocation()
+		            return Grandchild(anyIterator: anyIterator)
+		        }
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
-		            func __safeDI_grandchildBuilder() -> Grandchild {
-		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		                let anyIterator: AnyIterator<Element>? = AnyIterator<Element>(iterator)
-		                #sourceLocation()
-		                return Grandchild(anyIterator: anyIterator)
+		            let grandchildBuilder = Instantiator<Grandchild> {
+		                __safeDI_grandchildBuilder(iterator: iterator)
 		            }
-		            let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
 		            return Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
 		        }
 		        let childBuilder = Instantiator<Child> {
@@ -4683,14 +4684,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_feature(token: Secret?) -> Feature {
+		            #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
+		            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+		            #sourceLocation()
+		            return Feature(auth: auth)
+		        }
 		        func __safeDI_sessionBuilder(token: Secret?) -> Session {
-		            func __safeDI_feature() -> Feature {
-		                #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
-		                let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-		                #sourceLocation()
-		                return Feature(auth: auth)
-		            }
-		            let feature: Feature = __safeDI_feature()
+		            let feature: Feature = __safeDI_feature(token: token)
 		            return Session(token: token, feature: feature)
 		        }
 		        let sessionBuilder = Instantiator<Session> {
@@ -4769,14 +4770,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_feature(token: Outer.Secret?) -> Feature {
+		            #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
+		            let auth: AnyAuth? = (token as Outer.Secret?).map { AnyAuth($0) }
+		            #sourceLocation()
+		            return Feature(auth: auth)
+		        }
 		        func __safeDI_sessionBuilder(token: Outer.Secret?) -> Session {
-		            func __safeDI_feature() -> Feature {
-		                #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
-		                let auth: AnyAuth? = (token as Outer.Secret?).map { AnyAuth($0) }
-		                #sourceLocation()
-		                return Feature(auth: auth)
-		            }
-		            let feature: Feature = __safeDI_feature()
+		            let feature: Feature = __safeDI_feature(token: token)
 		            return Session(token: token, feature: feature)
 		        }
 		        let sessionBuilder = Instantiator<Session> {
@@ -4986,13 +4987,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let instance = Instance()
+		        func __safeDI_inner() -> Inner {
+		            let instance = Instance()
+		            let leaf = Leaf(instance: instance)
+		            return Inner(instance: instance, leaf: leaf)
+		        }
 		        func __safeDI_mid() -> Mid {
 		            let instance = Instance()
-		            func __safeDI_inner() -> Inner {
-		                let instance = Instance()
-		                let leaf = Leaf(instance: instance)
-		                return Inner(instance: instance, leaf: leaf)
-		            }
 		            let inner: Inner = __safeDI_inner()
 		            let leaf = Leaf(instance: instance)
 		            return Mid(instance: instance, inner: inner, leaf: leaf)
@@ -5498,18 +5499,22 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        let networkService: NetworkService = DefaultNetworkService()
 		        let authService: AuthService = DefaultAuthService(networkService: networkService)
+		        func __safeDI_profileViewControllerBuilder(userVendor: UserVendor, userManager: UserManager) -> ProfileViewController {
+		            let editProfileViewControllerBuilder = Instantiator<EditProfileViewController> {
+		                __safeDI_editProfileViewControllerBuilder(userVendor: userVendor, userManager: userManager)
+		            }
+		            return ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		        }
+		        func __safeDI_editProfileViewControllerBuilder(userVendor: UserVendor, userManager: UserManager) -> EditProfileViewController {
+		            EditProfileViewController(userVendor: userVendor, userManager: userManager)
+		        }
 		        func __safeDI_loggedInViewControllerBuilder(userManager: UserManager) -> LoggedInViewController {
 		            #sourceLocation(file: "\(output.fixtures["LoggedInViewController.swift"])", line: 9)
 		            let userVendor: UserVendor = userManager
 		            #sourceLocation()
-		            func __safeDI_profileViewControllerBuilder() -> ProfileViewController {
-		                func __safeDI_editProfileViewControllerBuilder() -> EditProfileViewController {
-		                    EditProfileViewController(userVendor: userVendor, userManager: userManager)
-		                }
-		                let editProfileViewControllerBuilder = Instantiator<EditProfileViewController>(__safeDI_editProfileViewControllerBuilder)
-		                return ProfileViewController(editProfileViewControllerBuilder: editProfileViewControllerBuilder)
+		            let profileViewControllerBuilder = Instantiator<ProfileViewController> {
+		                __safeDI_profileViewControllerBuilder(userVendor: userVendor, userManager: userManager)
 		            }
-		            let profileViewControllerBuilder = Instantiator<ProfileViewController>(__safeDI_profileViewControllerBuilder)
 		            return LoggedInViewController(userManager: userManager, userVendor: userVendor, profileViewControllerBuilder: profileViewControllerBuilder)
 		        }
 		        let loggedInViewControllerBuilder = Instantiator<LoggedInViewController> {
@@ -5653,16 +5658,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_aBuilder() -> A {
-		            func __safeDI_bBuilder() -> B {
-		                func __safeDI_cBuilder() -> C {
-		                    let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                    return C(aBuilder: aBuilder)
-		                }
-		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-		                return B(cBuilder: cBuilder)
-		            }
 		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		            return A(bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder() -> B {
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            return B(cBuilder: cBuilder)
+		        }
+		        func __safeDI_cBuilder() -> C {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return C(aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        self.init(aBuilder: aBuilder)
@@ -5709,11 +5714,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_a() -> A {
-		            func __safeDI_aBuilder() -> A {
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                return A(aBuilder: aBuilder)
-		            }
-		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            let aBuilder = Instantiator<A>(__safeDI_a)
 		            return A(aBuilder: aBuilder)
 		        }
 		        let a: A = __safeDI_a()
@@ -5762,14 +5763,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_nodeBuilder() -> Node {
-		            func __safeDI_childBuilder() -> Node {
-		                let childBuilder = Instantiator<Node>(__safeDI_childBuilder)
-		                #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 8)
-		                let otherBuilder: Instantiator<Node> = childBuilder
-		                #sourceLocation()
-		                return Node(childBuilder: childBuilder, otherBuilder: otherBuilder)
-		            }
-		            let childBuilder = Instantiator<Node>(__safeDI_childBuilder)
+		            let childBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
 		            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 8)
 		            let otherBuilder: Instantiator<Node> = childBuilder
 		            #sourceLocation()
@@ -5878,15 +5872,15 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder() -> A {
-		            func __safeDI_bBuilder() -> B {
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 8)
-		                let renamedBuilder: Instantiator<A> = aBuilder
-		                #sourceLocation()
-		                return B(aBuilder: aBuilder, renamedBuilder: renamedBuilder)
-		            }
 		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		            return A(bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 8)
+		            let renamedBuilder: Instantiator<A> = aBuilder
+		            #sourceLocation()
+		            return B(aBuilder: aBuilder, renamedBuilder: renamedBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        self.init(aBuilder: aBuilder)
@@ -6036,12 +6030,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_childBuilder() -> Child {
-		            func __safeDI_childBuilder_Grandchild() -> Grandchild {
-		                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-		                return Grandchild(childBuilder: childBuilder)
-		            }
-		            let childBuilder = Instantiator<Grandchild>(__safeDI_childBuilder_Grandchild)
+		            let childBuilder = Instantiator<Grandchild>(__safeDI_childBuilder_)
 		            return Child(childBuilder: childBuilder)
+		        }
+		        func __safeDI_childBuilder_() -> Grandchild {
+		            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+		            return Grandchild(childBuilder: childBuilder)
 		        }
 		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        self.init(childBuilder: childBuilder)
@@ -6107,21 +6101,21 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_childBuilder() -> A {
-		            func __safeDI_childBuilder_B() -> B {
-		                func __safeDI_childBuilder_C() -> C {
-		                    let childBuilder = Instantiator<A>(__safeDI_childBuilder)
-		                    return C(childBuilder: childBuilder)
-		                }
-		                let childBuilder = Instantiator<C>(__safeDI_childBuilder_C)
-		                func __safeDI_dBuilder() -> D {
-		                    let childBuilder = Instantiator<B>(__safeDI_childBuilder_B)
-		                    return D(childBuilder: childBuilder)
-		                }
-		                let dBuilder = Instantiator<D>(__safeDI_dBuilder)
-		                return B(childBuilder: childBuilder, dBuilder: dBuilder)
-		            }
-		            let childBuilder = Instantiator<B>(__safeDI_childBuilder_B)
+		            let childBuilder = Instantiator<B>(__safeDI_childBuilder_)
 		            return A(childBuilder: childBuilder)
+		        }
+		        func __safeDI_childBuilder_() -> B {
+		            let childBuilder = Instantiator<C>(__safeDI_childBuilder__)
+		            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+		            return B(childBuilder: childBuilder, dBuilder: dBuilder)
+		        }
+		        func __safeDI_childBuilder__() -> C {
+		            let childBuilder = Instantiator<A>(__safeDI_childBuilder)
+		            return C(childBuilder: childBuilder)
+		        }
+		        func __safeDI_dBuilder() -> D {
+		            let childBuilder = Instantiator<B>(__safeDI_childBuilder_)
+		            return D(childBuilder: childBuilder)
 		        }
 		        let childBuilder = Instantiator<A>(__safeDI_childBuilder)
 		        self.init(childBuilder: childBuilder)
@@ -6179,16 +6173,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_childBuilder() -> Child {
-		            func __safeDI_childBuilder_Leaf() -> Leaf {
-		                Leaf()
-		            }
-		            let childBuilder = Instantiator<Leaf>(__safeDI_childBuilder_Leaf)
-		            func __safeDI_middleBuilder() -> Middle {
-		                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-		                return Middle(childBuilder: childBuilder)
-		            }
+		            let childBuilder = Instantiator<Leaf>(__safeDI_childBuilder_)
 		            let middleBuilder = Instantiator<Middle>(__safeDI_middleBuilder)
 		            return Child(childBuilder: childBuilder, middleBuilder: middleBuilder)
+		        }
+		        func __safeDI_middleBuilder() -> Middle {
+		            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+		            return Middle(childBuilder: childBuilder)
+		        }
+		        func __safeDI_childBuilder_() -> Leaf {
+		            Leaf()
 		        }
 		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        self.init(childBuilder: childBuilder)
@@ -6246,16 +6240,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_aBuilder() -> A {
-		            func __safeDI_bBuilder() -> B {
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                return B(aBuilder: aBuilder)
-		            }
 		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            func __safeDI_cBuilder() -> C {
-		                C()
-		            }
 		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		            return A(bBuilder: bBuilder, cBuilder: cBuilder)
+		        }
+		        func __safeDI_bBuilder() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return B(aBuilder: aBuilder)
+		        }
+		        func __safeDI_cBuilder() -> C {
+		            C()
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        self.init(aBuilder: aBuilder)
@@ -6517,16 +6511,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchild() -> Child.Grandchild {
+		            let greatGrandchild: Child.Grandchild.GreatGrandchild = __safeDI_greatGrandchild()
+		            let pathalogical = Child.Grandchild.Pathalogical()
+		            return Child.Grandchild(greatGrandchild: greatGrandchild, pathalogical: pathalogical)
+		        }
+		        func __safeDI_greatGrandchild() -> Child.Grandchild.GreatGrandchild {
+		            let pathalogical = Child.Grandchild.GreatGrandchild.Pathalogical()
+		            return Child.Grandchild.GreatGrandchild(pathalogical: pathalogical)
+		        }
 		        func __safeDI_child() -> Child {
-		            func __safeDI_grandchild() -> Child.Grandchild {
-		                func __safeDI_greatGrandchild() -> Child.Grandchild.GreatGrandchild {
-		                    let pathalogical = Child.Grandchild.GreatGrandchild.Pathalogical()
-		                    return Child.Grandchild.GreatGrandchild(pathalogical: pathalogical)
-		                }
-		                let greatGrandchild: Child.Grandchild.GreatGrandchild = __safeDI_greatGrandchild()
-		                let pathalogical = Child.Grandchild.Pathalogical()
-		                return Child.Grandchild(greatGrandchild: greatGrandchild, pathalogical: pathalogical)
-		            }
 		            let grandchild: Child.Grandchild = __safeDI_grandchild()
 		            return Child(grandchild: grandchild)
 		        }
@@ -6609,16 +6603,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchild() -> Child.Grandchild {
+		            let greatGrandchild: Child.Grandchild.GreatGrandchild = __safeDI_greatGrandchild()
+		            let pathalogical = Child.Grandchild.Pathalogical()
+		            return Child.Grandchild(greatGrandchild: greatGrandchild, pathalogical: pathalogical)
+		        }
+		        func __safeDI_greatGrandchild() -> Child.Grandchild.GreatGrandchild {
+		            let pathalogical = Child.Grandchild.GreatGrandchild.Pathalogical()
+		            return Child.Grandchild.GreatGrandchild(pathalogical: pathalogical)
+		        }
 		        func __safeDI_child() -> Child {
-		            func __safeDI_grandchild() -> Child.Grandchild {
-		                func __safeDI_greatGrandchild() -> Child.Grandchild.GreatGrandchild {
-		                    let pathalogical = Child.Grandchild.GreatGrandchild.Pathalogical()
-		                    return Child.Grandchild.GreatGrandchild(pathalogical: pathalogical)
-		                }
-		                let greatGrandchild: Child.Grandchild.GreatGrandchild = __safeDI_greatGrandchild()
-		                let pathalogical = Child.Grandchild.Pathalogical()
-		                return Child.Grandchild(greatGrandchild: greatGrandchild, pathalogical: pathalogical)
-		            }
 		            let grandchild: Child.Grandchild = __safeDI_grandchild()
 		            return Child(grandchild: grandchild)
 		        }
@@ -6702,13 +6696,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_grandchild(pathalogical: Child.Grandchild.Pathalogical) -> Child.Grandchild {
+		            let greatGrandchild = Child.Grandchild.GreatGrandchild(pathalogical: pathalogical)
+		            return Child.Grandchild(greatGrandchild: greatGrandchild, pathalogical: pathalogical)
+		        }
 		        func __safeDI_child() -> Child {
 		            let pathalogical = Child.Grandchild.Pathalogical()
-		            func __safeDI_grandchild() -> Child.Grandchild {
-		                let greatGrandchild = Child.Grandchild.GreatGrandchild(pathalogical: pathalogical)
-		                return Child.Grandchild(greatGrandchild: greatGrandchild, pathalogical: pathalogical)
-		            }
-		            let grandchild: Child.Grandchild = __safeDI_grandchild()
+		            let grandchild: Child.Grandchild = __safeDI_grandchild(pathalogical: pathalogical)
 		            return Child(pathalogical: pathalogical, grandchild: grandchild)
 		        }
 		        let child: Child = __safeDI_child()
@@ -7177,13 +7171,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_d(c: C?) -> D {
+		            let b = B(c: c)
+		            return D(b: b)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let c = C()
-		            func __safeDI_d() -> D {
-		                let b = B(c: c)
-		                return D(b: b)
-		            }
-		            let d: D = __safeDI_d()
+		            let d: D = __safeDI_d(c: c)
 		            return A(c: c, d: d)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -7254,11 +7248,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_c() -> C {
+		            let b = B(c: nil)
+		            return C(b: b)
+		        }
 		        func __safeDI_aBuilder() -> A {
-		            func __safeDI_c() -> C {
-		                let b = B(c: nil)
-		                return C(b: b)
-		            }
 		            let c: C = __safeDI_c()
 		            return A(c: c)
 		        }
@@ -7487,13 +7481,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_worker() -> Worker {
+		            #sourceLocation(file: "\(output.fixtures["Worker.swift"])", line: 6)
+		            let renamed: CProtocol? = nil
+		            #sourceLocation()
+		            return Worker(renamed: renamed)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_worker() -> Worker {
-		                #sourceLocation(file: "\(output.fixtures["Worker.swift"])", line: 6)
-		                let renamed: CProtocol? = nil
-		                #sourceLocation()
-		                return Worker(renamed: renamed)
-		            }
 		            let worker: Worker = __safeDI_worker()
 		            return B(worker: worker)
 		        }
@@ -7844,15 +7838,15 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_cBuilder() -> C {
-		            func __safeDI_d() -> D {
-		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-		                #sourceLocation(file: "\(output.fixtures["D.swift"])", line: 5)
-		                let renamed: Instantiator<C>? = cBuilder
-		                #sourceLocation()
-		                return D(cBuilder: cBuilder, renamed: renamed)
-		            }
 		            let d: D = __safeDI_d()
 		            return C(d: d)
+		        }
+		        func __safeDI_d() -> D {
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            #sourceLocation(file: "\(output.fixtures["D.swift"])", line: 5)
+		            let renamed: Instantiator<C>? = cBuilder
+		            #sourceLocation()
+		            return D(cBuilder: cBuilder, renamed: renamed)
 		        }
 		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		        self.init(cBuilder: cBuilder)
@@ -8196,18 +8190,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_bBuilder() -> B {
-		            let d = D(a: nil, c: nil)
-		            return B(a: nil, d: d)
+		        func __safeDI_bBuilder(a: A?) -> B {
+		            let d = D(a: a, c: nil)
+		            return B(a: a, d: d)
 		        }
-		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		        let bBuilder = Instantiator<B> {
+		            __safeDI_bBuilder(a: nil)
+		        }
 		        let a = A(bBuilder: bBuilder)
 		        func __safeDI_c() -> C {
-		            func __safeDI_bBuilder2() -> B {
-		                let d = D(a: a, c: nil)
-		                return B(a: a, d: d)
+		            let bBuilder2 = Instantiator<B> {
+		                __safeDI_bBuilder(a: a)
 		            }
-		            let bBuilder2 = Instantiator<B>(__safeDI_bBuilder2)
 		            return C(a: a, bBuilder2: bBuilder2)
 		        }
 		        let c: C = __safeDI_c()
@@ -8508,32 +8502,34 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child(source: Source) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		            let second: SecondGreeter? = source
+		            #sourceLocation()
+		            let firstReceiver = FirstReceiver(first: first)
+		            let secondReceiver = SecondReceiver(second: second)
+		            return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
+		        }
+		        func __safeDI_other(source: Source, child: Child) -> Other {
+		            #sourceLocation(file: "\(output.fixtures["Other.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            let x = X(child: child)
+		            let sessionBuilder = Instantiator<Session> {
+		                __safeDI_sessionBuilder(first: first, x: x)
+		            }
+		            return Other(first: first, x: x, sessionBuilder: sessionBuilder)
+		        }
+		        func __safeDI_sessionBuilder(first: FirstGreeter?, x: X) -> Session {
+		            Session(first: first, x: x)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		                let second: SecondGreeter? = source
-		                #sourceLocation()
-		                let firstReceiver = FirstReceiver(first: first)
-		                let secondReceiver = SecondReceiver(second: second)
-		                return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
-		            }
-		            let child: Child = __safeDI_child()
-		            func __safeDI_other() -> Other {
-		                #sourceLocation(file: "\(output.fixtures["Other.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                let x = X(child: child)
-		                func __safeDI_sessionBuilder() -> Session {
-		                    Session(first: first, x: x)
-		                }
-		                let sessionBuilder = Instantiator<Session>(__safeDI_sessionBuilder)
-		                return Other(first: first, x: x, sessionBuilder: sessionBuilder)
-		            }
-		            let other: Other = __safeDI_other()
+		            let child: Child = __safeDI_child(source: source)
+		            let other: Other = __safeDI_other(source: source, child: child)
 		            return Parent(session: session, child: child, source: source, other: other)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -8638,32 +8634,34 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child(source: Source) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		            let second: SecondGreeter? = source
+		            #sourceLocation()
+		            let secondReceiver = SecondReceiver(second: second)
+		            let firstReceiver = FirstReceiver(first: first)
+		            return Child(first: first, second: second, secondReceiver: secondReceiver, firstReceiver: firstReceiver)
+		        }
+		        func __safeDI_other(source: Source, child: Child) -> Other {
+		            #sourceLocation(file: "\(output.fixtures["Other.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            let x = X(child: child)
+		            let sessionBuilder = Instantiator<Session> {
+		                __safeDI_sessionBuilder(first: first, x: x)
+		            }
+		            return Other(first: first, x: x, sessionBuilder: sessionBuilder)
+		        }
+		        func __safeDI_sessionBuilder(first: FirstGreeter?, x: X) -> Session {
+		            Session(first: first, x: x)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		                let second: SecondGreeter? = source
-		                #sourceLocation()
-		                let secondReceiver = SecondReceiver(second: second)
-		                let firstReceiver = FirstReceiver(first: first)
-		                return Child(first: first, second: second, secondReceiver: secondReceiver, firstReceiver: firstReceiver)
-		            }
-		            let child: Child = __safeDI_child()
-		            func __safeDI_other() -> Other {
-		                #sourceLocation(file: "\(output.fixtures["Other.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                let x = X(child: child)
-		                func __safeDI_sessionBuilder() -> Session {
-		                    Session(first: first, x: x)
-		                }
-		                let sessionBuilder = Instantiator<Session>(__safeDI_sessionBuilder)
-		                return Other(first: first, x: x, sessionBuilder: sessionBuilder)
-		            }
-		            let other: Other = __safeDI_other()
+		            let child: Child = __safeDI_child(source: source)
+		            let other: Other = __safeDI_other(source: source, child: child)
 		            return Parent(session: session, child: child, source: source, other: other)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -8760,20 +8758,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child(source: Source) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		            let second: SecondGreeter? = source
+		            #sourceLocation()
+		            let firstReceiver = FirstReceiver(first: first)
+		            let secondReceiver = SecondReceiver(second: second)
+		            return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		                let second: SecondGreeter? = source
-		                #sourceLocation()
-		                let firstReceiver = FirstReceiver(first: first)
-		                let secondReceiver = SecondReceiver(second: second)
-		                return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
-		            }
-		            let child: Child = __safeDI_child()
+		            let child: Child = __safeDI_child(source: source)
 		            return Parent(session: session, child: child, source: source)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -8937,20 +8935,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_other(child: Child) -> Other {
+		            let x = X(child: child)
+		            let sessionBuilder = Instantiator<Session> {
+		                __safeDI_sessionBuilder(id: $0, x: x)
+		            }
+		            return Other(x: x, sessionBuilder: sessionBuilder)
+		        }
+		        func __safeDI_sessionBuilder(id: String, x: X) -> Session {
+		            Session(id: id, x: x)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
 		            let child = Child(source: source)
-		            func __safeDI_other() -> Other {
-		                let x = X(child: child)
-		                func __safeDI_sessionBuilder(id: String) -> Session {
-		                    Session(id: id, x: x)
-		                }
-		                let sessionBuilder = Instantiator<Session> {
-		                    __safeDI_sessionBuilder(id: $0)
-		                }
-		                return Other(x: x, sessionBuilder: sessionBuilder)
-		            }
-		            let other: Other = __safeDI_other()
+		            let other: Other = __safeDI_other(child: child)
 		            return Parent(session: session, child: child, source: source, other: other)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -9053,20 +9051,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child(source: Source) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		            let second: SecondGreeter? = source
+		            #sourceLocation()
+		            let firstReceiver = FirstReceiver(first: first)
+		            let secondReceiver = SecondReceiver(second: second)
+		            return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		                let second: SecondGreeter? = source
-		                #sourceLocation()
-		                let firstReceiver = FirstReceiver(first: first)
-		                let secondReceiver = SecondReceiver(second: second)
-		                return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
-		            }
-		            let child: Child = __safeDI_child()
+		            let child: Child = __safeDI_child(source: source)
 		            return Parent(session: session, child: child, source: source)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -9191,32 +9189,34 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child(source: Source) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		            let second: SecondGreeter? = source
+		            #sourceLocation()
+		            let firstReceiver = FirstReceiver(first: first)
+		            let secondReceiver = SecondReceiver(second: second)
+		            return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
+		        }
+		        func __safeDI_other(source: Source, child: Child) -> Other {
+		            #sourceLocation(file: "\(output.fixtures["Other.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            let x = X(child: child)
+		            let sessionBuilder = Instantiator<Session> {
+		                __safeDI_sessionBuilder(first: first, x: x)
+		            }
+		            return Other(first: first, x: x, sessionBuilder: sessionBuilder)
+		        }
+		        func __safeDI_sessionBuilder(first: FirstGreeter?, x: X) -> Session {
+		            Session(first: first, x: x)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		                let second: SecondGreeter? = source
-		                #sourceLocation()
-		                let firstReceiver = FirstReceiver(first: first)
-		                let secondReceiver = SecondReceiver(second: second)
-		                return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
-		            }
-		            let child: Child = __safeDI_child()
-		            func __safeDI_other() -> Other {
-		                #sourceLocation(file: "\(output.fixtures["Other.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                let x = X(child: child)
-		                func __safeDI_sessionBuilder() -> Session {
-		                    Session(first: first, x: x)
-		                }
-		                let sessionBuilder = Instantiator<Session>(__safeDI_sessionBuilder)
-		                return Other(first: first, x: x, sessionBuilder: sessionBuilder)
-		            }
-		            let other: Other = __safeDI_other()
+		            let child: Child = __safeDI_child(source: source)
+		            let other: Other = __safeDI_other(source: source, child: child)
 		            return Parent(session: session, child: child, source: source, other: other)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -9327,20 +9327,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child(source: Source) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let first: FirstGreeter? = source
+		            #sourceLocation()
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+		            let second: SecondGreeter? = source
+		            #sourceLocation()
+		            let firstReceiver = FirstReceiver(first: first)
+		            let secondReceiver = SecondReceiver(second: second)
+		            return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
+		        }
 		        func __safeDI_parentBuilder(session: Session) -> Parent {
 		            let source = Source(session: session)
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let first: FirstGreeter? = source
-		                #sourceLocation()
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
-		                let second: SecondGreeter? = source
-		                #sourceLocation()
-		                let firstReceiver = FirstReceiver(first: first)
-		                let secondReceiver = SecondReceiver(second: second)
-		                return Child(first: first, second: second, firstReceiver: firstReceiver, secondReceiver: secondReceiver)
-		            }
-		            let child: Child = __safeDI_child()
+		            let child: Child = __safeDI_child(source: source)
 		            return Parent(session: session, child: child, source: source)
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -9728,17 +9728,17 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parent() -> Parent {
 		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
 		            let maybe: Greeter? = nil
 		            #sourceLocation()
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
 		        }
@@ -9808,14 +9808,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
 		        }
@@ -9954,14 +9954,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            let x = X(child: child)
 		            return Parent(maybe: maybe, child: child, x: x)
@@ -10035,17 +10035,17 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let greeter = DefaultGreeter()
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parent() -> Parent {
 		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
 		            let maybe: Greeter? = greeter
 		            #sourceLocation()
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
 		        }
@@ -10116,17 +10116,17 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let greeter = DefaultGreeter()
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parent() -> Parent {
 		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
 		            let maybe: Greeter? = nil
 		            #sourceLocation()
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
 		        }
@@ -10188,14 +10188,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_maybe() -> DefaultGreeter {
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            return DefaultGreeter(child: child)
 		        }
@@ -10272,21 +10272,21 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_parent() -> Parent {
+		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let child: Child = __safeDI_child()
+		            return Parent(maybe: maybe, child: child)
+		        }
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Outer {
-		            func __safeDI_parent() -> Parent {
-		                #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                func __safeDI_child() -> Child {
-		                    #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                    let maybe: Greeter? = nil
-		                    #sourceLocation()
-		                    let grand = Grand(maybe: maybe)
-		                    return Child(maybe: maybe, grand: grand)
-		                }
-		                let child: Child = __safeDI_child()
-		                return Parent(maybe: maybe, child: child)
-		            }
 		            let parent: Parent = __safeDI_parent()
 		            return Outer(maybe: maybe, parent: parent)
 		        }
@@ -10356,14 +10356,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
+		        }
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let maybe: Greeter? = nil
-		                #sourceLocation()
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: maybe, grand: grand)
-		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
 		        }
@@ -10499,17 +10499,17 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_c() -> C {
+		            let b: B = __safeDI_b()
+		            return C(b: b)
+		        }
+		        func __safeDI_b() -> B {
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+		            let cRenamed: CRenamed? = nil
+		            #sourceLocation()
+		            return B(cRenamed: cRenamed)
+		        }
 		        func __safeDI_aBuilder() -> A {
-		            func __safeDI_c() -> C {
-		                func __safeDI_b() -> B {
-		                    #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-		                    let cRenamed: CRenamed? = nil
-		                    #sourceLocation()
-		                    return B(cRenamed: cRenamed)
-		                }
-		                let b: B = __safeDI_b()
-		                return C(b: b)
-		            }
 		            let c: C = __safeDI_c()
 		            return A(c: c)
 		        }
@@ -10560,13 +10560,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_b() -> B {
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+		            let renamedA: A? = nil
+		            #sourceLocation()
+		            return B(renamedA: renamedA)
+		        }
 		        func __safeDI_a() -> A {
-		            func __safeDI_b() -> B {
-		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
-		                let renamedA: A? = nil
-		                #sourceLocation()
-		                return B(renamedA: renamedA)
-		            }
 		            let b: B = __safeDI_b()
 		            return A(b: b)
 		        }
@@ -10636,15 +10636,15 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_b(c: C) -> B {
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+		            let cRenamed: CRenamed? = c
+		            #sourceLocation()
+		            return B(cRenamed: cRenamed)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let c = C()
-		            func __safeDI_b() -> B {
-		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-		                let cRenamed: CRenamed? = c
-		                #sourceLocation()
-		                return B(cRenamed: cRenamed)
-		            }
-		            let b: B = __safeDI_b()
+		            let b: B = __safeDI_b(c: c)
 		            return A(b: b, c: c)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -10724,19 +10724,19 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_d(c: C) -> D {
+		            let b: B = __safeDI_b(c: c)
+		            return D(b: b)
+		        }
+		        func __safeDI_b(c: C) -> B {
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+		            let cRenamed: CRenamed? = c
+		            #sourceLocation()
+		            return B(cRenamed: cRenamed)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let c = C()
-		            func __safeDI_d() -> D {
-		                func __safeDI_b() -> B {
-		                    #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-		                    let cRenamed: CRenamed? = c
-		                    #sourceLocation()
-		                    return B(cRenamed: cRenamed)
-		                }
-		                let b: B = __safeDI_b()
-		                return D(b: b)
-		            }
-		            let d: D = __safeDI_d()
+		            let d: D = __safeDI_d(c: c)
 		            return A(c: c, d: d)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -12478,10 +12478,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let service = Service()
+		        func __safeDI_grandchildVCBuilder() -> GrandchildVC {
+		            GrandchildVC(service: service)
+		        }
 		        func __safeDI_childVCBuilder() -> ChildVC {
-		            func __safeDI_grandchildVCBuilder() -> GrandchildVC {
-		                GrandchildVC(service: service)
-		            }
 		            let grandchildVCBuilder = Instantiator<GrandchildVC>(__safeDI_grandchildVCBuilder)
 		            return ChildVC(grandchildVCBuilder: grandchildVCBuilder)
 		        }
@@ -12654,11 +12654,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_b() -> B {
+		            let c = C(maybeB: nil)
+		            return B(c: c)
+		        }
 		        func __safeDI_parent() -> Parent {
-		            func __safeDI_b() -> B {
-		                let c = C(maybeB: nil)
-		                return B(c: c)
-		            }
 		            let b: B = __safeDI_b()
 		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 5)
 		            let maybeB: B? = b
@@ -12842,19 +12842,23 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_xBuilder(pBuilder: Instantiator<P>) -> X {
+		            X(pBuilder: pBuilder)
+		        }
+		        func __safeDI_q(xBuilder: Instantiator<X>) -> Q {
+		            let pBuilder = Instantiator<P> {
+		                __safeDI_pBuilder(xBuilder: xBuilder)
+		            }
+		            return Q(pBuilder: pBuilder)
+		        }
+		        func __safeDI_pBuilder(xBuilder: Instantiator<X>) -> P {
+		            P(xBuilder: xBuilder)
+		        }
 		        func __safeDI_mBuilder(pBuilder: Instantiator<P>) -> M {
-		            func __safeDI_xBuilder() -> X {
-		                X(pBuilder: pBuilder)
+		            let xBuilder = Instantiator<X> {
+		                __safeDI_xBuilder(pBuilder: pBuilder)
 		            }
-		            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		            func __safeDI_q() -> Q {
-		                func __safeDI_pBuilder() -> P {
-		                    P(xBuilder: xBuilder)
-		                }
-		                let pBuilder = Instantiator<P>(__safeDI_pBuilder)
-		                return Q(pBuilder: pBuilder)
-		            }
-		            let q: Q = __safeDI_q()
+		            let q: Q = __safeDI_q(xBuilder: xBuilder)
 		            return M(pBuilder: pBuilder, xBuilder: xBuilder, q: q)
 		        }
 		        let mBuilder = Instantiator<M> {
@@ -14051,13 +14055,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_aBuilder() -> A {
-		            @Sendable func __safeDI_bBuilder() -> B {
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                return B(aBuilder: aBuilder)
-		            }
+		        @Sendable nonisolated func __safeDI_aBuilder() -> A {
 		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 		            return A(bBuilder: bBuilder)
+		        }
+		        @Sendable nonisolated func __safeDI_bBuilder() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return B(aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        self.init(aBuilder: aBuilder)
@@ -14124,18 +14128,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_gBuilder() -> G {
-		            @Sendable func __safeDI_fBuilder() -> F {
-		                let gBuilder = Instantiator<G>(__safeDI_gBuilder)
-		                @Sendable func __safeDI_sBuilder() -> S {
-		                    let fBuilder = Instantiator<F>(__safeDI_fBuilder)
-		                    return S(fBuilder: fBuilder)
-		                }
-		                let sBuilder = SendableInstantiator<S>(__safeDI_sBuilder)
-		                return F(gBuilder: gBuilder, sBuilder: sBuilder)
-		            }
+		        @Sendable nonisolated func __safeDI_gBuilder() -> G {
 		            let fBuilder = Instantiator<F>(__safeDI_fBuilder)
 		            return G(fBuilder: fBuilder)
+		        }
+		        @Sendable nonisolated func __safeDI_fBuilder() -> F {
+		            let gBuilder = Instantiator<G>(__safeDI_gBuilder)
+		            let sBuilder = SendableInstantiator<S>(__safeDI_sBuilder)
+		            return F(gBuilder: gBuilder, sBuilder: sBuilder)
+		        }
+		        @Sendable nonisolated func __safeDI_sBuilder() -> S {
+		            let fBuilder = Instantiator<F>(__safeDI_fBuilder)
+		            return S(fBuilder: fBuilder)
 		        }
 		        let gBuilder = Instantiator<G>(__safeDI_gBuilder)
 		        self.init(gBuilder: gBuilder)
@@ -14337,14 +14341,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        let x = X()
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 7)
+		            let y: X? = x
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 7)
-		                let y: X? = x
-		                #sourceLocation()
-		                let d = D(y: y)
-		                return C(y: y, d: d)
-		            }
 		            let c: C = __safeDI_c()
 		            return B(c: c)
 		        }
@@ -14816,21 +14820,21 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X()
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let e: E = __safeDI_e(y: y)
+		            return C(y: y, e: e)
+		        }
+		        func __safeDI_e(y: X?) -> E {
+		            #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
+		            let z: X? = y
+		            #sourceLocation()
+		            let d = D(z: z)
+		            return E(z: z, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let y: X? = x
-		                #sourceLocation()
-		                func __safeDI_e() -> E {
-		                    #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
-		                    let z: X? = y
-		                    #sourceLocation()
-		                    let d = D(z: z)
-		                    return E(z: z, d: d)
-		                }
-		                let e: E = __safeDI_e()
-		                return C(y: y, e: e)
-		            }
 		            let c: C = __safeDI_c()
 		            return B(c: c)
 		        }
@@ -14969,14 +14973,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X()
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let y: X? = x
-		                #sourceLocation()
-		                let d = D(y: y)
-		                return C(y: y, d: d)
-		            }
 		            let c: C = __safeDI_c()
 		            return B(c: c)
 		        }
@@ -15044,14 +15048,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = nil
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let y: X? = nil
-		                #sourceLocation()
-		                let d = D(y: y)
-		                return C(y: y, d: d)
-		            }
 		            let c: C = __safeDI_c()
 		            return B(c: c)
 		        }
@@ -15214,18 +15218,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_b() -> B {
+		            let c: C = __safeDI_c()
+		            return B(c: c)
+		        }
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = nil
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_p() -> P {
-		            func __safeDI_b() -> B {
-		                func __safeDI_c() -> C {
-		                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                    let y: X? = nil
-		                    #sourceLocation()
-		                    let d = D(y: y)
-		                    return C(y: y, d: d)
-		                }
-		                let c: C = __safeDI_c()
-		                return B(c: c)
-		            }
 		            let b: B = __safeDI_b()
 		            let x = X()
 		            #sourceLocation(file: "\(output.fixtures["P.swift"])", line: 6)
@@ -15297,14 +15301,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X(b: nil)
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let d = D(y: y)
+		            return C(y: y, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let y: X? = x
-		                #sourceLocation()
-		                let d = D(y: y)
-		                return C(y: y, d: d)
-		            }
 		            let c: C = __safeDI_c()
 		            let y = X(b: nil)
 		            return B(c: c, y: y)
@@ -15381,21 +15385,21 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X(b: nil)
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let e: E = __safeDI_e(y: y)
+		            return C(y: y, e: e)
+		        }
+		        func __safeDI_e(y: X?) -> E {
+		            #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
+		            let z: X? = y
+		            #sourceLocation()
+		            let d = D(z: z)
+		            return E(z: z, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let y: X? = x
-		                #sourceLocation()
-		                func __safeDI_e() -> E {
-		                    #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
-		                    let z: X? = y
-		                    #sourceLocation()
-		                    let d = D(z: z)
-		                    return E(z: z, d: d)
-		                }
-		                let e: E = __safeDI_e()
-		                return C(y: y, e: e)
-		            }
 		            let c: C = __safeDI_c()
 		            let z = X(b: nil)
 		            return B(c: c, z: z)
@@ -15550,18 +15554,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_c(y: X?) -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let z: X? = y
+		            #sourceLocation()
+		            let d = D(z: z)
+		            return C(z: z, d: d)
+		        }
 		        func __safeDI_sBuilder(x: X) -> S {
 		            #sourceLocation(file: "\(output.fixtures["S.swift"])", line: 5)
 		            let y: X? = x
 		            #sourceLocation()
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let z: X? = y
-		                #sourceLocation()
-		                let d = D(z: z)
-		                return C(z: z, d: d)
-		            }
-		            let c: C = __safeDI_c()
+		            let c: C = __safeDI_c(y: y)
 		            return S(x: x, y: y, c: c)
 		        }
 		        let sBuilder = Instantiator<S> {
@@ -15639,21 +15643,21 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X()
+		        func __safeDI_c() -> C {
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let y: X? = x
+		            #sourceLocation()
+		            let e: E = __safeDI_e(y: y)
+		            return C(y: y, e: e)
+		        }
+		        func __safeDI_e(y: X?) -> E {
+		            #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
+		            let z: X? = y
+		            #sourceLocation()
+		            let d = D(z: z)
+		            return E(z: z, d: d)
+		        }
 		        func __safeDI_b() -> B {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		                let y: X? = x
-		                #sourceLocation()
-		                func __safeDI_e() -> E {
-		                    #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
-		                    let z: X? = y
-		                    #sourceLocation()
-		                    let d = D(z: z)
-		                    return E(z: z, d: d)
-		                }
-		                let e: E = __safeDI_e()
-		                return C(y: y, e: e)
-		            }
 		            let c: C = __safeDI_c()
 		            let y = X()
 		            return B(c: c, y: y)

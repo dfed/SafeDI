@@ -360,8 +360,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
 				            _ = Host.__safeDI_Host_AEDE6D5B3DE5CA38.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable func __safeDI_gadgetSendableBuilder_Host_part() -> any Gadget {
-				                @Sendable func __safeDI_part() -> DefaultGadget {
+				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_part() -> any Gadget {
+				                @Sendable nonisolated func __safeDI_part() -> DefaultGadget {
 				                    DefaultGadget(analytics: analytics)
 				                }
 				                return __safeDI_part()
@@ -1446,7 +1446,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_C965CB17F84BDA80.self\(seamCallComment(seam: "Inner"))
-			            @Sendable func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
 			                @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
 			                    let __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gadget.inner_widgetSendableBuilder_Values())
 			                    let gadget: any Gadget = __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
