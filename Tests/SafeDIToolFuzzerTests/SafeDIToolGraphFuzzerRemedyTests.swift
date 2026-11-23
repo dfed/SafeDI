@@ -3419,6 +3419,45 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		#expect(!files.conformsToSendable(typeNamed: "S1_T2"))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func conformsToSendable_readsProtocolThatRefinesSendable_whenTypeConformsOnlyThroughItsProtocol() throws {
+		let files = try #require(GraphFuzzerRemedies.Files(GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init() {}
+			}
+
+			public protocol S1_T1Protocol: AnyObject, Sendable {}
+			public protocol S1_T2Protocol: S1_T1Protocol {}
+			public protocol S1_T3Protocol: AnyObject {}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable, S1_T1Protocol {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, S1_T2Protocol {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T3: Instantiable, S1_T3Protocol {
+				public init() {}
+			}
+			""",
+		])))
+
+		#expect(files.conformsToSendable(typeNamed: "S1_T1"))
+		#expect(files.conformsToSendable(typeNamed: "S1_T2"))
+		#expect(!files.conformsToSendable(typeNamed: "S1_T3"))
+	}
+
 	/// A type with a hand-written mock that takes its initializer's parameters and passes each on, as the base corpus's
 	/// mock vocabulary draws one.
 	private static let typeWithHandWrittenMock = GraphFuzzerFixture(seed: 1, swiftFileContent: [

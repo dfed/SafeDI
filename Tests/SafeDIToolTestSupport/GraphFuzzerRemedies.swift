@@ -1527,14 +1527,33 @@ enum GraphFuzzerRemedies {
 			return typeDeclaration.lines.lazy.compactMap { Self.property(on: lines[$0]) }.first { $0.label == label }
 		}
 
-		/// Whether the `final class` named `typeName` lists `Sendable`, checked or `@unchecked`, among its conformances.
+		/// Whether the `final class` named `typeName` conforms to `Sendable`: lists it, checked or `@unchecked`, among its
+		/// conformances, or a protocol a file declares that refines it, at any depth.
 		func conformsToSendable(typeNamed typeName: String) -> Bool {
 			guard let (fileIndex, typeDeclaration) = typeDeclaration(named: typeName) else { return false }
 			let declarationLine = Self.lines(of: contents[fileIndex])[typeDeclaration.lines.lowerBound - 1]
-			guard let conformancesStart = declarationLine.firstIndex(of: ":") else { return false }
-			return declarationLine[declarationLine.index(after: conformancesStart)...].dropLast(" {".count)
+			return Self.inheritedNames(in: declarationLine).contains { names(sendable: $0, visited: []) }
+		}
+
+		/// Whether `name` is `Sendable`, or a protocol a file declares whose inherited names include one that is, at any depth.
+		private func names(sendable name: String, visited: Set<String>) -> Bool {
+			guard name != "Sendable" else { return true }
+			guard !visited.contains(name) else { return false }
+			return contents.lazy.flatMap(Self.lines(of:)).contains { line in
+				guard let protocolRange = line.range(of: "protocol \(name)") else { return false }
+				let rest = line[protocolRange.upperBound...]
+				return rest.hasPrefix(":") && Self.inheritedNames(in: line).contains { names(sendable: $0, visited: visited.union([name])) }
+			}
+		}
+
+		/// The names a declaration line lists after its first `:` and before its `{`, each without attributes such as
+		/// `@unchecked`.
+		private static func inheritedNames(in declarationLine: String) -> [String] {
+			guard let inheritanceStart = declarationLine.firstIndex(of: ":") else { return [] }
+			return declarationLine[declarationLine.index(after: inheritanceStart)...]
+				.prefix { $0 != "{" }
 				.split(separator: ",")
-				.contains { $0.split(separator: " ").last == "Sendable" }
+				.compactMap { $0.split(separator: " ").last.map(String.init) }
 		}
 
 		/// The first file that declares the `final class` named `typeName`, with that declaration.
