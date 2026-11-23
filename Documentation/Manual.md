@@ -838,7 +838,7 @@ Here is what happens when the tree gains a narrower parameter. Suppose `Badge` a
 
 A new parameter at least as visible as the seam is on every tier, so hand-written calls stop compiling until they pass it.
 
-A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. The builder returns the value the property holds, and takes nothing, or what a place held in an instantiator forwards (below): `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place. A seam that calls another seam whose holes it cannot fill takes builders for them too, of the same forms, so a caller never writes anything else. The initializer only generated code calls takes such a builder as a struct, `SafeDIScope_UserService.__safeDI_Builder<any UserService>`, with one function for each of the seam’s properties that leads to a place of the type, which the seam calls where it binds that level, so the code that fills the builder keeps only the values it reads.
+A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. The builder returns the value the property holds, and takes nothing, or what a place held in an instantiator forwards (below): `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place. A seam that calls another seam whose holes it cannot fill takes builders for them too, of the same forms, so a caller never writes anything else. The initializer only generated code calls takes such a builder as a carrier, `__safeDI_UserServiceCarrier<any UserService>`, a class with one function for each of the seam’s properties that leads to a place of the type, which the seam calls where it binds that level, handing it the values bound there, so the code that fills the builder keeps only the values it reads.
 
 A property held in a wrapper is no different to write: the builder returns the plain value, and the generated initializer builds the `LazilyInstantiated`, `Instantiator` or other wrapper around it. An instantiator calls the builder each time it instantiates, and hands it the value it forwards: that value’s type is `ErasedInstantiator`’s first generic type, and always `T.ForwardedProperties` for `Instantiator<T>`, since the seam’s module cannot always see whether `T` forwards anything. So the builder of places held in instantiators that forward a value is the property’s wrapper followed by `.Builder`, such as `makerBuilder: @escaping Instantiator<Maker>.Builder`, or `ErasedInstantiator<F, Maker>.Builder` where the places spell one forwarded value `F` through other wrappers or spellings. A builder of places that forward nothing takes nothing, as a plain place’s does: places held in `ErasedInstantiator<(), Maker>` take `makerBuilder: @escaping () -> Maker`, as does an `Instantiator<Maker>` beside a plain place of `Maker`, which says that `Maker` forwards nothing. One builder fills every place of its type, so those places must forward the same values, or SafeDI reports an error. A type that conforms to `Instantiable` by hand forwards its own `ForwardedProperties`, so an erased instantiator beside its `Instantiator` is declared `ErasedInstantiator<Impl.ForwardedProperties, Impl>`.
 
@@ -851,49 +851,39 @@ Here, `Service` instantiates a `Profile`, which instantiates a `UserService` tha
 ```swift
 // Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
 extension Service {
-    nonisolated public enum SafeDIScope_UserService {
-        nonisolated public struct profile_Values {
-            public let analytics: Analytics
+    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+    nonisolated public final class __safeDI_UserServiceCarrier<__safeDI_Built> {
+        public let profile: (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>
+
+        public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
+            self.profile = profile
         }
 
-        nonisolated public enum Profile_Scope {
-            nonisolated public struct userService_Values {}
+        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+        }
+    }
 
-            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-                public let userService: (userService_Values) -> __safeDI_Built
+    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+    nonisolated public final class __safeDI_UserServiceCarrier_Profile<__safeDI_Built> {
+        public let userService: () -> __safeDI_Built
 
-                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
-                    self.userService = userService
-                }
-
-                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-                    self.userService = { _ in __safeDI_builder() }
-                }
-            }
+        public init(userService: @escaping () -> __safeDI_Built) {
+            self.userService = userService
         }
 
-        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
-
-            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
-                self.profile = profile
-            }
-
-            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-                self.profile = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-            }
+        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+            self.init(userService: { __safeDI_builder() })
         }
     }
 
     /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
     /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-    public init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+    public init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
         let analytics = Analytics()
-        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values(analytics: analytics))
+        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(analytics)
         func __safeDI_profile() -> Profile {
-            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService()
             return Profile(userService: userService, analytics: analytics)
         }
         let profile: Profile = __safeDI_profile()
@@ -907,12 +897,12 @@ A tree that calls the seam fills the builder when its module can see an implemen
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
 func __safeDI_service() -> Service {
-    _ = Service.__safeDI_Service_BEE5EF0BBCBFF8CE.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-        .init(profile: { values in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values.analytics) })
+    _ = Service.__safeDI_Service_88819F20AD4FA546.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+        .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
     }
-    func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<any UserService> {
-        .init(userService: { _ in
+    func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
+        .init(userService: {
             let userService: any UserService = DefaultUserService(analytics: analytics)
             return userService
         })

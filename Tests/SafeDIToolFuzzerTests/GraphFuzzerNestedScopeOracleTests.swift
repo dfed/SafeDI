@@ -176,8 +176,8 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scopeDeclarations_readBothFamiliesAndAgreeWithTheFacts_whenThePlainRootIsANamespaceOfTheToolsOutput() async throws {
-		// `Shell` builds `Panel` in a `@Sendable` function, and `Panel` holds the place: the tool's plain root enum declares no
-		// case, only `Panel`'s enum, which the `@Sendable` enum's case holds.
+		// `Shell` builds `Panel` in a `@Sendable` function, and `Panel` holds the place: the tool declares no plain root
+		// carrier, only `Panel`'s plain level, which the `@Sendable` family's level for `Shell` returns.
 		var filesToDelete = filesToDelete
 		let (output, facts) = try await collectingPlaceFacts {
 			try await executeSafeDIToolTest(
@@ -197,11 +197,8 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 
 		// Compared as sorted lists, so that a failure prints both in one order on every run.
 		#expect(declarations.entries.sorted() == [
-			"enum Host.SafeDIScope_Widget",
 			"enum Host.SafeDIScope_Widget.Panel_Scope",
-			"case Host.SafeDIScope_Widget.Panel_Scope.widget(widget_Values)",
-			"struct Host.SafeDIScope_Widget.Panel_Scope.widget_Values",
-			"field Host.SafeDIScope_Widget.Panel_Scope.widget_Values: public name: String",
+			"case Host.SafeDIScope_Widget.Panel_Scope.widget(String)",
 			"enum Host.SafeDISendableScope_Widget",
 			"case Host.SafeDISendableScope_Widget.shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)",
 			"enum Host.SafeDISendableScope_Widget.Shell_Scope",

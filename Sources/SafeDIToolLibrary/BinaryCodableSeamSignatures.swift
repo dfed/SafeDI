@@ -874,6 +874,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 				BinaryLayoutField("levelType", \.levelType),
 				BinaryLayoutField("bindingPath", \.bindingPath),
 				BinaryLayoutField("isCalledInsideFunction", \.isCalledInsideFunction),
+				BinaryLayoutField("isLetChild", \.isLetChild),
 			],
 			unwrittenProperties: [],
 		)
@@ -887,6 +888,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 			levelType: reader.read(),
 			bindingPath: reader.read(),
 			isCalledInsideFunction: reader.read(),
+			isLetChild: reader.read(),
 		)
 	}
 
@@ -897,6 +899,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 		writer.write(levelType)
 		writer.write(bindingPath)
 		writer.write(isCalledInsideFunction)
+		writer.write(isLetChild)
 	}
 }
 
@@ -1089,6 +1092,7 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 				BinaryLayoutField("rootTypeName", \.rootTypeName),
 				BinaryLayoutField("builderLabel", \.builderLabel),
 				BinaryLayoutField("cases", \.cases),
+				BinaryLayoutField("takesValuesPositionally", \.takesValuesPositionally),
 			],
 			unwrittenProperties: [],
 		)
@@ -1101,6 +1105,7 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 			rootTypeName: reader.read() as String?,
 			builderLabel: reader.read(),
 			cases: reader.read(),
+			takesValuesPositionally: reader.read(),
 		)
 	}
 
@@ -1110,6 +1115,7 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 		writer.write(rootTypeName)
 		writer.write(builderLabel)
 		writer.write(cases)
+		writer.write(takesValuesPositionally)
 	}
 }
 

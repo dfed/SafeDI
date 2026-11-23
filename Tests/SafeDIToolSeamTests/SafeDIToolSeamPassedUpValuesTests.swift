@@ -160,22 +160,16 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Inner"]?.generatedFiles == ["Inner.swift": generatedFileHeader + """
 		extension Detail {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct api_Values {
-		            public let id: Int
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let api: (Int) -> __safeDI_Built
+
+		        public init(api: @escaping (Int) -> __safeDI_Built) {
+		            self.api = api
 		        }
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let api: (api_Values) -> __safeDI_Built
-
-		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-		                self.api = api
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -186,14 +180,14 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id))
+		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+		        let api: any Api = __safeDI_apiBuilder.api(id)
 		        self.init(id: id, api: api)
 		    }
 		}
 
 		extension Detail {
-		    public enum __safeDI_Detail_4FD7A6651375681C {}
+		    public enum __safeDI_Detail_5BF800DF64AF87BC {}
 		}
 		"""])
 		#expect(output.modules["Outer"]?.generatedFiles == ["Outer.swift": generatedFileHeader + """
@@ -202,28 +196,18 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		#endif
 
 		extension List {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct api_Values {
-		            public let id: Int
-		            public let detailBuilder: Instantiator<Detail>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let api: (Int, Instantiator<Detail>) -> __safeDI_Built
+		        public let detailBuilder: Detail.__safeDI_ApiCarrier<__safeDI_Built>
+
+		        public init(api: @escaping (Int, Instantiator<Detail>) -> __safeDI_Built, detailBuilder: Detail.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.api = api
+		            self.detailBuilder = detailBuilder
 		        }
 
-		        nonisolated public struct detailBuilder_Values: Sendable {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let api: (api_Values) -> __safeDI_Built
-		            public let detailBuilder: (detailBuilder_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
-
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, detailBuilder: @escaping (detailBuilder_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.api = api
-		                self.detailBuilder = detailBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
-		                self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -234,21 +218,21 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		    public init(__safeDI_id id: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        func __safeDI_detailBuilder(id: Int) -> Detail {
-		            _ = Detail.__safeDI_Detail_4FD7A6651375681C.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Detail(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values()))
+		            _ = Detail.__safeDI_Detail_5BF800DF64AF87BC.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Detail(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.detailBuilder)
 		        }
 		        let detailBuilder = Instantiator<Detail> {
 		            __safeDI_detailBuilder(id: $0)
 		        }
-		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id, detailBuilder: detailBuilder))
+		        let api: any Api = __safeDI_apiBuilder.api(id, detailBuilder)
 		        self.init(id: id, api: api, detailBuilder: detailBuilder)
 		    }
 		}
 
 		extension List {
-		    public enum __safeDI_List_7E26719CA4BF71AE {}
+		    public enum __safeDI_List_BECBEBC190875F5C {}
 		}
 		"""])
 		let description = try await DifferentialValueOracle.describe(
@@ -300,28 +284,18 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Node {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct api_Values {
-		            public let id: Int
-		            public let nextBuilder: Instantiator<Node>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let api: (Int, Instantiator<Node>) -> __safeDI_Built
+		        public let nextBuilder: () -> Node.__safeDI_ApiCarrier<__safeDI_Built>
+
+		        public init(api: @escaping (Int, Instantiator<Node>) -> __safeDI_Built, nextBuilder: @escaping () -> Node.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.api = api
+		            self.nextBuilder = nextBuilder
 		        }
 
-		        nonisolated public struct nextBuilder_Values: Sendable {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let api: (api_Values) -> __safeDI_Built
-		            public let nextBuilder: (nextBuilder_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
-
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, nextBuilder: @escaping (nextBuilder_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.api = api
-		                self.nextBuilder = nextBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
-		                self.nextBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _, _ in __safeDI_builder() }, nextBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -332,21 +306,21 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        func __safeDI_nextBuilder(id: Int) -> Node {
-		            _ = Node.__safeDI_Node_DD5EE0BBCEB980F4.self
-		            return Node(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.nextBuilder(SafeDIScope_Api.nextBuilder_Values()))
+		            _ = Node.__safeDI_Node_E5AA19DA80BC605E.self
+		            return Node(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.nextBuilder())
 		        }
 		        let nextBuilder = Instantiator<Node> {
 		            __safeDI_nextBuilder(id: $0)
 		        }
-		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id, nextBuilder: nextBuilder))
+		        let api: any Api = __safeDI_apiBuilder.api(id, nextBuilder)
 		        self.init(id: id, api: api, nextBuilder: nextBuilder)
 		    }
 		}
 
 		extension Node {
-		    public enum __safeDI_Node_DD5EE0BBCEB980F4 {}
+		    public enum __safeDI_Node_E5AA19DA80BC605E {}
 		}
 		"""])
 		let description = try await DifferentialValueOracle.describe(

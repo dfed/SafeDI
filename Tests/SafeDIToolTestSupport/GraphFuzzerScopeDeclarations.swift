@@ -43,8 +43,9 @@ struct GraphFuzzerScopeDeclarations {
 	init(generatedFiles: [String: String]) {
 		var enums = [ScopeEnum]()
 		var valuesStructs = [ValuesStruct]()
+		let carrierPaths = Self.carrierPaths(in: generatedFiles.values)
 		for (_, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) {
-			let collector = ScopeEnumCollector(viewMode: .sourceAccurate)
+			let collector = ScopeEnumCollector(viewMode: .sourceAccurate, carrierPaths: carrierPaths)
 			collector.walk(Parser.parse(source: contents))
 			enums += collector.enums
 			valuesStructs += collector.valuesStructs
@@ -410,6 +411,68 @@ private struct ScopeEnumReference {
 }
 
 extension GraphFuzzerScopeDeclarations {
+	/// Whether `name` is the name of a seam's carrier: a root's, `__safeDI_<Stem>Carrier` or
+	/// `__safeDI_<Stem>SendableCarrier`, or a level's, `__safeDI_<Stem>Carrier_<Type>`.
+	static func isCarrierName(_ name: String) -> Bool {
+		name.range(of: #"^__safeDI_\w+Carrier(_\w+)?$"#, options: .regularExpression) != nil
+	}
+
+	/// The path of the scope enum each carrier class any of `files` declares stands for: a root carrier,
+	/// `__safeDI_<Stem>Carrier` or, `Sendable`, `__safeDI_<Stem>SendableCarrier`, stands for `SafeDIScope_<Stem>` or
+	/// `SafeDISendableScope_<Stem>`, and a level's, `<root carrier>_<Type>`, for that root enum's `<Type>_Scope`. A level's
+	/// root is the longest carrier name it extends by `_`, so that a stem holding `_` (an erasure's, `<Filling>_<Returned>`)
+	/// is never split; a root's family is read from its declaration, so that a hole type whose name ends in `Sendable` is
+	/// never read as a `@Sendable` family, and a level's from the spelling it extends, so that a plain level a `Sendable`
+	/// root's member returns, spelled after a plain root the module may not declare, is read as the plain family
+	/// (`GraphFuzzerCarrierReaderTests`' `scopeDeclarations_readsLevelCarrierAsPlainFamily_…`).
+	static func carrierPaths(in files: some Sequence<String>) -> [String: [String]] {
+		var isSendableByName = [String: Bool]()
+		let declaration = expression(#"\bfinal class (__safeDI_\w+Carrier(?:_\w+)?)<__safeDI_Built>(\s*:\s*Sendable)?"#)
+		for contents in files {
+			for match in declaration.matches(in: contents, range: NSRange(contents.startIndex..., in: contents)) {
+				guard let nameRange = Range(match.range(at: 1), in: contents) else { continue }
+				isSendableByName[String(contents[nameRange])] = match.range(at: 2).location != NSNotFound
+			}
+		}
+		let names = isSendableByName.keys.sorted()
+		// A level's name extends its root's own spelling, or, beneath a `Sendable` root, that root's plain spelling,
+		// `__safeDI_<Stem>Carrier`: a `Sendable` root's member can return the plain family's level carrier, whose root the
+		// module may not declare.
+		func plainSpelling(ofRoot root: String) -> String {
+			isSendableByName[root] == true && root.hasSuffix("SendableCarrier") ? String(root.dropLast("SendableCarrier".count)) + "Carrier" : root
+		}
+		func prefix(of name: String, extendedFrom root: String) -> String? {
+			guard name != root else { return nil }
+			if name.hasPrefix(root + "_") {
+				return root
+			} else if name.hasPrefix(plainSpelling(ofRoot: root) + "_") {
+				return plainSpelling(ofRoot: root)
+			} else {
+				return nil
+			}
+		}
+		var paths = [String: [String]]()
+		for name in names {
+			// The longest root a level extends; where both families' roots spell it, the one whose own spelling it extends.
+			let root = names
+				.compactMap { candidate in prefix(of: name, extendedFrom: candidate).map { (candidate, $0) } }
+				.max { ($0.1.count, $0.1 == $0.0 ? 1 : 0) < ($1.1.count, $1.1 == $1.0 ? 1 : 0) }
+			// The family is the spelling's the name extends: a level that extends a `Sendable` root's plain spelling is in the
+			// plain family, whatever its root's declaration says.
+			let rootSpelling = root?.1 ?? name
+			let isSendable = rootSpelling == (root?.0 ?? name) && isSendableByName[rootSpelling] == true
+			let family = isSendable ? "SendableCarrier" : "Carrier"
+			let stem = rootSpelling.hasSuffix(family) ? String(rootSpelling.dropFirst("__safeDI_".count).dropLast(family.count)) : String(rootSpelling.dropFirst("__safeDI_".count))
+			let rootEnumName = (isSendable ? "SafeDISendableScope_" : "SafeDIScope_") + stem
+			if let (_, matchedPrefix) = root {
+				paths[name] = [rootEnumName, String(name.dropFirst(matchedPrefix.count + 1)) + "_Scope"]
+			} else {
+				paths[name] = [rootEnumName]
+			}
+		}
+		return paths
+	}
+
 	/// Whether `name` is the name of a root scope enum: `SafeDIScope_…`, `SafeDISendableScope_…`, or a public mock's.
 	static func isRootEnumName(_ name: String) -> Bool {
 		name.range(of: #"^SafeDI(?:Sendable)?(?:Mock)?Scope_"#, options: .regularExpression) != nil
@@ -421,15 +484,69 @@ extension GraphFuzzerScopeDeclarations {
 private final class ScopeEnumCollector: SyntaxVisitor {
 	private(set) var enums = [GraphFuzzerScopeDeclarations.ScopeEnum]()
 	private(set) var valuesStructs = [GraphFuzzerScopeDeclarations.ValuesStruct]()
+	/// The scope enum path each carrier of the generated files stands for (`GraphFuzzerScopeDeclarations.carrierPaths(in:)`).
+	private let carrierPaths: [String: [String]]
+
+	init(viewMode: SyntaxTreeViewMode, carrierPaths: [String: [String]]) {
+		self.carrierPaths = carrierPaths
+		super.init(viewMode: viewMode)
+	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		let extendedType = node.extendedType.trimmedDescription
 		for member in node.memberBlock.members {
 			if let enumDeclaration = member.decl.as(EnumDeclSyntax.self), GraphFuzzerScopeDeclarations.isRootEnumName(enumDeclaration.name.text) {
 				collect(enumDeclaration, extendedType: extendedType, enclosingPath: [])
+			} else if let classDeclaration = member.decl.as(ClassDeclSyntax.self), let path = carrierPaths[classDeclaration.name.text] {
+				// A carrier is read as the scope enum it stands for, its members as that enum's cases, so that every oracle judges
+				// carriers, builder structs and enums alike. Its run structs (`__safeDI_<Type>Values<N>`), which a member takes,
+				// are no enum's values struct: each case is told apart by its label, and the levels' fields by `SeamPlaceLevels`.
+				enums.append(GraphFuzzerScopeDeclarations.ScopeEnum(extendedType: extendedType, path: path, cases: carrierCases(of: classDeclaration)))
 			}
 		}
 		return .skipChildren
+	}
+
+	/// A case for each stored member of `carrier`, labeled as the member, whose payload is the run struct it takes, unless
+	/// the carrier is `Sendable` (the `@Sendable` family's levels carry no values), then each scope enum whose carrier or
+	/// builder struct it returns, outermost first; a member that is a carrier, a level that binds nothing, holds that enum
+	/// alone.
+	private func carrierCases(of carrier: ClassDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
+		let isSendable = carrier.inheritanceClause?.inheritedTypes.contains { $0.type.trimmedDescription == "Sendable" } ?? false
+		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
+		for member in carrier.memberBlock.members {
+			guard let variable = member.decl.as(VariableDeclSyntax.self), variable.bindingSpecifier.tokenKind == .keyword(.let) else { continue }
+			for binding in variable.bindings {
+				guard let type = binding.typeAnnotation?.type else { continue }
+				var payload = [String]()
+				let returnedType: String
+				if let functionType = type.as(FunctionTypeSyntax.self) ?? type.as(AttributedTypeSyntax.self)?.baseType.as(FunctionTypeSyntax.self) {
+					payload = isSendable ? [] : functionType.parameters.map(\.type.trimmedDescription)
+					returnedType = functionType.returnClause.type.trimmedDescription
+				} else {
+					returnedType = type.trimmedDescription
+				}
+				payload += scopeEnumsReferenced(in: returnedType)
+				cases.append(GraphFuzzerScopeDeclarations.ScopeCase(label: binding.pattern.trimmedDescription.replacingOccurrences(of: "`", with: ""), payload: payload))
+			}
+		}
+		return cases
+	}
+
+	/// Each scope enum whose carrier or builder struct `type` spells, outermost first, a carrier as the enum it stands for,
+	/// qualified as `type` qualifies it.
+	private func scopeEnumsReferenced(in type: String) -> [String] {
+		let suffix = "." + Self.builderStructName
+		return type.split { !($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }.compactMap { token in
+			var components = token.split(separator: ".").map(String.init)
+			if let last = components.last, let path = carrierPaths[last] {
+				components.removeLast()
+				return (components + path).joined(separator: ".")
+			}
+			guard token.hasSuffix(suffix) else { return nil }
+			let enumPath = String(token.dropLast(suffix.count))
+			return enumPath.split(separator: ".").contains { GraphFuzzerScopeDeclarations.isRootEnumName(String($0)) } ? enumPath : nil
+		}
 	}
 
 	/// Whether `structDeclaration` is the payload struct of one of `cases`: not the level's builder struct
@@ -444,7 +561,7 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 	/// The cases `enumDeclaration` stands for: those it declares, or, for a seam's enum that is a namespace holding a builder
 	/// struct (`__safeDI_Builder`) and no case, one case per member of the struct, as the enum declared them before it took
 	/// the struct (`builderStructCases(of:)`). A public mock's enum keeps its cases beside its struct, and those are read.
-	private static func cases(of enumDeclaration: EnumDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
+	private func cases(of enumDeclaration: EnumDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
 		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
 		for member in enumDeclaration.memberBlock.members {
 			guard let caseDeclaration = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
@@ -458,7 +575,7 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		}
 		guard cases.isEmpty else { return cases }
 		for member in enumDeclaration.memberBlock.members {
-			if let structDeclaration = member.decl.as(StructDeclSyntax.self), structDeclaration.name.text == builderStructName {
+			if let structDeclaration = member.decl.as(StructDeclSyntax.self), structDeclaration.name.text == Self.builderStructName {
 				return builderStructCases(of: structDeclaration)
 			}
 		}
@@ -475,7 +592,7 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 	/// inner seam's root enum, or, for a place inside a fill, the filled seam's root enum and then the enum of the type the
 	/// fill builds. A member returning `__safeDI_Built` or a wrapper's `Builder` is a place, which carries nothing more the
 	/// readers read.
-	private static func builderStructCases(of builderStruct: StructDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
+	private func builderStructCases(of builderStruct: StructDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
 		let isSendable = builderStruct.inheritanceClause?.inheritedTypes.contains { $0.type.trimmedDescription == "Sendable" } ?? false
 		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
 		for member in builderStruct.memberBlock.members {
@@ -485,7 +602,7 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 				let functionType = type.as(FunctionTypeSyntax.self) ?? type.as(AttributedTypeSyntax.self)?.baseType.as(FunctionTypeSyntax.self)
 				guard let functionType else { continue }
 				var payload = isSendable ? [] : functionType.parameters.map(\.type.trimmedDescription)
-				payload += scopeEnumsWhoseBuilderStructs(areIn: functionType.returnClause.type.trimmedDescription)
+				payload += scopeEnumsReferenced(in: functionType.returnClause.type.trimmedDescription)
 				// A member named as a keyword is spelled in backticks, which a place's label, read without them, does not spell.
 				cases.append(GraphFuzzerScopeDeclarations.ScopeCase(label: binding.pattern.trimmedDescription.replacingOccurrences(of: "`", with: ""), payload: payload))
 			}
@@ -493,24 +610,12 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		return cases
 	}
 
-	/// Each scope enum whose builder struct `type` spells, outermost first: `Inner.SafeDIScope_Gadget` and
-	/// `SafeDIScope_Service.DefaultGadget_Scope` in
-	/// `Inner.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Service.DefaultGadget_Scope.__safeDI_Builder<__safeDI_Built>>`.
-	private static func scopeEnumsWhoseBuilderStructs(areIn type: String) -> [String] {
-		let suffix = "." + builderStructName
-		return type.split { !($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }.compactMap { token in
-			guard token.hasSuffix(suffix) else { return nil }
-			let enumPath = String(token.dropLast(suffix.count))
-			return enumPath.split(separator: ".").contains { GraphFuzzerScopeDeclarations.isRootEnumName(String($0)) } ? enumPath : nil
-		}
-	}
-
 	private func collect(_ enumDeclaration: EnumDeclSyntax, extendedType: String, enclosingPath: [String]) {
 		let path = enclosingPath + [enumDeclaration.name.text]
 		// Each enum before the enums nested in it, so that enums are listed in the order a reader meets them.
 		let enumIndex = enums.count
 		enums.append(GraphFuzzerScopeDeclarations.ScopeEnum(extendedType: extendedType, path: path, cases: []))
-		let cases = Self.cases(of: enumDeclaration)
+		let cases = cases(of: enumDeclaration)
 		var nestedEnums = [EnumDeclSyntax]()
 		for member in enumDeclaration.memberBlock.members {
 			if let nestedEnum = member.decl.as(EnumDeclSyntax.self) {

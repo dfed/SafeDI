@@ -59,33 +59,29 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		#endif
 
 		extension Banner {
-		    nonisolated public enum SafeDIScope_PaymentService {
-		        nonisolated public struct payments_Values {}
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_PaymentServiceCarrier<__safeDI_Built> {
+		        public let payments: () -> __safeDI_Built
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let payments: (payments_Values) -> __safeDI_Built
+		        public init(payments: @escaping () -> __safeDI_Built) {
+		            self.payments = payments
+		        }
 
-		            public init(payments: @escaping (payments_Values) -> __safeDI_Built) {
-		                self.payments = payments
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.payments = { _ in __safeDI_builder() }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(payments: { __safeDI_builder() })
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_paymentServiceBuilder: SafeDIScope_PaymentService.__safeDI_Builder<any PaymentService>) {
-		        let payments: any PaymentService = __safeDI_paymentServiceBuilder.payments(SafeDIScope_PaymentService.payments_Values())
+		    public convenience init(__safeDI_paymentServiceBuilder: __safeDI_PaymentServiceCarrier<any PaymentService>) {
+		        let payments: any PaymentService = __safeDI_paymentServiceBuilder.payments()
 		        self.init(payments: payments)
 		    }
 		}
 
 		extension Banner {
-		    public enum __safeDI_Banner_BBCEF4F117CBB63B {}
+		    public enum __safeDI_Banner_A99D80A9F942B3F9 {}
 		}
 
 		#if DEBUG

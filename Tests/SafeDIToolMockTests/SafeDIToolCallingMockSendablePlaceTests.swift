@@ -59,48 +59,38 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		#endif
 
 		extension F {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public enum K_Scope {
-		            nonisolated public struct api_Values {}
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_K<__safeDI_Built> {
+		        public let api: () -> __safeDI_Built
 
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		        public init(api: @escaping () -> __safeDI_Built) {
+		            self.api = api
+		        }
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-		                    self.api = api
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
-		                }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
-		    nonisolated public enum SafeDISendableScope_Api {
-		        nonisolated public struct k_Values: Sendable {}
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+		        public let k: @Sendable () -> __safeDI_ApiCarrier_K<__safeDI_Built>
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let k: @Sendable (k_Values) -> SafeDIScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>
+		        public init(k: @escaping @Sendable () -> __safeDI_ApiCarrier_K<__safeDI_Built>) {
+		            self.k = k
+		        }
 
-		            public init(k: @escaping @Sendable (k_Values) -> SafeDIScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                self.k = k
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.k = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		            self.init(k: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_db db: Db, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+		    public convenience init(__safeDI_db db: Db, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        @Sendable nonisolated func __safeDI_k() -> K {
-		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k(SafeDISendableScope_Api.k_Values())
-		            let api: any Api = __safeDI_apiSendableBuilder_k.api(SafeDIScope_Api.K_Scope.api_Values())
+		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k()
+		            let api: any Api = __safeDI_apiSendableBuilder_k.api()
 		            return K(api: api)
 		        }
 		        let k = SendableInstantiator<K>(__safeDI_k)
@@ -109,7 +99,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_D6F6EA6BFBAB0E58 {}
+		    public enum __safeDI_F_BCA2D47B8701CAB6 {}
 		}
 
 		#if DEBUG

@@ -364,7 +364,7 @@ struct GraphFuzzerFixture: Equatable {
 	}
 
 	/// The roots `declaresRootOfDrawBeneathSeamsModule` reads.
-	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot", "MixRoot"]
+	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot", "MixRoot", "MixCallRoot"]
 
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
@@ -1354,6 +1354,19 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleAnalytics` `package`, which the scope struct carries as a `package` field, read by `HoleImpl` in the seam's
 	/// package.
 	case holeNarrowerField
+	/// `HoleWideSeam`, a leaf seam the root builds, binds 7 values before its place of a hole, so that its level holds one
+	/// fewer than the most a carrier takes positionally (`SeamCarrierValues.maximumPositionalValues`).
+	case holeLevelOfSevenValues
+	/// The same, with 8 values: the most a carrier takes positionally.
+	case holeLevelOfEightValues
+	/// The same, with 9 values: one more than a carrier takes positionally, so the level's values travel in run structs.
+	case holeLevelOfNineValues
+	/// The same, with 12 values.
+	case holeLevelOfTwelveValues
+	/// One of those values `package` on a `public` seam: narrower than the carrier's members, so it travels in a run struct.
+	case holeLevelWithPackageValueOnPublicSeam
+	/// Every one of those values `package` on a `package` seam: as visible as the carrier's members, so they stay positional.
+	case holeLevelOfPackageValuesOnPackageSeam
 	/// `HoleImpl` reads `holeAnalytics` through an alias or only if available.
 	case holeAliasOrOnlyIfAvailable
 	/// `HoleImpl` reads `holeAnalytics` only if available.
@@ -1863,6 +1876,42 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case wrapperMixWrapperDeclaredAboveCall
 	/// `MixThingImpl` builds the reader in a `SendableInstantiator`.
 	case wrapperMixWrapperReadInSendableFunction
+	/// `addingCarrierShapes`' sibling places with unequal read sets: `UnequalHome`, a seam, binds `unequalFirst` and
+	/// `unequalSecond` and then holds places of `Unequal1Api1` and `Unequal1Api2`, whose fills read one value each, so each
+	/// carrier member captures only what its own fill reads.
+	case carrierDrawUnequalSiblings
+	/// The places are on `UnequalPanel`, which the seam builds through an instantiator, one level down.
+	case carrierDrawUnequalSiblingsBeneathChild
+	/// `addingCarrierShapes`' label-coinciding declarations: `CoincideLeft` and `CoincideRight`, siblings the seam
+	/// `CoincideHome` builds, each declare `coincideTag` and hold a place of `CoincideApi`, whose fill reads it, so one
+	/// label is bound at two levels of one carrier.
+	case carrierDrawCoincidingLabel
+	/// The seam also declares `coincideTag`, which its fill reads beside the siblings'.
+	case carrierDrawCoincidingLabelOnSeamToo
+	/// `addingCarrierShapes`' family-split keys: `KeySplitHome`, a seam, builds `KeySplitPlain` through an `Instantiator`
+	/// and `KeySplitSendable` through a `SendableInstantiator`, each holding a place of `KeySplitApi`, so one hole type's
+	/// places are in both families.
+	case carrierDrawKeySplitFamilies
+	/// `addingCarrierShapes`' wrapped place beside an unwrapped one: `WrapSideHome`, a seam, binds `wrapSideFirst` and
+	/// `wrapSideSecond`, holds a plain place of `WrapSide1Api1`, whose fill reads the first, and a place of `WrapSide1Api2`
+	/// in a wrapper, whose fill reads the second.
+	case carrierDrawWrappedBesidePlain
+	/// The wrapped place is a `LazilyInstantiated` or its `Sendable` twin.
+	case carrierDrawWrappedBesidePlainLazy
+	/// The wrapped place is an `ErasedInstantiator<(), any WrapSide1Api2>` or its `Sendable` twin.
+	case carrierDrawWrappedBesidePlainErased
+	/// `addingCarrierShapes`' mixed inner-seam fill and pass-up: `MixCallInner`, a seam of the module beneath the seam's
+	/// module, holds places of `MixCall1Kept` and `MixCall1Passed`; `MixCallOuter`, a seam of the seam's module, builds it,
+	/// fills the first with `MixCall1KeptImpl` and passes the second up to `MixCall1PassedImpl`, beside the root.
+	case carrierDrawMixedInnerSeamFillAndPassUp
+	/// `MixCallOuter` builds `MixCallInner` through an instantiator.
+	case carrierDrawMixedInnerSeamFillAndPassUpThroughInstantiator
+	/// `addingCarrierShapes`' loop whose level binds a value a fill reads: `LoopReadHome`, a seam, instantiates the
+	/// builders of `LoopReadA` and `LoopReadB`, each receiving the other's and binding `loopReadMark` before its place of
+	/// `LoopReadApi`, whose fill reads it, so each loop depth's level carries its own mark.
+	case carrierDrawLoopLevelReadByFill
+	/// The loop has a third member, `LoopReadC`.
+	case carrierDrawLoopLevelReadByFillThreeMembers
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -1941,10 +1990,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("forwardedLabelAcrossSeamCall")
 	}
 
-	/// Whether `addingRetentionShapes` or `addingRetentionLoopShapes` draws this shape, whose count in accepted graphs the
-	/// seam corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
+	/// Whether `addingRetentionShapes`, `addingRetentionLoopShapes` or `addingCarrierShapes` draws this shape, whose count
+	/// in accepted graphs the seam corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
 	var isRetentionShape: Bool {
-		rawValue.hasPrefix("retentionSeamValueBeforeBuilder") || rawValue.hasPrefix("retentionLoopOfBuilders")
+		rawValue.hasPrefix("retentionSeamValueBeforeBuilder") || rawValue.hasPrefix("retentionLoopOfBuilders") || rawValue.hasPrefix("carrierDraw")
 	}
 
 	/// Whether `addingHoleShapes` draws this place of `HoleErasureImpl`'s erasure, whose count in accepted graphs the seam
@@ -2796,6 +2845,7 @@ enum GraphFuzzerGenerator {
 			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
 			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
 			wrapperMixRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperMixRandomSeedMask)
+			carrierDrawRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.carrierDrawRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
@@ -2910,6 +2960,8 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = addingPassingUpCopyShapes(to: finalDeclarations)
 				finalDeclarations = addingReenteredFillShapes(to: finalDeclarations)
 				finalDeclarations = addingWrapperMixShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
+				finalDeclarations = addingCarrierShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3304,6 +3356,8 @@ enum GraphFuzzerGenerator {
 		private var reenteredFillRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingWrapperMixShapes`' choices.
 		private var wrapperMixRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingCarrierShapes`' choices: which of its six trees a split graph gains, and every shape of each.
+		private var carrierDrawRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
@@ -5730,6 +5784,10 @@ enum GraphFuzzerGenerator {
 			let drawsCrossPackage = holeRolls.crossPackage.percentChance(30)
 			let crossPackageRoll = holeRolls.crossPackage.integer(in: 0...9)
 			let drawsNarrowerField = holeRolls.narrowerField.percentChance(15)
+			let drawsWideLevel = holeRolls.wideLevel.percentChance(40)
+			let wideLevelValueCount = holeRolls.wideLevel.element(of: [7, 8, 9, 12])
+			let wideLevelNarrowsOneValue = holeRolls.wideLevel.percentChance(50)
+			let wideLevelNarrowedIndex = holeRolls.wideLevel.integer(in: 0...(wideLevelValueCount - 1))
 			let drawsAliasedRead = holeRolls.aliasedRead.percentChance(20)
 			let readsOnlyIfAvailable = holeRolls.aliasedRead.percentChance(50)
 			let ownerAliasesField = holeRolls.aliasedRead.percentChance(50)
@@ -5942,6 +6000,47 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations[0].access = .package
 				proofTypeAccess[analyticsName] = .package
 				seamModuleDeclarations[ownerIndex].properties.removeAll { $0.label == "holeAnalytics" }
+			}
+			// A wide level: `HoleWideSeam`, a seam of the seam's module that the root builds beside the rest, binds
+			// `holeWide1`… before its one place of a hole of its own, `HoleWideService`, which `HoleWideImpl` fills beside
+			// the roots, reading the last value. So the level its builders take holds `wideLevelValueCount` values – 7, 8, 9
+			// or 12, both sides of the most a carrier takes positionally – and, a leaf seam with nothing else drawn on it, it
+			// is declared with carriers whatever else the graph draws. Half of these on a `public` seam make one of them
+			// `package`, which only a run struct can carry, since a value narrower than the seam's type never crosses a member
+			// positionally; a `package` seam makes every one `package`, which stays positional at that access. Never with the
+			// fillers in another package, which could not name a `package` type.
+			var wideSeamDeclarations = [TypeDeclaration]()
+			var wideRootProperties = [PropertyDeclaration]()
+			if drawsWideLevel {
+				let wideServiceName = name("HoleWideService")
+				let narrowsValues = (wideLevelNarrowsOneValue || serviceAccess == .package) && !fillsFromOtherPackage
+				var wideProperties = [PropertyDeclaration]()
+				for index in 1...wideLevelValueCount {
+					var value = instantiable("HoleWide\(index)", module: .seamModule)
+					if narrowsValues, serviceAccess == .package || index - 1 == wideLevelNarrowedIndex {
+						value.access = .package
+						proofTypeAccess[value.name] = .package
+					}
+					wideSeamDeclarations.append(value)
+					wideProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeWide\(index)", type: value.name))
+				}
+				wideProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeWideService", type: "any \(wideServiceName)"))
+				var wideSeam = instantiable("HoleWideSeam", module: .seamModule, properties: wideProperties)
+				wideSeam.instantiableArguments = ["generateDependencyTree: true"]
+				if serviceAccess == .package {
+					proofTypeAccess[wideServiceName] = .package
+					proofTypeAccess[wideSeam.name] = .package
+					wideSeam.access = .package
+					wideSeam.initializerAccess = .internal
+				}
+				wideSeam.additionalDeclarations.append("\(serviceAccess.modifier)protocol \(wideServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				wideSeamDeclarations.append(wideSeam)
+				var wideImpl = instantiable("HoleWideImpl", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Received", label: "holeWide\(wideLevelValueCount)", type: name("HoleWide\(wideLevelValueCount)"))])
+				wideImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(wideServiceName).self]"]
+				wideImpl.additionalConformances.append(wideServiceName)
+				wideImpl.fillsHole = true
+				wideSeamDeclarations.append(wideImpl)
+				wideRootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeWideSeam", type: wideSeam.name))
 			}
 			var impl = instantiable("HoleImpl", module: fillerModule)
 			impl.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
@@ -6903,6 +7002,7 @@ enum GraphFuzzerGenerator {
 			}
 			rootProperties.append(rootCall)
 			rootProperties += nestedRootProperties
+			rootProperties += wideRootProperties
 			if fillsFromOtherPackage {
 				var otherRoot = instantiable("HoleOtherRoot", module: .otherPackageCaller, properties: rootProperties)
 				otherRoot.instantiableArguments = ["isRoot: true"]
@@ -6910,7 +7010,7 @@ enum GraphFuzzerGenerator {
 			} else {
 				declarations[0].properties += rootProperties
 			}
-			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations
+			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations + wideSeamDeclarations
 		}
 
 		/// The generators of `addingHoleShapes`' further rolls, one apiece, each seeded from the graph's seed.
@@ -6918,6 +7018,7 @@ enum GraphFuzzerGenerator {
 			init(seed: UInt64) {
 				crossPackage = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6543726F73)
 				narrowerField = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E617272)
+				wideLevel = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6557696465)
 				aliasedRead = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65416C6961)
 				mocks = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654D6F636B)
 				namespace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E616D65)
@@ -6951,6 +7052,9 @@ enum GraphFuzzerGenerator {
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
 			var narrowerField: GraphFuzzerRandomNumberGenerator
+			/// A level of 7, 8, 9 or 12 values on `HoleWideSeam`, now and then with values narrower than the carrier's members
+			/// (`holeLevelOf…Values`, `holeLevelWithPackageValueOnPublicSeam`, `holeLevelOfPackageValuesOnPackageSeam`).
+			var wideLevel: GraphFuzzerRandomNumberGenerator
 			var aliasedRead: GraphFuzzerRandomNumberGenerator
 			var mocks: GraphFuzzerRandomNumberGenerator
 			var namespace: GraphFuzzerRandomNumberGenerator
@@ -9528,6 +9632,179 @@ enum GraphFuzzerGenerator {
 
 		private static let wrapperMixRandomSeedMask: UInt64 = 0x777261704D697821
 
+		// MARK: Carriers
+
+		/// With the `generateDependencyTree` feature on, graphs already split across modules gain the six shapes a seam's
+		/// carriers are formed for (`c-spec` §18), each tree on a roll of its own, so that the retention oracle and the value
+		/// comparator judge each, and the level function capture check and the `carrier.member` check read its code:
+		/// - three in ten, sibling places with unequal read sets (`UnequalHome`);
+		/// - three in ten, one label declared on two sibling levels whose places' fill reads it (`CoincideHome`);
+		/// - every graph whose wrappers are not all of one kind, one hole type's places in both families (`KeySplitHome`),
+		///   since one family alone forms one key: the tool rejects most mixed graphs for their other draws, so three in ten
+		///   of them left fewer than ten graphs the value comparator judged (its roll is still made, so every later roll
+		///   reads as before);
+		/// - three in ten, a place held in a wrapper beside a plain place, their fills reading other values (`WrapSideHome`);
+		/// - three in ten where the seam's module has a package, an inner seam of `FuzzSession` one of whose hole types the
+		///   outer seam fills and the other it passes up (`MixCallOuter`);
+		/// - three in ten, a loop of builders each of whose levels binds a value its place's fill reads (`LoopReadHome`).
+		/// Every fill reads values only in the plain family, whose levels carry them; a place in the `@Sendable` family is
+		/// handed none. Keys split by isolation are not drawn: the corpus's types are on no actor, and an actor-isolated
+		/// type's initializer would need its seam on that actor too; the carrier cells cover them
+		/// (`SafeDIToolSeamCarrierMixedTests`, `SafeDIToolSeamCarrierFormationKeyTests`).
+		///
+		/// `carrierDrawRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
+		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. Every
+		/// roll is made before any is read, so that each tree draws as it does whatever the others draw.
+		private mutating func addingCarrierShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			let drawsUnequal = carrierDrawRandom.percentChance(30)
+			let unequalBeneathChild = carrierDrawRandom.percentChance(50)
+			let drawsCoincide = carrierDrawRandom.percentChance(30)
+			let coincideOnSeamToo = carrierDrawRandom.percentChance(40)
+			_ = carrierDrawRandom.percentChance(30)
+			let drawsWrapSide = carrierDrawRandom.percentChance(30)
+			let wrapSideErased = carrierDrawRandom.percentChance(50)
+			let wrapSideSendableRoll = carrierDrawRandom.percentChance(50)
+			let drawsMixCall = carrierDrawRandom.percentChance(30)
+			let mixCallThroughInstantiator = carrierDrawRandom.percentChance(50)
+			let drawsLoopRead = carrierDrawRandom.percentChance(30)
+			let loopReadThreeMembers = carrierDrawRandom.percentChance(40)
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			let protocolSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			// A place in the `@Sendable` family is handed no values, so a fill reads only where the plain family builds it.
+			let readsValues = sendability != .sendable
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func seam(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration], protocols: [String]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["generateDependencyTree: true"]
+				declaration.additionalDeclarations += protocols.map { "public protocol \(prefix)\($0)\(protocolSuffix) {}" }
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolSuffix: String, module: GraphFuzzerModule = .samePackageCaller, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(prefix)\(protocolSuffix).self]"]
+				declaration.additionalConformances.append("\(prefix)\(protocolSuffix)")
+				declaration.fillsHole = module == .samePackageCaller
+				return declaration
+			}
+			func root(_ suffix: String, building home: TypeDeclaration, label: String) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: label, type: home.name)])
+				declaration.instantiableArguments = ["isRoot: true"]
+				return declaration
+			}
+			func instantiated(_ label: String, _ suffix: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(prefix)\(suffix)")
+			}
+			func received(_ label: String, _ suffix: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Received", label: label, type: "\(prefix)\(suffix)")
+			}
+			func place(_ label: String, _ protocolSuffix: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: "any \(prefix)\(protocolSuffix)")
+			}
+			// Two place types of one draw share the name before their digit (`Unequal1`, `WrapSide1`, `MixCall1`), the part the
+			// renaming that moves type names across wrapper names reads, so their builders keep one label order under it.
+			var added = [TypeDeclaration]()
+			if drawsUnequal {
+				let places = [place("unequalApi1", "Unequal1Api1"), place("unequalApi2", "Unequal1Api2")]
+				let values = [instantiated("unequalFirst", "UnequalFirst"), instantiated("unequalSecond", "UnequalSecond")]
+				var home: TypeDeclaration
+				if unequalBeneathChild {
+					added.append(instantiable("UnequalPanel", properties: places))
+					home = seam("UnequalHome", properties: values + [PropertyDeclaration(attribute: "@Instantiated", label: "unequalPanelBuilder", type: "\(instantiator)<\(prefix)UnequalPanel>")], protocols: ["Unequal1Api1", "Unequal1Api2"])
+				} else {
+					home = seam("UnequalHome", properties: values + places, protocols: ["Unequal1Api1", "Unequal1Api2"])
+				}
+				added += [instantiable("UnequalFirst"), instantiable("UnequalSecond"), home]
+				added.append(fill("Unequal1Live1", fulfilling: "Unequal1Api1", properties: readsValues ? [received("unequalFirst", "UnequalFirst")] : []))
+				added.append(fill("Unequal1Live2", fulfilling: "Unequal1Api2", properties: readsValues ? [received("unequalSecond", "UnequalSecond")] : []))
+				added.append(root("UnequalRoot", building: home, label: "unequalHome"))
+			}
+			if drawsCoincide {
+				let left = instantiable("CoincideLeft", properties: [instantiated("coincideTag", "CoincideTag"), place("coincideApi", "CoincideApi")])
+				let right = instantiable("CoincideRight", properties: [instantiated("coincideTag", "CoincideTag"), place("coincideApi", "CoincideApi")])
+				var homeProperties = [PropertyDeclaration]()
+				if coincideOnSeamToo {
+					homeProperties.append(instantiated("coincideMark", "CoincideTag"))
+				}
+				homeProperties += [
+					PropertyDeclaration(attribute: "@Instantiated", label: "coincideLeftBuilder", type: "\(instantiator)<\(left.name)>"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "coincideRightBuilder", type: "\(instantiator)<\(right.name)>"),
+				]
+				let home = seam("CoincideHome", properties: homeProperties, protocols: ["CoincideApi"])
+				var readProperties = readsValues ? [received("coincideTag", "CoincideTag")] : []
+				if readsValues, coincideOnSeamToo {
+					readProperties.append(received("coincideMark", "CoincideTag"))
+				}
+				added += [instantiable("CoincideTag"), left, right, home, fill("CoincideLive", fulfilling: "CoincideApi", properties: readProperties), root("CoincideRoot", building: home, label: "coincideHome")]
+			}
+			if sendability == .mixed {
+				let plain = instantiable("KeySplitPlain", properties: [place("keySplitApi", "KeySplitApi")])
+				let sendableHolder = instantiable("KeySplitSendable", properties: [place("keySplitApi", "KeySplitApi")])
+				let home = seam("KeySplitHome", properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "keySplitPlainBuilder", type: "Instantiator<\(plain.name)>"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "keySplitSendableBuilder", type: "SendableInstantiator<\(sendableHolder.name)>"),
+				], protocols: ["KeySplitApi"])
+				added += [plain, sendableHolder, home, fill("KeySplitLive", fulfilling: "KeySplitApi"), root("KeySplitRoot", building: home, label: "keySplitHome")]
+			}
+			if drawsWrapSide {
+				let isSendable = switch sendability {
+				case .nonSendable: false
+				case .sendable: true
+				case .mixed: wrapSideSendableRoll
+				}
+				let wrapped = if wrapSideErased {
+					PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(prefix)WrapSide1Live2\")", label: "wrapSideApi2Builder", type: "\(isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator")<(), any \(prefix)WrapSide1Api2>")
+				} else {
+					PropertyDeclaration(attribute: "@Instantiated", label: "wrapSideApi2", type: "\(isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated")<any \(prefix)WrapSide1Api2>")
+				}
+				let home = seam("WrapSideHome", properties: [instantiated("wrapSideFirst", "WrapSideFirst"), instantiated("wrapSideSecond", "WrapSideSecond"), place("wrapSideApi1", "WrapSide1Api1"), wrapped], protocols: ["WrapSide1Api1", "WrapSide1Api2"])
+				added += [instantiable("WrapSideFirst"), instantiable("WrapSideSecond"), home]
+				added.append(fill("WrapSide1Live1", fulfilling: "WrapSide1Api1", properties: readsValues ? [received("wrapSideFirst", "WrapSideFirst")] : []))
+				added.append(fill("WrapSide1Live2", fulfilling: "WrapSide1Api2", properties: readsValues && !isSendable ? [received("wrapSideSecond", "WrapSideSecond")] : []))
+				added.append(root("WrapSideRoot", building: home, label: "wrapSideHome"))
+			}
+			if drawsMixCall, !modulesOmittingPackageName.contains(.seamModule) {
+				let inner = seam("MixCallInner", module: .seamDependency, properties: [place("mixCallKept", "MixCall1Kept"), place("mixCallPassed", "MixCall1Passed")], protocols: ["MixCall1Kept", "MixCall1Passed"])
+				let outer = seam("MixCallOuter", properties: [
+					instantiated("mixCallBadge", "MixCallBadge"),
+					mixCallThroughInstantiator
+						? PropertyDeclaration(attribute: "@Instantiated", label: "mixCallInnerBuilder", type: "\(instantiator)<\(inner.name)>")
+						: PropertyDeclaration(attribute: "@Instantiated", label: "mixCallInner", type: inner.name),
+				], protocols: [])
+				added += [inner, instantiable("MixCallBadge"), outer]
+				added.append(fill("MixCall1KeptImpl", fulfilling: "MixCall1Kept", module: .seamModule, properties: readsValues ? [received("mixCallBadge", "MixCallBadge")] : []))
+				var passedImplementation = fill("MixCall1PassedImpl", fulfilling: "MixCall1Passed")
+				// The protocol is declared beside `MixCallInner`, in the module beneath the seam's module, which the roots' module does not list.
+				passedImplementation.imports.append(GraphFuzzerModule.seamDependency.name)
+				added.append(passedImplementation)
+				added.append(root("MixCallRoot", building: outer, label: "mixCallOuter"))
+			}
+			if drawsLoopRead {
+				let suffixes = loopReadThreeMembers ? ["A", "B", "C"] : ["A", "B"]
+				func builder(_ suffix: String, attribute: String) -> PropertyDeclaration {
+					PropertyDeclaration(attribute: attribute, label: "loopRead\(suffix)Builder", type: "\(instantiator)<\(prefix)LoopRead\(suffix)>")
+				}
+				for (position, suffix) in suffixes.enumerated() {
+					added.append(instantiable("LoopRead" + suffix, properties: [
+						instantiated("loopReadMark", "LoopReadMark"),
+						place("loopReadApi", "LoopReadApi"),
+						builder(suffixes[(position + 1) % suffixes.count], attribute: "@Received"),
+					]))
+				}
+				let home = seam("LoopReadHome", properties: suffixes.map { builder($0, attribute: "@Instantiated") }, protocols: ["LoopReadApi"])
+				added += [instantiable("LoopReadMark"), home, fill("LoopReadLive", fulfilling: "LoopReadApi", properties: readsValues ? [received("loopReadMark", "LoopReadMark")] : []), root("LoopReadRoot", building: home, label: "loopReadHome")]
+			}
+			return declarations + added
+		}
+
+		private static let carrierDrawRandomSeedMask: UInt64 = 0x6361727269657244
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -11150,7 +11427,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
-			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture)).union(fixedSeamCallDefectDrawFeatures(of: fixture))
+			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture)).union(fixedSeamCallDefectDrawFeatures(of: fixture)).union(carrierDrawFeatures(of: fixture))
 	}
 
 	/// The shapes `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` and `addingReenteredFillShapes` draw, read from the
@@ -11290,6 +11567,49 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				if propertiesByType[prefix + "ReenteredHub"] != nil {
 					features.insert(.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule)
 				}
+			}
+		}
+		return features
+	}
+
+	/// The shapes `addingCarrierShapes` draws, read from the types and properties the fixture declares.
+	private static func carrierDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, _) = declaredProperties(of: fixture)
+		var features = Set<GraphFuzzerSeamDrawFeature>()
+		if propertiesByType[prefix + "UnequalHome"] != nil {
+			features.insert(.carrierDrawUnequalSiblings)
+			if propertiesByType[prefix + "UnequalPanel"] != nil {
+				features.insert(.carrierDrawUnequalSiblingsBeneathChild)
+			}
+		}
+		if let homeProperties = propertiesByType[prefix + "CoincideHome"] {
+			features.insert(.carrierDrawCoincidingLabel)
+			if homeProperties.contains(where: { $0.label == "coincideMark" }) {
+				features.insert(.carrierDrawCoincidingLabelOnSeamToo)
+			}
+		}
+		if propertiesByType[prefix + "KeySplitHome"] != nil {
+			features.insert(.carrierDrawKeySplitFamilies)
+		}
+		if let homeProperties = propertiesByType[prefix + "WrapSideHome"] {
+			features.insert(.carrierDrawWrappedBesidePlain)
+			if homeProperties.contains(where: { $0.label == "wrapSideApi2Builder" }) {
+				features.insert(.carrierDrawWrappedBesidePlainErased)
+			} else {
+				features.insert(.carrierDrawWrappedBesidePlainLazy)
+			}
+		}
+		if let outerProperties = propertiesByType[prefix + "MixCallOuter"] {
+			features.insert(.carrierDrawMixedInnerSeamFillAndPassUp)
+			if outerProperties.contains(where: { $0.label == "mixCallInnerBuilder" }) {
+				features.insert(.carrierDrawMixedInnerSeamFillAndPassUpThroughInstantiator)
+			}
+		}
+		if propertiesByType[prefix + "LoopReadHome"] != nil {
+			features.insert(.carrierDrawLoopLevelReadByFill)
+			if propertiesByType[prefix + "LoopReadC"] != nil {
+				features.insert(.carrierDrawLoopLevelReadByFillThreeMembers)
 			}
 		}
 		return features
@@ -11650,6 +11970,22 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if fixture.swiftFileContent.contains(where: { $0.contains("package final class \(prefix)HoleAnalytics: ") }) {
 			features.insert(.holeNarrowerField)
+		}
+		let wideValueCount = properties(of: "HoleWideSeam").count { $0.label.hasPrefix("holeWide") && $0.label != "holeWideService" }
+		switch wideValueCount {
+		case 7:
+			features.insert(.holeLevelOfSevenValues)
+		case 8:
+			features.insert(.holeLevelOfEightValues)
+		case 9:
+			features.insert(.holeLevelOfNineValues)
+		case 12:
+			features.insert(.holeLevelOfTwelveValues)
+		default:
+			break
+		}
+		if (1...max(wideValueCount, 1)).contains(where: { index in fixture.swiftFileContent.contains { $0.contains("package final class \(prefix)HoleWide\(index): ") } }) {
+			features.insert(features.contains(.holeProtocolPackage) ? .holeLevelOfPackageValuesOnPackageSeam : .holeLevelWithPackageValueOnPublicSeam)
 		}
 		// `HoleImpl`'s read of `holeAnalytics`, which other draws' only-if-available reads of their own labels leave alone.
 		let analyticsReads = implProperties.filter { $0.label == "holeAnalytics" || $0.attribute.contains("fulfilledByDependencyNamed: \"holeAnalytics\"") }
@@ -12165,20 +12501,26 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	static func holeOutputFeatures(generatedFiles: [String: String]) -> Set<GraphFuzzerHoleOutputFeature> {
 		var features = Set<GraphFuzzerHoleOutputFeature>()
 		// A builder over a scope enum, or a builder struct, which an initializer only generated code calls takes.
-		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: (?:@escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_|(\w+\.)?SafeDI(?:Sendable)?Scope_\w+\.__safeDI_Builder<)"#)
+		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: (?:@escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_|(\w+\.)?SafeDI(?:Sendable)?Scope_\w+\.__safeDI_Builder<|(\w+\.)?__safeDI_\w+Carrier<)"#)
 		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable)?Scope_"#)
 		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\((?:\w+, )?\w+\.SafeDI(?:Sendable)?Scope_"#)
 		// A builder struct's member that builds another seam's builder struct, as an enum's case holding another seam's enum did.
 		let structMemberOfInnerSeam = try! NSRegularExpression(pattern: #"^ +public let \w+: (?:@Sendable )?\(\w+_Values\) -> (\w+)\.SafeDI(?:Sendable)?Scope_"#)
+		// A carrier's member that holds or forms another seam's carrier (or its builder struct), which the seam passes up.
+		let carrierMemberOfInnerSeam = try! NSRegularExpression(pattern: #"^ +public let \w+: (?:@Sendable )?(?:\([^)]*\) -> )?(\w+)\.(?:__safeDI_\w+Carrier|SafeDI(?:Sendable)?Scope_)"#)
 		// A function that returns a level's builder struct: its indentation, its name, the seam, the struct's path in the seam,
 		// and the struct's generic argument.
-		let levelFunction = try! NSRegularExpression(pattern: #"^( *)(?:@Sendable )?(?:nonisolated )?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope)*)\.__safeDI_Builder<(.*) \{$"#)
-		let calledLevelFunction = try! NSRegularExpression(pattern: #"\bin (__safeDI_\w+)\(\)"#)
+		let levelFunction = try! NSRegularExpression(pattern: #"^( *)(?:@Sendable )?(?:nonisolated )?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope)*\.__safeDI_Builder|__safeDI_\w+Carrier(?:_\w+)?)<(.*) \{$"#)
+		let calledLevelFunction = try! NSRegularExpression(pattern: #"(?:\bin |: )(__safeDI_\w+)\("#)
 		// A fill takes a case's payload; a dispatcher, the enum, which is no fill.
 		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
 		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A dispatcher that returns a level's builder struct, which a call passes by calling it.
-		let levelFunctionDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable (?:nonisolated )?)?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?\.__safeDI_Builder<"#)
+		let levelFunctionDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable (?:nonisolated )?)?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(?:SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?\.__safeDI_Builder|__safeDI_\w+Carrier(?:_\w+)?)<"#)
+		// A carrier's level function, and its member that a caller fills: a closure whose body builds the place, which its
+		// line opens and lines after it close (`.init(api: { scope in`, `holeRouteService: {`).
+		let carrierLevelFunction = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?(?:nonisolated )?func __safeDI_\w+\([^)]*\) -> \w+\.__safeDI_\w+Carrier(?:_\w+)?<"#)
+		let carrierFillMember = try! NSRegularExpression(pattern: #"(?:\.init\(|, |^ *)\w+: \{(?: \w+ in)?$"#)
 		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
 		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
@@ -12195,6 +12537,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			// A call inside a fill passes the seam's dispatcher, which reaches the fill.
 			var dispatcherNamesBySeam = [String: Set<String>]()
 			var currentDispatcher: (indentation: String, isSendable: Bool, seam: String)?
+			var currentCarrierLevelFunction: (indentation: String, isSendable: Bool)?
 			for line in lines {
 				if let dispatcher = firstMatch(dispatcherDeclaration, in: line) ?? firstMatch(levelFunctionDeclaration, in: line) {
 					dispatcherNamesBySeam[dispatcher[2], default: []].insert(dispatcher[1])
@@ -12209,12 +12552,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				} else if line.hasPrefix("}") {
 					extendedType = nil
 				}
-				if let extendedType, let member = firstMatch(structMemberOfInnerSeam, in: line), member[1] != extendedType {
+				if let extendedType, let member = firstMatch(structMemberOfInnerSeam, in: line) ?? firstMatch(carrierMemberOfInnerSeam, in: line), member[1] != extendedType {
 					features.insert(.passedUpBuilder)
 				}
 				if line.contains("init("), firstMatch(builderParameter, in: line) != nil {
 					features.insert(.builderParameter)
-					if line.contains("@Sendable (SafeDISendableScope_") || line.contains(": SafeDISendableScope_") {
+					if line.contains("@Sendable (SafeDISendableScope_") || line.contains(": SafeDISendableScope_") || line.range(of: #"\b__safeDI_\w+SendableCarrier<"#, options: .regularExpression) != nil {
 						features.insert(.sendableBuilder)
 					}
 					if let extendedType, let match = firstMatch(otherSeamsStruct, in: line), match[1] != extendedType {
@@ -12223,6 +12566,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 				if let dispatcher = firstMatch(enclosingDispatcherDeclaration, in: line) {
 					currentDispatcher = (indentation: dispatcher[1], isSendable: !dispatcher[2].isEmpty, seam: dispatcher[3])
+				}
+				// A member closure of a carrier's level function that builds a place is a fill.
+				if let levelFunction = firstMatch(carrierLevelFunction, in: line) {
+					currentCarrierLevelFunction = (indentation: levelFunction[1], isSendable: !levelFunction[2].isEmpty)
+				} else if let levelFunction = currentCarrierLevelFunction, line == levelFunction.indentation + "}" {
+					currentCarrierLevelFunction = nil
+				}
+				if let levelFunction = currentCarrierLevelFunction, firstMatch(carrierFillMember, in: line) != nil {
+					features.insert(.fill)
+					if levelFunction.isSendable {
+						features.insert(.sendableFill)
+					}
 				}
 				// A fill is a function of its own, or the body of the one dispatcher case that calls it.
 				let indentation: String
@@ -12319,7 +12674,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				levelFunctionsByName[function[2]] = LevelFunction(seam: function[3], structPath: function[3] + "." + function[4], genericArgument: function[5], calledFunctions: calledFunctions)
 			}
 			for function in levelFunctionsByName.values {
-				let seamsTheFillIsDeclaredFor = Set(levelFunctionsByName.values.filter { $0.genericArgument.hasPrefix(function.structPath + ".__safeDI_Builder<") }.map(\.seam))
+				let seamsTheFillIsDeclaredFor = Set(levelFunctionsByName.values.filter { $0.genericArgument.hasPrefix(function.structPath + "<") }.map(\.seam))
 				guard !seamsTheFillIsDeclaredFor.isEmpty else { continue }
 				let calledSeams = function.calledFunctions.compactMap { levelFunctionsByName[$0]?.seam }
 				if calledSeams.contains(where: { $0 != function.seam && !seamsTheFillIsDeclaredFor.contains($0) }) {
@@ -12726,7 +13081,7 @@ private struct GraphFuzzerListOrderCanonicalizer {
 		if let closer = closer(openedAt: index) {
 			let start = index
 			index += 1
-			if let contents = closer == "}" ? block() : group(closedBy: closer) {
+			if let contents = closer == "}" ? block(isArgumentNamedByLabel: text.hasSuffix(": ")) : group(closedBy: closer) {
 				text += "\(character)\(contents)\(closer)"
 				return
 			}
@@ -12794,8 +13149,9 @@ private struct GraphFuzzerListOrderCanonicalizer {
 	}
 
 	/// The items of the block whose `{` `index` follows, an `#if` region joined into one, sorted and joined, with `index`
-	/// moved past its `}`; or `nil` where no `}` balances it.
-	private mutating func block() -> String? {
+	/// moved past its `}`; or `nil` where no `}` balances it. A block passed under an argument label
+	/// (`isArgumentNamedByLabel`) may be a caller's closure for a carrier's member, whose parameter names are sorted.
+	private mutating func block(isArgumentNamedByLabel: Bool = false) -> String? {
 		var items = [String]()
 		var item = ""
 		while index < characters.count {
@@ -12803,6 +13159,9 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			if character == "}" {
 				index += 1
 				items.append(item.trimmingCharacters(in: .whitespaces))
+				if isArgumentNamedByLabel, let first = items.first {
+					items[0] = Self.carrierMemberClosureParametersInCanonicalOrder(of: first)
+				}
 				return Self.joiningRegions(of: items.filter { !$0.isEmpty }).sorted().joined(separator: "; ")
 			} else if character == ";" {
 				items.append(item.trimmingCharacters(in: .whitespaces))
@@ -12823,6 +13182,29 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			}
 		}
 		return nil
+	}
+
+	/// `item`, the first item of a closure passed under an argument label, with the names of its parameter clause sorted
+	/// where it is a caller's closure for a carrier's member (`{ scope_a, scope_b, scope in`): every name is a payload
+	/// name `P` joined with a value's label, `P_<label>` (`SeamHoles.argumentName(of:inPayloadNamed:)`), for one `P`, or `P`
+	/// itself, the run struct. Such a member takes a level's values positionally in the order the level binds them, which
+	/// for a seam's root is its pass-throughs' label order: the label sort of equivalent parameters `CLAUDE.md`'s "What may
+	/// follow names" allows. No other list is touched: a closure whose names are not of that form, or that is not passed
+	/// under a label, keeps its order, and swapped names are left to the compile and value check, as swapped unlabeled
+	/// arguments are.
+	private static func carrierMemberClosureParametersInCanonicalOrder(of item: String) -> String {
+		guard let inRange = item.range(of: " in"), inRange.upperBound == item.endIndex || item[inRange.upperBound] == " " else {
+			return item
+		}
+		let names = item[..<inRange.lowerBound].components(separatedBy: ", ")
+		guard names.count > 1,
+		      names.allSatisfy({ name in name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" } && name.first?.isLetter == true }),
+		      let payloadName = names.first(where: { $0.contains("_") }).map({ String($0.prefix { $0 != "_" }) }),
+		      names.allSatisfy({ $0 == payloadName || ($0.hasPrefix(payloadName + "_") && $0.count > payloadName.count + 1) })
+		else {
+			return item
+		}
+		return names.sorted().joined(separator: ", ") + item[inRange.lowerBound...]
 	}
 
 	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those
@@ -13095,6 +13477,7 @@ struct GraphFuzzerFailure: Equatable {
 		/// An initializer only generated code calls – a seam tier's, or a builder struct's – gives a parameter a default
 		/// (`GraphFuzzerGeneratedOnlyInitializerDefaults.parametersWithDefaults(in:)`).
 		case generatedOnlyInitializerTakesDefault = "an initializer only generated code calls gives a parameter a default"
+		case carrierMemberReadApart = "generated code reads a closure member of a seam’s carrier apart from its carrier"
 		/// A base corpus graph's generated mock builds a type that has a hand-written mock with the type's initializer,
 		/// where it calls the hand-written mock.
 		case generatedMockBypassesHandWrittenMock = "a generated mock builds a type with its initializer rather than its hand-written mock"
@@ -14943,7 +15326,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -15033,14 +15416,20 @@ enum GraphFuzzerOracle {
 	}
 
 	/// Whether the graph of `fixture` holds a hole, judged by the retention oracle: it draws a type that fills a seam's hole
-	/// (`GraphFuzzerFixture.drawsHole`), or `generatedFiles` take a builder for a hole, over an enum of its places – a
-	/// seam's a `SafeDIScope_` or `SafeDISendableScope_` enum, a public mock's a `MockScope_` one. A rename of those enums
-	/// that drops graphs from the oracle changes the judged graphs each corpus pins (`retentionCounts`).
+	/// (`GraphFuzzerFixture.drawsHole`), or `generatedFiles` take a builder for a hole: a seam's carrier of its places
+	/// (`__safeDI_<Stem>Carrier`, `__safeDI_<Stem>SendableCarrier`), or one over an enum of its places – a seam's
+	/// `SafeDIScope_` or `SafeDISendableScope_` enum, a public mock's a `MockScope_` one. A rename of those types that drops
+	/// graphs from the oracle changes the judged graphs each corpus pins (`retentionCounts`).
 	static func holdsHole(fixture: GraphFuzzerFixture, generatedFiles: [String: String]) -> Bool {
 		fixture.drawsHole || generatedFiles.values.contains { contents in
-			contents.contains("Scope_") && (contents.contains("SafeDIScope_") || contents.contains("SafeDISendableScope_") || contents.contains("MockScope_"))
+			(contents.contains("Scope_") && (contents.contains("SafeDIScope_") || contents.contains("SafeDISendableScope_") || contents.contains("MockScope_")))
+				|| contents.range(of: GraphFuzzerOracle.carrierDeclarationPattern, options: .regularExpression) != nil
 		}
 	}
+
+	/// A seam's declaration of a carrier of its places: its root's, `__safeDI_<Stem>Carrier` or
+	/// `__safeDI_<Stem>SendableCarrier`, or a level's, `__safeDI_<Stem>Carrier_<Type>`.
+	static let carrierDeclarationPattern = #"\bfinal class __safeDI_\w+Carrier(_\w+)?<__safeDI_Built>"#
 
 	/// `valueFailures(of:)`, with the base corpus seeds whose value-oracle graph the comparator compared, failing or
 	/// not. A base corpus graph is compared by its value-oracle graph (`GraphFuzzerValueOracleRun.valueGraph`): each
@@ -16605,9 +16994,12 @@ enum GraphFuzzerOracle {
 	/// it: a builder for a hole (`userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService`) with
 	/// its scope struct, which the extension names unqualified, qualified by the seam. Any other parameter as written.
 	static func callerSpelling(ofParameter parameter: String, of seamTypeName: String) -> String {
-		parameter
-			.trimmingCharacters(in: .whitespaces)
-			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])(SafeDI(?:Sendable)?Scope_)"#, with: "\(seamTypeName).$1", options: .regularExpression)
+		let trimmed = parameter.trimmingCharacters(in: .whitespaces)
+		guard let colon = trimmed.range(of: ": ") else { return trimmed }
+		// A seam's carriers and their values structs, which the seam's extension nests, as it nests its scope enums.
+		let type = String(trimmed[colon.upperBound...])
+			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])(SafeDI(?:Sendable)?Scope_|__safeDI_[A-Za-z0-9_]*(?:Carrier|Values)[A-Za-z0-9_]*)"#, with: "\(seamTypeName).$1", options: .regularExpression)
+		return String(trimmed[..<colon.upperBound]) + type
 	}
 
 	/// `seamInitializers(inGeneratedFile:)` without each tier's access.

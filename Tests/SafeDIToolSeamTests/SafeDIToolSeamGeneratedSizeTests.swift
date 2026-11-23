@@ -62,13 +62,9 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 	/// call, each service cost a line per screen per hole type where the screens are inner seams, so `Home`'s lines grew
 	/// with the services times the screens.
 	///
-	/// Three shapes are known to grow faster than the graph until 2.3.1, and are excluded by name: `Feat` where the screens
-	/// are inline in the seam, whose case for each screen carries the values bound before it, which generated fills read
-	/// (`knownToGrowFasterThanTheGraph`, run as a known issue, so that the check reports it once it is fixed, and held
-	/// below `maximumKnownGrowthPerDoubling`, so that growth of a higher order than quadratic does not go unnoticed); a
-	/// large seam whose tree reaches a type along many paths (`SafeDIToolSeamScopeByTypeTests`'s `shapeEModules`); and a
-	/// large public mock on a layered graph of shared screens. This check's graph is neither of the last two, so it builds
-	/// neither.
+	/// Two shapes are known to grow faster than the graph until 2.3.1: a large seam whose tree reaches a type along many
+	/// paths (`SafeDIToolSeamScopeByTypeTests`'s `shapeEModules`), and a large public mock on a layered graph of shared
+	/// screens. This check's graph is neither, so it builds neither.
 	@Test(arguments: ScreenPlacement.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_growsAtMostTwoPointTwoTimesPerDoubling_whenSeamPassesUpPlacesOfItsScreens(screenPlacement: ScreenPlacement) async throws {
@@ -83,7 +79,6 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 		}
 		for moduleName in screenPlacement.generatingModuleNames {
 			var excessiveGrowths = [String]()
-			var growthsBeyondTheKnownCeiling = [String]()
 			for (smallerGraphSize, largerGraphSize) in zip(Self.graphSizes, Self.graphSizes.dropFirst()) {
 				let smaller = try #require(sizesByGraphSize[smallerGraphSize]?[moduleName])
 				let larger = try #require(sizesByGraphSize[largerGraphSize]?[moduleName])
@@ -93,19 +88,9 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 					if growth > Self.maximumGrowthPerDoubling {
 						excessiveGrowths.append(description)
 					}
-					if growth > Self.maximumKnownGrowthPerDoubling {
-						growthsBeyondTheKnownCeiling.append(description)
-					}
 				}
 			}
-			if Self.knownToGrowFasterThanTheGraph.contains(KnownGrowth(screenPlacement: screenPlacement, moduleName: moduleName)) {
-				withKnownIssue("Each screen’s case carries the values bound before it, which generated fills read: shared storage, not yet built") {
-					#expect(excessiveGrowths.isEmpty, "\(excessiveGrowths.joined(separator: "\n"))")
-				}
-				#expect(growthsBeyondTheKnownCeiling.isEmpty, "\(growthsBeyondTheKnownCeiling.joined(separator: "\n"))")
-			} else {
-				#expect(excessiveGrowths.isEmpty, "\(excessiveGrowths.joined(separator: "\n"))")
-			}
+			#expect(excessiveGrowths.isEmpty, "\(excessiveGrowths.joined(separator: "\n"))")
 		}
 	}
 
@@ -143,12 +128,6 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 		var characterCount: Int
 	}
 
-	/// A module of one placement whose generated code is known to grow faster than the graph.
-	struct KnownGrowth: Hashable {
-		var screenPlacement: ScreenPlacement
-		var moduleName: String
-	}
-
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -157,17 +136,10 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 	/// that size be linear; the margin above 2 is for the constant lines of each file.
 	private static let maximumGrowthPerDoubling = 2.2
 
-	/// The most the generated code of a module of `knownToGrowFasterThanTheGraph` may grow when every axis of the graph
-	/// doubles: twice `maximumGrowthPerDoubling`, the growth of code quadratic in the graph's size, with the same margin.
-	private static let maximumKnownGrowthPerDoubling = 4.4
-
 	/// Each size is twice the one before it. With the screens as inner seams, `Feat` generates 31 + 12n lines; at these
 	/// sizes a quadratic part as small as n² / 16 lines beside that grows more than `maximumGrowthPerDoubling` from 32 to
 	/// 64, where at 4, 8 and 16 one of n² / 4 did not.
 	private static let graphSizes = [16, 32, 64]
-
-	/// The modules whose generated code is known to grow faster than the graph, each until its fix lands.
-	private static let knownToGrowFasterThanTheGraph: Set<KnownGrowth> = [KnownGrowth(screenPlacement: .inlineInTheSeam, moduleName: "Feat")]
 
 	/// The number of lines `Feat` generates for `Home`, which instantiates `serviceCount` services, then
 	/// `screen0Builder: Instantiator<Screen0>` and `screen1Builder: Instantiator<Screen1>`, each screen a seam of module

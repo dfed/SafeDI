@@ -49,8 +49,8 @@ Construction reads the scopes through `ConstructionScope`, a record of a frozen 
 | `seamRoot`, `mockBuilders` | The root place only (children get `seamRoot: nil`), and a root place is never stored. A tree with either keeps its memo to itself (`sharesMemo` in `Scope.createScopeGenerator`). |
 | `holeArguments`, which feed `holeCallArguments`, `builderCallArguments`, `fillDispatchers` and `passedUpHoles` | Excluded when non-empty; all four are empty otherwise. |
 | `closedOnFillPathDeclarationsBeneath` | Non-nil only inside a fill. Excluded. |
-| A hole generator's `ownerPropertyStack`, `ownerConcreteTypeStack` | Excluded by `addHoleGenerator`: the creating scope and every ancestor are not memoizable. |
-| `isBuiltByFill`, `fillReturnsWrapperBuilder`, and a fill generator's own fields | Excluded. |
+| A hole generator's `ownerPropertyStack`, `ownerConcreteTypeStack`, `siteCarrierUse` | Excluded by `addHoleGenerator`: the creating scope and every ancestor are not memoizable. |
+| `isBuiltByFill`, `fillReturnsWrapperBuilder`, and a fill generator's own fields, `fillCarrierUse` among them | Excluded. |
 | `constructsWithHandWrittenMock` | Key (flag, scope, property). |
 | `cycleParameters`, `builtCycleParameters`, `cycleParameterUnavailableProperties`, `callSiteLazilyInstantiatedInstanceProperties` | From the key and logged reads (cycle context, bindings). |
 | `unavailableOptionalProperties`, `lazilyInstantiatedInstanceProperties`, `receivesPassedNil` | From the key's sets and logged `binding` and `passesNil` reads. |

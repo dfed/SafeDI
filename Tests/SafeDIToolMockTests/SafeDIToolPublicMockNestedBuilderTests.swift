@@ -3187,43 +3187,36 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#endif
 
 		extension Screen {
-		    nonisolated public enum SafeDISendableScope_LiveService_Service {
-		        nonisolated public struct panel_Values: Sendable {}
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_LiveService_ServiceSendableCarrier<__safeDI_Built>: Sendable {
+		        public let panel: @Sendable () -> Panel.__safeDI_LiveService_ServiceCarrier<__safeDI_Built>
+		        public let serviceBuilder: @Sendable () -> SendableErasedInstantiator<(), __safeDI_Built>.Builder
 
-		        nonisolated public struct serviceBuilder_Values: Sendable {}
+		        public init(panel: @escaping @Sendable () -> Panel.__safeDI_LiveService_ServiceCarrier<__safeDI_Built>, serviceBuilder: @escaping @Sendable () -> SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            self.panel = panel
+		            self.serviceBuilder = serviceBuilder
+		        }
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let panel: @Sendable (panel_Values) -> Panel.SafeDIScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>
-		            public let serviceBuilder: @Sendable (serviceBuilder_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder
-
-		            public init(panel: @escaping @Sendable (panel_Values) -> Panel.SafeDIScope_LiveService_Service.__safeDI_Builder<__safeDI_Built>, serviceBuilder: @escaping @Sendable (serviceBuilder_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.panel = panel
-		                self.serviceBuilder = serviceBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.serviceBuilder = { _ in { _ in __safeDI_builder() } }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		            self.init(panel: { .init(__safeDI_noScope: __safeDI_builder) }, serviceBuilder: { { _ in __safeDI_builder() } })
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_liveService_ServiceSendableBuilder: SafeDISendableScope_LiveService_Service.__safeDI_Builder<any Service>) {
+		    public init(__safeDI_liveService_ServiceSendableBuilder: __safeDI_LiveService_ServiceSendableCarrier<any Service>) {
 		        @Sendable nonisolated func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_A401B5C5495507F9.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel(__safeDI_liveService_ServiceBuilder: __safeDI_liveService_ServiceSendableBuilder.panel(SafeDISendableScope_LiveService_Service.panel_Values()))
+		            _ = Panel.__safeDI_Panel_9FEE5F70C886577B.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Panel(__safeDI_liveService_ServiceBuilder: __safeDI_liveService_ServiceSendableBuilder.panel())
 		        }
 		        let panel = SendableInstantiator<Panel>(__safeDI_panel)
-		        let serviceBuilder = SendableErasedInstantiator<(), any Service>(__safeDI_liveService_ServiceSendableBuilder.serviceBuilder(SafeDISendableScope_LiveService_Service.serviceBuilder_Values()))
+		        let serviceBuilder = SendableErasedInstantiator<(), any Service>(__safeDI_liveService_ServiceSendableBuilder.serviceBuilder())
 		        self.init(panel: panel, serviceBuilder: serviceBuilder)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_8D49C16632871457 {}
+		    public enum __safeDI_Screen_DF708D18715237E1 {}
 		}
 
 		#if DEBUG

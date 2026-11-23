@@ -60,6 +60,35 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 	}
 
 	@Test
+	func captures_findNothing_whenCarrierMemberHandsPositionalValuesOn() {
+		// Each positional parameter holds one value, which the member hands on whole, as inline hands the value.
+		let captures = GraphFuzzerLevelFunctionCaptures(generatedFiles: ["App.swift": """
+		func __safeDI_mixHoleService_MixMid(up: Mix.__safeDI_MixHoleServiceCarrier<any MixWorker>) -> Mix.__safeDI_MixHoleServiceCarrier<any MixHoleService> {
+		    .init(mixHoleService: { scope_mixToken, scope_mixLeafBuilder in __safeDI_fill(scope_mixToken, scope_mixLeafBuilder, inner: up.mixHoleService(scope_mixToken, scope_mixLeafBuilder)) })
+		}
+		"""])
+
+		#expect(captures == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 1, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
+	}
+
+	@Test
+	func captures_reportWholeUse_whenCarrierMemberHandsRunStructToNextLevelFunction() {
+		let captures = GraphFuzzerLevelFunctionCaptures(generatedFiles: ["App.swift": """
+		func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		    .init(detailBuilder: { scope, scope_token in __safeDI_apiBuilder_Home_Detail_Scope(scope, token: scope_token) })
+		}
+		"""])
+
+		#expect(captures == GraphFuzzerLevelFunctionCaptures(
+			findings: [.init(kind: .wholeUse, fileName: "App.swift", line: 2, function: "__safeDI_apiBuilder_Home", member: "detailBuilder", parameter: "scope")],
+			levelFunctionCount: 1,
+			namedMemberClosureCount: 1,
+			conversionFunctionCount: 0,
+			fillFunctionCount: 0,
+		))
+	}
+
+	@Test
 	func captures_reportNestedReferenceOnce_whenKeptClosureReadsMemberClosuresValues() {
 		// The next levels are built inline, so the closure `api` returns keeps `values` alive.
 		let captures = GraphFuzzerLevelFunctionCaptures(generatedFiles: ["App.swift": """
@@ -509,7 +538,8 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func captures_findNothing_inToolsOutputForSeamWhosePlaceIsTwoLevelsBeneathItsValues() async throws {
 		// `Home` binds `navigator` and `logger`, then `detailBuilder`, whose `Detail` builds `Leaf`, whose `api` only `App`
-		// builds, reading `logger`.
+		// builds, reading `logger`. Each level holds at most eight values, so its carrier's members take them positionally
+		// and no member closure names a run struct.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.featureAndApp(
 			feature: [
 				"public protocol Api: AnyObject {}",
@@ -525,15 +555,15 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0))
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func captures_findNothing_inToolsOutputWhenRouteBindsPropertiesLabeledValuesAndScope() async throws {
 		// `Home` binds `values` before `detailBuilder`, and `Detail` binds `scope` before `leafBuilder`; `LiveApi` reads both,
-		// so the level functions take parameters of those labels, the member closures name theirs `values_` and `scope_`,
-		// and the fill is a fill function, `(_ scope_:, values:, scope:)`, which reads only its other parameters.
+		// so the level functions take parameters of those labels, and the carriers' members take them positionally, under
+		// names joined with their labels, which no run struct's name equals.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.featureAndApp(
 			feature: [
 				"public protocol Api: AnyObject {}",
@@ -549,7 +579,7 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1))
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 
 	@Test
@@ -572,8 +602,29 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		// Written from that test's expected output: `__safeDI_apiSendableBuilder_Home`, `__safeDI_apiBuilder_Home_Worker_Scope`
-		// and `__safeDI_apiBuilder_Home_Detail_Scope`, of whose member closures only `detail` names its parameter.
+		// Three level functions, whose carriers' members take each level's values positionally, so none names a run struct.
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func captures_findNothing_inToolsOutputWhenCarrierLevelTakesRunStruct() async throws {
+		// `Home` binds nine values before `detailBuilder`, more than a carrier's member takes positionally, so the member
+		// closure of `Home`'s level takes them in a run struct, which it reads `logger` of and hands on no further.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.featureAndApp(
+			feature: [
+				"public protocol Api: AnyObject {}",
+				seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let leafBuilder: Instantiator<Leaf>"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: (1...8).map { "@Instantiated public let wide\($0): Logger" } + ["@Instantiated public let logger: Logger", "@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+			],
+			app: [
+				Self.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received public let logger: Logger"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+
 		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 

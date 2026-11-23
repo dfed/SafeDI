@@ -27,12 +27,13 @@ import SwiftSyntax
 /// its fill reads, never the struct.
 ///
 /// - A **level function** is a function, at any nesting, whose declared return type's last member type is
-///   `__safeDI_Builder<…>`, and no parameter of which is a function type whose result names a scope enum. One that has
+///   `__safeDI_Builder<…>` or a seam's carrier (`__safeDI_ApiCarrier<…>`, `__safeDI_ApiCarrier_Screen<…>`), and no parameter of which is a function type whose result names a scope enum. One that has
 ///   such a parameter is a **conversion function**, which a seam that still takes a closure over its enum calls to
 ///   build the case its closure takes: it is counted, not judged, since it captures an outer level's values on purpose.
 /// - A **member closure** is a closure passed as a labeled argument (`__safeDI_noScope` aside) of an `.init(…)` call
 ///   whose nearest enclosing function declaration is a level function. It belongs to that function alone: a function
-///   declared inside a level function is judged on its own.
+///   declared inside a level function is judged on its own. It is judged on its first parameter, the values struct,
+///   unless that is a carrier member's positional value (`scope_id`), which holds one value and is judged as a read.
 /// - A **fill function** is a function of the same file whose return type is not a builder struct, whose first
 ///   parameter's type's last member ends in `_Values`, and which a member closure hands its parameter, whole, as that
 ///   first, unlabeled argument of a direct call.
@@ -47,7 +48,8 @@ import SwiftSyntax
 ///    argument of a direct call of a member of a parameter of its level function whose type is a builder struct
 ///    (`up.<member>(values)`, the caller's struct for the same level), or as the first argument of a direct call of a fill
 ///    function.
-/// 3. A level function takes a parameter whose type's last member ends in `_Values`.
+/// 3. A level function takes a parameter whose type's last member ends in `_Values`, or is a carrier's run struct
+///    (`__safeDI_ScreenValues2`).
 ///
 /// A fill function is judged on its `_Values` parameter, which nothing nested in it may refer to (finding 1), and which
 /// its own body may use only as the base of a member access (finding 2), each reported on the fill function.
@@ -58,9 +60,10 @@ import SwiftSyntax
 /// counted nor judged. The retention oracle, which runs the code, stays the gate; this check is its first signal, and the
 /// only one in a run without compiles.
 struct GraphFuzzerLevelFunctionCaptures: Equatable {
-	/// Judges every file of `generatedFiles`, in the order of the files' names.
+	/// Judges every file of `generatedFiles` that names a builder struct or a carrier, in the order of the files' names:
+	/// a file that names neither declares no level function.
 	init(generatedFiles: [String: String]) {
-		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where contents.contains(Self.builderStructName) {
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where contents.contains(Self.builderStructName) || contents.contains(Self.carrierNameWord) {
 			let tree = Parser.parse(source: contents)
 			let file = FileJudgment(fileName: fileName, tree: tree)
 			findings += file.findings
@@ -128,6 +131,10 @@ struct GraphFuzzerLevelFunctionCaptures: Equatable {
 	static let builderStructName = "__safeDI_Builder"
 	static let noScopeLabel = "__safeDI_noScope"
 	static let valuesStructSuffix = "_Values"
+	static let carrierNamePattern = #"^__safeDI_\w+Carrier(_\w+)?$"#
+	/// A word every carrier's name holds, which a file must contain to declare a level function that returns one.
+	static let carrierNameWord = "Carrier"
+	static let carrierValuesNamePattern = #"^__safeDI_\w*Values\d+$"#
 	static let scopeEnumPrefixes = ["SafeDIScope_", "SafeDISendableScope_", "SafeDIMockScope_", "SafeDISendableMockScope_"]
 }
 
@@ -244,12 +251,20 @@ private struct FileJudgment {
 		}
 	}
 
+	/// Whether `type` is a level's builder struct, or a seam's carrier of a level (`__safeDI_ApiCarrier`,
+	/// `__safeDI_ApiSendableCarrier`, `__safeDI_ApiCarrier_Screen`), which took the builder struct's place.
 	private static func isBuilderStruct(_ type: TypeSyntax) -> Bool {
-		lastMemberName(of: type) == GraphFuzzerLevelFunctionCaptures.builderStructName
+		guard let name = lastMemberName(of: type) else { return false }
+		return name == GraphFuzzerLevelFunctionCaptures.builderStructName
+			|| name.range(of: GraphFuzzerLevelFunctionCaptures.carrierNamePattern, options: .regularExpression) != nil
 	}
 
+	/// Whether `type` is a struct of a level's values: a scope enum's `…_Values`, or a carrier's run struct
+	/// (`__safeDI_Values3`, `__safeDI_ScreenValues2`).
 	private static func isValuesStruct(_ type: TypeSyntax) -> Bool {
-		lastMemberName(of: type)?.hasSuffix(GraphFuzzerLevelFunctionCaptures.valuesStructSuffix) == true
+		guard let name = lastMemberName(of: type) else { return false }
+		return name.hasSuffix(GraphFuzzerLevelFunctionCaptures.valuesStructSuffix)
+			|| name.range(of: GraphFuzzerLevelFunctionCaptures.carrierValuesNamePattern, options: .regularExpression) != nil
 	}
 
 	/// The name a parameter is referred to by in the function's body.
@@ -266,7 +281,10 @@ private struct FileJudgment {
 		return collector.memberClosures
 	}
 
-	/// The name of `closure`'s one parameter, or `nil` when it names none (`_`, or no signature).
+	/// The name of `closure`'s values struct parameter, its first, or `nil` when it names none (`_`, or no signature) or
+	/// its first is a carrier member's positional value: a carrier's member closure takes a run struct under the payload's
+	/// name (`scope`, `values`, `__safeDI_serviceValues`, with any `_` appended to name it apart) and each positional value under that name joined
+	/// with its label (`scope_id`, `values_first`), which holds one value, so handing it on keeps nothing inline frees.
 	private static func namedParameter(of closure: ClosureExprSyntax) -> String? {
 		let names: [String] = switch closure.signature?.parameterClause {
 		case let .simpleInput(parameters)?:
@@ -276,7 +294,10 @@ private struct FileJudgment {
 		case nil:
 			[]
 		}
-		return names.first.flatMap { $0 == "_" ? nil : $0 }
+		guard let first = names.first, first != "_" else { return nil }
+		let payloadName = first.hasPrefix("__safeDI_") ? first.dropFirst("__safeDI_".count) : Substring(first)
+		guard !payloadName.reversed().drop(while: { $0 == "_" }).contains("_") else { return nil }
+		return first
 	}
 
 	/// A reference to the judged parameter, and whether a closure or a local function lies between it and the judged

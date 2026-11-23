@@ -1198,33 +1198,29 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
-				    nonisolated public enum SafeDIScope_UserService {
-				        nonisolated public struct userService_Values {}
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_UserServiceCarrier<__safeDI_Built> {
+				        public let userService: () -> __safeDI_Built
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let userService: (userService_Values) -> __safeDI_Built
+				        public init(userService: @escaping () -> __safeDI_Built) {
+				            self.userService = userService
+				        }
 
-				            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
-				                self.userService = userService
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.userService = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(userService: { __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+				    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
+				        let userService: any UserService = __safeDI_userServiceBuilder.userService()
 				        self.init(userService: userService)
 				    }
 				}
 
 				extension Service {
-				    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+				    public enum __safeDI_Service_3AB0D4BFE5B82066 {}
 				}
 				""",
 			])
@@ -1256,8 +1252,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-			            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.userService_Values) -> any UserService {
+			            _ = Service.__safeDI_Service_3AB0D4BFE5B82066.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			            func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 			                    return DefaultUserService()
@@ -1265,8 +1261,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			                let userService: any UserService = __safeDI_userService()
 			                return userService
 			            }
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(userService: { scope in __safeDI_userServiceBuilder_Service_userService(scope) })
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(userService: { __safeDI_userServiceBuilder_Service_userService() })
 			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -1279,33 +1275,29 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
-				    nonisolated public enum SafeDIScope_UserService {
-				        nonisolated public struct userService_Values {}
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_UserServiceCarrier<__safeDI_Built> {
+				        public let userService: () -> __safeDI_Built
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let userService: (userService_Values) -> __safeDI_Built
+				        public init(userService: @escaping () -> __safeDI_Built) {
+				            self.userService = userService
+				        }
 
-				            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
-				                self.userService = userService
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.userService = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(userService: { __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+				    public convenience init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
+				        let userService: any UserService = __safeDI_userServiceBuilder.userService()
 				        self.init(userService: userService)
 				    }
 				}
 
 				extension Service {
-				    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+				    public enum __safeDI_Service_3AB0D4BFE5B82066 {}
 				}
 				""",
 			])
@@ -1337,8 +1329,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-			            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.userService_Values) -> any UserService {
+			            _ = Service.__safeDI_Service_3AB0D4BFE5B82066.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			            func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 			                    return DefaultUserService()
@@ -1346,8 +1338,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			                let userService: any UserService = __safeDI_userService()
 			                return userService
 			            }
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(userService: { scope in __safeDI_userServiceBuilder_Service_userService(scope) })
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(userService: { __safeDI_userServiceBuilder_Service_userService() })
 			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }

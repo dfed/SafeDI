@@ -72,21 +72,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let session = Session()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_A7ED340089474321.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(settings: { values in __safeDI_userServiceBuilder_Service_Settings_Scope(session: session, theme: values.theme) }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
+			            _ = Service.__safeDI_Service_C25F2916AB97F229.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(settings: { values_theme in __safeDI_userServiceBuilder_Service_Settings_Scope(session: session, theme: values_theme) }, home: { values_theme, values_settings in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(session: Session, theme: Theme) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: session, theme: theme) })
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(session: Session, theme: Theme) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			                .init(avatar: __safeDI_userServiceBuilder_Service_Avatar_Scope(session: session, theme: theme))
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session, theme: Theme) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session, theme: Theme) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(session: session, theme: theme)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session, theme: values.theme) })
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			                .init(avatar: { values_session, values_theme in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values_session, theme: values_theme) })
 			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -124,21 +124,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_32FC276B366756BE.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(session: nil) })
+			            _ = Service.__safeDI_Service_D06DB61BED988956.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(home: __safeDI_userServiceBuilder_Service_Home_Scope(), settings: { values_home in __safeDI_userServiceBuilder_Service_Settings_Scope(session: nil) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values_session) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(session: session)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(session: Session?) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: session) })
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(session: Session?) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			                .init(avatar: __safeDI_userServiceBuilder_Service_Avatar_Scope(session: session))
 			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -180,22 +180,22 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_C4EFC52CB018649A.self // \(Self.moduleInfoComment)
-			            func __safeDI_apiBuilder_Service() -> Service.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(homeBuilder: { _ in __safeDI_apiBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_apiBuilder_Service_Settings_Scope(tab: nil) })
+			            _ = Service.__safeDI_Service_2CEE2E5D483A1EF6.self // \(Self.moduleInfoComment)
+			            func __safeDI_apiBuilder_Service() -> Service.__safeDI_ApiCarrier<any Api> {
+			                .init(homeBuilder: __safeDI_apiBuilder_Service_Home_Scope(), settings: { values_homeBuilder in __safeDI_apiBuilder_Service_Settings_Scope(tab: nil) })
 			            }
-			            func __safeDI_apiBuilder_Service_Home_Scope() -> Service.SafeDIScope_Api.Home_Scope.__safeDI_Builder<any Api> {
-			                .init(detailBuilder: { values in __safeDI_apiBuilder_Service_Detail_Scope(tab: values.tab) })
+			            func __safeDI_apiBuilder_Service_Home_Scope() -> Service.__safeDI_ApiCarrier_Home<any Api> {
+			                .init(detailBuilder: { values_tab in __safeDI_apiBuilder_Service_Detail_Scope(tab: values_tab) })
 			            }
-			            func __safeDI_apiBuilder_Service_Detail_Scope(tab: String?) -> Service.SafeDIScope_Api.Detail_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { scope in
-			                    let id = scope.id
+			            func __safeDI_apiBuilder_Service_Detail_Scope(tab: String?) -> Service.__safeDI_ApiCarrier_Detail<any Api> {
+			                .init(api: { scope_id in
+			                    let id = scope_id
 			                    let api: any Api = DefaultApi(id: id, tab: tab)
 			                    return api
 			                })
 			            }
-			            func __safeDI_apiBuilder_Service_Settings_Scope(tab: String?) -> Service.SafeDIScope_Api.Settings_Scope.__safeDI_Builder<any Api> {
-			                .init(detailBuilder: { _ in __safeDI_apiBuilder_Service_Detail_Scope(tab: tab) })
+			            func __safeDI_apiBuilder_Service_Settings_Scope(tab: String?) -> Service.__safeDI_ApiCarrier_Settings<any Api> {
+			                .init(detailBuilder: __safeDI_apiBuilder_Service_Detail_Scope(tab: tab))
 			            }
 			            return Service(__safeDI_apiBuilder: __safeDI_apiBuilder_Service())
 			        }
@@ -225,21 +225,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_8B7F57FD1D47F3E2.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settingsBuilder: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope() })
+			            _ = Service.__safeDI_Service_766BBB41F728010A.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(home: __safeDI_userServiceBuilder_Service_Home_Scope(), settingsBuilder: { values_home in __safeDI_userServiceBuilder_Service_Settings_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values_session) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(session: session)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope() -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope() -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values_session) })
 			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -267,21 +267,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_58B290B42665E063.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(settingsBuilder: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope() }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
+			            _ = Service.__safeDI_Service_E393F1B8E43D7CAB.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(settingsBuilder: __safeDI_userServiceBuilder_Service_Settings_Scope(), home: { values_settingsBuilder in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope() -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope() -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values_session) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(session: session)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values.session) })
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(session: values_session) })
 			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -311,21 +311,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let logger = Logger()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_33604A2387059D3F.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
+			            _ = Service.__safeDI_Service_7BB64FE7E3D2A4FF.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(settings: { values_logger in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) }, home: { values_logger, values_settings in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: logger) })
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(logger: Logger) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			                .init(avatar: __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: logger))
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: Logger) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(logger: logger)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: values.logger) })
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			                .init(avatar: { values_logger in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: values_logger) })
 			            }
 			            return Service(__safeDI_logger: logger, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -353,21 +353,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let logger = Logger()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_CD133EEE9F18DA4F.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) })
+			            _ = Service.__safeDI_Service_DEF254FB9884D00F.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(home: { values_logger in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { values_logger, values_home in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.SafeDIScope_UserService.Home_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { values in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: values.logger) })
+			            func __safeDI_userServiceBuilder_Service_Home_Scope() -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			                .init(avatar: { values_logger in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: values_logger) })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Avatar_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: Logger) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(logger: logger)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(logger: Logger) -> Service.SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<any UserService> {
-			                .init(avatar: { _ in __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: logger) })
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(logger: Logger) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			                .init(avatar: __safeDI_userServiceBuilder_Service_Avatar_Scope(logger: logger))
 			            }
 			            return Service(__safeDI_logger: logger, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
@@ -409,21 +409,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_home() -> Home {
-			            _ = Home.__safeDI_Home_ABA72DBCBBFD6210.self // \(Self.moduleInfoComment)
-			            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Home_A_Scope() }, b: { _ in __safeDI_apiBuilder_Home_B_Scope(session: nil) })
+			            _ = Home.__safeDI_Home_86483726617AD620.self // \(Self.moduleInfoComment)
+			            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+			                .init(aBuilder: __safeDI_apiBuilder_Home_A_Scope(), b: { values_aBuilder in __safeDI_apiBuilder_Home_B_Scope(session: nil) })
 			            }
-			            func __safeDI_apiBuilder_Home_A_Scope() -> Home.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(avatar: { values in __safeDI_apiBuilder_Home_Avatar_Scope(session: values.session) })
+			            func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
+			                .init(avatar: { values_session in __safeDI_apiBuilder_Home_Avatar_Scope(session: values_session) })
 			            }
-			            func __safeDI_apiBuilder_Home_Avatar_Scope(session: Session?) -> Home.SafeDIScope_Api.Avatar_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            func __safeDI_apiBuilder_Home_Avatar_Scope(session: Session?) -> Home.__safeDI_ApiCarrier_Avatar<any Api> {
+			                .init(api: {
 			                    let api: any Api = LiveApi(session: session)
 			                    return api
 			                })
 			            }
-			            func __safeDI_apiBuilder_Home_B_Scope(session: Session?) -> Home.SafeDIScope_Api.B_Scope.__safeDI_Builder<any Api> {
-			                .init(avatar: { _ in __safeDI_apiBuilder_Home_Avatar_Scope(session: session) })
+			            func __safeDI_apiBuilder_Home_B_Scope(session: Session?) -> Home.__safeDI_ApiCarrier_B<any Api> {
+			                .init(avatar: __safeDI_apiBuilder_Home_Avatar_Scope(session: session))
 			            }
 			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 			        }
@@ -454,16 +454,16 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let theme = Theme()
 			        func __safeDI_outer() -> Outer {
-			            _ = Outer.__safeDI_Outer_9229E580D0455D2E.self // \(Self.moduleInfoComment)
-			            func __safeDI_apiBuilder_Outer() -> Outer.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
+			            _ = Outer.__safeDI_Outer_51580B58182D7898.self // \(Self.moduleInfoComment)
+			            func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+			                .init(inner: __safeDI_apiBuilder_Inner())
 			            }
-			            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(panel: { _ in __safeDI_apiBuilder_Inner_Panel_Scope() })
+			            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+			                .init(panel: __safeDI_apiBuilder_Inner_Panel_Scope())
 			            }
-			            func __safeDI_apiBuilder_Inner_Panel_Scope() -> Inner.SafeDIScope_Api.Panel_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { scope in
-			                    let session = scope.session
+			            func __safeDI_apiBuilder_Inner_Panel_Scope() -> Inner.__safeDI_ApiCarrier_Panel<any Api> {
+			                .init(api: { scope_session in
+			                    let session = scope_session
 			                    let api: any Api = DefaultApi(session: session, theme: theme)
 			                    return api
 			                })
@@ -556,15 +556,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Office"))
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Office"))
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token.instance)
 			                    return userService
 			                })
@@ -597,18 +597,18 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_C1C4CFA43B1FA192.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) }, desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() })
+			            _ = Office.__safeDI_Office_C89D2770CF7FEA3C.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(model: __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })), desk: { values_model in __safeDI_userServiceBuilder_Office_Desk_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token.instance)
 			                    return userService
 			                })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
 			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 			        }
@@ -636,15 +636,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_79E9D8C7948FA1D0.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>({ token })) })
+			            _ = Office.__safeDI_Office_73F97802D05F021E.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token.instance)
 			                    return userService
 			                })
@@ -680,15 +680,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			        }
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_198FC1FC010778A5.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.instance) })
+			            _ = Office.__safeDI_Office_F8D805F0A45A6EA3.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.instance) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: Token) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token)
 			                    return userService
 			                })
@@ -721,15 +721,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token?.instance)
 			                    return userService
 			                })
@@ -766,15 +766,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token.instance)
 			                    return userService
 			                })
@@ -812,15 +812,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_3809615F3E68B69C.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            _ = Office.__safeDI_Office_B139FC6CC46F99FE.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(modelBuilder: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(modelBuilder: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token.instance)
 			                    return userService
 			                })
@@ -852,15 +852,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: nil) })
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: nil) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token?.instance)
 			                    return userService
 			                })
@@ -894,8 +894,8 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 				    public init() {
 				        let token = Token()
 				        func __safeDI_office() -> Office {
-				            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>?) -> any UserService {
+				            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
 				                func __safeDI_userService() -> DefaultUserService {
 				                    #sourceLocation(file: "\(appSources)/DefaultUserService.swift", line: 9)
 				                    let renamed: Token? = token?.instance
@@ -905,14 +905,14 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 				                let userService: any UserService = __safeDI_userService()
 				                return userService
 				            }
-				            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-				                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+				            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+				                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 				            }
-				            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-				                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+				            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+				                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 				            }
-				            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-				                .init(userService: { scope in __safeDI_userServiceBuilder_Office_Model_Scope_userService(scope, token: token) })
+				            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+				                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
 				            }
 				            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 				        }
@@ -953,8 +953,8 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>?) -> any UserService {
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    func __safeDI_loopABuilder(token: Token?) -> LoopA {
 			                        func __safeDI_loopBBuilder() -> LoopB {
@@ -975,14 +975,14 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			                let userService: any UserService = __safeDI_userService()
 			                return userService
 			            }
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { scope in __safeDI_userServiceBuilder_Office_Model_Scope_userService(scope, token: token) })
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
 			            }
 			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 			        }
@@ -1027,15 +1027,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token token: Token?) {
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { _ in
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: {
 			                    let userService: any UserService = DefaultUserService(token: token?.instance)
 			                    return userService
 			                })
@@ -1079,13 +1079,13 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>) -> any UserService {
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    func __safeDI_panel() -> Panel {
-			                        _ = Panel.__safeDI_Panel_A5FB2CD0EC7D53C9.self // \(Self.moduleInfoComment)
-			                        func __safeDI_gadgetBuilder_Panel() -> Panel.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			                            .init(gadget: { _ in
+			                        _ = Panel.__safeDI_Panel_9CC66A47349ADC17.self // \(Self.moduleInfoComment)
+			                        func __safeDI_gadgetBuilder_Panel() -> Panel.__safeDI_GadgetCarrier<any Gadget> {
+			                            .init(gadget: {
 			                                let gadget: any Gadget = DefaultGadget(token: token.instance)
 			                                return gadget
 			                            })
@@ -1098,14 +1098,14 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			                let userService: any UserService = __safeDI_userService()
 			                return userService
 			            }
-			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			            }
-			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                .init(userService: { scope in __safeDI_userServiceBuilder_Office_Model_Scope_userService(scope, token: token) })
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
 			            }
 			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 			        }
@@ -1141,15 +1141,15 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screenBuilder(token: Token?) -> Screen {
 			            func __safeDI_office() -> Office {
-			                _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			                func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
-			                    .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
+			                _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			                func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                    .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
 			                }
-			                func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.SafeDIScope_UserService.Desk_Scope.__safeDI_Builder<any UserService> {
-			                    .init(model: { values in __safeDI_userServiceBuilder_Office_Model_Scope(token: values.token) })
+			                func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                    .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 			                }
-			                func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.SafeDIScope_UserService.Model_Scope.__safeDI_Builder<any UserService> {
-			                    .init(userService: { _ in
+			                func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                    .init(userService: {
 			                        let userService: any UserService = DefaultUserService(token: token?.instance)
 			                        return userService
 			                    })

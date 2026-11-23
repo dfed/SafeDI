@@ -1512,12 +1512,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// The name of a simple type sans nesting, with associated generics.
-	var simpleNameAndGenerics: (name: String, generics: [TypeDescription])? {
+	/// The name of a nominal type sans nesting, the type it is nested in, if any, and its associated generics.
+	var simpleNameAndGenerics: (name: String, parentType: TypeDescription?, generics: [TypeDescription])? {
 		switch self {
-		case let .simple(name, generics),
-		     let .nested(name, _, generics):
-			(name, generics)
+		case let .simple(name, generics):
+			(name, nil, generics)
+		case let .nested(name, parentType, generics):
+			(name, parentType, generics)
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
