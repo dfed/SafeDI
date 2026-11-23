@@ -101,10 +101,6 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
-		// D1 lane hook (lane D): a seam's own places share their builders with the places its calls fill, or the places
-		// inside those fills, which the builders of `mock()` join by family (`seamMockBuilders`' `fillPlaces` and
-		// `filledCalls`): lane E's fill family, not lowered yet.
-		guard signature.placeProperties.isEmpty || walk.filledCallBuilders.calls.isEmpty else { return .unsupported(.fill) }
 		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
 		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
 			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
