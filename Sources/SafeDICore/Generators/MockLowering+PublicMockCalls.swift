@@ -76,16 +76,25 @@ extension ScopeGenerator {
 		}
 		for (child, declaredAbove, requiresSendable) in callsInWalkOrder {
 			let generator = child.generator
+			// A call on a loop of builders first rebinds the members its tree receives, which its fills read as declared above.
 			guard let publicMockCall = generator.publicMockCall,
-			      !generator.declaresCycleParameters,
-			      generator.reboundProperties.isEmpty
+			      !generator.declaresCycleParameters
 			else { return .unsupported(.fill) }
+			var declaredAbove = declaredAbove.union(generator.reboundProperties)
+			// An instantiator's builder function, which makes the call, takes what the instantiator forwards, which its fills
+			// read as declared above.
+			if case let .property(_, _, forwardedProperties, _, _, _) = generator.scopeData {
+				declaredAbove.formUnion(forwardedProperties)
+			}
 			// A fill that reads a value of the caller's scope reads what the mock binds or offers for it.
 			for fill in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater).map(\.generator) {
 				// A fill that reads the caller's own value from a root binding named apart from its label binds the label to that
-				// name (`bindingRootNames(_:)`).
+				// name (`bindingRootNames(_:)`); a receive of a label nothing above declares, such as a parameter no tier of a call
+				// inside the fill takes, reads no binding.
 				guard case .fill = fill.scopeData,
-				      fill.receivedProperties.allSatisfy({ declaredAbove.contains($0) || declaredAbove.contains($0.asUnwrappedProperty) })
+				      fill.receivedProperties.allSatisfy({ received in
+				      	declaredAbove.contains(received) || declaredAbove.contains(received.asUnwrappedProperty) || !declaredAbove.contains { $0.label == received.label }
+				      })
 				else { return .unsupported(.fill) }
 			}
 			// A place inside a fill takes a required builder, which an internal mock takes (a public mock's are places of its own
@@ -755,20 +764,22 @@ extension MockLowering.Walk {
 			return .unsupported(.fill)
 		}
 		lines.append(contentsOf: extractionLines)
-		lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {")
+		let functionDeclaration = "\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {"
+		// The statements of the call's builder function before its call, unindented.
+		var bodyLines = [String]()
 		// The members a `@Sendable` family's places inside the fills read, which the call's builder function calls at its top.
-		lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(innerIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
+		bodyLines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { $0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]) })
 		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
-			lines.append(line.isEmpty ? "" : "\(innerIndent)\(line)")
+			bodyLines.append(String(line))
 		}
-		lines.append("\(innerIndent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
+		bodyLines.append(publicMockCall.guardLine(for: instantiable.concreteInstantiable))
 		// Each receive of the call's leaf the mock names apart is bound again under its label (`emitReceiverBindings`), a
 		// receive of a lazy wrapper's instance binding the wrapper named apart.
 		for dependency in instantiable.dependencies {
 			// A builder the call passes up is bound again under the label the leaf receives it as, as a receive named apart is.
 			if let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property] {
 				if builderName != dependency.property.label {
-					lines.append("\(innerIndent)let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
+					bodyLines.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
 				}
 				continue
 			}
@@ -781,11 +792,39 @@ extension MockLowering.Walk {
 					.compactMap({ wrapperType in names[wrapperType].map { (wrapperType, $0) } })
 					.first
 				else { continue }
-				lines.append("\(innerIndent)let \(dependency.property.label): \(wrapperType.asSource) = \(name)")
+				bodyLines.append("let \(dependency.property.label): \(wrapperType.asSource) = \(name)")
 			} else if let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription] {
-				lines.append("\(innerIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
+				bodyLines.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
 			}
 		}
+		// A call on a loop of builders first rebinds the members its tree receives, and its level binds its wrapper where it
+		// reads it outside the loop (`MockLowering+Loops.swift`).
+		if let loopMembership {
+			// A public mock's call that promotes a member of a loop of itself is passed its caller's wrapper, which its function
+			// and its level read first, as the promoted wrapper is bound.
+			if isPromoted {
+				guard generator.reboundProperties == [property], loopMembers[property]?.receivedFunctionName == nil else { return .unsupported(.cycle) }
+				let promotedLine = { (indent: String) in
+					MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: property.label, passing: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)
+				}
+				lines.append(functionDeclaration)
+				lines.append(promotedLine(innerIndent))
+				lines.append(contentsOf: bodyLines.map { $0.isEmpty ? "" : "\(innerIndent)\($0)" })
+				lines.append("\(innerIndent)return \(call)")
+				lines.append("\(indent)}")
+				let bindingLines = loopMembership.declaresBinding ? [promotedLine(indent)] : []
+				lines.append(contentsOf: bindingLines)
+				lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: extractionLines.count, binding: bindingLines.count)
+				return .lowered(.publicMockCall(node))
+			}
+			guard let memberLines = loopMemberCallLines(of: generator, property: property, functionDeclaration: functionDeclaration, bodyLines: bodyLines, call: call, indent: indent) else { return .unsupported(.cycle) }
+			lines.append(contentsOf: memberLines)
+			// The locals the call's `@Sendable` builder function reads from the overrides are the member's prelude.
+			lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: extractionLines.count, binding: lastLoopMemberLineCounts?.binding ?? 0)
+			return .lowered(.publicMockCall(node))
+		}
+		lines.append(functionDeclaration)
+		lines.append(contentsOf: bodyLines.map { $0.isEmpty ? "" : "\(innerIndent)\($0)" })
 		lines.append("\(innerIndent)return \(call)")
 		lines.append("\(indent)}")
 		if isInstantiator {

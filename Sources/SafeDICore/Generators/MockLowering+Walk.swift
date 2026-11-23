@@ -580,12 +580,13 @@ extension MockLowering {
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
-				} else if case .property = generator.scopeData, generator.publicMockCall == nil || !generator.fillsABuilder && generator.valuesBindingsBeforeBuilderFunction.isEmpty {
+				} else if case .property = generator.scopeData, generator.publicMockCall == nil || generator.valuesBindingsBeforeBuilderFunction.isEmpty {
 					// D1 lane hook (lane B): a call of another module's public mock on a loop reads in its function the members it
 					// rebinds there, and names its guard where its level makes it, before the loop's unit, as the emitter names it.
+					// D1 lane hook (lane E): a call that fills a builder names its guard inside its function, after its fills.
 					let memberScope = generator.publicMockCall == nil ? scope : scope.union(generator.reboundProperties)
 					lowering = await node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, indent: indent, lines: &memberLines)
-					if case .lowered = lowering, generator.publicMockCall != nil {
+					if case .lowered = lowering, generator.publicMockCall != nil, !generator.fillsABuilder {
 						lines.append(memberLines.removeFirst())
 					}
 				} else if case .alias = generator.scopeData {
