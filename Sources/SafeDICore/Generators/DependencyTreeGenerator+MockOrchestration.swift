@@ -214,6 +214,7 @@ extension DependencyTreeGenerator {
 			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			publicMockContext: publicMockContext,
 			foreignPublicMocks: foreignPublicMocks,
+			apiVersion: apiVersion,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
