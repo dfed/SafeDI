@@ -9576,8 +9576,10 @@ enum GraphFuzzerGenerator {
 		/// comparator judge each, and the level function capture check and the `carrier.member` check read its code:
 		/// - three in ten, sibling places with unequal read sets (`UnequalHome`);
 		/// - three in ten, one label declared on two sibling levels whose places' fill reads it (`CoincideHome`);
-		/// - three in ten in a graph whose wrappers are not all of one kind, one hole type's places in both families
-		///   (`KeySplitHome`), since one family alone forms one key;
+		/// - every graph whose wrappers are not all of one kind, one hole type's places in both families (`KeySplitHome`),
+		///   since one family alone forms one key: the tool rejects most mixed graphs for their other draws, so three in ten
+		///   of them left fewer than ten graphs the value comparator judged (its roll is still made, so every later roll
+		///   reads as before);
 		/// - three in ten, a place held in a wrapper beside a plain place, their fills reading other values (`WrapSideHome`);
 		/// - three in ten where the seam's module has a package, an inner seam of `FuzzSession` one of whose hole types the
 		///   outer seam fills and the other it passes up (`MixCallOuter`);
@@ -9596,7 +9598,7 @@ enum GraphFuzzerGenerator {
 			let unequalBeneathChild = carrierDrawRandom.percentChance(50)
 			let drawsCoincide = carrierDrawRandom.percentChance(30)
 			let coincideOnSeamToo = carrierDrawRandom.percentChance(40)
-			let drawsKeySplit = carrierDrawRandom.percentChance(30)
+			_ = carrierDrawRandom.percentChance(30)
 			let drawsWrapSide = carrierDrawRandom.percentChance(30)
 			let wrapSideErased = carrierDrawRandom.percentChance(50)
 			let wrapSideSendableRoll = carrierDrawRandom.percentChance(50)
@@ -9678,7 +9680,7 @@ enum GraphFuzzerGenerator {
 				}
 				added += [instantiable("CoincideTag"), left, right, home, fill("CoincideLive", fulfilling: "CoincideApi", properties: readProperties), root("CoincideRoot", building: home, label: "coincideHome")]
 			}
-			if drawsKeySplit, sendability == .mixed {
+			if sendability == .mixed {
 				let plain = instantiable("KeySplitPlain", properties: [place("keySplitApi", "KeySplitApi")])
 				let sendableHolder = instantiable("KeySplitSendable", properties: [place("keySplitApi", "KeySplitApi")])
 				let home = seam("KeySplitHome", properties: [
@@ -13077,6 +13079,9 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			if character == "}" {
 				index += 1
 				items.append(item.trimmingCharacters(in: .whitespaces))
+				if let first = items.first {
+					items[0] = Self.closureParametersInCanonicalOrder(of: first)
+				}
 				return Self.joiningRegions(of: items.filter { !$0.isEmpty }).sorted().joined(separator: "; ")
 			} else if character == ";" {
 				items.append(item.trimmingCharacters(in: .whitespaces))
@@ -13097,6 +13102,24 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			}
 		}
 		return nil
+	}
+
+	/// `item`, a block's first item, with the names of its closure parameter clause sorted, where it opens with one spelled
+	/// as names alone (`{ scope_a, scope_b, scope_c in`): a carrier's member takes a level's values positionally in the
+	/// order the level binds them, which for a seam's root is its pass-throughs' label order, so a caller's closure names
+	/// them in that order. Swapped names are left to the compile and value check, as swapped unlabeled arguments are.
+	private static func closureParametersInCanonicalOrder(of item: String) -> String {
+		guard let inRange = item.range(of: " in"), inRange.upperBound == item.endIndex || item[inRange.upperBound] == " " else {
+			return item
+		}
+		let names = item[..<inRange.lowerBound].components(separatedBy: ", ")
+		guard names.count > 1, names.allSatisfy({ name in
+			guard let first = name.first, first.isLetter || first == "_" else { return false }
+			return name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+		}) else {
+			return item
+		}
+		return names.sorted().joined(separator: ", ") + item[inRange.lowerBound...]
 	}
 
 	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those

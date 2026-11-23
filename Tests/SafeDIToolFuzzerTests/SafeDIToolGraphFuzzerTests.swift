@@ -535,6 +535,32 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportListOrder_whenCarrierMembersClosureNamesRootLevelsValuesInOtherLabelOrder() {
+		// Seed 330's shape: a carrier member takes the seam root's values positionally, in its pass-throughs' label order,
+		// so reversing the labels reorders the names of the caller's closure's parameters with the arguments of the call.
+		let code = "extension Root {\n    func __safeDI_builder() -> Seam.__safeDI_ServiceCarrier<any Service> {\n        .init(service: { scope_tag, scope_note, scope_aBuilder in\n            let service: any Service = Impl()\n            return service\n        })\n    }\n}\n"
+		let otherCode = code.replacingOccurrences(of: "scope_tag, scope_note,", with: "scope_note, scope_tag,")
+		#expect(otherCode != code)
+
+		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.reversingLabels)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeListOrder, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportTreeCode_whenClosureParameterNamesMoveIntoItsBody() {
+		// Only the names of the parameter clause are sorted: a name moved past `in` into the body is the file's code.
+		let code = "extension Root {\n    func make() -> (Int, Int) -> Int {\n        { first, second in\n            first\n        }\n    }\n}\n"
+		let otherCode = code.replacingOccurrences(of: "{ first, second in\n            first", with: "{ first, first in\n            second")
+
+		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.reversingLabels)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_reportListOrder_whenSiblingDeclarationsOfOneBlockMove() {
 		// A seam's builder functions, declared in one body in label order, which the move of type names reorders with the
 		// cases of a switch: each function's lines move with it, and its own statements keep their block.
@@ -734,6 +760,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	"""
 
+	private static let reversingLabels = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: true, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: false)
 	private static let movingTypeNames = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true)
 
 	private static let reversingFileNames = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true)

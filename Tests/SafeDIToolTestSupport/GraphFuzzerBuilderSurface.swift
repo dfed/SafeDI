@@ -801,12 +801,12 @@ extension GraphFuzzerBuilderSurface {
 	static func switchedBuilder(ofGeneratedOnlyParameter parameter: String) -> (isSendable: Bool, builtType: String, structPath: String)? {
 		let type = Parameter(parameter).type
 		// A seam's root carrier, `__safeDI_<Stem>Carrier<T>` or `__safeDI_<Stem>SendableCarrier<T>`, which took the root
-		// builder struct's place.
-		if let carrierRange = type.range(of: #"(?<![A-Za-z0-9_.])__safeDI_\w+Carrier<"#, options: .regularExpression),
+		// builder struct's place, qualified by its seam where a caller spells it (`callerSpelling(ofParameter:of:)`).
+		if let carrierRange = type.range(of: #"(?<![A-Za-z0-9_.])(\w+\.)?__safeDI_\w+Carrier<"#, options: .regularExpression),
 		   let lastAngleBracket = type.lastIndex(of: ">"),
 		   carrierRange.upperBound <= lastAngleBracket
 		{
-			let carrierName = String(type[carrierRange].dropLast())
+			let carrierName = String(type[carrierRange].dropLast().split(separator: ".").last ?? "")
 			return (carrierName.hasSuffix("SendableCarrier"), String(type[carrierRange.upperBound..<lastAngleBracket]), carrierName)
 		}
 		guard let structRange = type.range(of: #"(?<![A-Za-z0-9_])SafeDI(Sendable)?Scope_\w+(\.\w+)*\.__safeDI_Builder<"#, options: .regularExpression),
