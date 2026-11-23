@@ -158,7 +158,15 @@ extension ScopeGenerator {
 		bindingLines.insert(contentsOf: signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines, at: rootReceiverBindingIndex)
 		// Every dependency of the mocked type is a node of its tree, a parameter of `mock()`, an override's binding or passed
 		// `nil`.
-		let providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties).union(unavailableOptionalProperties).union(signature.lazilyInstantiatedProperties)
+		var providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties).union(unavailableOptionalProperties).union(signature.lazilyInstantiatedProperties)
+		// D1 lane hook (lane D): the mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
+		// wrapper's instance, and a receive only if available of a node's optional form is passed the node, as
+		// `generateReturnArgumentList` passes them. A public mock's root is lane C's (`publicMockWithTree`).
+		let rootInstancesReadByValue = instantiable.generateMock == .public ? [] : MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
+		providedProperties.formUnion(rootInstancesReadByValue)
+		if instantiable.generateMock != .public {
+			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)), renames: rootRenames))
+		}
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
@@ -171,13 +179,13 @@ extension ScopeGenerator {
 			// D1 lane hook (lane C): a public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
-		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, context: context), configurations: walk.configurationRecords)
+		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 	}
 
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:
 	/// its `SafeDIOverrides` where a node has an override, and `mock()`, which takes `signature`'s parameters, the builders
 	/// `builders` (each label and declaration, in label order, listed among the flat received parameters) and the overrides, binds each node and returns the type built from them.
-	private static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, nodes: [MockLowering.TreeNode], bindingLines: [String], builders: [(label: String, declaration: String)], rootRenames: [String: [TypeDescription: String]], unavailableProperties: Set<Property>, context: MockContext) -> String {
+	private static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, nodes: [MockLowering.TreeNode], bindingLines: [String], builders: [(label: String, declaration: String)], rootRenames: [String: [TypeDescription: String]], unavailableProperties: Set<Property>, instancesReadByValue: Set<Property>, context: MockContext) -> String {
 		let indent = standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -210,7 +218,7 @@ extension ScopeGenerator {
 		lines.append(contentsOf: bindingLines)
 		// D1 lane hook (lane D): the mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
-			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
+			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
 		} ?? Instantiable.incorrectlyConfiguredComment
 		let construction = MockLowering.rootConstruction(of: instantiable, argumentList: argumentList)
 		lines.append("\(bodyIndent)return \(construction)")
@@ -1479,7 +1487,8 @@ extension MockLowering {
 	/// The name of the builder function of a node bound as `bindingName`.
 	/// The arguments the mocked type's construction `initializer` is handed for `dependencies`: each dependency's label, or
 	/// the name the mock root's level binds it apart under, by its label and type (`renames`).
-	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>) -> String {
+	// D1 lane hook (lane D): a dependency among `instancesReadByValue` is passed its wrapper's instance.
+	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> String {
 		var parts = [String]()
 		for argument in initializer.arguments {
 			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
@@ -1488,9 +1497,15 @@ extension MockLowering {
 					parts.append("\(argument.label.spelledAsArgumentLabel): nil")
 					continue
 				}
+				guard !instancesReadByValue.contains(dependency.property) else {
+					parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)")
+					continue
+				}
 				parts.append("\(argument.label.spelledAsArgumentLabel): \(renames[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel)")
 			} else if argument.hasDefaultValue, !argument.isLeftToItsDefault {
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
+				// D1 lane hook (lane D): an `@autoclosure` parameter of `mock()` is passed its call.
+				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(parameterValue)")
 			}
 		}
 		return parts.joined(separator: ", ")
