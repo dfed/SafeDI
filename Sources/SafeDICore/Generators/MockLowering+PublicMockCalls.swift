@@ -316,16 +316,24 @@ extension MockLowering.Walk {
 				// lowered yet: the leaf receives no builder, so the values below find no dependency of its label.
 				arguments.append(labeled(holeValue, as: argument))
 			} else {
-				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is.
+				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is, or
+				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`).
 				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
 				      dependency.source != .forwarded,
-				      !lazilyInstantiatedInstances.contains(dependency.property),
-				      !generator.unavailableOptionalProperties.contains(dependency.property),
-				      scope.contains(dependency.property) || dependency.property.typeDescription.isOptional && scope.contains(dependency.property.asUnwrappedProperty)
+				      !generator.unavailableOptionalProperties.contains(dependency.property)
 				else { return .unsupported(.publicMockCall) }
-				arguments.append(labeled(dependency.property.label, as: argument))
-				overrideArguments.append(dependency.property.label)
-				argumentByLabel[argument.innerLabel] = dependency.property.label
+				let value: String
+				if dependency.source.isReceived, lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty) {
+					// A label the tree holds in both wrapper kinds is named apart, which is not lowered yet.
+					guard scope.count(where: { $0.label == dependency.property.label && $0.typeDescription.lazilyInstantiatedInstanceType != nil }) == 1 else { return .unsupported(.publicMockCall) }
+					value = "\(dependency.property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				} else {
+					guard scope.contains(dependency.property) || dependency.property.typeDescription.isOptional && scope.contains(dependency.property.asUnwrappedProperty) else { return .unsupported(.publicMockCall) }
+					value = dependency.property.label
+				}
+				arguments.append(labeled(value, as: argument))
+				overrideArguments.append(value)
+				argumentByLabel[argument.innerLabel] = value
 			}
 		}
 		if publicMockCall.takesOverrides {
