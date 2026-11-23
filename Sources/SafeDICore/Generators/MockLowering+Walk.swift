@@ -44,6 +44,7 @@ extension ScopeGenerator {
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
 		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels.union(signature.lazilyInstantiatedBindings.map(\.name)), uncoveredProperties: signature.uncoveredProperties)
 		walk.rootFlatReceivedLabels = Set(signature.flatReceivedParameters.map(\.property.label))
+		walk.rootNamesDeclaredInBuilderFunctions = signature.namesDeclaredInBuilderFunctions
 		// D1 lane hook (lane B): a receive of a flat received parameter or override named apart from its label is handed that
 		// name, which its builder function binds again under the label.
 		walk.renames = signature.renamesByLabelAndType
@@ -330,6 +331,8 @@ extension MockLowering {
 		/// The labels of the dependencies the tree receives that the mock cannot build, which an alias of the mock root's
 		/// level is named apart from.
 		var rootFlatReceivedLabels = Set<String>()
+		/// The labels the builder functions of the root's tree declare, which an alias of the root's level is named apart from.
+		var rootNamesDeclaredInBuilderFunctions = Set<String>()
 		/// The names the mock root's level gives the aliases it names apart, which no builder function beneath may declare.
 		var rootAliasNamesApart = Set<String>()
 		/// The properties of `mock()`'s forwarded and default-valued parameters, which keep their labels: a node of the mock
@@ -523,10 +526,10 @@ extension MockLowering {
 			// D1 lane hook (lane D): the mock root's level names its nodes apart from every name a builder function beneath
 			// declares.
 			if bodyLabels.isEmpty {
-				guard rootLabels.isDisjoint(with: names), rootLabels.intersection(collidingLabels).isSubset(of: collidingParameterLabels) else { return .unsupported(.siblingLabelCollision) }
+				guard rootLabels.isDisjoint(with: names), rootLabels.intersection(collidingLabels).isSubset(of: collidingParameterLabels.union(rootOverrideNames)) else { return .unsupported(.siblingLabelCollision) }
 				rootNamesApart.formUnion(names)
 				rootLabelsNamedApart.formUnion(collidingLabels)
-				rootPropertiesNamedApartFromParameters.formUnion(collidingProperties.filter { collidingParameterLabels.contains($0.label) })
+				rootPropertiesNamedApartFromParameters.formUnion(collidingProperties.filter { collidingParameterLabels.contains($0.label) || rootOverrideNames.contains($0.label) })
 			}
 			return .lowered(propertyNodes.map { property in property.map { nameByProperty[$0] ?? $0.label } })
 		}
@@ -545,7 +548,7 @@ extension MockLowering {
 			// D1 lane hook (lane B): the root binds each override of what its tree receives only if available under its name
 			// before the tree, as it binds its property nodes (`MockRootTopLevelNames.rootBindingNames`).
 			let redeclaredNames = propertyNodeNames.union(rootFlatReceivedLabels).union(rootOverrideNames)
-			var takenNames = propertyNodeNames.union(rootLabels).union(aliases.map(\.property.label))
+			var takenNames = propertyNodeNames.union(rootLabels).union(aliases.map(\.property.label)).union(rootNamesDeclaredInBuilderFunctions)
 			for alias in aliases where redeclaredNames.contains(alias.property.label) {
 				var name = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)".spelledAsJoinedIdentifier
 				while !takenNames.insert(name).inserted {
