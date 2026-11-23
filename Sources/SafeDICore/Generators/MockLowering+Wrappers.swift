@@ -113,17 +113,24 @@ extension MockLowering {
 
 	/// The binding of a wrapper whose type is `typeDescription`, named `bindingName`, around the builder function named
 	/// `functionName`, which takes `forwardedProperties` from the wrapper's argument, then `cycleParameterArguments`; the
-	/// lines after the first at `indent`.
+	/// lines after the first at `indent`. A rename of the wrapper, `declaredProperty`, is bound as its own declaration.
 	static func wrapperBindingLines(
 		of typeDescription: TypeDescription,
 		named bindingName: String,
+		declaredAs declaredProperty: Property? = nil,
 		handing functionName: String,
 		forwardedProperties: [Property],
 		cycleParameterArguments: [String] = [],
 		indent: String,
 	) -> [String] {
 		let unwrappedType = typeDescription.unwrapped
-		let binding = unwrappedType.isConstructedByAnnotation ? "\(bindingName): \(unwrappedType.asSource)" : bindingName
+		let binding = if let declaredProperty {
+			declaredProperty.asSource
+		} else if unwrappedType.isConstructedByAnnotation {
+			"\(bindingName): \(unwrappedType.asSource)"
+		} else {
+			bindingName
+		}
 		let wrapperType = unwrappedType.spelledForConstruction
 		guard !forwardedProperties.isEmpty || !cycleParameterArguments.isEmpty else {
 			return ["\(indent)let \(binding) = \(wrapperType)(\(functionName))"]

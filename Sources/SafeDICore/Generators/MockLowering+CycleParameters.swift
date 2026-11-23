@@ -25,7 +25,7 @@ extension MockLowering {
 	/// parameters, where the node is built: `nil` for one the node is built where nothing provides, a lazy wrapper's
 	/// instance, or the binding of the label; or `nil` where a binding is none of `scope`'s, such as an override the
 	/// mock's root binds.
-	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>) -> [String]? {
+	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>, renames: [String: [TypeDescription: String]]) -> [String]? {
 		let unavailableProperties = generator.unavailableOptionalProperties
 		let lazilyInstantiatedInstanceProperties = generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
@@ -39,7 +39,8 @@ extension MockLowering {
 				value = "\(label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
 				guard Self.scope(scope, provides: parameter.property, unavailableProperties: [], lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties) else { return nil }
-				value = label
+				// D1 lane hook (lane B): the binding the label is named apart under (`mockCycleParameterArguments`).
+				value = renames[label]?[parameter.property.typeDescription] ?? renames[label]?[parameter.property.asUnwrappedProperty.typeDescription] ?? label
 			}
 			arguments.append("\(label.spelledAsArgumentLabel): \(value)")
 		}

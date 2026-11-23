@@ -158,12 +158,6 @@ extension MockLowering.Walk {
 		}
 		isBeneathRepeatedConfiguredAncestor = entry.wasBeneathRepeatedConfiguredAncestor
 	}
-
-	/// Whether a leaf of `concreteType` records its configuration: its type repeats no configured node around it, and it is
-	/// beneath no node that does.
-	func recordsConfiguration(ofLeafOf concreteType: TypeDescription) -> Bool {
-		!isBeneathRepeatedConfiguredAncestor && !configuredAncestorTypes.contains(concreteType.asSource)
-	}
 }
 
 extension MockLowering.ConfigurationRecord {

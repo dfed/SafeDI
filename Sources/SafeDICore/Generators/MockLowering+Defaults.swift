@@ -84,27 +84,31 @@ extension MockLowering {
 extension MockLowering.Walk {
 	/// The fields of the configuration of a node of `instantiable` for its construction's default-valued parameters, with
 	/// the defaults the type's hand-written mock declares; or the rule of a node that starts the extraction of a `@Sendable`
-	/// builder function, whose defaults the emitter reads inside it.
-	func configurationDefaultFields(of instantiable: Instantiable, startsExtraction: Bool) -> MockLowering.Lowering<[MockLowering.DefaultField]> {
-		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: false, builderTypesDeclaredEscaping: [])
+	/// builder function, whose defaults the emitter reads inside it. A node built with its type's hand-written mock
+	/// (`usesMockInitializer`) takes the mock's default-valued parameters.
+	func configurationDefaultFields(of instantiable: Instantiable, usesMockInitializer: Bool, startsExtraction: Bool) -> MockLowering.Lowering<[MockLowering.DefaultField]> {
+		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		let defaultFields = construction.defaultParameters.map { MockLowering.DefaultField(of: $0, handWrittenMockDefaultParameters: handWrittenDefaults) }
-		guard defaultFields.isEmpty || !startsExtraction else { return .unsupported(.wrapper) }
+		// A `@Sendable`-typed configuration stores each default as a `@Sendable` closure, read as a call.
+		guard defaultFields.isEmpty || !startsExtraction && !sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource) else { return .unsupported(.wrapper) }
 		return .lowered(defaultFields)
 	}
 
 	/// The arguments of `initializer`'s construction of `instantiable`, as `resolveBuilderArguments` passes them: each
 	/// dependency's value from `dependencyArguments`, in order, and each default-valued parameter the construction surfaces
 	/// read from the node's configuration at `nodePath`, or from one built afresh where no override reaches the node, which
-	/// surfaces only the defaults the type's hand-written mock declares too.
+	/// surfaces only the defaults the type's hand-written mock declares too, where the node is built with `init`; a node built
+	/// with the hand-written mock (`usesMockInitializer`) surfaces none of its defaults there.
 	func constructionArguments(
 		of _: Initializer,
 		given instantiable: Instantiable,
+		usesMockInitializer: Bool,
 		dependencyArguments: [(label: String, value: String)],
 		nodePath: String,
 		overrideReachable: Bool,
 	) -> [(label: String, value: String)] {
-		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: false, builderTypesDeclaredEscaping: [])
+		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		guard !construction.defaultParameters.isEmpty else { return dependencyArguments }
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		let surfacedArguments = overrideReachable
@@ -112,7 +116,7 @@ extension MockLowering.Walk {
 			: construction.callSiteArguments.filter { argument in
 				construction.dependencyInnerLabels.contains(argument.innerLabel)
 					|| !argument.hasDefaultValue
-					|| handWrittenDefaults.contains(where: { $0.isDefault(forParameterLabeled: argument.label, ofType: argument.typeDescription.strippingEscaping) })
+					|| (!usesMockInitializer && handWrittenDefaults.contains(where: { $0.isDefault(forParameterLabeled: argument.label, ofType: argument.typeDescription.strippingEscaping) }))
 			}
 		var dependencyValues = dependencyArguments[...]
 		return surfacedArguments.compactMap { argument in

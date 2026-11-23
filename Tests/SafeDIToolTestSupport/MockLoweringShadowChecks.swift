@@ -60,6 +60,9 @@ public enum MockLoweringShadowChecks {
 			{
 				print("mock-lowering unsupported (\(rule.rawValue)): \(comparison.mockedType) in \(Test.current?.name ?? "?")")
 			}
+			if self === Tally.process, case .differs = comparison.outcome {
+				print("mock-lowering differs: \(comparison.mockedType) in \(Test.current?.name ?? "?")")
+			}
 			lock.withLock {
 				switch comparison.subject {
 				case .mockCode:

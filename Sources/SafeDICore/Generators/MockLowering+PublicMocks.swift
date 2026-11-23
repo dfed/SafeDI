@@ -31,7 +31,7 @@ extension ScopeGenerator {
 		      let initializer = instantiable.initializer,
 		      initializer.arguments.isEmpty
 		else {
-			// The calls of other modules' public mocks in a public mock's tree, and the builders it takes, are not lowered yet.
+			// A construction function's defaults are not lowered yet.
 			guard !treeCallsPublicMock(of: orderedChildrenComputedAfresh(propertiesGeneratedLater: [])) else {
 				return .unsupported(.publicMockRoot)
 			}
@@ -129,12 +129,11 @@ extension ScopeGenerator {
 		return modulesByLabel
 	}
 
-	/// Whether the tree of `orderedChildren` calls another module's public mock. Walked with a stack, since a tree can be as
-	/// deep as the module has types.
+	/// Whether the tree of `orderedChildren` builds a type whose construction takes a default. Walked with a stack, since a
+	/// tree can be as deep as the module has types.
 	private func treeCallsPublicMock(of orderedChildren: [OrderedChild]) -> Bool {
 		var generatorsToVisit = orderedChildren.map(\.generator)
 		while let generator = generatorsToVisit.popLast() {
-			guard generator.publicMockCall == nil else { return true }
 			// A construction function's defaults are not lowered yet.
 			let constructionTakesDefault = if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
 				instantiable.initializer?.arguments.contains(where: \.hasDefaultValue) == true
@@ -158,44 +157,18 @@ extension ScopeGenerator {
 		nodes: [MockLowering.TreeNode],
 		bindingLines: [String],
 		rootRenames: [String: [TypeDescription: String]],
+		filledCallBuilders: MockLowering.FilledCallBuilders,
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
 	) -> MockLowering.Result {
 		// The uncovered parameters of a public mock are not lowered yet.
 		guard let publicMockContext = context.publicMockContext, signature.uncoveredParameters.isEmpty else { return .unsupported(.publicMockRoot) }
-		// Each forwarded parameter defaults to the default the initializer gives the parameter of its label, else to the
-		// hand-written mock its type has, as the signature's does.
-		let forwardedDependencies = instantiable.dependencies.filter { $0.source == .forwarded }.sorted { $0.property < $1.property }
-		var forwardedDefaults = [String: ForwardedParameterDefault]()
-		for dependency in forwardedDependencies {
-			let label = dependency.property.label
-			if let constructionDefault = instantiable.initializer?.arguments.first(where: { $0.innerLabel == label })?.defaultValueExpression {
-				forwardedDefaults[label] = .constructionDefault(constructionDefault)
-			} else if let mockDefault = context.flatParameterMockDefaults[dependency.property.typeDescription] {
-				forwardedDefaults[label] = .handWrittenMock(mockDefault)
-			}
-		}
-		let rootDefaultParameters = signature.rootDefaultParameters.compactMap { parameter in
-			parameter.defaultExpression.map { defaultExpression in
-				MockRootParameters.RootDefaultParameter(
-					label: parameter.name,
-					typeSource: parameter.typeSource ?? parameter.property.typeDescription.asSource,
-					defaultExpression: defaultExpression,
-					typeDescription: parameter.property.typeDescription.strippingEscaping,
-				)
-			}
-		}
-		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
-		for parameter in signature.flatReceivedParameters {
-			flatReceivedParameterMockDefaults[parameter.property] = context.flatParameterMockDefaults[parameter.property.typeDescription]
-		}
 		// Each dependency the mock promotes to its root is an optional parameter, named as the node's binding, which the walk
-		// binds the node from. A promoted wrapper, and a name the parameters take apart from the binding's, are not lowered
-		// yet.
+		// binds the node from. A name the parameters take apart from the binding's is not lowered yet.
 		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
 		var promotedNodes = [(property: Property, name: String)]()
 		for node in nodes where promotedProperties.contains(node.property) {
-			guard let builtNode = node.builtNode, !builtNode.isWrapped else { return .unsupported(.publicMockRoot) }
+			guard let builtNode = node.builtNode else { return .unsupported(.publicMockRoot) }
 			promotedNodes.append((property: node.property, name: builtNode.bindingName))
 		}
 		let indent = Self.standardIndent
@@ -205,25 +178,9 @@ extension ScopeGenerator {
 		// A public mock takes each property received only if available as a parameter, so only the tree's nodes make a
 		// `SafeDIOverrides`.
 		let hasOverrides = nodes.contains(where: \.isPropertyNode)
-		let plan = Self.publicMockPlan(
-			of: instantiable,
-			forwardedDependencies: forwardedDependencies,
-			forwardedDefaults: forwardedDefaults,
-			rootDefaultParameters: rootDefaultParameters,
-			flatReceivedParameters: signature.flatReceivedParameters.map { (property: $0.property, name: $0.name) },
-			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
-			flatUncoveredParameters: [],
-			promotedNodes: promotedNodes,
-			onlyIfAvailableOverrides: [],
-			wrapperParameterByInstance: [:],
-			parameterTree: [],
-			builders: mockBuilders,
-			hasOverrides: hasOverrides,
-			typesDeclaredEscaping: signature.typesDeclaredEscaping,
-			receiverModulesByLabel: publicMockReceiverModules(context: publicMockContext),
-			context: publicMockContext,
-		)
-		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == $0.name }) else { return .unsupported(.publicMockRoot) }
+		let plan = publicMockPlan(of: instantiable, signature: signature, promotedNodes: promotedNodes, filledCallBuilders: filledCallBuilders, hasOverrides: hasOverrides, context: context, publicMockContext: publicMockContext)
+		// The walk read each optional builder under the internal name the plan gives it.
+		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == $0.name }), plan.optionalBuilderNames == (filledCallBuilders.optionalBuilderNames ?? [:]) else { return .unsupported(.publicMockRoot) }
 		var lines = ["extension \(typeName) {"]
 		if !plan.providerDeclarations.isEmpty {
 			// The providers of the type's own optional-typed defaults, which the parameters default to.
@@ -250,15 +207,7 @@ extension ScopeGenerator {
 		if hasOverrides {
 			// The members are in inline order: the build's order without a child that holds a place starting after its
 			// siblings (`MockParameterNode.inlineOrderPosition`).
-			let children = propertiesToGenerate
-			var inlinePositionByProperty = [Property: Int]()
-			for (position, index) in computeOrderedPropertyToGenerateIndices(startingCarriersLast: false).enumerated() {
-				guard let property = children[index].property, inlinePositionByProperty[property] == nil else { continue }
-				inlinePositionByProperty[property] = position
-			}
-			let inlineOrderedNodes = nodes.enumerated().sorted { lhs, rhs in
-				(inlinePositionByProperty[lhs.element.property] ?? Int.max, lhs.offset) < (inlinePositionByProperty[rhs.element.property] ?? Int.max, rhs.offset)
-			}.map(\.element)
+			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
 			lines.append(MockLowering.publicOverridesStruct(
 				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
 				mockedTypeModuleName: instantiable.moduleName,
@@ -297,13 +246,140 @@ extension ScopeGenerator {
 		}
 		return .lowered(lowered, configurations: configurations)
 	}
+
+	/// The plan of the public mock of `instantiable`, whose root's signature is `signature`, that promotes `promotedNodes`,
+	/// under the names given, and takes the builders its calls fill (`filledCallBuilders`) optional, as `publicMockPlan`
+	/// plans it from the emitter's parameter tree.
+	private func publicMockPlan(
+		of instantiable: Instantiable,
+		signature: MockLowering.RootSignature,
+		promotedNodes: [(property: Property, name: String)],
+		filledCallBuilders: MockLowering.FilledCallBuilders,
+		hasOverrides: Bool,
+		context: MockContext,
+		publicMockContext: PublicMockContext,
+	) -> PublicMockPlan {
+		// Each forwarded parameter defaults to the default the initializer gives the parameter of its label, else to the
+		// hand-written mock its type has, as the signature's does.
+		let forwardedDependencies = instantiable.dependencies.filter { $0.source == .forwarded }.sorted { $0.property < $1.property }
+		var forwardedDefaults = [String: ForwardedParameterDefault]()
+		for dependency in forwardedDependencies {
+			let label = dependency.property.label
+			if let constructionDefault = instantiable.initializer?.arguments.first(where: { $0.innerLabel == label })?.defaultValueExpression {
+				forwardedDefaults[label] = .constructionDefault(constructionDefault)
+			} else if let mockDefault = context.flatParameterMockDefaults[dependency.property.typeDescription] {
+				forwardedDefaults[label] = .handWrittenMock(mockDefault)
+			}
+		}
+		let rootDefaultParameters = signature.rootDefaultParameters.compactMap { parameter in
+			parameter.defaultExpression.map { defaultExpression in
+				MockRootParameters.RootDefaultParameter(
+					label: parameter.name,
+					typeSource: parameter.typeSource ?? parameter.property.typeDescription.asSource,
+					defaultExpression: defaultExpression,
+					typeDescription: parameter.property.typeDescription.strippingEscaping,
+				)
+			}
+		}
+		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
+		for parameter in signature.flatReceivedParameters {
+			flatReceivedParameterMockDefaults[parameter.property] = context.flatParameterMockDefaults[parameter.property.typeDescription]
+		}
+		return Self.publicMockPlan(
+			of: instantiable,
+			forwardedDependencies: forwardedDependencies,
+			forwardedDefaults: forwardedDefaults,
+			rootDefaultParameters: rootDefaultParameters,
+			flatReceivedParameters: signature.flatReceivedParameters.map { (property: $0.property, name: $0.name) },
+			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
+			flatUncoveredParameters: [],
+			promotedNodes: promotedNodes,
+			onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides,
+			wrapperParameterByInstance: [:],
+			parameterTree: [],
+			builders: mockBuilders,
+			hasOverrides: hasOverrides,
+			typesDeclaredEscaping: signature.typesDeclaredEscaping,
+			receiverModulesByLabel: publicMockReceiverModules(context: publicMockContext),
+			filledFamilies: filledCallBuilders.families.isEmpty ? nil : (families: filledCallBuilders.families, namesInBody: publicMockNamesInBody(namesFillsDeclare: filledCallBuilders.namesFillsDeclare)),
+			context: publicMockContext,
+		)
+	}
+
+	/// The names of the builders a public mock takes optional, by family, which the walk reads them under: the internal names
+	/// its plan gives them, computed before the walk names the nodes it promotes, from their labels, which
+	/// `publicMockWithTree` checks the plan from the walk's names gives too. `nil` where its calls fill no builder.
+	func publicMockOptionalBuilderNames(
+		of instantiable: Instantiable,
+		signature: MockLowering.RootSignature,
+		filledCallBuilders: MockLowering.FilledCallBuilders,
+		context: MockContext,
+	) -> [MockRootParameters.SeamMockBuilder.Family: String]? {
+		guard instantiable.generateMock == .public, let publicMockContext = context.publicMockContext, !filledCallBuilders.families.isEmpty else { return nil }
+		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
+		let plan = publicMockPlan(
+			of: instantiable,
+			signature: signature,
+			promotedNodes: propertiesToGenerate.compactMap(\.property).filter(promotedProperties.contains).map { (property: $0, name: $0.label) },
+			filledCallBuilders: filledCallBuilders,
+			hasOverrides: !propertiesToGenerate.isEmpty,
+			context: context,
+			publicMockContext: publicMockContext,
+		)
+		return plan.optionalBuilderNames
+	}
+
+	/// The names the narrowest tier's body of this root's public mock declares beside its parameters, apart from which its
+	/// optional builders are named: each property's builder function and each dependency's label of every type its tree
+	/// builds, and the labels its calls' fills declare (`namesFillsDeclare`), as `publicMockOptionalBuilders` reads them
+	/// from a parameter tree. Walked with a stack, since a tree can be as deep as the module has types.
+	private func publicMockNamesInBody(namesFillsDeclare: Set<String>) -> Set<String> {
+		var namesInBody = namesFillsDeclare
+		var generatorsToVisit = orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
+		while let generator = generatorsToVisit.popLast() {
+			guard case let .property(instantiable, property, _, _, _, _) = generator.scopeData else { continue }
+			namesInBody.insert(Self.functionName(toBuildPropertyNamed: property.label))
+			namesInBody.formUnion(instantiable.dependencies.map(\.property.label))
+			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+		}
+		return namesInBody
+	}
+}
+
+extension PublicMockPlan {
+	/// The internal name of each builder the mock takes optional, by family.
+	var optionalBuilderNames: [ScopeGenerator.MockRootParameters.SeamMockBuilder.Family: String] {
+		var names = [ScopeGenerator.MockRootParameters.SeamMockBuilder.Family: String]()
+		for parameter in parameters {
+			guard let family = parameter.optionalBuilderFamily, let internalName = parameter.internalName else { continue }
+			names[family] = internalName
+		}
+		return names
+	}
+}
+
+extension ScopeGenerator {
+	/// The elements in inline order: the build's order without a child that holds a place starting after its siblings
+	/// (`MockParameterNode.inlineOrderPosition`), an element of no child keeping its place after them.
+	nonisolated func inlineOrdered<Element>(_ elements: [Element], property: (Element) -> Property) -> [Element] {
+		let children = propertiesToGenerate
+		var inlinePositionByProperty = [Property: Int]()
+		for (position, index) in computeOrderedPropertyToGenerateIndices(startingCarriersLast: false).enumerated() {
+			guard let property = children[index].property, inlinePositionByProperty[property] == nil else { continue }
+			inlinePositionByProperty[property] = position
+		}
+		return elements.enumerated().sorted { lhs, rhs in
+			(inlinePositionByProperty[property(lhs.element)] ?? Int.max, lhs.offset) < (inlinePositionByProperty[property(rhs.element)] ?? Int.max, rhs.offset)
+		}.map(\.element)
+	}
 }
 
 extension MockLowering {
 	/// The construction a public mock's configured `node`, whose children are `children`, builds its type with, which its
-	/// configuration record carries.
-	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode]) -> PublicConstructionRecord? {
-		PublicConstructionRecord(of: node, children: children)
+	/// configuration record carries, its children in the inline order of `generator`, the node's, as the configuration's
+	/// members are.
+	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode], orderedBy generator: ScopeGenerator) -> PublicConstructionRecord? {
+		PublicConstructionRecord(of: node, children: generator.inlineOrdered(children, property: \.property))
 	}
 }
 
@@ -360,8 +436,12 @@ extension MockLowering.Walk {
 			// The site binds its property from the builder, as an alias binds its own: no override reads it.
 			return .lowered(.alias(MockLowering.AliasBinding(
 				property: property,
+				bindingName: property.label,
 				fulfillingProperty: Property(label: site.builderLabel, typeDescription: site.builtType),
+				fulfillingName: site.builderLabel,
 				isErased: erasedToConcreteExistential,
+				isOnlyIfAvailable: false,
+				isBoundToNil: false,
 				declarationReference: nil,
 			)))
 		case .root, .fill, .property, .alias:
