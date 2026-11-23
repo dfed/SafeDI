@@ -63,3 +63,31 @@ public enum HeldCodeTasks {
 	/// set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
 }
+
+/// The children a production body plans at once, each on a task of its own
+/// (`ScopeGenerator.childCode(of:codeGeneration:leadingWhitespace:fillPlaceBindings:)`): a root the type key lays out starts no
+/// code early, so its tree is planned in parallel this way. Each body's count is handed to `observer`, which the tests set,
+/// never the tool.
+public enum ConcurrentChildCode {
+	/// Whether the body being planned plans its children at once: set while a root of the dependency tree, whose tree
+	/// starts no code early, plans its children, and cleared for each of those children, whose bodies plan one child after
+	/// another. A seam's tree and a mock's, which start their large subtrees' code early, keep planning one child after
+	/// another.
+	@TaskLocal static var plansChildrenAtOnce = false
+
+	/// The most children a body plans at once. Every plan in flight holds its own frames, so a bound per processor would
+	/// grow memory with the machine. Measured on E6d-600, E6d-600-inline and issue646-16, four in flight hold main's peak
+	/// memory and plan as fast as eight or every child at once.
+	static let maximumChildrenAtOnce = 4
+
+	/// Called with the number of children of each body that plans more than one at once, when set: by the tests, never by
+	/// the tool.
+	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
+
+	/// Tells `observer`, when set, that a body plans `childCount` children at once.
+	static func record(childCount: Int) {
+		if let observer {
+			observer(childCount)
+		}
+	}
+}
