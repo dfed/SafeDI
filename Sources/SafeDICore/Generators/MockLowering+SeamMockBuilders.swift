@@ -90,9 +90,12 @@ extension MockLowering {
 			}
 			// A call that passes the builder up in another form is handed an adapter, which drops the value its form takes; a
 			// form no adapter reaches is not lowered yet.
+			// D1 lane hook (lane E): a form that takes a value where the builder takes one too, spelled otherwise (`Int` beside
+			// `Swift.Int`, one value, `placesForwardOtherValues` rejecting any other), is handed the builder as it is, as
+			// `seamMockBuilders` hands it.
 			guard familyPassedUpProperties.allSatisfy({
 				passedUpType(of: $0).strippingEscaping.asSource == parameterType.strippingEscaping.asSource
-					|| (!takesValue(parameterType) && takesValue(passedUpType(of: $0)))
+					|| takesValue(passedUpType(of: $0))
 			}) else { return .unsupported(.publicMockCall) }
 			builders.append((label, family, parameterType))
 		}
