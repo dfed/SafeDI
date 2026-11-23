@@ -94,17 +94,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 
 		extension Inner {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_DetailValues2 {
-		        public let id: Int
-		        public let logger: any Logger
-
-		        init(id: Int, logger: any Logger) {
-		            self.id = id
-		            self.logger = logger
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let detailBuilder: __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
@@ -119,14 +108,14 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_Detail<__safeDI_Built> {
-		        public let api: (__safeDI_DetailValues2) -> __safeDI_Built
+		        public let api: (Int, any Logger) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_DetailValues2) -> __safeDI_Built) {
+		        public init(api: @escaping (Int, any Logger) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
+		            self.init(api: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -136,8 +125,7 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder
 		        func __safeDI_detailBuilder(id: Int) -> Detail {
 		            let logger: any Logger = LoggerImpl(id: id)
-		            let __safeDI_Detail_values2 = __safeDI_DetailValues2(id: id, logger: logger)
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(__safeDI_Detail_values2)
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(id, logger)
 		            return Detail(id: id, api: api, logger: logger)
 		        }
 		        let detailBuilder = Instantiator<Detail> {
@@ -167,8 +155,8 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		                .init(detailBuilder: __safeDI_apiBuilder_Inner_Detail_Scope())
 		            }
 		            func __safeDI_apiBuilder_Inner_Detail_Scope() -> Inner.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
+		                .init(api: { scope_id, scope_logger in
+		                    let id = scope_id
 		                    let api: any Api = ApiImpl(id: id)
 		                    return api
 		                })
@@ -256,15 +244,6 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 
 		extension Inner {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_DetailValues1 {
-		        public let id: Int
-
-		        init(id: Int) {
-		            self.id = id
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let detailBuilder: __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
@@ -279,9 +258,9 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_Detail<__safeDI_Built> {
-		        public let api: (__safeDI_DetailValues1) -> __safeDI_Built
+		        public let api: (Int) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_DetailValues1) -> __safeDI_Built) {
+		        public init(api: @escaping (Int) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
@@ -295,8 +274,7 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder
 		        func __safeDI_detailBuilder(id: Int) -> Detail {
-		            let __safeDI_Detail_values1 = __safeDI_DetailValues1(id: id)
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(__safeDI_Detail_values1)
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(id)
 		            return Detail(id: id, api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail> {
@@ -329,8 +307,8 @@ struct SafeDIToolSeamCarrierPassUpTests: ~Copyable {
 		                .init(detailBuilder: __safeDI_apiBuilder_Inner_Detail_Scope())
 		            }
 		            func __safeDI_apiBuilder_Inner_Detail_Scope() -> Inner.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
+		                .init(api: { scope_id in
+		                    let id = scope_id
 		                    let api: any Api = ApiImpl(id: id)
 		                    return api
 		                })

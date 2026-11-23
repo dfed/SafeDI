@@ -54,15 +54,6 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		CarrierCells.expectGeneratedFiles(output.modules["Seam"]?.generatedFiles, ["Seam.swift": generatedFileHeader + """
 		extension Home {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenValues1 {
-		        public let id: Int
-
-		        init(id: Int) {
-		            self.id = id
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let detail: __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
@@ -90,9 +81,9 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_Screen<__safeDI_Built> {
-		        public let detail: (__safeDI_ScreenValues1) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
+		        public let detail: (Int) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
-		        public init(detail: @escaping (__safeDI_ScreenValues1) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
+		        public init(detail: @escaping (Int) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detail = detail
 		        }
 
@@ -125,8 +116,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		        let detail: Detail = __safeDI_detail()
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
-		            let __safeDI_Screen_values1 = __safeDI_ScreenValues1(id: id)
-		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(__safeDI_Screen_values1)
+		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
 		            func __safeDI_detail() -> Detail {
 		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
 		                return Detail(api: api)
@@ -167,7 +157,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		                .init(screenBuilder: { __safeDI_apiBuilder_Home_Screen_Scope() })
 		            }
 		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(detail: { values in __safeDI_apiBuilder_Home_Detail_Scope() })
+		                .init(detail: { values_id in __safeDI_apiBuilder_Home_Detail_Scope() })
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
@@ -189,15 +179,6 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 
 		CarrierCells.expectGeneratedFiles(output.modules["Seam"]?.generatedFiles, ["Seam.swift": generatedFileHeader + """
 		extension Home {
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenValues1 {
-		        public let id: Int
-
-		        init(id: Int) {
-		            self.id = id
-		        }
-		    }
-
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let detail: __safeDI_ApiCarrier_Detail<__safeDI_Built>
@@ -226,9 +207,9 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_Screen<__safeDI_Built> {
-		        public let detail: (__safeDI_ScreenValues1) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
+		        public let detail: (Int) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
-		        public init(detail: @escaping (__safeDI_ScreenValues1) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
+		        public init(detail: @escaping (Int) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detail = detail
 		        }
 
@@ -261,8 +242,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		        let detail: Detail = __safeDI_detail()
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
-		            let __safeDI_Screen_values1 = __safeDI_ScreenValues1(id: id)
-		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(__safeDI_Screen_values1)
+		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
 		            func __safeDI_detail() -> Detail {
 		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
 		                return Detail(api: api)
@@ -303,7 +283,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		                .init(screenBuilder: { __safeDI_apiBuilder_Home_Screen_Scope() })
 		            }
 		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(detail: { values in __safeDI_apiBuilder_Home_Detail_Scope() })
+		                .init(detail: { values_id in __safeDI_apiBuilder_Home_Detail_Scope() })
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }

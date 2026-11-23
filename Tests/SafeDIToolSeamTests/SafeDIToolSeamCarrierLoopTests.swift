@@ -63,30 +63,6 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		CarrierCells.expectGeneratedFiles(output.modules["Seam"]?.generatedFiles, ["Seam.swift": generatedFileHeader + """
 		extension Home {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenAValues3 {
-		        public let id: Int
-		        public let screenBBuilder: Instantiator<ScreenB>
-		        public let mark: Mark
-
-		        init(id: Int, screenBBuilder: Instantiator<ScreenB>, mark: Mark) {
-		            self.id = id
-		            self.screenBBuilder = screenBBuilder
-		            self.mark = mark
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenBValues2 {
-		        public let id: Int
-		        public let screenABuilder: Instantiator<ScreenA>
-
-		        init(id: Int, screenABuilder: Instantiator<ScreenA>) {
-		            self.id = id
-		            self.screenABuilder = screenABuilder
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let screenABuilder: __safeDI_ApiCarrier_ScreenA<__safeDI_Built>
 		        public let screenBBuilder: __safeDI_ApiCarrier_ScreenB<__safeDI_Built>
@@ -103,27 +79,27 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_ScreenA<__safeDI_Built> {
-		        public let api: (__safeDI_ScreenAValues3) -> __safeDI_Built
+		        public let api: (Int, Instantiator<ScreenB>, Mark) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_ScreenAValues3) -> __safeDI_Built) {
+		        public init(api: @escaping (Int, Instantiator<ScreenB>, Mark) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
+		            self.init(api: { _, _, _ in __safeDI_builder() })
 		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_ScreenB<__safeDI_Built> {
-		        public let api: (__safeDI_ScreenBValues2) -> __safeDI_Built
+		        public let api: (Int, Instantiator<ScreenA>) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_ScreenBValues2) -> __safeDI_Built) {
+		        public init(api: @escaping (Int, Instantiator<ScreenA>) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
+		            self.init(api: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -140,8 +116,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		                __safeDI_screenBBuilder(id: $0)
 		            }
 		            let mark = Mark()
-		            let __safeDI_ScreenA_values3 = __safeDI_ScreenAValues3(id: id, screenBBuilder: screenBBuilder, mark: mark)
-		            let api: any Api = __safeDI_apiBuilder_screenABuilder.api(__safeDI_ScreenA_values3)
+		            let api: any Api = __safeDI_apiBuilder_screenABuilder.api(id, screenBBuilder, mark)
 		            return ScreenA(id: id, mark: mark, api: api, screenBBuilder: screenBBuilder)
 		        }
 		        let screenABuilder = Instantiator<ScreenA> {
@@ -152,8 +127,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		            let screenABuilder = Instantiator<ScreenA> {
 		                __safeDI_screenABuilder(id: $0)
 		            }
-		            let __safeDI_ScreenB_values2 = __safeDI_ScreenBValues2(id: id, screenABuilder: screenABuilder)
-		            let api: any Api = __safeDI_apiBuilder_screenBBuilder.api(__safeDI_ScreenB_values2)
+		            let api: any Api = __safeDI_apiBuilder_screenBBuilder.api(id, screenABuilder)
 		            return ScreenB(id: id, api: api, screenABuilder: screenABuilder)
 		        }
 		        let screenBBuilder = Instantiator<ScreenB> {
@@ -194,16 +168,16 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		                .init(screenABuilder: __safeDI_apiBuilder_Home_ScreenA_Scope(), screenBBuilder: __safeDI_apiBuilder_Home_ScreenB_Scope())
 		            }
 		            func __safeDI_apiBuilder_Home_ScreenA_Scope() -> Home.__safeDI_ApiCarrier_ScreenA<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
-		                    let mark = scope.mark
+		                .init(api: { scope_id, scope_screenBBuilder, scope_mark in
+		                    let id = scope_id
+		                    let mark = scope_mark
 		                    let api: any Api = ApiImpl(id: id, mark: mark)
 		                    return api
 		                })
 		            }
 		            func __safeDI_apiBuilder_Home_ScreenB_Scope() -> Home.__safeDI_ApiCarrier_ScreenB<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
+		                .init(api: { scope_id, scope_screenABuilder in
+		                    let id = scope_id
 		                    let api: any Api = ApiImpl(id: id, mark: nil)
 		                    return api
 		                })
@@ -239,39 +213,6 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		CarrierCells.expectGeneratedFiles(output.modules["Seam"]?.generatedFiles, ["Seam.swift": generatedFileHeader + """
 		extension Home {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenAValues2 {
-		        public let id: Int
-		        public let screenBBuilder: Instantiator<ScreenB>
-
-		        init(id: Int, screenBBuilder: Instantiator<ScreenB>) {
-		            self.id = id
-		            self.screenBBuilder = screenBBuilder
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenBValues2 {
-		        public let id: Int
-		        public let screenCBuilder: Instantiator<ScreenC>
-
-		        init(id: Int, screenCBuilder: Instantiator<ScreenC>) {
-		            self.id = id
-		            self.screenCBuilder = screenCBuilder
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenCValues2 {
-		        public let id: Int
-		        public let screenABuilder: Instantiator<ScreenA>
-
-		        init(id: Int, screenABuilder: Instantiator<ScreenA>) {
-		            self.id = id
-		            self.screenABuilder = screenABuilder
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let screenABuilder: __safeDI_ApiCarrier_ScreenA<__safeDI_Built>
 		        public let screenBBuilder: __safeDI_ApiCarrier_ScreenB<__safeDI_Built>
@@ -290,40 +231,40 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_ScreenA<__safeDI_Built> {
-		        public let api: (__safeDI_ScreenAValues2) -> __safeDI_Built
+		        public let api: (Int, Instantiator<ScreenB>) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_ScreenAValues2) -> __safeDI_Built) {
+		        public init(api: @escaping (Int, Instantiator<ScreenB>) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
+		            self.init(api: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_ScreenB<__safeDI_Built> {
-		        public let api: (__safeDI_ScreenBValues2) -> __safeDI_Built
+		        public let api: (Int, Instantiator<ScreenC>) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_ScreenBValues2) -> __safeDI_Built) {
+		        public init(api: @escaping (Int, Instantiator<ScreenC>) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
+		            self.init(api: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_ScreenC<__safeDI_Built> {
-		        public let api: (__safeDI_ScreenCValues2) -> __safeDI_Built
+		        public let api: (Int, Instantiator<ScreenA>) -> __safeDI_Built
 
-		        public init(api: @escaping (__safeDI_ScreenCValues2) -> __safeDI_Built) {
+		        public init(api: @escaping (Int, Instantiator<ScreenA>) -> __safeDI_Built) {
 		            self.api = api
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
+		            self.init(api: { _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -340,8 +281,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		            let screenBBuilder = Instantiator<ScreenB> {
 		                __safeDI_screenBBuilder(id: $0)
 		            }
-		            let __safeDI_ScreenA_values2 = __safeDI_ScreenAValues2(id: id, screenBBuilder: screenBBuilder)
-		            let api: any Api = __safeDI_apiBuilder_screenABuilder.api(__safeDI_ScreenA_values2)
+		            let api: any Api = __safeDI_apiBuilder_screenABuilder.api(id, screenBBuilder)
 		            return ScreenA(id: id, api: api, screenBBuilder: screenBBuilder)
 		        }
 		        let screenABuilder = Instantiator<ScreenA> {
@@ -352,8 +292,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		            let screenCBuilder = Instantiator<ScreenC> {
 		                __safeDI_screenCBuilder(id: $0)
 		            }
-		            let __safeDI_ScreenB_values2 = __safeDI_ScreenBValues2(id: id, screenCBuilder: screenCBuilder)
-		            let api: any Api = __safeDI_apiBuilder_screenBBuilder.api(__safeDI_ScreenB_values2)
+		            let api: any Api = __safeDI_apiBuilder_screenBBuilder.api(id, screenCBuilder)
 		            return ScreenB(id: id, api: api, screenCBuilder: screenCBuilder)
 		        }
 		        let screenBBuilder = Instantiator<ScreenB> {
@@ -364,8 +303,7 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		            let screenABuilder = Instantiator<ScreenA> {
 		                __safeDI_screenABuilder(id: $0)
 		            }
-		            let __safeDI_ScreenC_values2 = __safeDI_ScreenCValues2(id: id, screenABuilder: screenABuilder)
-		            let api: any Api = __safeDI_apiBuilder_screenCBuilder.api(__safeDI_ScreenC_values2)
+		            let api: any Api = __safeDI_apiBuilder_screenCBuilder.api(id, screenABuilder)
 		            return ScreenC(id: id, api: api, screenABuilder: screenABuilder)
 		        }
 		        let screenCBuilder = Instantiator<ScreenC> {
@@ -409,22 +347,22 @@ struct SafeDIToolSeamCarrierLoopTests: ~Copyable {
 		                .init(screenABuilder: __safeDI_apiBuilder_Home_ScreenA_Scope(), screenBBuilder: __safeDI_apiBuilder_Home_ScreenB_Scope(), screenCBuilder: __safeDI_apiBuilder_Home_ScreenC_Scope())
 		            }
 		            func __safeDI_apiBuilder_Home_ScreenA_Scope() -> Home.__safeDI_ApiCarrier_ScreenA<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
+		                .init(api: { scope_id, scope_screenBBuilder in
+		                    let id = scope_id
 		                    let api: any Api = ApiImpl(id: id)
 		                    return api
 		                })
 		            }
 		            func __safeDI_apiBuilder_Home_ScreenB_Scope() -> Home.__safeDI_ApiCarrier_ScreenB<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
+		                .init(api: { scope_id, scope_screenCBuilder in
+		                    let id = scope_id
 		                    let api: any Api = ApiImpl(id: id)
 		                    return api
 		                })
 		            }
 		            func __safeDI_apiBuilder_Home_ScreenC_Scope() -> Home.__safeDI_ApiCarrier_ScreenC<any Api> {
-		                .init(api: { scope in
-		                    let id = scope.id
+		                .init(api: { scope_id, scope_screenABuilder in
+		                    let id = scope_id
 		                    let api: any Api = ApiImpl(id: id)
 		                    return api
 		                })
