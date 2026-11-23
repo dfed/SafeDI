@@ -677,8 +677,9 @@ struct PublicMockParameter: Sendable {
 		parameter.narrowerTierNames = [:]
 		parameter.builder = builder?.atTier(tier)
 		parameter.hole = hole?.atTier(tier)
-		if case let .received(property, isRequired) = role, builder != nil {
-			parameter.role = .received(Property(label: parameter.name, typeDescription: property.typeDescription), isRequired: isRequired)
+		// A builder is received under its label, which `.v3Unstable` can name its parameter apart from.
+		if case let .received(property, isRequired) = role, let builder = parameter.builder {
+			parameter.role = .received(Property(label: builder.label, typeDescription: property.typeDescription), isRequired: isRequired)
 		}
 		return parameter
 	}
@@ -1021,6 +1022,25 @@ extension ScopeGenerator {
 				hole: holes.first { shapedBuilders?.builderBySite[$0.site]?.label == builder.label },
 			))
 			leadingParameters[leadingParameters.count - 1].narrowerTierNames = builder.narrowerTierLabels
+		}
+		if isV3 {
+			// In `.v3Unstable`, a builder is named after the property its places build, where they share one label that no
+			// other parameter and no other builder takes; the function only generated code calls still reads it under the
+			// internal name of its type's stem.
+			var builderIndicesByPlaceLabel = [String: [Int]]()
+			for (index, parameter) in leadingParameters.enumerated() {
+				guard let builder = parameter.builder else { continue }
+				let placeLabels = Set(holes.filter { shapedBuilders?.builderBySite[$0.site]?.label == builder.label }.map(\.property.label))
+				guard placeLabels.count == 1, let placeLabel = placeLabels.first else { continue }
+				builderIndicesByPlaceLabel[placeLabel, default: []].append(index)
+			}
+			let otherNames = Set(leadingParameters.filter { $0.builder == nil }.map(\.name))
+			for (placeLabel, indices) in builderIndicesByPlaceLabel where indices.count == 1 && !otherNames.contains(placeLabel) {
+				for index in indices {
+					leadingParameters[index].name = placeLabel
+					leadingParameters[index].narrowerTierNames = [:]
+				}
+			}
 		}
 
 		// The received dependencies the mock builds and those received only if available, each `T? = nil`, by name.

@@ -190,8 +190,12 @@ extension ScopeGenerator {
 		var optionalLabels = [String]()
 		for filled in families {
 			let stem = stems[filled.family.holeType, default: ""]
+			let placeLabels = Set(filled.placeProperties.map(\.label))
 			if let name = optionalBuilderNames?[filled.family] {
 				optionalLabels.append(name)
+			} else if context.apiVersion == .v3Unstable, placeLabels.count == 1, let placeLabel = placeLabels.first {
+				// In `.v3Unstable`, a builder is named after the property its places build, where they share one label.
+				optionalLabels.append(labels.claim(placeLabel))
 			} else {
 				optionalLabels.append(labels.claim(filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem)))
 			}

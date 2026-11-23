@@ -191,7 +191,8 @@ extension DependencyTreeGenerator {
 							name: parameter.name,
 							type: parameter.type,
 							dependency: Dependency(
-								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
+								// A builder is received under its label, which `.v3Unstable` names its parameter apart from.
+								property: isRequired && parameter.builder == nil && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
 								source: .received(onlyIfAvailable: !isRequired),
 								declarationLocation: ownPlan.instantiable.declarationLocation,
 							),
