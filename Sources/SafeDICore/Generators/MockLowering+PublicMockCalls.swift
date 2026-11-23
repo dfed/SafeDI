@@ -409,10 +409,10 @@ extension MockLowering.Walk {
 					guard forwardedProperties.contains(dependency.property) else { return .unsupported(.publicMockCall) }
 					value = dependency.property.label
 				} else if dependency.source.isReceived,
-				   lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
-				   let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label].flatMap({ namesByType in
-				   	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
-				   })
+				          lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
+				          let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label].flatMap({ namesByType in
+				          	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
+				          })
 				{
 					// D1 lane hook (lane C): the instance of the wrapper `mock()` binds apart from the instance it takes
 					// (`dependencyArgument`).
