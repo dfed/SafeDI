@@ -233,6 +233,7 @@ extension ScopeGenerator {
 	/// as the module has types.
 	private func passedUpBuilderNames(of orderedChildren: [OrderedChild]) -> MockLowering.Lowering<[Property: String]> {
 		var holeTypeByProperty = [Property: SeamSignature.HoleType]()
+		var sendableProperties = Set<Property>()
 		var builderFunctionNames = Set<String>()
 		// Each generator with whether a `@Sendable` builder function encloses it.
 		var generatorsToVisit = orderedChildren.map { ($0.generator, false) }
@@ -246,11 +247,14 @@ extension ScopeGenerator {
 				for parameter in publicMockCall.passedParameters {
 					// A `.public` caller's leaf receives no builder: the call passes its own struct's member.
 					guard let builder = parameter.builder, passedUpLabels.contains(builder.label), callsLeafReceivesBuilder(of: generator, parameter.dependency.property) else { continue }
-					// A builder of the `@Sendable` family, or one a `@Sendable` builder function captures, is not lowered yet.
-					guard !builder.enumKey.isSendable, !capturesSendably else { return .unsupported(.publicMockCall) }
+					// A builder of the `@Sendable` family, or one a `@Sendable` builder function captures, is of the `@Sendable`
+					// family (`passedUpBuilders`).
 					let property = parameter.dependency.property
 					guard holeTypeByProperty.updateValue(builder.enumKey.holeType, forKey: property).map({ $0 == builder.enumKey.holeType }) ?? true else {
 						return .unsupported(.publicMockCall)
+					}
+					if builder.enumKey.isSendable || capturesSendably {
+						sendableProperties.insert(property)
 					}
 				}
 			}
@@ -265,9 +269,12 @@ extension ScopeGenerator {
 		let stems = DependencyTreeGenerator.stems(of: holeTypes)
 		var names = [Property: String]()
 		for property in properties {
-			guard let holeType = holeTypeByProperty[property],
-			      DependencyTreeGenerator.plainBuilderLabel(ofStem: stems[holeType, default: ""]) == property.label
-			else { return .unsupported(.publicMockCall) }
+			guard let holeType = holeTypeByProperty[property] else { return .unsupported(.publicMockCall) }
+			let stem = stems[holeType, default: ""]
+			let label = sendableProperties.contains(property) ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem)
+			// A builder `mock()` takes under another label than the leaf receives it as, which the leaf's builder function binds
+			// under its label, is not lowered yet.
+			guard label == property.label else { return .unsupported(.publicMockCall) }
 			let name = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 			guard !builderFunctionNames.contains(name) else { return .unsupported(.publicMockCall) }
 			// A builder whose label another value the tree receives has is named apart (`mockRootParameterNames(of:)`), which
