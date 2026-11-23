@@ -40,6 +40,11 @@
 /// while the pass before's tree keeps it alive.
 struct SubtreeDigests {
 	/// One subtree's digest.
+	///
+	/// It stays `Hashable` and not `Comparable`, with its value `fileprivate`, so no output can depend on the order of
+	/// digests. Making it `Comparable`, or exposing its value, is a determinism change, and the change that makes it needs
+	/// an oracle of its own. The tests' block permutation (`ConstructionInternerObservation.declarationOrder`) reaches these
+	/// IDs: `init()` permutes their values.
 	struct ID: Hashable {
 		fileprivate let value: Int
 
