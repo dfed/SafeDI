@@ -614,38 +614,43 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#endif
 
 			extension Screen {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public struct __safeDI_Values2 {
+			        public let image: Image
+			        internal let cache: Cache
+
+			        init(image: Image, cache: Cache) {
+			            self.image = image
+			            self.cache = cache
+			        }
+			    }
+
 			    // SafeDI counts `Image` as `public`: no module it reads declares it narrower. If `Image` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-			    nonisolated public enum SafeDIScope_UserService {
-			        nonisolated public struct service_Values {
-			            public let image: Image
-			            internal let cache: Cache
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_UserServiceCarrier<__safeDI_Built> {
+			        public let service: (__safeDI_Values2) -> __safeDI_Built
+
+			        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
+			            self.service = service
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let service: (service_Values) -> __safeDI_Built
-
-			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-			                self.service = service
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(service: { _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_image image: Image, __safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+			    public init(__safeDI_image image: Image, __safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 			        let cache = Cache()
-			        let service: any UserService = __safeDI_userServiceBuilder.service(SafeDIScope_UserService.service_Values(image: image, cache: cache))
+			        let __safeDI__values2 = __safeDI_Values2(image: image, cache: cache)
+			        let service: any UserService = __safeDI_userServiceBuilder.service(__safeDI__values2)
 			        self.init(image: image, service: service, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_4CBA8275D4B31380 {}
+			    public enum __safeDI_Screen_F1D802A503A635E2 {}
 			}
 			""",
 		])
@@ -672,37 +677,41 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    nonisolated public enum SafeDIScope_Renderer {
-			        nonisolated public struct renderer_Values {
-			            internal let cache: Cache
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public struct __safeDI_Values1 {
+			        internal let cache: Cache
+
+			        init(cache: Cache) {
+			            self.cache = cache
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_RendererCarrier<__safeDI_Built> {
+			        public let renderer: (__safeDI_Values1) -> __safeDI_Built
+
+			        public init(renderer: @escaping (__safeDI_Values1) -> __safeDI_Built) {
+			            self.renderer = renderer
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let renderer: (renderer_Values) -> __safeDI_Built
-
-			            public init(renderer: @escaping (renderer_Values) -> __safeDI_Built) {
-			                self.renderer = renderer
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.renderer = { _ in __safeDI_builder() }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(renderer: { _ in __safeDI_builder() })
 			        }
 			    }
 
 			    // SafeDI counts `Renderer` as `public`: no module it reads declares it narrower. If `Renderer` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_rendererBuilder: SafeDIScope_Renderer.__safeDI_Builder<any Renderer>) {
+			    public init(__safeDI_rendererBuilder: __safeDI_RendererCarrier<any Renderer>) {
 			        let cache = Cache()
-			        let renderer: any Renderer = __safeDI_rendererBuilder.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache))
+			        let __safeDI__values1 = __safeDI_Values1(cache: cache)
+			        let renderer: any Renderer = __safeDI_rendererBuilder.renderer(__safeDI__values1)
 			        self.init(renderer: renderer, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_870F155B2B16A508 {}
+			    public enum __safeDI_Screen_40E57C412AD7B892 {}
 			}
 			""",
 		])
@@ -5970,40 +5979,48 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    nonisolated public enum SafeDIScope_UserService {
-			        nonisolated public struct service_Values {
-			            public let badgeBuilder: Instantiator<Badge>.Builder
-			            public let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder
-			            public let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder
-			            public let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder
-			            internal let cache: Cache
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public struct __safeDI_Values5 {
+			        public let badgeBuilder: Instantiator<Badge>.Builder
+			        public let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder
+			        public let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder
+			        public let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder
+			        internal let cache: Cache
+
+			        init(badgeBuilder: @escaping Instantiator<Badge>.Builder, sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder, cache: Cache) {
+			            self.badgeBuilder = badgeBuilder
+			            self.sendableBadgeBuilder = sendableBadgeBuilder
+			            self.erasedBadgeBuilder = erasedBadgeBuilder
+			            self.sendableErasedBadgeBuilder = sendableErasedBadgeBuilder
+			            self.cache = cache
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_UserServiceCarrier<__safeDI_Built> {
+			        public let service: (__safeDI_Values5) -> __safeDI_Built
+
+			        public init(service: @escaping (__safeDI_Values5) -> __safeDI_Built) {
+			            self.service = service
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let service: (service_Values) -> __safeDI_Built
-
-			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-			                self.service = service
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(service: { _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder, __safeDI_sendableBadgeBuilder sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableErasedBadgeBuilder sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder, __safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder, __safeDI_sendableBadgeBuilder sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableErasedBadgeBuilder sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder, __safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 			        let cache = Cache()
-			        let service: any UserService = __safeDI_userServiceBuilder.service(SafeDIScope_UserService.service_Values(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, cache: cache))
+			        let __safeDI__values5 = __safeDI_Values5(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, cache: cache)
+			        let service: any UserService = __safeDI_userServiceBuilder.service(__safeDI__values5)
 			        self.init(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, service: service, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D19EF7DC77ACB218 {}
+			    public enum __safeDI_Screen_2F181DDDC8B0ED96 {}
 			}
 			""",
 		])

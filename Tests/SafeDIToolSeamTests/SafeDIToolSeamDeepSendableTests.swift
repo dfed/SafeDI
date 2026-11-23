@@ -63,19 +63,19 @@ struct SafeDIToolSeamDeepSendableTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// One call of a `carried_Sendable` member for each `@Sendable` function on the path but the wrapper's own, whose member
-		// is `held`, each at the top of its function.
+		// One read of a `carried_Sendable` member for each `@Sendable` function on the path but the wrapper's own, whose member
+		// is `held`, each at the top of its function. A carried level is the carrier's `let` child, so it is read without a call.
 		let generatedSeam = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
 		let seamLines = generatedSeam.split(separator: "\n").map(String.init)
 		#expect(seamLines.filter { $0.hasPrefix("    public init(") } == [
-			"    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {",
+			"    public init(__safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {",
 		])
-		#expect(seamLines.filter { $0.contains(".carried_Sendable(SafeDISendableScope_Gadget") }.count == carrierCount + 1)
-		#expect(seamLines.filter { $0.contains(".held(SafeDISendableScope_Gadget") }.count == 1)
-		// One level function for the root enum and one for each carrier's enum, each returning its level's builder struct; the
+		#expect(seamLines.filter { $0.hasSuffix(".carried_Sendable") }.count == carrierCount + 1)
+		#expect(seamLines.filter { $0.hasSuffix(".held()") }.count == 1)
+		// One level function for the root carrier and one for each level's carrier, each returning its level's carrier; the
 		// fill of `held`, which returns the gadget, is no level function.
 		let generatedFill = try #require(output.modules["App"]?.generatedFiles["App.swift"])
-		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host") && $0.contains(".__safeDI_Builder<any Gadget> {") }.count == carrierCount + 2)
+		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host") && $0.contains("Carrier") && $0.hasSuffix("<any Gadget> {") }.count == carrierCount + 2)
 	}
 
 	// MARK: Private

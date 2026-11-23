@@ -70,114 +70,88 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct shell_Values {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier<__safeDI_Built> {
+			        public let shell: __safeDI_WidgetCarrier_Shell<__safeDI_Built>
 
-			        nonisolated public enum Shell_Scope {
-			            nonisolated public struct widget_Values {
-			                public let part: Part
-			                public let panelBuilder: SendableInstantiator<Panel>
-			            }
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let widget: (widget_Values) -> __safeDI_Built
-
-			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
-			                    self.widget = widget
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.widget = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public init(shell: __safeDI_WidgetCarrier_Shell<__safeDI_Built>) {
+			            self.shell = shell
 			        }
 
-			        nonisolated public enum Panel_Scope {
-			            nonisolated public struct widget_Values {
-			                public let name: String
-			                public let part: Part
-			            }
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let widget: (widget_Values) -> __safeDI_Built
-
-			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
-			                    self.widget = widget
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.widget = { _ in __safeDI_builder() }
-			                }
-			            }
-			        }
-
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let shell: (shell_Values) -> SafeDIScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(shell: @escaping (shell_Values) -> SafeDIScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell = shell
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.shell = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Widget {
-			        nonisolated public struct shell_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier_Shell<__safeDI_Built> {
+			        public let widget: (Part, SendableInstantiator<Panel>) -> __safeDI_Built
 
-			        nonisolated public enum Shell_Scope {
-			            nonisolated public struct panelBuilder_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
-
-			                public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.panelBuilder = panelBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(widget: @escaping (Part, SendableInstantiator<Panel>) -> __safeDI_Built) {
+			            self.widget = widget
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let shell_Sendable: @Sendable (shell_Sendable_Values) -> SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(widget: { _, _ in __safeDI_builder() })
+			        }
+			    }
 
-			            public init(shell_Sendable: @escaping @Sendable (shell_Sendable_Values) -> SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell_Sendable = shell_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier_Panel<__safeDI_Built> {
+			        public let widget: (String, Part) -> __safeDI_Built
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(widget: @escaping (String, Part) -> __safeDI_Built) {
+			            self.widget = widget
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(widget: { _, _ in __safeDI_builder() })
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier<__safeDI_Built>: Sendable {
+			        public let shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>
+
+			        public init(shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>) {
+			            self.shell_Sendable = shell_Sendable
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>: Sendable {
+			        public let panelBuilder: @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>
+
+			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
+			            self.panelBuilder = panelBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>, __safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_shell = __safeDI_widgetBuilder.shell(SafeDIScope_Widget.shell_Values())
-			        let __safeDI_widgetSendableBuilder_shell_Sendable = __safeDI_widgetSendableBuilder.shell_Sendable(SafeDISendableScope_Widget.shell_Sendable_Values())
+			    public init(__safeDI_widgetBuilder: __safeDI_WidgetCarrier<any Widget>, __safeDI_widgetSendableBuilder: __safeDI_WidgetSendableCarrier<any Widget>) {
+			        let __safeDI_widgetBuilder_shell = __safeDI_widgetBuilder.shell
+			        let __safeDI_widgetSendableBuilder_shell_Sendable = __safeDI_widgetSendableBuilder.shell_Sendable
 			        func __safeDI_shell() -> Shell {
 			            let part = Part()
 			            @Sendable nonisolated func __safeDI_panelBuilder(name: String) -> Panel {
-			                let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder_shell_Sendable.panelBuilder(SafeDISendableScope_Widget.Shell_Scope.panelBuilder_Values())
+			                let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder_shell_Sendable.panelBuilder()
 			                let part = Part()
-			                let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name, part: part))
+			                let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(name, part)
 			                return Panel(name: name, part: part, widget: widget)
 			            }
 			            let panelBuilder = SendableInstantiator<Panel> {
 			                __safeDI_panelBuilder(name: $0)
 			            }
-			            let widget: any Widget = __safeDI_widgetBuilder_shell.widget(SafeDIScope_Widget.Shell_Scope.widget_Values(part: part, panelBuilder: panelBuilder))
+			            let widget: any Widget = __safeDI_widgetBuilder_shell.widget(part, panelBuilder)
 			            return Shell(part: part, panelBuilder: panelBuilder, widget: widget)
 			        }
 			        let shell: Shell = __safeDI_shell()
@@ -186,7 +160,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_9E35CA2053DA300E {}
+			    public enum __safeDI_Host_1054A2F0CEAA6AB2 {}
 			}
 			""",
 			expectedApp: """
@@ -197,27 +171,27 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_9E35CA2053DA300E.self // \(Self.moduleInfoComment)
-			            func __safeDI_widgetBuilder_Host() -> Host.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell: { _ in __safeDI_widgetBuilder_Host_Shell_Scope() })
+			            _ = Host.__safeDI_Host_1054A2F0CEAA6AB2.self // \(Self.moduleInfoComment)
+			            func __safeDI_widgetBuilder_Host() -> Host.__safeDI_WidgetCarrier<any Widget> {
+			                .init(shell: __safeDI_widgetBuilder_Host_Shell_Scope())
 			            }
-			            func __safeDI_widgetBuilder_Host_Shell_Scope() -> Host.SafeDIScope_Widget.Shell_Scope.__safeDI_Builder<any Widget> {
-			                .init(widget: { scope in
-			                    let part = scope.part
+			            func __safeDI_widgetBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetCarrier_Shell<any Widget> {
+			                .init(widget: { scope_part, scope_panelBuilder in
+			                    let part = scope_part
 			                    let widget: any Widget = DefaultWidget(part: part, name: nil)
 			                    return widget
 			                })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell_Sendable: { _ in __safeDI_widgetSendableBuilder_Host_Shell_Scope() })
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			                .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<any Widget> {
-			                .init(panelBuilder: { _ in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
+			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<any Widget> {
-			                .init(widget: { scope in
-			                    let name = scope.name
-			                    let part = scope.part
+			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			                .init(widget: { scope_name, scope_part in
+			                    let name = scope_name
+			                    let part = scope_part
 			                    let widget: any Widget = DefaultWidget(part: part, name: name)
 			                    return widget
 			                })
@@ -253,46 +227,38 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
-			        nonisolated public struct shell_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_DefaultWidget_WidgetSendableCarrier<__safeDI_Built>: Sendable {
+			        public let shell_Sendable: __safeDI_DefaultWidget_WidgetSendableCarrier_Shell<__safeDI_Built>
 
-			        nonisolated public enum Shell_Scope {
-			            nonisolated public struct widgetBuilder_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let widgetBuilder: @Sendable (widgetBuilder_Values) -> SendableErasedInstantiator<Int, __safeDI_Built>.Builder
-
-			                public init(widgetBuilder: @escaping @Sendable (widgetBuilder_Values) -> SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
-			                    self.widgetBuilder = widgetBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
-			                    self.widgetBuilder = { _ in __safeDI_builder }
-			                }
-			            }
+			        public init(shell_Sendable: __safeDI_DefaultWidget_WidgetSendableCarrier_Shell<__safeDI_Built>) {
+			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let shell_Sendable: @Sendable (shell_Sendable_Values) -> SafeDISendableScope_DefaultWidget_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
+			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
 
-			            public init(shell_Sendable: @escaping @Sendable (shell_Sendable_Values) -> SafeDISendableScope_DefaultWidget_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell_Sendable = shell_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_DefaultWidget_WidgetSendableCarrier_Shell<__safeDI_Built>: Sendable {
+			        public let widgetBuilder: @Sendable () -> SendableErasedInstantiator<Int, __safeDI_Built>.Builder
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
-			                self.shell_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(widgetBuilder: @escaping @Sendable () -> SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
+			            self.widgetBuilder = widgetBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
+			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_defaultWidget_WidgetSendableBuilder: SafeDISendableScope_DefaultWidget_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable = __safeDI_defaultWidget_WidgetSendableBuilder.shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.shell_Sendable_Values())
+			    public init(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_DefaultWidget_WidgetSendableCarrier<any Widget>) {
+			        let __safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable = __safeDI_defaultWidget_WidgetSendableBuilder.shell_Sendable
 			        func __safeDI_shell() -> Shell {
-			            let widgetBuilder = SendableErasedInstantiator<Int, any Widget>(__safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable.widgetBuilder(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope.widgetBuilder_Values()))
+			            let widgetBuilder = SendableErasedInstantiator<Int, any Widget>(__safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable.widgetBuilder())
 			            return Shell(widgetBuilder: widgetBuilder)
 			        }
 			        let shell: Shell = __safeDI_shell()
@@ -301,7 +267,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_D8070AEF2F45CC49 {}
+			    public enum __safeDI_Host_00A8B34CF50EF9A9 {}
 			}
 			""",
 			expectedApp: """
@@ -312,18 +278,18 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_D8070AEF2F45CC49.self // \(Self.moduleInfoComment)
+			            _ = Host.__safeDI_Host_00A8B34CF50EF9A9.self // \(Self.moduleInfoComment)
 			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() -> SendableErasedInstantiator<Int, any Widget>.Builder {
 			                @Sendable nonisolated func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
 			                    DefaultWidget(id: id)
 			                }
 			                return { forwarded in __safeDI_widgetBuilder(id: forwarded) }
 			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.SafeDISendableScope_DefaultWidget_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell_Sendable: { _ in __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() })
+			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
+			                .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope())
 			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() -> Host.SafeDISendableScope_DefaultWidget_Widget.Shell_Scope.__safeDI_Builder<any Widget> {
-			                .init(widgetBuilder: { _ in __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() })
+			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell<any Widget> {
+			                .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() })
 			            }
 			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host())
 			        }
@@ -358,112 +324,88 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct shell_Values {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier<__safeDI_Built> {
+			        public let shell: __safeDI_WidgetCarrier_Shell<__safeDI_Built>
 
-			        nonisolated public enum Shell_Scope {
-			            nonisolated public struct plainPanelBuilder_Values {
-			                public let panelBuilder: SendableInstantiator<Panel>
-			            }
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let plainPanelBuilder: (plainPanelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
-
-			                public init(plainPanelBuilder: @escaping (plainPanelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.plainPanelBuilder = plainPanelBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.plainPanelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(shell: __safeDI_WidgetCarrier_Shell<__safeDI_Built>) {
+			            self.shell = shell
 			        }
 
-			        nonisolated public enum Panel_Scope {
-			            nonisolated public struct widget_Values {
-			                public let name: String
-			            }
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let widget: (widget_Values) -> __safeDI_Built
-
-			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
-			                    self.widget = widget
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.widget = { _ in __safeDI_builder() }
-			                }
-			            }
-			        }
-
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let shell: (shell_Values) -> SafeDIScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(shell: @escaping (shell_Values) -> SafeDIScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell = shell
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.shell = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Widget {
-			        nonisolated public struct shell_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier_Shell<__safeDI_Built> {
+			        public let plainPanelBuilder: (SendableInstantiator<Panel>) -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>
 
-			        nonisolated public enum Shell_Scope {
-			            nonisolated public struct panelBuilder_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
-
-			                public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.panelBuilder = panelBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(plainPanelBuilder: @escaping (SendableInstantiator<Panel>) -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
+			            self.plainPanelBuilder = plainPanelBuilder
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let shell_Sendable: @Sendable (shell_Sendable_Values) -> SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(plainPanelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            public init(shell_Sendable: @escaping @Sendable (shell_Sendable_Values) -> SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell_Sendable = shell_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier_Panel<__safeDI_Built> {
+			        public let widget: (String) -> __safeDI_Built
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(widget: @escaping (String) -> __safeDI_Built) {
+			            self.widget = widget
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(widget: { _ in __safeDI_builder() })
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier<__safeDI_Built>: Sendable {
+			        public let shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>
+
+			        public init(shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>) {
+			            self.shell_Sendable = shell_Sendable
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>: Sendable {
+			        public let panelBuilder: @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>
+
+			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
+			            self.panelBuilder = panelBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>, __safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_shell = __safeDI_widgetBuilder.shell(SafeDIScope_Widget.shell_Values())
-			        let __safeDI_widgetSendableBuilder_shell_Sendable = __safeDI_widgetSendableBuilder.shell_Sendable(SafeDISendableScope_Widget.shell_Sendable_Values())
+			    public init(__safeDI_widgetBuilder: __safeDI_WidgetCarrier<any Widget>, __safeDI_widgetSendableBuilder: __safeDI_WidgetSendableCarrier<any Widget>) {
+			        let __safeDI_widgetBuilder_shell = __safeDI_widgetBuilder.shell
+			        let __safeDI_widgetSendableBuilder_shell_Sendable = __safeDI_widgetSendableBuilder.shell_Sendable
 			        func __safeDI_shell() -> Shell {
 			            @Sendable nonisolated func __safeDI_panelBuilder(name: String) -> Panel {
-			                let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder_shell_Sendable.panelBuilder(SafeDISendableScope_Widget.Shell_Scope.panelBuilder_Values())
-			                let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name))
+			                let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder_shell_Sendable.panelBuilder()
+			                let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(name)
 			                return Panel(name: name, widget: widget)
 			            }
 			            let panelBuilder = SendableInstantiator<Panel> {
 			                __safeDI_panelBuilder(name: $0)
 			            }
-			            let __safeDI_widgetBuilder_plainPanelBuilder = __safeDI_widgetBuilder_shell.plainPanelBuilder(SafeDIScope_Widget.Shell_Scope.plainPanelBuilder_Values(panelBuilder: panelBuilder))
+			            let __safeDI_widgetBuilder_plainPanelBuilder = __safeDI_widgetBuilder_shell.plainPanelBuilder(panelBuilder)
 			            func __safeDI_plainPanelBuilder(name: String) -> Panel {
-			                let widget: any Widget = __safeDI_widgetBuilder_plainPanelBuilder.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name))
+			                let widget: any Widget = __safeDI_widgetBuilder_plainPanelBuilder.widget(name)
 			                return Panel(name: name, widget: widget)
 			            }
 			            let plainPanelBuilder = Instantiator<Panel> {
@@ -477,7 +419,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_7A9E6D13B9993D46 {}
+			    public enum __safeDI_Host_8DD5BD7AB71038C2 {}
 			}
 			""",
 			expectedApp: """
@@ -488,25 +430,25 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_7A9E6D13B9993D46.self // \(Self.moduleInfoComment)
-			            func __safeDI_widgetBuilder_Host() -> Host.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell: { _ in __safeDI_widgetBuilder_Host_Shell_Scope() })
+			            _ = Host.__safeDI_Host_8DD5BD7AB71038C2.self // \(Self.moduleInfoComment)
+			            func __safeDI_widgetBuilder_Host() -> Host.__safeDI_WidgetCarrier<any Widget> {
+			                .init(shell: __safeDI_widgetBuilder_Host_Shell_Scope())
 			            }
-			            func __safeDI_widgetBuilder_Host_Shell_Scope() -> Host.SafeDIScope_Widget.Shell_Scope.__safeDI_Builder<any Widget> {
-			                .init(plainPanelBuilder: { _ in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			            func __safeDI_widgetBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetCarrier_Shell<any Widget> {
+			                .init(plainPanelBuilder: { values_panelBuilder in __safeDI_widgetBuilder_Host_Panel_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<any Widget> {
-			                .init(widget: { scope in
-			                    let name = scope.name
+			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			                .init(widget: { scope_name in
+			                    let name = scope_name
 			                    let widget: any Widget = DefaultWidget(name: name)
 			                    return widget
 			                })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell_Sendable: { _ in __safeDI_widgetSendableBuilder_Host_Shell_Scope() })
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			                .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<any Widget> {
-			                .init(panelBuilder: { _ in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
+			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
 			            }
 			            return Host(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Host(), __safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Host())
 			        }
@@ -540,50 +482,38 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public enum Panel_Scope {
-			            nonisolated public struct widget_Values {
-			                public let name: String
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier_Panel<__safeDI_Built> {
+			        public let widget: (String) -> __safeDI_Built
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let widget: (widget_Values) -> __safeDI_Built
+			        public init(widget: @escaping (String) -> __safeDI_Built) {
+			            self.widget = widget
+			        }
 
-			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
-			                    self.widget = widget
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.widget = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(widget: { _ in __safeDI_builder() })
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Widget {
-			        nonisolated public struct panelBuilder_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier<__safeDI_Built>: Sendable {
+			        public let panelBuilder: @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
+			            self.panelBuilder = panelBuilder
+			        }
 
-			            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.panelBuilder = panelBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_theme theme: Theme, __safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
+			    public init(__safeDI_theme theme: Theme, __safeDI_widgetSendableBuilder: __safeDI_WidgetSendableCarrier<any Widget>) {
 			        @Sendable nonisolated func __safeDI_panelBuilder(name: String) -> Panel {
-			            let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder.panelBuilder(SafeDISendableScope_Widget.panelBuilder_Values())
-			            let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name))
+			            let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder.panelBuilder()
+			            let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(name)
 			            return Panel(name: name, widget: widget)
 			        }
 			        let panelBuilder = SendableInstantiator<Panel> {
@@ -594,7 +524,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_C53E7E959F618BFA {}
+			    public enum __safeDI_Host_A72EE49399699E0E {}
 			}
 			""",
 			expectedApp: """
@@ -606,12 +536,12 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    public init() {
 			        let theme = Theme()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_C53E7E959F618BFA.self // \(Self.moduleInfoComment)
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
-			                .init(panelBuilder: { _ in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			            _ = Host.__safeDI_Host_A72EE49399699E0E.self // \(Self.moduleInfoComment)
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<any Widget> {
-			                .init(widget: { _ in
+			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			                .init(widget: { scope_name in
 			                    let widget: any Widget = DefaultWidget(theme: theme)
 			                    return widget
 			                })
@@ -650,93 +580,70 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public enum Panel_Scope {
-			            nonisolated public struct widget_Values {
-			                public let name: String
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetCarrier_Panel<__safeDI_Built> {
+			        public let widget: (String) -> __safeDI_Built
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let widget: (widget_Values) -> __safeDI_Built
+			        public init(widget: @escaping (String) -> __safeDI_Built) {
+			            self.widget = widget
+			        }
 
-			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
-			                    self.widget = widget
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.widget = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(widget: { _ in __safeDI_builder() })
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Widget {
-			        nonisolated public struct shell_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier<__safeDI_Built>: Sendable {
+			        public let shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>
 
-			        nonisolated public enum Shell_Scope {
-			            nonisolated public struct screen_Sendable__Values: Sendable {}
-
-			            nonisolated public struct screen_Sendable_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let screen_Sendable_: @Sendable (screen_Sendable__Values) -> SafeDISendableScope_Widget.Screen_Scope.__safeDI_Builder<__safeDI_Built>
-			                public let screen_Sendable: @Sendable (screen_Sendable_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
-
-			                public init(screen_Sendable_: @escaping @Sendable (screen_Sendable__Values) -> SafeDISendableScope_Widget.Screen_Scope.__safeDI_Builder<__safeDI_Built>, screen_Sendable: @escaping @Sendable (screen_Sendable_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.screen_Sendable_ = screen_Sendable_
-			                    self.screen_Sendable = screen_Sendable
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.screen_Sendable_ = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                    self.screen_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>) {
+			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        nonisolated public enum Screen_Scope {
-			            nonisolated public struct panelBuilder_Values: Sendable {}
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>: Sendable {
+			        public let screen_Sendable_: __safeDI_WidgetSendableCarrier_Screen<__safeDI_Built>
+			        public let screen_Sendable: @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>
 
-			                public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.panelBuilder = panelBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(screen_Sendable_: __safeDI_WidgetSendableCarrier_Screen<__safeDI_Built>, screen_Sendable: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
+			            self.screen_Sendable_ = screen_Sendable_
+			            self.screen_Sendable = screen_Sendable
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let shell_Sendable: @Sendable (shell_Sendable_Values) -> SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(screen_Sendable_: .init(__safeDI_noScope: __safeDI_builder), screen_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            public init(shell_Sendable: @escaping @Sendable (shell_Sendable_Values) -> SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell_Sendable = shell_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_WidgetSendableCarrier_Screen<__safeDI_Built>: Sendable {
+			        public let panelBuilder: @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
+			            self.panelBuilder = panelBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetSendableBuilder_shell_Sendable = __safeDI_widgetSendableBuilder.shell_Sendable(SafeDISendableScope_Widget.shell_Sendable_Values())
+			    public init(__safeDI_widgetSendableBuilder: __safeDI_WidgetSendableCarrier<any Widget>) {
+			        let __safeDI_widgetSendableBuilder_shell_Sendable = __safeDI_widgetSendableBuilder.shell_Sendable
 			        func __safeDI_shell() -> Shell {
-			            let __safeDI_widgetSendableBuilder_screen_Sendable_ = __safeDI_widgetSendableBuilder_shell_Sendable.screen_Sendable_(SafeDISendableScope_Widget.Shell_Scope.screen_Sendable__Values())
+			            let __safeDI_widgetSendableBuilder_screen_Sendable_ = __safeDI_widgetSendableBuilder_shell_Sendable.screen_Sendable_
 			            func __safeDI_screen() -> Screen {
 			                @Sendable nonisolated func __safeDI_panelBuilder(name: String) -> Panel {
-			                    let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder_screen_Sendable_.panelBuilder(SafeDISendableScope_Widget.Screen_Scope.panelBuilder_Values())
-			                    let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name))
+			                    let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder_screen_Sendable_.panelBuilder()
+			                    let widget: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.widget(name)
 			                    return Panel(name: name, widget: widget)
 			                }
 			                let panelBuilder = SendableInstantiator<Panel> {
@@ -746,8 +653,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			            let screen: Screen = __safeDI_screen()
 			            @Sendable nonisolated func __safeDI_screen_Sendable(name: String) -> Panel {
-			                let __safeDI_widgetSendableBuilder_screen_Sendable = __safeDI_widgetSendableBuilder_shell_Sendable.screen_Sendable(SafeDISendableScope_Widget.Shell_Scope.screen_Sendable_Values())
-			                let widget: any Widget = __safeDI_widgetSendableBuilder_screen_Sendable.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name))
+			                let __safeDI_widgetSendableBuilder_screen_Sendable = __safeDI_widgetSendableBuilder_shell_Sendable.screen_Sendable()
+			                let widget: any Widget = __safeDI_widgetSendableBuilder_screen_Sendable.widget(name)
 			                return Panel(name: name, widget: widget)
 			            }
 			            let screen_Sendable = SendableInstantiator<Panel> {
@@ -761,7 +668,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_19434AA5F98E214B {}
+			    public enum __safeDI_Host_46E182016EE13C1D {}
 			}
 			""",
 			expectedApp: """
@@ -772,19 +679,19 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_19434AA5F98E214B.self // \(Self.moduleInfoComment)
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell_Sendable: { _ in __safeDI_widgetSendableBuilder_Host_Shell_Scope() })
+			            _ = Host.__safeDI_Host_46E182016EE13C1D.self // \(Self.moduleInfoComment)
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			                .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.SafeDISendableScope_Widget.Shell_Scope.__safeDI_Builder<any Widget> {
-			                .init(screen_Sendable_: { _ in __safeDI_widgetSendableBuilder_Host_Screen_Scope() }, screen_Sendable: { _ in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
+			                .init(screen_Sendable_: __safeDI_widgetSendableBuilder_Host_Screen_Scope(), screen_Sendable: { __safeDI_widgetBuilder_Host_Panel_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Screen_Scope() -> Host.SafeDISendableScope_Widget.Screen_Scope.__safeDI_Builder<any Widget> {
-			                .init(panelBuilder: { _ in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Screen_Scope() -> Host.__safeDI_WidgetSendableCarrier_Screen<any Widget> {
+			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<any Widget> {
-			                .init(widget: { scope in
-			                    let name = scope.name
+			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			                .init(widget: { scope_name in
+			                    let name = scope_name
 			                    let widget: any Widget = DefaultWidget(name: name)
 			                    return widget
 			                })
@@ -900,69 +807,55 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			probes: [DifferentialValueProbe("{ () -> [Any] in let root = Root(); return [root, root.home.mid.screenBuilder.instantiate()] }()")],
 			expectedFeature: """
 			extension Home {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public enum Screen_Scope {
-			            nonisolated public struct api_Values {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_Screen<__safeDI_Built> {
+			        public let api: () -> __safeDI_Built
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			        public init(api: @escaping () -> __safeDI_Built) {
+			            self.api = api
+			        }
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { __safeDI_builder() })
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Api {
-			        nonisolated public struct mid_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+			        public let mid_Sendable: __safeDI_ApiSendableCarrier_Mid<__safeDI_Built>
 
-			        nonisolated public enum Mid_Scope {
-			            nonisolated public struct screenBuilder_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let screenBuilder: @Sendable (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>
-
-			                public init(screenBuilder: @escaping @Sendable (screenBuilder_Values) -> SafeDIScope_Api.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.screenBuilder = screenBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(mid_Sendable: __safeDI_ApiSendableCarrier_Mid<__safeDI_Built>) {
+			            self.mid_Sendable = mid_Sendable
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let mid_Sendable: @Sendable (mid_Sendable_Values) -> SafeDISendableScope_Api.Mid_Scope.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(mid_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
 
-			            public init(mid_Sendable: @escaping @Sendable (mid_Sendable_Values) -> SafeDISendableScope_Api.Mid_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.mid_Sendable = mid_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiSendableCarrier_Mid<__safeDI_Built>: Sendable {
+			        public let screenBuilder: @Sendable () -> __safeDI_ApiCarrier_Screen<__safeDI_Built>
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.mid_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(screenBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
+			            self.screenBuilder = screenBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        let service = LazilyInstantiated<Service>(__safeDI_service)
 			        let appService = Service()
-			        let __safeDI_apiSendableBuilder_mid_Sendable = __safeDI_apiSendableBuilder.mid_Sendable(SafeDISendableScope_Api.mid_Sendable_Values())
+			        let __safeDI_apiSendableBuilder_mid_Sendable = __safeDI_apiSendableBuilder.mid_Sendable
 			        func __safeDI_mid() -> Mid {
 			            @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
-			                let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder_mid_Sendable.screenBuilder(SafeDISendableScope_Api.Mid_Scope.screenBuilder_Values())
-			                let api: any Api = __safeDI_apiSendableBuilder_screenBuilder.api(SafeDIScope_Api.Screen_Scope.api_Values())
+			                let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder_mid_Sendable.screenBuilder()
+			                let api: any Api = __safeDI_apiSendableBuilder_screenBuilder.api()
 			                return Screen(api: api)
 			            }
 			            let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -974,7 +867,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Home {
-			    public enum __safeDI_Home_73BF6F8BDC123DCD {}
+			    public enum __safeDI_Home_D5E84A21E646C521 {}
 			}
 			""",
 			expectedApp: """
@@ -986,15 +879,15 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    public init() {
 			        let service = Service()
 			        func __safeDI_home() -> Home {
-			            _ = Home.__safeDI_Home_73BF6F8BDC123DCD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
-			                .init(mid_Sendable: { _ in __safeDI_apiSendableBuilder_Home_Mid_Scope() })
+			            _ = Home.__safeDI_Home_D5E84A21E646C521.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
+			                .init(mid_Sendable: __safeDI_apiSendableBuilder_Home_Mid_Scope())
 			            }
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home_Mid_Scope() -> Home.SafeDISendableScope_Api.Mid_Scope.__safeDI_Builder<any Api> {
-			                .init(screenBuilder: { _ in __safeDI_apiBuilder_Home_Screen_Scope() })
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home_Mid_Scope() -> Home.__safeDI_ApiSendableCarrier_Mid<any Api> {
+			                .init(screenBuilder: { __safeDI_apiBuilder_Home_Screen_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.SafeDIScope_Api.Screen_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
+			                .init(api: {
 			                    let api: any Api = LiveApi(service: service)
 			                    return api
 			                })
@@ -1080,66 +973,50 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public enum C_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_C<__safeDI_Built> {
+			        public let api: (Tag) -> __safeDI_Built
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			        public init(api: @escaping (Tag) -> __safeDI_Built) {
+			            self.api = api
+			        }
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _ in __safeDI_builder() })
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Api {
-			        nonisolated public struct aBuilder_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+			        public let aBuilder_Sendable: __safeDI_ApiSendableCarrier_A<__safeDI_Built>
 
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct cBuilder_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let cBuilder: @Sendable (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>
-
-			                public init(cBuilder: @escaping @Sendable (cBuilder_Values) -> SafeDIScope_Api.C_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                    self.cBuilder = cBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                }
-			            }
+			        public init(aBuilder_Sendable: __safeDI_ApiSendableCarrier_A<__safeDI_Built>) {
+			            self.aBuilder_Sendable = aBuilder_Sendable
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let aBuilder_Sendable: @Sendable (aBuilder_Sendable_Values) -> SafeDISendableScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(aBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
 
-			            public init(aBuilder_Sendable: @escaping @Sendable (aBuilder_Sendable_Values) -> SafeDISendableScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder_Sendable = aBuilder_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiSendableCarrier_A<__safeDI_Built>: Sendable {
+			        public let cBuilder: @Sendable () -> __safeDI_ApiCarrier_C<__safeDI_Built>
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.aBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(cBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_C<__safeDI_Built>) {
+			            self.cBuilder = cBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(cBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-			        let __safeDI_apiSendableBuilder_aBuilder_Sendable = __safeDI_apiSendableBuilder.aBuilder_Sendable(SafeDISendableScope_Api.aBuilder_Sendable_Values())
+			        let __safeDI_apiSendableBuilder_aBuilder_Sendable = __safeDI_apiSendableBuilder.aBuilder_Sendable
 			        func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
 			            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -1152,8 +1029,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			                __safeDI_bBuilder(tag: $0)
 			            }
 			            @Sendable nonisolated func __safeDI_cBuilder(tag: Tag) -> C {
-			                let __safeDI_apiSendableBuilder_cBuilder = __safeDI_apiSendableBuilder_aBuilder_Sendable.cBuilder(SafeDISendableScope_Api.A_Scope.cBuilder_Values())
-			                let api: any Api = __safeDI_apiSendableBuilder_cBuilder.api(SafeDIScope_Api.C_Scope.api_Values(tag: tag))
+			                let __safeDI_apiSendableBuilder_cBuilder = __safeDI_apiSendableBuilder_aBuilder_Sendable.cBuilder()
+			                let api: any Api = __safeDI_apiSendableBuilder_cBuilder.api(tag)
 			                return C(tag: tag, api: api)
 			            }
 			            let cBuilder = SendableInstantiator<C> {
@@ -1169,7 +1046,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_950411F15CCB9273 {}
+			    public enum __safeDI_Hub_A09E0102113C11C1 {}
 			}
 			""",
 			expectedApp: """
@@ -1181,16 +1058,16 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    public init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_950411F15CCB9273.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_A09E0102113C11C1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
+			                .init(aBuilder_Sendable: __safeDI_apiSendableBuilder_Hub_A_Scope())
 			            }
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.SafeDISendableScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(cBuilder: { _ in __safeDI_apiBuilder_Hub_C_Scope() })
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiSendableCarrier_A<any Api> {
+			                .init(cBuilder: { __safeDI_apiBuilder_Hub_C_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.SafeDIScope_Api.C_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { scope in
-			                    let tag = scope.tag
+			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+			                .init(api: { scope_tag in
+			                    let tag = scope_tag
 			                    let api: any Api = LiveApi(tag: tag)
 			                    return api
 			                })
@@ -1366,29 +1243,25 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		#endif
 
 		extension Mid {
-		    nonisolated public enum SafeDISendableScope_Api {
-		        nonisolated public struct hub_Sendable_Values: Sendable {}
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+		        public let hub_Sendable: Hub.__safeDI_ApiSendableCarrier<__safeDI_Built>
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let hub_Sendable: @Sendable (hub_Sendable_Values) -> Hub.SafeDISendableScope_Api.__safeDI_Builder<__safeDI_Built>
+		        public init(hub_Sendable: Hub.__safeDI_ApiSendableCarrier<__safeDI_Built>) {
+		            self.hub_Sendable = hub_Sendable
+		        }
 
-		            public init(hub_Sendable: @escaping @Sendable (hub_Sendable_Values) -> Hub.SafeDISendableScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.hub_Sendable = hub_Sendable
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.hub_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		            self.init(hub_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        func __safeDI_hub() -> Hub {
-		            _ = Hub.__safeDI_Hub_6C9C0998745FE12B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder.hub_Sendable(SafeDISendableScope_Api.hub_Sendable_Values()))
+		            _ = Hub.__safeDI_Hub_4CD39108CC4EA7E7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder.hub_Sendable)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        self.init(tag: tag, hub: hub)
@@ -1396,7 +1269,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_F725DF89F69CD9BD {}
+		    public enum __safeDI_Mid_BE96EBDB32B38C91 {}
 		}
 		""")
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -1411,15 +1284,15 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		    public init() {
 		        let tag = Tag()
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_F725DF89F69CD9BD.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Mid() -> Mid.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
-		                .init(hub_Sendable: { _ in __safeDI_apiSendableBuilder_Hub() })
+		            _ = Mid.__safeDI_Mid_BE96EBDB32B38C91.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Mid() -> Mid.__safeDI_ApiSendableCarrier<any Api> {
+		                .init(hub_Sendable: __safeDI_apiSendableBuilder_Hub())
 		            }
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
-		                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
+		                .init(aBuilder: { __safeDI_apiBuilder_Hub_A_Scope() })
 		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-		                .init(api: { _ in
+		            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+		                .init(api: {
 		                    let api: any Api = LiveApi(tag: tag)
 		                    return api
 		                })
@@ -1531,46 +1404,38 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
-			        nonisolated public struct shell_Sendable_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_DefaultWidget_WidgetSendableCarrier<__safeDI_Built>: Sendable {
+			        public let shell_Sendable: __safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<__safeDI_Built>
 
-			        nonisolated public enum Shell_Scope_ {
-			            nonisolated public struct widgetBuilder_Values: Sendable {}
-
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			                public let widgetBuilder: @Sendable (widgetBuilder_Values) -> SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder
-
-			                public init(widgetBuilder: @escaping @Sendable (widgetBuilder_Values) -> SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
-			                    self.widgetBuilder = widgetBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
-			                    self.widgetBuilder = { _ in __safeDI_builder }
-			                }
-			            }
+			        public init(shell_Sendable: __safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<__safeDI_Built>) {
+			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let shell_Sendable: @Sendable (shell_Sendable_Values) -> SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_.__safeDI_Builder<__safeDI_Built>
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
+			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
 
-			            public init(shell_Sendable: @escaping @Sendable (shell_Sendable_Values) -> SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_.__safeDI_Builder<__safeDI_Built>) {
-			                self.shell_Sendable = shell_Sendable
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<__safeDI_Built>: Sendable {
+			        public let widgetBuilder: @Sendable () -> SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
-			                self.shell_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public init(widgetBuilder: @escaping @Sendable () -> SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
+			            self.widgetBuilder = widgetBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
+			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_defaultWidget_WidgetSendableBuilder: SafeDISendableScope_DefaultWidget_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable = __safeDI_defaultWidget_WidgetSendableBuilder.shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.shell_Sendable_Values())
+			    public init(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_DefaultWidget_WidgetSendableCarrier<any Widget>) {
+			        let __safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable = __safeDI_defaultWidget_WidgetSendableBuilder.shell_Sendable
 			        func __safeDI_shell() -> Shell {
-			            let widgetBuilder = SendableErasedInstantiator<Shell_Scope, any Widget>(__safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable.widgetBuilder(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_.widgetBuilder_Values()))
+			            let widgetBuilder = SendableErasedInstantiator<Shell_Scope, any Widget>(__safeDI_defaultWidget_WidgetSendableBuilder_shell_Sendable.widgetBuilder())
 			            return Shell(widgetBuilder: widgetBuilder)
 			        }
 			        let shell: Shell = __safeDI_shell()
@@ -1579,7 +1444,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_BEEAB25E2C586362 {}
+			    public enum __safeDI_Host_F60E1113BFAC8782 {}
 			}
 			""",
 			expectedApp: """
@@ -1590,18 +1455,18 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_BEEAB25E2C586362.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Host.__safeDI_Host_F60E1113BFAC8782.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
 			                @Sendable nonisolated func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
 			                    DefaultWidget(scope: scope)
 			                }
 			                return { forwarded in __safeDI_widgetBuilder(scope: forwarded) }
 			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.SafeDISendableScope_DefaultWidget_Widget.__safeDI_Builder<any Widget> {
-			                .init(shell_Sendable: { _ in __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() })
+			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
+			                .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_())
 			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() -> Host.SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_.__safeDI_Builder<any Widget> {
-			                .init(widgetBuilder: { _ in __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() })
+			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<any Widget> {
+			                .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() })
 			            }
 			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host())
 			        }

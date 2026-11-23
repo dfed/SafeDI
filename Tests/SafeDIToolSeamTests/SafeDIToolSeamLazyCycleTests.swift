@@ -353,7 +353,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_E19FD7C9E1DFA6E7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                _ = Service.__safeDI_Service_174A522880642CA5.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() -> ErasedInstantiator<(), AnyRouting>.Builder {
 		                    func __safeDI_routerBuilder() -> Router {
 		                        let x = X(renamed: nil)
@@ -364,8 +364,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                    }
 		                    return { _ in AnyRouting(__safeDI_routerBuilder()) }
 		                }
-		                func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
-		                    .init(routerBuilder: { _ in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() })
+		                func __safeDI_router_AnyRoutingBuilder_Service() -> Service.__safeDI_Router_AnyRoutingCarrier<AnyRouting> {
+		                    .init(routerBuilder: { __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() })
 		                }
 		                return Service(__safeDI_router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service())
 		            }
@@ -472,7 +472,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_E19FD7C9E1DFA6E7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                _ = Service.__safeDI_Service_174A522880642CA5.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() -> ErasedInstantiator<(), AnyRouting>.Builder {
 		                    func __safeDI_routerBuilder() -> Router {
 		                        let renamed = X(renamed: nil)
@@ -480,8 +480,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                    }
 		                    return { _ in AnyRouting(__safeDI_routerBuilder()) }
 		                }
-		                func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
-		                    .init(routerBuilder: { _ in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() })
+		                func __safeDI_router_AnyRoutingBuilder_Service() -> Service.__safeDI_Router_AnyRoutingCarrier<AnyRouting> {
+		                    .init(routerBuilder: { __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() })
 		                }
 		                return Service(__safeDI_router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service())
 		            }
@@ -941,7 +941,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public convenience init() {
 		        let analytics = Analytics()
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_BA5FF8924ED0BD13.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Service.__safeDI_Service_50A44EBD1F95C049.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
 		                func __safeDI_routerBuilder(analytics: Analytics) -> Router {
 		                    func __safeDI_tBuilder() -> T {
@@ -956,8 +956,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                }
 		                return { _ in AnyRouting(__safeDI_routerBuilder(analytics: analytics)) }
 		            }
-		            func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
-		                .init(routerBuilder: { values in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: values.analytics) })
+		            func __safeDI_router_AnyRoutingBuilder_Service() -> Service.__safeDI_Router_AnyRoutingCarrier<AnyRouting> {
+		                .init(routerBuilder: { values_analytics in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: values_analytics) })
 		            }
 		            return Service(__safeDI_analytics: analytics, __safeDI_router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service())
 		        }
