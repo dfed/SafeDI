@@ -240,12 +240,11 @@ extension ScopeGenerator {
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
 		lines.append("}")
-		let code = lines.joined(separator: "\n")
-		return if let mockConditionalCompilation = context.mockConditionalCompilation {
-			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
-		} else {
-			code
+		if let mockConditionalCompilation = context.mockConditionalCompilation {
+			lines.insert("#if \(mockConditionalCompilation)", at: 0)
+			lines.append("#endif")
 		}
+		return MockLowering.joinedLines(lines)
 	}
 
 	/// The mock's `SafeDIOverrides`: the member that configures each node, in generation order.
@@ -328,6 +327,11 @@ extension MockLowering {
 		/// function a body between a cycle closer and the node it repeats declares under that node's label would hide the
 		/// node's function from the closer.
 		var bodyLabels = [Set<String>]()
+		// D1 lane hook (lane B): the labels of the nodes each body declares a builder function for, which a cycle-closing
+		// node, declaring none, is not among.
+		/// The labels of the children of each body of `bodyLabels` that build a property, which a closer's reference could
+		/// resolve to.
+		var bodyBuiltLabels = [Set<String>]()
 		/// The names a receive is handed in place of its label, by label and then type: a node named apart from a sibling
 		/// that shares its label (`ScopeGenerator.disambiguatePropertyLabels(for:)`), which its receivers bind again under
 		/// the label in their builder functions, until a declaration of the label hides it.
@@ -696,7 +700,7 @@ extension MockLowering {
 			      generator.closedOnDeclaration?.concreteType == instantiable.concreteInstantiable,
 			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last,
 			      closedOn.declaration == generator.closedOnDeclaration,
-			      !bodyLabels[closedOn.bodyLevel..<(bodyLabels.count - 1)].contains(where: { $0.contains(property.label) })
+			      !bodyBuiltLabels[closedOn.bodyLevel..<(bodyBuiltLabels.count - 1)].contains(where: { $0.contains(property.label) })
 			else { return .unsupported(.cycle) }
 			let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
 			// D1 lane hook (lane B): a closer of any wrapper kind hands the function to its wrapper, inside a `@Sendable`
@@ -962,6 +966,10 @@ extension MockLowering {
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
 			ancestorDeclarationsByLabel[property.label, default: []].append((ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), functionName: node.functionName, bodyLevel: bodyLabels.count))
 			bodyLabels.append(Set(childGenerators.compactMap(\.property?.label)))
+			bodyBuiltLabels.append(Set(childGenerators.compactMap { child in
+				guard case let .property(_, property, _, _, isPropertyCycle, _) = child.scopeData, !isPropertyCycle else { return nil }
+				return property.label
+			}))
 			let siblingLabels = labels
 			labels = []
 			let enclosingParentConcreteType = parentConcreteType
@@ -993,6 +1001,7 @@ extension MockLowering {
 			labels = siblingLabels
 			ancestorDeclarationsByLabel[property.label]?.removeLast()
 			bodyLabels.removeLast()
+			bodyBuiltLabels.removeLast()
 			if insertedAncestor {
 				ancestorTypes.remove(cycleNodeKey)
 			}
@@ -1349,6 +1358,20 @@ extension MockLowering {
 			}
 			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: "\(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"))"]
 		}
+	}
+
+	/// `lines` joined by newlines, in storage sized once for all of them: a mock's code can run to megabytes, which
+	/// `joined(separator:)` grows into by copying.
+	static func joinedLines(_ lines: [String]) -> String {
+		var code = ""
+		code.reserveCapacity(lines.reduce(lines.count) { $0 + $1.utf8.count })
+		for (index, line) in lines.enumerated() {
+			if index > 0 {
+				code.append("\n")
+			}
+			code.append(line)
+		}
+		return code
 	}
 
 	/// A node of a mock's tree: one that builds its type, an alias of a value bound before it, or a call of another module's
