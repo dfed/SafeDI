@@ -285,9 +285,83 @@ struct SafeDIToolCodeGenerationHiddenSuggestionTests: ~Copyable {
 		"""])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_leavesOutPropertyBeingBuilt_whenItsSiblingsNumberMoreThanThirtyTwo() async {
+		// `Root` makes forty properties receivable, enough that the walk keeps the changes beneath it apart from them;
+		// `Detail` is built inside `screen`, so `screen: Screen`, which shares the receive’s label, is no suggestion.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Detail.swift"]):7:5: error: @Received property `screen: Screens` is not @Instantiated or @Forwarded in chain: Root -> Screen -> Detail. Did you mean `screens: Screens`?
+				\(fixtures["Detail.swift"]):7:19-7:25: fixit: screens
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.screenFilesWithFortySiblings,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Root` instantiates `screen: Screen`, `screens: Screens` and forty services; `Screen` instantiates `Detail`, which
+	/// receives `screen: Screens`.
+	private static var screenFilesWithFortySiblings: [String] {
+		let services = (0..<40).map { "service\($0): Service\($0)" }
+		return [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(screen: Screen, screens: Screens, \(services.joined(separator: ", "))) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let screen: Screen
+			    @Instantiated let screens: Screens
+			\(services.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(detail: Detail) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let detail: Detail
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(screen: Screens) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let screen: Screens
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Screens: Instantiable {
+			    public init() {}
+			}
+			""",
+		] + (0..<40).map {
+			"""
+			@Instantiable
+			public final class Service\($0): Instantiable {
+			    public init() {}
+			}
+			"""
+		}
+	}
 
 	/// `Root` instantiates `user: User` and builds `Host` through an `Instantiator`; `Host` forwards `hostForward` and
 	/// instantiates `Summary`, which receives `summaryReceive`.
