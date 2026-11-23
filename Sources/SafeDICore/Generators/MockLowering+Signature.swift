@@ -294,7 +294,6 @@ extension ScopeGenerator {
 						.map(\.asValidatedForDependencyCycles.asUnwrappedProperty),
 				)
 		}
-		let tree = treeNames(of: instantiable)
 		// D1 lane hook (lane B): only a property node binds a non-optional value for its optional form; an alias only if
 		// available binds an optional one (`generateMockRootCode`'s `isProvidedByTree`).
 		let rootPropertyNodes = Set(tree.rootPropertyNodes)
