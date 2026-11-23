@@ -119,6 +119,7 @@ public enum MigrationEdit: String, CaseIterable, Sendable {
 	case optInSettingAdded = "#SafeDIConfiguration opt-in setting added"
 	case optInSettingUpdated = "#SafeDIConfiguration opt-in setting updated"
 	case configurationFileCreated = "#SafeDIConfiguration file created with the opt-in setting"
+	case optInSettingRemoved = "#SafeDIConfiguration opt-in setting removed (3.0 move)"
 	case mockGenerationRenamed = "MockGeneration renamed FakeGeneration"
 	case configurationTypeRenamed = "SafeDIMockConfiguration renamed SafeDIFakeConfiguration"
 	case handWrittenMockDeclarationRenamed = "hand-written mock declaration renamed fake"
