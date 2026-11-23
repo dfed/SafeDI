@@ -271,11 +271,6 @@ extension MockLowering.PublicConstructionRecord {
 		)
 	}
 
-	/// Whether the construction takes a default-valued parameter.
-	var hasDefaultParameters: Bool {
-		!defaultFields.isEmpty
-	}
-
 	/// The name of the construction function: `__safeDI_mock` for the hand-written mock, else `__safeDI_init`.
 	var functionName: String {
 		usesMockInitializer ? ReservedName.publicMockFunctionName : "\(ReservedName.builderFunctionNamePrefix)init"
@@ -333,7 +328,7 @@ extension MockLowering.PublicConstructionRecord {
 }
 
 extension MockLowering.PublicConstructionRecord.ChildMember {
-	/// The member that configures `child`, or `nil` for an alias or a cycle closer, which the overrides hold no member of.
+	/// The member that configures `child`, or `nil` for an alias, which the overrides hold no member of.
 	init?(of child: MockLowering.TreeNode) {
 		switch child {
 		case let .built(node):
@@ -347,8 +342,16 @@ extension MockLowering.PublicConstructionRecord.ChildMember {
 					accessTypes: (node.instantiable.initializer?.arguments ?? []).map(\.typeDescription) + [node.property.typeDescription.asInstantiatedType],
 				),
 			)
-		case .alias, .cycleClosing:
+		case .alias:
 			return nil
+		case let .cycleClosing(_, bindingName, concreteType):
+			// A node that closes a cycle on a node of its type is configured by that type's configuration, as the emitter
+			// nests it (`MockParameterNode.needsConfigurationStruct` holds for a property cycle).
+			self.init(
+				name: bindingName,
+				concreteType: concreteType,
+				source: .built(isConfigured: true, builderClosureType: "", requiresSendable: false, accessTypes: []),
+			)
 		case let .publicMockCall(call):
 			// A call whose override closure the calling mock cannot offer has no member.
 			let field: MockLowering.OverridesField? = call.overridesField
