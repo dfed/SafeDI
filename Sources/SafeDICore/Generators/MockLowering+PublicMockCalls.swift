@@ -425,6 +425,10 @@ extension MockLowering.Walk {
 		let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 		// A call held in an instantiator is made in the builder function the instantiator holds.
 		let isInstantiator = !property.propertyType.isConstant
+		// A call a public mock promotes at its root's level reads its caller's value first, which only a plain call's binding
+		// is lowered for.
+		let isPromoted = parentConcreteType == nil && promotedProperties.contains(property)
+		guard !isPromoted || filledCall == nil && passedUpBuilderBindings.isEmpty && !isInstantiator else { return .unsupported(.publicMockCall) }
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 			// A call that passes a builder up binds it in a builder function of its own.
@@ -442,7 +446,7 @@ extension MockLowering.Walk {
 				lines.append("\(indent)}")
 				lines.append("\(indent)let \(property.label) = \(property.typeDescription.asSource)(\(functionName))")
 			} else {
-				lines.append("\(indent)let \(property.label) = \(call)")
+				lines.append("\(indent)let \(property.label) = \(isPromoted ? ScopeGenerator.passing(property.label, orBuilding: call) : call)")
 			}
 			return .lowered(.publicMockCall(node))
 		}

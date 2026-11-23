@@ -192,6 +192,7 @@ extension ScopeGenerator {
 		let tree = treeNames(of: instantiable)
 		let uncoveredParameters = tree.uncoveredParameters
 		let forwardedAndDefaultLabels = Set(forwardedParameters.map(\.name)).union(rootDefaultParameters.map(\.name))
+		let treeBindingNames = Self.bindingNames(of: tree.rootPropertyNodes, besideParametersKeepingTheirLabels: forwardedAndDefaultLabels)
 		let namesDeclaredInBuilderFunctions = tree.namesDeclaredInBuilderFunctions
 		// An uncovered dependency is named apart from another of its label, a forwarded or default-valued parameter, a binding
 		// of the root's tree, a label the mocked type receives or aliases, and a label a builder function around a type it is
@@ -200,7 +201,7 @@ extension ScopeGenerator {
 			preferredNames: uncoveredParameters.map(\.property.label),
 			typeDescriptions: uncoveredParameters.map(\.property.typeDescription),
 			namesInScope: forwardedAndDefaultLabels
-				.union(tree.bindingNames)
+				.union(treeBindingNames)
 				.union(instantiable.dependencies.lazy.compactMap { dependency in
 					switch dependency.source {
 					case .received, .aliased:
@@ -221,13 +222,13 @@ extension ScopeGenerator {
 			namesInScope: forwardedAndDefaultLabels
 				.union(uncoveredNames)
 				.union(onlyIfAvailableReceivedProperties.map(\.label))
-				.union(tree.bindingNames),
+				.union(treeBindingNames),
 			reservedNames: namesDeclaredInBuilderFunctions,
 		)
 		let onlyIfAvailableOverrides = onlyIfAvailableReceivedProperties.isEmpty ? [] : Self.onlyIfAvailableOverrides(
 			for: onlyIfAvailableReceivedProperties,
 			namedAfter: [:],
-			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(tree.bindingNames),
+			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames),
 			reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
 		)
 		var renamesByLabelAndType = [String: [TypeDescription: String]]()
@@ -286,6 +287,27 @@ extension ScopeGenerator {
 		return .lowered(signature)
 	}
 
+	/// The names the property nodes at a mock root's level, `properties`, are bound under, as
+	/// `ScopeGenerator.bindingNames(of:labels:labelMap:)` gives them: each node's label, or, where nodes of the level or a
+	/// parameter that keeps its label (`parameterLabels`) share it, a name apart, as `disambiguatePropertyLabels` names it.
+	private static func bindingNames(of properties: [Property], besideParametersKeepingTheirLabels parameterLabels: Set<String>) -> Set<String> {
+		var seenLabels = Set<String>()
+		var collidingLabels = parameterLabels.intersection(properties.map(\.label))
+		for property in properties where !seenLabels.insert(property.label).inserted {
+			collidingLabels.insert(property.label)
+		}
+		guard !collidingLabels.isEmpty else { return seenLabels }
+		let collidingProperties = properties.filter { collidingLabels.contains($0.label) }
+		let names = identifierSafeNames(
+			for: collidingProperties.map { property in
+				let instantiatedType = property.typeDescription.asInstantiatedType
+				return (label: property.label, suffixTypes: [instantiatedType.simplified, instantiatedType, property.typeDescription])
+			},
+			reservedNames: seenLabels.subtracting(collidingLabels).union(parameterLabels),
+		)
+		return seenLabels.subtracting(collidingLabels).union(names)
+	}
+
 	/// What the names of `mock()`'s parameters are chosen from in the tree of a mock root: its bindings, the names its
 	/// builder functions declare, and the `@Instantiated` dependencies the mock cannot build.
 	private struct TreeNames {
@@ -294,8 +316,8 @@ extension ScopeGenerator {
 		let uncoveredParameters: [MockRootParameters.UncoveredParameter]
 		/// The indices of the uncovered parameters whose label a builder function around a type passed them declares.
 		let uncoveredIndicesHiddenWhereReferenced: Set<Int>
-		/// The labels the nodes at the root's level bind.
-		let bindingNames: Set<String>
+		/// The properties of the property nodes at the root's level, in order.
+		let rootPropertyNodes: [Property]
 		/// The labels of the dependencies of every node of the tree, which its builder function declares
 		/// (`namesDeclaredInBuilderFunctions(of:)`).
 		let namesDeclaredInBuilderFunctions: Set<String>
@@ -451,7 +473,10 @@ extension ScopeGenerator {
 		return TreeNames(
 			uncoveredParameters: parameters,
 			uncoveredIndicesHiddenWhereReferenced: Set(properties.indices.filter { hiddenProperties.contains(properties[$0]) }),
-			bindingNames: Set(rootChildren.compactMap(\.generator.property?.label)),
+			rootPropertyNodes: rootChildren.compactMap { child in
+				guard case let .property(_, property, _, _, _, _) = child.generator.scopeData else { return nil }
+				return property
+			},
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 		)
 	}
