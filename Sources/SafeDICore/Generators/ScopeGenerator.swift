@@ -6207,6 +6207,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		orderedPropertyToGenerateIndices.map { propertiesToGenerate[$0] }
 	}
 
+	// D1 lane hook (lane E): each child in generation order with its index in `propertiesToGenerate`, which keys a place
+	// by its path of child indices.
+	nonisolated var orderedChildGeneratorsWithIndices: [(index: Int, generator: ScopeGenerator)] {
+		orderedPropertyToGenerateIndices.map { ($0, propertiesToGenerate[$0]) }
+	}
+
 	/// `orderedChildren(propertiesGeneratedLater:)`, with the indices of each property worked out afresh, for a walk of a
 	/// seam's tree that reads what generation will emit without awaiting each generator.
 	nonisolated func orderedChildrenComputedAfresh(propertiesGeneratedLater: Set<Property>) -> [OrderedChild] {

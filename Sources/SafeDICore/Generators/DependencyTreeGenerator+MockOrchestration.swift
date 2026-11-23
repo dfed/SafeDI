@@ -233,7 +233,7 @@ extension DependencyTreeGenerator {
 			// Stage D1's shadow, which only the tests set: the lowering of the same root, compared with the emitter's code.
 			var lowered: MockLowering.Result?
 			if let shadowObserver = MockLoweringShadow.observer {
-				let loweredRoot = await mockRoot.lowerMockRoot(context: mockContext)
+				let loweredRoot = try await mockRoot.lowerMockRoot(context: mockContext)
 				shadowObserver(MockLoweringShadow.Comparison(
 					mockedType: instantiable.concreteInstantiable.asSource,
 					outcome: MockLoweringShadow.outcome(comparing: loweredRoot, with: code),
