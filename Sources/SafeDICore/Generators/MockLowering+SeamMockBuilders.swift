@@ -122,6 +122,7 @@ extension MockLowering {
 				properties: passedUpPropertiesByFamily[builder.family, default: []],
 				typeSource: builder.typeDescription.asSource,
 				places: placesByFamily[builder.family, default: []],
+				family: builder.family,
 				adapters: adapters,
 			))
 		}
