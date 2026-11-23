@@ -30,6 +30,26 @@ public enum SafeDIConfigurationVisitor {
 	public static let additionalMocksToGenerateArgumentLabel = "additionalMocksToGenerate"
 	public static let mockConditionalCompilationArgumentLabel = "mockConditionalCompilation"
 	public static let generatePlainDependencyTreeInitializersArgumentLabel = "generatePlainDependencyTreeInitializers"
+	public static let apiVersionArgumentLabel = "apiVersion"
+
+	/// The `SafeDIAPIVersion` a `#SafeDIConfiguration(apiVersion:)` argument spells: a member access to one of its cases,
+	/// `.v2` or `.v3Unstable`, optionally qualified by the enum's name, or `nil` for any other expression.
+	public static func spelledAPIVersion(in expression: ExprSyntax) -> SafeDIAPIVersion? {
+		guard let memberAccess = MemberAccessExprSyntax(expression) else {
+			return nil
+		}
+		if let base = memberAccess.base {
+			guard let baseReference = DeclReferenceExprSyntax(base),
+			      baseReference.baseName.text == apiVersionTypeName
+			else {
+				return nil
+			}
+		}
+		return SafeDIAPIVersion(rawValue: memberAccess.declName.baseName.text)
+	}
+
+	/// The name the `SafeDI` library gives the type of `#SafeDIConfiguration(apiVersion:)`.
+	public static let apiVersionTypeName = "SafeDIAPIVersion"
 
 	/// Extracts a `SafeDIConfiguration` from a `MacroExpansionDeclSyntax` node
 	/// representing a `#SafeDIConfiguration(...)` invocation.
@@ -39,6 +59,7 @@ public enum SafeDIConfigurationVisitor {
 		var additionalMocksToGenerate = [String]()
 		var mockConditionalCompilation: String? = "DEBUG"
 		var generatePlainDependencyTreeInitializers = false
+		var apiVersion = SafeDIAPIVersion.v2
 
 		for argument in node.arguments {
 			guard let label = argument.label?.text else {
@@ -65,6 +86,10 @@ public enum SafeDIConfigurationVisitor {
 				if let value = BooleanLiteralExprSyntax(argument.expression) {
 					generatePlainDependencyTreeInitializers = value.literal.tokenKind == .keyword(.true)
 				}
+			case apiVersionArgumentLabel:
+				if let value = spelledAPIVersion(in: argument.expression) {
+					apiVersion = value
+				}
 			default:
 				continue
 			}
@@ -76,6 +101,7 @@ public enum SafeDIConfigurationVisitor {
 			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockConditionalCompilation: mockConditionalCompilation,
 			generatePlainDependencyTreeInitializers: generatePlainDependencyTreeInitializers,
+			apiVersion: apiVersion,
 		)
 	}
 

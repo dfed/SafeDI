@@ -70,6 +70,30 @@ struct SafeDIConfigurationVisitorTests {
 	}
 
 	@Test
+	func extractConfiguration_returnsAPIVersionV3Unstable_whenSetToV3Unstable() {
+		for source in [
+			"#SafeDIConfiguration(apiVersion: .v3Unstable)",
+			"#SafeDIConfiguration(apiVersion: SafeDIAPIVersion.v3Unstable)",
+		] {
+			#expect(extractConfiguration(from: source).apiVersion == .v3Unstable, "\(source)")
+		}
+	}
+
+	@Test
+	func extractConfiguration_returnsAPIVersionV2_whenSetToV2OrOmittedOrNotACase() {
+		for source in [
+			"#SafeDIConfiguration(apiVersion: .v2)",
+			"#SafeDIConfiguration()",
+			"#SafeDIConfiguration(apiVersion: version)",
+			"#SafeDIConfiguration(apiVersion: .v4)",
+			"#SafeDIConfiguration(apiVersion: Other.v3Unstable)",
+			"#SafeDIConfiguration(apiVersion: Outer.SafeDIAPIVersion.v3Unstable)",
+		] {
+			#expect(extractConfiguration(from: source).apiVersion == .v2, "\(source)")
+		}
+	}
+
+	@Test
 	func extractConfiguration_returnsMockConditionalCompilationNil() {
 		let configuration = extractConfiguration(from: """
 		#SafeDIConfiguration(

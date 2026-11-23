@@ -143,6 +143,104 @@ import Testing
 		}
 
 		@Test
+		func expansion_expandsWithoutIssue_whenAPIVersionIsV3Unstable() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    apiVersion: .v3Unstable
+				)
+				""",
+				expandedSource: "",
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenAPIVersionIsQualifiedByItsType() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    apiVersion: SafeDIAPIVersion.v2
+				)
+				""",
+				expandedSource: "",
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenAPIVersionIsNotACase() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    apiVersion: .v4
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    apiVersion: .v4
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `apiVersion` argument must be `.v2` or `.v3Unstable`.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenAPIVersionIsQualifiedByAnotherType() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    apiVersion: Other.v2
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    apiVersion: Other.v2
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `apiVersion` argument must be `.v2` or `.v3Unstable`.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenAPIVersionIsAVariable() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    apiVersion: version
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    apiVersion: version
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `apiVersion` argument must be `.v2` or `.v3Unstable`.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
 		func expansion_expandsWithoutIssue_whenMultipleValues() {
 			assertMacroExpansion(
 				"""
@@ -330,7 +428,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, or `generatePlainDependencyTreeInitializers`.",
+						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, `generatePlainDependencyTreeInitializers`, or `apiVersion`.",
 						line: 1,
 						column: 1,
 					),
@@ -354,7 +452,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, and `generatePlainDependencyTreeInitializers`.",
+						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, `generatePlainDependencyTreeInitializers`, and `apiVersion`.",
 						line: 1,
 						column: 1,
 					),

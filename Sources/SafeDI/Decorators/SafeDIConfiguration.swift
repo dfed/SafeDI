@@ -38,6 +38,7 @@
 ///   - additionalMocksToGenerate: Type names from dependent modules to generate `mock()` methods for in this module. The types must be decorated with `@Instantiable` in their home module. Generation fails for an entry that names no `@Instantiable` type. See the "Cross-module mock generation" section of the manual.
 ///   - mockConditionalCompilation: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation.
 ///   - generatePlainDependencyTreeInitializers: For each type this module declares with `generateDependencyTree: true`, whether SafeDI pairs each initializer whose labels start with `__safeDI_` with one that has readable labels, for code you write. Generated code calls the `__safeDI_` initializer whether this is `true` or `false`. Set it to `true` while code that does not use SafeDI yet calls such a type.
+///   - apiVersion: The form of mock API SafeDI generates for this module: ``SafeDIAPIVersion/v2``, or ``SafeDIAPIVersion/v3Unstable``, a preview of SafeDI 3's that may change in any release. Every module of an app sets the same value.
 ///
 /// Example:
 ///
@@ -52,4 +53,5 @@ public macro SafeDIConfiguration(
 	additionalMocksToGenerate: [StaticString] = [],
 	mockConditionalCompilation: StaticString? = "DEBUG",
 	generatePlainDependencyTreeInitializers: Bool = false,
+	apiVersion: SafeDIAPIVersion = .v2,
 ) = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")
