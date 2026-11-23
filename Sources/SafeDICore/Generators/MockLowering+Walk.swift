@@ -98,8 +98,14 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label, as it binds a flat
 		// parameter's `@Sendable` autoclosure, before anything else.
-		walk.filledCallBuilders.readPassedUpBuilders(underParameterNames: Dictionary(signature.flatReceivedParameters.map { ($0.property, $0.name) }, uniquingKeysWith: { first, _ in first }))
-		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
+		walk.filledCallBuilders.passedUpBuilderNames = signature.passedUpBuilderNames
+		var bindingLines = signature.passedUpBuilderBindingLines(indent: bodyIndent)
+		// D1 lane hook (lane C): the mocked type's own receive of a builder its tree's calls pass up is bound again under its
+		// label, as a receive of a flat parameter named apart is at the mock root.
+		for dependency in instantiable.dependencies where dependency.source.isReceived {
+			guard let name = signature.passedUpBuilderNames[dependency.property], name != dependency.property.label else { continue }
+			bindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(name)")
+		}
 		// D1 lane hook (lane C): each `@Sendable` autoclosure parameter is read into a local, and the value of one the mocked
 		// type instantiates is bound under the parameter's name.
 		bindingLines.append(contentsOf: signature.sendableAutoclosureLocalBindingLines(indent: bodyIndent))
