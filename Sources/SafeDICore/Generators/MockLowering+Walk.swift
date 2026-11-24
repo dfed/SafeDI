@@ -1225,10 +1225,8 @@ extension MockLowering {
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// A node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
+			// A node with no children and no default fields has no configuration, so no `.v3Unstable` configuration line.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
-				if let v3ConfigurationLine {
-					lines.append(v3ConfigurationLine)
-				}
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
@@ -1629,10 +1627,6 @@ extension MockLowering {
 
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
 		func constantBindingLine(overrideRead nodePath: String?, indent: String) -> String {
-			if let v3ReceivedConfigurationName, let promotedParameterName {
-				let builtValue = constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))")
-				return MockLowering.v3ReceivedBindingLine(of: property, boundAs: bindingName, passing: promotedParameterName, configurationName: v3ReceivedConfigurationName, building: builtValue, indent: indent)
-			}
 			// Only the `if` expression that reads an override needs the property's type, which its two branches share.
 			// A child the mock promotes for an optional receive, such as a value a called public mock
 			// builds when passed `nil`, is bound as the value it builds.
