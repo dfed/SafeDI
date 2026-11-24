@@ -1173,7 +1173,7 @@ extension MockLowering {
 				if let overrideRead {
 					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead, call: node.spikeHookCall, construction: node.spikeConstruction)
 				}
-				recordInputs(of: node, hasFunction: false, overrideRead: overrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments)
+				recordInputs(of: node, hasFunction: false, overrideRead: overrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 				return .finished(node)
 			}
 			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
@@ -1321,7 +1321,7 @@ extension MockLowering {
 			if let functionOverrideRead {
 				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
 			}
-			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments)
+			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			let oneWayParentConcreteType = parentConcreteType

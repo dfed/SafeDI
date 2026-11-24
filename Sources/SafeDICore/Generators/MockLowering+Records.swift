@@ -153,7 +153,11 @@ extension MockLowering.Walk {
 		initializer: Initializer,
 		instantiable: Instantiable,
 		dependencyArguments: [(label: String, value: String)],
+		usesMockInitializer: Bool,
 	) {
+		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, is one the record
+		// cannot spell yet: its target is the initializer, and its arguments are reads alone.
+		guard !usesMockInitializer, !constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return }
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
 			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
