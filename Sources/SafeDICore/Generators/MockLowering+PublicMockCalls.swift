@@ -329,6 +329,16 @@ extension MockLowering.Walk {
 					// The instance of the wrapper `mock()` binds apart from the instance it takes
 					// (`dependencyArgument`).
 					value = "\(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				} else if buildsPublicMock,
+				          dependency.source.isReceived,
+				          lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
+				          let wrapperParameterName = publicMockWrapperParameterNames[dependency.property.label].flatMap({ namesByType in
+				          	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].lazy.compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
+				          })
+				{
+					// The instance of the wrapper a public mock takes as a parameter, which `mock()` names apart where its root
+					// binds another value of the label (`instancesReadThroughPublicMockWrapperParameters`).
+					value = "\(wrapperParameterName).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} else if dependency.source.isReceived,
 				          lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
 				          let (wrapperType, renamedName) = renames[dependency.property.label].flatMap({ namesByType in

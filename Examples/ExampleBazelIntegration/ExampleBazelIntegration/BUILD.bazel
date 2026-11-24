@@ -28,6 +28,10 @@ safedi_swift_library(
     safedi_deps = [
         "//Subproject:Subproject_safedi",
     ],
+    # No SafeDI module depends on the app, so it writes no `.safedi`. A
+    # module that listed `ExampleBazelIntegration_safedi` would fail
+    # analysis with an error naming this attribute.
+    is_depended_upon = False,
     visibility = ["//visibility:public"],
     deps = [
         "//Subproject:Subproject",

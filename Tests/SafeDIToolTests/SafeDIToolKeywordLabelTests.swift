@@ -1228,11 +1228,10 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let __safeDI_thingBuilder__thingBuilder_default_safeDIBuilder = safeDIOverrides.thingBuilder.`default`
-		        let __safeDI_thingBuilder__safeDIBuilder = safeDIOverrides.thingBuilder.safeDIBuilder
+		        let __safeDI_thingBuilder__overrides = safeDIOverrides.thingBuilder
 		        @Sendable nonisolated func __safeDI_thingBuilder() -> Thing {
-		            let `default` = if let safeDIBuilder = __safeDI_thingBuilder__thingBuilder_default_safeDIBuilder { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = __safeDI_thingBuilder__safeDIBuilder { safeDIBuilder(`default`) } else { Thing(default: `default`) }
+		            let `default` = if let safeDIBuilder = __safeDI_thingBuilder__overrides.`default` { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_thingBuilder__overrides.safeDIBuilder { safeDIBuilder(`default`) } else { Thing(default: `default`) }
 		        }
 		        let thingBuilder = SendableInstantiator<Thing>(__safeDI_thingBuilder)
 		        return Root(thingBuilder: thingBuilder)

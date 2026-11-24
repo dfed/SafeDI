@@ -241,11 +241,38 @@ struct FrozenScopeMap {
 		table.overlaidRecords = [:]
 		table.interner = internerSpace.snapshot()
 		scopeStorage = ScopeStorage(scopes: addedScopes, idByScope: addedIDByScope)
+		baseScopeCount = addedScopes.count
 		addedScopes = []
 		addedIDByScope = [:]
 		if let observer = ScopeTableObservation.observer {
 			observer(table.projection)
 		}
+	}
+
+	/// What a task of a parallel signature computation makes this map again from, in an ID space of its own: the table,
+	/// and a copy of the space's IDs as they are now. The map's own scopes are not carried: a signature pass's map builds
+	/// scopes of its own, which name the base's positions by key (`overlaying`), never by identity.
+	struct Base: Sendable {
+		fileprivate let table: ScopeTable
+		fileprivate let scopeCount: Int
+		fileprivate let builder: ConstructionInterner.Builder
+	}
+
+	/// This map as a `Base`.
+	var base: Base {
+		Base(table: table, scopeCount: baseScopeCount, builder: internerSpace.copyOfBuilder())
+	}
+
+	/// The map `base` was taken of, in an ID space of its own whose IDs start as the base's did.
+	init(base: Base) {
+		internerSpace = ConstructionInternerSpace(copying: base.builder)
+		table = base.table
+		baseScopeCount = base.scopeCount
+	}
+
+	/// The ID space this map interns in.
+	var space: ConstructionInternerSpace {
+		internerSpace
 	}
 
 	/// The frozen table.
@@ -373,6 +400,8 @@ struct FrozenScopeMap {
 	}
 
 	private var scopeStorage = ScopeStorage(scopes: [], idByScope: [:])
+	/// The number of positions `scopeStorage` names, which a map made from a `Base` names without holding the scopes.
+	private var baseScopeCount = 0
 	/// The scopes given positions after `scopeStorage`'s, in `ScopeID` order.
 	private var addedScopes = [Scope]()
 	/// The positions of `addedScopes`, and of a signature pass's scopes, which name the base's (`overlaying`).
@@ -386,7 +415,7 @@ struct FrozenScopeMap {
 		if let id = addedIDByScope[identifier] ?? scopeStorage.idByScope[identifier] {
 			return id
 		} else {
-			let id = ScopeID(scopeStorage.scopes.count + addedScopes.count)
+			let id = ScopeID(baseScopeCount + addedScopes.count)
 			addedScopes.append(scope)
 			addedIDByScope[identifier] = id
 			return id
@@ -395,8 +424,8 @@ struct FrozenScopeMap {
 
 	/// Makes the record of every scope given a position but no record yet, in `ScopeID` order; each can give more positions.
 	private mutating func freezePendingScopes() {
-		while table.count < scopeStorage.scopes.count + addedScopes.count {
-			table.overlaidRecords[table.count] = recordCountingMisses(freezing: addedScopes[table.count - scopeStorage.scopes.count])
+		while table.count < baseScopeCount + addedScopes.count {
+			table.overlaidRecords[table.count] = recordCountingMisses(freezing: addedScopes[table.count - baseScopeCount])
 			table.count += 1
 		}
 	}

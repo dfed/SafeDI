@@ -240,12 +240,11 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    ) -> Home {
 		        func __safeDI_screen() -> Screen {
 		            let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
-		            let __safeDI_stepBuilder__screen_stepBuilder_model_safeDIBuilder = safeDIOverrides.screen.stepBuilder.model
+		            let __safeDI_stepBuilder__overrides = safeDIOverrides.screen.stepBuilder
 		            let __safeDI_stepBuilder__screen_safeDIBuilder = safeDIOverrides.screen.safeDIBuilder
 		            let __safeDI_stepBuilder__screen_cache_safeDIBuilder = safeDIOverrides.screen.cache
-		            let __safeDI_stepBuilder__safeDIBuilder = safeDIOverrides.screen.stepBuilder.safeDIBuilder
 		            @Sendable nonisolated func __safeDI_stepBuilder(cache: Cache) -> Step {
-		                let model = if let safeDIBuilder = __safeDI_stepBuilder__screen_stepBuilder_model_safeDIBuilder { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                let model = if let safeDIBuilder = __safeDI_stepBuilder__overrides.model { safeDIBuilder(cache) } else { Model(cache: cache) }
 		                @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
 		                    let cache = if let safeDIBuilder = __safeDI_stepBuilder__screen_cache_safeDIBuilder { safeDIBuilder() } else { Cache() }
 		                    let stepBuilder = SendableInstantiator<Step> {
@@ -254,7 +253,7 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		                    return if let safeDIBuilder = __safeDI_stepBuilder__screen_safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
 		                }
 		                let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
-		                return if let safeDIBuilder = __safeDI_stepBuilder__safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
+		                return if let safeDIBuilder = __safeDI_stepBuilder__overrides.safeDIBuilder { safeDIBuilder(model, screenBuilder) } else { Step(model: model, screenBuilder: screenBuilder) }
 		            }
 		            let stepBuilder = SendableInstantiator<Step> {
 		                __safeDI_stepBuilder(cache: cache)
@@ -616,34 +615,28 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Game {
-		        let __safeDI_pingBuilder__pingBuilder_pongBuilder_safeDIBuilder = safeDIOverrides.pingBuilder.pongBuilder.safeDIBuilder
-		        let __safeDI_pingBuilder__pingBuilder_pongBuilder_label = safeDIOverrides.pingBuilder.pongBuilder.label
-		        let __safeDI_pingBuilder__pingBuilder_label = safeDIOverrides.pingBuilder.label
-		        let __safeDI_pingBuilder__safeDIBuilder = safeDIOverrides.pingBuilder.safeDIBuilder
+		        let __safeDI_pingBuilder__overrides = safeDIOverrides.pingBuilder
 		        @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
 		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
 		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
-		                return if let safeDIBuilder = __safeDI_pingBuilder__pingBuilder_pongBuilder_safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__pingBuilder_pongBuilder_label(), pingBuilder) } else { Pong(label: __safeDI_pingBuilder__pingBuilder_pongBuilder_label(), pingBuilder: pingBuilder) }
+		                return if let safeDIBuilder = __safeDI_pingBuilder__overrides.pongBuilder.safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__overrides.pongBuilder.label(), pingBuilder) } else { Pong(label: __safeDI_pingBuilder__overrides.pongBuilder.label(), pingBuilder: pingBuilder) }
 		            }
 		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
-		            return if let safeDIBuilder = __safeDI_pingBuilder__safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__pingBuilder_label(), pongBuilder) } else { Ping(label: __safeDI_pingBuilder__pingBuilder_label(), pongBuilder: pongBuilder) }
+		            return if let safeDIBuilder = __safeDI_pingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_pingBuilder__overrides.label(), pongBuilder: pongBuilder) }
 		        }
 		        let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
-		        let __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_safeDIBuilder = safeDIOverrides.otherPingBuilder.pongBuilder.safeDIBuilder
-		        let __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_label = safeDIOverrides.otherPingBuilder.pongBuilder.label
-		        let __safeDI_otherPingBuilder__otherPingBuilder_safeDIBuilder = safeDIOverrides.otherPingBuilder.safeDIBuilder
-		        let __safeDI_otherPingBuilder__otherPingBuilder_label = safeDIOverrides.otherPingBuilder.label
+		        let __safeDI_otherPingBuilder__overrides = safeDIOverrides.otherPingBuilder
 		        @Sendable nonisolated func __safeDI_otherPingBuilder() -> Ping {
 		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
 		                @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
 		                    let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
-		                    return if let safeDIBuilder = __safeDI_otherPingBuilder__otherPingBuilder_safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder: pongBuilder) }
+		                    return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__overrides.label(), pongBuilder: pongBuilder) }
 		                }
 		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
-		                return if let safeDIBuilder = __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_label(), pingBuilder) } else { Pong(label: __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_label(), pingBuilder: pingBuilder) }
+		                return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.pongBuilder.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.pongBuilder.label(), pingBuilder) } else { Pong(label: __safeDI_otherPingBuilder__overrides.pongBuilder.label(), pingBuilder: pingBuilder) }
 		            }
 		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
-		            return if let safeDIBuilder = __safeDI_otherPingBuilder__otherPingBuilder_safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder: pongBuilder) }
+		            return if let safeDIBuilder = __safeDI_otherPingBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__overrides.label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__overrides.label(), pongBuilder: pongBuilder) }
 		        }
 		        let otherPingBuilder = SendableInstantiator<Ping>(__safeDI_otherPingBuilder)
 		        return Game(pingBuilder: pingBuilder, otherPingBuilder: otherPingBuilder)

@@ -206,7 +206,7 @@ final class ConstructionInterner: Sendable {
 
 	/// The one writer of a generator's ID space. It gives IDs in the order it is asked for values, a type's children
 	/// before the type, and publishes snapshots (`snapshot()`).
-	struct Builder {
+	struct Builder: Sendable {
 		/// The ID of `type`, given now when the builder has none.
 		mutating func intern(_ type: TypeDescription) -> TypeID {
 			let exactKey = exactKey(of: type)
@@ -508,6 +508,16 @@ final class ConstructionInternerSpace {
 	/// A space that has interned, first, what `instantiables` spell, in their order (`Builder.internDeclarations(of:)`).
 	init(declarationsOf instantiables: some Sequence<Instantiable>) {
 		builder.internDeclarations(of: instantiables)
+	}
+
+	/// A space whose IDs start as `builder`'s, for a task that freezes maps of its own.
+	init(copying builder: ConstructionInterner.Builder) {
+		self.builder = builder
+	}
+
+	/// A copy of the space's IDs as they are now, which `init(copying:)` starts a space from.
+	func copyOfBuilder() -> ConstructionInterner.Builder {
+		builder
 	}
 
 	/// Interns what `instantiables` spell, in their order, as the space's own declarations are interned: a computation over

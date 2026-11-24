@@ -607,10 +607,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_serviceBuilder__serviceBuilder_retries = safeDIOverrides.serviceBuilder.retries
-			        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder
+			        let __safeDI_serviceBuilder__overrides = safeDIOverrides.serviceBuilder
 			        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
-			            if let safeDIBuilder = __safeDI_serviceBuilder__safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__serviceBuilder_retries()) } else { Service(retries: __safeDI_serviceBuilder__serviceBuilder_retries()) }
+			            if let safeDIBuilder = __safeDI_serviceBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__overrides.retries()) } else { Service(retries: __safeDI_serviceBuilder__overrides.retries()) }
 			        }
 			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
 			        return Root(serviceBuilder: serviceBuilder)
@@ -622,7 +621,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            retries: @autoclosure @escaping @Sendable () -> Int = 3,
 			            _ safeDIBuilder: (@Sendable (Int) -> Service)? = nil
@@ -2083,10 +2082,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_serviceBuilder__serviceBuilder_retries = safeDIOverrides.serviceBuilder.retries
-			        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder
+			        let __safeDI_serviceBuilder__overrides = safeDIOverrides.serviceBuilder
 			        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
-			            if let safeDIBuilder = __safeDI_serviceBuilder__safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__serviceBuilder_retries()) } else { Service(retries: __safeDI_serviceBuilder__serviceBuilder_retries()) }
+			            if let safeDIBuilder = __safeDI_serviceBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__overrides.retries()) } else { Service(retries: __safeDI_serviceBuilder__overrides.retries()) }
 			        }
 			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
 			        return Root(serviceBuilder: serviceBuilder)
@@ -2098,7 +2096,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            retries: @autoclosure @escaping @Sendable () -> Int = 3,
 			            _ safeDIBuilder: (@Sendable (Int) -> Service)? = nil

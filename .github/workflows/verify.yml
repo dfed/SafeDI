@@ -548,7 +548,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: verify-test-bundle
       - name: Unpack Test Bundle
@@ -722,11 +722,11 @@ jobs:
           # Every branch's history, so any base is present.
           fetch-depth: 0
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: verify-test-bundle
       - name: Download the Groups' Profiles
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: verify-profile-*
           path: verify-profiles
@@ -776,8 +776,13 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The download below is a local action, which needs its files checked out.
+      - name: Checkout the Download Action
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions/download-artifact
       - name: Download the Groups' Test Counts
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: verify-test-count-*
           path: verify-test-counts

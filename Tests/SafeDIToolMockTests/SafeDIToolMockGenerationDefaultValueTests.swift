@@ -815,10 +815,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__childBuilder_flag = safeDIOverrides.childBuilder.flag
-		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
 		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
-		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__childBuilder_flag()) } else { Child(name: name, flag: __safeDI_childBuilder__childBuilder_flag()) }
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__overrides.flag()) } else { Child(name: name, flag: __safeDI_childBuilder__overrides.flag()) }
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -1277,10 +1276,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__childBuilder_flag = safeDIOverrides.childBuilder.flag
-		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
 		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
-		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__childBuilder_flag()) } else { Child(name: name, flag: __safeDI_childBuilder__childBuilder_flag()) }
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__overrides.flag()) } else { Child(name: name, flag: __safeDI_childBuilder__overrides.flag()) }
 		        }
 		        let childBuilder = SendableErasedInstantiator<String, Child> {
 		            __safeDI_childBuilder(name: $0)
@@ -2066,13 +2064,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let __safeDI_childBuilder__childBuilder_plain = safeDIOverrides.childBuilder.plain
-		        let __safeDI_childBuilder__childBuilder_taking = safeDIOverrides.childBuilder.taking
-		        let __safeDI_childBuilder__childBuilder_returning = safeDIOverrides.childBuilder.returning
-		        let __safeDI_childBuilder__childBuilder_top = safeDIOverrides.childBuilder.top
-		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
+		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
 		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
-		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__childBuilder_plain, __safeDI_childBuilder__childBuilder_taking, __safeDI_childBuilder__childBuilder_returning, __safeDI_childBuilder__childBuilder_top) } else { Child(plain: __safeDI_childBuilder__childBuilder_plain, taking: __safeDI_childBuilder__childBuilder_taking, returning: __safeDI_childBuilder__childBuilder_returning, top: __safeDI_childBuilder__childBuilder_top) }
+		            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.plain, __safeDI_childBuilder__overrides.taking, __safeDI_childBuilder__overrides.returning, __safeDI_childBuilder__overrides.top) } else { Child(plain: __safeDI_childBuilder__overrides.plain, taking: __safeDI_childBuilder__overrides.taking, returning: __safeDI_childBuilder__overrides.returning, top: __safeDI_childBuilder__overrides.top) }
 		        }
 		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 		        return Root(childBuilder: childBuilder)
@@ -2088,7 +2082,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            plain: @Sendable @escaping () -> Void = {},
 		            taking: @Sendable @escaping (@Sendable () -> Void) -> Void = { _ in },

@@ -2058,7 +2058,7 @@ extension GraphFuzzerMockOverrides {
 	/// `mock()`.
 	static func removingConfigurations(from contents: String) -> String {
 		contents.components(separatedBy: "\n#if DEBUG\n").enumerated().compactMap { index, block in
-			index > 0 && block.contains("struct SafeDIMockConfiguration {") && !block.contains("static func mock(") ? nil : block
+			index > 0 && block.contains("struct SafeDIMockConfiguration") && !block.contains("static func mock(") ? nil : block
 		}.joined(separator: "\n#if DEBUG\n").trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 
