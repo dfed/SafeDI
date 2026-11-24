@@ -10245,6 +10245,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var filledCalls = [FilledCall]()
 		/// The family of each builder the tree's calls pass up, by the property each call's leaf receives it as.
 		var passedUpBuilderFamilies = [Property: MockLowering.PassedUpBuilderFamily]()
+		/// Every node of the tree that builds a type, a node that closes a cycle included, each before its children, depth
+		/// first in generation order; a tree read from the parameter tree leaves it empty.
+		var propertyNodes = [PropertyNode]()
+
+		/// A node of the mock's tree that builds a type: what it builds, and where it is in the tree.
+		struct PropertyNode {
+			/// The index in `propertyNodes` of the node whose type declares this node's property, or `nil` for a node at the
+			/// root's level.
+			let parentIndex: Int?
+			let property: Property
+			/// The declaration the node builds its type from.
+			let instantiable: Instantiable
+			let erasedToConcreteExistential: Bool
+			/// Whether the node closes a cycle, so it builds nothing beneath it.
+			let isPropertyCycle: Bool
+
+			/// Whether the node builds its type with the type's hand-written mock: where the mock returns the type the
+			/// property builds, as `MockConstruction` decides it.
+			var usesMockInitializer: Bool {
+				instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
+			}
+		}
 	}
 
 	/// The names of the mock tree `parameterTree` of the mocked type, `instantiable`.

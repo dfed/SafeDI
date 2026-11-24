@@ -433,6 +433,16 @@ extension ScopeGenerator {
 		return signature
 	}
 
+	/// The classification of this mock root's parameters as `query needs` reads it, with the nodes of its tree
+	/// (`MockTreeNames.propertyNodes`): the tree's names without its calls' fills or passed-up builders, as a tree read from
+	/// the parameter tree leaves them.
+	func mockRootParametersWithTreeNodes(
+		of instantiable: Instantiable,
+		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
+	) -> MockRootParameters {
+		mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: treeNames(of: instantiable, readsFills: false).names, parameterTree: [])
+	}
+
 	/// What the names of `mock()`'s parameters are chosen from in the tree of a mock root: its bindings, the names its
 	/// builder functions declare, and the `@Instantiated` dependencies the mock cannot build.
 	private struct TreeNames {
@@ -447,7 +457,9 @@ extension ScopeGenerator {
 	/// tree in generation order first meets them; a dependency is uncovered where no child of the type that instantiates it
 	/// builds its label (for the mocked type, its property or a `LazilyInstantiated` of it). The tree is walked with a stack,
 	/// since it can be as deep as the module has types.
-	private func treeNames(of instantiable: Instantiable) -> TreeNames {
+	/// - Parameter readsFills: Whether to read the families of the builders the calls pass up, and the calls that fill
+	///   builders with the places inside their fills, which a tree read from the parameter tree leaves out.
+	private func treeNames(of instantiable: Instantiable, readsFills: Bool = true) -> TreeNames {
 		/// A node of the tree that builds a type, and where it is among the nodes the type above it builds: its declaration
 		/// index there, or none for a node the mock promotes, then its index in generation order. A node keeps only its own
 		/// position and the index of the node above it, so a deep tree copies no path per node; the path and the names the
@@ -561,8 +573,19 @@ extension ScopeGenerator {
 		var holdsCallFillingBuilder = false
 		var visits = Array(rootChildren.reversed())
 		var builderFunctionNames = Set<String>()
+		var propertyNodes = [ScopeGenerator.MockTreeNames.PropertyNode]()
+		// The index in `propertyNodes` of each node visited, by its index in `nodes`; a node is visited before its children.
+		var propertyNodeIndexByNodeIndex = [Int: Int]()
 		while let visit = visits.popLast() {
-			guard case let .property(nodeInstantiable, nodeProperty, _, _, isPropertyCycle, _) = visit.generator.scopeData else { continue }
+			guard case let .property(nodeInstantiable, nodeProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = visit.generator.scopeData else { continue }
+			propertyNodeIndexByNodeIndex[visit.nodeIndex] = propertyNodes.count
+			propertyNodes.append(ScopeGenerator.MockTreeNames.PropertyNode(
+				parentIndex: nodes[visit.nodeIndex].parentIndex.flatMap { propertyNodeIndexByNodeIndex[$0] },
+				property: nodeProperty,
+				instantiable: nodeInstantiable,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				isPropertyCycle: isPropertyCycle,
+			))
 			builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: nodeProperty.label))
 			let publicMockCall = visit.generator.publicMockCall
 			if publicMockCall != nil, visit.generator.fillsABuilder {
@@ -630,12 +653,13 @@ extension ScopeGenerator {
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 			builderFunctionNames: builderFunctionNames,
 		)
+		names.propertyNodes = propertyNodes
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.
-		if !passedUpBuilderProperties.isEmpty {
+		if readsFills, !passedUpBuilderProperties.isEmpty {
 			names.passedUpBuilderFamilies = passedUpBuilderFamilies(of: orderedChildGenerators)
 		}
 		// The calls that fill builders and the places inside their fills, which only a tree that holds such a call walks for.
-		if holdsCallFillingBuilder {
+		if readsFills, holdsCallFillingBuilder {
 			let found = callsFillingBuilders(of: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
 			names.fillPlaces = found.fillPlaces
 			names.namesDeclaredInFills = found.namesFillsDeclare
