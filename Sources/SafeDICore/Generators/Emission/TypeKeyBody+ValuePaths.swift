@@ -22,8 +22,15 @@ extension BuiltPlaceRecord {
 	/// The reads the place's construction makes where it is built: its arguments, then the reads of each alternative's
 	/// closure and of the values that must be absent, then the reads of its construction value.
 	var constructionReads: [PlaceRead] {
-		guard sharingFields != nil else { return arguments }
-		var reads = arguments
+		guard let sharingFields else { return arguments }
+		var reads = [PlaceRead]()
+		for (position, argument) in arguments.enumerated() {
+			if let value = sharingFields.argumentValues[position] {
+				reads.append(contentsOf: value.reads)
+			} else {
+				reads.append(argument)
+			}
+		}
 		for alternative in alternatives {
 			reads.append(contentsOf: alternative.closure.reads)
 			for absent in alternative.requiresAbsent {
@@ -56,6 +63,9 @@ extension BuiltPlaceRecord {
 		guard sharingFields != nil else { return [] }
 		var shape = alternatives.map { alternative in
 			"alternative|\(alternative.closure.shape)|\(alternative.bindingName ?? "")|\(alternative.requiresAbsent.map(\.shape).joined(separator: ","))|\(alternative.use)|\(alternative.resultWrapper?.asSource ?? "")"
+		}
+		for (position, value) in argumentValues.sorted(by: { $0.key < $1.key }) {
+			shape.append("argumentValue|\(position)|\(value.shape)")
 		}
 		if let constructionValue {
 			shape.append("value|\(constructionValue.value.shape)|\(constructionValue.resultWrapper?.asSource ?? "")")
@@ -186,12 +196,20 @@ extension TypeKeyLayout {
 				}
 			}
 			if let record = bodies[body].record {
+				guard record.argumentValues.keys.allSatisfy({ $0 < record.arguments.count }) else { return false }
+				for path in record.argumentValues.values {
+					guard check(path, before: statements.count) else { return false }
+				}
 				for path in record.alternatives.flatMap({ [$0.closure] + $0.requiresAbsent }) + (record.constructionValue.map { [$0.value] } ?? []) {
 					guard check(path, before: statements.count) else { return false }
 				}
 			}
 			for index in statements.indices {
 				if case let .inline(record) = statements[index] {
+					guard record.argumentValues.keys.allSatisfy({ $0 < record.arguments.count }) else { return false }
+					for path in record.argumentValues.values {
+						guard check(path, before: index) else { return false }
+					}
 					for path in record.alternatives.flatMap({ [$0.closure] + $0.requiresAbsent }) + (record.constructionValue.map { [$0.value] } ?? []) {
 						guard check(path, before: index) else { return false }
 					}

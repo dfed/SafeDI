@@ -26,12 +26,9 @@ import Testing
 struct TypeKeyBodyValuePathTests {
 	@Test
 	func statements_spellsMemberCallWithWrappedReads_whenConstructionIsACallOfAValue() throws {
-		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(constructionValue: .call(
-			"member",
-			of: .rootDeclaration("builder"),
-			arguments: [Self.idRead],
-			argumentsWrapper: .simple(name: "Values"),
-		))))
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.constructionValue = ConstructionValue(value: .call("member", of: .rootDeclaration("builder"), arguments: [Self.idRead], argumentsWrapper: .simple(name: "Values")), resultWrapper: nil)
+		}))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let id = 1
 		        func __safeDI_b() -> B {
@@ -43,7 +40,35 @@ struct TypeKeyBodyValuePathTests {
 
 	@Test
 	func statements_keepsThePathKeysBody_whenAValueReadsAPassedArgumentItsFunctionDoesNotTake() {
-		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(constructionValue: .member("value", of: .passedArgument("missing")))) == nil)
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.constructionValue = ConstructionValue(value: .member("value", of: .passedArgument("missing")), resultWrapper: nil)
+		}) == nil)
+	}
+
+	@Test
+	func statements_callsAnArgumentValueOnceWhereEachBranchPassesIt_whenTheArgumentIsACallOfAPassedArgumentsMember() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(arguments: [PlaceRead(argumentLabel: "label", label: "label", property: Property(label: "label", typeDescription: .simple(name: "String")), source: .binding(label: "label"))]) { built in
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("b", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false)]
+			built.argumentValues = [0: .call("label", of: .passedArgument("cfg"), arguments: [], argumentsWrapper: nil)]
+			built.alternatives = [ConstructionAlternative(closure: .member("builder", of: .passedArgument("cfg")), bindingName: "builder", requiresAbsent: [], use: .calledWithConstructionArguments, resultWrapper: nil)]
+		}))
+		let spelled = GeneratedCode.lines(statements).spelled()
+		#expect(spelled == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            if let builder = cfg.builder { builder(cfg.label()) } else { B(label: cfg.label()) }
+		        }
+		        let b: B = __safeDI_b(cfg: overrides.b)
+		""")
+		// One call in each branch of the `if`, so the default runs once, where the construction passes it.
+		#expect(spelled.components(separatedBy: "cfg.label()").count - 1 == 2)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenAnArgumentValueIsAtAPositionWithNoArgument() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.argumentValues = [0: .member("label", of: .rootDeclaration("overrides"))]
+		}) == nil)
 	}
 
 	private static let idRead = PlaceRead(
@@ -53,8 +78,8 @@ struct TypeKeyBodyValuePathTests {
 		source: .binding(label: "id"),
 	)
 
-	/// `let id = 1`, then a place that builds `b: B` in a function of its own, whose construction is `value`.
-	private static func rootBody(constructionValue value: ValuePath) -> [GeneratedCode] {
+	/// `let id = 1`, then a place that builds `b: B` with `arguments` in a function of its own, as `configure` records it.
+	private static func rootBody(arguments: [PlaceRead] = [], _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
 		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
 		var built = BuiltPlaceRecord(
 			property: Property(label: "b", typeDescription: .simple(name: "B")),
@@ -62,7 +87,7 @@ struct TypeKeyBodyValuePathTests {
 			concreteType: .simple(name: "B"),
 			isExtension: false,
 			target: .initializer(.simple(name: "B")),
-			arguments: [],
+			arguments: arguments,
 			forwardedProperties: [],
 			cycleParameters: [],
 			callCycleArguments: [],
@@ -74,7 +99,7 @@ struct TypeKeyBodyValuePathTests {
 			children: [],
 			node: PlanNode(),
 		)
-		built.constructionValue = ConstructionValue(value: value, resultWrapper: nil)
+		configure(&built)
 		return [
 			.place(PlacePlan(code: .text("let id = 1"), record: .alias(id))),
 			.place(PlacePlan(code: .text("let b = B()"), record: .built(built))),
