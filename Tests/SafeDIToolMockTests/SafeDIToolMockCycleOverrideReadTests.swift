@@ -268,6 +268,129 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		""")
 	}
 
+	/// Two properties of `Step` build `Screen` again, and both read the `Screen` above them outside `Step`'s configuration: each override is read into one local, which both construction functions read.
+	@Test
+	mutating func mock_readsEachOverrideIntoOneLocal_whenTwoSendablePropertiesBuildTypeAgainOutsideConfigurationPath() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public struct Home: Instantiable, Sendable {
+				    public init(screen: Screen) { self.screen = screen }
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Screen: Instantiable, Sendable {
+				    public init(cache: Cache, stepBuilder: SendableInstantiator<Step>) {
+				        self.cache = cache
+				        self.stepBuilder = stepBuilder
+				    }
+				    @Instantiated let cache: Cache
+				    @Instantiated let stepBuilder: SendableInstantiator<Step>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Step: Instantiable, Sendable {
+				    public init(model: Model, screenBuilder: SendableInstantiator<Screen>, otherScreenBuilder: SendableInstantiator<Screen>) {
+				        self.model = model
+				        self.screenBuilder = screenBuilder
+				        self.otherScreenBuilder = otherScreenBuilder
+				    }
+				    @Instantiated let model: Model
+				    @Instantiated let screenBuilder: SendableInstantiator<Screen>
+				    @Instantiated let otherScreenBuilder: SendableInstantiator<Screen>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Model: Instantiable, Sendable {
+				    public init(cache: Cache) { self.cache = cache }
+				    @Received let cache: Cache
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Cache: Instantiable, Sendable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Home+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Home {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
+		        }
+
+		        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screen: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Home {
+		        func __safeDI_screen() -> Screen {
+		            let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
+		            let __safeDI_stepBuilder__overrides = safeDIOverrides.screen.stepBuilder
+		            let __safeDI_stepBuilder__screen_safeDIBuilder = safeDIOverrides.screen.safeDIBuilder
+		            let __safeDI_stepBuilder__screen_cache_safeDIBuilder = safeDIOverrides.screen.cache
+		            @Sendable nonisolated func __safeDI_stepBuilder(cache: Cache) -> Step {
+		                let model = if let safeDIBuilder = __safeDI_stepBuilder__overrides.model { safeDIBuilder(cache) } else { Model(cache: cache) }
+		                @Sendable nonisolated func __safeDI_screenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = __safeDI_stepBuilder__screen_cache_safeDIBuilder { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = SendableInstantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = __safeDI_stepBuilder__screen_safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		                @Sendable nonisolated func __safeDI_otherScreenBuilder() -> Screen {
+		                    let cache = if let safeDIBuilder = __safeDI_stepBuilder__screen_cache_safeDIBuilder { safeDIBuilder() } else { Cache() }
+		                    let stepBuilder = SendableInstantiator<Step> {
+		                        __safeDI_stepBuilder(cache: cache)
+		                    }
+		                    return if let safeDIBuilder = __safeDI_stepBuilder__screen_safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		                }
+		                let otherScreenBuilder = SendableInstantiator<Screen>(__safeDI_otherScreenBuilder)
+		                return if let safeDIBuilder = __safeDI_stepBuilder__overrides.safeDIBuilder { safeDIBuilder(model, screenBuilder, otherScreenBuilder) } else { Step(model: model, screenBuilder: screenBuilder, otherScreenBuilder: otherScreenBuilder) }
+		            }
+		            let stepBuilder = SendableInstantiator<Step> {
+		                __safeDI_stepBuilder(cache: cache)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(cache, stepBuilder) } else { Screen(cache: cache, stepBuilder: stepBuilder) }
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        return Home(screen: screen)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	/// A public mock hands the reopened `Screen`'s construction function the overrides of the `Screen` above it.
 	@Test
 	mutating func publicMock_reopenedTypeReadsNearestSameTypeAncestorsOverrides_whenInstantiatorCycleBuildsItAgain() async throws {
