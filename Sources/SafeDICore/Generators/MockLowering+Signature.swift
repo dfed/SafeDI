@@ -559,7 +559,8 @@ extension ScopeGenerator {
 			}
 		}
 		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, under: nil, insideSendableFunction: false)
-		var builtProperties = Set<Property>(holeSiteProperties(of: self))
+		let rootHoleSiteProperties = holeSiteProperties(of: self)
+		var builtProperties = Set<Property>(rootHoleSiteProperties)
 		for child in rootChildren {
 			guard let property = child.generator.property else { continue }
 			builtProperties.insert(property)
@@ -589,6 +590,8 @@ extension ScopeGenerator {
 				instantiable: nodeInstantiable,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				isPropertyCycle: isPropertyCycle,
+				generator: visit.generator,
+				isInsideSendableFunction: visit.isInsideSendableFunction,
 			))
 			builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: nodeProperty.label))
 			let publicMockCall = visit.generator.publicMockCall
@@ -658,6 +661,7 @@ extension ScopeGenerator {
 			builderFunctionNames: builderFunctionNames,
 		)
 		names.propertyNodes = propertyNodes
+		names.rootHoleSiteProperties = rootHoleSiteProperties
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.
 		if readsFills, !passedUpBuilderProperties.isEmpty {
 			names.passedUpBuilderFamilies = passedUpBuilderFamilies(of: orderedChildGenerators)

@@ -216,7 +216,7 @@ extension ScopeGenerator {
 	/// The nodes at a mock root's level that the mock builds for dependencies the mocked type's tree receives, which a
 	/// public mock takes as parameters that default to `nil`: every node but those of the mocked type's own
 	/// `@Instantiated` dependencies, including one the mock builds as the `LazilyInstantiated` its tree receives.
-	static func publicMockPromotedNodes(of instantiable: Instantiable, in nodes: [MockParameterNode]) -> [MockParameterNode] {
+	static func publicMockPromotedNodes(of instantiable: Instantiable, in nodes: [MockTreeNames.PropertyNode]) -> [MockTreeNames.PropertyNode] {
 		let ownProperties = Set(instantiable.dependencies.lazy.filter { dependency in
 			switch dependency.source {
 			case .instantiated:
@@ -227,8 +227,8 @@ extension ScopeGenerator {
 		}.map(\.property))
 		return nodes.filter { node in
 			!ownProperties.contains(node.property)
-				&& !(node.property.propertyType.isLazilyInstantiated && node.typeDescription.lazilyInstantiatedInstanceType.map {
-					ownProperties.contains(Property(label: node.propertyLabel, typeDescription: $0))
+				&& !(node.property.propertyType.isLazilyInstantiated && node.property.typeDescription.lazilyInstantiatedInstanceType.map {
+					ownProperties.contains(Property(label: node.property.label, typeDescription: $0))
 				} ?? false)
 		}
 	}
@@ -431,7 +431,8 @@ extension ScopeGenerator {
 		parameterNames: MockRootParameterNames,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
-		let treePropertyNodes = parameters.parameterTree.propertyNodes
+		let treePropertyNodes = parameters.treeNames.propertyNodes
+		let rootPropertyNodes = treePropertyNodes.filter { $0.parentIndex == nil }
 		var plan = publicMockPlan(
 			of: instantiable,
 			forwardedDependencies: parameters.forwardedDependencies,
@@ -441,40 +442,39 @@ extension ScopeGenerator {
 			flatReceivedParameterMockDefaults: parameters.flatReceivedParameterMockDefaults,
 			flatUncoveredParameters: parameters.flatUncoveredParameters,
 			// D1 lane hook (lane C): a promoted node is passed as its property, which the mock lowering can name too.
-			promotedNodes: publicMockPromotedNodes(of: instantiable, in: treePropertyNodes).map { node in
-				(property: node.property, name: disambiguatedLabel(for: node, labelMap: parameters.rootLabelMap))
+			promotedNodes: publicMockPromotedNodes(of: instantiable, in: rootPropertyNodes).map { node in
+				(property: node.property, name: disambiguatedLabel(for: node.property, labelMap: parameters.rootLabelMap))
 			},
 			onlyIfAvailableOverrides: parameterNames.onlyIfAvailableOverrides,
 			wrapperParameterByInstance: parameters.publicMockWrapperParameterByInstance,
-			parameterTree: parameters.parameterTree,
+			treePropertyNodes: treePropertyNodes,
 			builders: parameters.mockBuilders,
 			// A public mock takes each property received only if available as a parameter, so only the tree's nodes make
 			// a `SafeDIOverrides`.
-			hasOverrides: !treePropertyNodes.isEmpty,
+			hasOverrides: !rootPropertyNodes.isEmpty,
 			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 			receiverModulesByLabel: receiverModules(in: parameters.treeNames.propertyNodes, context: context),
 			context: context,
 		)
-		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
+		plan.noTierParameters = noTierParameters(in: treePropertyNodes, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
 		return plan
 	}
 
-	/// The parameters on no tier of a public mock whose tree is `items` (see `PublicMockPlan.noTierParameters`): each
-	/// property of `leftOut` that a call of another module's public mock in the tree omits, once per label, in tree order.
-	private static func noTierParameters(in items: [MockTreeItem], leftOut: Set<Property>) -> [PublicMockParameter] {
+	/// The parameters on no tier of a public mock whose tree's nodes are `nodes` (`MockTreeNames.propertyNodes`; see
+	/// `PublicMockPlan.noTierParameters`): each property of `leftOut` that a call of another module's public mock in the tree
+	/// omits, once per label, in tree order.
+	private static func noTierParameters(in nodes: [MockTreeNames.PropertyNode], leftOut: Set<Property>) -> [PublicMockParameter] {
 		guard !leftOut.isEmpty else { return [] }
 		var noTierParameters = [PublicMockParameter]()
 		var labels = Set<String>()
-		// Depth first, in tree order, on a stack of its own, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = Array(items.propertyNodes.reversed())
-		while let node = nodesToVisit.popLast() {
+		for node in nodes {
 			// A node's call, then the calls the trees of the fills it passes make, depth first.
 			var publicMockCalls = [PublicMockCall]()
-			if let publicMockCall = node.publicMockCall {
+			if let publicMockCall = node.generator.publicMockCall {
 				publicMockCalls.append(publicMockCall)
 			}
-			if let fillingGenerator = node.fillingGenerator {
-				publicMockCalls += ScopeGenerator.publicMockCallsInFills(of: fillingGenerator)
+			if node.generator.fillsABuilder {
+				publicMockCalls += ScopeGenerator.publicMockCallsInFills(of: node.generator)
 			}
 			for publicMockCall in publicMockCalls {
 				for parameter in publicMockCall.omittedParameters {
@@ -506,7 +506,6 @@ extension ScopeGenerator {
 					noTierParameters.append(noTierParameter)
 				}
 			}
-			nodesToVisit.append(contentsOf: node.propertyChildren.reversed())
 		}
 		return noTierParameters
 	}
@@ -532,7 +531,7 @@ extension ScopeGenerator {
 		promotedNodes: [(property: Property, name: String)],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
 		wrapperParameterByInstance: [Property: Property],
-		parameterTree: [MockTreeItem],
+		treePropertyNodes: [MockTreeNames.PropertyNode],
 		builders shapedBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		hasOverrides: Bool,
 		typesDeclaredEscaping: Set<TypeDescription>,
@@ -697,7 +696,7 @@ extension ScopeGenerator {
 
 		// The optional builders follow the required ones, so that no required builder's position moves.
 		let optionalBuilders = publicMockOptionalBuilders(
-			parameterTree: parameterTree,
+			treePropertyNodes: treePropertyNodes,
 			filledFamilies: givenFilledFamilies,
 			requiredBuilders: builders,
 			otherParameters: (leadingParameters + optionalReceivedParameters).map { (label: $0.name, access: $0.access) }
@@ -738,22 +737,22 @@ extension ScopeGenerator {
 		return plan
 	}
 
-	/// The builders a public mock whose tree is `parameterTree` takes optional (`PublicMockParameter.Role.optionalBuilder`), one
+	/// The builders a public mock whose tree's nodes are `treePropertyNodes` takes optional (`PublicMockParameter.Role.optionalBuilder`), one
 	/// per hole type and family its calls of other modules' public mocks fill, in the sorted order of the properties a call
 	/// would receive each as (`ScopeGenerator.filledFamilies(of:)`). Each tier labels one as it would label a builder of its
 	/// hole type it took required (`TierNames.label(ofStem:isSendable:)`), from the stems of every hole type of the mock's
 	/// builders, unless those would rename a required builder's stem, when the optional builders' hole types are named apart
 	/// among themselves; a label a parameter of the tier has takes `_`. Each is as visible as the type it builds.
 	static func publicMockOptionalBuilders(
-		parameterTree: [MockTreeItem],
-		// D1 lane hook (lane C): the mock lowering, which reads no parameter tree, hands the families and the body's names.
+		treePropertyNodes: [MockTreeNames.PropertyNode],
+		// D1 lane hook (lane C): the mock lowering hands the families and the body's names.
 		filledFamilies givenFilledFamilies: (families: [FilledFamily], namesInBody: Set<String>)? = nil,
 		requiredBuilders: [SeamSignature.Builder],
 		otherParameters: [(label: String, access: AccessLevel)],
 		widestTier: AccessLevel,
 		access: (TypeDescription) -> AccessLevel,
 	) -> [PublicMockParameter] {
-		let fillPlaces = givenFilledFamilies == nil ? fillPlaces(in: parameterTree.propertyNodes) : (declaredLabels: [], calls: [])
+		let fillPlaces = givenFilledFamilies == nil ? fillPlaces(in: treePropertyNodes) : (declaredLabels: [], calls: [])
 		let filledFamilies = givenFilledFamilies?.families ?? filledFamilies(of: fillPlaces.calls)
 		guard !filledFamilies.isEmpty else { return [] }
 		let requiredHoleTypes = requiredBuilders.map(\.enumKey.holeType).uniqued().sorted { lhs, rhs in
@@ -773,11 +772,9 @@ extension ScopeGenerator {
 		namesInBody.formUnion(requiredBuilders.map(\.internalName))
 		namesInBody.formUnion(fillPlaces.declaredLabels)
 		namesInBody.formUnion(givenFilledFamilies?.namesInBody ?? [])
-		var nodesToVisit = parameterTree.propertyNodes
-		while let node = nodesToVisit.popLast() {
-			namesInBody.insert(functionName(toBuildPropertyNamed: node.propertyLabel))
-			namesInBody.formUnion(node.dependencies.map(\.property.label))
-			nodesToVisit += node.propertyChildren
+		for node in treePropertyNodes {
+			namesInBody.insert(functionName(toBuildPropertyNamed: node.property.label))
+			namesInBody.formUnion(node.instantiable.dependencies.map(\.property.label))
 		}
 		var internalNames = GeneratedNameAllocator(reserving: namesInBody)
 		var claimedLabels = [(label: String, access: AccessLevel)]()
@@ -1261,8 +1258,8 @@ extension ScopeGenerator {
 	private func publicMockHoleSiteBoundApartFinding(of instantiable: Instantiable, parameters: MockRootParameters) -> PublicMockFinding? {
 		let namesAliasesAreBoundApartFrom = Self.mockRootTopLevelNames(of: parameters, parameterNames: Self.mockRootParameterNames(of: parameters)).namesAliasesAreBoundApartFrom
 		var boundApartHoleLabels = Set<String>()
-		for case let .alias(alias) in parameters.parameterTree where alias.holeSite != nil && Self.isBoundApart(alias, from: namesAliasesAreBoundApartFrom) {
-			boundApartHoleLabels.insert(alias.property.label)
+		for property in parameters.treeNames.rootHoleSiteProperties where namesAliasesAreBoundApartFrom.contains(property.label) {
+			boundApartHoleLabels.insert(property.label)
 		}
 		guard let holeDependency = instantiable.dependencies.first(where: { boundApartHoleLabels.contains($0.property.label) }) else { return nil }
 		if let receive = firstReceive(ofLabelOf: holeDependency.property) {
