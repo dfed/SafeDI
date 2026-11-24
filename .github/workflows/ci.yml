@@ -3066,6 +3066,10 @@ jobs:
       # symbolic links and refuses missing data before it reads the reports.
       - name: Check the Script Against Its Fixtures
         run: python3 -I Scripts/unexecuted-lines.py --self-test "$RUNNER_TEMP/unexecuted-lines-self-test"
+      # No test has a time limit of its own, so a test that never ends is
+      # named only by reading the log of the step whose limit stopped it.
+      - name: Check the Unfinished Tests Script Against Its Fixtures
+        run: python3 -I Scripts/unfinished-tests.py --self-test
       # Scripts/changed-line-coverage.sh is how a change is checked before it
       # is pushed; its report of the files no report records must agree with
       # this job's, or a change passes there and fails here.
