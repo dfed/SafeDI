@@ -12725,6 +12725,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds() async throws {
+		// HAND MUTATION, never to be merged: holds one thread forever, as a synchronous walk of every path does.
+		while ProcessInfo.processInfo.environment["SAFEDI_NEVER_SET"] == nil {}
 		// Each service receives the two services before it and the service at half its index.
 		// The number of distinct received-dependency paths from the last service grows
 		// exponentially with the service count, while the number of services does not.
