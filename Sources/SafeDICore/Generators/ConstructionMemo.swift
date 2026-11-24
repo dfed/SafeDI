@@ -117,6 +117,17 @@ struct ConstructionMemo {
 		/// What the place's build reads of the generators the pass before created for its subtree, with the settled cycle
 		/// parameters a `CycleParameterSeed` gives it in place of what they found (`SubtreeDigests`): empty in a first pass.
 		let previousPass: SubtreeDigests.ID
+		/// The generator the pass before built at the place, by its identity, which only partitions the places of a later
+		/// pass: two places the pass before built one generator at read alike the context that generator's build read, so
+		/// a later pass's lookup asks only the places that shared one, as the pass before shared them, never every place
+		/// of the scope. `nil` in a first pass. It is compared only, never ordered or emitted, and kept alive by the pass
+		/// before's tree while the pass runs.
+		let previousPassGenerator: ObjectIdentifier?
+
+		/// This key with the pass before's generator `previousPassGenerator`.
+		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
+			Key(scope: scope, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forMockGeneration: forMockGeneration, validatesForwardedProperties: validatesForwardedProperties, buildsWithHandWrittenMocks: buildsWithHandWrittenMocks, mayPassNil: mayPassNil, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, reboundProperties: reboundProperties, spellings: spellings, previousPass: previousPass, previousPassGenerator: previousPassGenerator)
+		}
 	}
 
 	/// A finished place's generator, with the reads of the context above it its subtree made and its scope count, which
@@ -189,7 +200,7 @@ struct ConstructionMemo {
 	func reuse(ofPreviousPassGenerator generator: ScopeGenerator?, for key: Key, in context: ConstructionContext) -> Reuse? {
 		guard let generator,
 		      let stored = entriesByGenerator[ObjectIdentifier(generator)],
-		      stored.key == key,
+		      stored.key == key.withPreviousPassGenerator(stored.key.previousPassGenerator),
 		      let reads = stored.entry.reads.answeredAlike(in: context)
 		else { return nil }
 		return Reuse(entry: stored.entry, reads: reads)

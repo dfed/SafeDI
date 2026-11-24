@@ -1812,6 +1812,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			reboundProperties: childReboundProperties,
 			spellings: Property.spellingsForConstructionMemo(of: childLazilyInstantiatedInstanceProperties, childReboundProperties),
 			previousPass: previousPass,
+			previousPassGenerator: previousPassChildGenerator.map(ObjectIdentifier.init),
 		)
 	}
 
