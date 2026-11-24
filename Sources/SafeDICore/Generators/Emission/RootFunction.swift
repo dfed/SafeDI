@@ -115,8 +115,11 @@ enum RootFunctionHoisting {
 				work.append(contentsOf: pieces.reversed().map { ($0, isInsideSendableFunction) })
 			case let .indented(inner, _):
 				work.append((inner, isInsideSendableFunction))
-			case let .place(plan):
+			case let .place(plan) where plan.code.holdsRootFunction:
 				work.append((plan.code, isInsideSendableFunction))
+			case .place:
+				// A place records whether a root function is beneath it, so the walk reads no other place's tree.
+				break
 			case let .sendableFunction(inner):
 				work.append((inner, true))
 			case let .omittingRootFunctions(inner, _):
