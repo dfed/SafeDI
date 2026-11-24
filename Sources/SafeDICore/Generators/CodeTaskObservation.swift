@@ -90,4 +90,16 @@ public enum ConcurrentChildCode {
 			observer(childCount)
 		}
 	}
+
+	/// Orders the tasks of a body that plans its children at once, when set: by the tests, never by the tool, which check
+	/// that the order in which the tasks finish never reaches the code the body writes.
+	@TaskLocal public static var ordering: (any ConcurrentChildCodeOrdering)?
+}
+
+/// Holds each task of a body that plans its children at once until its turn to finish, so a test can force the order in
+/// which they finish. Set as `ConcurrentChildCode.ordering` by the tests, never by the tool.
+public protocol ConcurrentChildCodeOrdering: Sendable {
+	/// Awaited by the task of the child at `position` among the `childCount` children the body plans at once, once its code
+	/// is planned; the task finishes when this returns.
+	func waitForTurn(ofChildAt position: Int, childCount: Int) async
 }

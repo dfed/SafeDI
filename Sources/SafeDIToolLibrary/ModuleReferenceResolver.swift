@@ -119,6 +119,13 @@ actor ModuleReferenceResolver {
 	private var ownEntries = [String: OwnEntry]()
 	private var cachedTransitiveHeadsByModuleName: [String: [(path: String, ownEntryChecksum: UInt64?)]]?
 
+	/// The read of the head of the transitive list's file at `index`. A struct, never a tuple
+	/// (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
+	private struct HeadRead: Sendable {
+		let index: Int
+		let read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>
+	}
+
 	/// The files the transitive list names, as it spells them, with each one's own-entry checksum, by the module each names,
 	/// in path order: read once, so which file a reference resolves to follows the module's name and the paths alone,
 	/// never the order the reads finished in.
@@ -130,24 +137,24 @@ actor ModuleReferenceResolver {
 		if let transitiveModuleInfoListPath {
 			let paths = try Set(String(contentsOfFile: transitiveModuleInfoListPath, encoding: .utf8).parsedPathListCSV()).sorted()
 			let reads = await withTaskGroup(
-				of: (index: Int, read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>).self,
-				returning: [(index: Int, read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>)].self,
+				of: HeadRead.self,
+				returning: [HeadRead].self,
 			) { taskGroup in
 				for (index, path) in paths.enumerated() {
 					taskGroup.addTask {
-						(index: index, read: Result { () throws(UnreadableModuleInfoError) in try UnreadableModuleInfoError.readingHead(path.asFileURL) })
+						HeadRead(index: index, read: Result { () throws(UnreadableModuleInfoError) in try UnreadableModuleInfoError.readingHead(path.asFileURL) })
 					}
 				}
-				var reads = [(index: Int, read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>)]()
+				var reads = [HeadRead]()
 				for await read in taskGroup {
 					reads.append(read)
 				}
 				return reads
 			}
 			// The files are read in parallel, so their failures arrive in any order: the one reported is that of the first path.
-			for (index, read) in reads.sorted(by: { $0.index < $1.index }) {
-				let head = try read.get()
-				headsByModuleName[head.moduleName, default: []].append((path: paths[index], ownEntryChecksum: head.ownEntryChecksum))
+			for headRead in reads.sorted(by: { $0.index < $1.index }) {
+				let head = try headRead.read.get()
+				headsByModuleName[head.moduleName, default: []].append((path: paths[headRead.index], ownEntryChecksum: head.ownEntryChecksum))
 			}
 			headReadPaths = Set(paths)
 		}

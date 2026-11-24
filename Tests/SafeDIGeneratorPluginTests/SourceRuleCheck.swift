@@ -65,6 +65,12 @@ enum SourceRule: String, CaseIterable {
 	/// code is safe to run concurrently, a deinit-only field included. Only Dan admits one, for one site: its waiver cites
 	/// his OK (`— Dan’s OK: <where he gave it>`), and no invariant stated in a waiver stands in for it.
 	case uncheckedConcurrency
+	/// A task group whose element (its `of:` type) is a tuple, or an optional tuple. Swift 6.3's `-Osize` (the published
+	/// Linux binary's build), Swift 6.4's release builds and Xcode 26.4's release build of 2.3.1 miscompiled task groups
+	/// whose element was a tuple holding a `Result` with an `any Error`, so `query` crashed or read nothing; the tests,
+	/// built with `-enable-testing`, passed. A task group's element is a struct of the same fields, which those builds
+	/// compile correctly.
+	case taskGroupTupleElement
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
@@ -85,7 +91,7 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/") || path.hasPrefix("TuistPlugins/")
 		case .testableImport:
 			path.hasPrefix("Tests/SafeDIToolTestSupport/")
-		case .uncheckedConcurrency:
+		case .uncheckedConcurrency, .taskGroupTupleElement:
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		}
 	}
@@ -261,6 +267,35 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 			record(.forceUnwrap, at: node.declName.baseName, "`unsafelyUnwrapped` traps on `nil` in a debug build and reads an undefined value in a release build")
 		}
 		return .visitChildren
+	}
+
+	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+		if let calledName = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+		   Self.taskGroupFunctionNames.contains(calledName),
+		   let elementType = node.arguments.first(where: { $0.label?.text == "of" })?.expression,
+		   Self.namesTupleMetatype(elementType)
+		{
+			record(.taskGroupTupleElement, at: elementType, "a task group whose element is a tuple miscompiles in release builds of Swift 6.3 and 6.4: return a struct")
+		}
+		return .visitChildren
+	}
+
+	/// The functions that make a task group whose element type their `of:` argument names.
+	private static let taskGroupFunctionNames: Set<String> = ["withTaskGroup", "withThrowingTaskGroup"]
+
+	/// Whether `expression`, a task group's `of:` argument, is the metatype of a tuple or of an optional tuple:
+	/// `(Int, String).self`, `(index: Int, read: Read)?.self`.
+	private static func namesTupleMetatype(_ expression: ExprSyntax) -> Bool {
+		guard let memberAccess = expression.as(MemberAccessExprSyntax.self), memberAccess.declName.baseName.text == "self", var base = memberAccess.base else {
+			return false
+		}
+		while let optional = base.as(OptionalChainingExprSyntax.self) {
+			base = optional.expression
+		}
+		guard let tuple = base.as(TupleExprSyntax.self) else {
+			return false
+		}
+		return tuple.elements.count > 1 || tuple.elements.contains { $0.label != nil }
 	}
 
 	override func visit(_ node: DictionaryElementListSyntax) -> SyntaxVisitorContinueKind {

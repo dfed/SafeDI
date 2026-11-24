@@ -58,6 +58,14 @@ enum BoundedConcurrency {
 		case notAdmitted
 	}
 
+	/// What a job's task returns: its index, the cost it holds of the width, and its outcome. A struct, never a tuple
+	/// (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
+	private struct FinishedJob<Transformed: Sendable>: Sendable {
+		let index: Int
+		let cost: Int
+		let outcome: Outcome<Transformed>
+	}
+
 	/// Whether a failure stops the jobs not yet admitted.
 	enum FailurePolicy: Sendable {
 		/// Every job runs, whatever the others do.
@@ -105,7 +113,7 @@ enum BoundedConcurrency {
 			return outcomes
 		}
 		return await withTaskGroup(
-			of: (index: Int, cost: Int, outcome: Outcome<Transformed>).self,
+			of: FinishedJob<Transformed>.self,
 			returning: [Outcome<Transformed>].self,
 		) { taskGroup in
 			var nextIndex = 0
@@ -128,9 +136,9 @@ enum BoundedConcurrency {
 					runningCost += jobCost
 					taskGroup.addTask {
 						do {
-							return try await (index: index, cost: jobCost, outcome: .finished(transform(element, jobCost)))
+							return try await FinishedJob(index: index, cost: jobCost, outcome: .finished(transform(element, jobCost)))
 						} catch {
-							return (index: index, cost: jobCost, outcome: .failed(error))
+							return FinishedJob(index: index, cost: jobCost, outcome: .failed(error))
 						}
 					}
 					jobsRunning += 1
