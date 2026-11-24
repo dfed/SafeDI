@@ -14,10 +14,16 @@ name: macOS Build Check
 # The two jobs below run the steps that reported those. Five more of the 27 were failures of a macOS test run, and one
 # needed the Bazel example; this workflow leaves them, with Tuist, DocC and the other Apple platforms, to ci.yml.
 #
-# What it costs: about 15 macOS runner minutes over two jobs that run side by side, against about 88 for ci.yml's three
-# macOS jobs (about 159 when its Xcode tests run in two parts). Step medians in ci.yml's pull request runs when this
-# was written: building the package and its tests 6.5 minutes, the example package's native debug and release builds
-# 1.6 and 3.2, and its Swift Build builds without the DEBUG define 1.9 and 3.1.
+# What it costs: about 32 macOS runner minutes over two jobs that run side by side, 17 minutes of wall clock, against
+# about 88 runner minutes for ci.yml's three macOS jobs (about 159 when its Xcode tests run in two parts). Measured on
+# this workflow's first run, on a branch many commits above main, whose build cache therefore saved little: building
+# the package and its tests 15.6 minutes, the example package's native debug and release builds 1.8 and 4.4, its
+# native build without the DEBUG define 1.8, and its Swift Build builds without it 2.0 and 3.2. In ci.yml's pull
+# request runs the package and tests build has a median of 6.5 minutes.
+#
+# When to run it: on the top of a stack of pull requests before it goes to the merge gate, or on a change to code
+# that only compiles on macOS. Not on every branch of a stack, since the top's build compiles what the branches below
+# it add, and not as a substitute for ci.yml, which runs the tests.
 #
 # Every step but the first of each job is a copy of a step of ci.yml, under the same name unless
 # `.github/scripts/check-macos-build-check.py` lists another, and that script, the first step of the first job, fails
