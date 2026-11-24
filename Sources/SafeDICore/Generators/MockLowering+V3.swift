@@ -63,7 +63,7 @@ extension ScopeGenerator {
 		var afterUncovered = [String]()
 		for case let .built(node) in nodes {
 			guard let parameterName = node.promotedParameterName else { continue }
-			let valueType = node.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
+			let valueType = MockLowering.v3ReceivedValueType(of: node.property)
 			if node.hasConfiguration {
 				afterUncovered.append("\(bodyIndent)\(parameterName): SafeDIReceived<\(valueType.asSource), \(node.instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)> = .built(.init())")
 			} else {
@@ -193,7 +193,7 @@ extension MockLowering.Walk {
 
 	/// The name of a cycle target's parameter that holds the nearest configuration of `concreteType` above its pass.
 	static func v3NearestParameterName(of concreteType: TypeDescription) -> String {
-		"__safeDI_nearest_\(concreteType.asIdentifier)"
+		ReservedName.nearestConfigurationParameterName(ofTypeIdentifier: concreteType.asIdentifier)
 	}
 
 	/// The arguments a call of a cycle target hands its nearest parameters, from what is in scope.
