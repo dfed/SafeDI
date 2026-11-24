@@ -54,107 +54,98 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let path = moduleDirectory.path
 		#expect(try report.json() == """
 		{
-		  "errors" : [
-
-		  ],
-		  "formatVersion" : 0,
-		  "fulfillment" : [
+		  "command" : "graph",
+		  "completeness" : "trees",
+		  "declarations" : [
 		    {
-		      "fulfilledBy" : "App.Cache",
-		      "type" : "Cache"
-		    },
-		    {
-		      "fulfilledBy" : "App.Clock",
-		      "type" : "Clock"
-		    },
-		    {
-		      "fulfilledBy" : "App.DefaultService",
-		      "type" : "DefaultService"
-		    },
-		    {
-		      "fulfilledBy" : "App.Log",
-		      "type" : "Log"
-		    },
-		    {
-		      "fulfilledBy" : "App.Root",
-		      "type" : "Root"
-		    },
-		    {
-		      "fulfilledBy" : "App.DefaultService",
-		      "type" : "Service"
-		    }
-		  ],
-		  "modules" : [
-		    "App"
-		  ],
-		  "resolved" : true,
-		  "treesBuilt" : true,
-		  "types" : [
-		    {
+		      "constructedBy" : [
+		        {
+		          "declaredBy" : "App.Root",
+		          "label" : "cache"
+		        }
+		      ],
 		      "declarationKind" : "extension",
-		      "edges" : [
+		      "dependencies" : [
 
 		      ],
 		      "filePath" : "\(path)/Cache.swift",
 		      "fulfills" : [
 		        "Cache"
 		      ],
+		      "generatesDependencyTree" : false,
 		      "id" : "App.Cache",
+		      "isReachedByRoot" : true,
 		      "isRoot" : false,
-		      "isSeam" : false,
 		      "line" : 3,
 		      "module" : "App",
-		      "name" : "Cache"
+		      "typeName" : "Cache"
 		    },
 		    {
+		      "constructedBy" : [
+
+		      ],
 		      "declarationKind" : "actor",
-		      "edges" : [
+		      "dependencies" : [
 
 		      ],
 		      "filePath" : "\(path)/Clock.swift",
 		      "fulfills" : [
 		        "Clock"
 		      ],
+		      "generatesDependencyTree" : false,
 		      "id" : "App.Clock",
+		      "isReachedByRoot" : false,
 		      "isRoot" : false,
-		      "isSeam" : false,
 		      "line" : 1,
 		      "module" : "App",
-		      "name" : "Clock"
+		      "typeName" : "Clock"
 		    },
 		    {
+		      "constructedBy" : [
+		        {
+		          "declaredBy" : "App.Root",
+		          "label" : "service"
+		        }
+		      ],
 		      "declarationKind" : "class",
-		      "edges" : [
+		      "dependencies" : [
 		        {
 		          "filePath" : "\(path)/DefaultService.swift",
-		          "kind" : "received",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : true,
 		          "label" : "cache",
 		          "line" : 8,
-		          "onlyIfAvailable" : true,
-		          "suppliers" : [
+		          "plainType" : "Cache",
+		          "provenance" : [
 		            {
+		              "declaredBy" : "App.Root",
 		              "label" : "cache",
-		              "type" : "App.Root"
+		              "source" : "declaration"
 		            }
 		          ],
+		          "source" : "received",
 		          "type" : "Cache?"
 		        },
 		        {
 		          "aliasOf" : {
 		            "label" : "cache",
+		            "plainType" : "Cache",
 		            "type" : "Cache"
 		          },
-		          "erased" : true,
 		          "filePath" : "\(path)/DefaultService.swift",
-		          "kind" : "alias",
+		          "isErased" : true,
+		          "isOnlyIfAvailable" : false,
 		          "label" : "anyCache",
 		          "line" : 9,
-		          "suppliers" : [
+		          "plainType" : "AnyCache",
+		          "provenance" : [
 		            {
+		              "declaredBy" : "App.Root",
 		              "label" : "cache",
-		              "type" : "App.Root"
+		              "source" : "declaration"
 		            }
 		          ],
+		          "source" : "received",
 		          "type" : "AnyCache"
 		        }
 		      ],
@@ -163,21 +154,31 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		        "DefaultService",
 		        "Service"
 		      ],
+		      "generatesDependencyTree" : false,
 		      "id" : "App.DefaultService",
+		      "isReachedByRoot" : true,
 		      "isRoot" : false,
-		      "isSeam" : false,
 		      "line" : 1,
 		      "module" : "App",
-		      "name" : "DefaultService"
+		      "typeName" : "DefaultService"
 		    },
 		    {
+		      "constructedBy" : [
+		        {
+		          "declaredBy" : "App.Root",
+		          "label" : "logBuilder"
+		        }
+		      ],
 		      "declarationKind" : "struct",
-		      "edges" : [
+		      "dependencies" : [
 		        {
 		          "filePath" : "\(path)/Log.swift",
-		          "kind" : "forwarded",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
 		          "label" : "name",
 		          "line" : 7,
+		          "plainType" : "String",
+		          "source" : "forwarded",
 		          "type" : "String"
 		        }
 		      ],
@@ -185,42 +186,55 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		      "fulfills" : [
 		        "Log"
 		      ],
+		      "generatesDependencyTree" : true,
 		      "id" : "App.Log",
+		      "isReachedByRoot" : true,
 		      "isRoot" : false,
-		      "isSeam" : true,
 		      "line" : 1,
 		      "module" : "App",
-		      "name" : "Log"
+		      "typeName" : "Log"
 		    },
 		    {
+		      "constructedBy" : [
+
+		      ],
 		      "declarationKind" : "class",
-		      "edges" : [
+		      "dependencies" : [
 		        {
-		          "builds" : "DefaultService",
 		          "filePath" : "\(path)/Root.swift",
 		          "fulfilledBy" : "App.DefaultService",
-		          "kind" : "instantiated",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
 		          "label" : "service",
+		          "lifetime" : "eager",
 		          "line" : 11,
+		          "plainType" : "DefaultService",
+		          "source" : "instantiated",
 		          "type" : "any Service"
 		        },
 		        {
-		          "builds" : "Log",
 		          "filePath" : "\(path)/Root.swift",
 		          "fulfilledBy" : "App.Log",
-		          "kind" : "builder",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
 		          "label" : "logBuilder",
+		          "lifetime" : "builder",
 		          "line" : 12,
+		          "plainType" : "Log",
+		          "source" : "instantiated",
 		          "type" : "Instantiator<Log>",
 		          "wrapper" : "Instantiator"
 		        },
 		        {
-		          "builds" : "Cache",
 		          "filePath" : "\(path)/Root.swift",
 		          "fulfilledBy" : "App.Cache",
-		          "kind" : "lazy",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
 		          "label" : "cache",
+		          "lifetime" : "lazy",
 		          "line" : 13,
+		          "plainType" : "Cache",
+		          "source" : "instantiated",
 		          "type" : "LazilyInstantiated<Cache>",
 		          "wrapper" : "LazilyInstantiated"
 		        }
@@ -229,12 +243,51 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		      "fulfills" : [
 		        "Root"
 		      ],
+		      "generatesDependencyTree" : false,
 		      "id" : "App.Root",
+		      "isReachedByRoot" : true,
 		      "isRoot" : true,
-		      "isSeam" : false,
 		      "line" : 3,
 		      "module" : "App",
-		      "name" : "Root"
+		      "typeName" : "Root"
+		    }
+		  ],
+		  "errors" : [
+
+		  ],
+		  "formatVersion" : 0,
+		  "fulfillments" : [
+		    {
+		      "fulfilledBy" : "App.Cache",
+		      "plainType" : "Cache"
+		    },
+		    {
+		      "fulfilledBy" : "App.Clock",
+		      "plainType" : "Clock"
+		    },
+		    {
+		      "fulfilledBy" : "App.DefaultService",
+		      "plainType" : "DefaultService"
+		    },
+		    {
+		      "fulfilledBy" : "App.Log",
+		      "plainType" : "Log"
+		    },
+		    {
+		      "fulfilledBy" : "App.Root",
+		      "plainType" : "Root"
+		    },
+		    {
+		      "fulfilledBy" : "App.DefaultService",
+		      "plainType" : "Service"
+		    }
+		  ],
+		  "modules" : [
+		    {
+		      "name" : "App",
+		      "paths" : [
+		        "\(path)"
+		      ]
 		    }
 		  ]
 		}
@@ -318,6 +371,69 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let path = moduleDirectory.path
 		#expect(try report.json() == """
 		{
+		  "command" : "graph",
+		  "completeness" : "declarations",
+		  "declarations" : [
+		    {
+		      "declarationKind" : "class",
+		      "dependencies" : [
+		        {
+		          "filePath" : "\(path)/Feature.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "label" : "service",
+		          "lifetime" : "eager",
+		          "line" : 4,
+		          "plainType" : "Service",
+		          "source" : "instantiated",
+		          "type" : "Service"
+		        }
+		      ],
+		      "filePath" : "\(path)/Feature.swift",
+		      "fulfills" : [
+		        "Feature"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Feature",
+		      "isRoot" : true,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Feature"
+		    },
+		    {
+		      "declarationKind" : "class",
+		      "dependencies" : [
+
+		      ],
+		      "filePath" : "\(path)/Service.swift",
+		      "fulfills" : [
+		        "Service"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Service",
+		      "isRoot" : false,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Service"
+		    },
+		    {
+		      "declarationKind" : "class",
+		      "dependencies" : [
+
+		      ],
+		      "filePath" : "\(path)/Twin.swift",
+		      "fulfills" : [
+		        "Twin",
+		        "Service"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Twin",
+		      "isRoot" : false,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Twin"
+		    }
+		  ],
 		  "errors" : [
 		    {
 		      "filePath" : "\(path)/Service.swift",
@@ -331,70 +447,15 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		    }
 		  ],
 		  "formatVersion" : 0,
-		  "fulfillment" : [
+		  "fulfillments" : [
 
 		  ],
 		  "modules" : [
-		    "App"
-		  ],
-		  "resolved" : false,
-		  "treesBuilt" : false,
-		  "types" : [
 		    {
-		      "declarationKind" : "class",
-		      "edges" : [
-		        {
-		          "builds" : "Service",
-		          "filePath" : "\(path)/Feature.swift",
-		          "kind" : "instantiated",
-		          "label" : "service",
-		          "line" : 4,
-		          "type" : "Service"
-		        }
-		      ],
-		      "filePath" : "\(path)/Feature.swift",
-		      "fulfills" : [
-		        "Feature"
-		      ],
-		      "id" : "App.Feature",
-		      "isRoot" : true,
-		      "isSeam" : false,
-		      "line" : 1,
-		      "module" : "App",
-		      "name" : "Feature"
-		    },
-		    {
-		      "declarationKind" : "class",
-		      "edges" : [
-
-		      ],
-		      "filePath" : "\(path)/Service.swift",
-		      "fulfills" : [
-		        "Service"
-		      ],
-		      "id" : "App.Service",
-		      "isRoot" : false,
-		      "isSeam" : false,
-		      "line" : 1,
-		      "module" : "App",
-		      "name" : "Service"
-		    },
-		    {
-		      "declarationKind" : "class",
-		      "edges" : [
-
-		      ],
-		      "filePath" : "\(path)/Twin.swift",
-		      "fulfills" : [
-		        "Twin",
-		        "Service"
-		      ],
-		      "id" : "App.Twin",
-		      "isRoot" : false,
-		      "isSeam" : false,
-		      "line" : 1,
-		      "module" : "App",
-		      "name" : "Twin"
+		      "name" : "App",
+		      "paths" : [
+		        "\(path)"
+		      ]
 		    }
 		  ]
 		}
@@ -675,7 +736,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_marksReceivesNil_whenLazyCyclePassesNilFromOneCall() async throws {
+	mutating func graph_recordsNilProvenance_whenLazyCyclePassesNilFromOneCall() async throws {
 		// The app declares no session, so its call of the screen's builder function passes `nil`; the step's passes its own.
 		let report = try await graph(of: [
 			"App.swift": """
@@ -721,13 +782,13 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		])
 
 		#expect(Self.supplies(in: report) == [
-			"App.Screen.session": "App.Step.session, nil",
+			"App.Screen.session": "App.Step.session, nil(noProvidingDeclaration)",
 		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_marksReceivesNil_whenSiblingThatDeclaresReceiveIsBuiltAfterReceiver() async throws {
+	mutating func graph_recordsNilProvenance_whenSiblingThatDeclaresReceiveIsBuiltAfterReceiver() async throws {
 		// `c` receives `b`, so `b` is built first, and its receive of `c` only if available is handed `nil`.
 		let report = try await graph(of: [
 			"Root.swift": """
@@ -765,14 +826,14 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		])
 
 		#expect(Self.supplies(in: report) == [
-			"App.B.c": "nil",
+			"App.B.c": "nil(providerNotYetBuilt)",
 			"App.C.b": "App.Root.b",
 		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_namesAliasAsSupplier_whenReceiveReadsAliasDeclaredAbove() async throws {
+	mutating func graph_namesAliasInProvenance_whenReceiveReadsAliasDeclaredAbove() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
 			@Instantiable(isRoot: true)
@@ -824,7 +885,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_namesDeclarationAboveAsAliasSupplier_whenAliasKeepsLabelItRetypes() async throws {
+	mutating func graph_namesDeclarationAboveInAliasProvenance_whenAliasKeepsLabelItRetypes() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
 			@Instantiable(isRoot: true)
@@ -878,7 +939,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_leavesSuppliersOut_whenNoRootBuildsType() async throws {
+	mutating func graph_leavesProvenanceOut_whenNoRootBuildsType() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
 			@Instantiable(isRoot: true)
@@ -908,13 +969,14 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 			""",
 		])
 
-		#expect(report.treesBuilt)
-		#expect(report.types.flatMap(\.edges).filter { $0.kind == .received }.map(\.suppliers) == [nil])
+		#expect(report.completeness == .trees)
+		#expect(report.declarations.first { $0.typeName == "Unreached" }?.isReachedByRoot == false)
+		#expect(report.declarations.flatMap(\.dependencies).filter { $0.source == .received }.map(\.provenance) == [nil])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_reportsTreeErrorWithoutSuppliers_whenTreeInstantiatesTypeNoDeclarationFulfills() async throws {
+	mutating func graph_reportsTreeErrorWithoutProvenance_whenTreeInstantiatesTypeNoDeclarationFulfills() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
 			@Instantiable(isRoot: true)
@@ -940,11 +1002,11 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 			""",
 		])
 
-		#expect(report.resolved)
-		#expect(!report.treesBuilt)
+		#expect(report.completeness == .fulfillment)
 		#expect(report.errors.map(\.line) == [9])
 		#expect(report.errors.map(\.message).allSatisfy { $0.hasPrefix("No @Instantiable type or extension fulfills `Missing`") })
-		#expect(report.types.flatMap(\.edges).map(\.suppliers) == [nil, nil, nil])
+		#expect(report.declarations.flatMap(\.dependencies).map(\.provenance) == [nil, nil, nil])
+		#expect(report.declarations.map(\.isReachedByRoot) == [nil, nil])
 	}
 
 	@Test
@@ -963,9 +1025,9 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let fromDirectory = try await QueryGraph.parse(["--include", moduleDirectory.path]).graph()
 		let fromModuleInfo = try await QueryGraph.parse(["--module-info", moduleInfoFile.path]).graph()
 
-		#expect(fromModuleInfo.types.map(\.id) == ["App.Cache", "App.Clock", "App.DefaultService", "App.Log", "App.Root"])
-		#expect(fromModuleInfo.types.map(\.id) == fromDirectory.types.map(\.id))
-		#expect(fromModuleInfo.fulfillment == fromDirectory.fulfillment)
+		#expect(fromModuleInfo.declarations.map(\.id) == ["App.Cache", "App.Clock", "App.DefaultService", "App.Log", "App.Root"])
+		#expect(fromModuleInfo.declarations.map(\.id) == fromDirectory.declarations.map(\.id))
+		#expect(fromModuleInfo.fulfillments == fromDirectory.fulfillments)
 	}
 
 	@Test
@@ -1005,8 +1067,8 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let fromDirectories = try await QueryGraph.parse(["--include"] + moduleDirectories.map(\.path)).graph()
 		let fromModuleInfo = try await QueryGraph.parse(["--module-info"] + moduleInfoFiles.map(\.path)).graph()
 
-		#expect(fromDirectories.types.map(\.id).sorted() == expectedIDs)
-		#expect(fromModuleInfo.types.map(\.id).sorted() == expectedIDs)
+		#expect(fromDirectories.declarations.map(\.id).sorted() == expectedIDs)
+		#expect(fromModuleInfo.declarations.map(\.id).sorted() == expectedIDs)
 	}
 
 	@Test
@@ -1067,14 +1129,21 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		return try await QueryGraph.parse(["--include", moduleDirectory.path]).graph()
 	}
 
-	/// What each received edge or alias of `report` that has suppliers is handed, by `<type id>.<label>`: its suppliers as
-	/// `<type id>.<label>`, then `nil` where it receives `nil`, joined.
+	/// The provenance of each received dependency or alias of `report` that has one, by `<declaration id>.<label>`: each
+	/// declaration as `<declaration id>.<label>`, then each `nil` as `nil(<reason kind>)`, joined.
 	private static func supplies(in report: QueryGraphReport) -> [String: String] {
 		var supplies = [String: String]()
-		for type in report.types {
-			for edge in type.edges {
-				guard let suppliers = edge.suppliers else { continue }
-				supplies["\(type.id).\(edge.label)"] = (suppliers.map { "\($0.type).\($0.label)" } + (edge.receivesNil == true ? ["nil"] : [])).joined(separator: ", ")
+		for declaration in report.declarations {
+			for dependency in declaration.dependencies {
+				guard let provenance = dependency.provenance else { continue }
+				supplies["\(declaration.id).\(dependency.label)"] = provenance.map { entry in
+					switch entry {
+					case let .declaration(declaredBy, label):
+						"\(declaredBy).\(label)"
+					case let .passedNil(reason):
+						"nil(\(reason.kind.rawValue))"
+					}
+				}.joined(separator: ", ")
 			}
 		}
 		return supplies

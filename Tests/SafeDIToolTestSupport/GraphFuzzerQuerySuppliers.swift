@@ -35,31 +35,33 @@ struct GraphFuzzerQuerySupplies: Equatable {
 	/// What `query graph`'s export, `json`, says each receive is handed, or `nil` when its trees were not built.
 	init?(exportedJSON json: String) throws {
 		guard let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
-		      export["treesBuilt"] as? Bool == true,
-		      let types = export["types"] as? [[String: Any]]
+		      export["completeness"] as? String == "trees",
+		      let declarations = export["declarations"] as? [[String: Any]]
 		else { return nil }
 		var nameByID = [String: String]()
-		for type in types {
-			if let id = type["id"] as? String, let name = type["name"] as? String {
+		for declaration in declarations {
+			if let id = declaration["id"] as? String, let name = declaration["typeName"] as? String {
 				nameByID[id] = name
 			}
 		}
-		for type in types {
-			guard let name = type["name"] as? String, let edges = type["edges"] as? [[String: Any]] else { continue }
-			for edge in edges {
-				guard let label = edge["label"] as? String, let suppliers = edge["suppliers"] as? [[String: String]] else { continue }
-				var values = Set(suppliers.map { "\(nameByID[$0["type"] ?? ""] ?? "?").\($0["label"] ?? "?")" })
-				if edge["receivesNil"] as? Bool == true {
-					values.insert("nil")
-				}
-				valuesByReceive["\(name).\(label)"] = values
+		for declaration in declarations {
+			guard let name = declaration["typeName"] as? String, let dependencies = declaration["dependencies"] as? [[String: Any]] else { continue }
+			for dependency in dependencies {
+				guard let label = dependency["label"] as? String, let provenance = dependency["provenance"] as? [[String: Any]] else { continue }
+				valuesByReceive["\(name).\(label)"] = Set(provenance.map { entry in
+					if entry["source"] as? String == "declaration" {
+						"\(nameByID[entry["declaredBy"] as? String ?? ""] ?? "?").\(entry["label"] as? String ?? "?")"
+					} else {
+						"nil"
+					}
+				})
 			}
 		}
 	}
 
 	/// What the production code among `generatedFiles` hands each receive of the types `kindsByLabelByType` describes –
-	/// each type's edges' kinds by label, as the export names them – read from the code's syntax as Swift resolves
-	/// each name: the nearest declaration in scope where the receive's type is constructed.
+	/// each type's dependencies' kinds by label, as `kindsByLabelByType(exportedJSON:)` names them – read from the code's
+	/// syntax as Swift resolves each name: the nearest declaration in scope where the receive's type is constructed.
 	init(generatedFiles: [String: String], kindsByLabelByType: [String: [String: String]]) {
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.contains("Mock") {
 			let reader = GeneratedCodeSupplyReader(kindsByLabelByType: kindsByLabelByType, fileName: fileName)
@@ -71,18 +73,27 @@ struct GraphFuzzerQuerySupplies: Equatable {
 		}
 	}
 
-	/// Each type's edges' kinds by label, read from `query graph`'s export, `json`.
+	/// Each type's dependencies' kinds by label, read from `query graph`'s export, `json`: `instantiated`, `lazy` or
+	/// `builder` for an instantiated dependency by its lifetime, `forwarded`, `alias` for a received dependency that
+	/// renames another, and `received`.
 	static func kindsByLabelByType(exportedJSON json: String) throws -> [String: [String: String]] {
 		guard let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
-		      let types = export["types"] as? [[String: Any]]
+		      let declarations = export["declarations"] as? [[String: Any]]
 		else { return [:] }
 		var kindsByLabelByType = [String: [String: String]]()
-		for type in types {
-			guard let name = type["name"] as? String, let edges = type["edges"] as? [[String: Any]] else { continue }
-			for edge in edges {
-				if let label = edge["label"] as? String, let kind = edge["kind"] as? String {
-					kindsByLabelByType[name, default: [:]][label] = kind
+		for declaration in declarations {
+			guard let name = declaration["typeName"] as? String, let dependencies = declaration["dependencies"] as? [[String: Any]] else { continue }
+			for dependency in dependencies {
+				guard let label = dependency["label"] as? String, let source = dependency["source"] as? String else { continue }
+				let kind = switch source {
+				case "instantiated":
+					dependency["lifetime"] as? String == "eager" ? "instantiated" : dependency["lifetime"] as? String ?? "?"
+				case "received":
+					dependency["aliasOf"] == nil ? "received" : "alias"
+				default:
+					source
 				}
+				kindsByLabelByType[name, default: [:]][label] = kind
 			}
 		}
 		return kindsByLabelByType
