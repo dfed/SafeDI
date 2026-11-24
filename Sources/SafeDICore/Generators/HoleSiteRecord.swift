@@ -19,12 +19,14 @@
 // SOFTWARE.
 
 extension ScopeGenerator {
-	/// The place of a hole's site in a seam's tree, written as `text`, the payloads bound at its path (`valuesBindings`)
-	/// followed by `buildSiteCode`'s code, recorded as a place the type key copies as written (`AliasPlaceRecord`): it binds
-	/// the hole's property, and each payload and wrapper function it declares besides, and reads the builder struct or
-	/// level it calls a member of and each value it hands that member, as the path key resolves them. Where a read is of a
-	/// value no binding of the seam's tree types – the struct a fill is handed, or a level bound by a call's route from
-	/// another builder – it records no reads, which keeps the place and the bodies enclosing it one per path.
+	/// The place of a hole's site in a seam's tree, written as `text`: `buildSiteCode`'s code, after the payloads bound at
+	/// its path (`valuesBindings`) where `bindsValuesBindings`, which is where a loop's box holds them and they are no places
+	/// of their own (`valuesBindingPlaces`). It is recorded as a place the type key copies as written (`AliasPlaceRecord`):
+	/// it binds the hole's property, and each payload it binds, declares the function it builds a wrapper around, and reads
+	/// the builder struct or level it calls a member of and each value it hands that member, as the path key resolves them.
+	/// Where a read is of a value no binding of the seam's tree types – the struct a fill is handed, or a level bound by a
+	/// call's route from another builder – it records no reads, which keeps the place and the bodies enclosing it one per
+	/// path.
 	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
 	@inline(never)
 	static func holeSitePlace(
@@ -33,12 +35,17 @@ extension ScopeGenerator {
 		at site: SeamSignature.Hole,
 		functionName: String?,
 		valuesBindings: [SeamHoles.ValuesBinding],
+		bindsValuesBindings: Bool,
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>,
 		carrierUse: SeamCarrierValues.Use?,
 	) -> GeneratedCode {
 		var recorder = HoleSiteReads(site: site, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, carrierUse: carrierUse)
 		for binding in valuesBindings {
-			recorder.record(binding)
+			if bindsValuesBindings {
+				recorder.record(binding)
+			} else {
+				recorder.type(binding)
+			}
 		}
 		let wrapperFunction = recorder.recordSite(of: property, functionName: functionName)
 		let record = AliasPlaceRecord(
@@ -46,11 +53,12 @@ extension ScopeGenerator {
 			fulfillingProperty: nil,
 			text: text,
 			reads: recorder.reads,
-			otherBindings: recorder.otherBindings + (wrapperFunction.map { [$0] } ?? []),
+			otherBindings: recorder.otherBindings,
 			calledFunctionNames: [],
+			declaredFunctionNames: wrapperFunction.map { [$0] } ?? [],
 		)
 		if let observer = HoleSiteRecordObservation.observer {
-			observer(HoleSiteRecordObservation(text: text, readNames: record.reads?.map(\.label), boundNames: [record.property.label] + record.otherBindings.map(\.label)))
+			observer(HoleSiteRecordObservation(text: text, readNames: record.reads?.map(\.label), boundNames: [record.property.label] + record.otherBindings.map(\.label) + record.declaredFunctionNames))
 		}
 		return .place(PlacePlan(code: .text(text), record: .alias(record)))
 	}
@@ -81,6 +89,11 @@ private struct HoleSiteReads {
 	/// The payloads the site binds besides its property.
 	private(set) var otherBindings = [Property]()
 
+	/// Types `binding`'s name, bound by a place before the site's.
+	mutating func type(_ binding: SeamHoles.ValuesBinding) {
+		levelTypesByName[binding.bindingName] = binding.boundType
+	}
+
 	/// Records `binding`, bound before the site's own code.
 	mutating func record(_ binding: SeamHoles.ValuesBinding) {
 		if binding.formsRunAfter != nil {
@@ -101,9 +114,9 @@ private struct HoleSiteReads {
 		bind(Property(label: binding.bindingName, typeDescription: binding.boundType))
 	}
 
-	/// Records the site's own code, as `ScopeGenerator.buildSiteCode` writes it, and returns the function it declares to
-	/// build the wrapper the property is held in, where it declares one.
-	mutating func recordSite(of property: Property, functionName: String?) -> Property? {
+	/// Records the site's own code, as `ScopeGenerator.buildSiteCode` writes it, and returns the name of the function it
+	/// declares to build the wrapper the property is held in, where it declares one.
+	mutating func recordSite(of property: Property, functionName: String?) -> String? {
 		guard let enumPlace = site.enumPlace, enumPlace.memberValuesTypeName != nil else {
 			// The site writes nothing (`buildSiteCode`), so it reads nothing.
 			reads = []
@@ -125,11 +138,7 @@ private struct HoleSiteReads {
 		}
 		let propertyType = property.propertyType
 		guard !propertyType.isConstant, !propertyType.isAnyInstantiator else { return nil }
-		let functionType = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: site.builtType)
-		return Property(
-			label: functionName ?? site.wrapperFunctionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
-			typeDescription: propertyType.isSendable ? .attributed(functionType, specifiers: [], attributes: ["Sendable"]) : functionType,
-		)
+		return functionName ?? site.wrapperFunctionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 	}
 
 	// MARK: Private
@@ -217,14 +226,14 @@ private struct HoleSiteReads {
 }
 
 /// A hole's site as `ScopeGenerator.holeSitePlace` records it: its text, the names its record says it reads, and the
-/// names it binds. Handed to `observer`, which the tests set to check that the record lists every value the text reads
-/// and binds, and nothing else, where the site's code is generated in a task that inherits it.
+/// names it binds or declares. Handed to `observer`, which the tests set to check that the record lists every value the
+/// text reads, binds and declares, and nothing else, where the site's code is generated in a task that inherits it.
 public struct HoleSiteRecordObservation: Sendable {
 	/// The site's code.
 	public let text: String
 	/// The names the record says the text reads, or `nil` where it records none.
 	public let readNames: [String]?
-	/// The names the record says the text binds.
+	/// The names the record says the text binds, and the functions it declares.
 	public let boundNames: [String]
 
 	/// Called with each hole's site as it is recorded, when set: by the tests, never by the tool.
