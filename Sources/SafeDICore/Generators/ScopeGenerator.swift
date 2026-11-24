@@ -3285,6 +3285,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailablePropertiesToGenerateCodeTask[cacheKey] = generateCodeTask
 				generatedCode = try await generateCodeTask.value
 			}
+		case .configurable:
+			generatedCode = try await generatePropertyCode(
+				codeGeneration: codeGeneration,
+				unavailableProperties: unavailableProperties,
+				propertiesGeneratedLater: propertiesGeneratedLater,
+				builderFunctionNames: builderFunctionNames,
+				fillPlaceBindings: fillPlaceBindings,
+			)
 		}
 		if leadingWhitespace.isEmpty {
 			return generatedCode
@@ -4712,6 +4720,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The code generation mode.
 	enum CodeGeneration {
 		case dependencyTree
+		/// A body any place of which may have its construction replaced (`PlaceHooks`), never cached, since one generator
+		/// can sit at several places, each with its own hook.
+		case configurable(PlaceHooks)
+
+		/// The generation of the child at `childIndex` (`OrderedChild.index`) of the scope this generates.
+		func descending(toChildAt childIndex: Int) -> CodeGeneration {
+			switch self {
+			case .dependencyTree:
+				self
+			case let .configurable(hooks):
+				.configurable(hooks.children[childIndex] ?? PlaceHooks())
+			}
+		}
+
+		/// The hook of the place this generates.
+		var constructionHook: ConstructionHook? {
+			switch self {
+			case .dependencyTree:
+				nil
+			case let .configurable(hooks):
+				hooks.construction
+			}
+		}
 	}
 
 	/// Context for mock code generation, consumed by the mock root when emitting the
@@ -6935,7 +6966,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - enclosingFunctionNames: This scope's `BuilderFunctionNames.enclosingFunctionNames`.
 	///   - fillPlaceBindings: The bindings of the places inside the fills an internal mock declares, which every scope of
 	///     a fill's tree emits in its builder function.
-	private func generateProperties(
+	func generateProperties(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
@@ -6952,7 +6983,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// would add its frame to every task that plans a body (`.claude/rules/generator-design.md`).
 			for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
 				let code = try await body.orderedChildren[index].generator.generateCode(
-					codeGeneration: codeGeneration,
+					codeGeneration: codeGeneration.descending(toChildAt: body.orderedChildren[index].index),
 					unavailableProperties: body.orderedChildren[index].unavailableProperties,
 					propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
 					builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
@@ -6971,6 +7002,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The child's position among the body's ordered children.
 		let index: Int
 		let generator: ScopeGenerator
+		let codeGeneration: CodeGeneration
 		let unavailableProperties: Set<Property>
 		let propertiesGeneratedLater: Set<Property>
 		let builderFunctionNames: BuilderFunctionNames
@@ -6991,6 +7023,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			ChildCodeRequest(
 				index: index,
 				generator: body.orderedChildren[index].generator,
+				codeGeneration: codeGeneration.descending(toChildAt: body.orderedChildren[index].index),
 				unavailableProperties: body.orderedChildren[index].unavailableProperties,
 				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
@@ -7023,7 +7056,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				try await childCodes.append(ChildCode(
 					index: request.index,
 					code: request.generator.generateCode(
-						codeGeneration: codeGeneration,
+						codeGeneration: request.codeGeneration,
 						unavailableProperties: request.unavailableProperties,
 						propertiesGeneratedLater: request.propertiesGeneratedLater,
 						builderFunctionNames: request.builderFunctionNames,
@@ -7053,7 +7086,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// costs more processor time than it saves.
 					let code = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(false) {
 						try await request.generator.generateCode(
-							codeGeneration: codeGeneration,
+							codeGeneration: request.codeGeneration,
 							unavailableProperties: request.unavailableProperties,
 							propertiesGeneratedLater: request.propertiesGeneratedLater,
 							builderFunctionNames: request.builderFunctionNames,
@@ -7853,6 +7886,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)
 				}
 				return Self.rootCode(of: rootInitializer, writing: consume childCode)
+			case .configurable:
+				return .empty
 			}
 		case let .property(
 			instantiable,
@@ -7890,6 +7925,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			return try placeCode(
 				around: childCode,
+				constructionHook: codeGeneration.constructionHook,
 				instantiable: instantiable,
 				property: property,
 				forwardedProperties: forwardedProperties,
@@ -7973,6 +8009,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	@inline(never)
 	private func placeCode(
 		around childCode: [GeneratedCode],
+		constructionHook: ConstructionHook?,
 		instantiable: Instantiable,
 		property: Property,
 		forwardedProperties: Set<Property>,
@@ -7986,6 +8023,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) throws(Initializer.GenerationError) -> GeneratedCode {
 		try .place(propertyCode(
 			around: childCode,
+			constructionHook: constructionHook,
 			instantiable: instantiable,
 			property: property,
 			forwardedProperties: forwardedProperties,
@@ -8238,6 +8276,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	@inline(never)
 	private func propertyCode(
 		around childCode: [GeneratedCode],
+		constructionHook: ConstructionHook? = nil,
 		instantiable: Instantiable,
 		property: Property,
 		forwardedProperties: Set<Property>,
@@ -8265,7 +8304,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			? builderCallArguments.map { "\($0.label): \($0.value)" }
 			: []
 		let constructionArguments = holeArgumentList.isEmpty ? argumentList : ([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")
-		let construction = Expression.construction(constructionTarget, arguments: constructionArguments)
+		let construction = constructionHook.map { Expression.hooked(.construction(constructionTarget, arguments: constructionArguments), by: $0) }
+			?? Expression.construction(constructionTarget, arguments: constructionArguments)
 		// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
 		// the scope's parent binds its labels: each field read as the parent's receivers read it.
 		let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines

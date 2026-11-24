@@ -157,6 +157,9 @@ extension ScopeGenerator {
 			indent: bodyIndent,
 			lines: &bindingLines,
 		)
+		if SpikeShadow.logPath != nil {
+			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty)
+		}
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
 		// The mocked type's construction reads the names its own dependencies are bound apart under.
@@ -435,6 +438,8 @@ extension MockLowering {
 		// The path of child indices (`OrderedChild.index`) from the root to the node being lowered,
 		// which keys what the walk reads per place.
 		var childIndexPath = [Int]()
+		// SPIKE: the hook each place's construction would be replaced by, keyed by its path of child indices.
+		var placeHooks = [[Int]: ConstructionHook]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.
@@ -1143,6 +1148,9 @@ extension MockLowering {
 			// function.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
+				if let overrideRead {
+					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead, call: node.spikeHookCall, construction: node.spikeConstruction)
+				}
 				return .finished(node)
 			}
 			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
@@ -1287,6 +1295,9 @@ extension MockLowering {
 				node.arguments = readingDefaultsInsideFunction()
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
+			if let functionOverrideRead {
+				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
+			}
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			let oneWayParentConcreteType = parentConcreteType
@@ -1492,6 +1503,17 @@ extension MockLowering {
 		/// The name of the node's builder function.
 		var functionName: String {
 			renamedFunctionName ?? MockLowering.builderFunctionName(boundAs: bindingName)
+		}
+
+		/// SPIKE: the node's construction without an override.
+		var spikeConstruction: String {
+			construction
+		}
+
+		/// SPIKE: the call of the node's override builder, as its construction's replacement.
+		var spikeHookCall: String {
+			let builder = ReservedName.configurationBuilderPropertyName
+			return isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 		}
 
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
