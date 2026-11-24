@@ -133,7 +133,13 @@ enum GraphFuzzerBaseValueComparison {
 
 		/// The graphs whose values were compared: those whose bytes differ, with a verdict.
 		var comparedByValue: Int {
-			matchingValues + findings.count { if case .valueDifference = $0.finding { true } else { false } }
+			matchingValues + findings.count {
+				if case .valueDifference = $0.finding {
+					true
+				} else {
+					false
+				}
+			}
 		}
 
 		/// The counts as one report line.
