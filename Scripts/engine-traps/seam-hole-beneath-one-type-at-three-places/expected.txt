@@ -1,0 +1,25 @@
+left: services: ["left pair", "left built pair"]
+left: pairs read left's token: true
+left: levels were handed left's token: true
+left: the built pair's level was handed left's pair: true
+left: the node's level was handed left's inner: true
+left: node services by lap: ["left node left 1", "left node left 2", "left node left 3"]
+left: nodes read left's token and their own id: true
+right: services: ["right pair", "right built pair"]
+right: pairs read right's token: true
+right: levels were handed right's token: true
+right: the built pair's level was handed right's pair: true
+right: the node's level was handed right's inner: true
+right: node services by lap: ["right node right 1", "right node right 2", "right node right 3"]
+right: nodes read right's token and their own id: true
+sendable: services: ["sendable pair", "sendable built pair"]
+sendable: pairs read sendable's token: true
+sendable: levels were handed sendable's token: true
+sendable: the built pair's level was handed sendable's pair: true
+sendable: the node's level was handed sendable's inner: true
+sendable: node services by lap: ["sendable node sendable 1", "sendable node sendable 2", "sendable node sendable 3"]
+sendable: nodes read sendable's token and their own id: true
+the three tokens differ: true
+a second right: services: ["right pair", "right built pair", "right node again"]
+a second right: its levels were handed its own token and pair: true
+levels handed out by side: ["left inner 1", "left node 1", "right inner 2", "right node 2", "sendable inner 1", "sendable node 1"]

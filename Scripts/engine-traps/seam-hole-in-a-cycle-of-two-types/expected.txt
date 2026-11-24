@@ -1,0 +1,19 @@
+left: the side's leaf: left leaf
+left: levels were handed left's token: true
+left: first A's leaf level was handed that A's service: true
+left: first A's next level was handed that A's service and leaf: true
+left: first B's leaf level was handed that B's service: true
+left: second A's leaf level was handed that A's service: true
+left: second B's leaf level was handed that B's service: true
+left: services by lap (A, its leaf, B, its leaf, A, its leaf, B, its leaf): ["left A", "left A leaf", "left B", "left B leaf", "left A", "left A leaf", "left B", "left B leaf"]
+left: every leaf reads left's token: true
+right: the side's leaf: right leaf
+right: levels were handed right's token: true
+right: first A's leaf level was handed that A's service: true
+right: first A's next level was handed that A's service and leaf: true
+right: first B's leaf level was handed that B's service: true
+right: second A's leaf level was handed that A's service: true
+right: second B's leaf level was handed that B's service: true
+right: services by lap (A, its leaf, B, its leaf, A, its leaf, B, its leaf): ["right A", "right A leaf", "right B", "right B leaf", "right A", "right A leaf", "right B", "right B leaf"]
+right: every leaf reads right's token: true
+the two tokens differ: true
