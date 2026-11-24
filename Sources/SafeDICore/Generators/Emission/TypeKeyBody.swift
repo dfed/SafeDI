@@ -40,6 +40,18 @@ enum TypeKeyBody {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
+		// The root functions the plan's places call are declared once, before every statement, as the path key declares
+		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
+		// a place written as text without them.
+		let rootFunctionNames = Set(RootFunctionHoisting.records(in: rootBody).map(\.name))
+		var rootFunctionDeclarations = [GeneratedCode]()
+		if !rootFunctionNames.isEmpty {
+			let hoisted = RootFunctionHoisting.hoisted(rootBody, indentation: rootStatementIndentation)
+			guard let body = hoisted.last, case let .omittingRootFunctions(_, declaredNames) = body.node, declaredNames == rootFunctionNames else { return nil }
+			rootFunctionDeclarations = hoisted.dropLast()
+			layout.rootFunctionNames = rootFunctionNames
+			layout.namesInScope.formUnion(rootFunctionNames)
+		}
 		guard layout.read(rootBody) else { return nil }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
 		guard layout.computeReads() else { return nil }
@@ -47,11 +59,16 @@ enum TypeKeyBody {
 		guard layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
-		      layout.checkEveryRead()
+		      layout.checkEveryRead(),
+		      layout.checkValuePaths()
 		else { return nil }
 		layout.computeDecoratorsAndNames()
-		return layout.spelledRootStatements()
+		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements() else { return nil }
+		return rootFunctionDeclarations + statements
 	}
+
+	/// The indentation of a root's statements, which every root body is written after.
+	static let rootStatementIndentation = "        "
 }
 
 /// A declaration of the path key's body: a statement of a body, a forwarded property or a cycle parameter of a place's
@@ -146,6 +163,9 @@ struct TypeKeyLayout {
 	var bodies = [Body]()
 	/// The number of the root body's first statements that stand for declarations outside it, which are never spelled.
 	var outerDeclarationCount = 0
+	/// The root functions the root declares before its statements, which the text of a statement kept as the path key's code
+	/// leaves out.
+	var rootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
 	/// The views other than the root's in post-order of the view DAG.
@@ -183,6 +203,9 @@ struct TypeKeyLayout {
 	var normalizedCycleParameters = [Int: [String: PathValue]]()
 	var isDecorated = [Bool]()
 	var functionNames = [String]()
+	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
+	/// of one view can each hand their own.
+	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
 }
 
 extension AliasPlaceRecord {
