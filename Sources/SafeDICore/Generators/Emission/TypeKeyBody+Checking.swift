@@ -152,6 +152,8 @@ extension TypeKeyLayout {
 	/// Whether `read`, which a text place spells as written, names a declaration of the type in the type key's code that it
 	/// names in the path key's. The engine adds `.instance` only to the reads it spells, so where two places of one
 	/// function hand it a value and its `LazilyInstantiated`, the merged function's wrapper would reach the text unread.
+	/// The types are compared by exact spelling (`any P` and `P`, `Optional<X>` and `X?`, differ), which is what text
+	/// copied as written needs: a looser match would only share more places, never one the copy reads alike.
 	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
 		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
 	}
