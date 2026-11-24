@@ -68,3 +68,25 @@ extension MockLowering {
 		return path
 	}
 }
+
+extension ArgumentSource {
+	/// This source read under `name` where it reads the declaration of `label`: what a read becomes where a mock binds the
+	/// label apart (`ScopeGenerator.builtPlaceRecord(of:…readNames:…)`).
+	func renamed(from label: String, to name: String) -> ArgumentSource {
+		switch self {
+		case let .binding(boundLabel) where boundLabel == label:
+			.binding(label: name)
+		case let .lazyInstance(boundLabel, throughOptional) where boundLabel == label:
+			.lazyInstance(label: name, throughOptional: throughOptional)
+		case .binding,
+		     .lazyInstance,
+		     .nil,
+		     .forwardedSpread,
+		     .wrapper,
+		     .optionalWrapper,
+		     .builderArgument,
+		     .spelledArgument:
+			self
+		}
+	}
+}

@@ -6990,6 +6990,70 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		))
 	}
 
+	/// The record of this scope's place where it builds `property`, from what the walk that writes the place hands it, or
+	/// `nil` where the type key does not plan it: the one function every walk records a built place with. `hasFunction` is
+	/// whether the walk writes the place's builder function, `functionName` the name it writes it under, `children` the
+	/// code of the places its body builds, `isPlannedAtPlace` the walk's half of whether the type key plans the place,
+	/// `readNames` the names the walk binds labels apart under, by the property the read is of, which each read's label
+	/// becomes (as `cycleParameterReads(unavailableProperties:readNames:)` reads them), and `alternatives` the values the
+	/// construction tries before its call.
+	/// It throws what the construction's argument list throws.
+	nonisolated func builtPlaceRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		forwardedProperties: Set<Property>,
+		erasedToConcreteExistential: Bool,
+		unavailableProperties: Set<Property>,
+		functionName: String,
+		hasFunction: Bool,
+		children: [GeneratedCode],
+		node: PlanNode,
+		isPlannedAtPlace: Bool,
+		readNames: [Property: String] = [:],
+		alternatives: [ConstructionAlternative] = [],
+	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		guard isPlannedAtPlace, isPlannedByGenerator, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
+		var record = BuiltPlaceRecord(
+			property: property,
+			isErased: erasedToConcreteExistential,
+			concreteType: instantiable.concreteInstantiable,
+			isExtension: instantiable.declarationType.isExtension,
+			target: constructionTarget(of: instantiable),
+			arguments: arguments.map { read in
+				guard let name = readNames[read.property] else { return read }
+				return PlaceRead(argumentLabel: read.argumentLabel, label: name, property: read.property, source: read.source.renamed(from: read.label, to: name))
+			},
+			forwardedProperties: forwardedProperties.sorted(),
+			cycleParameters: cycleParameters.map(\.property),
+			callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties, readNames: readNames),
+			functionName: functionName,
+			isSendable: buildsInSendableFunction,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			lineEnd: builtInlineSeamComment.map { " \($0)" } ?? "",
+			hasFunction: hasFunction,
+			children: children,
+			node: node,
+		)
+		if !alternatives.isEmpty {
+			record.alternatives = alternatives
+		}
+		return .built(record)
+	}
+
+	/// What this scope's place calls to construct `instantiable`: another module's public mock, the type's hand-written
+	/// mock, its `instantiate(…)`, or its initializer.
+	nonisolated func constructionTarget(of instantiable: Instantiable) -> ConstructionTarget {
+		if let publicMockCall {
+			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
+		} else if constructsWithHandWrittenMock {
+			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
+		} else if instantiable.declarationType.isExtension {
+			.instantiate(instantiable.concreteInstantiable)
+		} else {
+			.initializer(instantiable.concreteInstantiable)
+		}
+	}
+
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call.
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
@@ -8366,15 +8430,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillPlaceBindings: FillPlaceBindings,
 	) throws(Initializer.GenerationError) -> PlacePlan {
 		let concreteTypeName = instantiable.concreteInstantiable.asSource
-		let constructionTarget: ConstructionTarget = if let publicMockCall {
-			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
-		} else if constructsWithHandWrittenMock {
-			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
-		} else if instantiable.declarationType.isExtension {
-			.instantiate(instantiable.concreteInstantiable)
-		} else {
-			.initializer(instantiable.concreteInstantiable)
-		}
+		let constructionTarget = constructionTarget(of: instantiable)
 		// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
 		// mock passes them among its arguments.
 		let holeArgumentList = publicMockCall == nil
@@ -8411,40 +8467,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// its children in its function's body.
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
 		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
-			guard isPlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
 			// A mock's place whose construction the walk hooked with its override tries the override first.
 			var alternatives = [ConstructionAlternative]()
 			if let constructionHook {
-				guard let alternative = MockLowering.constructionAlternative(
-					of: constructionHook,
-					construction: Expression.construction(constructionTarget, arguments: constructionArguments).spelled,
-					argumentValues: arguments.map(\.source.spelled),
-					erasedType: erasedToConcreteExistential ? property.typeDescription.asInstantiatedType : nil,
-				) else { return nil }
+				guard let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties),
+				      let alternative = MockLowering.constructionAlternative(
+				      	of: constructionHook,
+				      	construction: Expression.construction(constructionTarget, arguments: constructionArguments).spelled,
+				      	argumentValues: arguments.map(\.source.spelled),
+				      	erasedType: erasedToConcreteExistential ? property.typeDescription.asInstantiatedType : nil,
+				      )
+				else { return nil }
 				alternatives.append(alternative)
 			}
-			var record = BuiltPlaceRecord(
-				property: property,
-				isErased: erasedToConcreteExistential,
-				concreteType: instantiable.concreteInstantiable,
-				isExtension: instantiable.declarationType.isExtension,
-				target: constructionTarget,
-				arguments: arguments,
-				forwardedProperties: forwardedProperties.sorted(),
-				cycleParameters: cycleParameters.map(\.property),
-				callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+			return try builtPlaceRecord(
+				of: property,
+				instantiable: instantiable,
+				forwardedProperties: forwardedProperties,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				unavailableProperties: unavailableProperties,
 				functionName: functionName,
-				isSendable: buildsInSendableFunction,
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
 				children: childCode,
 				node: planNode,
+				isPlannedAtPlace: seamCall == nil && isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+				alternatives: alternatives,
 			)
-			if !alternatives.isEmpty {
-				record.alternatives = alternatives
-			}
-			return .built(record)
 		}
 
 		let propertyType = property.propertyType
