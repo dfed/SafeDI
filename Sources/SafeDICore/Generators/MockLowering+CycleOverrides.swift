@@ -76,11 +76,11 @@ extension MockLowering {
 		}
 
 		/// A read of this parameter where a call is made: the nearest place of the type's configuration where the path
-		/// key reads one there (`isProvided`), else a fresh configuration (`ValuePath.freshConfiguration`, requested of the
-		/// engine's owner) for a struct, or `nil` for an override closure.
+		/// key reads one there (`isProvided`), else a fresh configuration (`ValuePath.emptyInitialization`, spelled `<type>()`, on the
+		/// engine) for a struct, or `nil` for an override closure.
 		func read(isProvided: Bool) -> ValuePath {
 			if !isProvided, readsConfigurationStruct {
-				.freshConfiguration(type)
+				.emptyInitialization(type)
 			} else {
 				.read(PlaceRead(
 					argumentLabel: name,
