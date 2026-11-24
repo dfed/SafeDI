@@ -1017,15 +1017,10 @@ extension ScopeGenerator {
 			}
 		}
 		for uncovered in flatUncoveredParameters {
+			let typeSource = uncovered.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)" : uncovered.typeSource
 			// In `.v3Unstable`, a builder called once per instance (D12).
-			let typeSource = if isV3 {
-				"@escaping \(uncovered.isSendableAutoclosure ? "@Sendable " : "")() -> \(uncovered.typeSource)"
-			} else if uncovered.isSendableAutoclosure {
-				"@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)"
-			} else {
-				uncovered.typeSource
-			}
-			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true), sharedValueDocumentation: uncovered.sharedValueDocumentation))
+			let parameterTypeSource = isV3 ? "@escaping \(uncovered.isSendableAutoclosure ? "@Sendable " : "")() -> \(uncovered.typeSource)" : typeSource
+			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: parameterTypeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true), sharedValueDocumentation: uncovered.sharedValueDocumentation))
 		}
 		// Each builder, required, in builder order, as a seam takes it: what fills a place takes the values in scope at its
 		// site, and a call of another module's public mock hands up the places it does not fill. The tree calls each builder

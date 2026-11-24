@@ -1513,6 +1513,221 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		"""])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_namesBuilderAfterPropertyItsPlacesBuild_whenCallingMockFillsAnotherModulesPublicMockHole() async throws {
+		// `Screen`’s mock takes `api`’s builder under the label of the property it builds, and `Home`’s mock, which sees
+		// `Live`, takes its optional builder under that label too.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n",
+				"FeatTypes.swift": """
+					import SafeDI
+
+					public protocol Api {}
+
+					@Instantiable
+					final class Store: Instantiable {
+					    init(api: any Api) {
+					        self.api = api
+					    }
+
+					    @Received let api: any Api
+					}
+
+					@Instantiable(generateMock: .public)
+					public final class Screen: Instantiable {
+					    init(api: any Api, store: Store) {
+					        self.api = api
+					        self.store = store
+					    }
+
+					    @Instantiated public let api: any Api
+					    @Instantiated let store: Store
+					}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n",
+				"AppTypes.swift": """
+					import Feat
+					import SafeDI
+
+					@Instantiable(fulfillingAdditionalTypes: [Api.self])
+					public final class Live: Api, Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(generateMock: true)
+					public final class Home: Instantiable {
+					    public init(screen: Screen) {
+					        self.screen = screen
+					    }
+
+					    @Instantiated let screen: Screen
+					}
+				""",
+			], dependencies: ["Feat"]),
+		], integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feat"]?.generatedFiles == ["Feat.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct api_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let api: (api_Values) -> __safeDI_Built
+
+		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                self.api = api
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.api = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Configures `Screen` wherever a mock builds it: as the mocked type, or inside another module’s mock that calls this
+		    /// one. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its path, or that
+		    /// type’s defaults where there is none.
+		    nonisolated public struct SafeDIOverrides {
+		        public init() {
+		            __safeDI_storage = __safeDI_Storage(
+		                store: nil,
+		                safeDIBuilder: nil
+		            )
+		        }
+
+		        init(
+		            store: ((any Api) -> Store)? = nil,
+		            _ safeDIBuilder: ((any Api, Store) -> Screen)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                store: store,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var store: ((any Api) -> Store)? { __safeDI_storage.store }
+		        /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
+		        var safeDIBuilder: ((any Api, Store) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                store: ((any Api) -> Store)?,
+		                safeDIBuilder: ((any Api, Store) -> Screen)?
+		            ) {
+		                self.store = store
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let store: ((any Api) -> Store)?
+		            let safeDIBuilder: ((any Api, Store) -> Screen)?
+		        }
+		    }
+
+		    public static func mock(
+		        api: @escaping () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(api: .init(__safeDI_noScope: api), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        api __safeDI_apiBuilder: Screen.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values())
+		        let store = if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder(api) } else { Store(api: api) }
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(api, store) } else { Screen(api: api, store: store) }
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_050B2267ED4EAD62 {}
+		}
+		#endif
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Home {
+		    static func mock(
+		        api: (() -> any Api)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Home {
+		        let __safeDI_api_ = api
+		        func __safeDI_screen() -> Screen {
+		            func __safeDI_apiBuilder_Screen() -> Screen.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live()
+		                    return api
+		                })
+		            }
+		            _ = Screen.__safeDI_Screen_mock_050B2267ED4EAD62.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Screen.__safeDI_mock(api: __safeDI_api_.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Screen(), safeDIOverrides: safeDIOverrides.screen ?? .init())
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(screen) } else { Home(screen: screen) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Home {
+		    /// Configures `Home` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Screen) -> Home)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var screen: Screen.SafeDIOverrides? { __safeDI_storage.screen }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Screen) -> Home)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: Screen.SafeDIOverrides?,
+		                safeDIBuilder: ((Screen) -> Home)?
+		            ) {
+		                self.screen = screen
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let screen: Screen.SafeDIOverrides?
+		            let safeDIBuilder: ((Screen) -> Home)?
+		        }
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
