@@ -54,30 +54,41 @@ extension MockLowering {
 	/// The passed argument through which a type key function of `concreteType` takes the configuration its place reads.
 	/// Its name is one per type, and a passed argument is a declaration inside the function it is handed to, so a read of
 	/// the name resolves to the nearest place of the type above it: the rule above, as the engine's nearest declaration.
-	/// Its type is optional, since a call that reaches no override hands a read nothing provides, which is `nil`.
+	/// A place that reads a configuration struct takes it non-optional, and a call that reaches no same-type place hands a
+	/// fresh `<T>.SafeDIMockConfiguration()`, as the path key's pruned place reads one today, so the place's defaults read
+	/// `configuration.label` alike on every call. A place that reads only an override closure takes it optional, and such a
+	/// call hands `nil`, which builds the type as no override does.
 	struct ConfigurationParameter: Hashable, Sendable {
 		/// The parameter's name in the called function.
 		let name: String
-		/// The parameter's type: the configuration the place reads, made optional.
+		/// The parameter's type: the configuration struct the place reads, or the override closure's type made optional.
 		let type: TypeDescription
+		/// Whether the place reads a configuration struct rather than an override closure.
+		let readsConfigurationStruct: Bool
 
 		/// A place built with its type's hand-written mock reads a configuration of another shape than one built with its
 		/// initializer (`validateConfigurationsAreBuiltOneWay` leaves out a place beneath a cycle edge), so the two ways take
 		/// parameters of two names, and a place reads only the nearest place built its own way (issue #720's shape).
 		init(concreteType: TypeDescription, builtWithHandWrittenMock: Bool, configurationType: TypeDescription) {
 			name = ReservedName.builderFunctionNamePrefix + concreteType.asIdentifier + (builtWithHandWrittenMock ? "_mockConfiguration" : "_configuration")
-			type = configurationType.isOptional ? configurationType : .optional(configurationType)
+			readsConfigurationStruct = !configurationType.isClosure && !configurationType.isOptional
+			type = readsConfigurationStruct || configurationType.isOptional ? configurationType : .optional(configurationType)
 		}
 
 		/// A read of this parameter where a call is made: the nearest place of the type's configuration where the path
-		/// key reads one there (`isProvided`), else a read nothing provides, which is `nil`.
+		/// key reads one there (`isProvided`), else a fresh configuration (`ValuePath.freshConfiguration`, requested of the
+		/// engine's owner) for a struct, or `nil` for an override closure.
 		func read(isProvided: Bool) -> ValuePath {
-			.read(PlaceRead(
-				argumentLabel: name,
-				label: name,
-				property: Property(label: name, typeDescription: type),
-				source: isProvided ? .binding(label: name) : .nil,
-			))
+			if !isProvided, readsConfigurationStruct {
+				.freshConfiguration(type)
+			} else {
+				.read(PlaceRead(
+					argumentLabel: name,
+					label: name,
+					property: Property(label: name, typeDescription: type),
+					source: isProvided ? .binding(label: name) : .nil,
+				))
+			}
 		}
 
 		/// The argument a call hands this parameter.
