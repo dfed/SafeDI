@@ -234,53 +234,37 @@ public struct TypeAccessProof: Sendable {
 		self.kinds = kinds
 		self.unreadExtendedTypesByEntry = unreadExtendedTypesByEntry
 
-		// Every mention, from every member of every entry of the map, under each key it is recorded on: a `mockOnly`
-		// merge carries its mock under the key it merges into. A member names an entry of the type it mentions only where
-		// its module may name that entry.
-		var mentions = [TypeDescription: [Mention]]()
-		var seenMembers = Set<MemberKey>()
-		// Visited in key order, sorting the map's indices rather than copying every declaration into a sorted array.
-		for index in instantiables.indices.sorted(by: { instantiables[$0].key < instantiables[$1].key }) {
-			let carrier = instantiables[index].value
-			let dependencyLabels = Set(carrier.dependencies.map(\.property.label))
-			for member in Self.provingMembers(of: carrier) {
-				guard seenMembers.insert(MemberKey(carrier: carrier.concreteInstantiable, member: member.kind, location: member.location)).inserted else { continue }
-				for argument in member.initializer.arguments where dependencyLabels.contains(argument.innerLabel) {
-					for mentionedType in Self.mentionedTypes(in: argument.typeDescription) where entries[mentionedType] == nil || nameableEntry(of: mentionedType, mentionedFrom: member.moduleName) != nil {
-						mentions[mentionedType, default: []].append(Mention(
-							carrier: carrier.concreteInstantiable,
-							member: member.kind,
-							argumentLabels: member.initializer.arguments.map(\.label),
-							ownLevel: member.ownLevel,
-							moduleName: member.moduleName,
-							location: member.location,
-						))
-					}
-				}
+		// The mentions whose types the fixed point or a reader of mentions decides: the types of the entries that are not
+		// exact, and the spellings SafeDI cannot read. An exact entry's proof is its start, which no mention raises, and a
+		// type with no entry is proven by its plain declarations; the mentions of those explain only the error that
+		// `declarationsProving(typesNamedBy:admittedModules:)` reports, which collects every mention again.
+		let mentions = Self.mentions(in: instantiables, entries: entries, reach: reach, ofTypesWhere: { type in
+			if case .unknown = type {
+				true
+			} else {
+				kinds[type].map { $0.exactProof == nil } ?? false
 			}
-		}
+		})
 		self.mentions = mentions
 
 		// The least fixed point: every entry that is not exact starts at its bound and is raised by each mention of its
 		// type, at the mentioning member's level capped by its carrier's current proof, never above `public`.
-		var proofs = [TypeDescription: AccessLevel]()
-		for (type, kind) in kinds {
-			proofs[type] = kind.start
-		}
+		var raisedProofs = kinds.compactMapValues { kind in kind.exactProof == nil ? kind.start : nil }
+		let raisedTypes = raisedProofs.keys.sorted()
 		var changed = true
 		while changed {
 			changed = false
-			for type in kinds.keys.sorted() where kinds[type]?.exactProof == nil {
-				let raised = (mentions[type] ?? []).reduce(proofs[type] ?? .internal) { level, mention in
-					max(level, mention.ownLevel.capped(by: proofs[mention.carrier] ?? .internal))
+			for type in raisedTypes {
+				let raised = (mentions[type] ?? []).reduce(raisedProofs[type] ?? .internal) { level, mention in
+					max(level, mention.ownLevel.capped(by: Self.proof(of: mention.carrier, kinds: kinds, raisedProofs: raisedProofs)))
 				}
-				if raised != proofs[type] {
-					proofs[type] = raised
+				if raised != raisedProofs[type] {
+					raisedProofs[type] = raised
 					changed = true
 				}
 			}
 		}
-		self.proofs = proofs
+		self.raisedProofs = raisedProofs
 	}
 
 	// MARK: Public
@@ -462,6 +446,9 @@ public struct TypeAccessProof: Sendable {
 		var proving = Set<TypeDescription>()
 		var typesToVisit = Self.mentionedTypes(in: type)
 		var visitedTypes = Set<TypeDescription>()
+		// Only an error about a seam whose callers compute it otherwise reads this, so every mention is collected again
+		// here rather than kept by every proof.
+		let mentions = Self.mentions(in: instantiables, entries: entries, reach: reach, ofTypesWhere: { _ in true })
 		while let visitedType = typesToVisit.popLast() {
 			guard visitedTypes.insert(visitedType).inserted else { continue }
 			let isEntry = kinds[visitedType] != nil
@@ -529,8 +516,10 @@ public struct TypeAccessProof: Sendable {
 	/// The type each entry inside an extension, or extension-based entry, is bounded by that no declaration SafeDI reads
 	/// declares, by the entry's type.
 	private let unreadExtendedTypesByEntry: [TypeDescription: TypeDescription]
+	/// The mentions of the types whose proofs mentions decide (`init`), by the type each mentions.
 	private let mentions: [TypeDescription: [Mention]]
-	private let proofs: [TypeDescription: AccessLevel]
+	/// The proof of each entry that is not exact, by its type: the least fixed point.
+	private let raisedProofs: [TypeDescription: AccessLevel]
 	private let reach: ModuleReach
 
 	/// The kind of the entry of `type` that a mention in `mentioningModule` resolves to: `nil` when there is none, or when
@@ -636,6 +625,92 @@ public struct TypeAccessProof: Sendable {
 		let location: Dependency.DeclarationLocation?
 	}
 
+	/// A mention found in a pass over the map in its own order, with what puts it in the order a pass in key order
+	/// would record it in: the index of the entry it is recorded on, and its position among that entry's mentions.
+	private struct FoundMention {
+		let mentionedType: TypeDescription
+		let mention: Mention
+		let memberKey: MemberKey
+		let index: Dictionary<TypeDescription, Instantiable>.Index
+		let position: Int
+	}
+
+	/// The proof of `type`: an exact entry's exact proof, the fixed point's for one that is not exact, and `internal` for a
+	/// type with no entry, which only a spelling SafeDI cannot read asks for.
+	private static func proof(of type: TypeDescription, kinds: [TypeDescription: EntryKind], raisedProofs: [TypeDescription: AccessLevel]) -> AccessLevel {
+		kinds[type]?.exactProof ?? raisedProofs[type] ?? .internal
+	}
+
+	private func proof(of type: TypeDescription) -> AccessLevel {
+		Self.proof(of: type, kinds: kinds, raisedProofs: raisedProofs)
+	}
+
+	/// The mentions of the types `isCollected` admits, from every member of every entry of the map, under each key it is
+	/// recorded on – a `mockOnly` merge carries its mock under the key it merges into – each member read once, under the
+	/// first key in key order that carries it, and each type's mentions in that order. A member names an entry of the type
+	/// it mentions only where its module may name that entry. The map is read in its own order and only the mentions
+	/// found are put in key order, so a proof whose mentions decide nothing sorts nothing.
+	private static func mentions(
+		in instantiables: [TypeDescription: Instantiable],
+		entries: [TypeDescription: Instantiable],
+		reach: ModuleReach,
+		ofTypesWhere isCollected: (TypeDescription) -> Bool,
+	) -> [TypeDescription: [Mention]] {
+		var found = [FoundMention]()
+		for index in instantiables.indices {
+			let carrier = instantiables[index].value
+			let dependencyLabels = Set(carrier.dependencies.map(\.property.label))
+			var position = 0
+			for member in provingMembers(of: carrier) {
+				let memberKey = MemberKey(carrier: carrier.concreteInstantiable, member: member.kind, location: member.location)
+				for argument in member.initializer.arguments where dependencyLabels.contains(argument.innerLabel) {
+					for mentionedType in mentionedTypes(in: argument.typeDescription) where isCollected(mentionedType) && (entries[mentionedType].map { !reach.cannotName($0, from: member.moduleName) } ?? true) {
+						found.append(FoundMention(
+							mentionedType: mentionedType,
+							mention: Mention(
+								carrier: carrier.concreteInstantiable,
+								member: member.kind,
+								argumentLabels: member.initializer.arguments.map(\.label),
+								ownLevel: member.ownLevel,
+								moduleName: member.moduleName,
+								location: member.location,
+							),
+							memberKey: memberKey,
+							index: index,
+							position: position,
+						))
+						position += 1
+					}
+				}
+			}
+		}
+		guard !found.isEmpty else { return [:] }
+		// A member is read under the first key in key order that carries it, which may be a key whose declaration mentions
+		// nothing collected: a member's mentions follow the dependencies of the declaration a key holds.
+		let foundMemberKeys = Set(found.map(\.memberKey))
+		let foundCarriers = Set(foundMemberKeys.map(\.carrier))
+		var firstIndexByMemberKey = [MemberKey: Dictionary<TypeDescription, Instantiable>.Index]()
+		for index in instantiables.indices where foundCarriers.contains(instantiables[index].value.concreteInstantiable) {
+			for member in provingMembers(of: instantiables[index].value) {
+				let memberKey = MemberKey(carrier: instantiables[index].value.concreteInstantiable, member: member.kind, location: member.location)
+				let isFirst = foundMemberKeys.contains(memberKey) && (firstIndexByMemberKey[memberKey].map { instantiables[index].key < instantiables[$0].key } ?? true)
+				if isFirst {
+					firstIndexByMemberKey[memberKey] = index
+				}
+			}
+		}
+		var mentions = [TypeDescription: [Mention]]()
+		let kept = found
+			.filter { firstIndexByMemberKey[$0.memberKey] == $0.index }
+			.sorted { left, right in
+				left.index == right.index ? left.position < right.position : instantiables[left.index].key < instantiables[right.index].key
+			}
+		for foundMention in kept {
+			mentions[foundMention.mentionedType, default: []].append(foundMention.mention)
+		}
+		return mentions
+	}
+
 	private struct ProvingMember {
 		let kind: MemberKind
 		let initializer: Initializer
@@ -732,7 +807,7 @@ public struct TypeAccessProof: Sendable {
 	/// type enclosing it, which is `public`.
 	private func cause(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause? {
 		if let kind = entryKind(of: type, mentionedFrom: mentioningModule) {
-			let level = proofs[type] ?? .internal
+			let level = proof(of: type)
 			switch kind {
 			case .typeDeclaration:
 				return .ownDeclaration(type: type, level: level)
@@ -844,7 +919,7 @@ public struct TypeAccessProof: Sendable {
 	/// starting at `internal`.
 	private func mentionedCause(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause {
 		let admittedMentions = (mentions[type] ?? []).filter { admittedModules.contains($0.moduleName) }
-		guard let level = admittedMentions.map({ $0.ownLevel.capped(by: proofs[$0.carrier] ?? .internal) }).max() else {
+		guard let level = admittedMentions.map({ $0.ownLevel.capped(by: proof(of: $0.carrier)) }).max() else {
 			return .unproven(type: type)
 		}
 		return .signatures(type: type, level: level, provers: provers(of: type, atLevel: level, admittedModules: admittedModules), mentioningModuleName: mentioningModule.moduleName)
@@ -856,7 +931,7 @@ public struct TypeAccessProof: Sendable {
 		var seen = Set<MemberKey>()
 		return (mentions[type] ?? [])
 			.filter { mention in admittedModules.map { $0.contains(mention.moduleName) } ?? true }
-			.filter { $0.ownLevel.capped(by: proofs[$0.carrier] ?? .internal) == level }
+			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
 			.filter { seen.insert(MemberKey(carrier: $0.carrier, member: $0.member, location: $0.location)).inserted }
 			.sorted { left, right in
 				let leftKey = (left.location?.filePath ?? "\u{10FFFF}", left.location?.line ?? 0, left.location?.column ?? 0)
@@ -864,7 +939,7 @@ public struct TypeAccessProof: Sendable {
 				return leftKey < rightKey || (leftKey == rightKey && left.carrier < right.carrier)
 			}
 			.map { mention in
-				let carrierProof = proofs[mention.carrier] ?? .internal
+				let carrierProof = proof(of: mention.carrier)
 				return Prover(
 					carrier: mention.carrier,
 					member: mention.member,
@@ -881,7 +956,7 @@ public struct TypeAccessProof: Sendable {
 	/// Why the entry of `carrier` is proven at its level, for a member it caps.
 	private func carrierCause(_ carrier: TypeDescription) -> Cause? {
 		guard let kind = kinds[carrier] else { return nil }
-		let level = proofs[carrier] ?? .internal
+		let level = proof(of: carrier)
 		switch kind {
 		case .typeDeclaration:
 			return .ownDeclaration(type: carrier, level: level)
@@ -914,7 +989,7 @@ public struct TypeAccessProof: Sendable {
 		guard level > (kinds[type]?.start ?? .internal) else { return [] }
 		var seen = Set<MemberKey>()
 		return (mentions[type] ?? [])
-			.filter { $0.ownLevel.capped(by: proofs[$0.carrier] ?? .internal) == level }
+			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
 			.filter { seen.insert(MemberKey(carrier: $0.carrier, member: $0.member, location: $0.location)).inserted }
 			.sorted { left, right in
 				let leftKey = (left.location?.filePath ?? "\u{10FFFF}", left.location?.line ?? 0, left.location?.column ?? 0)
