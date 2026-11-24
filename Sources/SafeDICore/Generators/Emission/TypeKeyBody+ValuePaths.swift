@@ -35,6 +35,12 @@ extension BuiltPlaceRecord {
 		return reads
 	}
 
+	/// The values the place's function is handed and declares for its body: what its wrapper forwards, then its passed
+	/// arguments, which a read in its body resolves to as it resolves to a forwarded value.
+	var parameterProperties: [Property] {
+		forwardedProperties + passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
+	}
+
 	/// The reads the place's call makes in its parent's body: what it passes its cycle parameters, then the reads of what
 	/// it hands its passed arguments.
 	var callSiteReads: [PlaceRead] {

@@ -29,7 +29,7 @@ extension TypeKeyLayout {
 		case let .statement(body, index):
 			property(of: bodies[body].statements[index])?.typeDescription
 		case let .forwarded(body, label):
-			bodies[body].record?.forwardedProperties.first(where: { $0.label == label })?.typeDescription
+			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
 			bodies[body].record?.cycleParameters.first(where: { $0.label == label })?.typeDescription
 		}

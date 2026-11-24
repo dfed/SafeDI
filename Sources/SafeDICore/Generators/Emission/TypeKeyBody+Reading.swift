@@ -75,7 +75,7 @@ extension TypeKeyLayout {
 							record: built,
 							isInSendableFamily: isInSendableFamily,
 							domainLabels: labels,
-							forwardedLabels: Set(built.forwardedProperties.map(\.label)),
+							forwardedLabels: Set(built.parameterProperties.map(\.label)),
 							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
 						))
 						viewsByKey[key] = newBody
@@ -132,7 +132,7 @@ extension TypeKeyLayout {
 				continue
 			}
 			stack.removeLast()
-			let bound = Set(current.forwardedProperties.map(\.label)).union(current.cycleParameters.map(\.label))
+			let bound = Set(current.parameterProperties.map(\.label)).union(current.cycleParameters.map(\.label))
 			var boundBefore = Set<String>()
 			var domain = Domain()
 			// A read of `nil` is in the domain too: the checks look up every label a function reads, whatever its places read.
