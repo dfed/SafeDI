@@ -128,8 +128,10 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	mutating func generate_startsTasksForFewScopes_whenSeamThatTakesAParameterIsCreatedAgainForItsLazyCycle() async throws {
 		// The tree of `generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle`, whose screen also receives a
 		// token nothing in the tree provides. The seam takes the token, so its first signature pass does not settle it, and
-		// emission creates its tree anew: twice, for the lazy cycle. The second creation reuses each place the first built
-		// settled, and starts again the groups the first started beneath it: 10 tasks on each creation, 20.
+		// emission creates its tree anew: twice, for the lazy cycle. The first creation starts 10 tasks. The second reuses
+		// each place the first built settled, whose code the first already started, so the tree's driver starts none of them
+		// again: it starts only the 2 groups that hold places the second creation built anew, 12 in all. Starting again what
+		// the first creation started, as each creation once did, made 20.
 		let cycle = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Received let token: Token", "@Instantiated let stepBuilder: Instantiator<Step>"]),
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
@@ -141,7 +143,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			beneath: ["Root"],
 			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
 		) + cycle)
-		#expect(starts == 20)
+		#expect(starts == 12)
 	}
 
 	@Test

@@ -509,6 +509,12 @@ extension ScopeRecord {
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
 		var generatorsToStart: [[ScopeGenerator]]?
+		// The generators whose code the first pass started as it created them, which no later pass starts again, and the
+		// first pass's start log, which keeps them alive while the tree is built, so no other generator takes one's
+		// identity. Only the first pass starts code as it goes: a later pass collects what to start, and the driver starts
+		// the last pass's collection once the passes end.
+		var codeStartedByFirstPass = Set<ObjectIdentifier>()
+		var firstPassStartLog: ConstructionMemo.StartLog?
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
@@ -548,6 +554,8 @@ extension ScopeRecord {
 					previousPassGenerator: nil,
 					cycleParameterSeed: nil,
 					generatorsToStart: &discardedGeneratorsToStart,
+					codeStartedByFirstPass: [],
+					startLog: ConstructionMemo.StartLog(),
 					placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 					memo: &passMemo,
 					previousPassMemo: nil,
@@ -556,6 +564,7 @@ extension ScopeRecord {
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 				)
 			}
+			let startLog = ConstructionMemo.StartLog()
 			scopeGenerator = try createScopeGenerator(
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -569,6 +578,8 @@ extension ScopeRecord {
 				previousPassGenerator: previousPassGenerator,
 				cycleParameterSeed: cycleParameterSeed,
 				generatorsToStart: &generatorsToStart,
+				codeStartedByFirstPass: codeStartedByFirstPass,
+				startLog: startLog,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
 				previousPassMemo: reusablePassMemo,
@@ -578,6 +589,8 @@ extension ScopeRecord {
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
+				codeStartedByFirstPass = Set(startLog.groups.joined().map(ObjectIdentifier.init))
+				firstPassStartLog = startLog
 				cycleParameterSeed = Self.cycleParameterSeed(
 					ofFirstPassTree: scopeGenerator,
 					seamRoot: seamRoot,
@@ -603,6 +616,7 @@ extension ScopeRecord {
 		for group in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: group)
 		}
+		withExtendedLifetime(firstPassStartLog) {}
 		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
 		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
 		// the whole mock pass, so no later mock root reads the memo after a root that failed. A change that adds a
@@ -642,6 +656,9 @@ extension ScopeRecord {
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
 	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
 	///   generators whose code to start, in the order they are created, in the groups that each start on one task.
+	/// - Parameter codeStartedByFirstPass: The generators whose code the tree's first pass started, which this pass does
+	///   not start or collect again; empty in the first pass.
+	/// - Parameter startLog: Where this pass logs each group of generators it starts or collects, which its entries share.
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
 	/// - Parameter scopesBuiltAtOnePlace: The scopes the tree builds at one place only, whose places are not keyed, looked up
@@ -665,6 +682,8 @@ extension ScopeRecord {
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterSeed: CycleParameterSeed?,
 		generatorsToStart: inout [[ScopeGenerator]]?,
+		codeStartedByFirstPass: Set<ObjectIdentifier>,
+		startLog: ConstructionMemo.StartLog,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
 		previousPassMemo: ConstructionMemo?,
@@ -708,11 +727,11 @@ extension ScopeRecord {
 		// scope has on the stack, the reuse, its key, and whether the reuse is a generator the pass before built, which the
 		// memo stores for the places after. What is built inside one is not stored: the tool does not build it.
 		var rebuiltPlaces = [(index: Int, reuse: ConstructionMemo.Reuse, key: ConstructionMemo.Key, storesEntry: Bool)]()
-		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
-		var startedGenerators = Set<ObjectIdentifier>()
-		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
-		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
-		let startLog = ConstructionMemo.StartLog()
+		// The generators whose code the first pass started or this pass started or collected, each of which a place that
+		// reuses it does not start again. `startLog` holds every generator this pass started or collected, in order: what
+		// each place's build started is the part of it from the place's `startLogIndex` on, which a later pass that reuses
+		// the place's generator collects again.
+		var startedGenerators = codeStartedByFirstPass
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
@@ -1786,7 +1805,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			property: propertyID,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
-			startsCodeGeneration: startsCodeGeneration,
 			validatesForwardedProperties: validatesForwardedProperties,
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			mayPassNil: nearestDeclarations(ofChildBuilding: property).mayPassNil,

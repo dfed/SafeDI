@@ -101,7 +101,6 @@ struct ConstructionMemo {
 		let property: PropertyID
 		let erasedToConcreteExistential: Bool
 		let forMockGeneration: Bool
-		let startsCodeGeneration: Bool
 		let validatesForwardedProperties: Bool
 		let buildsWithHandWrittenMocks: Bool
 		/// Whether a declaration enclosing the tree holds a receive a mock passes `nil`
