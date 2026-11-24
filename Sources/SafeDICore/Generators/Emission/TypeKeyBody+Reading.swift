@@ -248,7 +248,7 @@ extension TypeKeyLayout {
 		     .wrapper,
 		     .optionalWrapper,
 		     .builderArgument,
-		     .holeArgument:
+		     .spelledArgument:
 			lookUp(read.label, inBody: body, before: index)
 		}
 	}
