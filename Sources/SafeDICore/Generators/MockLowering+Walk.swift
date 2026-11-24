@@ -1729,17 +1729,15 @@ extension MockLowering {
 		}
 	}
 
-	/// `lines` joined by newlines, in storage sized once for all of them: a mock's code can run to megabytes, which
-	/// `joined(separator:)` grows into by copying.
-	/// The statement that binds a node `mock()` promotes in `.v3Unstable` from the `SafeDIReceived` parameter it takes for it:
-	/// the instance it is passed, or the value `built` builds from the configuration it is passed, bound as
-	/// `configurationName`.
 	/// The type of the value `mock()` takes for a received dependency it promotes in `.v3Unstable`: the property's own type,
 	/// wrapper included, or its instantiated type for a constant.
 	static func v3ReceivedValueType(of property: Property) -> TypeDescription {
 		property.propertyType.isConstant ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription.unwrapped
 	}
 
+	/// The statement that binds a node `mock()` promotes in `.v3Unstable` from the `SafeDIReceived` parameter it takes for it:
+	/// the instance it is passed, or the value `built` builds from the configuration it is passed, bound as
+	/// `configurationName`.
 	static func v3ReceivedBindingLine(of property: Property, boundAs bindingName: String, passing parameterName: String, configurationName: String, building built: String, indent: String) -> String {
 		[
 			"\(indent)let \(bindingName): \(MockLowering.v3ReceivedValueType(of: property).asSource) = switch \(parameterName) {",
@@ -1749,6 +1747,8 @@ extension MockLowering {
 		].joined(separator: "\n")
 	}
 
+	/// `lines` joined by newlines, in storage sized once for all of them: a mock's code can run to megabytes, which
+	/// `joined(separator:)` grows into by copying.
 	static func joinedLines(_ lines: [String]) -> String {
 		var code = ""
 		code.reserveCapacity(lines.reduce(lines.count) { $0 + $1.utf8.count })
@@ -1963,10 +1963,6 @@ extension MockLowering {
 		}
 	}
 
-	/// The name of the builder function of a node bound as `bindingName`.
-	/// The arguments the mocked type's construction `initializer` is handed for `dependencies`: each dependency's label, or
-	/// the name the mock root's level binds it apart under, by its label and type (`renames`).
-	// A dependency among `instancesReadByValue` is passed its wrapper's instance.
 	/// The arguments of `initializer` that a dependency fulfills, each label and value, as `rootArgumentList` passes them.
 	static func rootDependencyArguments(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property>) -> [(label: String, value: String)] {
 		initializer.arguments.compactMap { argument in
@@ -1977,6 +1973,10 @@ extension MockLowering {
 		}
 	}
 
+	/// The name of the builder function of a node bound as `bindingName`.
+	/// The arguments the mocked type's construction `initializer` is handed for `dependencies`: each dependency's label, or
+	/// the name the mock root's level binds it apart under, by its label and type (`renames`).
+	// A dependency among `instancesReadByValue` is passed its wrapper's instance.
 	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> String {
 		rootArguments(of: initializer, given: dependencies, renames: renames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
 			.map { "\($0.label): \($0.value)" }
