@@ -55,7 +55,11 @@ extension InstantiableMacro {
 		// SafeDI generates initializers only for a tree that builds something: a root or seam that instantiates no
 		// dependency gets none, and its callers call its own initializer.
 		let instantiatesDependency = visitor.dependencies.contains {
-			if case .instantiated = $0.source { true } else { false }
+			if case .instantiated = $0.source {
+				true
+			} else {
+				false
+			}
 		}
 		let generatedInitializers: FixableInstantiableError.GeneratedIsolatedDeclaration? = if !instantiatesDependency {
 			nil
