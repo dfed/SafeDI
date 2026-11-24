@@ -47,7 +47,7 @@ extension TypeKeyLayout {
 				}
 			}
 		}
-		var allocator = GeneratedNameAllocator(reserving: namesInScope)
+		var allocator = GeneratedNameAllocator(reserving: Set<String>())
 		functionNames = membersByClass.indices.map { owner in
 			guard let representative = representative(of: owner) else { return "" }
 			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
@@ -62,7 +62,7 @@ extension TypeKeyLayout {
 		for owner in classesByDepth {
 			guard let representative = representative(of: owner),
 			      let body = spelledStatements(ofClass: owner, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
-			      let argumentValues = spelledArgumentValues(representative.arguments, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
+			      let argumentValues = spelledArgumentValues(representative.arguments, replacedAt: representative.argumentValues, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
 			else { return nil }
 			let arguments = Self.labeled(argumentValues, of: representative.arguments)
 			var parameters = representative.forwardedProperties
@@ -96,13 +96,13 @@ extension TypeKeyLayout {
 				lineEnd: representative.lineEnd,
 			).spelled()
 		}
-		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
+		return spelledStatements(ofClass: 0, indentation: "        ", functionCode: functionCode)
 	}
 
 	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.
 	func spelledStatements(ofClass owner: Int, indentation: String, functionCode: [GeneratedCode]) -> [GeneratedCode]? {
 		var code = [GeneratedCode]()
-		for (index, statement) in statements(ofClass: owner).enumerated() where owner != 0 || index >= outerDeclarationCount {
+		for (index, statement) in statements(ofClass: owner).enumerated() {
 			let site = CallSite(owner: owner, index: index)
 			for function in hoistedFunctions[site] ?? [] {
 				code.append(.indented(functionCode[function], by: indentation))
@@ -119,7 +119,7 @@ extension TypeKeyLayout {
 	func spelledStatement(_ statement: Statement, inClass owner: Int, at index: Int) -> String? {
 		switch statement {
 		case let .inline(record):
-			guard let argumentValues = spelledArgumentValues(record.arguments, inClass: owner, before: index, sourceAtMember: { member, position in
+			guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
 				guard case let .inline(memberRecord) = bodies[member].statements[index] else { return nil }
 				return memberRecord.arguments[position].source
 			}) else { return nil }
@@ -155,6 +155,12 @@ extension TypeKeyLayout {
 			      let value = spelledArgument(label, passedTo: parameterType, inClass: owner, before: index)
 			else { return nil }
 			arguments.append("\(label.spelledAsArgumentLabel): \(value)")
+		}
+		// The members of `owner` hand their calls passed arguments of one shape (`structuralKey`), so its first member's
+		// spell every member's.
+		for argument in passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) {
+			guard let value = spelledValuePath(argument.value, inClass: owner, before: index) else { return nil }
+			arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
 		}
 		let functionName = functionNames[callee]
 		switch property.propertyType {
@@ -210,12 +216,15 @@ extension TypeKeyLayout {
 
 	/// The arguments of a construction made before the statement at `index` of `owner`'s body, each read as the receiver
 	/// declares it.
-	func spelledArgumentValues(_ reads: [PlaceRead], inClass owner: Int, before index: Int, sourceAtMember: (Int, Int) -> ArgumentSource?) -> [String]? {
+	func spelledArgumentValues(_ reads: [PlaceRead], replacedAt replacements: [Int: ValuePath], inClass owner: Int, before index: Int, sourceAtMember: (Int, Int) -> ArgumentSource?) -> [String]? {
 		var values = [String]()
 		let members = owner == 0 ? [0] : membersByClass[owner]
 		for (position, read) in reads.enumerated() {
 			let value: String
-			if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
+			if let path = replacements[position] {
+				guard let spelled = spelledValuePath(path, inClass: owner, before: index) else { return nil }
+				value = spelled
+			} else if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
 				value = "nil"
 			} else {
 				let declaration = typeLookUp(read.label, inClass: owner, before: index)
@@ -242,7 +251,7 @@ extension TypeKeyLayout {
 		let receivedType = read.property.typeDescription
 		if receivedType == declaredType || (receivedType.isOptional && receivedType.unwrapped == declaredType) {
 			return read.label
-		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType || receivedType == instanceType {
+		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType {
 			return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else {
 			guard let instanceType = declaredType.lazilyInstantiatedInstanceType, declaredType.isOptional, receivedType.isOptional, receivedType == instanceType else { return nil }
