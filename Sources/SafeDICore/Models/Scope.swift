@@ -2530,6 +2530,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private static func depth(ofAnswerAt answerDepth: Int?, insideFillOfCallAt fillCallDepth: Int?) -> Int {
 		max(answerDepth ?? -1, fillCallDepth ?? -1)
 	}
+
 	/// See `ScopeGenerator.closedOnFillPathDeclarationsBeneath`.
 	private let closedOnFillPathDeclarationsBeneath: Int?
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property, where this scope's type
