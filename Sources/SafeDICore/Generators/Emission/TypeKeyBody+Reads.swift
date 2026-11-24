@@ -158,6 +158,7 @@ extension TypeKeyLayout {
 				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional {
 					required.insert(fulfillingProperty.label)
 				}
+				record.listedReads.forEach(note)
 			}
 		}
 		return required.intersection(reads[body])
@@ -190,6 +191,7 @@ extension TypeKeyLayout {
 				if let fulfillingProperty = record.fulfillingProperty {
 					add(fulfillingProperty.label)
 				}
+				record.listedReads.forEach { add($0.label) }
 			}
 		}
 		return list.filter { !bodies[body].forwardedLabels.contains($0) && bodies[body].positionsByLabel[$0] == nil }
@@ -235,6 +237,9 @@ extension TypeKeyLayout {
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
 					note(fulfillingProperty.label, lookUp(fulfillingProperty.label, inBody: body, before: index))
+				}
+				for read in record.listedReads {
+					note(read.label, pathValue(of: read, inBody: body, before: index))
 				}
 			}
 		}

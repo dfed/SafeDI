@@ -44,6 +44,16 @@ extension TypeKeyLayout {
 			frames[frames.count - 1].next += 1
 			let body = frame.body
 			guard let record = Self.record(of: frame.children[frame.next]) else { return false }
+			// A statement of the root's body whose tree holds a place the type key cannot lay out keeps the path key's code,
+			// which reads only the root's declarations before it, as the type key's code declares them: functions are all
+			// declared in the root's body, so no function beneath it could keep reads it does not list.
+			if body == 0, !Self.laysOut(frame.children[frame.next]) {
+				guard case let .built(built) = record, let text = Self.unindentedText(of: frame.children[frame.next]) else { return false }
+				namesInScope.insert(built.functionName)
+				bodies[0].positionsByLabel[built.property.label, default: []].append(bodies[0].statements.count)
+				bodies[0].statements.append(.alias(AliasPlaceRecord(property: built.property, fulfillingProperty: nil, text: text, reads: [])))
+				continue
+			}
 			let position = bodies[body].statements.count
 			let statement: Statement
 			let label: String
@@ -106,7 +116,12 @@ extension TypeKeyLayout {
 				statement = .closer(closer, target: target)
 				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .alias(alias):
+				// A place written as text whose reads are not listed, that binds labels besides its own, or that calls or
+				// refers to a function it does not declare, is never laid out by the type key: two such places of one text can
+				// name different functions, which no read tells apart.
+				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
 				label = alias.property.label
+				namesInScope.formUnion(alias.declaredFunctionNames)
 				statement = .alias(alias)
 			}
 			bodies[body].statements.append(statement)
@@ -176,6 +191,7 @@ extension TypeKeyLayout {
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
 						domain.labels.insert(fulfillingProperty.label)
 					}
+					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
 				}
 			}
@@ -183,6 +199,33 @@ extension TypeKeyLayout {
 			domainsByNode[current.node] = domain
 		}
 		return domainsByNode[built.node]
+	}
+
+	/// Whether the type key can lay out every place of `code`'s tree: each records what it builds, and each written as text
+	/// lists its reads, binds no other label and names no function. A plan can be as deep as the module has types, so the
+	/// walk keeps a stack of its own.
+	static func laysOut(_ code: GeneratedCode) -> Bool {
+		var stack = [code]
+		while let current = stack.popLast() {
+			switch record(of: current) {
+			case nil:
+				return false
+			case let .built(built):
+				stack.append(contentsOf: built.children)
+			case .closer:
+				break
+			case let .alias(alias):
+				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
+			}
+		}
+		return true
+	}
+
+	/// The text of a statement of the root's body without the indentation the root gives it, which the type key's spelling
+	/// gives it again.
+	static func unindentedText(of code: GeneratedCode) -> String? {
+		guard case let .indented(inner, _) = code.node else { return nil }
+		return inner.spelled()
 	}
 
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.

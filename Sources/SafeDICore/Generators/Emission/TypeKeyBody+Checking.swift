@@ -97,6 +97,10 @@ extension TypeKeyLayout {
 						guard checkRead(record.arguments[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
 					}
 				case let .alias(record):
+					for position in record.listedReads.indices {
+						let isNil = isNilAtEveryMember(owner: owner, statement: index, argument: position)
+						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
+					}
 					guard let fulfillingProperty = record.fulfillingProperty else { continue }
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
@@ -125,8 +129,14 @@ extension TypeKeyLayout {
 	func isNilAtEveryMember(owner: Int, statement index: Int, argument position: Int) -> Bool {
 		let members = owner == 0 ? [0] : membersByClass[owner]
 		return members.allSatisfy { member in
-			guard case let .inline(record) = bodies[member].statements[index] else { return false }
-			return record.arguments[position].source == .nil
+			switch bodies[member].statements[index] {
+			case let .inline(record):
+				record.arguments[position].source == .nil
+			case let .alias(record):
+				record.listedReads[position].source == .nil
+			case .built, .closer:
+				false
+			}
 		}
 	}
 

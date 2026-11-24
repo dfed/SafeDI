@@ -184,3 +184,15 @@ struct TypeKeyLayout {
 	var isDecorated = [Bool]()
 	var functionNames = [String]()
 }
+
+extension AliasPlaceRecord {
+	/// Whether the type key knows every read the place makes: a rename's one read, or the reads its text lists.
+	var listsItsReads: Bool {
+		reads != nil || text.isEmpty || fulfillingProperty != nil
+	}
+
+	/// The reads the place's text lists, which a rename's read is not among.
+	var listedReads: [PlaceRead] {
+		reads ?? []
+	}
+}
