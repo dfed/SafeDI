@@ -99,7 +99,9 @@ extension TypeKeyLayout {
 				case let .alias(record):
 					for position in record.listedReads.indices {
 						let isNil = isNilAtEveryMember(owner: owner, statement: index, argument: position)
-						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
+						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil),
+						      isNil || readsDeclarationOfSameType(record.listedReads[position], inBody: body, before: index, owner: owner)
+						else { return false }
 					}
 					guard let fulfillingProperty = record.fulfillingProperty else { continue }
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
@@ -145,6 +147,13 @@ extension TypeKeyLayout {
 		let expected = normalized(pathValue(of: read, inBody: body, before: index))
 		let declaration = typeLookUp(read.label, inClass: owner, before: index)
 		return normalized(evaluate(declaration, inBody: body)) == expected
+	}
+
+	/// Whether `read`, which a text place spells as written, names a declaration of the type in the type key's code that it
+	/// names in the path key's. The engine adds `.instance` only to the reads it spells, so where two places of one
+	/// function hand it a value and its `LazilyInstantiated`, the merged function's wrapper would reach the text unread.
+	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
+		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path
