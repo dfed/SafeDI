@@ -16054,9 +16054,10 @@ enum GraphFuzzerOracle {
 					firstLine.hasPrefix("extension ") || firstLine.hasPrefix("/// Configuration for how ") || firstLine.hasPrefix("/// Configures ")
 				} == true
 		}
-		/// Whether an unconditional public mock's module-level configuration, or a forwarder of a default, begins at `index`.
+		/// Whether an unconditional public mock's module-level configuration, `.v3Unstable`'s file-scope configuration, or a
+		/// forwarder of a default, begins at `index`.
 		func beginsPublicConfigurationDeclaration(at index: Int) -> Bool {
-			lines[index].hasPrefix("/// Configuration for how ") || lines[index].hasPrefix("@usableFromInline ")
+			lines[index].hasPrefix("/// Configuration for how ") || lines[index].hasPrefix("/// Configures ") || lines[index].hasPrefix("@usableFromInline ")
 		}
 		guard let firstBlock = lines.indices.first(where: beginsBlock(at:)) else { return ["Combined.swift": contents] }
 		let header = lines[..<firstBlock].joined(separator: "\n")

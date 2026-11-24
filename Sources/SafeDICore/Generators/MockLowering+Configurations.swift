@@ -474,7 +474,7 @@ extension MockLowering.ConfigurationRecord {
 			lines.append("")
 			lines.append("extension \(concreteType.asSource) {")
 			for provider in providers {
-				lines.append("\(ScopeGenerator.standardIndent)fileprivate nonisolated static func \(provider.name)() -> \(provider.typeSource) { \(provider.expression) }")
+				lines.append("\(ScopeGenerator.standardIndent)nonisolated static func \(provider.name)() -> \(provider.typeSource) { \(provider.expression) }")
 			}
 			lines.append("}")
 		}
@@ -482,7 +482,7 @@ extension MockLowering.ConfigurationRecord {
 	}
 
 	/// The providers a file-scope configuration's defaults read (`isFileScopeInV3`): one per default other than a magic
-	/// literal, which is evaluated where the configuration is made, and `nil`, each declared `fileprivate` in an extension
+	/// literal, which is evaluated where the configuration is made, and `nil`, each declared in an extension
 	/// of the type, and `nonisolated`, as the initializer of a configuration nested in the type is. A closure-typed default
 	/// is returned `@Sendable` where the configuration is `@Sendable`-typed (`requiresSendable`).
 	func fileScopeDefaultProviders(requiresSendable: Bool) -> [(label: String, name: String, typeSource: String, expression: String)] {
@@ -491,7 +491,7 @@ extension MockLowering.ConfigurationRecord {
 			return (
 				label: defaultField.label,
 				name: "\(ReservedName.builderFunctionNamePrefix)configurationDefault_\(defaultField.label)".spelledAsJoinedIdentifier,
-				typeSource: requiresSendable && defaultField.isClosureType ? "@Sendable \(defaultField.valueTypeSource)" : defaultField.valueTypeSource,
+				typeSource: requiresSendable && defaultField.isClosureType && !defaultField.isAutoclosure && !defaultField.valueTypeDescription.isSendableFunction ? "@Sendable \(defaultField.valueTypeSource)" : defaultField.valueTypeSource,
 				expression: defaultField.defaultExpression,
 			)
 		}
