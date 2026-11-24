@@ -63,6 +63,7 @@ extension TypeKeyLayout {
 						outerView: outerView,
 						cycleArguments: built.callCycleArguments.map { pathValue(of: $0, inBody: body, before: position) },
 					)
+					passedArgumentsByCall[[body, position]] = built.passedArguments
 					if let view = viewsByKey[key] {
 						bodies[view].otherEdges.append((parent: body, position: position))
 						statement = .built(body: view)
@@ -148,18 +149,18 @@ extension TypeKeyLayout {
 			for child in children {
 				switch child {
 				case let .built(childBuilt):
-					childBuilt.callCycleArguments.forEach(lookUp)
+					childBuilt.callSiteReads.forEach(lookUp)
 					if childBuilt.hasFunction, let childDomain = domainsByNode[childBuilt.node] {
 						for label in childDomain.labels where !bound.contains(label) && !boundBefore.contains(label) {
 							domain.labels.insert(label)
 						}
 						childDomain.closedOnFunctionNames.forEach(close)
 					} else {
-						childBuilt.arguments.forEach(lookUp)
+						childBuilt.constructionReads.forEach(lookUp)
 					}
 					boundBefore.insert(childBuilt.property.label)
 				case let .closer(closer):
-					closer.cycleArguments.forEach(lookUp)
+					closer.callSiteReads.forEach(lookUp)
 					close(closer.closedOnFunctionName)
 					boundBefore.insert(closer.property.label)
 				case let .alias(alias):
@@ -169,7 +170,7 @@ extension TypeKeyLayout {
 					boundBefore.insert(alias.property.label)
 				}
 			}
-			current.arguments.forEach(lookUp)
+			current.constructionReads.forEach(lookUp)
 			domainsByNode[current.node] = domain
 		}
 		return domainsByNode[built.node]

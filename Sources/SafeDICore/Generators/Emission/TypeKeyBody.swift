@@ -42,9 +42,11 @@ enum TypeKeyBody {
 		guard layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
-		      layout.checkEveryRead()
+		      layout.checkEveryRead(),
+		      layout.checkValuePaths()
 		else { return nil }
 		layout.computeDecoratorsAndNames()
+		guard layout.checkSendableMarks() else { return nil }
 		return layout.spelledRootStatements()
 	}
 }
@@ -174,4 +176,7 @@ struct TypeKeyLayout {
 	var normalizedCycleParameters = [Int: [String: PathValue]]()
 	var isDecorated = [Bool]()
 	var functionNames = [String]()
+	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
+	/// of one view can each hand their own.
+	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
 }
