@@ -14654,11 +14654,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_constructsConstantChildDirectly_whenItsParentIsOnPrunedBackEdge() async throws {
+	mutating func mock_readsNearestSameTypeAncestorsOverrideOfConstantChild_whenItsParentIsOnPrunedBackEdge() async throws {
 		// A → Instantiator<B> → B → Instantiator<A> (2-node cycle A↔B; B→A is the
 		// pruned back-edge). B names its edge `aFactory` so the A it builds is not a
-		// property cycle and still constructs its own children. A's constant `leaf`
-		// under that pruned A has no override slot, so it is constructed directly.
+		// property cycle and still constructs its own children. The A under that pruned
+		// edge has no override slot of its own, so it and its constant `leaf` read the
+		// overrides of the nearest A above it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""

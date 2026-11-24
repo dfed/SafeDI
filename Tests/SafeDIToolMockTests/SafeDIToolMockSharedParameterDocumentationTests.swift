@@ -1427,7 +1427,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_pointsOnlyAtFake_whenCreatingTypeIsBuiltWhereDependencyCycleLeavesNoOverride() async throws {
 		// `B.SafeDIMockConfiguration` has no entry for `y`, the dependency that closes the cycle, so nothing in
-		// `safeDIOverrides` reaches `A`.
+		// `safeDIOverrides` reaches `A`; the `B` the cycle builds again reads the overrides of the `B` above it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""

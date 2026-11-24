@@ -502,9 +502,10 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_readsNoOverrideOfPublicMockCall_whenCallIsBeneathCycleEdge() async throws {
+	mutating func mock_readsNearestHoldersOverrideOfPublicMockCall_whenCallIsBeneathCycleEdge() async throws {
 		// `Holder` builds itself again through `holderBuilder`, an edge `cycleEdges` prunes, so the `Holder` built there has no
-		// member in its parent’s configuration, and its call of `Cache`’s public mock reads no override.
+		// member in its parent’s configuration; it reads the overrides of the nearest `Holder` above it, and so does its call
+		// of `Cache`’s public mock.
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
 			import SafeDI
