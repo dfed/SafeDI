@@ -4438,7 +4438,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// inline are holes of its module (`ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)`).
 		let foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock]
 		/// The form of the mock API the module generates.
-		var apiVersion = SafeDIAPIVersion.v2
+		var apiVersion: SafeDIAPIVersion
 		/// In `.v3Unstable`, the names of the module's configurations of the types another module declares
 		/// (`MockLowering.V3ConfigurationNames`).
 		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
