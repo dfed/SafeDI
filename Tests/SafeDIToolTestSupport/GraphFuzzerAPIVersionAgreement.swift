@@ -434,12 +434,7 @@ extension GraphFuzzerAPIVersionAgreement {
 		let seeds: [UInt64]
 	}
 
-	static let pendingShapes = [
-		PendingShape(
-			reason: "A `@Sendable` function captures the mocked type's `SafeDIOverrides`, which is not `Sendable`",
-			seeds: [55, 74, 78, 116, 184, 185, 204, 295],
-		),
-	]
+	static let pendingShapes: [PendingShape] = []
 
 	/// The public mock corpus's pending seeds, one entry per first error of the `.v3Unstable` side, as a run of seeds
 	/// `0..<1000` on e602503 classed them (class D, generated code that does not compile, but for the shared-construction

@@ -1101,7 +1101,14 @@ extension MockLowering {
 					let expression = v3ConfigurationExpression(of: concreteType, field: "\(path).\(bindingName)")
 					if v3Target != nil {
 						v3TargetParameters.append("_ \(configurationName): \(v3ConfigurationNames.typeName(of: concreteType))")
-						v3TargetArguments.append(expression)
+						// A `Sendable` wrapper's closure hands its function the configuration read into a local before it,
+						// since the parent's configuration it is read from need not be `Sendable`.
+						if property.propertyType.isSendable {
+							v3ConfigurationLine = "\(indent)let \(configurationName) = \(expression)"
+							v3TargetArguments.append(configurationName)
+						} else {
+							v3TargetArguments.append(expression)
+						}
 					} else {
 						v3ConfigurationLine = "\(indent)let \(configurationName) = \(expression)"
 					}
