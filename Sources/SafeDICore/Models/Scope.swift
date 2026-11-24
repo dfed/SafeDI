@@ -706,7 +706,7 @@ extension ScopeRecord {
 				case let .instantiated(property, scope, erasedToConcreteExistential, propertyID):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
-						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
+						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
 					if key != nil, let keyedPlaceObserver {
 						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
@@ -1522,7 +1522,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// The key this scope's generator is stored under once it exists, or `nil` for a root, a fill, or a scope the memo does
-	/// not cover (see `memoKey(ofChildBuilding:as:erasedToConcreteExistential:)`).
+	/// not cover (see `memoKey(ofChildBuilding:as:id:erasedToConcreteExistential:)`).
 	var memoKey: ConstructionMemo.Key?
 
 	/// How many groups of generators the pass had started or collected when this scope's build began (see `createScopeGenerator`'s
@@ -1750,11 +1750,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The key under which the generator of the child of this scope that builds `property` with `scope` is stored and looked
 	/// up in a construction memo, or `nil` where the child reads context the memo's log does not cover: it is inside a fill,
 	/// or in a tree with holes (see `ConstructionMemo`).
-	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
+	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, id propertyID: PropertyID, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
 		guard enclosingFills.isEmpty, seamHoles.isEmpty, fill == nil else { return nil }
 		return ConstructionMemo.Key(
 			scope: ObjectIdentifier(scope.identity),
-			property: property,
+			property: propertyID,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1763,7 +1763,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			mayPassNil: nearestDeclarations(ofChildBuilding: property).mayPassNil,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			reboundProperties: childReboundProperties,
-			spellings: Property.spellingsForConstructionMemo(of: property, childLazilyInstantiatedInstanceProperties, childReboundProperties),
+			spellings: Property.spellingsForConstructionMemo(of: childLazilyInstantiatedInstanceProperties, childReboundProperties),
 			previousPassGenerator: previousPassChildGenerator.map(ObjectIdentifier.init),
 			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count).map(ObjectIdentifier.init),
 		)
