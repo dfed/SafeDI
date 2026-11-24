@@ -185,19 +185,19 @@ extension MockLowering.Walk {
 		// unrecorded: the walk's own statement is what the mock writes.
 		do {
 			builtRecords[childIndexPath] = try generator.builtPlaceRecord(
-			of: property,
-			instantiable: instantiable,
-			forwardedProperties: forwardedProperties,
-			erasedToConcreteExistential: erasedToConcreteExistential,
-			unavailableProperties: unavailableProperties,
-			functionName: inputs.functionName,
-			hasFunction: inputs.hasFunction,
-			children: [],
-			node: planNode,
-			isPlannedAtPlace: seamCall == nil && !isLoopMember,
-			readNames: inputs.readNames,
-			alternatives: inputs.alternatives,
-		)
+				of: property,
+				instantiable: instantiable,
+				forwardedProperties: forwardedProperties,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				unavailableProperties: unavailableProperties,
+				functionName: inputs.functionName,
+				hasFunction: inputs.hasFunction,
+				children: [],
+				node: planNode,
+				isPlannedAtPlace: seamCall == nil && !isLoopMember,
+				readNames: inputs.readNames,
+				alternatives: inputs.alternatives,
+			)
 		} catch {
 			unrecordedPlaceErrors[childIndexPath] = error
 		}
