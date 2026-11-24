@@ -269,13 +269,24 @@ struct BinaryWriter {
 			writeUnsigned(UInt64(utf8.count))
 			bytes.append(contentsOf: utf8)
 		} else {
-			let key = StringTableKey(string: string)
-			if let index = stringIndices[key] {
+			// A string in a representation written before is the string written then, with no look at its bytes: a file
+			// names a few thousand distinct strings millions of times, nearly all of them through the same few values.
+			let representation = StringRepresentation(string)
+			if let index = stringIndicesByRepresentation.value(for: representation) {
 				writeUnsigned(index)
 			} else {
-				let index = UInt64(strings.count)
-				stringIndices[key] = index
-				strings.append(string)
+				let key = StringTableKey(string: string)
+				let index: UInt64
+				if let writtenIndex = stringIndices[key] {
+					index = writtenIndex
+				} else {
+					index = UInt64(strings.count)
+					stringIndices[key] = index
+					strings.append(string)
+				}
+				// The string is kept so that its storage, and so the address it is found by, is not freed and reused.
+				stringIndicesByRepresentation.insert(index, for: representation)
+				valuesHeldForTheirStorage.append(string)
 				writeUnsigned(index)
 			}
 		}
@@ -297,9 +308,13 @@ struct BinaryWriter {
 			writeUnsigned(written.index + 1)
 			return
 		}
-		let key = AnyHashable(SharedValueKey(value: value))
+		// Two values read back the same exactly when they are written as the same bytes: a value's `==` can ignore what
+		// its bytes keep, as a type description's does for `any`. The value is written once by itself to be looked up, with
+		// each string where it is named, and again in place only when it is new.
+		var valueWriter = BinaryWriter.writingStringsInline()
+		valueWriter.write(value)
 		let index: UInt64
-		if let writtenIndex = sharedValueIndices[key] {
+		if let writtenIndex = valueWriter.bytes.withUnsafeBytes({ sharedValueIndicesByOwnBytes.index(of: $0) }) {
 			index = writtenIndex
 			writeUnsigned(index + 1)
 		} else {
@@ -307,7 +322,7 @@ struct BinaryWriter {
 			write(value)
 			// After the value, as the reader appends it after reading it: a shared value the value holds takes its index first.
 			index = sharedValueCount
-			sharedValueIndices[key] = index
+			valueWriter.bytes.withUnsafeBytes { sharedValueIndicesByOwnBytes.insert(index, for: $0) }
 			sharedValueCount += 1
 		}
 		if let storage {
@@ -335,6 +350,30 @@ struct BinaryWriter {
 	/// exactly when two values read back equal in every respect, even where their type's `==` ignores a difference, as
 	/// a type description's does for `any`. A value written again wrote no string the table lacked, since every string it
 	/// names was written with the value it repeats, so removing its bytes leaves the table as it was.
+	/// Writes `value` as ``writeSharedByBytes(_:)`` writes what `write` writes, which must be the same bytes whatever was
+	/// written before and however the writer is set. A value held as the same words as one written before, such as an
+	/// indirect enum's case in the same box, is that value, so it is written as that one was without writing it out to
+	/// compare: a signature names a few thousand distinct types more than a million times.
+	mutating func writeSharedByBytes(_ value: some Any, _ write: (inout BinaryWriter) -> Void) {
+		guard let representation = ValueRepresentation(value) else {
+			return writeSharedByBytes(write)
+		}
+		if let index = sharedValueIndicesByRepresentation.value(for: representation) {
+			writeUnsigned(index + 1)
+		} else {
+			let referenceStart = bytes.count
+			writeSharedByBytes(write)
+			// What was written is a reference unless the value was new, whose index is the last one given.
+			let index = bytes.withUnsafeBytes { bytes in
+				var reader = UnsignedReader(bytes: UnsafeRawBufferPointer(rebasing: bytes[referenceStart...]))
+				return reader.readUnsigned()
+			}
+			// The value is kept so that its storage, and so the address it is found by, is not freed and reused.
+			sharedValueIndicesByRepresentation.insert(index == 0 ? sharedValueCount - 1 : index - 1, for: representation)
+			valuesHeldForTheirStorage.append(value)
+		}
+	}
+
 	mutating func writeSharedByBytes(_ write: (inout BinaryWriter) -> Void) {
 		let referenceStart = bytes.count
 		writeUnsigned(0)
@@ -343,13 +382,18 @@ struct BinaryWriter {
 		sharesSignatureValues = false
 		write(&self)
 		sharesSignatureValues = wasSharing
-		// Copied: a slice would keep the writer's buffer shared, so that every later append copied the whole buffer.
-		let key = Array(bytes[valueStart...])
-		if let index = sharedValueIndicesByBytes[key] {
+		// Compared where they were written, against a copy kept of each value's first write: nearly every value repeats one
+		// written before, so copying each to look it up allocated once per value written.
+		let writtenIndex = bytes.withUnsafeBytes { bytes in
+			sharedValueIndicesByBytes.index(of: UnsafeRawBufferPointer(rebasing: bytes[valueStart...]))
+		}
+		if let writtenIndex {
 			bytes.removeSubrange(referenceStart...)
-			writeUnsigned(index + 1)
+			writeUnsigned(writtenIndex + 1)
 		} else {
-			sharedValueIndicesByBytes[key] = sharedValueCount
+			bytes.withUnsafeBytes { bytes in
+				sharedValueIndicesByBytes.insert(sharedValueCount, for: UnsafeRawBufferPointer(rebasing: bytes[valueStart...]))
+			}
 			sharedValueCount += 1
 		}
 	}
@@ -414,38 +458,10 @@ struct BinaryWriter {
 
 	private let writesStringsInline: Bool
 
-	/// A value written through ``writeShared(_:)``, hashed by its count and its first and last elements alone: hashing
-	/// every element of each of many long arrays costs what writing them did, while an array equal to one already
-	/// written shares its storage, which `==` compares first.
-	private struct SharedValueKey<Value: BinaryCodable & BidirectionalCollection & Equatable>: Hashable where Value.Element: Hashable {
-		let value: Value
-
-		/// Whether the two values read back the same. A value's `==` can ignore what its bytes keep, as a type description's
-		/// does for `any`, so two values that `==` calls equal are compared by their bytes unless they share their storage.
-		static func == (lhs: Self, rhs: Self) -> Bool {
-			guard lhs.value == rhs.value else { return false }
-			let sharesStorage = lhs.value.withContiguousStorageIfAvailable { lhsElements in
-				rhs.value.withContiguousStorageIfAvailable { lhsElements.baseAddress == $0.baseAddress }
-			}
-			return sharesStorage == true || bytes(of: lhs.value) == bytes(of: rhs.value)
-		}
-
-		func hash(into hasher: inout Hasher) {
-			hasher.combine(value.count)
-			hasher.combine(value.first)
-			hasher.combine(value.last)
-		}
-
-		private static func bytes(of value: Value) -> [UInt8] {
-			var writer = BinaryWriter()
-			writer.write(value)
-			return writer.encoded
-		}
-	}
-
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
-	private var sharedValueIndices = [AnyHashable: UInt64]()
+	/// The index of each value written through ``writeShared(_:)``, by the bytes it is written as by itself.
+	private var sharedValueIndicesByOwnBytes = SharedValueIndicesByBytes()
 	/// Where a value written through ``writeShared(_:)`` keeps its elements: with its type and count, since every empty
 	/// collection of every type can share one address.
 	private struct SharedValueStorage: Hashable {
@@ -456,10 +472,184 @@ struct BinaryWriter {
 
 	/// The index of each value written through ``writeShared(_:)``, by its storage, with the value.
 	private var sharedValueIndicesByStorage = [SharedValueStorage: (index: UInt64, value: Any)]()
-	private var sharedValueIndicesByBytes = [[UInt8]: UInt64]()
+	private var stringIndicesByRepresentation = TableByWords<StringRepresentation, UInt64>()
+	private var sharedValueIndicesByBytes = SharedValueIndicesByBytes()
+	private var sharedValueIndicesByRepresentation = TableByWords<ValueRepresentation, UInt64>()
+	/// Each string and value whose representation one of the tables above holds: one per representation written, a few
+	/// thousand in the largest files, for as long as the writer lives.
+	private var valuesHeldForTheirStorage = [Any]()
 	private var sharedValueCount: UInt64 = 0
 	private var nestingDepth = 0
 	private var isNestedTooDeeply = false
+}
+
+/// A key of a ``TableByWords``: a few words compared whole, with a hash of them that costs a few multiplications.
+private protocol WordsKey: Equatable {
+	var hash: UInt64 { get }
+}
+
+/// A hash table from a few words to a value, probed linearly. `Dictionary` hashes each key with SipHash, which costs
+/// more than everything else a writer or reader does for one of the millions of small values a file names.
+private struct TableByWords<Key: WordsKey, Value> {
+	func value(for key: Key) -> Value? {
+		guard !slots.isEmpty else { return nil }
+		var slot = Int(truncatingIfNeeded: key.hash >> 32) & (slots.count - 1)
+		while let filled = slots[slot] {
+			if filled.key == key {
+				return filled.value
+			}
+			slot = (slot + 1) & (slots.count - 1)
+		}
+		return nil
+	}
+
+	mutating func insert(_ value: Value, for key: Key) {
+		if (count + 1) * 2 > slots.count {
+			let filled = slots.compactMap(\.self)
+			slots = [(key: Key, value: Value)?](repeating: nil, count: Swift.max(slots.count * 2, 64))
+			for (key, value) in filled {
+				place(value, for: key)
+			}
+		}
+		count += 1
+		place(value, for: key)
+	}
+
+	private var slots = [(key: Key, value: Value)?]()
+	private var count = 0
+
+	private mutating func place(_ value: Value, for key: Key) {
+		var slot = Int(truncatingIfNeeded: key.hash >> 32) & (slots.count - 1)
+		while slots[slot] != nil {
+			slot = (slot + 1) & (slots.count - 1)
+		}
+		slots[slot] = (key, value)
+	}
+}
+
+/// The two words a `String` is held as: a short string's bytes themselves, or else the address of its storage with its
+/// length. Two strings held as the same words are the same bytes for as long as that storage lives.
+private struct StringRepresentation: WordsKey {
+	init(_ string: String) {
+		(low, high) = unsafeBitCast(string, to: (UInt64, UInt64).self)
+	}
+
+	let low: UInt64
+	let high: UInt64
+
+	var hash: UInt64 {
+		((low ^ (high >> 32)) &* 0x9E3779B185EBCA87) ^ (high &* 0xC2B2AE3D27D4EB4F)
+	}
+}
+
+/// An unsigned integer at the start of bytes a writer wrote.
+private struct UnsignedReader {
+	let bytes: UnsafeRawBufferPointer
+
+	mutating func readUnsigned() -> UInt64 {
+		var value: UInt64 = 0
+		var shift: UInt64 = 0
+		for byte in bytes {
+			value |= UInt64(byte & 0x7F) << shift
+			guard byte >= 0x80, shift < 57 else { break }
+			shift += 7
+		}
+		return value
+	}
+}
+
+/// The bytes a value of at most three words is held as. Two values of one type held as the same bytes are the same
+/// value for as long as the storage those bytes point to lives.
+private struct ValueRepresentation: WordsKey {
+	init?(_ value: some Any) {
+		guard MemoryLayout.size(ofValue: value) <= 3 * MemoryLayout<UInt64>.size else { return nil }
+		var words: (UInt64, UInt64, UInt64) = (0, 0, 0)
+		withUnsafeBytes(of: value) { valueBytes in
+			withUnsafeMutableBytes(of: &words) { $0.copyMemory(from: valueBytes) }
+		}
+		(first, second, third) = words
+	}
+
+	let first: UInt64
+	let second: UInt64
+	let third: UInt64
+
+	var hash: UInt64 {
+		((first ^ (second >> 32)) &* 0x9E3779B185EBCA87) ^ (second &* 0xC2B2AE3D27D4EB4F) ^ (third &* 0x165667B19E3779F9)
+	}
+}
+
+/// Two unsigned integers a reader read one after the other.
+private struct UnsignedPair: WordsKey {
+	let first: UInt64
+	let second: UInt64
+
+	var hash: UInt64 {
+		(first &* 0x9E3779B185EBCA87) ^ (second &* 0xC2B2AE3D27D4EB4F)
+	}
+}
+
+/// A value a reader holds to hand out again, in a box whose type is checked by comparing one pointer, where casting a
+/// value out of `Any` asks the runtime what the value conforms to.
+private final class SharedValueBox<Value> {
+	init(_ value: Value) {
+		self.value = value
+	}
+
+	let value: Value
+}
+
+/// The index of each shared value a writer wrote, by the bytes it was written as, of which it keeps one copy per distinct
+/// value for as long as the writer lives.
+private struct SharedValueIndicesByBytes {
+	/// The index of the value written as `valueBytes`, when one was.
+	func index(of valueBytes: UnsafeRawBufferPointer) -> UInt64? {
+		guard !slots.isEmpty else { return nil }
+		let hash = BinaryFile.checksum(of: valueBytes)
+		var slot = Int(truncatingIfNeeded: hash >> 32) & (slots.count - 1)
+		while let filled = slots[slot] {
+			if filled.hash == hash, filled.length == valueBytes.count,
+			   keyBytes.withUnsafeBytes({ UnsafeRawBufferPointer(rebasing: $0[filled.offset..<filled.offset + filled.length]).elementsEqual(valueBytes) })
+			{
+				return filled.index
+			}
+			slot = (slot + 1) & (slots.count - 1)
+		}
+		return nil
+	}
+
+	/// Records that the value written as `valueBytes`, which no value was written as before, has `index`.
+	mutating func insert(_ index: UInt64, for valueBytes: UnsafeRawBufferPointer) {
+		if (count + 1) * 2 > slots.count {
+			let filled = slots.compactMap(\.self)
+			slots = [Slot?](repeating: nil, count: Swift.max(slots.count * 2, 64))
+			for filledSlot in filled {
+				place(filledSlot)
+			}
+		}
+		count += 1
+		place(Slot(hash: BinaryFile.checksum(of: valueBytes), offset: keyBytes.count, length: valueBytes.count, index: index))
+		keyBytes.append(contentsOf: valueBytes)
+	}
+
+	private struct Slot {
+		let hash: UInt64
+		let offset: Int
+		let length: Int
+		let index: UInt64
+	}
+
+	private var slots = [Slot?]()
+	private var keyBytes = [UInt8]()
+	private var count = 0
+
+	private mutating func place(_ filledSlot: Slot) {
+		var slot = Int(truncatingIfNeeded: filledSlot.hash >> 32) & (slots.count - 1)
+		while slots[slot] != nil {
+			slot = (slot + 1) & (slots.count - 1)
+		}
+		slots[slot] = filledSlot
+	}
 }
 
 /// Reads values in SafeDITool's binary format from bytes that ``BinaryWriter/encoded`` produced.
@@ -585,13 +775,13 @@ struct BinaryReader {
 		let reference = try readUnsigned()
 		if reference == 0 {
 			let value: Value = try read()
-			sharedValues.append(value)
+			sharedValues.append(SharedValueBox(value))
 			return value
 		} else {
-			guard reference <= UInt64(sharedValues.count), let value = sharedValues[Int(reference - 1)] as? Value else {
+			guard reference <= UInt64(sharedValues.count), let box = sharedValues[Int(reference - 1)] as? SharedValueBox<Value> else {
 				throw .sharedValueReferenceOutOfRange(reference: reference, offset: referenceOffset)
 			}
-			return value
+			return box.value
 		}
 	}
 
@@ -616,11 +806,37 @@ struct BinaryReader {
 			sharesSignatureValues = false
 			defer { sharesSignatureValues = wasSharing }
 			let value = try read(&self)
-			sharedValues.append(value)
+			sharedValues.append(SharedValueBox(value))
 			return value
 		} else {
-			guard reference <= UInt64(sharedValues.count), let value = sharedValues[Int(reference - 1)] as? Value else {
+			guard reference <= UInt64(sharedValues.count), let box = sharedValues[Int(reference - 1)] as? SharedValueBox<Value> else {
 				throw .sharedValueReferenceOutOfRange(reference: reference, offset: referenceOffset)
+			}
+			return box.value
+		}
+	}
+
+	/// Reads a value written as a string and then a value shared by its bytes, as `read` reads it, and hands the same
+	/// value back wherever the same string and the same shared value follow again: a signature names a few hundred
+	/// distinct properties hundreds of thousands of times, and a property hashes its type when it is made.
+	mutating func readSharingValuesOfOneStringAndSharedValue<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let start = offset
+		let stringIndex = try readUnsigned()
+		let reference = try readUnsigned()
+		let end = offset
+		// A reference of 0 is followed by the value itself, written there for the first time.
+		guard sharesSignatureValues, reference != 0 else {
+			offset = start
+			return try read(&self)
+		}
+		let key = UnsignedPair(first: stringIndex, second: reference)
+		if let box = valuesByStringAndSharedValue.value(for: key) as? SharedValueBox<Value> {
+			return box.value
+		} else {
+			offset = start
+			let value = try read(&self)
+			if offset == end {
+				valuesByStringAndSharedValue.insert(SharedValueBox(value), for: key)
 			}
 			return value
 		}
@@ -645,7 +861,8 @@ struct BinaryReader {
 	/// Where each string of the table lies, for a reader that decodes a string only when a value names it.
 	private var stringRanges = [Range<Int>]()
 	private var decodesStringsUpFront = true
-	private var sharedValues = [Any]()
+	private var sharedValues = [AnyObject]()
+	private var valuesByStringAndSharedValue = TableByWords<UnsignedPair, AnyObject>()
 	private var nestingDepth = 0
 
 	private mutating func readByte() throws(BinaryDecodingError) -> UInt8 {
