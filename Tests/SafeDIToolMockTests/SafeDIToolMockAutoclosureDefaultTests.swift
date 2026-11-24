@@ -2315,7 +2315,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_89D089517396B8E2 {}
+			    public enum __safeDI_Screen_mock_CE97C8015E0A28F8 {}
 			}
 			#endif
 			""",
@@ -2325,7 +2325,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_readsSendableAutoclosureDefaultBeforeConstruction_whenTypeIsBuiltInAnotherMocksTree() async throws {
-		// A configuration stores a `@Sendable` autoclosure default as a `@Sendable` closure, and the construction reads it into a local before passing its call to the `@Sendable` autoclosure, which then captures that closure and not the overrides.
+		// A configuration stores a `@Sendable` autoclosure default as a `@Sendable` closure, and the builder function reads its configuration into locals before it, as a `@Sendable` builder function does, so the `@Sendable` autoclosure the construction is passed captures that closure and not the overrides.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2422,9 +2422,10 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Host {
+			        let __safeDI_screen__safeDIBuilder = safeDIOverrides.screen.safeDIBuilder
+			        let __safeDI_screen__screen_tag = safeDIOverrides.screen.tag
 			        func __safeDI_screen() -> Screen {
-			            let __safeDI_screen__screen_tag = safeDIOverrides.screen.tag
-			            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(__safeDI_screen__screen_tag()) } else { Screen(tag: __safeDI_screen__screen_tag()) }
+			            return if let safeDIBuilder = __safeDI_screen__safeDIBuilder { safeDIBuilder(__safeDI_screen__screen_tag()) } else { Screen(tag: __safeDI_screen__screen_tag()) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Host(screen: screen)

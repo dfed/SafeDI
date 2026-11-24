@@ -1140,7 +1140,12 @@ extension MockLowering {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
-			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			// So does one whose construction passes a configuration read to a `@Sendable` autoclosure, which would capture
+			// the overrides the read names; a public mock passes the read to the type's construction function instead.
+			let startsExtraction = sendableOverrideExtractor == nil && (
+				generator.buildsInSendableFunction
+					|| (!buildsPublicMock && overrideReachable && constructionPassesConfigurationReadToSendableAutoclosure(of: instantiable, usesMockInitializer: usesMockInitializer))
+			)
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
