@@ -1,0 +1,147 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+/// A function a seam call's code declares that captures nothing of the code around it, which the root holding the call
+/// can declare once, at its top, for every call that declares it (`RootFunctionHoisting`). Each call of another module's
+/// seam declares the dispatchers of the seam's tree, and a call made inside a fill declares those of every seam it calls,
+/// so a root that calls a seam from many places declared each dispatcher once per call.
+struct RootFunctionRecord: Sendable {
+	/// What the function's text is a function of within one root: two records of one root with equal keys have equal text.
+	let key: RootFunctionKey
+	/// The function's name, which the call allocates and nothing renames.
+	let name: String
+	/// The declaration as the call writes it after `key.indentation`, from its keyword on: without that indentation and the
+	/// attributes `isSendable` adds (`ScopeGenerator.localFunctionPrefix`).
+	let textWithoutAttributes: String
+	/// Whether the call declares the function `@Sendable nonisolated`.
+	let isSendable: Bool
+	/// The names of the root functions the text calls, which are declared with it or not at all.
+	let calls: [String]
+
+	/// The declaration, after its indentation, `@Sendable nonisolated` where `isSendable`.
+	func spelled(isSendable: Bool) -> String {
+		key.indentation + ScopeGenerator.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes
+	}
+}
+
+/// What a root function's text is a function of, within one root: the called seam, the level of its tree the function
+/// returns the struct of, and what of the call around it the text reads. Nothing compares the text itself; the graph
+/// fuzzer checks that equal keys give equal text.
+struct RootFunctionKey: Hashable, Sendable {
+	/// The seam whose tree the function walks.
+	let calledSeam: TypeDescription?
+	/// The level's key (`ScopeGenerator.FillDispatcher.key`), which names the hole type and family the level is of.
+	let level: String
+	/// Whether the call declares the function `@Sendable nonisolated`.
+	let isSendable: Bool
+	/// The fills of the call the function holds the bodies of, by key.
+	let inlinedFillKeys: Set<String>
+	/// The fills of the call whose members are handed each payload field.
+	let fillsTakingPayloadFields: Set<String>
+	/// The types a parameter is declared `@escaping` for.
+	let typesDeclaredEscaping: Set<TypeDescription>
+	/// The labels a call inside a fill binds again beneath the call.
+	let labelsHiddenByReenteringCalls: Set<String>
+	/// The indentation the call writes the declaration after, which the body of every scope shares, and the root's
+	/// statements too (`ScopeGenerator.rootStatementIndentation`).
+	let indentation: String
+}
+
+/// Declares each root function of a root's plan once, at the root's top, in the order the plan first reaches it.
+///
+/// A name is declared at the top only where every record of it in the plan has one key and every function it calls is
+/// declared there too; every other record is written where the call put it, as it was before. A function reached inside
+/// a `@Sendable` function (`GeneratedCode.sendableFunction(_:)`) is declared `@Sendable nonisolated`, since a `@Sendable`
+/// function calls no function that is not; a name reached both inside and outside one keeps both where they are.
+enum RootFunctionHoisting {
+	/// `statements`, the root's body, whose statements are written after `indentation`, preceded by the root functions it
+	/// declares once, each indented as a statement of the root.
+	static func hoisted(_ statements: [GeneratedCode], indentation: String) -> [GeneratedCode] {
+		let (records, conflictingNames) = recordsAndConflicts(in: statements)
+		let keyByName = Dictionary(records.map { ($0.name, $0.key) }, uniquingKeysWith: { first, _ in first })
+		// A function that calls one kept in place is kept in place too, until none is left to keep.
+		var keptNames = conflictingNames
+		var changed = !keptNames.isEmpty
+		while changed {
+			changed = false
+			for record in records where !keptNames.contains(record.name) && record.calls.contains(where: { keptNames.contains($0) || keyByName[$0] == nil }) {
+				keptNames.insert(record.name)
+				changed = true
+			}
+		}
+		let declared = records.filter { !keptNames.contains($0.name) }
+		guard !declared.isEmpty else { return statements }
+		// A call's body is indented by the levels around it, so its declarations are written after its own indentation alone.
+		return declared.map { record in
+			.indented(.text(record.spelled(isSendable: record.isSendable)), by: indentation.hasPrefix(record.key.indentation) ? String(indentation.dropFirst(record.key.indentation.count)) : "")
+		}
+			+ [.omittingRootFunctions(.lines(statements), named: Set(declared.map(\.name)))]
+	}
+
+	/// The root functions `codes` hold, once per name, in the order they are reached, each keyed with the family a
+	/// `@Sendable` function around it gives it.
+	static func records(in codes: [GeneratedCode]) -> [RootFunctionRecord] {
+		recordsAndConflicts(in: codes).records
+	}
+
+	/// The root functions `codes` hold, once per name, in the order they are reached, and the names reached with two keys.
+	private static func recordsAndConflicts(in codes: [GeneratedCode]) -> (records: [RootFunctionRecord], conflictingNames: Set<String>) {
+		var keyByName = [String: RootFunctionKey]()
+		var conflictingNames = Set<String>()
+		var records = [RootFunctionRecord]()
+		var work = codes.reversed().map { (code: $0, isInsideSendableFunction: false) }
+		while let (code, isInsideSendableFunction) = work.popLast() {
+			switch code.node {
+			case .text, .spelled:
+				break
+			case let .sequence(pieces), let .lines(pieces):
+				work.append(contentsOf: pieces.reversed().map { ($0, isInsideSendableFunction) })
+			case let .indented(inner, _):
+				work.append((inner, isInsideSendableFunction))
+			case let .place(plan):
+				work.append((plan.code, isInsideSendableFunction))
+			case let .sendableFunction(inner):
+				work.append((inner, true))
+			case let .omittingRootFunctions(inner, _):
+				work.append((inner, isInsideSendableFunction))
+			case let .rootFunction(record, _):
+				let key = RootFunctionKey(
+					calledSeam: record.key.calledSeam,
+					level: record.key.level,
+					isSendable: record.isSendable || isInsideSendableFunction,
+					inlinedFillKeys: record.key.inlinedFillKeys,
+					fillsTakingPayloadFields: record.key.fillsTakingPayloadFields,
+					typesDeclaredEscaping: record.key.typesDeclaredEscaping,
+					labelsHiddenByReenteringCalls: record.key.labelsHiddenByReenteringCalls,
+					indentation: record.key.indentation,
+				)
+				if let declaredKey = keyByName[record.name] {
+					if declaredKey != key {
+						conflictingNames.insert(record.name)
+					}
+				} else {
+					keyByName[record.name] = key
+					records.append(RootFunctionRecord(key: key, name: record.name, textWithoutAttributes: record.textWithoutAttributes, isSendable: key.isSendable, calls: record.calls))
+				}
+			}
+		}
+		return (records, conflictingNames)
+	}
+}
