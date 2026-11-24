@@ -544,7 +544,7 @@ extension MockLowering {
 		/// function, or the configuration that holds the member is `@Sendable`-typed.
 		let overridesAreSendable: Bool
 		/// For a call of a mock that takes no overrides, the type of the closure that builds the called type, where the call
-		/// offers one (`ScopeGenerator.MockParameterNode.offersOverrideClosure`).
+		/// offers one (`ScopeGenerator.publicMockOverrideBuilders`).
 		let overrideClosureType: String?
 
 		/// The member of the calling mock's overrides that configures the call: the called mock's own `SafeDIOverrides`, or,

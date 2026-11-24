@@ -693,7 +693,7 @@ extension DependencyTreeGenerator {
 				}
 				let message = "Generated mocks build \(typeName) with its hand-written \(mockName) method for \(Self.describe(builtByMock)),"
 					+ " and with its \(construction) for \(Self.describe(builtWithoutMock))."
-					+ " The two take different parameters, but both properties are configured with one `\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)`."
+					+ " The two take different parameters, but both properties are configured with one `\(concreteType.asSource).\(ScopeGenerator.mockConfigurationStructName)`."
 					+ " Make \(mockName) return \(typeName), so that it builds both properties, or give \(mockName) exactly the parameters of \(typeName)’s \(construction), in the same order."
 				return mockDeclarationLocations.map {
 					SourceDiagnostic(severity: .error, location: $0, message: message)

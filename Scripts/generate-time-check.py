@@ -6,7 +6,8 @@
 
 Compares how long two builds of `SafeDITool` take to `generate` synthetic dependency graphs, and exits 1 when
 HEAD_TOOL takes RATIO (default 2) times as long as BASE_TOOL, or longer, on any of them, or needs MEMORY-LIMIT (default
-1.3) times its peak memory, or LARGE-MEMORY-LIMIT (default 1.1) times on the shapes whose peak is the largest.
+1.3) times its peak memory, or, on the shapes whose peak is the largest, LARGE-MEMORY-LIMIT (default 1.1) times its
+peak with one allocator arena.
 "Check Generate Time on Linux"
 in ci.yml runs it with main's tool as BASE_TOOL and the change's as HEAD_TOOL, so a change that makes generation several
 times slower is seen before it lands, not when an adopter's build slows down.
@@ -57,7 +58,7 @@ The shapes (every name invented; `--shapes` picks among them, default all):
                        of each a run took 0.16 s, too near the 0.1 s a shape must lose before it can fail.
 
 The four shapes below are the ones whose peak memory is the largest, each one module with no seam, as a project that
-has not adopted seams writes its graph. They take the tighter memory limit (see "Peak memory"):
+has not adopted seams writes its graph. They are also held to the tighter memory limit (see "Peak memory"):
   S12-mocks            twelve screens, each holding `Instantiator`s of three other screens drawn at random from a fixed
                        seed, some declaring, receiving or optionally receiving `Context`, and a root that builds
                        screen 0. Every type has `generateMock: true`, so each of the thirteen mocks holds a tree of
@@ -78,16 +79,31 @@ Peak memory is each `generate` process's maximum resident set size, which the op
 when it exits (`getrusage` through `os.wait4`); a shape's figure is the largest of its modules', and the figure compared
 is its median over the timed runs. Its limit is tighter than time's: a shape fails when the
 head's median peak is MEMORY-LIMIT times the base's or more, and also more than 8 MB above it, because below that the
-peak is the process's own start, not the generator's work. The four large shapes fail at LARGE-MEMORY-LIMIT, with the
-same 8 MB: they are where a build's memory is decided, and each once peaked at 1.5 to 4.5 times what it needs now, so
-a tenth more on one of them is a tenth more on the largest module of a project shaped like it.
+peak is the process's own start, not the generator's work.
 
-A limit of a tenth needs more than five runs. The generator works in parallel, so one tool's peak on one graph
-varies with how its tasks happened to overlap: twelve runs each of two builds of C1500-mock-chain on a four-core
-Linux machine peaked between 236 and 307 MB, around 277. Two medians of five drawn from those twenty-four peaks are
-a tenth apart about once in seventy pairs, which failed a change that used no more memory (1.12 times), and two
-medians of eleven about once in fifteen hundred. So the four large shapes take LARGE-MEMORY-RUNS timed runs (default
-11) where that is more than N; each takes about a second, and their times are medians of the same runs.
+The four large shapes are also held to LARGE-MEMORY-LIMIT, with the same 8 MB, on another figure: they are where a
+build's memory is decided, and each once peaked at 1.5 to 4.5 times what it needs now, so a tenth more on one of
+them is a tenth more on the largest module of a project shaped like it. The timed runs' peaks cannot carry a limit
+of a tenth. glibc gives each thread that allocates an arena of its own when another thread holds the one it tried,
+and how many arenas a run ends with, and what each keeps, differs from run to run of one tool on one graph: 264
+runs of one build of C1500-mock-chain on a four-core Linux machine peaked at one of two levels, 225 to 240 MB or 260
+to 272 MB, about two in five at the lower. Medians of eleven of those runs were 0.90 to 1.12 times one another, and
+of the 552 pairs of the 24 sets of eleven, 26 were a tenth apart: the check failed a change that used no more memory
+(1.12 times), and the lowest peak of eleven did little better, a tenth apart in 16 of the 552. Running the tool on
+one thread, and with address space layout randomization off, left both levels. With one arena
+(`MALLOC_ARENA_MAX=1`), 22 runs of that build peaked between 214.7 and 217.9 MB, and eleven runs of each other large
+shape within 1.3% of one another.
+
+So the large shapes take LARGE-MEMORY-RUNS (default 5) more runs of each tool, alternating, with `MALLOC_ARENA_MAX=1`
+in the tool's environment, and the figure held to LARGE-MEMORY-LIMIT is the median peak of those. They are runs of
+their own because one arena makes the tool's threads wait on one another (E32-inline-mocks took 2.4 s where it takes
+1.3 s), so their times are not compared. Their peaks are printed, lowest first, beside the median of the timed
+runs, which is held to MEMORY-LIMIT as every shape's is. What this figure cannot see: a change that allocates no
+more but leaves more unused in the arenas, as by allocating from more threads at once, is seen only at MEMORY-LIMIT.
+The variable is glibc's, so on macOS these runs measure what the timed runs do. Where a large shape peaks under 80 MB,
+a tenth of it is under the 8 MB, which then decides the shape: S16 peaked at 67 MB with one arena on that machine and
+failed from about 1.12 times, and at 146.7 MB in CI's container, where the tenth decides. Why the two machines differ
+on that shape is not known.
 
 A shape the base tool cannot generate (a new attribute, say) is reported and not compared. A shape the head tool cannot
 generate fails the check: the shapes are valid SafeDI, so either the change broke them or they need updating with it.
@@ -292,8 +308,9 @@ SHAPES = {
 
 # The shapes whose peak memory is held to `--large-memory-limit`.
 LARGE_MEMORY_SHAPES = frozenset(["S12-mocks", "S16", "E32-inline-mocks", "C1500-mock-chain"])
-# How many timed runs those shapes take, when that is more than `--runs` ("Peak memory" in the header says why).
-LARGE_MEMORY_RUNS = 11
+# How many runs with one allocator arena those shapes take of each tool ("Peak memory" in the header says why).
+LARGE_MEMORY_RUNS = 5
+ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 
 
 # MARK: Running a tool
@@ -309,11 +326,12 @@ def write(path, text):
         handle.write(text)
 
 
-def generate(tool, modules, sources, output):
-    """Runs `generate` for each module into `output`; returns (wall seconds, CPU seconds, peak bytes): the times summed
-    over the modules, the peak the largest of the modules' processes' maximum resident set sizes."""
+def generate(tool, modules, sources, output, variables={}):
+    """Runs `generate` for each module into `output`, with `variables` added to its environment; returns (wall
+    seconds, CPU seconds, peak bytes): the times summed over the modules, the peak the largest of the modules'
+    processes' maximum resident set sizes."""
     os.makedirs(output, exist_ok=True)
-    environment = dict(os.environ, TMPDIR=output)
+    environment = dict(os.environ, TMPDIR=output, **variables)
     beneath = {}
     wall = 0.0
     cpu = 0.0
@@ -363,11 +381,9 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
     rows = []
     size_rows = []
     failures = []
-    every_shape_runs = runs
     for shape in shapes:
-        runs = max(every_shape_runs, large_memory_runs) if shape in large_memory_shapes else every_shape_runs
         modules = SHAPES[shape]()
-        shape_memory_limit = min(memory_limit, large_memory_limit) if shape in large_memory_shapes else memory_limit
+        one_arena_runs = large_memory_runs if shape in large_memory_shapes else 0
         sources = f"{directory}/{shape}/sources"
         for name, _, source in modules:
             write(f"{sources}/{name}/Types.swift", source)
@@ -408,13 +424,27 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
         if over:
             failures.append(f"{shape}: `generate` took {ratio:.2f} times as long as the base tool ({median['head'][0]:.3f} s against {median['base'][0]:.3f} s, median wall of {runs}); the limit is {limit:g}")
         memory_ratio = median["head"][2] / median["base"][2]
-        memory_over = memory_ratio >= shape_memory_limit and median["head"][2] - median["base"][2] > MEMORY_NOISE_FLOOR_BYTES
+        memory_over = memory_ratio >= memory_limit and median["head"][2] - median["base"][2] > MEMORY_NOISE_FLOOR_BYTES
         if memory_over:
-            failures.append(f"{shape}: `generate` needed {memory_ratio:.2f} times the base tool's peak memory ({megabytes(median['head'][2])} against {megabytes(median['base'][2])}, median of {runs}); the limit is {shape_memory_limit:g}")
+            failures.append(f"{shape}: `generate` needed {memory_ratio:.2f} times the base tool's peak memory ({megabytes(median['head'][2])} against {megabytes(median['base'][2])}, median of {runs}); the limit is {memory_limit:g}")
+        one_arena = ""
+        if one_arena_runs:
+            peaks = {"base": [], "head": []}
+            for run in range(one_arena_runs):
+                for label in ("base", "head"):
+                    peaks[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-one-arena-{run}", ONE_ARENA)[2])
+            base_peak, head_peak = statistics.median(peaks["base"]), statistics.median(peaks["head"])
+            one_arena_ratio = head_peak / base_peak
+            if one_arena_ratio >= min(memory_limit, large_memory_limit) and head_peak - base_peak > MEMORY_NOISE_FLOOR_BYTES:
+                memory_over = True
+                failures.append(f"{shape}: `generate` needed {one_arena_ratio:.2f} times the base tool's peak memory with one allocator arena ({megabytes(head_peak)} against {megabytes(base_peak)}, median of {one_arena_runs}); the limit is {min(memory_limit, large_memory_limit):g}")
+            one_arena = f"; with one arena {megabytes(base_peak)} and {megabytes(head_peak)}, {one_arena_ratio:.2f}"
+            for label in ("base", "head"):
+                print(f"{shape}: {label}'s peak memory of each run with one arena, lowest first, in MB: {' '.join(f'{peak / 1024 / 1024:.1f}' for peak in sorted(peaks[label]))}", flush=True)
         figure = lambda label: f"{median[label][0]:.3f} s / {median[label][1]:.3f} s"
         verdict = " and ".join(name for name, failed in (("time", over), ("memory", memory_over)) if failed)
-        rows.append(f"| {shape} | {runs} | {figure('base')} | {figure('head')} | {ratio:.2f} | {megabytes(median['base'][2])} | {megabytes(median['head'][2])} | {memory_ratio:.2f} | {'identical' if code['base'] == code['head'] else 'differs'} | {f'**{verdict} over the limit**' if verdict else 'within the limits'} |")
-        print(f"{shape}: base {figure('base')}, head {figure('head')} (wall / CPU), ratio {ratio:.2f}; peak memory base {megabytes(median['base'][2])}, head {megabytes(median['head'][2])}, ratio {memory_ratio:.2f}", flush=True)
+        rows.append(f"| {shape} | {runs}{f', and {one_arena_runs} with one arena' if one_arena_runs else ''} | {figure('base')} | {figure('head')} | {ratio:.2f} | {megabytes(median['base'][2])} | {megabytes(median['head'][2])} | {memory_ratio:.2f}{one_arena} | {'identical' if code['base'] == code['head'] else 'differs'} | {f'**{verdict} over the limit**' if verdict else 'within the limits'} |")
+        print(f"{shape}: base {figure('base')}, head {figure('head')} (wall / CPU), ratio {ratio:.2f}; peak memory base {megabytes(median['base'][2])}, head {megabytes(median['head'][2])}, ratio {memory_ratio:.2f}{one_arena}", flush=True)
     return rows, size_rows, failures
 
 
@@ -423,7 +453,7 @@ def megabytes(size):
 
 
 def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit=1.1, large_memory_runs=LARGE_MEMORY_RUNS):
-    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory ({min(memory_limit, large_memory_limit):g} times, over {max(runs, large_memory_runs)} runs, for {', '.join(sorted(LARGE_MEMORY_SHAPES))}).", "",
+    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory, and {', '.join(sorted(LARGE_MEMORY_SHAPES))} also at {min(memory_limit, large_memory_limit):g} times the base's median peak of {large_memory_runs} more runs with one allocator arena.", "",
              "| Shape | Runs | Base wall / CPU | Head wall / CPU | Head / base (wall) | Base peak | Head peak | Head / base (peak) | Generated code | Verdict |",
              "|---|---|---|---|---|---|---|---|---|---|"] + rows
     lines += ["", f"`.safedi` size, head against base: a module fails at {size_limit:g} times the base's bytes.", "",
@@ -443,13 +473,13 @@ def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, sum
 
 
 STAND_IN = """#!/usr/bin/env python3
-import sys, time
+import os, sys, time
 arguments = sys.argv[1:]
 option = lambda name: arguments[arguments.index(name) + 1]
 if {refuses!r} and option("--module-name") == "App":
     sys.exit("stand-in: refused")
 # Touched page by page, so that the memory is resident.
-held = bytearray({allocates!r})
+held = bytearray({allocates!r} + (0 if os.environ.get("MALLOC_ARENA_MAX") == "1" else {allocates_without_one_arena!r}))
 for index in range(0, len(held), 4096):
     held[index] = 1
 time.sleep({sleep!r})
@@ -461,9 +491,9 @@ open(option("--module-info-output"), "w").write("x" * {module_info_size!r})
 def self_test(directory):
     failures = []
 
-    def tool(name, sleep, refuses=False, allocates=0, module_info_size=10000):
+    def tool(name, sleep, refuses=False, allocates=0, module_info_size=10000, allocates_without_one_arena=0):
         path = f"{directory}/tools/{name}"
-        write(path, STAND_IN.format(sleep=sleep, refuses=refuses, allocates=allocates, module_info_size=module_info_size))
+        write(path, STAND_IN.format(sleep=sleep, refuses=refuses, allocates=allocates, module_info_size=module_info_size, allocates_without_one_arena=allocates_without_one_arena))
         os.chmod(path, 0o755)
         return path
 
@@ -487,16 +517,20 @@ def self_test(directory):
     expect("memory-under-the-floor", fast, tool("less-than-the-floor", 0.0, allocates=6 * 1024 * 1024), 0, "within the limits", memory_limit=1.1)
     expect("less-memory", tool("much-memory", 0.0, allocates=64 * 1024 * 1024), fast, 0, "within the limits")
     # 16 MB more than a base that holds 64 MB is about 1.2 times its peak: within 1.3, and over the 1.1 a large shape
-    # is held to. The same stand-ins pass as an ordinary shape and fail as a large one.
+    # is held to with one arena. The same stand-ins pass as an ordinary shape and fail as a large one.
     held = tool("holds-memory", 0.0, allocates=64 * 1024 * 1024)
     holds_more = tool("holds-a-fifth-more", 0.0, allocates=80 * 1024 * 1024)
     expect("a-fifth-more-memory", held, holds_more, 0, "within the limits")
     expect("a-fifth-more-memory-of-a-large-shape", held, holds_more, 1, "**memory over the limit**", large_memory_shapes=frozenset(["E16-seam"]))
     expect("same-memory-of-a-large-shape", held, held, 0, "within the limits", large_memory_shapes=frozenset(["E16-seam"]))
-    # A large shape takes its own count of runs when that is more than every shape's 3, and the row gives the count.
-    expect("more-runs-of-a-large-shape", held, held, 0, "| E16-seam | 5 |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=5)
-    expect("no-fewer-runs-of-a-large-shape", held, held, 0, "| E16-seam | 3 |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=2)
-    expect("every-shape's-runs-of-an-ordinary-shape", held, held, 0, "| E16-seam | 3 |", large_memory_runs=5)
+    # The tighter limit reads the runs with one arena only: a fifth more in the timed runs alone, as when the arenas
+    # hold more, is within 1.3 there and the same with one arena, and a fifth more with one arena alone fails.
+    expect("a-fifth-more-without-one-arena-of-a-large-shape", held, tool("holds-a-fifth-more-in-arenas", 0.0, allocates=64 * 1024 * 1024, allocates_without_one_arena=16 * 1024 * 1024), 0, "within the limits", large_memory_shapes=frozenset(["E16-seam"]))
+    expect("a-fifth-more-with-one-arena-of-a-large-shape", tool("holds-a-fifth-more-in-arenas-too", 0.0, allocates=64 * 1024 * 1024, allocates_without_one_arena=16 * 1024 * 1024), holds_more, 1, "**memory over the limit**", large_memory_shapes=frozenset(["E16-seam"]))
+    # A large shape's row gives both counts of runs and both figures; an ordinary shape's has neither.
+    expect("runs-of-a-large-shape", held, held, 0, "| E16-seam | 3, and 5 with one arena |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=5)
+    expect("figures-of-a-large-shape", held, held, 0, "; with one arena ", large_memory_shapes=frozenset(["E16-seam"]))
+    expect("runs-of-an-ordinary-shape", held, held, 0, "| E16-seam | 3 |", large_memory_runs=5)
     expect("slower-and-more-memory", fast, tool("slower-and-more-memory", 0.2, allocates=64 * 1024 * 1024), 2, "**time and memory over the limit**")
     expect("head-refuses", fast, tool("head-refuses", 0.0, refuses=True), 1, "**failed**")
     expect("base-refuses", tool("base-refuses", 0.0, refuses=True), fast, 0, "not compared")

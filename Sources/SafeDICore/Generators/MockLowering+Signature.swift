@@ -253,10 +253,10 @@ extension ScopeGenerator {
 		of instantiable: Instantiable,
 		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
 	) -> MockLowering.RootSignature {
-		// The one classification of the mock's parameters (`mockRootParameters(instantiable:mockDefaults:treeNames:parameterTree:)`),
+		// The one classification of the mock's parameters (`mockRootParameters(instantiable:mockDefaults:treeNames:)`),
 		// read from this generator's tree.
 		let tree = treeNames(of: instantiable)
-		let parameters = mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: tree.names, parameterTree: [])
+		let parameters = mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: tree.names)
 		let forwardedParameters = parameters.forwardedDependencies.map { dependency in
 			MockLowering.RootSignature.Parameter(property: dependency.property, defaultExpression: parameters.forwardedParameterDefaults[dependency.property.label]?.expression)
 		}
@@ -435,16 +435,6 @@ extension ScopeGenerator {
 		// The overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		return signature
-	}
-
-	/// The classification of this mock root's parameters as `query needs` reads it, with the nodes of its tree
-	/// (`MockTreeNames.propertyNodes`): the tree's names without its calls' fills or passed-up builders, and without the
-	/// parameter tree, which `query needs` does not read.
-	func mockRootParametersWithTreeNodes(
-		of instantiable: Instantiable,
-		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
-	) -> MockRootParameters {
-		mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: treeNames(of: instantiable, readsFills: false).names, parameterTree: [])
 	}
 
 	/// What the names of `mock()`'s parameters are chosen from in the tree of a mock root: its bindings, the names its
