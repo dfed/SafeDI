@@ -508,7 +508,7 @@ func importedModuleNames(ofFileAt filePath: String, conditionalCompilation evalu
 /// from it depends on the order the reads finish in.
 func ownFiles(at filePaths: [String], conditionalCompilation evaluator: ConditionalCompilationEvaluator) async -> FulfillerImports.OwnFiles {
 	await withTaskGroup(
-		of: (typeNames: [String], importStatements: [ImportStatement])?.self,
+		of: OwnFile?.self,
 		returning: FulfillerImports.OwnFiles.self,
 	) { taskGroup in
 		for filePath in filePaths {
@@ -516,7 +516,7 @@ func ownFiles(at filePaths: [String], conditionalCompilation evaluator: Conditio
 				(try? String(contentsOfFile: filePath, encoding: .utf8)).map { source in
 					let fileVisitor = FileVisitor(conditionalCompilationEvaluator: evaluator)
 					fileVisitor.walk(Parser.parse(source: source))
-					return (
+					return OwnFile(
 						typeNames: fileVisitor.plainTypeDeclarations
 							.filter { $0.enclosingTypeAccess.isEmpty && $0.extendedType == nil && $0.isVisibleOutsideItsFile }
 							.map(\.typeDescription.plainDeclarationKey),
@@ -533,6 +533,13 @@ func ownFiles(at filePaths: [String], conditionalCompilation evaluator: Conditio
 		}
 		return FulfillerImports.OwnFiles(typeNames: typeNames, importStatements: importStatements)
 	}
+}
+
+/// What `ownFiles(at:conditionalCompilation:)` reads of one file. A struct, never a tuple (`taskGroupTupleElement` in
+/// `.claude/rules/source-rules.md`).
+private struct OwnFile: Sendable {
+	let typeNames: [String]
+	let importStatements: [ImportStatement]
 }
 
 /// What one file contributed to the module.
@@ -1005,7 +1012,7 @@ private func walkFiles(
 	findingPackageAccessModifier: Bool = false,
 ) async throws -> WalkedFiles {
 	try await withTaskGroup(
-		of: (path: String, read: Result<WalkedSwiftFile, UnreadableSwiftFileError>).self,
+		of: WalkedFileRead.self,
 		returning: Result<WalkedFiles, UnreadableSwiftFileError>.self,
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
@@ -1013,12 +1020,12 @@ private func walkFiles(
 				do throws(UnreadableSwiftFileError) {
 					let read = try readSwiftFile(atPath: filePath, findingPackageAccessModifier: findingPackageAccessModifier)
 					return if let syntaxTree = read.syntaxTree {
-						(filePath, .success(.scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator))))
+						WalkedFileRead(path: filePath, read: .success(.scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator))))
 					} else {
-						(filePath, .success(.skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName: read.mayDeclareTypeOtherModulesCanName)))
+						WalkedFileRead(path: filePath, read: .success(.skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName: read.mayDeclareTypeOtherModulesCanName)))
 					}
 				} catch {
-					return (filePath, .failure(error))
+					return WalkedFileRead(path: filePath, read: .failure(error))
 				}
 			}
 		}
@@ -1048,6 +1055,13 @@ private func walkFiles(
 		}
 	}
 	.get()
+}
+
+/// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` read of the file at `path`. A struct, never
+/// a tuple (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
+private struct WalkedFileRead: Sendable {
+	let path: String
+	let read: Result<WalkedSwiftFile, UnreadableSwiftFileError>
 }
 
 /// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` found in one file.

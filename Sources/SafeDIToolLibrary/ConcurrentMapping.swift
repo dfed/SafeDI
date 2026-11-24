@@ -25,14 +25,14 @@ extension Array where Element: Sendable {
 	/// the caller holds, such as spelling or stamping a module's thousands of paths.
 	func concurrentlyMapped<Transformed: Sendable>(_ transform: @escaping @Sendable (Element) -> Transformed) async -> [Transformed] {
 		let runLength = Swift.max(1, (count + Self.concurrentRunCount - 1) / Self.concurrentRunCount)
-		return await withTaskGroup(of: (start: Int, transformed: [Transformed]).self) { taskGroup in
+		return await withTaskGroup(of: TransformedRun<Transformed>.self) { taskGroup in
 			for start in stride(from: 0, to: count, by: runLength) {
 				let run = self[start..<Swift.min(start + runLength, count)]
 				taskGroup.addTask {
-					(start, run.map(transform))
+					TransformedRun(start: start, transformed: run.map(transform))
 				}
 			}
-			var transformedRuns = [(start: Int, transformed: [Transformed])]()
+			var transformedRuns = [TransformedRun<Transformed>]()
 			for await transformedRun in taskGroup {
 				transformedRuns.append(transformedRun)
 			}
@@ -47,4 +47,11 @@ extension Array where Element: Sendable {
 	private static var concurrentRunCount: Int {
 		4
 	}
+}
+
+/// One run of `concurrentlyMapped(_:)`'s elements, transformed, under the index of its first element. A struct, never a
+/// tuple (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
+private struct TransformedRun<Transformed: Sendable>: Sendable {
+	let start: Int
+	let transformed: [Transformed]
 }

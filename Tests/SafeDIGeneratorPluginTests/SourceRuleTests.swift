@@ -70,6 +70,42 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func sources_returnNoTupleFromATaskGroup() throws {
+		#expect(try findings(of: [.taskGroupTupleElement]) == [])
+	}
+
+	@Test(arguments: [
+		"let reads = await withTaskGroup(of: (Int, String).self) { _ in }",
+		"let reads = await withTaskGroup(\n    of: (index: Int, read: Result<Head, any Error>).self,\n    returning: [Head].self,\n) { _ in }",
+		"let reads = try await withThrowingTaskGroup(of: (path: String, read: Read)?.self) { _ in }",
+		"let reads = await withTaskGroup(of: (only: Int).self) { _ in }",
+	])
+	func sourceRuleCheck_findsTaskGroupTupleElement_whenTaskGroupReturnsTuple(declaration: String) {
+		let line = declaration.hasPrefix("let reads = await withTaskGroup(\n") ? 2 : 1
+		#expect(findings(in: declaration) == [
+			"Sources/SafeDICore/Models/Fixture.swift:\(line): taskGroupTupleElement: a task group whose element is a tuple miscompiles in release builds of Swift 6.3 and 6.4: return a struct",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsTaskGroupTupleElement_whenPluginsTaskGroupReturnsTuple() {
+		#expect(findings(in: "let reads = await withTaskGroup(of: (Int, String).self) { _ in }", at: "Plugins/Shared.swift") == [
+			"Plugins/Shared.swift:1: taskGroupTupleElement: a task group whose element is a tuple miscompiles in release builds of Swift 6.3 and 6.4: return a struct",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoTaskGroupTupleElement_whenTaskGroupReturnsStructOrParenthesizedType() {
+		#expect(findings(in: """
+		let reads = await withTaskGroup(of: HeadRead.self, returning: [(Int, String)].self) { _ in }
+		let plans = try await withThrowingTaskGroup(of: PlannedRoot?.self) { _ in }
+		let names = await withTaskGroup(of: (String).self) { _ in }
+		let other = await otherFunction(of: (Int, String).self)
+		_ = "withTaskGroup(of: (Int, String).self)"
+		""") == [])
+	}
+
+	@Test
 	func toolTestSupport_importsNoModuleTestably() throws {
 		let checkedFiles = try Self.checkedFiles.get()
 		#expect(Set(checkedFiles.map(\.file.path)).isSuperset(of: [
@@ -651,7 +687,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`",
 		])
 	}
 

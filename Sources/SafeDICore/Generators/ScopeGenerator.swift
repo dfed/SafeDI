@@ -6913,67 +6913,84 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
 			)
 		}
-		let codes = try await Self.concurrentChildCode(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
-		for (request, code) in zip(requests, codes) {
-			append(code, ofChildAt: request.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		for childCode in try await Self.concurrentChildCode(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings) {
+			append(childCode.code, ofChildAt: childCode.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 		}
 	}
 
-	/// The code of each of `requests`, each on a task of its own (`appendConcurrentChildCode`).
+	/// The code of one of a body's children, under the child's position among the body's ordered children. Each child's
+	/// task returns its code with its own position, so the body writes each code at the child it is for, whatever order
+	/// the tasks finish in. A struct, never a tuple (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
+	private struct ChildCode: Sendable {
+		/// The child's position among the body's ordered children (`ChildCodeRequest.index`).
+		let index: Int
+		let code: GeneratedCode
+	}
+
+	/// The code of each of `requests`, in their order, each on a task of its own (`appendConcurrentChildCode`).
 	private static func concurrentChildCode(
 		of requests: [ChildCodeRequest],
 		codeGeneration: CodeGeneration,
 		leadingWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
-	) async throws -> [GeneratedCode] {
+	) async throws -> [ChildCode] {
 		guard requests.count > 1 else {
-			var codes = [GeneratedCode]()
+			var childCodes = [ChildCode]()
 			for request in requests {
-				try await codes.append(request.generator.generateCode(
-					codeGeneration: codeGeneration,
-					unavailableProperties: request.unavailableProperties,
-					propertiesGeneratedLater: request.propertiesGeneratedLater,
-					builderFunctionNames: request.builderFunctionNames,
-					leadingWhitespace: leadingWhitespace,
-					fillPlaceBindings: fillPlaceBindings,
+				try await childCodes.append(ChildCode(
+					index: request.index,
+					code: request.generator.generateCode(
+						codeGeneration: codeGeneration,
+						unavailableProperties: request.unavailableProperties,
+						propertiesGeneratedLater: request.propertiesGeneratedLater,
+						builderFunctionNames: request.builderFunctionNames,
+						leadingWhitespace: leadingWhitespace,
+						fillPlaceBindings: fillPlaceBindings,
+					),
 				))
 			}
-			return codes
+			return childCodes
 		}
 		ConcurrentChildCode.record(childCount: requests.count)
 		let maximumChildrenAtOnce = ConcurrentChildCode.maximumChildrenAtOnce
-		return try await withThrowingTaskGroup(
-			of: (Int, GeneratedCode).self,
-			returning: [GeneratedCode].self,
+		let childCodesInFinishingOrder = try await withThrowingTaskGroup(
+			of: ChildCode.self,
+			returning: [ChildCode].self,
 		) { taskGroup in
-			var codesByPosition = [GeneratedCode?](repeating: nil, count: requests.count)
+			var childCodes = [ChildCode]()
+			childCodes.reserveCapacity(requests.count)
 			for (position, request) in requests.enumerated() {
 				// A child that waits for a task to finish holds no frame, so the children planned at once never hold more memory
 				// than `maximumChildrenAtOnce` plans do.
-				if position >= maximumChildrenAtOnce, let (finishedPosition, code) = try await taskGroup.next() {
-					codesByPosition[finishedPosition] = code
+				if position >= maximumChildrenAtOnce, let childCode = try await taskGroup.next() {
+					childCodes.append(childCode)
 				}
 				taskGroup.addTask {
 					// The child's own body plans its children one after another: planning every body's children at once
 					// costs more processor time than it saves.
-					try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(false) {
-						try await (position, request.generator.generateCode(
+					let code = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(false) {
+						try await request.generator.generateCode(
 							codeGeneration: codeGeneration,
 							unavailableProperties: request.unavailableProperties,
 							propertiesGeneratedLater: request.propertiesGeneratedLater,
 							builderFunctionNames: request.builderFunctionNames,
 							leadingWhitespace: leadingWhitespace,
 							fillPlaceBindings: fillPlaceBindings,
-						))
+						)
 					}
+					if let ordering = ConcurrentChildCode.ordering {
+						await ordering.waitForTurn(ofChildAt: position, childCount: requests.count)
+					}
+					return ChildCode(index: request.index, code: code)
 				}
 			}
-			for try await (position, code) in taskGroup {
-				codesByPosition[position] = code
+			for try await childCode in taskGroup {
+				childCodes.append(childCode)
 			}
-			// Every position holds its child's code once the group is done.
-			return codesByPosition.compactMap(\.self)
+			return childCodes
 		}
+		// The tasks finish in any order: each child's code is put back at its own position.
+		return childCodesInFinishingOrder.sorted { $0.index < $1.index }
 	}
 
 	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
