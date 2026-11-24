@@ -301,6 +301,62 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryReader_readsRepeatedListOnce_whenListOfFewerThanEightBytesRepeatsInsideSignatureValues() throws {
+		// `[1, 2]` is three bytes: its count and its elements.
+		let lists: [[UInt64]] = [[1, 2], [3], [1, 2], [1, 2, 3], [], [1, 2], []]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == [0, 1, 0, 3, 4, 0, 4])
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenListsOfEightBytesOrMoreBeginWithTheSameBytes() throws {
+		// The second list has the first's length and first eight bytes, and the third only its first eight bytes.
+		let first: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+		let second: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 8, 10]
+		let third: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 300, 9]
+		let lists = [first, second, third, second, first, third, first]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == [0, 1, 2, 1, 0, 2, 0])
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenMoreListsBeginWithTheSameBytesThanAReaderTriesLengthsOf() throws {
+		// Twenty lists of twenty elements that begin with the same seven: list `index` writes `index` of the others in
+		// two bytes each, so each list has a length of its own. Then each list again, in reverse.
+		let distinctLists: [[UInt64]] = (0..<20).map { index in
+			Array(repeating: 1, count: 20 - index) + Array(repeating: 200, count: index)
+		}
+		let lists = distinctLists + distinctLists.reversed()
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == Array(0..<20) + Array((0..<20).reversed()))
+	}
+
+	@Test
+	func binaryReader_readsEachListByItself_whenListsRepeatOutsideSignatureValues() throws {
+		let lists: [[UInt64]] = [[1, 2], [1, 2], [1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9]]
+
+		let readLists: [[UInt64]] = try read(Self.encoded(lists))
+
+		#expect(readLists == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists) == [0, 1, 2, 3])
+	}
+
+	@Test
 	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
 		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
 		// list does. The second list refers to the first.
@@ -1451,7 +1507,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
-	/// `value` with a string table holding the strings it writes.
+	/// For each list, the index of the first list that holds its elements in the same storage, or its own index when it
+	/// holds none.
+	private static func indicesOfFirstListInSameStorage(_ lists: [[UInt64]]) -> [Int] {
+		let storages = lists.map { list in list.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) } }
+		return lists.indices.map { index in
+			storages[index] == nil ? lists.firstIndex(of: lists[index]) ?? index : storages.firstIndex(of: storages[index]) ?? index
+		}
+	}
+
 	/// `value` as a variable-length integer.
 	private static func unsigned(_ value: UInt64) -> [UInt8] {
 		var writer = BinaryWriter()
@@ -1459,6 +1523,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		return writer.bytes
 	}
 
+	/// `value` with a string table holding the strings it writes.
 	private static func encoded(_ value: some BinaryCodable) -> [UInt8] {
 		var writer = BinaryWriter()
 		writer.write(value)
