@@ -259,7 +259,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: ${{ env.TEST_BUNDLE }}
       - name: Unpack Test Bundle
@@ -356,7 +356,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: ${{ env.TEST_BUNDLE }}
       - name: Unpack Test Bundle
@@ -423,16 +423,16 @@ jobs:
           # Every branch's history, so any base is present.
           fetch-depth: 0
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: ${{ env.TEST_BUNDLE }}
       - name: Download Unit Suite Profile
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: unit-suite-profile
           path: unit-suite
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: graph-fuzzer-report-*
           path: reports
@@ -490,7 +490,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: graph-fuzzer-report-*
           path: reports

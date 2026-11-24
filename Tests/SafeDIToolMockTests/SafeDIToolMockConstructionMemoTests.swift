@@ -958,6 +958,37 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_reusesLaterPassOfEarlierMockRoot_whenMockRootsReachSameTypeInLazyCycle() async throws {
+		// `Editor` lazily builds a `Preview` that builds `Editor` again beneath its own `theme`, so each mock's tree takes a
+		// second pass with `theme` a parameter of `Editor`'s function. `First`'s first pass stores `Editor`'s place, which
+		// `Second`'s first pass reuses, so the second passes of both are built from one generator, and `Second`'s second
+		// pass reuses `Editor`'s place from `First`'s. `Editor` is built at one place of each tree, so no place of a tree's
+		// own reuses it.
+		let fixture = [
+			Self.mockedType(named: "First", declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: Editor"]),
+			Self.mockedType(named: "Second", declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: Editor"]),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Instantiated let previewBuilder: Instantiator<Preview>", "@Instantiated let toolbar: Toolbar"]),
+			seamFixtureType(named: "Preview", isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: LazilyInstantiated<Editor>"]),
+			seamFixtureType(named: "Toolbar", isFinalClass: true, declarations: ["@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, isFirstPass in
+			guard !isFirstPass else { return }
+			continuation.yield(concreteType)
+		}) { [fixture] in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reusedTypes = Set<String>()
+		for await reusedType in stream {
+			reusedTypes.insert(reusedType)
+		}
+		#expect(reusedTypes.contains("Editor"))
+	}
+
 	// MARK: Private
 
 	/// How the module's mock roots share the construction memo.
