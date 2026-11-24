@@ -84,9 +84,6 @@ struct BuiltPlaceRecord: Sendable {
 	var constructionValue: ConstructionValue?
 	/// The optional closures the construction tries first, in order, before calling `target` or `calledMember`.
 	var alternatives = [ConstructionAlternative]()
-	/// The names of the root functions the place's code calls (`RootFunctionRecord`), which the root declares and nothing
-	/// renames, so calling one keeps no place one per path.
-	var calledRootFunctionNames = [String]()
 }
 
 /// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
