@@ -10248,6 +10248,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Every node of the tree that builds a type, a node that closes a cycle included, each before its children, depth
 		/// first in generation order.
 		var propertyNodes = [PropertyNode]()
+		/// The properties the sites of holes at the root's level bind, in generation order.
+		var rootHoleSiteProperties = [Property]()
 
 		/// A node of the mock's tree that builds a type: what it builds, and where it is in the tree.
 		struct PropertyNode {
@@ -10260,6 +10262,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let erasedToConcreteExistential: Bool
 			/// Whether the node closes a cycle, so it builds nothing beneath it.
 			let isPropertyCycle: Bool
+			/// The node's generator.
+			let generator: ScopeGenerator
+			/// Whether the node is built inside a `@Sendable` builder function: its own, or one around it.
+			let isInsideSendableFunction: Bool
 
 			/// Whether the node builds its type with the type's hand-written mock: where the mock returns the type the
 			/// property builds, as `MockConstruction` decides it.
@@ -10677,20 +10683,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The calls of other modules' public mocks in the tree of `treePropertyNodes` and inside their fills
 	/// (`fillPlaces(insideSendableFunction:)`), in the order the calls' nodes are generated, with every label the fills' trees
 	/// declare.
-	static func fillPlaces(in treePropertyNodes: [MockParameterNode]) -> (declaredLabels: Set<String>, calls: [FilledCall]) {
+	static func fillPlaces(in treePropertyNodes: [MockTreeNames.PropertyNode]) -> (declaredLabels: Set<String>, calls: [FilledCall]) {
 		var declaredLabels = Set<String>()
 		var calls = [FilledCall]()
-		// A stack of its own, since a mock tree can be as deep as the module has types. Only a node that calls a public mock
-		// fills a builder (`fillsABuilder`).
-		var nodesToVisit = Array(treePropertyNodes.filter(\.subtreeCallsPublicMock).reversed())
-		while let node = nodesToVisit.popLast() {
-			if let fillingGenerator = node.fillingGenerator {
-				let callPlaces = fillingGenerator.fillPlaces(insideSendableFunction: node.requiresSendable)
-				declaredLabels.formUnion(callPlaces.declaredLabels)
-				calls.append(FilledCall(generator: fillingGenerator, isInsideSendableFunction: node.requiresSendable, enclosingCalls: []))
-				calls += callPlaces.calls
-			}
-			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock).reversed())
+		// The records are in generation order, each before its children. Only a node that calls a public mock fills a
+		// builder (`fillsABuilder`).
+		for node in treePropertyNodes where node.generator.fillsABuilder {
+			let callPlaces = node.generator.fillPlaces(insideSendableFunction: node.isInsideSendableFunction)
+			declaredLabels.formUnion(callPlaces.declaredLabels)
+			calls.append(FilledCall(generator: node.generator, isInsideSendableFunction: node.isInsideSendableFunction, enclosingCalls: []))
+			calls += callPlaces.calls
 		}
 		return (declaredLabels, calls)
 	}
@@ -11880,11 +11882,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Returns the disambiguated property label for a node, given a disambiguation map.
 	static func disambiguatedLabel(
-		for node: MockParameterNode,
+		for property: Property,
 		labelMap: [String: [TypeDescription: String]],
 	) -> String {
-		// safedi-source-rule: allow forceUnwrap — every caller passes the `labelMap` that `disambiguatePropertyLabels` made of nodes that include `node`, and it names each of them.
-		labelMap[node.propertyLabel]![node.typeDescription]!
+		// safedi-source-rule: allow forceUnwrap — every caller passes the `labelMap` that `disambiguatePropertyLabels` made of properties that include `property`, and it names each of them.
+		labelMap[property.label]![property.typeDescription]!
 	}
 
 	/// Names apart entries that share a label, deriving every name from type structure so that
