@@ -391,20 +391,16 @@ extension GraphFuzzerAPIVersionAgreement {
 
 	static let pendingShapes = [
 		PendingShape(
-			reason: "A promoted received wrapper with nothing to configure takes `x: T? = nil` typed as the type it builds, not the wrapper",
-			seeds: [0, 6, 12, 15, 27, 36, 38, 41, 44, 68, 77, 80, 84, 91, 92, 94, 95, 97, 104, 108, 110, 120, 123, 126, 131, 132, 133, 139, 141, 144],
+			reason: "A promoted received builder in a loop of builders that is configured: the loop rebinds it with `if let` over `SafeDIReceived`",
+			seeds: [15, 30, 136],
 		),
 		PendingShape(
-			reason: "A builder function a cycle closes on reads a configuration out of its scope, or before its declaration",
-			seeds: [9, 14, 25, 26, 30, 33, 55, 56, 74, 78, 93, 99, 101, 114, 116, 121, 135, 136, 140],
+			reason: "A `@Sendable` function captures the mocked type's `SafeDIOverrides`, which is not `Sendable`",
+			seeds: [55, 74, 78, 116],
 		),
 		PendingShape(
-			reason: "`SafeDIReceived`'s `.built` case calls a builder function that takes more parameters than it passes",
-			seeds: [18, 31, 69],
-		),
-		PendingShape(
-			reason: "A builder function's type names the configurations of a cycle",
-			seeds: [107],
+			reason: "A builder function a cycle closes on is handed another type's configuration",
+			seeds: [101],
 		),
 	]
 
