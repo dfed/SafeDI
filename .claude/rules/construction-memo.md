@@ -72,6 +72,5 @@ These are every `var` `ScopeGenerator` stores; everything else is a `let` set at
 |---|---|
 | `fillCodeByKey` | Written only on a scope with non-empty `holeArguments`, never memoizable, and keyed by its whole input (`FillCodeKey`: the properties generated later and the fill place bindings). |
 | `unavailablePropertiesToGenerateCodeTask`, `unavailablePropertiesToGeneratedCode` | Keyed by `UnavailablePropertiesCacheKey`, every argument of `generatePropertyCode` but the constant `codeGeneration`. Several places can share one generator, and the oracle compares construction only, so a new emission argument goes in the key. |
-| `rootMockParameterTreeTask` | A mock root only; a root place is never stored. |
 
 A construction error ends the mock pass (`ErasedInstantiatorForwardedPropertiesMismatchError`, the only one), so no mock root reads the shared memo after a root that failed. A construction error the mock pass catches would owe a test that a root failing first, in the middle and last reports the same errors, and leaves the other roots the same mocks, with the memo shared and without it.
