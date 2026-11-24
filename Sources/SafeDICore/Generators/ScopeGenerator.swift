@@ -11289,7 +11289,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var typeSources = [String]()
 		/// The type each dependency instantiates, which no `@Instantiable` declaration fulfills.
 		private(set) var instantiatedTypes = [TypeDescription]()
-		/// Each dependency, as first added.
+		/// Each dependency.
 		private(set) var dependencies = [Dependency]()
 		/// The indices of the dependencies whose label a builder function around a type passed them declares.
 		private(set) var indicesHiddenWhereReferenced = Set<Int>()
@@ -11297,23 +11297,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// (`MockRootParameters.UncoveredParameter.isSendableAutoclosure`).
 		private(set) var indicesInstantiatedInSendableFunction = Set<Int>()
 
+		/// Adds a dependency the lowering's walk lists once, having merged every type that creates it
+		/// (`MockTreeNames.uncoveredDependencies`), so no dependency is added twice.
 		mutating func add(_ dependency: Dependency, isHiddenWhereReferenced: Bool, isInstantiatedInSendableFunction: Bool) {
 			let property = dependency.property
-			let index: Int
-			if let existingIndex = properties.firstIndex(of: property) {
-				index = existingIndex
-			} else {
-				index = properties.count
-				properties.append(property)
-				// Route through `asFunctionParameter` so closure types surface
-				// as `@escaping` — matching the `rootDefaultParameters` and
-				// flat-received emission conventions. Idempotent for non-closures.
-				typeSources.append(property.propertyType.isConstant
-					? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
-					: property.typeDescription.asFunctionParameter.asSource)
-				instantiatedTypes.append(dependency.asInstantiatedType)
-				dependencies.append(dependency)
-			}
+			let index = properties.count
+			properties.append(property)
+			// Route through `asFunctionParameter` so closure types surface
+			// as `@escaping` — matching the `rootDefaultParameters` and
+			// flat-received emission conventions. Idempotent for non-closures.
+			typeSources.append(property.propertyType.isConstant
+				? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
+				: property.typeDescription.asFunctionParameter.asSource)
+			instantiatedTypes.append(dependency.asInstantiatedType)
+			dependencies.append(dependency)
 			if isHiddenWhereReferenced {
 				indicesHiddenWhereReferenced.insert(index)
 			}
