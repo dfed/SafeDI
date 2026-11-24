@@ -318,6 +318,8 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
+The `@Instantiable` macro checks a type’s own initializer, or the hand-written mock its `mock()` calls: when it is bound to a global actor the type is not, and the argument the generated declaration reads spells no isolation, the macro reports an error with a fix-it that adds the actor. It cannot see the initializers of the types a tree builds, nor an actor a type takes from its superclass or a protocol, so add those attributes yourself.
+
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
 ```swift

@@ -276,6 +276,16 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
+			if let instantiableMacro = declaration.attributes.instantiableMacro {
+				Self.diagnoseUnstatedGlobalActorIsolation(
+					of: concreteDeclaration,
+					instantiableMacro: instantiableMacro,
+					visitor: visitor,
+					on: declaration,
+					context: context,
+				)
+			}
+
 			if visitor.isRoot, let instantiableType = visitor.instantiableType {
 				let inheritedDependencies = visitor.dependencies.filter {
 					switch $0.source {
@@ -2404,7 +2414,7 @@ extension Initializer.GenerationError {
 // MARK: - AttributeRewriter
 
 /// Replaces a single attribute in a syntax tree by matching its node ID.
-private final class AttributeRewriter: SyntaxRewriter {
+final class AttributeRewriter: SyntaxRewriter {
 	let oldID: SyntaxIdentifier
 	let replacement: AttributeSyntax
 	init(oldID: SyntaxIdentifier, replacement: AttributeSyntax) {
