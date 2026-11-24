@@ -54,7 +54,7 @@ An async function's frame holds a body's values too. A task keeps the frame of e
 
 ## Places
 
-A place is a position in a root's tree that the body's ordered walk (ordered children, depth first) reaches. A scope's cached plan is reached once for each place that holds it, so a place is never a scope's or a generator's identity. The emitter marks each place with what the type key reads of it (`PlacePlan.record`); a fill or a seam's hole site is the seam emitter's hosted text, with no place beneath it, until fills are planned. Old and new layouts are compared by diffing `generate`'s output against a build of the base commit, never by an oracle kept in the tree.
+A place is a position in a root's tree that the body's ordered walk (ordered children, depth first) reaches. A scope's cached plan is reached once for each place that holds it, so a place is never a scope's or a generator's identity. The emitter marks each place with what the type key reads of it (`PlacePlan.record`); a fill is the seam emitter's hosted text, with no place beneath it, until fills are planned. A seam's hole site is a place written as text whose record lists every value it reads – the builder struct or level it calls a member of, a run struct, each payload field – and the payloads and wrapper function it binds besides its property (`ScopeGenerator.holeSitePlace`), or no reads where one is of a struct no binding of the seam's tree types, such as the one a fill is handed; every test checks each record against its text (`HoleSiteRecordObservation.checkingRecords`). Old and new layouts are compared by diffing `generate`'s output against a build of the base commit, never by an oracle kept in the tree.
 
 ## Where the ports live
 

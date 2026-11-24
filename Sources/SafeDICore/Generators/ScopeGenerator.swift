@@ -7908,7 +7908,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
 			// stays until fills are planned.
-			return Self.textPlace(valuesBindingLines + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse))
+			return Self.holeSitePlace(
+				text: valuesBindingLines + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse),
+				of: property,
+				at: site,
+				functionName: builderFunctionNames.functionName,
+				valuesBindings: valuesBindings,
+				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
+				carrierUse: siteCarrierUse,
+			)
 		case let .fill(hole, functionName):
 			// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
 			let fillCode = try await generateFillCode(
