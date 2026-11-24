@@ -775,15 +775,15 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder__Host() -> Host.__safeDI_ApiCarrier<any Api> {
+		            .init(api: { scope_apiBuilder in
+		                let api: any Api = Live()
+		                return api
+		            })
+		        }
 		        func __safeDI_holderBuilder(apiBuilder: Int) -> Holder {
 		            func __safeDI_host() -> Host {
 		                _ = Host.__safeDI_Host_BF70F492F1E5D486.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                func __safeDI_apiBuilder__Host() -> Host.__safeDI_ApiCarrier<any Api> {
-		                    .init(api: { scope_apiBuilder in
-		                        let api: any Api = Live()
-		                        return api
-		                    })
-		                }
 		                return Host(__safeDI_apiBuilder: apiBuilder, __safeDI_apiBuilder_: __safeDI_apiBuilder__Host())
 		            }
 		            let host: Host = __safeDI_host()

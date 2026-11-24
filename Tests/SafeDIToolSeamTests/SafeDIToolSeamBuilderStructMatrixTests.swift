@@ -545,15 +545,15 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension MidRoot {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_Service() -> Service.__safeDI_ApiCarrier<any Api> {
+		            .init(api: { scope in
+		                let api: any Api = MidApi()
+		                return api
+		            })
+		        }
 		        func __safeDI_shellBuilder(theme: Theme) -> MidShell {
 		            func __safeDI_service() -> Service {
 		                _ = Service.__safeDI_Service_0FCB0160F9664B99.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                func __safeDI_apiBuilder_Service() -> Service.__safeDI_ApiCarrier<any Api> {
-		                    .init(api: { scope in
-		                        let api: any Api = MidApi()
-		                        return api
-		                    })
-		                }
 		                return Service(__safeDI_theme: theme, __safeDI_apiBuilder: __safeDI_apiBuilder_Service())
 		            }
 		            let service: Service = __safeDI_service()
@@ -1719,21 +1719,21 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(innermost: __safeDI_serviceBuilder_Innermost())
+		        }
+		        func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
+		            .init(detailBuilder: { values_logger in __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: values_logger) })
+		        }
+		        func __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: Logger) -> Innermost.__safeDI_ServiceCarrier_Detail<any Service> {
+		            .init(service: {
+		                let service: any Service = DefaultService(logger: logger)
+		                return service
+		            })
+		        }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_inner() -> Inner {
 		                _ = Inner.__safeDI_Inner_6B37CE7AAF7A1362.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                    .init(innermost: __safeDI_serviceBuilder_Innermost())
-		                }
-		                func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
-		                    .init(detailBuilder: { values_logger in __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: values_logger) })
-		                }
-		                func __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: Logger) -> Innermost.__safeDI_ServiceCarrier_Detail<any Service> {
-		                    .init(service: {
-		                        let service: any Service = DefaultService(logger: logger)
-		                        return service
-		                    })
-		                }
 		                return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
 		            }
 		            let inner: Inner = __safeDI_inner()

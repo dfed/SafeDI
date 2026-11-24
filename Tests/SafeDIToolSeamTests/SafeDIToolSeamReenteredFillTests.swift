@@ -245,6 +245,15 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
+		            .init(subA: __safeDI_firstBuilder_SubA())
+		        }
+		        func __safeDI_firstBuilder_SubA() -> SubA.__safeDI_FirstCarrier<any First> {
+		            .init(first: {
+		                let first: any First = DefaultFirst()
+		                return first
+		            })
+		        }
 		        let __safeDI_gadgetBuilder_top_secondBuilder = __safeDI_gadgetBuilder.top_secondBuilder(SafeDIScope_Gadget.top_secondBuilder_Values())
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
@@ -261,15 +270,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                }
 		                let second: any Second = __safeDI_second()
 		                return second
-		            }
-		            func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
-		                .init(subA: __safeDI_firstBuilder_SubA())
-		            }
-		            func __safeDI_firstBuilder_SubA() -> SubA.__safeDI_FirstCarrier<any First> {
-		                .init(first: {
-		                    let first: any First = DefaultFirst()
-		                    return first
-		                })
 		            }
 		            func __safeDI_secondBuilder_Top(up: Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_SecondCarrier<any Second> {
 		                .init(subB: __safeDI_secondBuilder_SubB(up: up.subB))
@@ -1946,6 +1946,15 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
+		        func __safeDI_secondBuilder_Top() -> Top.__safeDI_SecondCarrier<any Second> {
+		            .init(subB: __safeDI_secondBuilder_SubB())
+		        }
+		        func __safeDI_secondBuilder_SubB() -> SubB.__safeDI_SecondCarrier<any Second> {
+		            .init(second: {
+		                let second: any Second = DefaultSecond()
+		                return second
+		            })
+		        }
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 		            func __safeDI_firstBuilder_SubA_first() -> any First {
@@ -1965,15 +1974,6 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            }
 		            func __safeDI_firstBuilder_SubA() -> SubA.__safeDI_FirstCarrier<any First> {
 		                .init(first: { __safeDI_firstBuilder_SubA_first() })
-		            }
-		            func __safeDI_secondBuilder_Top() -> Top.__safeDI_SecondCarrier<any Second> {
-		                .init(subB: __safeDI_secondBuilder_SubB())
-		            }
-		            func __safeDI_secondBuilder_SubB() -> SubB.__safeDI_SecondCarrier<any Second> {
-		                .init(second: {
-		                    let second: any Second = DefaultSecond()
-		                    return second
-		                })
 		            }
 		            return Top(__safeDI_firstBuilder: __safeDI_firstBuilder_Top(), __safeDI_secondBuilder: __safeDI_secondBuilder_Top())
 		        }

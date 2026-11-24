@@ -2375,19 +2375,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session) {
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+			            .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
+			            .init(widget: { scope_analytics, scope_clock in
+			                let analytics = scope_analytics
+			                let clock = scope_clock
+			                let widget: any Widget = DefaultWidget(analytics: analytics, clock: clock)
+			                return widget
+			            })
+			        }
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_1A9C10F553C3A46C.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
-			                .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
-			                .init(widget: { scope_analytics, scope_clock in
-			                    let analytics = scope_analytics
-			                    let clock = scope_clock
-			                    let widget: any Widget = DefaultWidget(analytics: analytics, clock: clock)
-			                    return widget
-			                })
-			            }
 			            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
 			        }
 			        let inner: Inner = __safeDI_inner()
@@ -4498,17 +4498,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			extension Host {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+			            .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
+			            .init(`my widget`: {
+			                let `my widget`: any Widget = DefaultWidget()
+			                return `my widget`
+			            })
+			        }
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_ECB382D43E04D2FE.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
-			                .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
-			                .init(`my widget`: {
-			                    let `my widget`: any Widget = DefaultWidget()
-			                    return `my widget`
-			                })
-			            }
 			            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
 			        }
 			        let inner: Inner = __safeDI_inner()
