@@ -15196,7 +15196,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension A {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init(),
 		            label: @autoclosure @escaping @Sendable () -> String = "default",
@@ -18261,7 +18261,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Parent {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            child: Child.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: (@Sendable (Child, String) -> Parent)? = nil
@@ -18339,7 +18339,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            leaf: (@Sendable () -> Leaf)? = nil,
 		            _ safeDIBuilder: (@Sendable (Leaf) -> Child)? = nil

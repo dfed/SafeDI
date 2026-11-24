@@ -2043,7 +2043,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
@@ -2100,7 +2100,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension C {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
 			        ) {
@@ -2128,7 +2128,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 			extension B {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            cBuilder: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)? = nil
@@ -2229,7 +2229,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
@@ -2286,7 +2286,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension C {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
 			        ) {
@@ -2314,7 +2314,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 			extension B {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            cBuilder: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)? = nil
@@ -2426,7 +2426,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            x: (@Sendable () -> X)? = nil,
@@ -2533,7 +2533,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
@@ -2590,7 +2590,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension C {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
 			        ) {
@@ -2618,7 +2618,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 			extension B {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            cBuilder: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (Instantiator<C>) -> B)? = nil

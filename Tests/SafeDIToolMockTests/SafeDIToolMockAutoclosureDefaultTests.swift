@@ -622,7 +622,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            retries: @autoclosure @escaping @Sendable () -> Int = 3,
 			            _ safeDIBuilder: (@Sendable (Int) -> Service)? = nil
@@ -2098,7 +2098,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            retries: @autoclosure @escaping @Sendable () -> Int = 3,
 			            _ safeDIBuilder: (@Sendable (Int) -> Service)? = nil
