@@ -1,0 +1,105 @@
+#!/bin/bash
+# A git pre-push hook: refuses a push while SwiftFormat would change the checkout that is pushed.
+#
+# Git runs it once `git config core.hooksPath .claude/hooks` is set in a clone (or with `--global`, which makes every
+# clone on the machine use its own `.claude/hooks`, and leaves a repository without that folder with no hooks). Unlike
+# `lint-before-push.sh`, which Claude Code runs only in a session that started inside the checkout, git runs this one
+# for every push from the clone, whatever started it and from whichever directory. `git push --no-verify` skips it.
+#
+#   .claude/hooks/pre-push --self-test   pushes from stand-in clones and checks which pushes git refuses.
+#
+# It lints the worktree's files, not the commits pushed, as `lint-before-push.sh` does: commit before pushing.
+set -u
+
+self_test() {
+	local hook scratch failures=0
+	hook=$(cd "$(dirname "$0")" && pwd)/pre-push
+	scratch=$(mktemp -d "${TMPDIR:-/tmp}/pre-push-self-test.XXXXXX")
+	trap 'rm -rf "$scratch"' EXIT
+	export GIT_CONFIG_GLOBAL="$scratch/gitconfig" GIT_CONFIG_NOSYSTEM=1
+	git config --global user.name "Self Test"
+	git config --global user.email "self-test@example.com"
+	git config --global init.defaultBranch trunk
+	git config --global core.hooksPath .claude/hooks
+	git init -q --bare "$scratch/remote.git"
+	# $1 names the clone; $2 is its CLI/lint.sh, or empty for a repository that has none.
+	clone() {
+		git init -q "$scratch/$1"
+		mkdir -p "$scratch/$1/.claude/hooks"
+		cp "$hook" "$scratch/$1/.claude/hooks/pre-push"
+		if [[ -n "$2" ]]; then
+			mkdir -p "$scratch/$1/CLI"
+			printf '#!/bin/bash\n%s\n' "$2" >"$scratch/$1/CLI/lint.sh"
+			chmod +x "$scratch/$1/CLI/lint.sh"
+		fi
+		git -C "$scratch/$1" add -A
+		git -C "$scratch/$1" commit -q -m "A commit"
+		git -C "$scratch/$1" remote add origin "$scratch/remote.git"
+	}
+	# $1 describes the case; $2 is "refused" or "pushed"; the rest is the command, run from $scratch.
+	expect() {
+		local description=$1 expected=$2 result=pushed
+		shift 2
+		if ! (cd "$scratch" && "$@") >"$scratch/output" 2>&1; then
+			result=refused
+		fi
+		if [[ "$result" != "$expected" ]]; then
+			echo "self-test: $description: expected $expected, was $result"
+			sed 's/^/    /' "$scratch/output"
+			failures=$((failures + 1))
+		fi
+	}
+	clone clean 'exit 0'
+	clone unformatted 'echo "Scope.swift:916:1: error: (andOperator) Prefer comma over && in if, guard or while conditions."; exit 1'
+	clone without-swift 'echo >&2 "error: ./CLI/lint.sh did NOT run: swift is not on PATH."; exit 127'
+	clone elsewhere ''
+	mkdir -p "$scratch/outside"
+	expect "a formatted checkout, pushed from inside it" pushed git -C clean push -q origin HEAD:refs/heads/clean
+	expect "an unformatted checkout, pushed from inside it" refused bash -c 'cd unformatted && git push -q origin HEAD:refs/heads/unformatted'
+	expect "an unformatted checkout, pushed after cd from outside any checkout" refused bash -c 'cd outside && cd ../unformatted && git push -q origin HEAD:refs/heads/unformatted'
+	expect "an unformatted checkout, pushed with git -C from outside any checkout" refused bash -c 'cd outside && git -C ../unformatted push -q origin HEAD:refs/heads/unformatted'
+	expect "an unformatted checkout whose lint ran before through a pipe that hid its failure" refused bash -c 'cd unformatted && ./CLI/lint.sh --check | tail -1 && git push -q origin HEAD:refs/heads/unformatted'
+	expect "a checkout whose lint cannot run because swift is missing" refused git -C without-swift push -q origin HEAD:refs/heads/without-swift
+	expect "an unformatted checkout, pushed with --no-verify" pushed git -C unformatted push -q --no-verify origin HEAD:refs/heads/unformatted
+	expect "deleting a branch from an unformatted checkout" pushed git -C unformatted push -q origin :refs/heads/unformatted
+	expect "a repository with no CLI/lint.sh" pushed git -C elsewhere push -q origin HEAD:refs/heads/elsewhere
+	git -C "$scratch/unformatted" push -q origin HEAD:refs/heads/unformatted >"$scratch/output" 2>&1
+	if ! grep -q "andOperator" "$scratch/output" || ! grep -q "nothing was pushed" "$scratch/output"; then
+		echo "self-test: a refused push must print what SwiftFormat said and that nothing was pushed"
+		sed 's/^/    /' "$scratch/output"
+		failures=$((failures + 1))
+	fi
+	if [[ $failures -gt 0 ]]; then
+		exit 1
+	fi
+	echo "self-test passed"
+	exit 0
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+	self_test
+fi
+
+# Git gives one line per ref on standard input: local ref, local object, remote ref, remote object. A push that only
+# deletes branches sends no code, and its local object is all zeros.
+sends_commits=0
+while read -r _ local_object _ _; do
+	if [[ -n "${local_object//0/}" ]]; then
+		sends_commits=1
+	fi
+done
+root=$(git rev-parse --show-toplevel)
+if [[ $sends_commits -eq 0 || ! -x "$root/CLI/lint.sh" ]]; then
+	exit 0
+fi
+output=$(cd "$root" && ./CLI/lint.sh --check 2>&1)
+status=$?
+if [[ $status -ne 0 ]]; then
+	{
+		echo "Lint did not pass in $root (./CLI/lint.sh --check exited $status), so nothing was pushed."
+		echo "Run ./CLI/lint.sh, commit the formatting in a commit of its own, and push again. It said:"
+		printf '%s\n' "$output" | grep -v '^Building\|^Compiling\|^Build complete\|^\[' | head -20
+	} >&2
+	exit 1
+fi
+exit 0
