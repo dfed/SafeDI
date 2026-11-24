@@ -3431,7 +3431,7 @@ extension GraphFuzzerToolRuns {
 	/// `CarrierShelf` module-level configuration where `CarrierShelf` declares the holder, takes the holder and its siblings
 	/// in another order than their declaration: the order the internal mock takes them in, whatever order the public mock
 	/// builds them in (the contract's rule 7); or, where `CarrierLocal`'s internal mock configures `CarrierShelf` too, whose
-	/// internal `SafeDIMockConfiguration` does. `nil` for any other graph. With `MockParameterNode.inInlineOrder` returning
+	/// internal `SafeDIMockConfiguration` does. `nil` for any other graph. With `ScopeGenerator.inlineOrdered(_:property:)` returning
 	/// its nodes in build order, the holder last, seeds 17, 22, 24, 57, 89, 186 and 246 fail.
 	var publicMockOverridesOrderFailure: GraphFuzzerFailure? {
 		guard knownRightOutcome != nil, case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
@@ -3446,10 +3446,10 @@ extension GraphFuzzerToolRuns {
 		var structs: [(name: String, opening: String, structOpening: String?)] = if types.declarations["\(prefix)CarrierShelf"] != nil {
 			[("`\(prefix)CarrierShelf`'s module-level configuration", "_\(prefix)CarrierShelf_MockConfiguration {", nil)]
 		} else {
-			[("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {", "struct SafeDIOverrides {")]
+			[("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {", "struct SafeDIOverrides")]
 		}
 		if types.declarations["\(prefix)CarrierLocal"] != nil {
-			structs.append(("`\(prefix)CarrierShelf`'s `SafeDIMockConfiguration`", "extension \(prefix)CarrierShelf {", "struct SafeDIMockConfiguration {"))
+			structs.append(("`\(prefix)CarrierShelf`'s `SafeDIMockConfiguration`", "extension \(prefix)CarrierShelf {", "struct SafeDIMockConfiguration"))
 		}
 		var problems = [String]()
 		for (structName, opening, structOpening) in structs {
@@ -3515,7 +3515,7 @@ extension GraphFuzzerOracle {
 
 	/// The labels of the first initializer of a struct in `contents`, a generated file, in the order it takes them: the
 	/// struct whose declaration line ends with `opening`, or, where `structOpening` is given, the first struct after it, and
-	/// before any other extension, whose declaration line ends with `structOpening`. `nil` where `contents` declares no such
+	/// before any other extension, whose declaration line contains `structOpening`. `nil` where `contents` declares no such
 	/// struct.
 	static func initializerLabels(after opening: String, struct structOpening: String?, in contents: String) -> [String]? {
 		var lines = contents.split(separator: "\n", omittingEmptySubsequences: false).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.makeIterator()
@@ -3528,7 +3528,7 @@ extension GraphFuzzerOracle {
 				// Another extension, of this type or another, before the struct: look for the struct after the opening again.
 				foundOpening = line.hasSuffix(opening)
 			} else if expectsStruct, let structOpening {
-				expectsStruct = !line.hasSuffix(structOpening)
+				expectsStruct = !line.contains(structOpening)
 			} else if line.hasSuffix("init(") {
 				var labels = [String]()
 				while let parameter = lines.next(), !parameter.hasPrefix(")") {

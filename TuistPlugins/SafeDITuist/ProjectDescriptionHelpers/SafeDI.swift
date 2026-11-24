@@ -94,21 +94,27 @@ public enum SafeDI {
 	///     target is never listed only for such a type of another module.
 	///     The SafeDI manual's "Which modules to list" says more.
 	///     Tuist target dependencies must guarantee build order.
+	///   - isDependedUpon: Whether another target lists this one in its
+	///     `dependencies`. Pass `false` only for a target no SafeDI target
+	///     depends on, such as an app: the script then writes no `.safedi`,
+	///     which saves the time a top target spends writing what its
+	///     dependencies' files carry, and a target that lists this one
+	///     fails with an error naming this argument.
 	public static func preCompileScript(
 		module: String,
 		dependencies: [String] = [],
+		isDependedUpon: Bool = true,
 	) -> TargetScript {
 		let moduleSources: [FileListGlob] = [.glob("\(module)/**/*.swift")]
 		let dependencyInputPaths: [FileListGlob] = dependencies.map {
 			FileListGlob.glob("$(BUILT_PRODUCTS_DIR)/SafeDI/\($0).safedi")
 		}
-		let outputPaths: [Path] = [
-			"$(BUILT_PRODUCTS_DIR)/SafeDI/$(PRODUCT_MODULE_NAME).safedi",
+		let outputPaths: [Path] = (isDependedUpon ? ["$(BUILT_PRODUCTS_DIR)/SafeDI/$(PRODUCT_MODULE_NAME).safedi"] : []) + [
 			"$(DERIVED_FILE_DIR)/SafeDIGenerated.swift",
 		]
 
 		return .pre(
-			script: scriptBody(module: module, dependencies: dependencies),
+			script: scriptBody(module: module, dependencies: dependencies, isDependedUpon: isDependedUpon),
 			name: "Generate SafeDI",
 			inputPaths: moduleSources + dependencyInputPaths,
 			outputPaths: outputPaths,
@@ -123,7 +129,7 @@ public enum SafeDI {
 // don't honor in-content shebangs. The body below sticks to POSIX
 // shell — no arrays, no process substitution — so behavior is
 // identical regardless of which sh-compatible shell Xcode picks.
-private func scriptBody(module: String, dependencies: [String]) -> String {
+private func scriptBody(module: String, dependencies: [String], isDependedUpon: Bool) -> String {
 	let escapedModule = shellEscape(module)
 	let escapedDependencyNames = shellEscape(dependencies.joined(separator: ","))
 
@@ -132,6 +138,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	module=\(escapedModule)
 	dependency_names_csv=\(escapedDependencyNames)
+	is_depended_upon=\(isDependedUpon ? "1" : "0")
 
 	: "${SRCROOT:?SRCROOT must be set}"
 	: "${DERIVED_FILE_DIR:?DERIVED_FILE_DIR must be set}"
@@ -148,6 +155,10 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	# two projects whose targets name their directories alike write two
 	# files, and a dependent finds each by its module name.
 	module_info_output="$shared_safedi_dir/$PRODUCT_MODULE_NAME.safedi"
+	# A target that passes `isDependedUpon: false` writes no `.safedi`, and
+	# leaves this note in its place, so a target that lists it anyway fails
+	# with an error naming the argument rather than reading a stale file.
+	not_depended_upon_note="$shared_safedi_dir/$PRODUCT_MODULE_NAME.safedi-not-depended-upon"
 
 	combined_output="$scratch_dir/SafeDIGenerated.swift"
 
@@ -235,6 +246,10 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		first=1
 		for dependency_name in "$@"; do
 			dependency_path="$shared_safedi_dir/$dependency_name.safedi"
+			if [ ! -f "$dependency_path" ] && [ -f "$shared_safedi_dir/$dependency_name.safedi-not-depended-upon" ]; then
+				echo "error: SafeDI plugin: $dependency_name passes isDependedUpon: false to SafeDI.preCompileScript, so it writes no .safedi for a target to read. Remove isDependedUpon: false from $dependency_name’s script, or remove $dependency_name from this target’s dependencies." >&2
+				exit 1
+			fi
 			if [ ! -f "$dependency_path" ]; then
 				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. The dependencies of SafeDI.preCompileScript list module names (PRODUCT_MODULE_NAME values). Check that $dependency_name is the module name of a target, that the target runs SafeDI.preCompileScript, and that this target depends on it, directly or through another target, so that it builds first." >&2
 				exit 1
@@ -251,8 +266,14 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	cd "$SRCROOT"
 
 	set -- "$input_csv" \\
-		--combined-output "$combined_output" \\
-		--module-info-output "$module_info_output"
+		--combined-output "$combined_output"
+	if [ "$is_depended_upon" = 1 ]; then
+		set -- "$@" --module-info-output "$module_info_output"
+		rm -f "$not_depended_upon_note"
+	else
+		rm -f "$module_info_output"
+		: >"$not_depended_upon_note"
+	fi
 	if [ -n "$dependency_csv" ]; then
 		set -- "$@" --dependent-module-info-file-path "$dependency_csv"
 	fi
@@ -303,7 +324,9 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	"$safedi_tool" generate "$@"
 
-	echo "SafeDI: generated $module_info_output"
+	if [ "$is_depended_upon" = 1 ]; then
+		echo "SafeDI: generated $module_info_output"
+	fi
 	echo "SafeDI: generated $combined_output"
 	"""
 }

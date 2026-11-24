@@ -2045,7 +2045,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_aliasFulfilledByInstantiatorSibling_emittedAfterFulfillingBinding() async throws {
 		// The fulfilling property's `typeDescription` is `Instantiator<Child>`, while
-		// the MockParameterNode's `instantiatedTypeDescription` is `Child`. The
+		// the mock node's instantiated type is `Child`. The
 		// post-child-alias bookkeeping must key on the same type source for both
 		// storage and lookup, or aliases fulfilled by Instantiator siblings land in
 		// the pre-child slot and forward-reference their undeclared fulfilling
@@ -7003,15 +7003,14 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.accountView { safeDIBuilder(session) } else { AccountView(session: session) }
 		        }
 		        let accountView: AccountView = __safeDI_accountView()
-		        let __safeDI_guestViewBuilder__guestViewBuilder_prompt_safeDIBuilder = safeDIOverrides.guestViewBuilder.prompt
-		        let __safeDI_guestViewBuilder__safeDIBuilder = safeDIOverrides.guestViewBuilder.safeDIBuilder
+		        let __safeDI_guestViewBuilder__overrides = safeDIOverrides.guestViewBuilder
 		        @Sendable nonisolated func __safeDI_guestViewBuilder(session_GuestSession: GuestSession) -> GuestView {
 		            func __safeDI_prompt() -> SignInPrompt {
 		                let session: GuestSession = session_GuestSession_
-		                return if let safeDIBuilder = __safeDI_guestViewBuilder__guestViewBuilder_prompt_safeDIBuilder { safeDIBuilder(session) } else { SignInPrompt(session: session) }
+		                return if let safeDIBuilder = __safeDI_guestViewBuilder__overrides.prompt { safeDIBuilder(session) } else { SignInPrompt(session: session) }
 		            }
 		            let prompt: SignInPrompt = __safeDI_prompt()
-		            return if let safeDIBuilder = __safeDI_guestViewBuilder__safeDIBuilder { safeDIBuilder(session_GuestSession, prompt) } else { GuestView(session_GuestSession: session_GuestSession, prompt: prompt) }
+		            return if let safeDIBuilder = __safeDI_guestViewBuilder__overrides.safeDIBuilder { safeDIBuilder(session_GuestSession, prompt) } else { GuestView(session_GuestSession: session_GuestSession, prompt: prompt) }
 		        }
 		        let guestViewBuilder = SendableInstantiator<GuestView> {
 		            __safeDI_guestViewBuilder(session_GuestSession: $0)

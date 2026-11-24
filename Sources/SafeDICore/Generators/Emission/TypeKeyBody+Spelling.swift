@@ -1,0 +1,233 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+extension TypeKeyLayout {
+	// MARK: Decorators and names
+
+	mutating func computeDecoratorsAndNames() {
+		let classCount = membersByClass.count
+		isDecorated = membersByClass.indices.map { owner in
+			owner != 0 && membersByClass[owner].contains { bodies[$0].record?.isSendable == true }
+		}
+		// A function a `@Sendable` function declared beneath it calls is captured by that function, so it is `@Sendable` too.
+		var changed = true
+		while changed {
+			changed = false
+			for owner in 1..<max(classCount, 1) where !isDecorated[owner] {
+				let decorated = callSitesByClass[owner].contains { site in
+					var current = site.owner
+					while current != 0, current != placementOwner[owner] {
+						if isDecorated[current] {
+							return true
+						}
+						current = placementOwner[current]
+					}
+					return false
+				}
+				if decorated {
+					isDecorated[owner] = true
+					changed = true
+				}
+			}
+		}
+		var allocator = GeneratedNameAllocator(reserving: Set<String>())
+		functionNames = membersByClass.indices.map { owner in
+			guard let representative = representative(of: owner) else { return "" }
+			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
+		}
+	}
+
+	// MARK: Spelling
+
+	mutating func spelledRootStatements() -> [GeneratedCode]? {
+		var functionCode = [GeneratedCode](repeating: .empty, count: membersByClass.count)
+		let classesByDepth = membersByClass.indices.dropFirst().sorted { placementDepth[$0] > placementDepth[$1] }
+		for owner in classesByDepth {
+			guard let representative = representative(of: owner),
+			      let body = spelledStatements(ofClass: owner, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
+			      let arguments = spelledArguments(representative.arguments, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
+			else { return nil }
+			var parameters = representative.forwardedProperties
+			var typesDeclaredEscaping = representative.typesDeclaredEscaping
+			for label in reads[membersByClass[owner][0]] where outcomes[owner][label] == .passed {
+				guard let parameterType = parameterTypes[owner][label] else { return nil }
+				parameters.append(Property(label: label, typeDescription: parameterType))
+				if parameterType.isClosure {
+					typesDeclaredEscaping.insert(parameterType)
+				}
+			}
+			functionCode[owner] = BuilderNode(
+				name: functionNames[owner],
+				isSendable: isDecorated[owner],
+				parameters: parameters,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				returnType: representative.concreteType,
+				body: BuilderBody(statements: body),
+				value: .construction(representative.target, arguments: arguments),
+				lineEnd: representative.lineEnd,
+			).spelled()
+		}
+		return spelledStatements(ofClass: 0, indentation: "        ", functionCode: functionCode)
+	}
+
+	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.
+	func spelledStatements(ofClass owner: Int, indentation: String, functionCode: [GeneratedCode]) -> [GeneratedCode]? {
+		var code = [GeneratedCode]()
+		for (index, statement) in statements(ofClass: owner).enumerated() {
+			let site = CallSite(owner: owner, index: index)
+			for function in hoistedFunctions[site] ?? [] {
+				code.append(.indented(functionCode[function], by: indentation))
+			}
+			if let function = attachedFunction[site] {
+				code.append(.indented(functionCode[function], by: indentation))
+			}
+			guard let text = spelledStatement(statement, inClass: owner, at: index) else { return nil }
+			code.append(.indented(.text(text), by: indentation))
+		}
+		return code
+	}
+
+	func spelledStatement(_ statement: Statement, inClass owner: Int, at index: Int) -> String? {
+		switch statement {
+		case let .inline(record):
+			guard let arguments = spelledArguments(record.arguments, inClass: owner, before: index, sourceAtMember: { member, position in
+				guard case let .inline(memberRecord) = bodies[member].statements[index] else { return nil }
+				return memberRecord.arguments[position].source
+			}) else { return nil }
+			let declaration = BindingDeclaration(
+				property: record.property,
+				rule: .constant(
+					isErased: record.isErased,
+					constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
+					hasBuilderFunction: false,
+					isExtension: record.isExtension,
+				),
+			)
+			let value = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription, where: record.isErased)
+			return "\(declaration.spelled) = \(value.spelled)\(record.lineEnd)"
+		case let .built(child):
+			guard let record = bodies[child].record else { return nil }
+			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+		case let .closer(record, target):
+			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+		case let .alias(record):
+			return record.text
+		}
+	}
+
+	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.
+	func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, inClass owner: Int, at index: Int) -> String? {
+		guard let representative = representative(of: callee) else { return nil }
+		var arguments = [String]()
+		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
+			guard let parameterType = parameterTypes[callee][label],
+			      let value = spelledArgument(label, passedTo: parameterType, inClass: owner, before: index)
+			else { return nil }
+			arguments.append("\(label.spelledAsArgumentLabel): \(value)")
+		}
+		let functionName = functionNames[callee]
+		switch property.propertyType {
+		case .instantiator,
+		     .erasedInstantiator,
+		     .sendableInstantiator,
+		     .sendableErasedInstantiator:
+			let isOnly = representative.forwardedProperties.count == 1
+			let forwardedArguments = representative.forwardedProperties.map {
+				CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: "$0")).spelled
+			}
+			return ScopeGenerator.instantiatorDeclaration(
+				of: property,
+				isExtension: isExtension,
+				isErased: isErased,
+				handing: functionName,
+				forwardedArguments: (forwardedArguments + arguments).joined(separator: ", "),
+			)
+		case .lazilyInstantiated,
+		     .sendableLazilyInstantiated:
+			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased))"
+		case .constant:
+			let declaration = BindingDeclaration(
+				property: property,
+				rule: .constant(
+					isErased: isErased,
+					constructedTypeIsPropertyType: representative.concreteType.asSource == property.typeDescription.asSource,
+					hasBuilderFunction: true,
+					isExtension: isExtension,
+				),
+			)
+			return "\(declaration.spelled) = \(Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription, where: isErased).spelled)"
+		}
+	}
+
+	/// What a call made before the statement at `index` of `owner`'s body passes a parameter `label` of type
+	/// `parameterType`: its nearest declaration, `nil`, or a wrapper made of a value where the parameter takes a wrapper.
+	func spelledArgument(_ label: String, passedTo parameterType: TypeDescription, inClass owner: Int, before index: Int) -> String? {
+		let declaration = typeLookUp(label, inClass: owner, before: index)
+		guard let declaredType = type(of: declaration) else {
+			return parameterType.isOptional ? "nil" : nil
+		}
+		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
+			return label
+		} else {
+			// The call is one of the function's call sites, whose declarations' types `computeParameterTypes` combined into
+			// `parameterType` (`parameterType(combining:)`), so a declaration that is not the parameter's type, or its
+			// unwrapped type, is the instance of the lazy wrapper the parameter takes.
+			guard parameterType.unwrapped.lazilyInstantiatedInstanceType == declaredType, !declaredType.isOptional else { return nil }
+			return "\(parameterType.unwrapped.asSource) { \(label) }"
+		}
+	}
+
+	/// The arguments of a construction made before the statement at `index` of `owner`'s body, each read as the receiver
+	/// declares it.
+	func spelledArguments(_ reads: [PlaceRead], inClass owner: Int, before index: Int, sourceAtMember: (Int, Int) -> ArgumentSource?) -> String? {
+		var arguments = [String]()
+		let members = owner == 0 ? [0] : membersByClass[owner]
+		for (position, read) in reads.enumerated() {
+			let value: String
+			if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
+				value = "nil"
+			} else {
+				let declaration = typeLookUp(read.label, inClass: owner, before: index)
+				if let declaredType = type(of: declaration) {
+					guard let spelled = Self.spelledRead(read, declaredAs: declaredType) else { return nil }
+					value = spelled
+				} else {
+					value = "nil"
+				}
+			}
+			arguments.append("\(read.argumentLabel.spelledAsArgumentLabel): \(value)")
+		}
+		return arguments.joined(separator: ", ")
+	}
+
+	/// How `read` reads a declaration of its label typed `declaredType`: the declaration itself, or its lazy wrapper's
+	/// instance; `nil` where it reads it in neither way.
+	static func spelledRead(_ read: PlaceRead, declaredAs declaredType: TypeDescription) -> String? {
+		let receivedType = read.property.typeDescription
+		if receivedType == declaredType || (receivedType.isOptional && receivedType.unwrapped == declaredType) {
+			return read.label
+		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType {
+			return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		} else {
+			guard let instanceType = declaredType.lazilyInstantiatedInstanceType, declaredType.isOptional, receivedType.isOptional, receivedType == instanceType else { return nil }
+			return "\(read.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		}
+	}
+}
