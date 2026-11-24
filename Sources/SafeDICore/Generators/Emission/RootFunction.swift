@@ -44,7 +44,7 @@ struct RootFunctionRecord: Sendable {
 /// What a root function's text is a function of, within one root: the called seam, the level of its tree the function
 /// returns the struct of, and what of the call around it the text reads. Nothing compares the text itself; the graph
 /// fuzzer checks that equal keys give equal text.
-struct RootFunctionKey: Hashable, Sendable {
+public struct RootFunctionKey: Hashable, Sendable {
 	/// The seam whose tree the function walks.
 	let calledSeam: TypeDescription?
 	/// The level's key (`ScopeGenerator.FillDispatcher.key`), which names the hole type and family the level is of.
@@ -70,11 +70,22 @@ struct RootFunctionKey: Hashable, Sendable {
 /// declared there too; every other record is written where the call put it, as it was before. A function reached inside
 /// a `@Sendable` function (`GeneratedCode.sendableFunction(_:)`) is declared `@Sendable nonisolated`, since a `@Sendable`
 /// function calls no function that is not; a name reached both inside and outside one keeps both where they are.
-enum RootFunctionHoisting {
+public enum RootFunctionHoisting {
+	/// A root function a root's plan reaches: its key, its name, and its text as the root would declare it.
+	public struct Occurrence: Sendable {
+		public let key: RootFunctionKey
+		public let name: String
+		public let text: String
+	}
+
+	/// Handed every root function each root's plan reaches, once per call that reaches it, in the order the plan reaches
+	/// them, so the graph fuzzer can check that equal keys give equal text, which nothing in the generator compares.
+	@TaskLocal public static var observer: (@Sendable ([Occurrence]) -> Void)?
+
 	/// `statements`, the root's body, whose statements are written after `indentation`, preceded by the root functions it
 	/// declares once, each indented as a statement of the root.
 	static func hoisted(_ statements: [GeneratedCode], indentation: String) -> [GeneratedCode] {
-		let (records, conflictingNames) = recordsAndConflicts(in: statements)
+		let (records, conflictingNames) = recordsAndConflicts(in: statements, reportsOccurrences: true)
 		let keyByName = Dictionary(records.map { ($0.name, $0.key) }, uniquingKeysWith: { first, _ in first })
 		// A function that calls one kept in place is kept in place too, until none is left to keep.
 		var keptNames = conflictingNames
@@ -102,7 +113,9 @@ enum RootFunctionHoisting {
 	}
 
 	/// The root functions `codes` hold, once per name, in the order they are reached, and the names reached with two keys.
-	private static func recordsAndConflicts(in codes: [GeneratedCode]) -> (records: [RootFunctionRecord], conflictingNames: Set<String>) {
+	private static func recordsAndConflicts(in codes: [GeneratedCode], reportsOccurrences: Bool = false) -> (records: [RootFunctionRecord], conflictingNames: Set<String>) {
+		let observer = reportsOccurrences ? observer : nil
+		var occurrences = [Occurrence]()
 		var keyByName = [String: RootFunctionKey]()
 		var conflictingNames = Set<String>()
 		var records = [RootFunctionRecord]()
@@ -132,6 +145,9 @@ enum RootFunctionHoisting {
 					labelsHiddenByReenteringCalls: record.key.labelsHiddenByReenteringCalls,
 					indentation: record.key.indentation,
 				)
+				if observer != nil {
+					occurrences.append(Occurrence(key: key, name: record.name, text: record.spelled(isSendable: key.isSendable)))
+				}
 				if let declaredKey = keyByName[record.name] {
 					if declaredKey != key {
 						conflictingNames.insert(record.name)
@@ -142,6 +158,7 @@ enum RootFunctionHoisting {
 				}
 			}
 		}
+		observer?(occurrences)
 		return (records, conflictingNames)
 	}
 }
