@@ -615,7 +615,7 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_compilesActorMock_whenModuleDefaultsToMainActorAndConfiguredTypeTakesSendableForm() async throws {
 		// An actor’s `mock()` is `nonisolated`, so it can read only a configuration that is not isolated to the main actor:
-		// the `Sendable` form’s. A plain configuration there stays isolated to the main actor, a deliberate gap (issue 1016):
+		// the `Sendable` form’s. A plain configuration there stays isolated to the main actor, a deliberate gap (issue 661):
 		// a `nonisolated` one could not evaluate a default that reads main-actor state, which SafeDI cannot see.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

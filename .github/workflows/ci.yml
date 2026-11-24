@@ -1923,7 +1923,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2207,7 +2207,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2252,7 +2252,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2896,7 +2896,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2925,7 +2925,7 @@ jobs:
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolGraphFuzzerTests/longRun'
       - name: Download the Base Tool
         if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: base-safedi-tool
           path: base-tool
@@ -2995,7 +2995,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: graph-fuzzer-report-*
           path: reports
@@ -3100,7 +3100,7 @@ jobs:
       # download that finds nothing is not this step's failure.
       - name: Download Coverage Reports
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: line-coverage-*
           path: ${{ runner.temp }}/line-coverage
@@ -3153,16 +3153,16 @@ jobs:
           # Main's history, for the merge base.
           fetch-depth: 0
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Download Unit Suite Profile
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: unit-suite-profile
           path: unit-suite
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: graph-fuzzer-report-*
           path: reports
@@ -3381,7 +3381,9 @@ jobs:
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    # To check out the download action.
+    permissions:
+      contents: read
     steps:
       - name: Require the Seven Groups
         env:
@@ -3389,8 +3391,13 @@ jobs:
         run: |
           echo "Build and Test on Latest Swift (seven groups): $GROUPS_RESULT"
           test "$GROUPS_RESULT" = success
+      # The download below is a local action, which needs its files checked out.
+      - name: Checkout the Download Action
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions/download-artifact
       - name: Download the Groups' Test Counts
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: latest-swift-test-count-*
           path: latest-swift-test-counts

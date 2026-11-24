@@ -249,7 +249,7 @@ extension MockLowering {
 	static func cycleClosingOverridesField(boundAs bindingName: String, concreteType: TypeDescription) -> OverridesField {
 		OverridesField(
 			name: bindingName,
-			typeSource: "\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)",
+			typeSource: "\(concreteType.asSource).\(ScopeGenerator.mockConfigurationStructName)",
 			defaultValue: ".init()",
 			sendability: .whenConfigurationIsTypedSendable(concreteType.asSource),
 		)
@@ -435,14 +435,14 @@ extension MockLowering.ConfigurationRecord {
 		// `Sendable`, so a `@Sendable nonisolated` function can take it and read its members in a module whose
 		// declarations default to the main actor. A plain configuration keeps the module's isolation: its default
 		// expressions may read main-actor state, which SafeDI cannot see and a `nonisolated` initializer could not read. So an
-		// actor's `mock()` there cannot read a plain configuration, a deliberate gap (issue 1016; the actor cell of
+		// actor's `mock()` there cannot read a plain configuration, a deliberate gap (issue 661; the actor cell of
 		// `SafeDIToolMockSendableConfigurationIsolationTests` says the same).
 		let isSendable = requiresSendable && fields.allSatisfy(\.isProvenSendable)
 		var lines = [
 			"\(indent)/// Configuration for how this type is constructed within a mock tree.",
 			isSendable
-				? "\(indent)nonisolated struct \(ScopeGenerator.MockParameterNode.configurationStructName): Sendable {"
-				: "\(indent)struct \(ScopeGenerator.MockParameterNode.configurationStructName) {",
+				? "\(indent)nonisolated struct \(ScopeGenerator.mockConfigurationStructName): Sendable {"
+				: "\(indent)struct \(ScopeGenerator.mockConfigurationStructName) {",
 		]
 		lines.append("\(innerIndent)init(")
 		lines.append(parameters.joined(separator: ",\n"))

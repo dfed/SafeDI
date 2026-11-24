@@ -3431,7 +3431,7 @@ extension GraphFuzzerToolRuns {
 	/// `CarrierShelf` module-level configuration where `CarrierShelf` declares the holder, takes the holder and its siblings
 	/// in another order than their declaration: the order the internal mock takes them in, whatever order the public mock
 	/// builds them in (the contract's rule 7); or, where `CarrierLocal`'s internal mock configures `CarrierShelf` too, whose
-	/// internal `SafeDIMockConfiguration` does. `nil` for any other graph. With `MockParameterNode.inInlineOrder` returning
+	/// internal `SafeDIMockConfiguration` does. `nil` for any other graph. With `ScopeGenerator.inlineOrdered(_:property:)` returning
 	/// its nodes in build order, the holder last, seeds 17, 22, 24, 57, 89, 186 and 246 fail.
 	var publicMockOverridesOrderFailure: GraphFuzzerFailure? {
 		guard knownRightOutcome != nil, case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
