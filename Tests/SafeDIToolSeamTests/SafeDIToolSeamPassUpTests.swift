@@ -866,10 +866,10 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 				        let __safeDI_apiBuilder_detail = __safeDI_apiBuilder.detail(logger)
+				        func __safeDI_readerBuilder() -> Reader {
+				            Reader(logger: logger.instance)
+				        }
 				        func __safeDI_detail() -> Detail {
-				            func __safeDI_readerBuilder() -> Reader {
-				                Reader(logger: logger.instance)
-				            }
 				            let readerBuilder = Instantiator<Reader>(__safeDI_readerBuilder)
 				            let api: any Api = __safeDI_apiBuilder_detail.api(readerBuilder)
 				            return Detail(api: api, readerBuilder: readerBuilder)

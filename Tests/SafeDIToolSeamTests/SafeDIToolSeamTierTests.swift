@@ -1304,16 +1304,16 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 				extension MidRoot {
 				    public convenience init() {
-				        func __safeDI_holderBuilder(logger: Logger) -> Holder {
-				            func __safeDI_outer() -> Outer {
-				                func __safeDI_screen() -> Screen {
-				                    _ = Screen.__safeDI_Screen_4FF58FD9C96A28C4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				                    return Screen(__safeDI_logger: logger)
-				                }
-				                let screen: Screen = __safeDI_screen()
-				                return Outer(screen: screen)
+				        func __safeDI_outer(logger: Logger) -> Outer {
+				            func __safeDI_screen() -> Screen {
+				                _ = Screen.__safeDI_Screen_4FF58FD9C96A28C4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				                return Screen(__safeDI_logger: logger)
 				            }
-				            let outer: Outer = __safeDI_outer()
+				            let screen: Screen = __safeDI_screen()
+				            return Outer(screen: screen)
+				        }
+				        func __safeDI_holderBuilder(logger: Logger) -> Holder {
+				            let outer: Outer = __safeDI_outer(logger: logger)
 				            return Holder(logger: logger, outer: outer)
 				        }
 				        let holderBuilder = Instantiator<Holder> {
@@ -1332,16 +1332,16 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 				extension MidRoot {
 				    public convenience init() {
-				        func __safeDI_holderBuilder(logger: Logger) -> Holder {
-				            func __safeDI_outer() -> Outer {
-				                func __safeDI_screen() -> Screen {
-				                    _ = Screen.__safeDI_Screen_4FF58FD9C96A28C4.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
-				                    return Screen(__safeDI_logger: logger)
-				                }
-				                let screen: Screen = __safeDI_screen()
-				                return Outer(screen: screen)
+				        func __safeDI_outer(logger: Logger) -> Outer {
+				            func __safeDI_screen() -> Screen {
+				                _ = Screen.__safeDI_Screen_4FF58FD9C96A28C4.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				                return Screen(__safeDI_logger: logger)
 				            }
-				            let outer: Outer = __safeDI_outer()
+				            let screen: Screen = __safeDI_screen()
+				            return Outer(screen: screen)
+				        }
+				        func __safeDI_holderBuilder(logger: Logger) -> Holder {
+				            let outer: Outer = __safeDI_outer(logger: logger)
 				            return Holder(logger: logger, outer: outer)
 				        }
 				        let holderBuilder = Instantiator<Holder> {

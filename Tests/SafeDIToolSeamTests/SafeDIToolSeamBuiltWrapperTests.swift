@@ -1650,16 +1650,16 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init(__safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
 		        let __safeDI_gadgetBuilder_again = __safeDI_gadgetBuilder.again
 		        func __safeDI_again() -> Middle {
-		            func __safeDI_beneath() -> Beneath {
-		                let again = Instantiator<Middle>(__safeDI_again)
-		                return Beneath(again: again)
-		            }
 		            let beneath: Beneath = __safeDI_beneath()
 		            func __safeDI_again_Gadget() -> any Gadget {
 		                __safeDI_gadgetBuilder_again.again(beneath)
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle(again: again, beneath: beneath)
+		        }
+		        func __safeDI_beneath() -> Beneath {
+		            let again = Instantiator<Middle>(__safeDI_again)
+		            return Beneath(again: again)
 		        }
 		        let again = Instantiator<Middle>(__safeDI_again)
 		        self.init(again: again)

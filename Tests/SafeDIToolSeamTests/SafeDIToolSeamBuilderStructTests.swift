@@ -165,13 +165,15 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        let navigator = Navigator()
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(navigator, logger)
+		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
+		            return Leaf(api: api)
+		        }
 		        func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder
-		            func __safeDI_leafBuilder() -> Leaf {
-		                let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
-		                return Leaf(api: api)
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
 		            }
-		            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 		            return Detail(leafBuilder: leafBuilder)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -1295,15 +1297,17 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder
+		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let logger = Logger()
 		            let tag = Tag()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_aBuilder.detailBuilder(logger, tag)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return A(logger: logger, tag: tag, detailBuilder: detailBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -1311,11 +1315,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        func __safeDI_bBuilder() -> B {
 		            let logger = Logger()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_bBuilder.detailBuilder(logger)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return B(logger: logger, detailBuilder: detailBuilder)
 		        }
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -1409,18 +1411,18 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_next.api(id)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
+		            }
+		            return Screen(id: id, api: api, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id)
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(id, api)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let api: any Api = __safeDI_apiBuilder_next.api(id)
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, api: api, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
 		            }
 		            return Screen(id: id, api: api, next: next)
 		        }
@@ -1558,24 +1560,30 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Step {
+		            let mark = Mark()
+		            let api: any Api = __safeDI_apiBuilder_stepBuilder.api(mark)
+		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_stepBuilder.next(mark, api)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(__safeDI_apiBuilder_next: __safeDI_apiBuilder_next, __safeDI_apiBuilder_stepBuilder: __safeDI_apiBuilder_stepBuilder)
+		            }
+		            return Step(api: api, mark: mark, next: next)
+		        }
+		        func __safeDI_next(__safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>, __safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Screen {
+		            let cache = Cache()
+		            let monitor: any Api = __safeDI_apiBuilder_next.monitor(cache)
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_apiBuilder_stepBuilder)
+		            }
+		            return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
+		        }
 		        func __safeDI_screenBuilder() -> Screen {
 		            let cache = Cache()
 		            let monitor: any Api = __safeDI_apiBuilder_screenBuilder.monitor(cache)
 		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screenBuilder.stepBuilder(cache, monitor)
-		            func __safeDI_stepBuilder() -> Step {
-		                let mark = Mark()
-		                let api: any Api = __safeDI_apiBuilder_stepBuilder.api(mark)
-		                let __safeDI_apiBuilder_next = __safeDI_apiBuilder_stepBuilder.next(mark, api)
-		                func __safeDI_next() -> Screen {
-		                    let cache = Cache()
-		                    let monitor: any Api = __safeDI_apiBuilder_next.monitor(cache)
-		                    let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		                    return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
-		                }
-		                let next = Instantiator<Screen>(__safeDI_next)
-		                return Step(api: api, mark: mark, next: next)
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_apiBuilder_stepBuilder)
 		            }
-		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
@@ -1861,14 +1869,16 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let tag = Tag()
 		        let __safeDI_serviceBuilder_child = __safeDI_serviceBuilder.child(tag)
+		        func __safeDI_child_(__safeDI_serviceBuilder_child_: __safeDI_ServiceCarrier_Y<any Service>) -> Y {
+		            let service: any Service = __safeDI_serviceBuilder_child_.service()
+		            return Y(service: service)
+		        }
 		        func __safeDI_child() -> X {
 		            let logger = Logger()
 		            let __safeDI_serviceBuilder_child_ = __safeDI_serviceBuilder_child.child(logger)
-		            func __safeDI_child() -> Y {
-		                let service: any Service = __safeDI_serviceBuilder_child_.service()
-		                return Y(service: service)
+		            let child = Instantiator<Y> {
+		                __safeDI_child_(__safeDI_serviceBuilder_child_: __safeDI_serviceBuilder_child_)
 		            }
-		            let child = Instantiator<Y>(__safeDI_child)
 		            return X(logger: logger, child: child)
 		        }
 		        let child = Instantiator<X>(__safeDI_child)
