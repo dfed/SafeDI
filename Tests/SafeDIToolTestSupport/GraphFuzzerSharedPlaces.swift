@@ -38,7 +38,7 @@
 struct GraphFuzzerSharedPlacesGraph {
 	init(seed: UInt64) {
 		self.seed = seed
-		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x5348_4152_4544_504C)
+		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x534841524544504C)
 		isInSeam = random.percentChance(34)
 		branches = (1...2).map { index in
 			let depth = random.integer(in: 1...3)
