@@ -818,17 +818,16 @@ extension DependencyTreeGenerator {
 			keepsFirstPassTrees: keepsFirstPassTrees,
 			seamsReachingThemselves: seamComponents.seamsReachingThemselves,
 		)
-		let width = Self.seamSignatureWidth
+		let width = SeamSignatureObservation.width ?? ProcessInfo.processInfo.activeProcessorCount
 		// Made only when a level runs on more than one task: each task freezes its passes in an ID space of its own.
 		var base: FrozenScopeMap.Base?
 		var settledComponents = [Int: SettledSeamComponent]()
-		// The component, earliest in component order, whose computation threw an error no pass reports: the computation
-		// throws it, as computing the components one after another would, and so no component after it counts.
-		var firstFailure: (index: Int, error: any Error)?
+		// Every level holds a component: one is in a level after the first only for a component it reaches in the level
+		// before. A component's computation throws only an error no pass reports, which no input is known to reach (every
+		// error a pass meets is a `SourceLocatedError`, which the pass reports); the level's earliest such component in
+		// component order decides it, as computing the level's components one after another would.
 		for level in 0..<((levelOfComponent.max() ?? -1) + 1) {
-			let levelPlans = plans.filter { levelOfComponent[$0.index] == level && $0.index < (firstFailure?.index ?? .max) }
-			guard !levelPlans.isEmpty else { continue }
-			let inputs = levelPlans.map { plan in
+			let inputs = plans.filter { levelOfComponent[$0.index] == level }.map { plan in
 				var reachedSeamRoots = [TypeDescription: ScopeGenerator.SeamRoot?]()
 				var reachedScopeEnums = [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]()
 				for seamType in plan.reachedSeamTypes {
@@ -840,72 +839,36 @@ extension DependencyTreeGenerator {
 				return SeamComponentInput(plan: plan, knownSeamRoots: reachedSeamRoots, ownScopeEnums: reachedScopeEnums)
 			}
 			let taskCount = min(width, inputs.count)
-			var results = [Result<SettledSeamComponent, any Error>]()
+			let settledInputs: [SettledSeamComponent]
 			if taskCount <= 1 {
-				for input in inputs {
-					do {
-						try results.append(.success(Self.settle(input, context: context, baseFrozenScopeMap: baseFrozenScopeMap)))
-					} catch {
-						results.append(.failure(error))
-						break
-					}
-				}
+				settledInputs = try inputs.map { try Self.settle($0, context: context, baseFrozenScopeMap: baseFrozenScopeMap) }
 			} else {
 				let levelBase = base ?? baseFrozenScopeMap.base
 				base = levelBase
-				// Contiguous runs of the level's components, one per task, so each task makes its map once.
+				// Contiguous runs of the level's components, one per task, so that each task makes its map once.
 				let runs = (0..<taskCount).map { run in
 					Array(inputs[(inputs.count * run / taskCount)..<(inputs.count * (run + 1) / taskCount)])
 				}
-				let outcomes = await BoundedConcurrency.outcomes(of: runs, width: taskCount, failurePolicy: .runAll) { run, _ in
+				settledInputs = try await BoundedConcurrency.map(runs, width: taskCount) { run, _ in
 					let taskBaseFrozenScopeMap = FrozenScopeMap(base: levelBase)
-					var runResults = [Result<SettledSeamComponent, any Error>]()
-					for input in run {
-						do {
-							try runResults.append(.success(Self.settle(input, context: context, baseFrozenScopeMap: taskBaseFrozenScopeMap)))
-						} catch {
-							runResults.append(.failure(error))
-							break
-						}
-					}
-					return SettledSeamComponentRun(results: runResults)
-				}
-				for outcome in outcomes {
-					switch outcome {
-					case let .finished(run):
-						results += run.results
-					case .failed, .notAdmitted:
-						// A run catches every error of its own and is admitted under `runAll`.
-						break
-					}
-				}
+					return try SettledSeamComponentRun(components: run.map { try Self.settle($0, context: context, baseFrozenScopeMap: taskBaseFrozenScopeMap) })
+				}.flatMap(\.components)
 			}
-			for (input, result) in zip(inputs, results) {
-				switch result {
-				case let .success(settled):
-					settledComponents[input.plan.index] = settled
-					for (seamType, seamRoot) in settled.seamRoots {
-						seamRoots[seamType] = seamRoot
-						knownSeamRoots[seamType] = .some(seamRoot)
-						ownScopeEnumsBySeamType[seamType] = seamRoot.map(Self.ownScopeEnums(of:)) ?? []
-					}
-				case let .failure(error):
-					if input.plan.index < (firstFailure?.index ?? .max) {
-						firstFailure = (input.plan.index, error)
-					}
+			for (input, settled) in zip(inputs, settledInputs) {
+				settledComponents[input.plan.index] = settled
+				for (seamType, seamRoot) in settled.seamRoots {
+					seamRoots[seamType] = seamRoot
+					knownSeamRoots[seamType] = .some(seamRoot)
+					ownScopeEnumsBySeamType[seamType] = seamRoot.map(Self.ownScopeEnums(of:)) ?? []
 				}
 			}
 		}
-		if let firstFailure {
-			throw firstFailure.error
-		}
-		for plan in plans {
-			guard let settled = settledComponents[plan.index] else { continue }
+		for (_, settled) in settledComponents.sorted(by: { $0.key < $1.key }) {
 			errors += settled.errors
 			failedSeams.formUnion(settled.failedSeams)
 			// Kept only for a component of one seam that its first pass settled with a signature and no error.
-			if let firstPassTree = settled.firstPassTree {
-				firstPassTrees[plan.seams[0].concreteInstantiable] = firstPassTree
+			if let firstPassTree = settled.firstPassTree, let seamType = settled.seamRoots.first?.0 {
+				firstPassTrees[seamType] = firstPassTree
 			}
 		}
 		// Every enum of a cycle is generated by one module, whose seams are the ones settled here.
@@ -915,15 +878,6 @@ extension DependencyTreeGenerator {
 			seamRoots[seamType] = seamRoot
 		}
 		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams, proof: proof, firstPassTrees: firstPassTrees)
-	}
-
-	/// How many tasks settle one level of a module's seam components at once.
-	private static var seamSignatureWidth: Int {
-		if let width = ProcessInfo.processInfo.environment["SAFEDI_SIGNATURE_WIDTH"].flatMap(Int.init) {
-			width
-		} else {
-			ProcessInfo.processInfo.activeProcessorCount
-		}
 	}
 
 	/// One strongly connected component of a module's seams, as `seamSignatures` plans its computation.
@@ -978,9 +932,9 @@ extension DependencyTreeGenerator {
 		let firstPassTree: ScopeGenerator?
 	}
 
-	/// What one task of a level settled, in its components' order, up to and including the first that threw.
+	/// What one task of a level settled, in its components' order.
 	private struct SettledSeamComponentRun: Sendable {
-		let results: [Result<SettledSeamComponent, any Error>]
+		let components: [SettledSeamComponent]
 	}
 
 	/// Settles one component of `seamSignatures`, from the roots and enums of the seams it reaches.
@@ -2395,6 +2349,9 @@ public enum SeamSignatureObservation {
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
 	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
+	/// count, so that a test runs a level on one task or on several whatever machine runs it.
+	@TaskLocal public static var width: Int?
 }
 
 /// Observes the trees of the seams this module generates that emission makes again from their first signature pass's
