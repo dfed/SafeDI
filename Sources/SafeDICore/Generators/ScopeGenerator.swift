@@ -1591,7 +1591,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"fulfillingExpression": .copied,
 			"property": .copied,
 			"constructsWithHandWrittenMock": .copied,
-			"fillCodeByKey": .startsEmpty,
 			"unavailablePropertiesToGenerateCodeTask": .startsEmpty,
 			"unavailablePropertiesToGeneratedCode": .startsEmpty,
 			"orderedPropertyToGenerateIndices": .copied,
@@ -3910,7 +3909,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 				// The call's fills are its children, declared in the builder function that makes the call and generated with
-				// that function's body's `propertiesGeneratedLater`, as `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates
+				// that function's body's `propertiesGeneratedLater`, as `mockLoweringFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates
 				// them. A call a fill makes is led to by the dependency that leads to the call the fill is passed to.
 				let callReferenceLocation = fillReferenceLocation ?? .some(declarationLocationByProperty[childProperty].flatMap(\.self) ?? scopeDeclarationLocation)
 				let fillsPropertiesGeneratedLater = child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater)
@@ -5653,14 +5652,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// For a scope that calls another module's public mock and fills its builders, the code of the fills, which a mock
-	/// declares before the call, by the `propertiesGeneratedLater` and `FillPlaceBindings` the fills are generated with: each
-	/// builds the hole's property as the module that declares the fulfilling type builds it. Empty until
-	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` returns.
-	private var fillCodeByKey = [FillCodeKey: [String]]()
-
-	// D1 lane hook (lane C): the mock lowering reads a call's fills as the emitter generates them, storing nothing.
-	/// The code of the fills with `propertiesGeneratedLater` and `fillPlaceBindings`, as
-	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates it, without keeping it in `fillCodeByKey`.
+	/// declares before the call, generated with `propertiesGeneratedLater` and `fillPlaceBindings`, the names the mock root
+	/// hands the call: each builds the hole's property as the module that declares the fulfilling type builds it. Stored
+	/// nowhere, since mock roots that share the call each hand it their own names (`construction-memo-calls.md`).
 	func mockLoweringFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws -> [String] {
 		try await generateProperties(
 			propertiesGeneratedLater: propertiesGeneratedLater,
@@ -5668,13 +5662,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			leadingMemberWhitespace: "",
 			fillPlaceBindings: fillPlaceBindings,
 		).map { $0.spelled() }
-	}
-
-	/// What a call's fills are generated with: the code differs by both, since a mock root hands each call the names of its
-	/// own builders (`FillPlaceBindings`).
-	private struct FillCodeKey: Hashable {
-		let propertiesGeneratedLater: Set<Property>
-		let fillPlaceBindings: FillPlaceBindings
 	}
 
 	/// Every argument of `generatePropertyCode` but `codeGeneration`, which is `.dependencyTree` wherever the key is made,
