@@ -70,6 +70,42 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func typeKeyFilesAndPlaceRecords_nameNoFeature() throws {
+		#expect(try findings(of: [.engineFeatureName]) == [])
+	}
+
+	@Test(arguments: [
+		("let mockDefaults = 1", "mockDefaults", "mock"),
+		("_ = record.seamRoot", "seamRoot", "seam"),
+		("struct SafeDIOverrides {}", "SafeDIOverrides", "overrides"),
+		("func read(configuration: Int) {}", "configuration", "configuration"),
+		("_ = HoleFill.self", "HoleFill", "hole"),
+		("_ = \"a fill\"", "a fill", "fill"),
+	])
+	func sourceRuleCheck_findsEngineFeatureName_whenATypeKeyFileNamesAFeature(source: String, name: String, word: String) {
+		#expect(findings(in: source, at: "Sources/SafeDICore/Generators/Emission/TypeKeyBody+Fixture.swift") == [
+			"Sources/SafeDICore/Generators/Emission/TypeKeyBody+Fixture.swift:1: engineFeatureName: the type key and its records name no feature, and `\(name)` names `\(word)`: record the fact in general terms on the place, and read that",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoEngineFeatureName_whenAWordOnlyContainsAFeaturesLettersOrAnotherFileNamesIt() {
+		#expect(findings(in: """
+		// A comment may say what a mock or a seam records.
+		let fulfillingProperty = 1
+		override func visit() {}
+		""", at: "Sources/SafeDICore/Generators/Emission/TypeKeyBody.swift") == [])
+		#expect(findings(in: "let mockDefaults = seamRoot", at: "Sources/SafeDICore/Generators/Emission/ArgumentSource.swift") == [])
+	}
+
+	@Test
+	func sourceRuleCheck_findsEngineFeatureName_whenPlaceRecordNamesAFeature() {
+		#expect(findings(in: "let isHole = true", at: "Sources/SafeDICore/Generators/Emission/PlaceRecord.swift") == [
+			"Sources/SafeDICore/Generators/Emission/PlaceRecord.swift:1: engineFeatureName: the type key and its records name no feature, and `isHole` names `hole`: record the fact in general terms on the place, and read that",
+		])
+	}
+
+	@Test
 	func sources_returnNoTupleFromATaskGroup() throws {
 		#expect(try findings(of: [.taskGroupTupleElement]) == [])
 	}
@@ -687,7 +723,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `engineFeatureName`",
 		])
 	}
 

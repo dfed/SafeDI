@@ -71,6 +71,11 @@ enum SourceRule: String, CaseIterable {
 	/// built with `-enable-testing`, passed. A task group's element is a struct of the same fields, which those builds
 	/// compile correctly.
 	case taskGroupTupleElement
+	/// A mock, an override, a configuration, a seam, a hole or a fill named in a type key file (`TypeKeyBody*.swift`) or
+	/// in `PlaceRecord.swift`, in an identifier or a literal: the type key lays out any body from its places' records
+	/// and knows no feature, so a feature that needs something of it records a fact in general terms on the place, and
+	/// the layout reads the fact.
+	case engineFeatureName
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
@@ -93,6 +98,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Tests/SafeDIToolTestSupport/")
 		case .uncheckedConcurrency, .taskGroupTupleElement:
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
+		case .engineFeatureName:
+			path.hasPrefix("Sources/SafeDICore/Generators/Emission/TypeKeyBody") || path == "Sources/SafeDICore/Generators/Emission/PlaceRecord.swift"
 		}
 	}
 }
@@ -357,6 +364,20 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		return .visitChildren
 	}
 
+	override func visit(_ token: TokenSyntax) -> SyntaxVisitorContinueKind {
+		let text: String? = if case let .identifier(text) = token.tokenKind {
+			text
+		} else if case let .stringSegment(text) = token.tokenKind {
+			text
+		} else {
+			nil
+		}
+		if let text, let word = Self.featureWords(in: text).first {
+			record(.engineFeatureName, at: token, "the type key and its records name no feature, and `\(text)` names `\(word)`: record the fact in general terms on the place, and read that")
+		}
+		return .visitChildren
+	}
+
 	override func visit(_ node: StringSegmentSyntax) -> SyntaxVisitorContinueKind {
 		if node.content.text.contains(Self.builderFunctionNamePrefix) {
 			record(.builderFunctionNamePrefix, at: node.content, Self.builderFunctionNamePrefixMessage)
@@ -399,6 +420,27 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private static let trappingFunctionNames: Set = ["fatalError", "precondition", "preconditionFailure", "assert", "assertionFailure"]
+
+	/// The words that name a feature the type key must not know, each in the forms an identifier spells it.
+	private static let featureWords: Set = ["mock", "mocks", "mocked", "override", "overrides", "overridden", "configuration", "configurations", "seam", "seams", "hole", "holes", "fill", "fills", "filled"]
+
+	/// The feature words `text` spells, in order: a word is a run of letters that a capital letter begins or follows,
+	/// as in `seamRoot` and `SafeDIOverrides`, so `fulfillingProperty` spells none.
+	private static func featureWords(in text: String) -> [String] {
+		var words = [String]()
+		var word = ""
+		for character in text + " " {
+			if character.isLetter, !character.isUppercase {
+				word.append(character)
+			} else {
+				if featureWords.contains(word.lowercased()) {
+					words.append(word.lowercased())
+				}
+				word = character.isLetter ? String(character) : ""
+			}
+		}
+		return words
+	}
 
 	/// The traps `text` spells, in the order they first appear: a name in `trappingFunctionNames`, or `unsafelyUnwrapped`, as
 	/// a whole word, neither preceded nor followed by a letter, a digit or `_`; or `try` or `as` as a whole word followed by

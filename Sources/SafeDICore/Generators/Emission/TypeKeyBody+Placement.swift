@@ -1,0 +1,107 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+extension TypeKeyLayout {
+	// MARK: Placement
+
+	/// The class a statement of a class's body calls, or `nil` for one that calls none.
+	func callee(of statement: Statement) -> Int? {
+		switch statement {
+		case let .built(child):
+			classByBody[child]
+		case let .closer(_, target):
+			classByBody[target]
+		case .inline, .alias:
+			nil
+		}
+	}
+
+	/// The statements of a class's body, which every member's body shares: its first member's, or the root's.
+	func statements(ofClass owner: Int) -> [Statement] {
+		owner == 0 ? bodies[0].statements : bodies[membersByClass[owner][0]].statements
+	}
+
+	func representative(of owner: Int) -> BuiltPlaceRecord? {
+		owner == 0 ? nil : bodies[membersByClass[owner][0]].record
+	}
+
+	/// Declares each class's function in the root's body, a cycle's functions together.
+	mutating func computePlacement() -> Bool {
+		let classCount = membersByClass.count
+		calleesByClass = Array(repeating: [], count: classCount)
+		callSitesByClass = Array(repeating: [], count: classCount)
+		for owner in 0..<classCount {
+			for (index, statement) in statements(ofClass: owner).enumerated() {
+				guard let callee = callee(of: statement) else { continue }
+				calleesByClass[owner].insert(callee)
+				callSitesByClass[callee].insert(CallSite(owner: owner, index: index))
+			}
+		}
+		let componentByClass = ScopeGenerator.stronglyConnectedComponents(of: calleesByClass)
+		var classesByComponent = [Int: [Int]]()
+		for owner in 1..<max(classCount, 1) {
+			classesByComponent[componentByClass[owner], default: []].append(owner)
+		}
+		placementOwner = Array(repeating: -1, count: classCount)
+		placementIndex = Array(repeating: 0, count: classCount)
+		placementDepth = Array(repeating: 0, count: classCount)
+		placementOwner[0] = 0
+		// Tarjan's algorithm finishes a component after every component it reaches, so callers come last: they are placed
+		// first.
+		for component in classesByComponent.keys.sorted(by: >) {
+			guard let members = classesByComponent[component]?.sorted() else { continue }
+			let memberSet = Set(members)
+			let allSites = members.flatMap { callSitesByClass[$0] }
+			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) })
+			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
+			// each level of nested local functions past about twenty.
+			guard let firstSite = externalSites.first else { return false }
+			let owner = 0
+			let isAttached = members.count == 1 && externalSites.count == 1 && allSites.count == 1 && firstSite.owner == owner
+			// The functions are declared before the first statement of the root's body that reaches them: one that calls a
+			// member, or one that reaches a function that calls one, which is placed already, since callers are placed first.
+			let index = externalSites.reduce(Int.max) { first, site in
+				min(first, site.owner == owner ? site.index : placementIndex[site.owner])
+			}
+			for member in members {
+				placementOwner[member] = owner
+				placementIndex[member] = index
+				placementDepth[member] = placementDepth[owner] + 1
+			}
+			let site = CallSite(owner: owner, index: index)
+			if isAttached {
+				attachedFunction[site] = members[0]
+			} else {
+				hoistedFunctions[site, default: []].append(contentsOf: members)
+			}
+		}
+		// Functions declared before one statement are ordered by the first reach of their cycle, then by their own.
+		for (site, functions) in hoistedFunctions {
+			hoistedFunctions[site] = functions.sorted { lhs, rhs in
+				let lhsComponent = componentByClass[lhs]
+				let rhsComponent = componentByClass[rhs]
+				let lhsFirst = classesByComponent[lhsComponent]?.min() ?? lhs
+				let rhsFirst = classesByComponent[rhsComponent]?.min() ?? rhs
+				return lhsFirst == rhsFirst ? lhs < rhs : lhsFirst < rhsFirst
+			}
+		}
+		return true
+	}
+}

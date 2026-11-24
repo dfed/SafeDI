@@ -1,0 +1,157 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+extension TypeKeyLayout {
+	// MARK: Checking every read
+
+	/// The body of class `owner` that encloses `body`, where `owner` is `body`'s class or the root's: what `typeLookUp`
+	/// finds in `body`'s class is declared in `body` itself or, since every function is declared in the root's body
+	/// (`computePlacement`), in the root's.
+	func instance(ofClass owner: Int, enclosing body: Int) -> Int {
+		owner == 0 ? 0 : body
+	}
+
+	/// What the type key's `declaration`, which `typeLookUp` found in the class of `body`, holds in `body`, as a path
+	/// declaration.
+	func evaluate(_ declaration: TypeDeclaration, inBody body: Int) -> PathValue {
+		var declaration = declaration
+		var body = body
+		// A read that is no cycle parameter is what the call passes: the declaration the caller's class sees.
+		while case let .read(owner, label) = declaration, !bodies[instance(ofClass: owner, enclosing: body)].cycleParameterLabels.contains(label) {
+			let place = instance(ofClass: owner, enclosing: body)
+			let parent = bodies[place].parent
+			declaration = typeLookUp(label, inClass: classByBody[parent], before: bodies[place].position)
+			body = parent
+		}
+		switch declaration {
+		case .none:
+			return PathValue.none
+		case let .statement(owner, index):
+			return .statement(body: instance(ofClass: owner, enclosing: body), index: index)
+		case let .forwarded(owner, label):
+			return .forwarded(body: instance(ofClass: owner, enclosing: body), label: label)
+		case let .read(owner, label):
+			return normalized(.cycleParameter(body: instance(ofClass: owner, enclosing: body), label: label))
+		}
+	}
+
+	/// `value`, a cycle parameter replaced by what every call of its function passes it, where every call passes one value.
+	func normalized(_ value: PathValue) -> PathValue {
+		if case let .cycleParameter(body, label) = value, let passed = normalizedCycleParameters[body]?[label] {
+			passed
+		} else {
+			value
+		}
+	}
+
+	mutating func normalizeCycleParameters() {
+		for body in bodies.indices.dropFirst() {
+			guard let record = bodies[body].record else { continue }
+			// The call passes each cycle parameter one argument of its label (`ScopeGenerator.cycleParameterReads`).
+			for argument in record.callCycleArguments {
+				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
+				var values = [first]
+				for closer in closersByTarget[body] ?? [] {
+					values.append(normalized(closerValue(of: argument.label, closing: closer, onPlace: body)))
+				}
+				if values.allSatisfy({ $0 == first }) {
+					normalizedCycleParameters[body, default: [:]][argument.label] = first
+				}
+			}
+		}
+	}
+
+	/// Whether every read of every place reads in the type key's code the declaration it reads in the path key's.
+	mutating func checkEveryRead() -> Bool {
+		normalizeCycleParameters()
+		for body in bodies.indices {
+			let owner = classByBody[body]
+			let statements = bodies[body].statements
+			if let record = bodies[body].record {
+				for (position, argument) in record.arguments.enumerated() {
+					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNilAtEveryMember(owner: owner) { $0.arguments[position] }) else { return false }
+				}
+			}
+			for (index, statement) in statements.enumerated() {
+				switch statement {
+				case let .inline(record):
+					for position in record.arguments.indices {
+						let isNil = isNilAtEveryMember(owner: owner, statement: index, argument: position)
+						guard checkRead(record.arguments[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
+					}
+				case let .alias(record):
+					guard let fulfillingProperty = record.fulfillingProperty else { continue }
+					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
+					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
+					guard normalized(evaluate(declaration, inBody: body)) == expected,
+					      let typeModeType = type(of: declaration),
+					      let pathType = type(of: expected),
+					      typeModeType.asSource == pathType.asSource
+					else { return false }
+				case let .built(child):
+					guard checkCall(of: child, from: body, at: index, closer: nil) else { return false }
+				case let .closer(record, target):
+					guard checkCall(of: target, from: body, at: index, closer: record) else { return false }
+				}
+			}
+		}
+		return true
+	}
+
+	func isNilAtEveryMember(owner: Int, read: (BuiltPlaceRecord) -> PlaceRead) -> Bool {
+		guard owner != 0 else { return false }
+		return membersByClass[owner].allSatisfy { member in
+			bodies[member].record.map { read($0).source == .nil } ?? false
+		}
+	}
+
+	func isNilAtEveryMember(owner: Int, statement index: Int, argument position: Int) -> Bool {
+		let members = owner == 0 ? [0] : membersByClass[owner]
+		return members.allSatisfy { member in
+			guard case let .inline(record) = bodies[member].statements[index] else { return false }
+			return record.arguments[position].source == .nil
+		}
+	}
+
+	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {
+		guard !isNilAtEveryMember else { return true }
+		let expected = normalized(pathValue(of: read, inBody: body, before: index))
+		let declaration = typeLookUp(read.label, inClass: owner, before: index)
+		return normalized(evaluate(declaration, inBody: body)) == expected
+	}
+
+	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path
+	/// key's call does. Every function is declared in the root's body (`computePlacement`), so a closing call captures
+	/// what the path key's function captures.
+	func checkCall(of place: Int, from body: Int, at index: Int, closer: ClosingPlaceRecord?) -> Bool {
+		let callee = classByBody[place]
+		let owner = classByBody[body]
+		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
+			let expected: PathValue = if closer != nil {
+				normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place))
+			} else {
+				normalized(resolution(of: label, atPlace: place))
+			}
+			let declaration = typeLookUp(label, inClass: owner, before: index)
+			guard normalized(evaluate(declaration, inBody: body)) == expected else { return false }
+		}
+		return true
+	}
+}
