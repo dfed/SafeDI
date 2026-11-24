@@ -152,6 +152,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
+		let treeNodes = parameters.treeNames.propertyNodes
 		// The declarations the mock calls, each once, in the order the mock reaches them.
 		var declarations = [TypeRequirements.Declaration]()
 		var recordedDeclarations = Set<TypeRequirements.Declaration>()
@@ -169,21 +170,17 @@ extension DependencyTreeGenerator {
 				kind: .handWrittenMock(methodName: instantiable.customMockName ?? InstantiableVisitor.mockMethodName),
 			))
 		}
-		// Each node before its children, depth first, with a stack of the items left to record, since a mock tree can be
-		// as deep as the module has types.
-		var itemsToRecord = Array(parameters.parameterTree.reversed())
-		while let item = itemsToRecord.popLast() {
-			guard case let .property(node) = item else { continue }
-			record(TypeRequirements.Declaration(typeDescription: node.concreteType, sourceFilePath: node.sourceFilePath, kind: .instantiable))
-			if node.useMockInitializer {
+		// Each node before its children, depth first, as the tree's nodes are listed.
+		for node in treeNodes {
+			let nodeInstantiable = node.instantiable
+			record(TypeRequirements.Declaration(typeDescription: nodeInstantiable.concreteInstantiable, sourceFilePath: nodeInstantiable.sourceFilePath, kind: .instantiable))
+			if node.usesMockInitializer {
 				record(TypeRequirements.Declaration(
-					typeDescription: node.concreteType,
-					sourceFilePath: node.mockDeclarationLocation?.filePath,
-					kind: .handWrittenMock(methodName: node.customMockName ?? InstantiableVisitor.mockMethodName),
+					typeDescription: nodeInstantiable.concreteInstantiable,
+					sourceFilePath: nodeInstantiable.mockDeclarationLocation?.filePath,
+					kind: .handWrittenMock(methodName: nodeInstantiable.customMockName ?? InstantiableVisitor.mockMethodName),
 				))
 			}
-			// The item recorded next is the last one on the stack, so the first child goes last.
-			itemsToRecord.append(contentsOf: node.children.reversed())
 		}
 
 		/// The declarations that erase a concrete type to the type of `property`, or to the type of its
@@ -197,14 +194,15 @@ extension DependencyTreeGenerator {
 		// declarations, already recorded.
 		let rootInstantiatedProperties = Set(instantiable.dependencies.filter(\.isInstantiated).map(\.property))
 		var erasures = [TypeRequirements.Erasure]()
-		for case let .property(node) in parameters.parameterTree
-			where node.erasedToConcreteExistential && !rootInstantiatedProperties.contains(node.property)
+		for node in treeNodes
+			where node.parentIndex == nil && node.erasedToConcreteExistential && !rootInstantiatedProperties.contains(node.property)
 		{
+			let nodeConcreteType = node.instantiable.concreteInstantiable
 			erasures.append(TypeRequirements.Erasure(
 				property: node.property,
-				concreteType: node.concreteType,
+				concreteType: nodeConcreteType,
 				declarations: erasureDeclarations(to: node.property)
-					.filter { $0.concreteType == node.concreteType }
+					.filter { $0.concreteType == nodeConcreteType }
 					.map(\.declaration)
 					.sorted { ($0.declaringType, $0.property) < ($1.declaringType, $1.property) },
 			))

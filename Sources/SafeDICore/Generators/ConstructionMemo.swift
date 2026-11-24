@@ -44,21 +44,28 @@
 /// so what is constant in a pass (the order a seam's places start in, the declared type names) is equal for every place
 /// it compares. Only completed builds are stored: a pass that throws throws away its memo.
 ///
-/// A memo shared across trees (`Sharing.acrossTrees`) carries the first pass of each tree that finished to the trees
-/// created after it with the same memo, which only the mock roots do: production trees keep a memo per tree. A first
-/// pass's keys name no generator of a pass before, and the memo keeps alive every scope its keys name, so no key names an
-/// object whose address another object can take while the memo lives. A root's own place is never stored. A tree built
-/// with a seam root or a mock root's builders reads its own `SeamHoles`, constant within the tree but not across trees,
-/// so it neither reads nor keeps a shared memo. A first pass starts each generator's code as it creates it, so every
-/// generator a later tree reuses has started. What is constant in a pass of one tree and not across trees is either in
-/// the key (the flags) or kept to the tree (its `SeamHoles`, and the start order of a tree with holes). The list of every
-/// input and stored value and why each is covered is `.claude/rules/construction-memo.md`.
+/// A memo shared across trees (`Sharing.acrossTrees`) carries every pass of each tree that finished to the trees created
+/// after it with the same memo, which only the mock roots do: production trees keep a memo per tree. Each pass of a tree
+/// starts from what the pass before held, so a later pass of one tree reuses a later pass of another where the two are
+/// built from one generator of the pass before (a later pass's key names that generator) and read their context alike:
+/// mock roots that reach one type in a lazy cycle reuse each other's first pass, so their second passes share it too. The
+/// memo keeps alive every scope its keys name, and every generator and cycle parameter seed of a pass before that a key
+/// can name, by holding each pass's tree and seed (`keepAlive(passTree:seed:)`), so no key names an object whose address
+/// another object can take while the memo lives. A root's own place is never stored. A tree built with a seam root or a
+/// mock root's builders reads its own `SeamHoles`, constant within the tree but not across trees, so it neither reads nor
+/// keeps a shared memo. A first pass starts each generator's code as it creates it, and a tree's last pass collects and
+/// starts its generators, so a generator a later tree reuses from a pass that was neither has not started: its code
+/// starts when the scope above it asks for it, as any generator's does that starts nothing early. What is constant in a
+/// pass of one tree and not across trees is either in the key (the flags) or kept to the tree (its `SeamHoles`, and the
+/// start order of a tree with holes). The list of every input and stored value and why each is covered is
+/// `.claude/rules/construction-memo.md`.
 struct ConstructionMemo {
 	/// Which trees a memo carries generators between.
 	enum Sharing {
 		/// Each tree's passes start empty, and nothing is kept once the tree is created.
 		case perTree
-		/// Each tree's first pass starts from what the trees created before it with this memo kept.
+		/// Each tree's first pass starts from what the trees created before it with this memo kept, and each later pass from
+		/// what the pass before held.
 		case acrossTrees
 	}
 
@@ -72,25 +79,42 @@ struct ConstructionMemo {
 
 	let sharing: Sharing
 
-	/// The memo a tree's first pass starts from.
-	var memoForFirstPass: ConstructionMemo {
+	/// The memo a tree's pass starts from: for a tree's first pass, `nil`, this memo where it is shared across trees, and for a
+	/// later pass, the memo the pass before held where this one is shared across trees. A memo per tree starts every pass
+	/// empty.
+	func memo(forPassAfter previousPassMemo: ConstructionMemo?) -> ConstructionMemo {
 		switch sharing {
 		case .perTree:
 			ConstructionMemo()
 		case .acrossTrees:
-			self
+			previousPassMemo ?? self
 		}
 	}
 
-	/// Keeps what the first pass of a tree that finished stored, when the memo is shared across trees.
-	mutating func keepEntries(ofFirstPass firstPassMemo: ConstructionMemo) {
+	/// Keeps what the last pass of a tree that finished held, every pass before it included, when the memo is shared
+	/// across trees.
+	mutating func keepEntries(ofLastPass lastPassMemo: ConstructionMemo) {
 		switch sharing {
 		case .perTree:
 			break
 		case .acrossTrees:
-			entriesByKey = firstPassMemo.entriesByKey
-			entriesByGenerator = firstPassMemo.entriesByGenerator
-			keyedScopes = firstPassMemo.keyedScopes
+			self = lastPassMemo
+		}
+	}
+
+	/// Keeps alive `passTree`, a pass's tree, and `seed`, the cycle parameter seed it settled for the pass after it, which
+	/// the keys of the pass after name (`Key.previousPassGenerator`, `Key.cycleParameterSeed`): a tree holds every
+	/// generator of its pass, and a seed every seed of its children. Only a memo shared across trees, which keys of
+	/// another tree can be looked up in after this tree's are released, needs them.
+	mutating func keepAlive(passTree: ScopeGenerator, seed: CycleParameterSeed?) {
+		switch sharing {
+		case .perTree:
+			break
+		case .acrossTrees:
+			passTrees.append(passTree)
+			if let seed {
+				seeds.append(seed)
+			}
 		}
 	}
 
@@ -257,6 +281,10 @@ struct ConstructionMemo {
 	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
 	private var keyedScopes = [ScopeRecord]()
+	/// The trees and seeds of passes that a later pass's keys can name (`keepAlive(passTree:seed:)`), kept so that no other
+	/// generator or seed can take one's address.
+	private var passTrees = [ScopeGenerator]()
+	private var seeds = [CycleParameterSeed]()
 
 	/// The memo the memo oracle's build with the memo shares across the trees created with this memo
 	/// (`ConstructionMemoOracle`).
@@ -266,18 +294,24 @@ struct ConstructionMemo {
 			oracleMemo.entriesByKey = oracleEntriesByKey
 			oracleMemo.entriesByGenerator = oracleEntriesByGenerator
 			oracleMemo.keyedScopes = oracleKeyedScopes
+			oracleMemo.passTrees = oraclePassTrees
+			oracleMemo.seeds = oracleSeeds
 			return oracleMemo
 		}
 		set {
 			oracleEntriesByKey = newValue.entriesByKey
 			oracleEntriesByGenerator = newValue.entriesByGenerator
 			oracleKeyedScopes = newValue.keyedScopes
+			oraclePassTrees = newValue.passTrees
+			oracleSeeds = newValue.seeds
 		}
 	}
 
 	private var oracleEntriesByKey = [Key: [Entry]]()
 	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [ScopeRecord]()
+	private var oraclePassTrees = [ScopeGenerator]()
+	private var oracleSeeds = [CycleParameterSeed]()
 
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
 	/// oracle, which compares the trees built with and without it.
@@ -744,6 +778,11 @@ public enum ConstructionMemoOracle {
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
 	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
 	@TaskLocal public static var keyedPlaceObserver: (@Sendable (_ concreteType: String) -> Void)?
+
+	/// Called with the concrete type of each place `Scope.createScopeGenerator` reuses from a construction memo within a
+	/// pass, and whether the pass is a tree's first, when set: by the tests, never by the tool. The oracle's own builds are
+	/// not reported.
+	@TaskLocal public static var reusedPlaceObserver: (@Sendable (_ concreteType: String, _ isFirstPass: Bool) -> Void)?
 }
 
 /// What a place's log keeps of the reads its subtree made: the elements each place adds to what the logs and the memo

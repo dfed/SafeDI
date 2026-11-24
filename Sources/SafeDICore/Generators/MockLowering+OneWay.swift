@@ -33,14 +33,16 @@ extension MockLowering {
 		let customMockName: String?
 		/// Whether the type is declared by an extension, whose construction is its `instantiate(…)` method.
 		let isExtensionBased: Bool
-		/// What the construction reads from the configuration, as `ScopeGenerator.MockParameterNode.configurationRequirements`.
+		/// What the construction reads from the configuration.
 		let requirements: Requirements
 		/// Whether an edge in `cycleEdges` is above the node, which then reads no override from its configuration.
 		let isBeneathCycleEdge: Bool
 		/// The order in which the walk entered the node's children: a node before the nodes beneath it, in declaration order.
 		let walkOrder: Int
 
-		/// See `ScopeGenerator.MockParameterNode.ConfigurationRequirements`.
+		/// What a construction reads from its type's configuration: the child properties, the default-valued parameters by
+		/// label and type, the types the builder takes, and the labels of the values it is handed, in order, so that two
+		/// dependencies of one type in other orders are told apart.
 		struct Requirements: Sendable, Equatable {
 			let childProperties: [Property]
 			let defaultParameters: [Property]

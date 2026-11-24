@@ -449,7 +449,7 @@ extension DependencyTreeGenerator {
 				parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
 				context: publicMockContext,
 			),
-			receiversByLabel: ScopeGenerator.receivers(in: parameters.parameterTree, mockedType: instantiable),
+			receiversByLabel: ScopeGenerator.receivers(in: parameters.treeNames.propertyNodes, mockedType: instantiable),
 			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 		)
 	}
@@ -560,6 +560,11 @@ extension DependencyTreeGenerator {
 	/// or not SafeDI knows the seam's module, so the cause the comment gives would be wrong there, and a mock's
 	/// constructions carry none.
 	func builtInlineSeamComment(for instantiable: Instantiable) -> String? {
+		Self.builtInlineSeamComment(for: instantiable, seams: seams)
+	}
+
+	/// See `builtInlineSeamComment(for:)`.
+	static func builtInlineSeamComment(for instantiable: Instantiable, seams: SeamResolution) -> String? {
 		guard instantiable.generatesDependencyTree,
 		      seams.foreignSeams[instantiable.concreteInstantiable] == nil,
 		      !seams.generatedSeams.contains(instantiable.concreteInstantiable)
