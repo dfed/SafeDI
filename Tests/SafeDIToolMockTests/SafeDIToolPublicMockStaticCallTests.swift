@@ -160,9 +160,9 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screen.stepBuilder(SafeDIMockScope_Api.Screen_Scope.stepBuilder_Values(cache: cache))
 		            func __safeDI_stepBuilder() -> Step {
 		                func __safeDI_screenBuilder() -> Screen {
-		                    let cache = Cache()
+		                    let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
 		                    let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		                    return Screen.__safeDI_init(cache: cache, stepBuilder: stepBuilder, safeDIBuilder: nil)
+		                    return Screen.__safeDI_init(cache: cache, stepBuilder: stepBuilder, safeDIBuilder: safeDIOverrides.screen.safeDIBuilder)
 		                }
 		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		                let api: any Api = __safeDI_apiBuilder_stepBuilder.api(SafeDIMockScope_Api.Step_Scope.api_Values(screenBuilder: screenBuilder))

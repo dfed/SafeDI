@@ -10366,7 +10366,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		                #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 5)
 		                let otherBuilder: Instantiator<Node> = childBuilder
 		                #sourceLocation()
-		                return Node(childBuilder: childBuilder, otherBuilder: otherBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.safeDIBuilder { safeDIBuilder(childBuilder, otherBuilder) } else { Node(childBuilder: childBuilder, otherBuilder: otherBuilder) }
 		            }
 		            let childBuilder = Instantiator<Node>(__safeDI_childBuilder)
 		            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 5)
@@ -14654,11 +14654,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func mock_constructsConstantChildDirectly_whenItsParentIsOnPrunedBackEdge() async throws {
+	mutating func mock_readsNearestSameTypeAncestorsOverrideOfConstantChild_whenItsParentIsOnPrunedBackEdge() async throws {
 		// A → Instantiator<B> → B → Instantiator<A> (2-node cycle A↔B; B→A is the
 		// pruned back-edge). B names its edge `aFactory` so the A it builds is not a
-		// property cycle and still constructs its own children. A's constant `leaf`
-		// under that pruned A has no override slot, so it is constructed directly.
+		// property cycle and still constructs its own children. The A under that pruned
+		// edge has no override slot of its own, so it and its constant `leaf` read the
+		// overrides of the nearest A above it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -14740,8 +14741,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            func __safeDI_bBuilder() -> B {
 		                func __safeDI_aFactory() -> A {
 		                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                    let leaf = Leaf()
-		                    return A(bBuilder: bBuilder, leaf: leaf)
+		                    let leaf = if let safeDIBuilder = safeDIOverrides.aBuilder.leaf { safeDIBuilder() } else { Leaf() }
+		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(bBuilder, leaf) } else { A(bBuilder: bBuilder, leaf: leaf) }
 		                }
 		                let aFactory = Instantiator<A>(__safeDI_aFactory)
 		                return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder { safeDIBuilder(aFactory) } else { B(aFactory: aFactory) }
@@ -15458,7 +15459,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_childBuilder() -> Child {
 		            func __safeDI_selfBuilder() -> Child {
 		                let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
-		                return Child(selfBuilder: selfBuilder, service: service)
+		                return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(selfBuilder, service) } else { Child(selfBuilder: selfBuilder, service: service) }
 		            }
 		            let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(selfBuilder, service) } else { Child(selfBuilder: selfBuilder, service: service) }
