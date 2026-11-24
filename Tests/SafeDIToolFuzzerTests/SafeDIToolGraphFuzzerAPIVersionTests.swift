@@ -191,6 +191,58 @@ struct SafeDIToolGraphFuzzerAPIVersionTests {
 	}
 
 	@Test
+	func addingTwiceBuiltUnbuildableOwner_buildsFirstOwnerThroughInstantiator_whenGraphDrawsUnbuildableType() {
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class S7_T0: Instantiable {
+				public init(t2: S7_Unbuildable0) {
+					self.t2 = t2
+				}
+
+				@Instantiated let t2: S7_Unbuildable0
+			}
+			""",
+			"public final class S7_Unbuildable0 {}\n",
+		])
+		#expect(fixture.addingTwiceBuiltUnbuildableOwner.swiftFileContent == fixture.swiftFileContent + [
+			"""
+			@Instantiable(generateMock: true)
+			public final class S7_ZTwiceHost: Instantiable {
+				let differentialValueCreationStamp = S7_CreationStamp.next()
+
+				public init(zTwiceOwnerBuilder: Instantiator<S7_T0>) {
+					self.zTwiceOwnerBuilder = zTwiceOwnerBuilder
+				}
+
+				@Instantiated let zTwiceOwnerBuilder: Instantiator<S7_T0>
+			}
+
+			""",
+		])
+	}
+
+	@Test
+	func addingTwiceBuiltUnbuildableOwner_leavesGraph_whenEveryOwnerForwards() {
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class S7_T0: Instantiable {
+				public init(t1: Int, t2: S7_Unbuildable0) {
+					self.t1 = t1
+					self.t2 = t2
+				}
+
+				@Forwarded let t1: Int
+				@Instantiated let t2: S7_Unbuildable0
+			}
+			""",
+			"public final class S7_Unbuildable0 {}\n",
+		])
+		#expect(fixture.addingTwiceBuiltUnbuildableOwner == fixture)
+	}
+
+	@Test
 	func makingUnbuildableTypesInstantiable_returnsNil_whenGraphDrawsNoUnbuildableType() {
 		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: ["@Instantiable\npublic final class S7_T0: Instantiable {}\n"])
 		#expect(fixture.makingUnbuildableTypesInstantiable == nil)

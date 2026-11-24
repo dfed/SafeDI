@@ -111,6 +111,52 @@ extension GraphFuzzerFixture {
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: contents + [Self.counterSource(named: unbuildableInitializationCounterName)])
 	}
 
+	/// The name of the type `addingTwiceBuiltUnbuildableOwner` adds.
+	var twiceBuiltUnbuildableOwnerHostName: String {
+		"\(typeNamePrefix)ZTwiceHost"
+	}
+
+	/// The graph with a mocked type of its own, `ZTwiceHost`, that builds the first type instantiating a dependency a mock
+	/// cannot build (`unbuildableTypeNames`) through an `Instantiator`, which the value comparator calls twice: so a mock
+	/// of the host builds that owner twice, and a `.v3Unstable` mock that calls the builder it takes for the dependency
+	/// once and hands both owners its value differs from the twin, whose owners each build their own. The graph as drawn
+	/// where no such owner forwards nothing. Its name sorts after every type of the graph, and nothing else names it, so
+	/// every other mock is generated as before.
+	var addingTwiceBuiltUnbuildableOwner: GraphFuzzerFixture {
+		let unbuildable = Set(unbuildableTypeNames)
+		guard !unbuildable.isEmpty else { return self }
+		var ownerName: String?
+		search: for content in swiftFileContent where !content.contains("@Forwarded") {
+			var currentClassName: String?
+			for line in content.components(separatedBy: "\n") {
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed.hasPrefix("public final class "), let name = trimmed.dropFirst("public final class ".count).split(whereSeparator: { $0 == ":" || $0 == " " || $0 == "{" }).first {
+					currentClassName = String(name)
+				} else if trimmed.hasPrefix("@Instantiated let "), let type = trimmed.split(separator: ":").last?.trimmingCharacters(in: .whitespaces), unbuildable.contains(type), let currentClassName {
+					ownerName = currentClassName
+					break search
+				}
+			}
+		}
+		guard let ownerName else { return self }
+		let host = twiceBuiltUnbuildableOwnerHostName
+		return GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent + [
+			"""
+			@Instantiable(generateMock: true)
+			public final class \(host): Instantiable {
+			\tlet differentialValueCreationStamp = \(typeNamePrefix)CreationStamp.next()
+
+			\tpublic init(zTwiceOwnerBuilder: Instantiator<\(ownerName)>) {
+			\t\tself.zTwiceOwnerBuilder = zTwiceOwnerBuilder
+			\t}
+
+			\t@Instantiated let zTwiceOwnerBuilder: Instantiator<\(ownerName)>
+			}
+
+			""",
+		])
+	}
+
 	/// The graph with the class a D12 probe counts its builders' calls with: the feature path of the D12 per-instance
 	/// oracle.
 	var declaringUnbuildableBuilderCalls: GraphFuzzerFixture {
@@ -179,7 +225,7 @@ enum GraphFuzzerAPIVersionAgreement {
 
 	/// The fixture both sides start from: the base corpus graph drawn storing every parameter, with every class mocked.
 	static func fixture(forSeed seed: UInt64) -> GraphFuzzerFixture {
-		GraphFuzzerGenerator.fixture(forSeed: seed, storingEveryParameter: true).mockingEveryClass
+		GraphFuzzerGenerator.fixture(forSeed: seed, storingEveryParameter: true).mockingEveryClass.addingTwiceBuiltUnbuildableOwner
 	}
 
 	/// Judges `seeds`, running the graphs of each batch concurrently and comparing a batch's values in one comparison;
@@ -370,6 +416,8 @@ extension GraphFuzzerAPIVersionAgreement {
 	/// Seeds of the ordinary suite's gate: graphs whose `.v2` and `.v3Unstable` mocks agree, together holding at least ten
 	/// compared graphs and ten D12 probes. A hand mutation that has `.v3Unstable` pass `nil` to the mocked type's receives
 	/// only if available fails seeds 23, 85 and 88 as values that differ; one whose `.v3Unstable` builder of an unbuildable
-	/// dependency is called twice per instance fails seeds 2, 7, 13, 45, 62, 73 and 90 in their D12 graphs.
+	/// dependency is called twice per instance fails seeds 2, 7, 13, 45, 62, 73 and 90 in their D12 graphs; one whose
+	/// builder is called once and its value handed to every instance fails seeds 2, 7, 13, 45, 62 and 73, whose
+	/// `ZTwiceHost` builds the owner twice (`addingTwiceBuiltUnbuildableOwner`).
 	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 117]
 }
