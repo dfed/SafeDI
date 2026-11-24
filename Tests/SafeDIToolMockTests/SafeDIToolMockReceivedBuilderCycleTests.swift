@@ -2961,9 +2961,8 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		], "Unexpected output \(output.mockFiles)")
 	}
 
-	// The time limit only turns a hang into a failure; see
-	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit; see `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatesWithinTimeLimit_whenEveryReceivedInstantiatorPathFromEarlierSiblingsEndsInLoopOfInstantiators() async throws {
 		// Each layer holds a Left and a Right service that both receive Instantiators of the two
@@ -3031,9 +3030,8 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		#expect(output.dependencyTreeFiles.isEmpty)
 	}
 
-	// The time limit only turns a hang into a failure; see
-	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit; see `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatesWithinTimeLimit_whenEveryReceivedAliasPathFromEarlierSiblingsEndsInLoopOfInstantiatorsOfLazyCycles() async throws {
 		// Each layer holds a Left and a Right service that instantiate Instantiators of each other and

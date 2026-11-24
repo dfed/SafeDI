@@ -12718,10 +12718,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	// MARK: Received dependency validation
 
-	// The time limit only turns a hang into a failure, so it sits far above any scheduling delay:
-	// this test does a fraction of a second of work, but on a loaded CI runner it can wait more
-	// than a minute behind the rest of the suite.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit: a test's limit also counts the time it waits for a thread behind the rest of the
+	// suite, which on a loaded CI runner has passed ten minutes for this fraction of a second of work.
+	// A walk of every path does not end, so the job's step limit ends the run, and
+	// `Scripts/unfinished-tests.py` names this test from the run's log.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds() async throws {
 		// Each service receives the two services before it and the service at half its index.
