@@ -78,15 +78,50 @@ struct BuiltPlaceRecord: Sendable {
 	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
 	/// shared by every place that reads that code from the generator's cache.
 	let node: PlanNode
+	/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
+	/// as small to copy as one that holds none of it.
+	var sharingFields: PlaceSharingFields?
+
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
-	var passedArguments = [PassedArgument]()
+	var passedArguments: [PassedArgument] {
+		get { sharingFields?.passedArguments ?? [] }
+		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues) }
+	}
+
 	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
-	var constructionValue: ConstructionValue?
-	/// The optional closures the construction tries first, in order, before calling `target` or `calledMember`.
-	var alternatives = [ConstructionAlternative]()
-	/// The names of the root functions the place's code calls (`RootFunctionRecord`), which the root declares and nothing
-	/// renames, so calling one keeps no place one per path.
-	var calledRootFunctionNames = [String]()
+	var constructionValue: ConstructionValue? {
+		get { sharingFields?.constructionValue }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues) }
+	}
+
+	/// The optional closures the construction tries first, in order, before calling `target` or its construction value.
+	var alternatives: [ConstructionAlternative] {
+		get { sharingFields?.alternatives ?? [] }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues) }
+	}
+
+	/// The values of the construction's arguments that are no read, by the argument's position in `arguments`, whose read
+	/// still names the parameter and its type: a member of a value, or a call of one, which the construction evaluates
+	/// once, where the argument is passed.
+	var argumentValues: [Int: ValuePath] {
+		get { sharingFields?.argumentValues ?? [:] }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue) }
+	}
+}
+
+/// The box of `BuiltPlaceRecord.sharingFields`. It holds its values for as long as a record holds it.
+final class PlaceSharingFields: Sendable {
+	let passedArguments: [PassedArgument]
+	let constructionValue: ConstructionValue?
+	let alternatives: [ConstructionAlternative]
+	let argumentValues: [Int: ValuePath]
+
+	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath]) {
+		self.passedArguments = passedArguments
+		self.constructionValue = constructionValue
+		self.alternatives = alternatives
+		self.argumentValues = argumentValues
+	}
 }
 
 /// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
@@ -159,6 +194,9 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
 	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
 	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
+	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
+	/// so it is a value of every call alike, and keyed as itself.
+	case emptyInitialization(TypeDescription)
 }
 
 /// A value a call hands the function it calls on every call, which the function never captures: places that share one

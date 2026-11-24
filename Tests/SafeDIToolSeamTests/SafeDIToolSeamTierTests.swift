@@ -1444,14 +1444,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 		extension MidRoot {
 		    public init() {
+		        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope in
+		                let service: any Service = ServiceImpl()
+		                return service
+		            })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_11BA22C997114AEF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope in
-		                    let service: any Service = ServiceImpl()
-		                    return service
-		                })
-		            }
 		            return Host(__safeDI_serviceBuilder: nil, __safeDI_serviceBuilder_: __safeDI_serviceBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1466,14 +1466,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 		extension AppRoot {
 		    public init() {
+		        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope in
+		                let service: any Service = ServiceImpl()
+		                return service
+		            })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_11BA22C997114AEF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope in
-		                    let service: any Service = ServiceImpl()
-		                    return service
-		                })
-		            }
 		            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()

@@ -1228,21 +1228,21 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			            .init(profileBuilder: { values_token in __safeDI_userServiceBuilder_Service_Profile_Scope() })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Profile_Scope() -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
+			            .init(userService: {
+			                let userService: any UserService = DefaultUserService(token: token.instance)
+			                return userService
+			            })
+			        }
 			        func __safeDI_token() -> Token {
 			            Token()
 			        }
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_D62583A11FF09051.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-			                .init(profileBuilder: { values_token in __safeDI_userServiceBuilder_Service_Profile_Scope() })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Profile_Scope() -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
-			                .init(userService: {
-			                    let userService: any UserService = DefaultUserService(token: token.instance)
-			                    return userService
-			                })
-			            }
 			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()

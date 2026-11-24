@@ -773,25 +773,25 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
+		            .init(
+		                api: { scope_db, scope_k, scope_inner in
+		                    let api: any Api = Live(db: db)
+		                    return api
+		                },
+		                inner: __safeDI_apiBuilder_Inner()
+		            )
+		        }
+		        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		            .init(api: { scope_db in
+		                let db = scope_db
+		                let api: any Api = Live(db: db)
+		                return api
+		            })
+		        }
 		        let db = Db()
 		        func __safeDI_f() -> F {
 		            _ = F.__safeDI_F_B6D9BD662693F0E4.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
-		                .init(
-		                    api: { scope_db, scope_k, scope_inner in
-		                        let api: any Api = Live(db: db)
-		                        return api
-		                    },
-		                    inner: __safeDI_apiBuilder_Inner()
-		                )
-		            }
-		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
-		                .init(api: { scope_db in
-		                    let db = scope_db
-		                    let api: any Api = Live(db: db)
-		                    return api
-		                })
-		            }
 		            return F(__safeDI_db: db, __safeDI_apiBuilder: __safeDI_apiBuilder_F())
 		        }
 		        let f: F = __safeDI_f()
@@ -884,25 +884,25 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
+		            .init(
+		                api: { scope_db, scope_k, scope_inner in
+		                    let api: any Api = Live(db: db)
+		                    return api
+		                },
+		                inner: __safeDI_apiBuilder_Inner()
+		            )
+		        }
+		        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		            .init(api: { scope_db in
+		                let db = scope_db
+		                let api: any Api = Live(db: db)
+		                return api
+		            })
+		        }
 		        let db = Db()
 		        func __safeDI_f() -> F {
 		            _ = F.__safeDI_F_B6D9BD662693F0E4.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
-		                .init(
-		                    api: { scope_db, scope_k, scope_inner in
-		                        let api: any Api = Live(db: db)
-		                        return api
-		                    },
-		                    inner: __safeDI_apiBuilder_Inner()
-		                )
-		            }
-		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
-		                .init(api: { scope_db in
-		                    let db = scope_db
-		                    let api: any Api = Live(db: db)
-		                    return api
-		                })
-		            }
 		            return F(__safeDI_db: db, __safeDI_apiBuilder: __safeDI_apiBuilder_F())
 		        }
 		        let f: F = __safeDI_f()

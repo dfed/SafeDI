@@ -22,9 +22,15 @@ extension BuiltPlaceRecord {
 	/// The reads the place's construction makes where it is built: its arguments, then the reads of each alternative's
 	/// closure and of the values that must be absent, then the reads of its construction value.
 	var constructionReads: [PlaceRead] {
-		// Most constructions read only their arguments, which are then returned with no copy.
-		guard !alternatives.isEmpty || constructionValue != nil else { return arguments }
-		var reads = arguments
+		guard let sharingFields else { return arguments }
+		var reads = [PlaceRead]()
+		for (position, argument) in arguments.enumerated() {
+			if let value = sharingFields.argumentValues[position] {
+				reads.append(contentsOf: value.reads)
+			} else {
+				reads.append(argument)
+			}
+		}
 		for alternative in alternatives {
 			reads.append(contentsOf: alternative.closure.reads)
 			for absent in alternative.requiresAbsent {
@@ -40,22 +46,26 @@ extension BuiltPlaceRecord {
 	/// The values the place's function is handed and declares for its body: what its wrapper forwards, then its passed
 	/// arguments, which a read in its body resolves to as it resolves to a forwarded value.
 	var parameterProperties: [Property] {
-		guard !passedArguments.isEmpty else { return forwardedProperties }
-		return forwardedProperties + passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
+		guard let sharingFields else { return forwardedProperties }
+		return forwardedProperties + sharingFields.passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
 	}
 
 	/// The reads the place's call makes in its parent's body: what it passes its cycle parameters, then the reads of what
 	/// it hands its passed arguments.
 	var callSiteReads: [PlaceRead] {
-		guard !passedArguments.isEmpty else { return callCycleArguments }
-		return callCycleArguments + passedArguments.flatMap(\.value.reads)
+		guard let sharingFields else { return callCycleArguments }
+		return callCycleArguments + sharingFields.passedArguments.flatMap(\.value.reads)
 	}
 
 	/// The shape of what the place's construction does besides calling its target, for a structural key: never a label a
 	/// read names apart from the read itself.
 	var constructionShape: [String] {
+		guard sharingFields != nil else { return [] }
 		var shape = alternatives.map { alternative in
 			"alternative|\(alternative.closure.shape)|\(alternative.bindingName ?? "")|\(alternative.requiresAbsent.map(\.shape).joined(separator: ","))|\(alternative.use)|\(alternative.resultWrapper?.asSource ?? "")"
+		}
+		for (position, value) in argumentValues.sorted(by: { $0.key < $1.key }) {
+			shape.append("argumentValue|\(position)|\(value.shape)")
 		}
 		if let constructionValue {
 			shape.append("value|\(constructionValue.value.shape)|\(constructionValue.resultWrapper?.asSource ?? "")")
@@ -67,8 +77,7 @@ extension BuiltPlaceRecord {
 extension ClosingPlaceRecord {
 	/// The reads the closing call makes: what it passes the cycle parameters, then the reads of its passed arguments.
 	var callSiteReads: [PlaceRead] {
-		guard !passedArguments.isEmpty else { return cycleArguments }
-		return cycleArguments + passedArguments.flatMap(\.value.reads)
+		passedArguments.isEmpty ? cycleArguments : cycleArguments + passedArguments.flatMap(\.value.reads)
 	}
 }
 
@@ -77,7 +86,8 @@ extension ValuePath {
 	var reads: [PlaceRead] {
 		switch self {
 		case .rootDeclaration,
-		     .passedArgument:
+		     .passedArgument,
+		     .emptyInitialization:
 			[]
 		case let .read(read):
 			[read]
@@ -93,7 +103,8 @@ extension ValuePath {
 	var passedArgumentNames: [String] {
 		switch self {
 		case .rootDeclaration,
-		     .read:
+		     .read,
+		     .emptyInitialization:
 			[]
 		case let .passedArgument(name):
 			[name]
@@ -120,6 +131,8 @@ extension ValuePath {
 			"\(value.shape)?.\(name)"
 		case let .call(name, value, arguments, argumentsWrapper):
 			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
+		case let .emptyInitialization(type):
+			"new:\(type.asSource)"
 		}
 	}
 }
@@ -140,14 +153,16 @@ extension PassedArgument {
 
 extension PassedArgument {
 	/// The argument for a closer's structural key: its parameter, its type and the label it reads, never the declaration
-	/// that resolves to, which `checkEveryRead` proves alike at every member; `nil` for a value that is neither a read nor
-	/// a passed argument, which keeps the root one per path.
+	/// that resolves to, which `checkEveryRead` proves alike at every member; a new value as itself; `nil` for any other
+	/// value, which keeps the root one per path.
 	var closerShape: String? {
 		switch value {
 		case let .read(read):
 			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)"
 		case let .passedArgument(name):
 			"passed|\(parameterName)|\(type.asSource)|passed:\(name)"
+		case .emptyInitialization:
+			shape
 		case .rootDeclaration,
 		     .member,
 		     .optionalMember,
@@ -187,12 +202,20 @@ extension TypeKeyLayout {
 				}
 			}
 			if let record = bodies[body].record {
+				guard record.argumentValues.keys.allSatisfy({ $0 < record.arguments.count }) else { return false }
+				for path in record.argumentValues.values {
+					guard check(path, before: statements.count) else { return false }
+				}
 				for path in record.alternatives.flatMap({ [$0.closure] + $0.requiresAbsent }) + (record.constructionValue.map { [$0.value] } ?? []) {
 					guard check(path, before: statements.count) else { return false }
 				}
 			}
 			for index in statements.indices {
 				if case let .inline(record) = statements[index] {
+					guard record.argumentValues.keys.allSatisfy({ $0 < record.arguments.count }) else { return false }
+					for path in record.argumentValues.values {
+						guard check(path, before: index) else { return false }
+					}
 					for path in record.alternatives.flatMap({ [$0.closure] + $0.requiresAbsent }) + (record.constructionValue.map { [$0.value] } ?? []) {
 						guard check(path, before: index) else { return false }
 					}
@@ -247,6 +270,8 @@ extension TypeKeyLayout {
 			return name
 		case let .read(read):
 			return spelledValue(of: read, inClass: owner, before: index)
+		case let .emptyInitialization(type):
+			return "\(type.asSource)()"
 		case let .member(name, value):
 			return spelledValuePath(value, inClass: owner, before: index).map { "\($0).\(name)" }
 		case let .optionalMember(name, value):
