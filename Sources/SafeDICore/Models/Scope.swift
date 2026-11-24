@@ -913,6 +913,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
 			scope.declaredLazilyInstantiatedInstanceProperties
+		} else if property == nil && forMockGeneration {
+			// A mock root's tree is given only the instances it reads through the wrappers its public mock takes as
+			// parameters, which the root binds beside its own declarations, naming apart any two of one label
+			// (`ScopeGenerator.mockRootTopLevelNames`), as `childNearestDeclarations` joins them below: no declaration of
+			// the root hides one.
+			lazilyInstantiatedInstanceProperties.union(scope.declaredLazilyInstantiatedInstanceProperties)
 		} else if scope.declaredLazilyInstantiatedInstanceProperties.isEmpty,
 		          !lazilyInstantiatedInstanceProperties.contains(where: { scope.declaredLabels.contains($0.label) })
 		{

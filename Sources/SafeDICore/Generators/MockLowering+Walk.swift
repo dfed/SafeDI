@@ -720,7 +720,12 @@ extension MockLowering {
 				bindingName: aliasBindingName,
 				fulfillingProperty: fulfillingProperty,
 				fulfillingName: instanceWrapper.map { wrapper in
-					"\(renames[wrapper.label]?[wrapper.typeDescription] ?? wrapper.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					// A public mock's wrapper parameter is named apart where its root binds another value of the label
+					// (`instancesReadThroughPublicMockWrapperParameters`).
+					let wrapperName = renames[wrapper.label]?[wrapper.typeDescription]
+						?? (buildsPublicMock ? publicMockWrapperParameterNames[wrapper.label]?[wrapper.typeDescription] : nil)
+						?? wrapper.label
+					return "\(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} ?? lazilyInstantiatedNames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? renames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? fulfillingProperty.label,
 				isErased: erasedToConcreteExistential,
 				isOnlyIfAvailable: onlyIfAvailable,
