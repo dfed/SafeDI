@@ -1,0 +1,243 @@
+name: macOS Build Check
+
+# Builds, by hand and for one branch, what only a macOS runner can build, with no test run: an early answer while a
+# stack of changes is being built, before any of it is on a pull request. Dispatch it on the branch to check, as
+# `verify.yml` is dispatched for the Linux tests: `gh workflow run macos-build-check.yml --ref my-branch`. It is never
+# started by a pull request or a push, and it changes nothing about ci.yml: a pull request still runs every macOS job
+# there, tests included, and those remain the gate.
+#
+# Why these steps. Of the 27 ci.yml runs between 2026-10-20 and 2026-11-24 whose macOS failure no Linux job
+# reported, 14 failed while building, 1 to 8 minutes into a job (one at 15.6): three uses of API newer than the
+# package's `platforms` in the test helpers, an actor's `lazy var` default value that only Xcode 26's Swift 6.2
+# rejects, a test too slow to type-check only there, Xcode 26 refusing a test target that depends on a test target,
+# and eight failures of the plugin in the example package, in debug, in release and under the Swift Build backend.
+# The two jobs below run the steps that reported those. Five more of the 27 were failures of a macOS test run, and one
+# needed the Bazel example; this workflow leaves them, with Tuist, DocC and the other Apple platforms, to ci.yml.
+#
+# What it costs: about 32 macOS runner minutes over two jobs that run side by side, 17 minutes of wall clock, against
+# about 88 runner minutes for ci.yml's three macOS jobs (about 159 when its Xcode tests run in two parts). Measured on
+# this workflow's first run, on a branch many commits above main, whose build cache therefore saved little: building
+# the package and its tests 15.6 minutes, the example package's native debug and release builds 1.8 and 4.4, its
+# native build without the DEBUG define 1.8, and its Swift Build builds without it 2.0 and 3.2. In ci.yml's pull
+# request runs the package and tests build has a median of 6.5 minutes.
+#
+# When to run it: on the top of a stack of pull requests before it goes to the merge gate, or on a change to code
+# that only compiles on macOS. Not on every branch of a stack, since the top's build compiles what the branches below
+# it add, and not as a substitute for ci.yml, which runs the tests.
+#
+# Every step but the first of each job is a copy of a step of ci.yml, under the same name unless
+# `.github/scripts/check-macos-build-check.py` lists another, and that script, the first step of the first job, fails
+# the run when a copy and its step in ci.yml differ. Change a step in ci.yml and here together. The caches are
+# restored and never saved: ci.yml saves them on main, and a branch's dispatched run reads main's.
+#
+# Dispatching takes write access to the repository, and the ref must be a branch or tag of this repository, so a
+# fork's code cannot run here. The jobs read the repository and nothing else, and take no input.
+on:
+  workflow_dispatch:
+
+# A newer dispatch on a branch replaces the one still running there: only the branch's newest commit matters.
+concurrency:
+  group: macos-build-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # On macOS because it compiles SafeDI and its tests with Xcode 26's Swift for macOS, and resolves the package with
+  # xcodebuild: the availability checks, that compiler's own diagnostics and Xcode's rules for targets exist nowhere
+  # else.
+  package:
+    name: Build Package and Tests on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+      actions: read
+    env:
+      SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      # Only in this workflow.
+      - name: Check That the Copied Steps Equal ci.yml's
+        run: python3 -I .github/scripts/check-macos-build-check.py --self-test && python3 -I .github/scripts/check-macos-build-check.py
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Stamp Source Times
+        run: .github/scripts/stamp-source-times.sh
+      - name: Read Runner Image Version
+        id: runner-image
+        run: echo "version=${ImageVersion:-$(sw_vers -buildVersion)}" >> "$GITHUB_OUTPUT"
+      - name: Hash Build Arguments
+        id: build-arguments
+        run: |
+          compiler=$(xcrun swift --version 2>&1)
+          arguments=$(printf '%s\n%s' "$SWIFT_TEST_ARGUMENTS" "$compiler" | shasum -a 256 | cut -c1-16)
+          test "${#arguments}" -eq 16
+          echo "hash=$arguments" >> "$GITHUB_OUTPUT"
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-${{ github.sha }}
+          restore-keys: |
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: xcrun swift package resolve
+      - name: Restore Cloned Source Packages
+        id: packages-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/xcode-packages
+          key: xcode-packages-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+      - name: Resolve Package Dependencies with xcodebuild
+        timeout-minutes: 15
+        id: resolve-packages
+        uses: ./.github/actions/retry
+        with:
+          command: xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme SafeDI-Package -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
+      - name: Build Framework and Tests
+        timeout-minutes: 55
+        run: |
+          xcrun swift build --build-tests $SWIFT_TEST_ARGUMENTS
+
+  # On macOS because it builds the example package with Xcode 26's SwiftPM and its Swift Build backend, which is where
+  # the plugin is handed build settings as an adopter's Xcode hands them.
+  example-package:
+    name: Build Package Integration on Xcode 26
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Stamp Source Times
+        run: .github/scripts/stamp-source-times.sh
+      - name: Read Runner Image Version
+        id: runner-image
+        run: echo "version=${ImageVersion:-$(sw_vers -buildVersion)}" >> "$GITHUB_OUTPUT"
+      - name: Resolve Package Dependencies
+        timeout-minutes: 15
+        uses: ./.github/actions/retry
+        with:
+          command: xcrun swift package resolve --package-path "Examples/Example Package Integration"
+      - name: Restore the Native Builds' Scratch Directories
+        id: native-scratch
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ runner.temp }}/native-debug
+            ${{ runner.temp }}/native-release
+            ${{ runner.temp }}/native-without-define
+          key: example-native-scratch-v1-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', 'Examples/Example Package Integration/Package.resolved', 'Examples/Example Package Integration/Package.swift') }}
+      - name: Report swift build Backends
+        id: backends
+        run: |
+          xcrun swift build --help | grep -A 3 -- '--build-system'
+          if xcrun swift build --help | grep -q 'swiftbuild'; then
+            echo "swiftbuild=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swiftbuild=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::This toolchain's swift build offers no swiftbuild backend; only the native backend is built."
+          fi
+          if xcrun swift build --help | grep -Eq 'default: swiftbuild|swiftbuild .*\(default\)'; then
+            echo "swiftbuild_is_default=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swiftbuild_is_default=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build Package Integration (swift build, native backend)
+        id: native-debug
+        timeout-minutes: 7
+        if: ${{ !cancelled() }}
+        run: |
+          rm -rf "$RUNNER_TEMP/native-debug/plugins/outputs"
+          xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
+          grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      - name: Build Package Integration in release configuration (swift build, native backend)
+        id: native-release
+        timeout-minutes: 11
+        if: ${{ !cancelled() }}
+        run: |
+          rm -rf "$RUNNER_TEMP/native-release/plugins/outputs"
+          xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/native-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      - name: Prepare Package Integration without the DEBUG define
+        id: prepare
+        if: ${{ !cancelled() }}
+        run: |
+          copy="$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine"
+          rm -rf "$copy"
+          cp -Rp "Examples/Example Package Integration" "$copy"
+          rm -rf "$copy/.build"
+          sed -i '' \
+            -e "s|\.package(path: \"\.\./\.\./\"|.package(path: \"$GITHUB_WORKSPACE\"|" \
+            -e '/\.define("DEBUG", \.when(configuration: \.debug)),/d' \
+            "$copy/Package.swift"
+          TZ=UTC touch -t 200001010000.00 "$copy/Package.swift"
+          grep -q "package(path: \"$GITHUB_WORKSPACE\"" "$copy/Package.swift"
+          if grep -q '\.define("DEBUG"' "$copy/Package.swift"; then
+            echo "The DEBUG define is still in $copy/Package.swift." >&2
+            exit 1
+          fi
+      - name: Build Package Integration without the DEBUG define (swift build, native backend, expects the assertion)
+        id: native-without-define
+        timeout-minutes: 7
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: |
+          log="$RUNNER_TEMP/native-without-define.log"
+          rm -rf "$RUNNER_TEMP/native-without-define/plugins/outputs"
+          if xcrun swift build --build-system native -v --scratch-path "$RUNNER_TEMP/native-without-define" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1; then
+            echo "Expected the native backend to stop at SafeDI's compile-time assertion without the DEBUG define, but the build succeeded." >&2
+            exit 1
+          fi
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments"
+          [ "$arguments" = unexpanded ] || { echo "::error::Expected the native backend to pass the build-setting arguments through unexpanded." >&2; exit 1; }
+          grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
+      - name: Build Package Integration without the DEBUG define (swift build, Swift Build backend)
+        timeout-minutes: 5
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
+        env:
+          SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
+        run: |
+          log="$RUNNER_TEMP/swiftbuild-debug.log"
+          status=0
+          xcrun swift build --build-system swiftbuild -v --scratch-path "$RUNNER_TEMP/swiftbuild-debug" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1 || status=$?
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments; build exit status: $status"
+          case "$arguments" in
+            expanded)
+              [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
+              grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/swiftbuild-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+              ;;
+            unexpanded)
+              if [ "$SWIFTBUILD_IS_DEFAULT" = true ]; then
+                echo "::error::This toolchain's default swiftbuild backend passed the build-setting arguments through unexpanded." >&2
+                exit 1
+              else
+                echo "::notice::This toolchain's opt-in swiftbuild backend passes build tool plugin arguments through unexpanded, so SafeDITool falls back as on the native backend."
+              fi
+              [ "$status" -ne 0 ] || { echo "Expected the fallback to stop at SafeDI's compile-time assertion, but the build succeeded." >&2; exit 1; }
+              grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
+              ;;
+          esac
+      - name: Build Package Integration without the DEBUG define in release configuration (swift build, Swift Build backend)
+        timeout-minutes: 8
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
+        env:
+          SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
+        run: |
+          log="$RUNNER_TEMP/swiftbuild-release.log"
+          xcrun swift build --build-system swiftbuild -v -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/swiftbuild-release" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1 || { tail -n 100 "$log"; exit 1; }
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments"
+          if [ "$SWIFTBUILD_IS_DEFAULT" = true ] && [ "$arguments" != expanded ]; then
+            echo "::error::This toolchain's default swiftbuild backend passed the build-setting arguments through unexpanded." >&2
+            exit 1
+          fi
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/swiftbuild-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
