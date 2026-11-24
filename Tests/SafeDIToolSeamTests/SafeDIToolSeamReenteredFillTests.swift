@@ -4301,32 +4301,32 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+		            .init(top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_Second() }, top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_First() })
+		        }
+		        func __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
+		            .init(gadget: { _ in
+		                let gadget: any Gadget = DefaultGadget()
+		                return gadget
+		            })
+		        }
+		        func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
+		            .init(subB_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		        }
+		        func __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_Second() -> Top.__safeDI_SecondCarrier<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(subB: __safeDI_gadgetBuilder_Host_SubB())
+		        }
+		        func __safeDI_gadgetBuilder_Host_SubB() -> SubB.__safeDI_SecondCarrier<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(second: { __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() })
+		        }
+		        func __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_First() -> Top.__safeDI_FirstCarrier<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(subA: __safeDI_gadgetBuilder_Host_SubA())
+		        }
+		        func __safeDI_gadgetBuilder_Host_SubA() -> SubA.__safeDI_FirstCarrier<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(first: { __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_8EB5E3FC6042D63E.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-		                .init(top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_Second() }, top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_First() })
-		            }
-		            func __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() -> Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadget: { _ in
-		                    let gadget: any Gadget = DefaultGadget()
-		                    return gadget
-		                })
-		            }
-		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
-		                .init(subB_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_SubB() })
-		            }
-		            func __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_Second() -> Top.__safeDI_SecondCarrier<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(subB: __safeDI_gadgetBuilder_Host_SubB())
-		            }
-		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.__safeDI_SecondCarrier<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(second: { __safeDI_gadgetBuilder_Host_DefaultSecond_Scope() })
-		            }
-		            func __safeDI_gadgetBuilder_Host_Top_SafeDICarrierScope_First() -> Top.__safeDI_FirstCarrier<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(subA: __safeDI_gadgetBuilder_Host_SubA())
-		            }
-		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.__safeDI_FirstCarrier<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(first: { __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
-		            }
 		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
