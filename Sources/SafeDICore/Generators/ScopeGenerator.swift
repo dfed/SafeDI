@@ -7355,6 +7355,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The keys of `dispatchers`, a seam call's, whose text captures nothing of the code around the call, so the root may
+	/// declare them once for every call: none where the root dispatcher hands a target the caller's declaration
+	/// (`FillCallerReads`), and else each whose every case is handed to a fill `inlinedFills` holds or to such a dispatcher
+	/// of the call, with no struct of an enclosing call's level to hand on.
+	nonisolated private static func rootFunctionDispatcherKeys(of dispatchers: [FillDispatcher], inlinedFills: [String: FillDispatcher.InlinedFill], capturesCallerDeclarations: Bool) -> Set<String> {
+		guard !capturesCallerDeclarations else { return [] }
+		var keys = Set(dispatchers.filter { !$0.takesPassUp && $0.carriedInnerScopes.isEmpty }.map(\.key))
+		var changed = true
+		while changed {
+			changed = false
+			for dispatcher in dispatchers where keys.contains(dispatcher.key) {
+				let capturesNothing = dispatcher.cases.allSatisfy { dispatcherCase in
+					guard let target = dispatcherCase.target else { return false }
+					return target.reusedCarriedInnerScopes.isEmpty && (inlinedFills[target.key] != nil || keys.contains(target.key))
+				}
+				if !capturesNothing {
+					keys.remove(dispatcher.key)
+					changed = true
+				}
+			}
+		}
+		return keys
+	}
+
 	/// The statements of `body`, its children's code followed by the declarations of its call's dispatchers or a public
 	/// mock's level functions.
 	@inline(never)
@@ -7362,19 +7386,55 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Moved out of `body`, so that appending to it does not copy it.
 		var generatedProperties = [GeneratedCode]()
 		swap(&generatedProperties, &body.generatedProperties)
-		// A call's dispatchers follow its fills, each a function that returns its level's struct.
+		// A call's dispatchers follow its fills, each a function that returns its level's struct. One that captures nothing
+		// of the call is a root function, which the root may declare once for every call (`RootFunctionHoisting`).
+		let labelsHiddenByReenteringCalls = Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined())
+		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills, capturesCallerDeclarations: !body.callerArgumentByParameter.isEmpty || !body.callerMemoArgumentByMemo.isEmpty)
 		for dispatcher in body.callDispatchers {
-			generatedProperties.append(.text(dispatcher.declaration(
-				isSendable: sendableFillKeys.contains(dispatcher.key),
-				indent: leadingMemberWhitespace,
-				inlinedFills: body.inlinedFills,
-				parametersByKey: body.parametersByKey,
-				callerArgumentByParameter: body.callerArgumentByParameter,
-				callerMemoArgumentByMemo: body.callerMemoArgumentByMemo,
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
-				labelsHiddenByReenteringCalls: Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined()),
-			)))
+			let isSendable = sendableFillKeys.contains(dispatcher.key)
+			guard rootFunctionKeys.contains(dispatcher.key) else {
+				generatedProperties.append(.text(dispatcher.declaration(
+					isSendable: isSendable,
+					indent: leadingMemberWhitespace,
+					inlinedFills: body.inlinedFills,
+					parametersByKey: body.parametersByKey,
+					callerArgumentByParameter: body.callerArgumentByParameter,
+					callerMemoArgumentByMemo: body.callerMemoArgumentByMemo,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
+					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+				)))
+				continue
+			}
+			let targetKeys = dispatcher.cases.compactMap(\.target?.key)
+			let inlinedFillKeys = Set(targetKeys.filter { body.inlinedFills[$0] != nil })
+			let record = RootFunctionRecord(
+				key: RootFunctionKey(
+					calledSeam: dispatcher.seamType,
+					level: dispatcher.key,
+					isSendable: isSendable,
+					inlinedFillKeys: inlinedFillKeys,
+					fillsTakingPayloadFields: body.fillsTakingPayloadFields.intersection(targetKeys),
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+					indentation: leadingMemberWhitespace,
+				),
+				name: dispatcher.functionName,
+				textWithoutAttributes: String(dispatcher.declaration(
+					isSendable: false,
+					indent: leadingMemberWhitespace,
+					inlinedFills: body.inlinedFills,
+					parametersByKey: body.parametersByKey,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
+					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+				).dropFirst(leadingMemberWhitespace.count)),
+				isSendable: isSendable,
+				calls: dispatcher.cases.compactMap { dispatcherCase in
+					dispatcherCase.target.flatMap { body.inlinedFills[$0.key] == nil ? $0.name : nil }
+				},
+			)
+			generatedProperties.append(.rootFunction(record))
 		}
 		if let publicMockLevelFunctions {
 			generatedProperties += publicMockLevelFunctions.declarations(
@@ -7870,7 +7930,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					try await generateProperties(
 						propertiesGeneratedLater: propertiesGeneratedLater,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-						leadingMemberWhitespace: "        ",
+						leadingMemberWhitespace: Self.rootStatementIndentation,
 						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
@@ -8058,14 +8118,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		try RootInitializer(of: instantiable, argumentList: instantiable.generateArgumentList())
 	}
 
+	/// The indentation of a statement of a root's initializer.
+	static let rootStatementIndentation = "        "
+
 	/// The extension `rootInitializer` declares, writing `childCode`, the code of the root's children.
 	@inline(never)
 	private static func rootCode(of rootInitializer: RootInitializer, writing childCode: consuming [GeneratedCode]) -> GeneratedCode {
 		// The type key lays the body out again from the path key's plan, or keeps the path key's body where it cannot.
+		// Each function a seam call declares that captures nothing is declared once, at the root's top.
 		guard let statements = TypeKeyBody.statements(ofRootBody: childCode) else {
-			return rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
+			return rootInitializer.spelled(writing: BuilderFunctionGraph(body: RootFunctionHoisting.hoisted(childCode, indentation: rootStatementIndentation).map(Statement.verbatim)))
 		}
-		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
+		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: RootFunctionHoisting.hoisted(statements, indentation: rootStatementIndentation).map(Statement.verbatim)))
 	}
 
 	/// The declaration of the alias `property`, which `fulfillingProperty` fulfills.
