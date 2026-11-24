@@ -169,7 +169,7 @@ extension MockLowering.Walk {
 	}
 
 	/// Records, through production's record function, the built place the walk lowered `node` at.
-	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) throws {
+	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) {
 		guard case .built = node,
 		      let inputs = builtPlaceInputs[childIndexPath],
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
@@ -177,7 +177,10 @@ extension MockLowering.Walk {
 		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties)
 		let planNode = planNodes[key] ?? PlanNode()
 		planNodes[key] = planNode
-		builtRecords[childIndexPath] = try generator.builtPlaceRecord(
+		// A construction whose reads the record function cannot name (`Initializer.GenerationError`) leaves the place
+		// unrecorded: the walk's own statement is what the mock writes.
+		do {
+			builtRecords[childIndexPath] = try generator.builtPlaceRecord(
 			of: property,
 			instantiable: instantiable,
 			forwardedProperties: forwardedProperties,
@@ -191,5 +194,8 @@ extension MockLowering.Walk {
 			readNames: inputs.readNames,
 			alternatives: inputs.alternatives,
 		)
+		} catch {
+			unrecordedPlaceErrors[childIndexPath] = error
+		}
 	}
 }

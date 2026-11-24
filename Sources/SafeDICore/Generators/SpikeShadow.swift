@@ -202,7 +202,24 @@ extension ScopeGenerator {
 			}
 		}
 		if production.count != walkRecords.count {
-			differ("count", "prod=\(production.count) walk=\(walkRecords.count)")
+			func key(_ record: BuiltPlaceRecord) -> String {
+				"\(record.property.asSource)@\(record.concreteType.asSource)/\(record.target)/fn=\(record.hasFunction)"
+			}
+			var remaining = [String: Int]()
+			for record in production {
+				remaining[key(record), default: 0] += 1
+			}
+			var walkOnly = [String]()
+			for record in walkRecords {
+				if let count = remaining[key(record)], count > 0 {
+					remaining[key(record)] = count - 1
+				} else {
+					walkOnly.append(key(record))
+				}
+			}
+			let productionOnly = remaining.filter { $0.value > 0 }.keys.sorted()
+			differ("count", "prod=\(production.count) walk=\(walkRecords.count) walkOnly=\(walkOnly.prefix(3)) prodOnly=\(productionOnly.prefix(3))")
+			SpikeShadow.append("WALKONLY\t\(root)\t" + walkOnly.joined(separator: "\t"))
 		}
 		for (p, m) in zip(production, walkRecords) {
 			guard p.property == m.property, p.concreteType == m.concreteType else {
@@ -245,6 +262,6 @@ extension ScopeGenerator {
 		}
 		let differenceText = differences.keys.sorted().map { "\($0)=\(differences[$0, default: 0])" }.joined(separator: ",")
 		let exampleText = examples.keys.sorted().map { "\($0): \(examples[$0, default: ""])" }.joined(separator: " || ")
-		return "WALKRECORDS\t\(root)\tprod=\(production.count)\twalk=\(walkRecords.count)\twalkNodes=\(Set(walkRecords.map(\.node)).count)\tprodNodes=\(Set(production.map(\.node)).count)\tdiff=\(differenceText.isEmpty ? "none" : differenceText)\t\(exampleText)"
+		return "WALKRECORDS\t\(root)\tprod=\(production.count)\twalk=\(walkRecords.count)\twalkNodes=\(Set(walkRecords.map(\.node)).count)\tprodNodes=\(Set(production.map(\.node)).count)\twalkThrew=\(walk.unrecordedPlaceErrors.count)\tdiff=\(differenceText.isEmpty ? "none" : differenceText)\t\(exampleText)"
 	}
 }

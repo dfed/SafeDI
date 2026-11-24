@@ -449,6 +449,8 @@ extension MockLowering {
 		var builtRecords = [[Int]: PlaceRecord]()
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
+		/// The error production's record function threw at a built place, which leaves it unrecorded.
+		var unrecordedPlaceErrors = [[Int]: Initializer.GenerationError]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
 		var planNodes = [PlanNodeKey: PlanNode]()
 
@@ -569,7 +571,7 @@ extension MockLowering {
 					}
 				}
 				if let node {
-					try recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
+					recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
 				}
 				childIndexPath.removeLast()
 				loopMembership = nil
