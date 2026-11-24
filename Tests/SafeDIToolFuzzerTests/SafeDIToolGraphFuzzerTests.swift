@@ -7389,7 +7389,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 608, judgedWithNamed: 399, named: 1_075, conversions: 0, fills: 504)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 676, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 91, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
 	static let seamCorpusFixtureHash: UInt64 = 0x47F14B403A57189F
