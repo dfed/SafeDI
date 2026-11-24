@@ -86,6 +86,29 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesReferenceToFirstWrite_whenValueRepeatsInStorageWrittenBefore() throws {
+		// Two equal values in storages of their own: the second storage is first found equal to the first by comparison,
+		// and each later write of either storage refers to the same first write.
+		let first = ["a", "b"]
+		let second = ["a"] + ["b"]
+		var writer = BinaryWriter()
+		writer.write([BinaryShared(first), BinaryShared(second), BinaryShared(["c"]), BinaryShared(second), BinaryShared(first)])
+		let encoded = writer.encoded
+
+		let values = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let values: [BinaryShared<[String]>] = try reader.read()
+			try reader.finish()
+			return values
+		}
+
+		// The string table (three strings), then five elements: the first and third written in full, every other a
+		// reference to the first.
+		#expect(encoded == [3, 1, 97, 1, 98, 1, 99] + [5, 0, 2, 0, 1, 1, 0, 1, 2, 1, 1])
+		#expect(values.map(\.value) == [["a", "b"], ["a", "b"], ["c"], ["a", "b"], ["a", "b"]])
+	}
+
+	@Test
 	func binaryWriter_writesEachSpellingOfPlaces_whenPlacesDifferOnlyInAny() throws {
 		// `==` calls `any Service` and `Service` equal, but each list of places reads back as written.
 		let places = [TypeDescription.any(.simple(name: "Service")), .simple(name: "Service"), .any(.simple(name: "Service"))].map { type in
