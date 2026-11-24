@@ -1,0 +1,6 @@
+sessions created once the tree is built: ["holderBuilder_", "session_"]
+the eager values: holderBuilder_ session_
+the right's holders: second second
+the top holder: session
+the left's holders: first first
+sessions created at the end: ["holderBuilder_", "session_", "second", "session", "first"]

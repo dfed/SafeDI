@@ -1,0 +1,15 @@
+tokens created once the tree is built: 0
+left: tokens created after the first lap: 0
+left: every lap's leaf reads left's token: true
+left: each lap's reader reads the id its node was forwarded: true
+left: each lap's reader reads left's token: true
+right: tokens created after the first lap: 0
+right: every lap's leaf reads right's token: true
+right: each lap's reader reads the id its node was forwarded: true
+right: each lap's reader reads right's token: true
+top: tokens created after the first lap: 1
+top: every lap's leaf reads top's token: true
+top: each lap's reader reads the id its node was forwarded: true
+top: each lap's reader reads top's token: true
+the three tokens differ: true
+tokens created at the end: 1
