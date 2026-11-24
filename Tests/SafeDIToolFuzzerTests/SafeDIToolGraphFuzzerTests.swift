@@ -5342,7 +5342,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenAnExtractedLocalReadsTheFieldOfAnotherDefault() async throws {
 		let differences = try await Self.differences(of: Self.lazyCycleOfSendableBuildersWithDefaultsFixture, under: Self.reversalOfTypeNames, editingOutcome: { files in
 			let fileName = Self.mockFileName(of: "T8")
-			files[fileName] = Self.replacing("__t7Builder_t8Builder_count = safeDIOverrides.t7Builder.t8Builder.count", with: "__t7Builder_t8Builder_count = safeDIOverrides.t7Builder.t8Builder.size", in: files[fileName])
+			files[fileName] = Self.replacing("count: __safeDI_t7Builder__overrides.t8Builder.count()", with: "count: __safeDI_t7Builder__overrides.t8Builder.size()", in: files[fileName])
 		})
 
 		#expect(differences.filter { $0.fileName == Self.mockFileName(of: "T8") }.map(\.aspect) == [.mockCode])

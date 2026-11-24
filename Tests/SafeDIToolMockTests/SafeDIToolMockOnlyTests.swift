@@ -8523,7 +8523,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_alpha() -> AlphaProtocol {
-		            let __safeDI_beta__safeDIBuilder = safeDIOverrides.alpha.beta.safeDIBuilder
+		            let __safeDI_beta__overrides = safeDIOverrides.alpha.beta
 		            @Sendable nonisolated func __safeDI_beta() -> Beta {
 		                @Sendable nonisolated func __safeDI_alphaBuilder() -> Alpha {
 		                    let beta = SendableInstantiator<Beta>(__safeDI_beta)
@@ -8534,7 +8534,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		                    return Alpha(beta: beta, gamma: gamma)
 		                }
 		                let alphaBuilder = SendableInstantiator<Alpha>(__safeDI_alphaBuilder)
-		                return if let safeDIBuilder = __safeDI_beta__safeDIBuilder { safeDIBuilder(alphaBuilder) } else { Beta(alphaBuilder: alphaBuilder) }
+		                return if let safeDIBuilder = __safeDI_beta__overrides.safeDIBuilder { safeDIBuilder(alphaBuilder) } else { Beta(alphaBuilder: alphaBuilder) }
 		            }
 		            let beta = SendableInstantiator<Beta>(__safeDI_beta)
 		            return if let safeDIBuilder = safeDIOverrides.alpha.safeDIBuilder { safeDIBuilder(beta) } else { Alpha.mock(beta: beta) }
