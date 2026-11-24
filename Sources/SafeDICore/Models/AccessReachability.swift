@@ -164,7 +164,8 @@ extension AccessLevel {
 		// crashes the compiler with `-Osize` (signal 11, a SIL verification error on a `borrowed from` instruction
 		// before ownership is lowered), because the copy-to-borrow optimization mishandles the borrow of
 		// `emitter.moduleName` that the comparison below makes. Binding `declarer.moduleName` too does not avoid it.
-		// Remove the attribute once SafeDI's minimum Swift is past 6.3.3.
+		// Published builds pass `-O`, under which Swift 6.3.3 compiles this function without the attribute; it stays
+		// so that a build for size compiles too. Remove the attribute once SafeDI's minimum Swift is past 6.3.3.
 		if isOwnFile {
 			.internal
 		} else if let emitterModuleName = emitter.moduleName, emitterModuleName == declarer.moduleName {
