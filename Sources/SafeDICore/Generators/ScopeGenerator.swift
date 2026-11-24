@@ -6881,17 +6881,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What `cycleParameterArguments(unavailableProperties:)` passes, each with the parameter it passes, for the type key.
-	nonisolated private func cycleParameterReads(unavailableProperties: Set<Property>) -> [PlaceRead] {
+	/// `readNames` are the names a walk binds a parameter's label apart under, by the parameter's property, which the read
+	/// reads in place of the label: it then resolves to the declaration of that name.
+	nonisolated func cycleParameterReads(unavailableProperties: Set<Property>, readNames: [Property: String] = [:]) -> [PlaceRead] {
 		cycleParameters.map { parameter in
 			let label = parameter.property.label
+			let name = readNames[parameter.property] ?? label
 			let source: ArgumentSource = if unavailableProperties.contains(parameter.property) {
 				.nil
-			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: label) {
+			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: name) {
 				instanceSource
 			} else {
-				.binding(label: label)
+				.binding(label: name)
 			}
-			return PlaceRead(argumentLabel: label, label: label, property: parameter.property, source: source)
+			return PlaceRead(argumentLabel: label, label: name, property: parameter.property, source: source)
 		}
 	}
 
@@ -6922,29 +6925,65 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
 	) -> PlaceRecord? {
-		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings) else { return nil }
+		closingPlaceRecord(
+			of: property,
+			instantiable: instantiable,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			closedOnFunctionName: closedOnFunctionName,
+			unavailableProperties: unavailableProperties,
+			isPlannedAtPlace: isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+		)
+	}
+
+	/// The record of this scope's place where it closes a cycle on the function named `closedOnFunctionName`, from what the
+	/// walk that writes the place hands it, or `nil` where the type key does not plan it: the one function every walk
+	/// records a closer with. `isPlannedAtPlace` is the walk's half of whether the type key plans the place, and
+	/// `readNames` the names it binds labels apart under (`cycleParameterReads(unavailableProperties:readNames:)`).
+	nonisolated func closingPlaceRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		forwardedProperties: [Property],
+		erasedToConcreteExistential: Bool,
+		closedOnFunctionName: String,
+		unavailableProperties: Set<Property>,
+		isPlannedAtPlace: Bool,
+		readNames: [Property: String] = [:],
+	) -> PlaceRecord? {
+		guard isPlannedAtPlace, isPlannedByGenerator else { return nil }
 		return .closer(ClosingPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: closedOnFunctionName,
 			forwardedProperties: forwardedProperties,
-			cycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+			cycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties, readNames: readNames),
 		))
 	}
 
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call.
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
+		isPlannedByGenerator && isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
+	}
+
+	/// The half of `isPlannedByTypeKey(builderFunctionNames:fillPlaceBindings:)` the generator decides alone, whichever walk
+	/// writes its place: no payload binding, no wrapper made again, no member call, and no fill's own place.
+	nonisolated var isPlannedByGenerator: Bool {
 		valuesBindingLines.isEmpty
-			&& builderFunctionNames.loopValuesBindingLines == nil
-			&& builderFunctionNames.loopLevelsName == nil
-			&& builderFunctionNames.receivedFunctionName == nil
-			&& builderFunctionNames.loopMemberDeclarations.isEmpty
 			&& reboundProperties.isEmpty
 			&& memberCallLines.isEmpty
 			&& !isBuiltByFill
 			&& !fillReturnsWrapperBuilder
+	}
+
+	/// The half of `isPlannedByTypeKey(builderFunctionNames:fillPlaceBindings:)` production's walk decides at the place: no
+	/// loop of builders and no fill place binding there.
+	nonisolated private func isPlannedAtPlace(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
+		builderFunctionNames.loopValuesBindingLines == nil
+			&& builderFunctionNames.loopLevelsName == nil
+			&& builderFunctionNames.receivedFunctionName == nil
+			&& builderFunctionNames.loopMemberDeclarations.isEmpty
 			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
 	}
 

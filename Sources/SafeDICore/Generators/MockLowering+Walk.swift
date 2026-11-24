@@ -440,6 +440,9 @@ extension MockLowering {
 		var childIndexPath = [Int]()
 		// SPIKE: the hook each place's construction would be replaced by, keyed by its path of child indices.
 		var placeHooks = [[Int]: ConstructionHook]()
+		/// The records of the closers and defaults the walk lowered (`MockLowering+ClosersAndDefaults.swift`), by their paths of
+		/// child indices, which the plan reads where it writes their places.
+		var closerAndDefaultRecords = [[Int]: PlaceRecord]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.
@@ -793,6 +796,11 @@ extension MockLowering {
 				lines.append(contentsOf: receivedFunctionLines + bindingLines)
 				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
 				return .cycleClosing(property, bindingName: bindingName, concreteType: instantiable.concreteInstantiable)
+			}
+			if case let .property(_, _, _, erasedToConcreteExistential, _, _) = generator.scopeData,
+			   let record = closerRecord(of: generator, instantiable: instantiable, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, closedOnFunctionName: closedOnFunctionName)
+			{
+				closerAndDefaultRecords[childIndexPath] = record
 			}
 			lines.append(contentsOf: MockLowering.bindingLines(
 				of: property,
