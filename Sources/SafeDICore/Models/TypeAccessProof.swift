@@ -249,7 +249,7 @@ public struct TypeAccessProof: Sendable {
 
 		// The least fixed point: every entry that is not exact starts at its bound and is raised by each mention of its
 		// type, at the mentioning member's level capped by its carrier's current proof, never above `public`.
-		var raisedProofs = kinds.compactMapValues { kind in kind.exactProof == nil ? kind.start : nil }
+		var raisedProofs = kinds.compactMapValues(\.raisedStart)
 		let raisedTypes = raisedProofs.keys.sorted()
 		var changed = true
 		while changed {
@@ -567,15 +567,17 @@ public struct TypeAccessProof: Sendable {
 			}
 		}
 
-		var start: AccessLevel {
+		/// The level the fixed point starts an entry that is not exact at, which mentions of its type raise; `nil` for an
+		/// exact entry, whose proof is its `exactProof` and which no mention raises.
+		var raisedStart: AccessLevel? {
 			switch self {
 			case .typeDeclaration, .plainDeclaration, .exactInExtension:
-				exactProof ?? .internal
+				nil
 			case let .inExtension(_, _, start):
 				start
 			case let .extensionBased(extensionLevel, _, enclosingType):
 				if let extensionLevel, let enclosingType {
-					extensionLevel.capped(by: enclosingType.proof)
+					extensionLevel >= enclosingType.proof ? nil : extensionLevel.capped(by: enclosingType.proof)
 				} else {
 					.internal
 				}
@@ -986,7 +988,7 @@ public struct TypeAccessProof: Sendable {
 	/// The members that raise `type` to `level`, without their own caps: a diagnostic names them, not why they are
 	/// capped in turn.
 	private func shallowProvers(of type: TypeDescription, atLevel level: AccessLevel) -> [Prover] {
-		guard level > (kinds[type]?.start ?? .internal) else { return [] }
+		guard level > (kinds[type]?.raisedStart ?? .internal) else { return [] }
 		var seen = Set<MemberKey>()
 		return (mentions[type] ?? [])
 			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
