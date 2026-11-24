@@ -328,6 +328,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The type a value of this type holds, with no optional, no SafeDI wrapper and no `any` at any depth:
+	/// `LazilyInstantiated<any Service>?` and `Instantiator<Service>` are both `Service`. `query graph` reports it beside
+	/// a declared type, so that a reader matches two spellings of one type without reading either.
+	public var plainType: TypeDescription {
+		unwrapped.asInstantiatedType.withoutAny.unwrapped
+	}
+
 	/// This type with `any` stripped at every depth: the spelling `==` compares, and what the seam guard hashes.
 	var withoutAny: TypeDescription {
 		switch self {

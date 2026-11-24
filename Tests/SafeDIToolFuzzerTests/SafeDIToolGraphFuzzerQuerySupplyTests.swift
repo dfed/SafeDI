@@ -49,21 +49,52 @@ struct SafeDIToolGraphFuzzerQuerySupplyTests {
 		let generated = GraphFuzzerQuerySupplies(generatedFiles: ["App+SafeDI.swift": Self.lazyCycleCode], kindsByLabelByType: Self.lazyCycleKinds)
 		let exported = try #require(try GraphFuzzerQuerySupplies(exportedJSON: """
 		{
-		  "treesBuilt" : true,
-		  "types" : [
-		    { "id" : "M.App", "name" : "App", "edges" : [] },
-		    { "id" : "M.Step", "name" : "Step", "edges" : [] },
-		    { "id" : "M.Screen", "name" : "Screen", "edges" : [
-		      { "kind" : "received", "label" : "session", "suppliers" : [ { "type" : "M.App", "label" : "session" } ] },
-		      { "kind" : "alias", "label" : "currentSession", "suppliers" : [ { "type" : "M.App", "label" : "session" }, { "type" : "M.Step", "label" : "session" } ] }
+		  "completeness" : "trees",
+		  "declarations" : [
+		    { "id" : "M.App", "typeName" : "App", "dependencies" : [] },
+		    { "id" : "M.Step", "typeName" : "Step", "dependencies" : [] },
+		    { "id" : "M.Screen", "typeName" : "Screen", "dependencies" : [
+		      { "source" : "received", "label" : "session", "provenance" : [ { "source" : "declaration", "declaredBy" : "M.App", "label" : "session" } ] },
+		      { "source" : "received", "label" : "currentSession", "aliasOf" : { "label" : "session" }, "provenance" : [
+		        { "source" : "declaration", "declaredBy" : "M.App", "label" : "session" },
+		        { "source" : "nil", "reason" : { "kind" : "noProvidingDeclaration", "message" : "" } }
+		      ] }
 		    ] }
 		  ]
 		}
 		"""))
 
 		#expect(exported.differences(from: generated) == [
+			#"Screen.currentSession: ["App.session", "nil"] against ["App.session", "Step.session"]"#,
 			#"Screen.session: ["App.session"] against ["App.session", "Step.session"]"#,
 		])
+	}
+
+	@Test
+	func kindsByLabelByType_namesEachKind_whenExportListsEverySourceAndLifetime() throws {
+		let kinds = try GraphFuzzerQuerySupplies.kindsByLabelByType(exportedJSON: """
+		{
+		  "declarations" : [
+		    { "typeName" : "Screen", "dependencies" : [
+		      { "source" : "instantiated", "lifetime" : "eager", "label" : "model" },
+		      { "source" : "instantiated", "lifetime" : "lazy", "label" : "cache" },
+		      { "source" : "instantiated", "lifetime" : "builder", "label" : "stepBuilder" },
+		      { "source" : "forwarded", "label" : "id" },
+		      { "source" : "received", "label" : "session" },
+		      { "source" : "received", "label" : "currentSession", "aliasOf" : { "label" : "session" } }
+		    ] }
+		  ]
+		}
+		""")
+
+		#expect(kinds == ["Screen": [
+			"model": "instantiated",
+			"cache": "lazy",
+			"stepBuilder": "builder",
+			"id": "forwarded",
+			"session": "received",
+			"currentSession": "alias",
+		]])
 	}
 
 	private static let lazyCycleKinds = [

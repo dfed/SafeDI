@@ -30,8 +30,8 @@ public struct QueryGraph: AsyncParsableCommand {
 
 	public static let configuration = CommandConfiguration(
 		commandName: "graph",
-		abstract: "Export every `@Instantiable` declaration, its dependencies, the type that fulfills each type they name, and what each received dependency is handed, as JSON (alpha).",
-		discussion: "Reads the modules named with `--include` and `--module-info` once, as `query needs` reads them, and prints one JSON document: each production `@Instantiable` type with its module, file and line, each of its dependencies as an edge with its kind and the type that fulfills what it builds, which type fulfills each type, and, read from the trees `generate` builds, the declarations whose values each received dependency is handed. Each type and edge appears once, however many trees reach it. The same inputs give the same bytes. When two declarations fulfill one type, the declarations are still exported, `resolved` is false, and the error is listed; when the trees are not valid, `treesBuilt` is false and the error is listed; the command still succeeds either way. This command is in alpha: its options and JSON may change in any release, which the JSON’s `formatVersion` of 0 says. SafeDI’s Documentation/QueryGraph.md documents the format.",
+		abstract: "Export every `@Instantiable` declaration, its dependencies, which declaration fulfills each one and which declarations each fulfills, and where each received dependency’s value comes from, as JSON (alpha).",
+		discussion: "Reads the modules named with `--include` and `--module-info` once, as `query needs` reads them, and prints one JSON document: each production `@Instantiable` declaration with its module, file and line, the dependencies it declares, each with its type as declared and as a plain type, the declaration that fulfills each instantiated dependency (`fulfilledBy`) and, on each declaration, the dependencies it fulfills (`constructedBy`), the declaration that fulfills each type, and, read from the trees `generate` builds, each declaration whose value a received dependency is handed, or why it is handed `nil` (`provenance`). Each declaration and dependency appears once, however many trees reach it. The same inputs give the same bytes. `completeness` says how much SafeDI worked out: when two declarations fulfill one type, only the declarations are exported; when the trees are not valid, no provenance is; `errors` says why, and the command still succeeds. This command is in alpha: its options and JSON may change in any release, which the JSON’s `formatVersion` of 0 says. SafeDI’s Documentation/QueryGraph.md documents the format.",
 	)
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, as `query needs` takes them.") var include: [String] = []
@@ -88,7 +88,7 @@ public struct QueryGraph: AsyncParsableCommand {
 		}
 		// What each receive is handed is read from the trees `generate` builds of the production declarations, which the
 		// export reports only when they are valid.
-		var supplies: [ReceivedValueSupply]?
+		var supplies: ReceivedValueSupplies?
 		var treeDiagnostics = [SourceDiagnostic]()
 		if let resolvedMap {
 			let generator = DependencyTreeGenerator(
@@ -110,7 +110,7 @@ public struct QueryGraph: AsyncParsableCommand {
 			}
 		}
 		return QueryGraphReport(
-			moduleNames: parsedModules.map(\.includedModule.name),
+			includedModules: parsedModules.map(\.includedModule),
 			instantiables: instantiables,
 			resolvedMap: resolvedMap,
 			resolutionDiagnostics: resolutionDiagnostics + treeDiagnostics,
@@ -124,16 +124,21 @@ public struct QueryGraph: AsyncParsableCommand {
 /// fulfills each type, each once. The format is documented in `Documentation/QueryGraph.md`.
 public struct QueryGraphReport: Encodable, Equatable, Sendable {
 	init(
-		moduleNames: [String],
+		includedModules: [IncludedModule],
 		instantiables: [Instantiable],
 		resolvedMap: [TypeDescription: Instantiable]?,
 		resolutionDiagnostics: [SourceDiagnostic],
-		supplies: [ReceivedValueSupply]?,
+		supplies: ReceivedValueSupplies?,
 		attributionsByFilePath: [String: FileAttribution],
 	) {
-		modules = moduleNames
-		resolved = resolvedMap != nil
-		treesBuilt = supplies != nil
+		modules = includedModules.map { GraphModule(name: $0.name, paths: $0.paths) }
+		completeness = if resolvedMap == nil {
+			.declarations
+		} else if supplies == nil {
+			.fulfillment
+		} else {
+			.trees
+		}
 		// Only production declarations: a `mockOnly` declaration describes a mock, which the graph leaves out.
 		let productionInstantiables = instantiables.filter { !$0.mockOnly }
 		let resolvedMap = resolvedMap?.filter { !$0.value.mockOnly }
@@ -153,72 +158,86 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 		for instantiable in productionInstantiables {
 			idByConcreteType[instantiable.concreteInstantiable] = id(of: instantiable)
 		}
-		var suppliesByReceive = [GraphEdge.Receive: GraphEdge.Supplies]()
-		for supply in supplies ?? [] {
-			let receive = GraphEdge.Receive(type: supply.receivingType, label: supply.label)
-			var receiveSupplies = suppliesByReceive[receive] ?? GraphEdge.Supplies()
-			if let supplier = supply.supplier {
-				receiveSupplies.suppliers.insert(GraphEdge.Supplier(type: idByConcreteType[supplier.declaringType] ?? supplier.declaringType.asSource, label: supplier.label))
-			} else {
-				receiveSupplies.receivesNil = true
+		var provenanceByReceive = [GraphDependency.Receive: Set<GraphDependency.Provenance>]()
+		for supply in supplies?.supplies ?? [] {
+			let provenance: GraphDependency.Provenance = switch supply.value {
+			case let .declaration(supplier):
+				.declaration(declaredBy: idByConcreteType[supplier.declaringType] ?? supplier.declaringType.asSource, label: supplier.label)
+			case let .passedNil(reason):
+				.passedNil(GraphDependency.NilReason(reason, receivingTypeName: supply.receivingType.asSource, label: supply.label))
 			}
-			suppliesByReceive[receive] = receiveSupplies
+			provenanceByReceive[GraphDependency.Receive(type: supply.receivingType, label: supply.label), default: []].insert(provenance)
+		}
+		let constructedTypes = supplies.map { Set($0.constructedTypes) }
+
+		// Each instantiated dependency points down at the declaration that fulfills it; each declaration points back up
+		// at the dependencies it fulfills.
+		var constructedByByID = [String: [GraphDeclaration.Constructor]]()
+		var dependenciesByID = [String: [GraphDependency]]()
+		for instantiable in productionInstantiables {
+			let declarationID = id(of: instantiable)
+			dependenciesByID[declarationID] = instantiable.dependencies.map { dependency in
+				let fulfilledBy = fulfillingTypeID(of: dependency.asInstantiatedType)
+				if case .instantiated = dependency.source, let fulfilledBy {
+					constructedByByID[fulfilledBy, default: []].append(GraphDeclaration.Constructor(declaredBy: declarationID, label: dependency.property.label))
+				}
+				let isReached = constructedTypes?.contains(instantiable.concreteInstantiable) == true
+				return GraphDependency(
+					dependency,
+					fulfilledBy: fulfilledBy,
+					provenance: isReached ? provenanceByReceive[GraphDependency.Receive(type: instantiable.concreteInstantiable, label: dependency.property.label)] ?? [] : nil,
+					filePath: attribution(of: dependency.declarationLocation?.filePath),
+				)
+			}
 		}
 
 		errors = resolutionDiagnostics.map { diagnostic in
 			GraphError(message: diagnostic.message, filePath: attribution(of: diagnostic.location?.filePath), line: diagnostic.location?.line)
 		}
-		types = productionInstantiables.map { instantiable in
-			GraphType(
-				id: id(of: instantiable),
-				name: instantiable.concreteInstantiable.asSource,
+		declarations = productionInstantiables.map { instantiable in
+			let declarationID = id(of: instantiable)
+			return GraphDeclaration(
+				id: declarationID,
+				typeName: instantiable.concreteInstantiable.asSource,
 				module: instantiable.moduleName,
 				filePath: attribution(of: instantiable.declarationLocation?.filePath ?? instantiable.sourceFilePath),
 				line: instantiable.declarationLocation?.line,
-				declarationKind: GraphType.DeclarationKind(instantiable.declarationType),
+				declarationKind: GraphDeclaration.DeclarationKind(instantiable.declarationType),
 				fulfills: instantiable.instantiableTypes.map(\.asSource),
 				isRoot: instantiable.isRoot,
-				isSeam: instantiable.generatesDependencyTree,
-				edges: instantiable.dependencies.map { dependency in
-					GraphEdge(
-						dependency,
-						fulfilledBy: fulfillingTypeID(of: dependency.asInstantiatedType),
-						supplies: suppliesByReceive[GraphEdge.Receive(type: instantiable.concreteInstantiable, label: dependency.property.label)],
-						filePath: attribution(of: dependency.declarationLocation?.filePath),
-					)
-				},
+				generatesDependencyTree: instantiable.generatesDependencyTree,
+				isReachedByRoot: constructedTypes.map { $0.contains(instantiable.concreteInstantiable) },
+				constructedBy: resolvedMap.map { _ in (constructedByByID[declarationID] ?? []).sorted() },
+				dependencies: dependenciesByID[declarationID] ?? [],
 			)
 		}
 		// Sorted by module, then name, then line: never by file path, whose spelling depends on how a module was read.
 		.sorted { lhs, rhs in
-			(lhs.module ?? "", lhs.name, lhs.line ?? 0) < (rhs.module ?? "", rhs.name, rhs.line ?? 0)
+			(lhs.module ?? "", lhs.typeName, lhs.line ?? 0) < (rhs.module ?? "", rhs.typeName, rhs.line ?? 0)
 		}
 
-		fulfillment = (resolvedMap ?? [:])
+		fulfillments = (resolvedMap ?? [:])
 			.map { typeDescription, instantiable in
-				Fulfillment(type: typeDescription.asSource, fulfilledBy: id(of: instantiable))
+				Fulfillment(plainType: typeDescription.plainType.asSource, fulfilledBy: id(of: instantiable))
 			}
-			// Two keys can share a spelling only where `==` ignores an `any`, so the provider breaks the tie.
-			.sorted { ($0.type, $0.fulfilledBy) < ($1.type, $1.fulfilledBy) }
+			// The declaration breaks a tie between two keys of one plain type, so no dictionary order reaches the output.
+			.sorted { ($0.plainType, $0.fulfilledBy) < ($1.plainType, $1.fulfilledBy) }
 	}
 
 	/// The version of the JSON format. `0` while the command is in alpha: the shape may change in any release.
 	static let formatVersion = 0
 
-	/// The modules read, by name, in name order.
-	public let modules: [String]
-	/// Whether SafeDI resolved which type fulfills each type. When it did not, `errors` says why, and neither
-	/// `fulfillment` nor any edge's `fulfilledBy` is present.
-	public let resolved: Bool
-	/// Whether SafeDI built the trees of the roots as `generate` builds them, which say what each receive is handed. When
-	/// it did not, `errors` says why, and no edge has `suppliers`.
-	public let treesBuilt: Bool
+	/// The modules read, in name order.
+	public let modules: [GraphModule]
+	/// How much of the graph SafeDI could work out: the declarations alone, which type fulfills each type too, or the
+	/// trees of the roots too. `errors` says why it stopped short.
+	public let completeness: Completeness
 	/// The errors that kept SafeDI from resolving the graph or from building its trees.
 	public let errors: [GraphError]
 	/// Each production `@Instantiable` declaration, by module, then name, then line.
-	public let types: [GraphType]
-	/// The type that fulfills each type SafeDI can build, by the fulfilled type's spelling.
-	public let fulfillment: [Fulfillment]
+	public let declarations: [GraphDeclaration]
+	/// The declaration that fulfills each type SafeDI can build, by the fulfilled type's plain type.
+	public let fulfillments: [Fulfillment]
 
 	/// The report as JSON, with its keys sorted.
 	public func json() throws -> String {
@@ -227,29 +246,48 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 
 	public func encode(to encoder: any Encoder) throws {
 		var container = encoder.container(keyedBy: CodingKeys.self)
+		try container.encode("graph", forKey: .command)
 		try container.encode(Self.formatVersion, forKey: .formatVersion)
+		try container.encode(completeness, forKey: .completeness)
 		try container.encode(modules, forKey: .modules)
-		try container.encode(resolved, forKey: .resolved)
-		try container.encode(treesBuilt, forKey: .treesBuilt)
 		try container.encode(errors, forKey: .errors)
-		try container.encode(types, forKey: .types)
-		try container.encode(fulfillment, forKey: .fulfillment)
+		try container.encode(declarations, forKey: .declarations)
+		try container.encode(fulfillments, forKey: .fulfillments)
 	}
 
-	/// A type's id: its name, after its module's. Every module the query reads names its declarations, so the module is
-	/// always known. Opaque to a reader, who matches it whole.
+	/// A declaration's id: its type's name, after its module's. Every module the query reads names its declarations, so
+	/// the module is always known. Opaque to a reader, who matches it whole.
 	static func id(ofTypeSpelled typeName: String, moduleName: String?) -> String {
 		[moduleName, typeName].compactMap(\.self).joined(separator: ".")
 	}
 
 	private enum CodingKeys: String, CodingKey {
+		case command
 		case formatVersion
+		case completeness
 		case modules
-		case resolved
-		case treesBuilt
 		case errors
-		case types
+		case declarations
+		case fulfillments
+	}
+
+	/// How much of the graph SafeDI worked out.
+	public enum Completeness: String, Encodable, Equatable, Sendable {
+		/// Two declarations fulfill one type, so only the declarations are exported: no `fulfilledBy`, `constructedBy`
+		/// or `fulfillments`.
+		case declarations
+		/// Which declaration fulfills each type is exported, but the trees are not valid, so no `isReachedByRoot` or
+		/// `provenance`.
 		case fulfillment
+		/// Everything is exported.
+		case trees
+	}
+
+	/// A module the query read.
+	public struct GraphModule: Encodable, Equatable, Sendable {
+		let name: String
+		/// The `--include` directories or `--module-info` files that name the module, as given.
+		let paths: [String]
 	}
 
 	/// An error that kept SafeDI from resolving the graph, located where `generate` would report it.
@@ -259,20 +297,20 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 		let line: Int?
 	}
 
-	/// The type that fulfills a type.
+	/// The declaration that fulfills a type.
 	public struct Fulfillment: Encodable, Equatable, Sendable {
-		/// The fulfilled type, as declarations spell it.
-		let type: String
-		/// The id of the type that fulfills it.
+		/// The fulfilled type, as a plain type.
+		let plainType: String
+		/// The id of the declaration that fulfills it.
 		let fulfilledBy: String
 	}
 }
 
 /// A production `@Instantiable` declaration.
-public struct GraphType: Encodable, Equatable, Sendable {
+public struct GraphDeclaration: Encodable, Equatable, Sendable {
 	let id: String
 	/// The type's name, nested types qualified by the types that enclose them.
-	let name: String
+	let typeName: String
 	let module: String?
 	let filePath: String?
 	let line: Int?
@@ -281,9 +319,14 @@ public struct GraphType: Encodable, Equatable, Sendable {
 	let fulfills: [String]
 	let isRoot: Bool
 	/// Whether the type is declared with `generateDependencyTree: true`.
-	let isSeam: Bool
+	let generatesDependencyTree: Bool
+	/// Once the trees are built, whether some root's tree builds the type.
+	let isReachedByRoot: Bool?
+	/// In a resolved graph, each instantiated dependency this declaration fulfills, by the id of the declaration that
+	/// declares it and its label, sorted.
+	let constructedBy: [Constructor]?
 	/// The type's dependencies, in declaration order.
-	let edges: [GraphEdge]
+	let dependencies: [GraphDependency]
 
 	enum DeclarationKind: String, Encodable, Equatable, Sendable {
 		case `class`
@@ -304,11 +347,22 @@ public struct GraphType: Encodable, Equatable, Sendable {
 			}
 		}
 	}
+
+	/// An instantiated dependency that a declaration fulfills.
+	struct Constructor: Encodable, Comparable, Sendable {
+		/// The id of the declaration that declares the dependency.
+		let declaredBy: String
+		let label: String
+
+		static func < (lhs: Self, rhs: Self) -> Bool {
+			(lhs.declaredBy, lhs.label) < (rhs.declaredBy, rhs.label)
+		}
+	}
 }
 
-/// A dependency a type declares.
-public struct GraphEdge: Encodable, Equatable, Sendable {
-	init(_ dependency: Dependency, fulfilledBy: String?, supplies: Supplies?, filePath: String?) {
+/// A dependency a declaration declares.
+public struct GraphDependency: Encodable, Equatable, Sendable {
+	init(_ dependency: Dependency, fulfilledBy: String?, provenance: Set<Provenance>?, filePath: String?) {
 		label = dependency.property.label
 		type = dependency.property.typeDescription.asSource
 		wrapper = dependency.property.typeDescription.propertyType.wrapperTypeName
@@ -316,85 +370,95 @@ public struct GraphEdge: Encodable, Equatable, Sendable {
 		line = dependency.declarationLocation?.line
 		switch dependency.source {
 		case let .instantiated(_, erasedToConcreteExistential):
-			kind = Kind(builtAs: dependency.property.typeDescription.propertyType)
-			builds = dependency.asInstantiatedType.asSource
+			source = .instantiated
+			lifetime = Lifetime(builtAs: dependency.property.typeDescription.propertyType)
+			plainType = dependency.asInstantiatedType.plainType.asSource
 			self.fulfilledBy = fulfilledBy
-			erased = erasedToConcreteExistential ? true : nil
-			onlyIfAvailable = nil
+			isErased = erasedToConcreteExistential
+			isOnlyIfAvailable = false
 			aliasOf = nil
-			suppliers = nil
-			receivesNil = nil
-		case let .received(isOnlyIfAvailable):
-			kind = .received
-			builds = nil
+			self.provenance = nil
+		case let .received(onlyIfAvailable):
+			source = .received
+			lifetime = nil
+			plainType = dependency.property.typeDescription.plainType.asSource
 			self.fulfilledBy = nil
-			erased = nil
-			onlyIfAvailable = isOnlyIfAvailable ? true : nil
+			isErased = false
+			isOnlyIfAvailable = onlyIfAvailable
 			aliasOf = nil
-			suppliers = supplies.map { $0.suppliers.sorted() }
-			receivesNil = supplies?.receivesNil == true ? true : nil
-		case let .aliased(fulfillingProperty, erasedToConcreteExistential, isOnlyIfAvailable):
-			kind = .alias
-			builds = nil
+			self.provenance = provenance.map { $0.sorted() }
+		case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+			source = .received
+			lifetime = nil
+			plainType = dependency.property.typeDescription.plainType.asSource
 			self.fulfilledBy = nil
-			erased = erasedToConcreteExistential ? true : nil
-			onlyIfAvailable = isOnlyIfAvailable ? true : nil
-			aliasOf = AliasOf(label: fulfillingProperty.label, type: fulfillingProperty.typeDescription.asSource)
-			suppliers = supplies.map { $0.suppliers.sorted() }
-			receivesNil = supplies?.receivesNil == true ? true : nil
+			isErased = erasedToConcreteExistential
+			isOnlyIfAvailable = onlyIfAvailable
+			aliasOf = AliasOf(
+				label: fulfillingProperty.label,
+				type: fulfillingProperty.typeDescription.asSource,
+				plainType: fulfillingProperty.typeDescription.plainType.asSource,
+			)
+			self.provenance = provenance.map { $0.sorted() }
 		case .forwarded:
-			kind = .forwarded
-			builds = nil
+			source = .forwarded
+			lifetime = nil
+			plainType = dependency.property.typeDescription.plainType.asSource
 			self.fulfilledBy = nil
-			erased = nil
-			onlyIfAvailable = nil
+			isErased = false
+			isOnlyIfAvailable = false
 			aliasOf = nil
-			suppliers = nil
-			receivesNil = nil
+			self.provenance = nil
 		}
 	}
 
-	let kind: Kind
 	let label: String
+	let source: Source
+	/// For an instantiated dependency, when its value is built.
+	let lifetime: Lifetime?
 	/// The property's type, as declared.
 	let type: String
+	/// The type of the value the dependency holds, with no optional, wrapper or `any`; for an instantiated dependency,
+	/// the type SafeDI builds: `fulfilledByType:`, or the property's type without its wrapper.
+	let plainType: String
 	/// The SafeDI wrapper the property is held in, when it is held in one.
 	let wrapper: String?
-	/// For an instantiated edge, the type it builds, as SafeDI looks it up: `fulfilledByType:`, or the property's type
-	/// without its wrapper.
-	let builds: String?
-	/// For an instantiated edge in a resolved graph, the id of the type that fulfills `builds`; absent when no
-	/// production declaration does.
+	/// For an instantiated dependency in a resolved graph, the id of the declaration that fulfills `plainType`; absent
+	/// when no production declaration does.
 	let fulfilledBy: String?
-	let erased: Bool?
-	let onlyIfAvailable: Bool?
+	let isErased: Bool
+	let isOnlyIfAvailable: Bool
 	/// For an alias, the property it renames.
 	let aliasOf: AliasOf?
-	/// For a received edge or an alias that a root's tree reaches, once the trees are built, each declaration whose value
-	/// the edge is handed in some place the trees build its type, sorted by type, then label.
-	let suppliers: [Supplier]?
-	/// Whether, in some place the trees build the edge's type, generated code hands the edge `nil`: an edge received
-	/// only if available that no declaration in scope provides there.
-	let receivesNil: Bool?
+	/// For a received dependency or an alias of a type some root's tree builds, once the trees are built: each value the
+	/// trees hand it, wherever they build its type.
+	let provenance: [Provenance]?
 	let filePath: String?
 	let line: Int?
 
-	enum Kind: String, Encodable, Equatable, Sendable {
-		/// `@Instantiated`, built when its owner is.
+	/// Where a dependency's value comes from.
+	enum Source: String, Encodable, Equatable, Sendable {
+		/// `@Instantiated`: the declaration builds it.
 		case instantiated
-		/// `@Instantiated` in a `LazilyInstantiated` or `SendableLazilyInstantiated`: built once, when first read.
-		case lazy
-		/// `@Instantiated` in an instantiator: built each time it is asked.
-		case builder
-		case forwarded
+		/// `@Received`, or `@Received(fulfilledByDependencyNamed:ofType:)`, an alias: a declaration above hands it.
 		case received
-		/// `@Received(fulfilledByDependencyNamed:ofType:)`.
-		case alias
+		/// `@Forwarded`: whoever builds the declaration hands it.
+		case forwarded
+	}
+
+	/// When an instantiated dependency's value is built.
+	enum Lifetime: String, Encodable, Equatable, Sendable {
+		/// Built when its owner is.
+		case eager
+		/// In a `LazilyInstantiated` or `SendableLazilyInstantiated`: built once, when first read.
+		case lazy
+		/// In an instantiator: built each time it is asked.
+		case builder
 
 		init(builtAs propertyType: Property.PropertyType) {
 			switch propertyType {
 			case .constant:
-				self = .instantiated
+				self = .eager
 			case .lazilyInstantiated, .sendableLazilyInstantiated:
 				self = .lazy
 			case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
@@ -406,17 +470,70 @@ public struct GraphEdge: Encodable, Equatable, Sendable {
 	struct AliasOf: Encodable, Equatable, Sendable {
 		let label: String
 		let type: String
+		let plainType: String
 	}
 
-	/// A declaration that supplies a received value: a dependency `type` instantiates, forwards or aliases.
-	struct Supplier: Encodable, Comparable, Hashable, Sendable {
-		/// The id of the type that makes the declaration.
-		let type: String
-		/// The declaration's label.
-		let label: String
+	/// A value the trees hand a received dependency: a declaration's, or `nil`.
+	enum Provenance: Encodable, Hashable, Comparable, Sendable {
+		/// The value of a dependency the declaration with id `declaredBy` instantiates, forwards or aliases.
+		case declaration(declaredBy: String, label: String)
+		/// `nil`, which generated code hands a dependency received only if available.
+		case passedNil(NilReason)
 
 		static func < (lhs: Self, rhs: Self) -> Bool {
-			(lhs.type, lhs.label) < (rhs.type, rhs.label)
+			lhs.sortKey < rhs.sortKey
+		}
+
+		/// Declarations by id, then label, before `nil` by reason.
+		private var sortKey: (Int, String, String) {
+			switch self {
+			case let .declaration(declaredBy, label):
+				(0, declaredBy, label)
+			case let .passedNil(reason):
+				(1, reason.kind.rawValue, "")
+			}
+		}
+
+		func encode(to encoder: any Encoder) throws {
+			var container = encoder.container(keyedBy: CodingKeys.self)
+			switch self {
+			case let .declaration(declaredBy, label):
+				try container.encode("declaration", forKey: .source)
+				try container.encode(declaredBy, forKey: .declaredBy)
+				try container.encode(label, forKey: .label)
+			case let .passedNil(reason):
+				try container.encode("nil", forKey: .source)
+				try container.encode(reason, forKey: .reason)
+			}
+		}
+
+		private enum CodingKeys: String, CodingKey {
+			case source
+			case declaredBy
+			case label
+			case reason
+		}
+	}
+
+	/// Why generated code hands a dependency `nil`.
+	struct NilReason: Encodable, Hashable, Sendable {
+		init(_ reason: ReceivedValueSupply.NilReason, receivingTypeName: String, label: String) {
+			switch reason {
+			case .noProvidingDeclaration:
+				kind = .noProvidingDeclaration
+				message = "No declaration in scope where `\(receivingTypeName)` is built provides the `\(label)` it receives."
+			case .providerNotYetBuilt:
+				kind = .providerNotYetBuilt
+				message = "The nearest declaration that provides `\(label)` is built after `\(receivingTypeName)`, or is still being built where `\(receivingTypeName)` is built inside it."
+			}
+		}
+
+		let kind: Kind
+		let message: String
+
+		enum Kind: String, Encodable, Sendable {
+			case noProvidingDeclaration
+			case providerNotYetBuilt
 		}
 	}
 
@@ -424,11 +541,5 @@ public struct GraphEdge: Encodable, Equatable, Sendable {
 	struct Receive: Hashable {
 		let type: TypeDescription
 		let label: String
-	}
-
-	/// What a receive is handed in every place the trees build its type.
-	struct Supplies {
-		var suppliers = Set<Supplier>()
-		var receivesNil = false
 	}
 }

@@ -2149,7 +2149,7 @@ It then reports the same for the type’s mock. [The `query needs` report](Query
 
 > `query graph` is in alpha. Its options and JSON may change in any release; the JSON’s `formatVersion` is `0`.
 
-A tool or a coding agent that needs a question SafeDI has no command for – which types use a service, what a new type would receive, which declarations a feature is built from – can answer it from one JSON document. `SafeDITool query graph` exports every production `@Instantiable` declaration with its module, file and line, each of its dependencies with its kind, the type that fulfills each type, and, for each received dependency, the declarations whose values it is handed. It takes the modules as `query needs` takes them:
+A tool or a coding agent that needs a question SafeDI has no command for – which types use a service, what a new type would receive, which declarations a feature is built from – can answer it from one JSON document. `SafeDITool query graph` exports every production `@Instantiable` declaration with its module, file and line, each of its dependencies with its kind, the declaration that fulfills each type and the declarations that construct each one, and, for each received dependency, the declarations whose values it is handed or why it is handed `nil`. It takes the modules as `query needs` takes them:
 
 ```bash
 .build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool query graph --include Sources/Foundations Sources/Services Sources/HomeFeature --output graph.json

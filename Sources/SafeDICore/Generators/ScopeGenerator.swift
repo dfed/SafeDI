@@ -3642,16 +3642,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// tree builds its type, as generated code resolves its label: the nearest declaration of the label where the receive's
 	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
 	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
-	/// value is the one each call of the function passes (see `OmissionFindings`).
-	func receivedValueSupplies(ofTreeRootedAt instantiable: Instantiable) async -> [ReceivedValueSupply] {
-		await receivedValueSupplies(
+	/// value is the one each call of the function passes (see `OmissionFindings`). Also returns the concrete type of each
+	/// scope the tree constructs, in the order the walk meets them.
+	func receivedValueSupplies(ofTreeRootedAt instantiable: Instantiable) async -> (supplies: [ReceivedValueSupply], constructedTypes: [TypeDescription]) {
+		let findings = await receivedValueSupplies(
 			of: instantiable,
 			unavailableProperties: [],
 			propertiesGeneratedLater: [],
 			declarationsByLabel: [:],
 			enclosingCycleFunctions: [:],
 			visitNumber: 0,
-		).judged()
+		)
+		return (findings.judged(), findings.constructedTypes)
 	}
 
 	/// - Parameters:
@@ -3669,21 +3671,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		visitNumber: Int,
 	) async -> ReceivedValueSupplyFindings {
 		let declaringType = instantiable.concreteInstantiable
-		var findings = ReceivedValueSupplyFindings(nextVisitNumber: visitNumber + 1)
-		/// Records what the receive of `receivedProperty` under `label` reads among `declarationsByLabel`, or `nil` when
-		/// generation passes it `nil`.
+		var findings = ReceivedValueSupplyFindings(nextVisitNumber: visitNumber + 1, constructedType: declaringType)
+		/// Records what the receive of `receivedProperty` under `label` reads among `declarationsByLabel`, or `nil`, with
+		/// its reason, when generation passes it `nil`.
 		func recordSupply(of receivedProperty: Property, label: String, among declarationsByLabel: [String: [VisibleDeclaration]], isPassedNil: Bool) {
 			let unwrappedProperty = receivedProperty.asUnwrappedProperty
-			let passedNil = ReceivedValueSupply(receivingType: declaringType, label: label, supplier: nil)
-			guard !isPassedNil, let provider = declarationsByLabel[receivedProperty.label]?.first(where: { $0.provides(unwrappedProperty) }) else {
-				findings.append(passedNil)
+			let passedNil = ReceivedValueSupply(receivingType: declaringType, label: label, value: .passedNil(.noProvidingDeclaration))
+			let provider = declarationsByLabel[receivedProperty.label]?.first(where: { $0.provides(unwrappedProperty) })
+			guard !isPassedNil, let provider else {
+				// Generation also finds a receive unavailable whose nearest declaration provides no form it reads.
+				findings.append(provider == nil ? passedNil : passedNil.passingNil(because: .providerNotYetBuilt))
 				return
 			}
 			findings.append(reading: unwrappedProperty, from: provider, passedNothing: passedNil) { provider in
+				// Every provider a supply is judged at is a declaration of a type of the tree: a parameter of a builder
+				// function a lazy cycle closes on, whose declaring type is `nil`, is judged at the calls of the function.
 				ReceivedValueSupply(
 					receivingType: declaringType,
 					label: label,
-					supplier: provider.declaringType.map { ReceivedValueSupply.Supplier(declaringType: $0, label: provider.property.label) },
+					value: provider.declaringType.map { .declaration(ReceivedValueSupply.Supplier(declaringType: $0, label: provider.property.label)) } ?? .passedNil(.noProvidingDeclaration),
 				)
 			}
 		}
@@ -4213,6 +4219,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let function: Int
 			let label: String
 			let declarations: [VisibleDeclaration]
+			/// Whether the call passes `nil` whatever `declarations` provide: generation finds the parameter unavailable
+			/// where it is called.
+			let passesNil: Bool
 		}
 
 		/// The number the walk gives the next scope it visits, which tells apart the builder functions the walk enters.
@@ -4220,10 +4229,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var omissions = [Omission]()
 		private(set) var parameterReads = [ParameterRead]()
 		private(set) var calls = [Call]()
+		/// The concrete type of each scope the walk constructs, in the order it meets them.
+		private(set) var constructedTypes: [TypeDescription]
 
-		/// The findings of a visit, whose first visit beneath it is numbered `nextVisitNumber`.
-		init(nextVisitNumber: Int) {
+		/// The findings of a visit of a scope that constructs `constructedType`, whose first visit beneath it is numbered
+		/// `nextVisitNumber`.
+		init(nextVisitNumber: Int, constructedType: TypeDescription) {
 			self.nextVisitNumber = nextVisitNumber
+			constructedTypes = [constructedType]
 		}
 
 		/// Records the omission of a value of `unwrappedProperty` that `provider`, the declaration the omitting call's leaf
@@ -4259,8 +4272,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for parameter in child.generator.cycleParameters {
 				let unwrappedProperty = parameter.property.asUnwrappedProperty
 				let isPassedLoopMember = loopMembers.contains(unwrappedProperty) || loopMembers.contains(unwrappedProperty.asOptionalProperty)
-				let declarations = !isPassedLoopMember && child.unavailableProperties.contains(parameter.property) ? [] : declarationsByLabel[parameter.property.label, default: []]
-				calls.append(Call(function: function, label: parameter.property.label, declarations: declarations))
+				calls.append(Call(
+					function: function,
+					label: parameter.property.label,
+					declarations: declarationsByLabel[parameter.property.label, default: []],
+					passesNil: !isPassedLoopMember && child.unavailableProperties.contains(parameter.property),
+				))
 			}
 		}
 
@@ -4271,6 +4288,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			omissions.append(contentsOf: findings.omissions)
 			parameterReads.append(contentsOf: findings.parameterReads)
 			calls.append(contentsOf: findings.calls)
+			constructedTypes.append(contentsOf: findings.constructedTypes)
 		}
 
 		/// The omissions, with each parameter read judged at every call of its function: an omission at each declaration a
@@ -4288,9 +4306,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				var functionsToJudge = [read.function]
 				while let function = functionsToJudge.popLast() {
 					for call in callsByFunction[function, default: []] where call.label == read.label {
-						guard let provider = call.declarations.first(where: { $0.provides(read.unwrappedProperty) }) else {
+						let provider = call.declarations.first(where: { $0.provides(read.unwrappedProperty) })
+						guard !call.passesNil, let provider else {
+							// A call passes `nil` where no declaration provides the value, or where one does that is not built yet.
 							if let passedNothing = read.passedNothing {
-								omissions.append(passedNothing)
+								omissions.append(provider == nil ? passedNothing : passedNothing.passingNil(because: .providerNotYetBuilt))
 							}
 							continue
 						}
