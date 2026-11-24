@@ -206,6 +206,25 @@ extension DependencyTreeGenerator {
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 
 		let foreignPublicMocks = seams.foreignPublicMocks
+		// In `.v3Unstable`, a type with a public mock of its own is configured by that mock's `SafeDIOverrides`, and every
+		// type a public mock configures has one configuration in the module, its public one.
+		var v3PublicNameByType = [TypeDescription: String]()
+		let publicMockContext = publicMockContext.map { context in
+			var context = context
+			switch apiVersion {
+			case .v2:
+				break
+			case .v3Unstable:
+				context.v3PublicMockTypes = Set(mockRoots.lazy.filter { $0.instantiable.generateMock == .public }.map(\.instantiable.concreteInstantiable))
+				for type in Self.typesBuiltInPublicMockTrees(of: mockRoots) {
+					v3PublicNameByType[type] = context.configurationTypeSpelling(of: type)
+				}
+				for type in context.v3PublicMockTypes {
+					v3PublicNameByType[type] = context.configurationTypeSpelling(of: type)
+				}
+			}
+			return context
+		}
 		var configuredMockContext = ScopeGenerator.MockContext(
 			mockConditionalCompilation: mockConditionalCompilation,
 			flatParameterMockDefaults: flatParameterMockDefaults,
@@ -227,6 +246,7 @@ extension DependencyTreeGenerator {
 					return instantiable.concreteInstantiable
 				},
 				moduleName: moduleName,
+				publicNameByType: v3PublicNameByType,
 			)
 		}
 		let mockContext = configuredMockContext
@@ -347,6 +367,21 @@ extension DependencyTreeGenerator {
 	/// the comment the `public` declarations this module generates carry, naming the types they name that it reads no
 	/// declaration of, or `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Made once by each
 	/// call that needs it.
+	/// The concrete types built in the trees of `mockRoots`' public mocks, other than through a call of another module's
+	/// public mock. Walked with a stack, since a tree can be as deep as the module has types.
+	static func typesBuiltInPublicMockTrees(of mockRoots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]) -> Set<TypeDescription> {
+		var types = Set<TypeDescription>()
+		var generatorsToVisit = mockRoots.filter { $0.instantiable.generateMock == .public }.flatMap(\.scopeGenerator.orderedChildGenerators)
+		while let generator = generatorsToVisit.popLast() {
+			guard generator.publicMockCall == nil else { continue }
+			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
+				types.insert(instantiable.concreteInstantiable)
+			}
+			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
+		}
+		return types
+	}
+
 	func makePublicMockContext(proof: TypeAccessProof) -> PublicMockContext {
 		var moduleNameByType = [TypeDescription: String]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {

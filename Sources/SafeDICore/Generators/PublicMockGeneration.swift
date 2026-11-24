@@ -42,6 +42,15 @@ struct PublicMockContext: Sendable {
 	/// The form of the mock API the module generates, which the whole app shares, so a calling module computes another
 	/// module's public mock in the form that module generated.
 	var apiVersion = SafeDIAPIVersion.v2
+	/// In `.v3Unstable`, the types whose public mock the module generates, each configured everywhere in the module by the
+	/// `SafeDIOverrides` its public mock declares (`configurationTypeSpelling(of:)`).
+	var v3PublicMockTypes = Set<TypeDescription>()
+
+	/// The name the module's public configuration of `type` is spelled by: in `.v3Unstable`, a type with a public mock of its
+	/// own is configured by that mock's `SafeDIOverrides`; any other type by its module-level configuration.
+	func configurationTypeSpelling(of type: TypeDescription) -> String? {
+		v3PublicMockTypes.contains(type) ? "\(type.asSource).\(ReservedName.mockOverridesTypeName)" : configurationTypeNameByType[type]
+	}
 
 	/// The access with which a declaration can name every type in `types`: the narrowest proof among them, a type with
 	/// no entry resolved to its plain declaration in the module the mocks are generated in and otherwise read from

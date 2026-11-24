@@ -140,7 +140,7 @@ extension MockLowering.Walk {
 	) -> [(label: String, value: String)] {
 		let construction = mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer)
 		guard Self.readsConfiguration(construction, given: instantiable) else { return dependencyArguments }
-		guard !buildsPublicMock else {
+		guard !buildsPublicly(instantiable.concreteInstantiable) else {
 			return publicConstructionArguments(of: construction, given: instantiable, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
 		}
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
