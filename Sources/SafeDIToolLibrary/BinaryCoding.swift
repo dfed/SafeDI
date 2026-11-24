@@ -356,25 +356,25 @@ struct BinaryWriter {
 	/// compare: a signature names a few thousand distinct types more than a million times.
 	mutating func writeSharedByBytes(_ value: some Any, _ write: (inout BinaryWriter) -> Void) {
 		guard let representation = ValueRepresentation(value) else {
-			return writeSharedByBytes(write)
+			writeSharedByBytes(write)
+			return
 		}
 		if let index = sharedValueIndicesByRepresentation.value(for: representation) {
 			writeUnsigned(index + 1)
 		} else {
-			let referenceStart = bytes.count
-			writeSharedByBytes(write)
-			// What was written is a reference unless the value was new, whose index is the last one given.
-			let index = bytes.withUnsafeBytes { bytes in
-				var reader = UnsignedReader(bytes: UnsafeRawBufferPointer(rebasing: bytes[referenceStart...]))
-				return reader.readUnsigned()
-			}
+			sharedValueIndicesByRepresentation.insert(writeSharedByBytes(write), for: representation)
 			// The value is kept so that its storage, and so the address it is found by, is not freed and reused.
-			sharedValueIndicesByRepresentation.insert(index == 0 ? sharedValueCount - 1 : index - 1, for: representation)
 			valuesHeldForTheirStorage.append(value)
 		}
 	}
 
-	mutating func writeSharedByBytes(_ write: (inout BinaryWriter) -> Void) {
+	/// Writes the value `write` writes as ``writeShared(_:)`` does, but keyed by the bytes it writes, which are equal
+	/// exactly when two values read back equal in every respect, even where their type's `==` ignores a difference, as
+	/// a type description's does for `any`. A value written again wrote no string the table lacked, since every string it
+	/// names was written with the value it repeats, so removing its bytes leaves the table as it was.
+	/// - Returns: The value's index among shared values.
+	@discardableResult
+	mutating func writeSharedByBytes(_ write: (inout BinaryWriter) -> Void) -> UInt64 {
 		let referenceStart = bytes.count
 		writeUnsigned(0)
 		let valueStart = bytes.count
@@ -390,11 +390,14 @@ struct BinaryWriter {
 		if let writtenIndex {
 			bytes.removeSubrange(referenceStart...)
 			writeUnsigned(writtenIndex + 1)
+			return writtenIndex
 		} else {
+			let index = sharedValueCount
 			bytes.withUnsafeBytes { bytes in
-				sharedValueIndicesByBytes.insert(sharedValueCount, for: UnsafeRawBufferPointer(rebasing: bytes[valueStart...]))
+				sharedValueIndicesByBytes.insert(index, for: UnsafeRawBufferPointer(rebasing: bytes[valueStart...]))
 			}
 			sharedValueCount += 1
+			return index
 		}
 	}
 
@@ -539,22 +542,6 @@ private struct StringRepresentation: WordsKey {
 
 	var hash: UInt64 {
 		((low ^ (high >> 32)) &* 0x9E3779B185EBCA87) ^ (high &* 0xC2B2AE3D27D4EB4F)
-	}
-}
-
-/// An unsigned integer at the start of bytes a writer wrote.
-private struct UnsignedReader {
-	let bytes: UnsafeRawBufferPointer
-
-	mutating func readUnsigned() -> UInt64 {
-		var value: UInt64 = 0
-		var shift: UInt64 = 0
-		for byte in bytes {
-			value |= UInt64(byte & 0x7F) << shift
-			guard byte >= 0x80, shift < 57 else { break }
-			shift += 7
-		}
-		return value
 	}
 }
 
@@ -823,7 +810,6 @@ struct BinaryReader {
 		let start = offset
 		let stringIndex = try readUnsigned()
 		let reference = try readUnsigned()
-		let end = offset
 		// A reference of 0 is followed by the value itself, written there for the first time.
 		guard sharesSignatureValues, reference != 0 else {
 			offset = start
@@ -835,9 +821,7 @@ struct BinaryReader {
 		} else {
 			offset = start
 			let value = try read(&self)
-			if offset == end {
-				valuesByStringAndSharedValue.insert(SharedValueBox(value), for: key)
-			}
+			valuesByStringAndSharedValue.insert(SharedValueBox(value), for: key)
 			return value
 		}
 	}
