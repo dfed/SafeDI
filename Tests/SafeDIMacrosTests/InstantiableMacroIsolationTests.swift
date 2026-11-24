@@ -27,6 +27,10 @@ import Testing
 
 	/// A declaration SafeDI generates – a root’s `init()`, a seam’s initializers, a `mock()` – has the type’s isolation or
 	/// the one its attributes spell, so one that calls a declaration bound to another global actor needs the attribute.
+	/// The error must never fire on code that compiles: compiled with and without `-default-isolation MainActor`, in
+	/// Swift 5 and 6, the generated code of each shape these tests report fails, while a type that conforms to another
+	/// protocol or subclasses another class can take a global actor from it (in a module whose declarations default to
+	/// the main actor, a protocol or class of its own does), so the macro stays quiet on it.
 	struct InstantiableMacroIsolationTests {
 		// MARK: Roots
 
@@ -281,6 +285,28 @@ import Testing
 			)
 		}
 
+		@Test
+		func declaration_expandsWithoutIssue_whenMockedTypeSubclassesAnotherClass() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true)
+				public final class Presenter: Base, Instantiable {
+				    @MainActor public init() {
+				        super.init(name: "")
+				    }
+				}
+				""",
+				expandedSource: """
+				public final class Presenter: Base, Instantiable {
+				    @MainActor public init() {
+				        super.init(name: "")
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: Seams
 
 		@Test
@@ -359,6 +385,32 @@ import Testing
 				    }
 
 				    private let name: String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenSeamConformsToAProtocolThatCanBindTheGlobalActor() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public final class Feature: FeatureProtocol, Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				public final class Feature: FeatureProtocol, Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
 				}
 				""",
 				macros: instantiableTestMacros,
