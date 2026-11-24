@@ -32,9 +32,14 @@ public enum HeldCodeTasks {
 /// way a tree is planned in parallel. Each body's count is handed to `observer`, which the tests set, never the tool.
 public enum ConcurrentChildCode {
 	/// Whether the body being planned plans its children at once: set while a root of the dependency tree, or a seam's
-	/// root in its own module, plans its children, and cleared for each of those children, whose bodies plan one child
-	/// after another. A mock's tree plans one child after another throughout.
+	/// root in its own module where `seamRootsPlanChildrenAtOnce` holds, plans its children, and cleared for each of those
+	/// children, whose bodies plan one child after another. A mock's tree plans one child after another throughout.
 	@TaskLocal static var plansChildrenAtOnce = false
+
+	/// Whether a seam's root, planned in its own module, plans its children at once: set where the module plans no more
+	/// trees than `maximumChildrenAtOnce`, since each tree is planned on a task of its own and many trees already keep
+	/// every processor busy.
+	@TaskLocal static var seamRootsPlanChildrenAtOnce = false
 
 	/// The most children a body plans at once. Every plan in flight holds its own frames, so a bound per processor would
 	/// grow memory with the machine. Measured on E6d-600, E6d-600-inline and issue646-16, four in flight hold main's peak
