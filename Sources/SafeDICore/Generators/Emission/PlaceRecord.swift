@@ -114,13 +114,23 @@ struct ClosingPlaceRecord: Sendable {
 	var passedArguments = [PassedArgument]()
 }
 
-/// A rename of a value, written as the path key writes it.
+/// A place written as text, as the path key writes it: a rename of a value, or another place whose code the engine copies
+/// as written. Two such places are alike when their text, their property and their reads' labels are, and each read
+/// resolves to an equal declaration.
 struct AliasPlaceRecord: Sendable {
 	let property: Property
 	/// The property the rename reads, or `nil` where it is bound to `nil`.
 	let fulfillingProperty: Property?
-	/// The rename's code, its lines unindented.
+	/// The place's code, its lines unindented.
 	let text: String
+	/// Every read the text makes, as the path key resolves it; `nil` where the emitter cannot list them, which keeps the
+	/// place and the bodies enclosing it one per path, unless the place is a rename, whose one read is `fulfillingProperty`.
+	var reads: [PlaceRead]?
+	/// The labels the text binds besides `property`, which code after it may read.
+	var otherBindings = [Property]()
+	/// The names of the functions the text calls, compared as text: where sharing would name a callee apart, the engine
+	/// rewrites the name in the text or keeps the place one per path, never assuming the name stays.
+	var calledFunctionNames = [String]()
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction
