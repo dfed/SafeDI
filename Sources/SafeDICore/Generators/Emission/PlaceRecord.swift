@@ -85,19 +85,27 @@ struct BuiltPlaceRecord: Sendable {
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
 		get { sharingFields?.passedArguments ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives) }
+		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues) }
 	}
 
 	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
 	var constructionValue: ConstructionValue? {
 		get { sharingFields?.constructionValue }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues) }
 	}
 
 	/// The optional closures the construction tries first, in order, before calling `target` or its construction value.
 	var alternatives: [ConstructionAlternative] {
 		get { sharingFields?.alternatives ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues) }
+	}
+
+	/// The values of the construction's arguments that are no read, by the argument's position in `arguments`, whose read
+	/// still names the parameter and its type: a member of a value, or a call of one, which the construction evaluates
+	/// once, where the argument is passed.
+	var argumentValues: [Int: ValuePath] {
+		get { sharingFields?.argumentValues ?? [:] }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue) }
 	}
 }
 
@@ -106,11 +114,13 @@ final class PlaceSharingFields: Sendable {
 	let passedArguments: [PassedArgument]
 	let constructionValue: ConstructionValue?
 	let alternatives: [ConstructionAlternative]
+	let argumentValues: [Int: ValuePath]
 
-	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative]) {
+	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath]) {
 		self.passedArguments = passedArguments
 		self.constructionValue = constructionValue
 		self.alternatives = alternatives
+		self.argumentValues = argumentValues
 	}
 }
 

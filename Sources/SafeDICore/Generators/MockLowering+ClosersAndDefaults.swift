@@ -64,3 +64,61 @@ extension MockLowering.Walk {
 		return readNames
 	}
 }
+
+extension MockLowering {
+	/// Whether a node the mock builds writes a builder function: where it builds children or a wrapper, as production's
+	/// place does, and also where its function binds a receive named apart again (`receiverBindings`), reads a default from
+	/// its configuration (`readsDefaults`), or binds the value of a `@Sendable` autoclosure parameter of `mock()`
+	/// (`hasSendableAutoclosureBindings`), which production's place never does: the input the mock walk hands production's
+	/// built record function for whether the place has a function.
+	static func writesBuilderFunction(hasChildren: Bool, isWrapped: Bool, hasReceiverBindings: Bool, readsDefaults: Bool, hasSendableAutoclosureBindings: Bool) -> Bool {
+		hasChildren || isWrapped || hasReceiverBindings || readsDefaults || hasSendableAutoclosureBindings
+	}
+
+	/// The statements that begin a node's builder function, before its children's, as places the type key reads: each
+	/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the node
+	/// instantiates, as `ConstantNode.receiverBindingLines(indent:)` writes them, unindented. Each is a place written as
+	/// text whose one read is the name it binds from: the name the receive is bound apart under, or the local `mock()`
+	/// reads the autoclosure into (`RootDeclarationRecord`).
+	static func receiverBindingPlaces(
+		receiverBindings: [(property: Property, name: String)],
+		sendableAutoclosureBindings: [(property: Property, parameter: ScopeGenerator.SendableAutoclosureParameter)],
+	) -> [GeneratedCode] {
+		var places = [GeneratedCode]()
+		for binding in receiverBindings {
+			let read = Property(label: binding.name, typeDescription: binding.property.typeDescription)
+			places.append(.place(PlacePlan(
+				code: .text("let \(binding.property.label): \(binding.property.typeDescription.asSource) = \(binding.name)"),
+				record: .alias(AliasPlaceRecord(
+					property: binding.property,
+					fulfillingProperty: read,
+					text: "let \(binding.property.label): \(binding.property.typeDescription.asSource) = \(binding.name)",
+					reads: [PlaceRead(argumentLabel: binding.property.label, label: binding.name, property: read, source: .binding(label: binding.name))],
+				)),
+			)))
+		}
+		for (property, parameter) in sendableAutoclosureBindings {
+			let read = sendableAutoclosureLocalProperty(of: parameter, builds: property)
+			places.append(.place(PlacePlan(
+				code: .text(parameter.binding),
+				record: .alias(AliasPlaceRecord(
+					property: Property(label: parameter.name, typeDescription: property.typeDescription),
+					fulfillingProperty: nil,
+					text: parameter.binding,
+					reads: [PlaceRead(argumentLabel: parameter.name, label: parameter.localName, property: read, source: .binding(label: parameter.localName))],
+				)),
+			)))
+		}
+		return places
+	}
+
+	/// The declaration `mock()` binds a `@Sendable` autoclosure parameter's closure under at the root's top, which builds
+	/// `property`: what a binding of its value reads, and what the root records it as (`RootDeclarationRecord`).
+	static func sendableAutoclosureLocalProperty(of parameter: ScopeGenerator.SendableAutoclosureParameter, builds property: Property) -> Property {
+		let valueType = parameter.valueType ?? property.typeDescription
+		return Property(
+			label: parameter.localName,
+			typeDescription: .attributed(.closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType), specifiers: [], attributes: ["Sendable"]),
+		)
+	}
+}
