@@ -8065,11 +8065,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			unavailableProperties: unavailableProperties,
 		)
 		let record: PlaceRecord? = if fulfillingExpression == nil {
-			.alias(AliasPlaceRecord(
-				property: property,
-				fulfillingProperty: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) ? nil : fulfillingProperty,
-				text: aliasCode,
-			))
+			// An alias bound to `nil` reads nothing, which its record lists, so the type key lays it out as written.
+			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
+				.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
+			} else {
+				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode))
+			}
 		} else {
 			nil
 		}

@@ -55,7 +55,7 @@ struct TypeKeyBodyValuePathTests {
 
 	/// `let id = 1`, then a place that builds `b: B` in a function of its own, whose construction is `value`.
 	private static func rootBody(constructionValue value: ValuePath) -> [GeneratedCode] {
-		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
+		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1", reads: [])
 		var built = BuiltPlaceRecord(
 			property: Property(label: "b", typeDescription: .simple(name: "B")),
 			isErased: false,
