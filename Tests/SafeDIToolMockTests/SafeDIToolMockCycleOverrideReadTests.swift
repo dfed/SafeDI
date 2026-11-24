@@ -531,6 +531,128 @@ struct SafeDIToolMockCycleOverrideReadTests: ~Copyable {
 		""")
 	}
 
+	/// A `Ping` that `otherPingBuilder` builds and its `Pong` builds again reads the overrides of the `Ping` above it,
+	/// through the locals read before the outermost `@Sendable` function: each override is read into one local, however
+	/// many places read it.
+	@Test
+	mutating func mock_readsEachOverrideIntoOneLocal_whenSendableCycleBuildsTypeAgainBeneathSecondEntry() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Ping: Instantiable, Sendable {
+				    public nonisolated init(label: String = "ping", pongBuilder: SendableInstantiator<Pong>) {
+				        self.label = label
+				        self.pongBuilder = pongBuilder
+				    }
+
+				    public let label: String
+				    @Instantiated public let pongBuilder: SendableInstantiator<Pong>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Pong: Instantiable, Sendable {
+				    public nonisolated init(label: String = "pong", pingBuilder: SendableInstantiator<Ping>) {
+				        self.label = label
+				        self.pingBuilder = pingBuilder
+				    }
+
+				    public let label: String
+				    @Instantiated public let pingBuilder: SendableInstantiator<Ping>
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Game: Instantiable {
+				    public init(pingBuilder: SendableInstantiator<Ping>, otherPingBuilder: SendableInstantiator<Ping>) {
+				        self.pingBuilder = pingBuilder
+				        self.otherPingBuilder = otherPingBuilder
+				    }
+
+				    @Instantiated let pingBuilder: SendableInstantiator<Ping>
+				    @Instantiated let otherPingBuilder: SendableInstantiator<Ping>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Game+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Game {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            pingBuilder: Ping.SafeDIMockConfiguration = .init(),
+		            otherPingBuilder: Ping.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                pingBuilder: pingBuilder,
+		                otherPingBuilder: otherPingBuilder
+		            )
+		        }
+
+		        var pingBuilder: Ping.SafeDIMockConfiguration { __safeDI_storage.pingBuilder }
+		        var otherPingBuilder: Ping.SafeDIMockConfiguration { __safeDI_storage.otherPingBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                pingBuilder: Ping.SafeDIMockConfiguration,
+		                otherPingBuilder: Ping.SafeDIMockConfiguration
+		            ) {
+		                self.pingBuilder = pingBuilder
+		                self.otherPingBuilder = otherPingBuilder
+		            }
+
+		            let pingBuilder: Ping.SafeDIMockConfiguration
+		            let otherPingBuilder: Ping.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Game {
+		        let __safeDI_pingBuilder__pingBuilder_pongBuilder_safeDIBuilder = safeDIOverrides.pingBuilder.pongBuilder.safeDIBuilder
+		        let __safeDI_pingBuilder__pingBuilder_pongBuilder_label = safeDIOverrides.pingBuilder.pongBuilder.label
+		        let __safeDI_pingBuilder__pingBuilder_label = safeDIOverrides.pingBuilder.label
+		        let __safeDI_pingBuilder__safeDIBuilder = safeDIOverrides.pingBuilder.safeDIBuilder
+		        @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
+		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
+		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+		                return if let safeDIBuilder = __safeDI_pingBuilder__pingBuilder_pongBuilder_safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__pingBuilder_pongBuilder_label(), pingBuilder) } else { Pong(label: __safeDI_pingBuilder__pingBuilder_pongBuilder_label(), pingBuilder: pingBuilder) }
+		            }
+		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+		            return if let safeDIBuilder = __safeDI_pingBuilder__safeDIBuilder { safeDIBuilder(__safeDI_pingBuilder__pingBuilder_label(), pongBuilder) } else { Ping(label: __safeDI_pingBuilder__pingBuilder_label(), pongBuilder: pongBuilder) }
+		        }
+		        let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+		        let __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_safeDIBuilder = safeDIOverrides.otherPingBuilder.pongBuilder.safeDIBuilder
+		        let __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_label = safeDIOverrides.otherPingBuilder.pongBuilder.label
+		        let __safeDI_otherPingBuilder__otherPingBuilder_safeDIBuilder = safeDIOverrides.otherPingBuilder.safeDIBuilder
+		        let __safeDI_otherPingBuilder__otherPingBuilder_label = safeDIOverrides.otherPingBuilder.label
+		        @Sendable nonisolated func __safeDI_otherPingBuilder() -> Ping {
+		            @Sendable nonisolated func __safeDI_pongBuilder() -> Pong {
+		                @Sendable nonisolated func __safeDI_pingBuilder() -> Ping {
+		                    let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+		                    return if let safeDIBuilder = __safeDI_otherPingBuilder__otherPingBuilder_safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder: pongBuilder) }
+		                }
+		                let pingBuilder = SendableInstantiator<Ping>(__safeDI_pingBuilder)
+		                return if let safeDIBuilder = __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_label(), pingBuilder) } else { Pong(label: __safeDI_otherPingBuilder__otherPingBuilder_pongBuilder_label(), pingBuilder: pingBuilder) }
+		            }
+		            let pongBuilder = SendableInstantiator<Pong>(__safeDI_pongBuilder)
+		            return if let safeDIBuilder = __safeDI_otherPingBuilder__otherPingBuilder_safeDIBuilder { safeDIBuilder(__safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder) } else { Ping(label: __safeDI_otherPingBuilder__otherPingBuilder_label(), pongBuilder: pongBuilder) }
+		        }
+		        let otherPingBuilder = SendableInstantiator<Ping>(__safeDI_otherPingBuilder)
+		        return Game(pingBuilder: pingBuilder, otherPingBuilder: otherPingBuilder)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

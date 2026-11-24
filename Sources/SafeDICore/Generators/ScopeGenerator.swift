@@ -12006,12 +12006,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		/// Records that `expression` is read into a local named after the
-		/// outermost `@Sendable` function, and returns that local's name.
+		/// outermost `@Sendable` function, and returns that local's name. An
+		/// expression read before, as the override path of a type a cycle builds
+		/// again is the path of the nearest same-type place above it, returns the
+		/// local that read it, so one override is read into one local.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
+			if let localName = localNameByExpression[expression] {
+				return localName
+			}
 			let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
 			extractions.append((localName: localName, expression: expression))
+			localNameByExpression[expression] = localName
 			return localName
 		}
+
+		/// The local each expression extracted so far was read into.
+		private var localNameByExpression = [String: String]()
 
 		/// Keeps every later local apart from `names`, which a scope inside the function declares: a local named as one
 		/// would be hidden by it where it is read.
