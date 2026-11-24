@@ -88,6 +88,8 @@ public enum MockLowering {
 			/// `requiresSendable`.
 			case built(bindingName: String, hasConfiguration: Bool, requiresSendable: Bool, concreteType: TypeDescription, builderParameters: MockLowering.BuilderParameters, propertyType: TypeDescription)
 			case spelled(ChildField)
+			/// A node that closes a cycle, spelled as the node of `concreteType` it repeats is.
+			case closingCycle(ChildField, concreteType: TypeDescription)
 
 			var childField: ChildField {
 				switch self {
@@ -100,7 +102,7 @@ public enum MockLowering {
 						let builderClosureType = "(\(builderParameters.spelled)) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
 						return ChildField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendableForm: .init(typeSource: "(@Sendable \(builderClosureType))?", defaultValue: "nil", configuredTypeName: nil))
 					}
-				case let .spelled(childField):
+				case let .spelled(childField), let .closingCycle(childField, _):
 					return childField
 				}
 			}
@@ -112,11 +114,11 @@ public enum MockLowering {
 				case let .built(bindingName, hasConfiguration, _, concreteType, _, _) where hasConfiguration:
 					let typeSource = "\(names.typeName(of: concreteType))?"
 					return ChildField(name: bindingName, typeSource: typeSource, defaultValue: "nil", sendableForm: .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: concreteType.asSource))
-				case let .spelled(field) where field.defaultValue == ".init()" && field.typeSource.hasSuffix(".\(ScopeGenerator.MockParameterNode.configurationStructName)"):
+				case let .closingCycle(field, concreteType) where field.defaultValue == ".init()":
 					// A node that closes a cycle is configured like the node it repeats.
-					let typeSource = "\(field.typeSource.dropLast(ScopeGenerator.MockParameterNode.configurationStructName.count))\(ReservedName.mockOverridesTypeName)?"
+					let typeSource = "\(names.typeName(of: concreteType))?"
 					return ChildField(name: field.name, typeSource: typeSource, defaultValue: "nil", sendableForm: field.sendableForm.map { .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: $0.configuredTypeName) })
-				case .built, .spelled:
+				case .built, .spelled, .closingCycle:
 					return childField
 				}
 			}

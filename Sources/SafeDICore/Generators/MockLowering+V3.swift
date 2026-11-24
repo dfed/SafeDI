@@ -62,13 +62,23 @@ extension ScopeGenerator {
 			"\(bodyIndent)\(override.name): \(override.typeDescription.asSource) = nil"
 		}
 		var afterUncovered = [String]()
-		for case let .built(node) in nodes {
-			guard let parameterName = node.promotedParameterName else { continue }
-			let valueType = MockLowering.v3ReceivedValueType(of: node.property)
-			if node.hasConfiguration {
-				afterUncovered.append("\(bodyIndent)\(parameterName): SafeDIReceived<\(valueType.asSource), \(context.v3ConfigurationNames.typeName(of: node.instantiable.concreteInstantiable))> = .built(.init())")
-			} else {
-				afterUncovered.append("\(bodyIndent)\(parameterName): \(TypeDescription.optional(valueType).asSource) = nil")
+		for node in nodes {
+			switch node {
+			case let .built(node):
+				guard let parameterName = node.promotedParameterName else { continue }
+				let valueType = MockLowering.v3ReceivedValueType(of: node.property)
+				if node.hasConfiguration {
+					afterUncovered.append("\(bodyIndent)\(parameterName): SafeDIReceived<\(valueType.asSource), \(context.v3ConfigurationNames.typeName(of: node.instantiable.concreteInstantiable))> = .built(.init())")
+				} else {
+					afterUncovered.append("\(bodyIndent)\(parameterName): \(TypeDescription.optional(valueType).asSource) = nil")
+				}
+			case let .publicMockCall(node):
+				// A received value another module's public mock builds is passed as an optional instance; the call is configured
+				// by the root's field for it.
+				guard let parameterName = node.v3PromotedParameterName else { continue }
+				afterUncovered.append("\(bodyIndent)\(parameterName): \(TypeDescription.optional(node.property.typeDescription).asSource) = nil")
+			case .alias, .cycleClosing:
+				continue
 			}
 		}
 		var parameterLines = signature.parameterLines(indent: bodyIndent, builders: builders, includingRootDefaults: false, beforeUncovered: beforeUncovered)
@@ -108,7 +118,12 @@ extension MockLowering.ConfigurationRecord {
 				return .built(bindingName: childNode.bindingName, hasConfiguration: childNode.hasConfiguration, requiresSendable: childNode.requiresSendable, concreteType: childNode.instantiable.concreteInstantiable, builderParameters: MockLowering.BuilderParameters(of: childNode.instantiable, usesMockInitializer: childNode.usesMockInitializer), propertyType: childNode.property.typeDescription)
 			}
 			return child.overridesField.map { field in
-				.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm))
+				let childField = ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm)
+				return if case let .cycleClosing(_, _, concreteType) = child {
+					.closingCycle(childField, concreteType: concreteType)
+				} else {
+					.spelled(childField)
+				}
 			}
 		}
 	}
@@ -122,6 +137,9 @@ extension MockLowering {
 	struct V3ConfigurationInScope {
 		let expression: String
 		let isOptional: Bool
+		/// Whether the node the configuration configures is built with its type's hand-written mock, or `nil` for a cycle
+		/// target's nearest configuration, which the target's caller hands it.
+		let usesMockInitializer: Bool?
 	}
 
 	/// A builder function a cycle closes on in `.v3Unstable`: each call hands it the configuration it builds from, and the

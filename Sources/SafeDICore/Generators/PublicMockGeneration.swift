@@ -131,6 +131,15 @@ struct PublicStructMember {
 	var storageParameterTypeSource: String {
 		parameterTypeSource == typeSource ? typeSource : "@escaping \(typeSource)"
 	}
+
+	/// The member in a struct that is `Sendable`: an optional closure, `((…) -> T)?`, made `@Sendable`, and any other
+	/// member as it is.
+	var sendable: PublicStructMember {
+		func sendableSpelling(of typeSource: String) -> String {
+			typeSource.hasPrefix("((") ? "(@Sendable " + typeSource.dropFirst() : typeSource
+		}
+		return PublicStructMember(name: name, typeSource: sendableSpelling(of: typeSource), parameterTypeSource: sendableSpelling(of: parameterTypeSource), access: access, defaultExpression: defaultExpression, omittedValue: omittedValue, isUnlabeled: isUnlabeled, documentation: documentation)
+	}
 }
 
 extension ScopeGenerator {
@@ -143,8 +152,9 @@ extension ScopeGenerator {
 	/// The initializers and members of a public struct, indented by `indent`: one initializer per level of
 	/// `publicInitializerLevels(of:)`, each taking every member at or above its level, in member order, and setting
 	/// each member it omits to its `omittedValue`. The members are in the struct's storage (`ConfigurationStorage`),
-	/// which is not `Sendable`, since a public struct is not `Sendable` unless it declares it, which none of these does.
-	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
+	/// which is `Sendable` only where the struct declares it is (`isSendable`): a public struct is not `Sendable` unless it
+	/// declares it, which only `.v3Unstable`'s module-level configuration of a type built beneath a `Sendable` wrapper does.
+	static func publicStructBody(members: [PublicStructMember], indent: String, isSendable: Bool = false, initializerIsolation: String? = nil) -> [String] {
 		// A mock's `SafeDIOverrides` whose only member was a closure its call cannot be handed keeps its initializer.
 		guard !members.isEmpty else { return ["\(indent)public init() {}"] }
 		let memberIndent = "\(indent)\(standardIndent)"
@@ -155,13 +165,13 @@ extension ScopeGenerator {
 				parameterTypeSource: member.storageParameterTypeSource,
 				accessPrefix: member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) ",
 				documentation: member.documentation,
-				isProvenSendable: false,
+				isProvenSendable: isSendable,
 			)
 		})
 		var lines = [String]()
 		for level in publicInitializerLevels(of: members) {
 			let takenMembers = members.filter { $0.access >= level }
-			let levelPrefix = level == .internal ? "" : "\(level.spelledOnGeneratedDeclaration) "
+			let levelPrefix = (initializerIsolation.map { "\($0) " } ?? "") + (level == .internal ? "" : "\(level.spelledOnGeneratedDeclaration) ")
 			if takenMembers.isEmpty {
 				lines.append("\(indent)\(levelPrefix)init() {")
 			} else {
@@ -740,6 +750,9 @@ struct PublicMockPlan: Sendable {
 	var scopeEnums = [SeamSignature.ScopeEnum]()
 	/// In `.v3Unstable`, the members of the mock's `SafeDIOverrides` that hold the mocked type's own defaults.
 	var v3RootDefaultMembers = [PublicStructMember]()
+	/// In `.v3Unstable`, the isolation of the initializers of the mocked type's `SafeDIOverrides`: `mock()`'s, where a
+	/// member defaults to a provider isolated as `mock()` is, else `nil`.
+	var v3RootInitializerIsolation: String?
 
 	/// The parameters the tier at `tier` takes, under that tier's names.
 	func parameters(ofTier tier: AccessLevel) -> [PublicMockParameter] {
@@ -954,6 +967,7 @@ extension ScopeGenerator {
 		// The members of `SafeDIOverrides` that hold the mocked type's own defaults in `.v3Unstable`, each read into a local
 		// of its label before the tree, as a parameter of `mock()` binds it in `.v2`.
 		var v3RootDefaultMembers = [PublicStructMember]()
+		var v3RootInitializerIsolation: String?
 		for rootDefault in rootDefaultParameters where isV3 {
 			let type = rootDefault.typeDescription
 			let typeAccess = access(of: type, receivedAs: nil)
@@ -972,9 +986,14 @@ extension ScopeGenerator {
 				v3RootDefaultMembers.append(member(typeSource: closureType.asSource, defaultExpression: "nil", documentation: documentation))
 				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read) ?? { \(rootDefault.defaultExpression) }")
 			} else if type.isOptional {
-				// An optional-typed default is held as it is, defaulting to what the declaration's default evaluates to.
+				// An optional-typed default is held as it is, defaulting to what the declaration's default evaluates to, which
+				// a provider isolated as `mock()` is evaluates: the configuration's initializers take that isolation then
+				// (`v3RootInitializerIsolation`).
 				let isNilLiteral = rootDefault.defaultExpression == "nil"
 				let providerCall = isNilLiteral ? "nil" : provider(named: rootDefault.label, type: type, access: typeAccess, expression: rootDefault.defaultExpression)
+				if !isNilLiteral, let mockIsolation {
+					v3RootInitializerIsolation = mockIsolation
+				}
 				v3RootDefaultMembers.append(member(typeSource: type.asSource, defaultExpression: providerCall, documentation: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set."))
 				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read)")
 			} else {
@@ -1120,6 +1139,7 @@ extension ScopeGenerator {
 		plan.holes = holes
 		plan.builders = builders
 		plan.v3RootDefaultMembers = v3RootDefaultMembers
+		plan.v3RootInitializerIsolation = v3RootInitializerIsolation
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
 	}

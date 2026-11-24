@@ -401,7 +401,7 @@ extension MockLowering.ConfigurationRecord {
 				"/// Configures `\(concreteType.asSource.spelledWithoutBackticks)` wherever a mock in this module builds it: inside another mock’s tree, or on a later pass of",
 				"/// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its",
 				"/// path, or that type’s defaults where there is none.",
-				"struct \(fileScopeName) {",
+				"\(requiresSendable ? "nonisolated " : "")struct \(fileScopeName) {",
 			]
 		} else if isV3 {
 			[
@@ -436,7 +436,13 @@ extension MockLowering.ConfigurationRecord {
 				isProvenSendable: isProvenSendable,
 			))
 		}
-		for defaultField in defaultFields {
+		// At file scope, a default the type's declaration spells is read through a provider the type declares, where the
+		// names the declaration's default reads, members of the type among them, are in scope.
+		let providers = fileScopeName == nil ? [] : fileScopeDefaultProviders(requiresSendable: requiresSendable)
+		for var defaultField in defaultFields {
+			if let provider = providers.first(where: { $0.label == defaultField.label }) {
+				defaultField.defaultExpression = "\(concreteType.asSource).\(provider.name)()"
+			}
 			let (parameter, field) = requiresSendable
 				? defaultField.sendableConfigurationParameter(indent: parameterIndent)
 				: defaultField.configurationParameter(indent: parameterIndent)
@@ -464,7 +470,31 @@ extension MockLowering.ConfigurationRecord {
 		lines.append("")
 		lines.append(contentsOf: storage.declarations(indent: innerIndent))
 		lines.append("\(indent)}")
+		if !providers.isEmpty {
+			lines.append("")
+			lines.append("extension \(concreteType.asSource) {")
+			for provider in providers {
+				lines.append("\(ScopeGenerator.standardIndent)fileprivate nonisolated static func \(provider.name)() -> \(provider.typeSource) { \(provider.expression) }")
+			}
+			lines.append("}")
+		}
 		return lines.joined(separator: "\n")
+	}
+
+	/// The providers a file-scope configuration's defaults read (`isFileScopeInV3`): one per default other than a magic
+	/// literal, which is evaluated where the configuration is made, and `nil`, each declared `fileprivate` in an extension
+	/// of the type, and `nonisolated`, as the initializer of a configuration nested in the type is. A closure-typed default
+	/// is returned `@Sendable` where the configuration is `@Sendable`-typed (`requiresSendable`).
+	func fileScopeDefaultProviders(requiresSendable: Bool) -> [(label: String, name: String, typeSource: String, expression: String)] {
+		defaultFields.compactMap { defaultField in
+			guard !defaultField.defaultExpression.hasPrefix("#"), defaultField.defaultExpression != "nil" else { return nil }
+			return (
+				label: defaultField.label,
+				name: "\(ReservedName.builderFunctionNamePrefix)configurationDefault_\(defaultField.label)".spelledAsJoinedIdentifier,
+				typeSource: requiresSendable && defaultField.isClosureType ? "@Sendable \(defaultField.valueTypeSource)" : defaultField.valueTypeSource,
+				expression: defaultField.defaultExpression,
+			)
+		}
 	}
 
 	/// Whether the configuration is `.v3Unstable`'s of a type another module declares, declared at file scope.

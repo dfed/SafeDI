@@ -16040,7 +16040,7 @@ enum GraphFuzzerOracle {
 	/// combined output's header and imports: each type's extensions, `<Type>+SafeDI.swift`; each type's mock, the
 	/// conditional block declaring `mock()`, `<Type>+SafeDIMock.swift`; and the mock configurations, the conditional block
 	/// declaring none, `SafeDIMockConfiguration.swift`, which a public mock's module-level configurations open with their
-	/// documentation. A combined output declares its files' extensions in the files' path order, which a file-name
+	/// documentation, as `.v3Unstable`'s file-scope configurations of another module's types do. A combined output declares its files' extensions in the files' path order, which a file-name
 	/// reversal reverses; one file per type compares, compiles, and is probed as the per-file outputs of a graph in one
 	/// module are.
 	static func decomposingCombinedOutput(_ contents: String) -> [String: String] {
@@ -16051,7 +16051,7 @@ enum GraphFuzzerOracle {
 			lines[index].hasPrefix("extension ")
 				|| beginsPublicConfigurationDeclaration(at: index)
 				|| lines[index].hasPrefix("#if ") && lines[(index + 1)...].first { !$0.isEmpty }.map { firstLine in
-					firstLine.hasPrefix("extension ") || firstLine.hasPrefix("/// Configuration for how ")
+					firstLine.hasPrefix("extension ") || firstLine.hasPrefix("/// Configuration for how ") || firstLine.hasPrefix("/// Configures ")
 				} == true
 		}
 		/// Whether an unconditional public mock's module-level configuration, or a forwarder of a default, begins at `index`.
@@ -16312,6 +16312,10 @@ enum GraphFuzzerOracle {
 				// judges. One the call passes under such a label in another form is a draw this reading does not know. A graph
 				// renamed to change an order renames the type names the mock's labels are spelled from but not the call the
 				// draw wrote, so where the call passes none of the mock's labels, each builder is converted by its form.
+				// A `.v3Unstable` mock takes a builder under the label of its places' property, where the draw wrote its `.v2` name.
+				for (name, label) in GraphFuzzerPublicMockBuilders.v3BuilderLabelsByName(of: callee, in: generatedFiles).sorted(by: { $0.key < $1.key }) where name != label {
+					call = call.replacingOccurrences(of: #"\b\#(name): "#, with: "\(label): ", options: .regularExpression)
+				}
 				let labelsTakingNothing = GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: callee, in: generatedFiles)
 				let passedLabels = labelsTakingNothing.filter { call.range(of: #"\b\#($0): "#, options: .regularExpression) != nil }
 				if passedLabels.isEmpty, !labelsTakingNothing.isEmpty {

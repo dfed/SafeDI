@@ -30,7 +30,9 @@ extension MockLowering {
 		let label: String
 		/// The type of the value the parameter takes.
 		let valueTypeDescription: TypeDescription
-		let defaultExpression: String
+		/// The default, which a configuration at file scope reads through a provider its type declares
+		/// (`ConfigurationRecord.fileScopeDefaultProviders`).
+		var defaultExpression: String
 		let isAutoclosure: Bool
 		let isClosureType: Bool
 		let isDeclaredEscaping: Bool

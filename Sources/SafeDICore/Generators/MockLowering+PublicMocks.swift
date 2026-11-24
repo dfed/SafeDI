@@ -177,13 +177,21 @@ extension ScopeGenerator {
 			// The members are in inline order: the build's order without a child that holds a place starting after its
 			// siblings (`MockParameterNode.inlineOrderPosition`).
 			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
+			// In `.v3Unstable`, a `Sendable` wrapper in the tree that builds the mocked type again captures its configuration,
+			// which is then `Sendable`, as a module-level one is.
+			let isV3RootSendable = isV3 && context.sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 			// In `.v3Unstable`, the mocked type's own defaults and its builder follow its children's members.
 			lines.append(MockLowering.publicOverridesStruct(
 				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
 				mockedTypeModuleName: instantiable.moduleName,
 				context: publicMockContext,
 				indent: indent,
-				v3Root: isV3 ? (mockedType: instantiable.concreteInstantiable, members: plan.v3RootDefaultMembers + [publicMockContext.v3BuilderMember(of: instantiable, constructedWith: rootInitializer)]) : nil,
+				v3Root: isV3 ? (
+					mockedType: instantiable.concreteInstantiable,
+					members: plan.v3RootDefaultMembers.map { isV3RootSendable ? $0.sendable : $0 } + [publicMockContext.v3BuilderMember(of: instantiable, constructedWith: rootInitializer, isSendable: isV3RootSendable)],
+					initializerIsolation: plan.v3RootInitializerIsolation,
+					isSendable: isV3RootSendable,
+				) : nil,
 			))
 			lines.append("")
 		}
@@ -417,10 +425,10 @@ extension MockLowering.Walk {
 extension PublicMockContext {
 	/// The member of a public mock's `SafeDIOverrides` that holds the builder of `instantiable`, the mocked type, in
 	/// `.v3Unstable`: handed each argument its construction `initializer` takes, as visible as those types and the type.
-	func v3BuilderMember(of instantiable: Instantiable, constructedWith initializer: Initializer?) -> PublicStructMember {
+	func v3BuilderMember(of instantiable: Instantiable, constructedWith initializer: Initializer?, isSendable: Bool) -> PublicStructMember {
 		let concreteType = instantiable.concreteInstantiable
 		let builderParameters = MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: instantiable.mockInitializer != nil)
-		let builderType = "((\(builderParameters.spelled)) -> \(concreteType.asSource))?"
+		let builderType = "(\(isSendable ? "@Sendable " : "")(\(builderParameters.spelled)) -> \(concreteType.asSource))?"
 		return PublicStructMember(
 			name: ReservedName.configurationBuilderPropertyName,
 			typeSource: builderType,

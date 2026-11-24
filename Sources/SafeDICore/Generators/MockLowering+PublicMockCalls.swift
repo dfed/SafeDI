@@ -220,7 +220,10 @@ extension ScopeGenerator {
 				buildersInLabelOrder.append((label, true, nil))
 			}
 			buildersInLabelOrder.sort { $0.label < $1.label }
-			var names = GeneratedNameAllocator(reserving: builderNaming.builderFunctionNames.union(namesBoundInTheTreeAndFills))
+			// In `.v3Unstable`, a builder named after its places' property is named apart from the builder functions the fills
+			// declare for nodes of that property too.
+			let fillFunctionNames = context.apiVersion == .v3Unstable ? Set(namesFillsDeclare.map { ScopeGenerator.functionName(toBuildPropertyNamed: $0) }) : []
+			var names = GeneratedNameAllocator(reserving: builderNaming.builderFunctionNames.union(namesBoundInTheTreeAndFills).union(fillFunctionNames))
 			for builder in buildersInLabelOrder {
 				let internalName = (builder.fillsPlaces ? namesBoundInTheTreeAndFills : namesBoundInTheTree).contains(builder.label)
 					? names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: builder.label))
@@ -393,7 +396,7 @@ extension MockLowering.Walk {
 		// The member that configures the call is a `@Sendable` closure where the call is built inside a `@Sendable` function,
 		// or where the configuration holding it is `@Sendable`-typed (`publicMockOverridesMember(sendable:)`).
 		let overridesAreSendable = isInsideSendableFunction || generator.buildsInSendableFunction || parentConcreteType.map(sendableConfigurationTypeNames.contains) ?? false
-		let node = MockLowering.PublicMockCallNode(
+		var node = MockLowering.PublicMockCallNode(
 			property: property,
 			calledType: instantiable.concreteInstantiable,
 			call: publicMockCall,
@@ -544,6 +547,11 @@ extension MockLowering.Walk {
 		// A call a public mock promotes at its root's level reads its caller's value first, which only a call with no builder
 		// bound again is lowered for.
 		let isPromoted = parentConcreteType == nil && promotedProperties.contains(property)
+		// In `.v3Unstable`, an internal mock that promotes a received value another module's public mock builds takes it as
+		// an optional instance, which its root declares (`v3MockWithTree`).
+		if isPromoted, isV3, !buildsPublicMock {
+			node.v3PromotedParameterName = property.label
+		}
 		func instantiatorBindingLines() -> [String] {
 			isPromoted
 				? [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: property.label, passing: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)]
@@ -681,6 +689,8 @@ extension MockLowering {
 		/// For a call of a mock that takes no overrides, the type of the closure that builds the called type, where the call
 		/// offers one (`ScopeGenerator.MockParameterNode.offersOverrideClosure`).
 		let overrideClosureType: String?
+		/// In `.v3Unstable`, the parameter of the calling internal mock that passes the node's value, where the mock promotes it.
+		var v3PromotedParameterName: String?
 
 		/// The member of the calling mock's overrides that configures the call: the called mock's own `SafeDIOverrides`, or,
 		/// for a mock that takes none, the closure that builds the called type, where the call offers one.

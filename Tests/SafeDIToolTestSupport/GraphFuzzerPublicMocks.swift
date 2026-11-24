@@ -4538,13 +4538,42 @@ enum GraphFuzzerPublicMockBuilders {
 				} else if isInMockParameters, let colon = trimmed.firstIndex(of: ":") {
 					let label = String(trimmed[..<colon])
 					let type = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-					if label.contains("Builder") {
+					// `.v3Unstable` names a builder by the label of the property its places build, and spells it `@escaping`.
+					if label.contains("Builder") || type.hasPrefix("@escaping ") {
 						parameters.append((label, type.hasSuffix(",") ? String(type.dropLast()) : type))
 					}
 				}
 			}
 		}
 		return parameters
+	}
+
+	/// The builders the generated `__safeDI_mock()` of `mockedType` in `generatedFiles` takes under another label than the
+	/// name `.v2` gives them, by that name: `.v3Unstable` labels a builder by the property its places build, and reads it
+	/// under its `.v2` name, prefixed `__safeDI_` (`<label> __safeDI_<name>: …`).
+	static func v3BuilderLabelsByName(of mockedType: String, in generatedFiles: [String: String]) -> [String: String] {
+		var labelsByName = [String: String]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix("+SafeDIPublicMockCaller.swift") {
+			var extendedType: String?
+			var isInMockParameters = false
+			for line in contents.split(separator: "\n") {
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(2))
+				}
+				if extendedType == mockedType, trimmed.hasSuffix("static func __safeDI_mock(") {
+					isInMockParameters = true
+				} else if trimmed.hasPrefix(")") {
+					isInMockParameters = false
+				} else if isInMockParameters, let colon = trimmed.firstIndex(of: ":") {
+					let names = trimmed[..<colon].split(separator: " ")
+					if names.count == 2, names[1].hasPrefix("__safeDI_") {
+						labelsByName[String(names[1].dropFirst("__safeDI_".count))] = String(names[0])
+					}
+				}
+			}
+		}
+		return labelsByName
 	}
 
 	/// Whether a builder of `type`, as `builderParameters(of:in:)` spells it, takes a value its place forwards, so that a
