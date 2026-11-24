@@ -138,7 +138,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            grandchild: (@Sendable () -> Grandchild)? = nil,
 		            formatter: @autoclosure @escaping @Sendable () -> Formatter = Formatter(),
@@ -278,7 +278,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Grandchild {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            formatter: @autoclosure @escaping @Sendable () -> Formatter = Formatter(),
 		            _ safeDIBuilder: (@Sendable (Formatter) -> Grandchild)? = nil
@@ -312,7 +312,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            grandchild: Grandchild.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: (@Sendable (Grandchild) -> Child)? = nil
@@ -431,7 +431,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            formatter: @autoclosure @escaping @Sendable () -> Formatter = Formatter(),
 		            _ safeDIBuilder: (@Sendable (Formatter) -> Child)? = nil
@@ -600,7 +600,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            grandchild: (@Sendable () -> Grandchild)? = nil,
 		            formatter: @autoclosure @escaping @Sendable () -> Formatter = Formatter(),
@@ -881,7 +881,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension A {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init(),
 		            formatter: @autoclosure @escaping @Sendable () -> Formatter = Formatter(),
@@ -975,7 +975,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension B {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            _ safeDIBuilder: (@Sendable (SendableInstantiator<A>) -> B)? = nil
 		        ) {
@@ -1098,7 +1098,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            onTap: @autoclosure @escaping @Sendable () -> (() -> Void)? = ({}),
 		            _ safeDIBuilder: (@Sendable ((() -> Void)?) -> Child)? = nil
@@ -1252,7 +1252,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            onSend: @autoclosure @escaping @Sendable () -> (@Sendable () -> Void)? = ({}),
 		            onHandle: @autoclosure @escaping @Sendable () -> Handler? = ({}),
@@ -1429,7 +1429,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            onFinish: @autoclosure @escaping @Sendable () -> Handler = makeHandler(),
 		            onSend: @autoclosure @escaping @Sendable () -> SendableHandler = ({}),

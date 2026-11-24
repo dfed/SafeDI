@@ -13633,7 +13633,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Wrapper {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            analytics: (@Sendable () -> Analytics)? = nil,
 		            service: (@Sendable () -> Service.SafeDIOverrides)? = nil,

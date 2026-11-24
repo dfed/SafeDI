@@ -1056,7 +1056,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		#if DEBUG
 		extension Wrapper {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            cache: (@Sendable () -> Cache.SafeDIOverrides)? = nil,
 		            _ safeDIBuilder: (@Sendable (Cache) -> Wrapper)? = nil
@@ -1184,7 +1184,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		#if DEBUG
 		extension Wrapper {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            cache: (@Sendable () -> Cache.SafeDIOverrides)? = nil,
 		            _ safeDIBuilder: (@Sendable (Cache) -> Wrapper)? = nil
