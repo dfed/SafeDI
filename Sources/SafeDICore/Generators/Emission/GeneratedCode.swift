@@ -25,8 +25,7 @@ import Foundation
 ///
 /// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
-/// spelled once (`spelled()`), each line written with the indentation of every level around it. A small subtree started
-/// early is spelled while the rest of the tree is generated (`Node.spelled`), and the root's spelling copies its text. The bytes are the ones
+/// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
 /// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own, and
@@ -47,8 +46,6 @@ struct GeneratedCode: Sendable {
 		/// no line feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty
 		/// `indentation` writes `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
 		case indented(GeneratedCode, by: String)
-		/// Code spelled while the rest of the tree was being generated, written as its text, with no plan kept.
-		case spelled(String)
 		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 		case place(PlacePlan)
 		/// A function the root may declare once at its top (`RootFunctionHoisting`), written as `inPlace` where it does not.
@@ -79,37 +76,11 @@ struct GeneratedCode: Sendable {
 		GeneratedCode(storage: .children(Children(.indented(indentation), [code])))
 	}
 
-	/// `code`'s text, which a writer writes as it is (`Node.spelled`). The plan is dropped once it is spelled, unless it holds
-	/// a root function, which the root that holds the code may declare at its top instead (`RootFunctionHoisting`).
-	static func spelled(_ code: GeneratedCode) -> GeneratedCode {
-		code.holdsRootFunction ? code : GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
-	}
-
 	/// The text of the code without its root functions, and the names of those it holds, in the order it reaches them: the
 	/// text a place's record holds where the root declares them from the place's plan.
 	func spelledWithoutRootFunctions() -> (text: String, rootFunctionNames: [String]) {
 		let names = RootFunctionHoisting.records(in: [self]).map(\.name)
 		return (GeneratedCode.omittingRootFunctions(self, named: Set(names)).spelled(), names)
-	}
-
-	/// Whether the plan holds a root function (`Node.rootFunction`) outside the text of a level it spelled.
-	var holdsRootFunction: Bool {
-		var work = [self]
-		while let code = work.popLast() {
-			switch code.node {
-			case .text, .spelled:
-				break
-			case let .sequence(pieces), let .lines(pieces):
-				work.append(contentsOf: pieces)
-			case let .indented(inner, _), let .sendableFunction(inner), let .omittingRootFunctions(inner, _):
-				work.append(inner)
-			case let .place(plan):
-				work.append(plan.code)
-			case .rootFunction:
-				return true
-			}
-		}
-		return false
 	}
 
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
@@ -149,8 +120,6 @@ struct GeneratedCode: Sendable {
 				.lines(children.codes)
 			case let .indented(indentation):
 				.indented(children.codes[0], by: indentation)
-			case let .spelled(text):
-				.spelled(text)
 			case let .place(record):
 				.place(PlacePlan(code: children.codes[0], record: record))
 			case let .rootFunction(record):
@@ -168,7 +137,7 @@ struct GeneratedCode: Sendable {
 		// Text no level indents is written as it is, so it is its own spelling: a mock's text, tens of megabytes on a deep
 		// chain, is not copied into the writer's bytes, which grow by doubling, and then into a string again.
 		switch node {
-		case let .text(text), let .spelled(text):
+		case let .text(text):
 			return text
 		case .sequence, .lines, .indented, .place, .rootFunction, .sendableFunction, .omittingRootFunctions:
 			break
@@ -190,7 +159,6 @@ struct GeneratedCode: Sendable {
 			case sequence
 			case lines
 			case indented(String)
-			case spelled(String)
 			case place(record: PlaceRecord?)
 			case rootFunction(RootFunctionRecord)
 			case sendableFunction
@@ -277,7 +245,7 @@ private struct GeneratedCodeWriter {
 			switch next {
 			case let .code(code):
 				switch code.node {
-				case let .text(text), let .spelled(text):
+				case let .text(text):
 					write(text)
 				case let .sequence(pieces):
 					for piece in pieces.reversed() {

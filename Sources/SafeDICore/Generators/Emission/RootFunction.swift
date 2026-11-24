@@ -109,7 +109,7 @@ enum RootFunctionHoisting {
 		var work = codes.reversed().map { (code: $0, isInsideSendableFunction: false) }
 		while let (code, isInsideSendableFunction) = work.popLast() {
 			switch code.node {
-			case .text, .spelled:
+			case .text:
 				break
 			case let .sequence(pieces), let .lines(pieces):
 				work.append(contentsOf: pieces.reversed().map { ($0, isInsideSendableFunction) })

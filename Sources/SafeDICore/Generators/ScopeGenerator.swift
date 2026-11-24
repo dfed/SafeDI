@@ -3184,43 +3184,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
-	/// Generates this scope's code as the root of what is generated and caches its text in place of the plan
-	/// (`GeneratedCode.spelled(_:)`), so that a tree that holds this scope copies the text when it is spelled rather than
-	/// walking the plan again, and the plan is released. A scope that starts its code early
-	/// (`Scope.startCodeGeneration(of:spellsPlans:)`) spells it while the rest of the tree is still being generated. The
-	/// spelling is part of the task the cache holds while the code is generated, so a scope above that asks for the code
-	/// meanwhile is handed the text, never the plan, which it would otherwise keep beside the cached text and spell again.
-	func generateSpelledPlan() async throws {
-		let cacheKey = UnavailablePropertiesCacheKey(
-			unavailableProperties: rootUnavailableProperties,
-			propertiesGeneratedLater: [],
-			builderFunctionNames: BuilderFunctionNames(),
-			fillPlaceBindings: .none,
-		)
-		// A generator a construction memo shares between trees can be started by each, and its code may be asked for
-		// before it is started: either way its code is generated once, as it was first asked for.
-		guard unavailablePropertiesToGeneratedCode[cacheKey] == nil, unavailablePropertiesToGenerateCodeTask[cacheKey] == nil else {
-			return
-		}
-		let unavailableProperties = cacheKey.unavailableProperties
-		let generateCodeTask = Task {
-			let code = try await generatePropertyCode(
-				codeGeneration: .dependencyTree,
-				unavailableProperties: unavailableProperties,
-				propertiesGeneratedLater: [],
-				builderFunctionNames: BuilderFunctionNames(),
-				fillPlaceBindings: .none,
-			)
-			let spelledCode = GeneratedCode.spelled(code)
-			// As in `generateCode`, the cache keeps the finished code rather than the task.
-			unavailablePropertiesToGeneratedCode[cacheKey] = spelledCode
-			unavailablePropertiesToGenerateCodeTask[cacheKey] = nil
-			return spelledCode
-		}
-		unavailablePropertiesToGenerateCodeTask[cacheKey] = generateCodeTask
-		_ = try await generateCodeTask.value
-	}
-
 	/// This scope's unavailable properties as the root of what is generated, with nothing generated before it.
 	private var rootUnavailableProperties: Set<Property> {
 		unavailableProperties(
@@ -3295,7 +3258,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The code tasks the generators of this scope's tree still hold (see `HeldCodeTasks`). Once the tree's code is
-	/// generated, each is a finished task, or one a scope started early for a context nothing asked for, still running.
+	/// generated, each is a finished task.
 	/// The tree is walked with a stack, since it can be as deep as the module has types. A generator a construction memo
 	/// shares between places is reached once for each place, so its tasks count once for each.
 	func codeTasksHeldInTree() async -> Int {
@@ -7002,10 +6965,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderFunctionNames: BuilderFunctionNames
 	}
 
-	/// The code of each of `requests`, in their order. A root of the dependency tree, which starts no code early, plans each of its body's children on a task of its own, at most `ConcurrentChildCode.maximumChildrenAtOnce`
-	/// at a time, and the code comes back in the body's order of its children, never in the order the tasks finish. Beneath
-	/// those children, and in every other tree, which starts its large subtrees' code early, a body plans one child after
-	/// another. A child's error is thrown as the roots' task group throws one
+	/// The code of each of `requests`, in their order. A root of the dependency tree plans each of its body's children on a
+	/// task of its own, at most `ConcurrentChildCode.maximumChildrenAtOnce` at a time, and the code comes back in the body's
+	/// order of its children, never in the order the tasks finish. Beneath those children, and in every other tree, a body
+	/// plans one child after another. A child's error is thrown as the roots' task group throws one
 	/// (`DependencyTreeGenerator.plannedCode(of:rootsOfOtherModules:)`).
 	private func appendConcurrentChildCode(
 		to body: inout BodyChildren,
@@ -7869,7 +7832,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					))
 				}
 				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return .empty }
-				// A root of the dependency tree starts no code early, so its body plans its children at once.
+				// A root of the dependency tree plans its children at once (`ConcurrentChildCode`).
 				let childCode = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(true) {
 					try await generateProperties(
 						propertiesGeneratedLater: propertiesGeneratedLater,
