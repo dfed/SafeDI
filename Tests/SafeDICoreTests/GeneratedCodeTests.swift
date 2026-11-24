@@ -113,6 +113,10 @@ struct GeneratedCodeTests {
 			text
 		case let .place(plan):
 			reindentingEveryLevel(plan.code)
+		case let .rootFunction(_, inPlace):
+			reindentingEveryLevel(inPlace)
+		case let .sendableFunction(code), let .omittingRootFunctions(code, _):
+			reindentingEveryLevel(code)
 		}
 	}
 
