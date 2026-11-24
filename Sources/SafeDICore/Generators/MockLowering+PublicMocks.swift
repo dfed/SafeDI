@@ -23,7 +23,9 @@ extension ScopeGenerator {
 	/// guard hashes its empty signature; a mock with a tree is lowered by the walk (`lowerMockRootWithTree(of:context:)`),
 	/// which hands its nodes to `publicMockWithTree`.
 	func lowerPublicMockRoot(of instantiable: Instantiable, publicMockContext: PublicMockContext, context: MockContext) async throws -> MockLowering.Result {
-		guard propertiesToGenerate.isEmpty,
+		// In `.v3Unstable`, every public mock takes the `SafeDIOverrides` that holds its type's builder.
+		guard context.apiVersion == .v2,
+		      propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      // The type's own hand-written mock builds it where it has one.
 		      let initializer = MockLowering.rootConstructionInitializer(of: instantiable),
@@ -78,8 +80,9 @@ extension ScopeGenerator {
 	/// The properties of the root's children, `orderedChildren`, that the public mock of `instantiable` promotes for received
 	/// dependencies, which it takes as optional parameters (`publicMockPromotedNodes(of:in:)`): every child but the mocked
 	/// type's own instantiated properties and a `LazilyInstantiated` of one's instance.
-	func publicMockPromotedProperties(of instantiable: Instantiable, among orderedChildren: [OrderedChild]) -> Set<Property> {
-		guard instantiable.generateMock == .public else { return [] }
+	// In `.v3Unstable`, an internal mock promotes alike (`regardlessOfMockKind`).
+	func publicMockPromotedProperties(of instantiable: Instantiable, among orderedChildren: [OrderedChild], regardlessOfMockKind: Bool = false) -> Set<Property> {
+		guard instantiable.generateMock == .public || regardlessOfMockKind else { return [] }
 		let ownProperties = Set(instantiable.dependencies.lazy.filter { dependency in
 			switch dependency.source {
 			case .instantiated:
@@ -121,7 +124,9 @@ extension ScopeGenerator {
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		// A public mock takes each property received only if available as a parameter, so only the tree's nodes make a
 		// `SafeDIOverrides`.
-		let hasOverrides = nodes.contains(where: \.isPropertyNode)
+		let isV3 = context.apiVersion == .v3Unstable
+		let hasOverrides = nodes.contains(where: \.isPropertyNode) || isV3
+		let rootInitializer = MockLowering.rootConstructionInitializer(of: instantiable)
 		var lines = ["extension \(typeName) {"]
 		if !plan.providerDeclarations.isEmpty {
 			// The providers of the type's own optional-typed defaults, which the parameters default to.
@@ -151,11 +156,21 @@ extension ScopeGenerator {
 			// The members are in inline order: the build's order without a child that holds a place starting after its
 			// siblings (`inlineOrdered(_:property:)`).
 			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
+			// In `.v3Unstable`, a `Sendable` wrapper in the tree that builds the mocked type again captures its configuration,
+			// which is then `Sendable`, as a module-level one is.
+			let isV3RootSendable = isV3 && context.sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
+			// In `.v3Unstable`, the mocked type's own defaults and its builder follow its children's members.
 			lines.append(MockLowering.publicOverridesStruct(
 				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
 				mockedTypeModuleName: instantiable.moduleName,
 				context: publicMockContext,
 				indent: indent,
+				v3Root: isV3 ? (
+					mockedType: instantiable.concreteInstantiable,
+					members: plan.v3RootDefaultMembers.map { isV3RootSendable ? $0.sendable : $0 } + [publicMockContext.v3BuilderMember(of: instantiable, constructedWith: rootInitializer, isSendable: isV3RootSendable)],
+					initializerIsolation: plan.v3RootInitializerIsolation,
+					isSendable: isV3RootSendable,
+				) : nil,
 			))
 			lines.append("")
 		}
@@ -163,10 +178,18 @@ extension ScopeGenerator {
 		body.append(contentsOf: bindingLines)
 		// The mocked type's own hand-written mock builds it where it has one, and `mock()` returns what that mock returns
 		// (`MockLowering+HandWrittenMocks.swift`).
-		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
-			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
-		} ?? Instantiable.incorrectlyConfiguredComment
-		body.append("\(bodyIndent)return \(MockLowering.rootConstruction(of: instantiable, argumentList: argumentList))")
+		if isV3, let rootInitializer {
+			// In `.v3Unstable`, the builder its `SafeDIOverrides` holds builds the mocked type where it is set.
+			let arguments = MockLowering.rootArguments(of: rootInitializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			let construction = MockLowering.rootConstruction(of: instantiable, argumentList: arguments.map { "\($0.label): \($0.value)" }.joined(separator: ", "))
+			let builder = ReservedName.configurationBuilderPropertyName
+			body.append("\(bodyIndent)return if let \(builder) = \(ReservedName.mockOverridesParameterName).\(builder) { \(builder)(\(arguments.map(\.value).joined(separator: ", "))) } else { \(construction) }")
+		} else {
+			let argumentList = rootInitializer.map { initializer in
+				MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			} ?? Instantiable.incorrectlyConfiguredComment
+			body.append("\(bodyIndent)return \(MockLowering.rootConstruction(of: instantiable, argumentList: argumentList))")
+		}
 		lines.append(contentsOf: Self.publicMockTiers(
 			of: plan,
 			typeName: typeName,
@@ -243,7 +266,9 @@ extension ScopeGenerator {
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedParameters: flatReceivedParameters,
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
-			flatUncoveredParameters: signature.uncoveredRootParameters,
+			// `.v3Unstable`'s signature spells each as its builder already, which the plan spells from the value's type, as
+			// a calling module's plan does.
+			flatUncoveredParameters: context.apiVersion == .v2 ? signature.uncoveredRootParameters : lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults).uncoveredRootParameters,
 			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides,
 			wrapperParameterByInstance: wrapperParameterByInstance,
@@ -372,5 +397,25 @@ extension MockLowering.Walk {
 			isBoundToNil: false,
 			declarationReference: nil,
 		))
+	}
+}
+
+extension PublicMockContext {
+	/// The member of a public mock's `SafeDIOverrides` that holds the builder of `instantiable`, the mocked type, in
+	/// `.v3Unstable`: handed each argument its construction `initializer` takes, as visible as those types and the type.
+	func v3BuilderMember(of instantiable: Instantiable, constructedWith initializer: Initializer?, isSendable: Bool) -> PublicStructMember {
+		let concreteType = instantiable.concreteInstantiable
+		let builderParameters = MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: instantiable.mockInitializer != nil)
+		let builderType = "(\(isSendable ? "@Sendable " : "")(\(builderParameters.spelled)) -> \(concreteType.asSource))?"
+		return PublicStructMember(
+			name: ReservedName.configurationBuilderPropertyName,
+			typeSource: builderType,
+			parameterTypeSource: builderType,
+			access: access(ofTypes: (initializer?.arguments ?? []).map(\.typeDescription) + [concreteType], admittedModules: [moduleName, instantiable.moduleName]).level,
+			defaultExpression: "nil",
+			omittedValue: "nil",
+			isUnlabeled: true,
+			documentation: "Overrides how `\(concreteType.asSource)` is constructed. Parameters match the type’s initializer or custom mock method.",
+		)
 	}
 }

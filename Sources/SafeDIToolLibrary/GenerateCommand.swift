@@ -382,6 +382,14 @@ public struct Generate: AsyncParsableCommand {
 			by: membership,
 			dependingOn: dependentModuleInfoFiles.map(\.file.moduleName),
 		)
+		// Every module of an app generates one form of mock API, so a module whose setting differs from that of a module it
+		// depends on is reported before anything is generated.
+		try Self.validateAPIVersionsAgree(
+			ownModule: module,
+			ownConfiguration: sourceConfiguration,
+			dependentModuleInfoFiles: dependentModuleInfoFiles.map(\.file),
+			membership: membership,
+		)
 		// The modules the given module info files describe, and the modules their views carry, each once.
 		let moduleInfoView = try MergedModuleInfoView(
 			directModules: dependentModuleInfoFiles,
@@ -521,6 +529,7 @@ public struct Generate: AsyncParsableCommand {
 			viewInstantiablesByModuleName: Dictionary(grouping: viewOnlyDeclarations, by: \.moduleName).mapValues { $0.flatMap(\.instantiables) },
 			viewPlainTypeDeclarations: viewOnlyDeclarations.flatMap(\.plainTypeDeclarations),
 			viewDeclaringModules: Self.viewDeclaringModules(of: viewOnlyDeclarations, in: moduleInfoView),
+			apiVersion: sourceConfiguration?.apiVersion ?? .v2,
 		)
 
 		// The DOT graph, drawn by the call of `generate(_:)` that generates the module's code when the run asks for one.
@@ -1505,6 +1514,47 @@ public struct Generate: AsyncParsableCommand {
 		private let dependencyModuleNamesByModuleName: [String: [String]]
 	}
 
+	/// Throws when this module and a module it depends on select different forms of mock API, naming each such module.
+	///
+	/// A module that declares neither an `@Instantiable` nor a `#SafeDIConfiguration` generates nothing, so its setting
+	/// is not compared. A module's setting is its configuration's, `.v2` without one: from a module info file, the first
+	/// configuration it holds, as `ModuleInfoFile.ownIdentity` reads its mock condition; under the target graph, the
+	/// configuration in a file the graph attributes to the module, as `VisibleDeclarationsResolver.mockCondition` reads it.
+	static func validateAPIVersionsAgree(
+		ownModule: ModuleInfo,
+		ownConfiguration: SafeDIConfiguration?,
+		dependentModuleInfoFiles: [ModuleInfoFile],
+		membership: ModuleMembership?,
+	) throws(APIVersionMismatchError) {
+		guard ownConfiguration != nil || ownModule.instantiables.contains(where: { $0.moduleName == ownModule.moduleName }) else { return }
+		let ownAPIVersion = ownConfiguration?.apiVersion ?? .v2
+		var dependencyAPIVersions = [String: SafeDIAPIVersion]()
+		for file in dependentModuleInfoFiles where !file.configurations.isEmpty || !file.instantiables.isEmpty {
+			dependencyAPIVersions[file.moduleName] = file.configurations.first?.apiVersion ?? .v2
+		}
+		if let membership, membership.isTargetGraph {
+			for dependencyModuleName in membership.dependencyModuleNames {
+				let configuration = ownModule.configurations.first { configuration in
+					configuration.sourceFilePath.flatMap { membership.declaringModule(ofFileAt: $0)?.moduleName } == dependencyModuleName
+				}
+				guard configuration != nil || ownModule.instantiables.contains(where: { $0.moduleName == dependencyModuleName }) else { continue }
+				dependencyAPIVersions[dependencyModuleName] = configuration?.apiVersion ?? .v2
+			}
+		}
+		let differingModules = dependencyAPIVersions
+			.filter { $0.value != ownAPIVersion }
+			.sorted { $0.key < $1.key }
+			.map { APIVersionMismatchError.Module(moduleName: $0.key, apiVersion: $0.value) }
+		guard differingModules.isEmpty else {
+			throw APIVersionMismatchError(
+				ownModuleName: ownModule.moduleName,
+				ownAPIVersion: ownAPIVersion,
+				ownConfigurationLocation: ownConfiguration?.declarationLocation,
+				differingModules: differingModules,
+			)
+		}
+	}
+
 	/// The condition a module whose configuration is `configuration` guards its mocks and mock-only declarations with,
 	/// as the module's own run reads them: `DEBUG` for a module that declares no configuration.
 	private static func mockCondition(of configuration: SafeDIConfiguration?) -> MockCondition {
@@ -2194,6 +2244,34 @@ struct AdditionalMocksNameMockOnlyDeclarationError: SourceLocatedError {
 
 /// Types the module's own files declare whose names begin with a prefix SafeDI reserves for the types it generates, which
 /// the `@Instantiable` macro does not see. Each diagnostic is at one declaration's name, in source order.
+/// A module whose `#SafeDIConfiguration(apiVersion:)` differs from that of modules it depends on: every module of an app
+/// generates one form of mock API, since a mock of one form cannot call a mock of the other.
+struct APIVersionMismatchError: SourceLocatedError {
+	struct Module {
+		let moduleName: String
+		let apiVersion: SafeDIAPIVersion
+	}
+
+	let ownModuleName: String?
+	let ownAPIVersion: SafeDIAPIVersion
+	let ownConfigurationLocation: Dependency.DeclarationLocation?
+	/// Each module this module depends on whose setting differs, sorted by name.
+	let differingModules: [Module]
+
+	var sourceDiagnostics: [SourceDiagnostic] {
+		let ownModule = ownModuleName.map { "`\($0)`" } ?? "This module"
+		let modules = differingModules
+			.map { "`\($0.moduleName)` (`.\($0.apiVersion.rawValue)`)" }
+			.joined(separator: ", ")
+		let label = SafeDIConfigurationVisitor.apiVersionArgumentLabel
+		return [SourceDiagnostic(
+			severity: .error,
+			location: ownConfigurationLocation,
+			message: "\(ownModule) sets `\(label): .\(ownAPIVersion.rawValue)`, but modules it depends on set another value: \(modules). Every module of an app sets the same `\(label)` in its `#\(SafeDIConfigurationVisitor.macroName)`, which is `.\(SafeDIAPIVersion.v2.rawValue)` where a module declares none.",
+		)]
+	}
+}
+
 struct ReservedTypeNameError: SourceLocatedError {
 	let sourceDiagnostics: [SourceDiagnostic]
 }

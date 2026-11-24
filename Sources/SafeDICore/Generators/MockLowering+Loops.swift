@@ -193,7 +193,8 @@ extension MockLowering {
 			return "\(parameter.label.spelledAsArgumentLabel): \(argumentMember.bindingName)"
 		}
 		let parameters = member.forwardedProperties.isEmpty ? "" : member.forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
-		let callArguments = member.forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments
+		// In `.v3Unstable`, the configurations a cycle target takes follow its cycle parameters (`Walk.cycleClosingNode`).
+		let callArguments = member.forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments + Array(cycleParameterArguments.dropFirst(member.cycleParameters.count))
 		let decorator = ScopeGenerator.localFunctionPrefix(isSendable: isSendable)
 		var lines = ["\(indent)\(decorator)func \(receivedFunctionName)(\(parameters)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) {"]
 		lines.append(contentsOf: memberLines)

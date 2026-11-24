@@ -56,19 +56,30 @@ extension MockLowering {
 		mockedTypeModuleName: String?,
 		context: PublicMockContext,
 		indent: String,
+		// In `.v3Unstable`, the mocked type, the members that hold its own defaults and builder, after its children's, and the
+		// isolation of the struct's initializers (`PublicMockPlan.v3RootInitializerIsolation`).
+		v3Root: (mockedType: TypeDescription, members: [PublicStructMember], initializerIsolation: String?, isSendable: Bool)? = nil,
 	) -> String {
+		let isSendable = v3Root?.isSendable ?? false
 		let structMembers = members.map { member in
 			publicMember(
 				member,
 				context: context,
 				admittedModules: [context.moduleName, mockedTypeModuleName, context.moduleNameByType[member.concreteType]],
-				requiresSendable: false,
+				requiresSendable: isSendable,
 			)
-		}
+		} + (v3Root?.members ?? [])
 		var lines = [String]()
-		lines.append("\(indent)/// Overrides for the mock dependency tree.")
-		lines.append("\(indent)nonisolated public struct \(ReservedName.mockOverridesTypeName) {")
-		lines.append(contentsOf: ScopeGenerator.publicStructBody(members: structMembers, indent: "\(indent)\(ScopeGenerator.standardIndent)"))
+		if let v3Root {
+			let typeName = v3Root.mockedType.asSource.spelledWithoutBackticks
+			lines.append("\(indent)/// Configures `\(typeName)` wherever a mock builds it: as the mocked type, or inside another module’s mock that calls this")
+			lines.append("\(indent)/// one. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its path, or that")
+			lines.append("\(indent)/// type’s defaults where there is none.")
+		} else {
+			lines.append("\(indent)/// Overrides for the mock dependency tree.")
+		}
+		lines.append("\(indent)nonisolated public struct \(ReservedName.mockOverridesTypeName)\(isSendable ? ": Sendable" : "") {")
+		lines.append(contentsOf: ScopeGenerator.publicStructBody(members: structMembers, indent: "\(indent)\(ScopeGenerator.standardIndent)", isSendable: isSendable, initializerIsolation: v3Root?.initializerIsolation))
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
 	}
@@ -151,11 +162,18 @@ extension MockLowering {
 			documentation: "Overrides how `\(concreteType.asSource)` is constructed. Parameters match the type’s initializer or custom mock method.",
 		))
 		var lines = [String]()
-		lines.append("/// Configuration for how `\(concreteType.asSource)` is constructed within the public mock trees of \(context.moduleName.map { "module `\($0)`" } ?? "this module").")
-		lines.append("nonisolated public struct \(configurationTypeName) {")
-		lines.append(contentsOf: ScopeGenerator.publicStructBody(members: members, indent: ScopeGenerator.standardIndent))
-		lines.append("}")
-		lines.append("")
+		// In `.v3Unstable`, a type with a public mock of its own is configured by that mock's `SafeDIOverrides`, so only its
+		// construction functions are declared here.
+		if !context.v3PublicMockTypes.contains(concreteType) {
+			lines.append("/// Configuration for how `\(concreteType.asSource)` is constructed within the public mock trees of \(context.moduleName.map { "module `\($0)`" } ?? "this module").")
+			// In `.v3Unstable`, a `@Sendable` builder function beneath a `Sendable` wrapper captures the configuration of the
+			// node it builds, which is then `Sendable`, as an internal mock's is.
+			let isSendable = requiresSendable && context.apiVersion == .v3Unstable
+			lines.append("nonisolated public struct \(configurationTypeName)\(isSendable ? ": Sendable" : "") {")
+			lines.append(contentsOf: ScopeGenerator.publicStructBody(members: members, indent: ScopeGenerator.standardIndent, isSendable: isSendable))
+			lines.append("}")
+			lines.append("")
+		}
 		lines.append("extension \(concreteType.asSource) {")
 		// One provider per label, value type and default, across the type's constructions: two of one label differ in the
 		// type they return, which each call's argument selects.
@@ -237,14 +255,17 @@ extension MockLowering {
 				documentation: nil,
 			)
 		case let .built(isConfigured, builderClosureType, childRequiresSendable, accessTypes):
-			if isConfigured, let configurationTypeName = context.configurationTypeNameByType[member.concreteType] {
+			if isConfigured, let configurationTypeName = context.configurationTypeSpelling(of: member.concreteType) {
+				// In `.v3Unstable`, `nil` reads the type's defaults.
+				let isV3 = context.apiVersion == .v3Unstable
+				let typeSource = isV3 ? "\(configurationTypeName)?" : configurationTypeName
 				return PublicStructMember(
 					name: member.name,
-					typeSource: configurationTypeName,
-					parameterTypeSource: configurationTypeName,
+					typeSource: typeSource,
+					parameterTypeSource: typeSource,
 					access: .public,
-					defaultExpression: ".init()",
-					omittedValue: ".init()",
+					defaultExpression: isV3 ? "nil" : ".init()",
+					omittedValue: isV3 ? "nil" : ".init()",
 					isUnlabeled: false,
 					documentation: nil,
 				)

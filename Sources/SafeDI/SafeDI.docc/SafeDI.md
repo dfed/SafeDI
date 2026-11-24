@@ -75,7 +75,8 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 
 ### Configuration
 
-- ``SafeDIConfiguration(additionalImportedModules:additionalDirectoriesToInclude:additionalMocksToGenerate:mockConditionalCompilation:generatePlainDependencyTreeInitializers:)``
+- ``SafeDIConfiguration(additionalImportedModules:additionalDirectoriesToInclude:additionalMocksToGenerate:mockConditionalCompilation:generatePlainDependencyTreeInitializers:apiVersion:)``
+- ``SafeDIAPIVersion``
 
 ### Delayed instantiation
 
@@ -85,3 +86,7 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 - ``SendableErasedInstantiator``
 - ``LazilyInstantiated``
 - ``SendableLazilyInstantiated``
+
+### Mocks
+
+- ``SafeDIReceived``

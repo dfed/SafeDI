@@ -67,7 +67,9 @@ public actor DependencyTreeGenerator {
 		viewInstantiablesByModuleName: [String: [Instantiable]] = [:],
 		viewPlainTypeDeclarations: [PlainTypeDeclaration] = [],
 		viewDeclaringModules: [TypeDescription: ViewDeclaringModule] = [:],
+		apiVersion: SafeDIAPIVersion = .v2,
 	) {
+		self.apiVersion = apiVersion
 		self.unreadImports = unreadImports
 		self.viewInstantiablesByModuleName = viewInstantiablesByModuleName
 		self.viewDeclaringModules = viewDeclaringModules
@@ -551,6 +553,8 @@ public actor DependencyTreeGenerator {
 	let viewInstantiablesByModuleName: [String: [Instantiable]]
 	/// See `init`'s `viewDeclaringModules`.
 	let viewDeclaringModules: [TypeDescription: ViewDeclaringModule]
+	/// The form of mock API the module's own configuration selects, which every module the run reads selects too.
+	let apiVersion: SafeDIAPIVersion
 	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
 	/// that extension.
 	let extendedTypeDeclarations: ExtendedTypeDeclarations

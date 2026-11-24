@@ -75,6 +75,8 @@ extension ScopeGenerator {
 		walk.sendableConfigurationTypeNames = context.sendableConfigurationTypeNames
 		// A public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
+		walk.isV3 = context.apiVersion == .v3Unstable
+		walk.v3ConfigurationNames = context.v3ConfigurationNames
 		// The mocked type's own initializer takes the root's level, an actor's into its isolation, so the root's children
 		// read their overrides as a `@Sendable` builder function does. A public mock's configurations are never `Sendable`, so
 		// it reads each field into a local of its own, and its construction functions take an actor's arguments `sending`
@@ -458,6 +460,27 @@ extension MockLowering {
 		// A public mock builds each configured node with its type's construction function.
 		/// Whether the walk lowers a public mock, whose configured nodes call their types' construction functions.
 		var buildsPublicMock = false
+		// `.v3Unstable`'s mock API: each configured node reads its configuration one level down from its parent's, into a
+		// local of its own, and a node the mock promotes reads the instance or configuration `mock()` is passed for it.
+		/// Whether the walk lowers `.v3Unstable`'s mock API.
+		var isV3 = false
+		// In `.v3Unstable`, the configurations in lexical scope by type, innermost last, the builder functions a cycle closes
+		// on, and those around the node the walk is at, innermost last, with the types each node pushed into scope.
+		var v3ConfigurationsInScope = [TypeDescription: [V3ConfigurationInScope]]()
+		var v3CycleTargets = [ObjectIdentifier: V3CycleTarget]()
+		var v3TargetsAround = [(declaration: ScopeGenerator.BuiltDeclaration, target: V3CycleTarget)]()
+		var v3ScopePushes = [(types: [TypeDescription], pushedTarget: Bool)]()
+		// The configured loop members `mock()` promotes, each bound from its `SafeDIReceived` before its loop.
+		var v3PromotedLoopMemberInstanceNames = [Property: String]()
+		/// In `.v3Unstable`, what the module names each type's configuration.
+		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
+
+		/// Whether a configured node of `type` is built with its type's construction function, reading its public
+		/// configuration: in a public mock, and in `.v3Unstable`, wherever the module configures the type publicly.
+		func buildsPublicly(_ type: TypeDescription) -> Bool {
+			buildsPublicMock || (isV3 && v3ConfigurationNames.isConfiguredPublicly(type))
+		}
+
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
@@ -1798,6 +1821,17 @@ extension MockLowering {
 		/// The parameter of a public mock that holds the value its caller passed for the node, which the node's binding reads
 		/// first (`ScopeGenerator.passing(_:orBuilding:)`).
 		var promotedParameterName: String?
+		/// In `.v3Unstable`, where the node is promoted and configured, the name its configuration is bound under where
+		/// `mock()` is passed one: the node is bound by a `switch` over the `SafeDIReceived` `mock()` takes for it.
+		var v3ReceivedConfigurationName: String?
+		/// In `.v3Unstable`, where a cycle closes on the node's builder function, the parameters it takes for its configuration
+		/// and the nearest configurations of the other types its subtree builds, after its cycle parameters.
+		var v3TargetParameters = [String]()
+		/// In `.v3Unstable`, where the node is a configured member of a loop the mock promotes, the name of the instance
+		/// `mock()` was passed for it, `nil` where it builds the node, bound before the loop.
+		var v3ReceivedInstanceName: String?
+		/// The name of that configuration's type.
+		var v3ReceivedConfigurationTypeName: String?
 		// The `@Sendable` autoclosure parameters of the values the node's type instantiates that the
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
 		// Also the places it instantiates that a builder of `mock()` builds.
@@ -1814,6 +1848,13 @@ extension MockLowering {
 			var node = self
 			node.hasConfiguration = children.contains(where: \.isPropertyNode) || !defaultFields.isEmpty
 			return node
+		}
+
+		/// The name of the node's member of the enclosing overrides: in `.v3Unstable` its label, set by the walk, else
+		/// its binding name.
+		var v3FieldName: String?
+		var fieldName: String {
+			v3FieldName ?? bindingName
 		}
 
 		/// The member of the enclosing overrides that configures the node: its configuration, or an optional builder closure.
@@ -1975,6 +2016,24 @@ extension MockLowering {
 			}
 			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: "\(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"))"]
 		}
+	}
+
+	/// The type of the value `mock()` takes for a received dependency it promotes in `.v3Unstable`: the property's own type,
+	/// wrapper included, or its instantiated type for a constant.
+	static func v3ReceivedValueType(of property: Property) -> TypeDescription {
+		property.propertyType.isConstant ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription.unwrapped
+	}
+
+	/// The statement that binds a node `mock()` promotes in `.v3Unstable` from the `SafeDIReceived` parameter it takes for it:
+	/// the instance it is passed, or the value `built` builds from the configuration it is passed, bound as
+	/// `configurationName`.
+	static func v3ReceivedBindingLine(of property: Property, boundAs bindingName: String, passing parameterName: String, configurationName: String, building built: String, indent: String) -> String {
+		[
+			"\(indent)let \(bindingName): \(MockLowering.v3ReceivedValueType(of: property).asSource) = switch \(parameterName) {",
+			"\(indent)case let .instance(\(parameterName)): \(parameterName)",
+			"\(indent)case let .built(\(configurationName)): \(built)",
+			"\(indent)}",
+		].joined(separator: "\n")
 	}
 
 	/// `lines` joined by newlines, in storage sized once for all of them: a mock's code can run to megabytes, which
@@ -2155,34 +2214,51 @@ extension MockLowering {
 	}
 
 	/// The name of the builder function of a node bound as `bindingName`.
+	/// The arguments of `initializer` that a dependency fulfills, each label and value, as `rootArgumentList` passes them.
+	static func rootDependencyArguments(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property>) -> [(label: String, value: String)] {
+		initializer.arguments.compactMap { argument in
+			guard MockLowering.dependency(passedTo: argument, among: dependencies) != nil else { return nil }
+			let part = rootArgumentList(of: Initializer(arguments: [argument]), given: dependencies, renames: renames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			let prefix = "\(argument.label.spelledAsArgumentLabel): "
+			return (label: argument.label.spelledAsArgumentLabel, value: part.hasPrefix(prefix) ? String(part.dropFirst(prefix.count)) : part)
+		}
+	}
+
 	/// The arguments the mocked type's construction `initializer` is handed for `dependencies`: each dependency's label, or
 	/// the name the mock root's level binds it apart under, by its label and type (`renames`).
 	// A dependency among `instancesReadByValue` is passed its wrapper's instance.
 	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> String {
-		var parts = [String]()
+		rootArguments(of: initializer, given: dependencies, renames: renames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			.map { "\($0.label): \($0.value)" }
+			.joined(separator: ", ")
+	}
+
+	/// The arguments `rootArgumentList` spells, each label, spelled as an argument label, and value.
+	static func rootArguments(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> [(label: String, value: String)] {
+		var parts = [(label: String, value: String)]()
 		for argument in initializer.arguments {
 			// An argument takes the dependency of its label, whatever its type.
 			if let dependency = MockLowering.dependency(passedTo: argument, among: dependencies) {
 				// A receive only if available nothing above provides is passed `nil`, as production passes it.
 				guard dependency.source != .received(onlyIfAvailable: true) || !unavailableProperties.contains(dependency.property) else {
-					parts.append("\(argument.label.spelledAsArgumentLabel): nil")
+					parts.append((label: argument.label.spelledAsArgumentLabel, value: "nil"))
 					continue
 				}
 				guard !instancesReadByValue.contains(dependency.property) else {
 					// Through the wrapper's name where the root's level names it apart, as
 					// `generateReturnArgumentList` reads `disambiguatedLazilyInstantiatedBinding`.
 					let wrapperName = renames[argument.innerLabel].flatMap { wrapperRename(ofInstanceOfType: dependency.property.typeDescription.unwrapped, among: $0) } ?? argument.innerLabel
-					parts.append("\(argument.label.spelledAsArgumentLabel): \(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)")
+					parts.append((label: argument.label.spelledAsArgumentLabel, value: "\(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)"))
 					continue
 				}
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(renames[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel)")
+				parts.append((label: argument.label.spelledAsArgumentLabel, value: renames[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel))
 			} else if argument.hasDefaultValue, !argument.isLeftToItsDefault {
 				// An `@autoclosure` parameter of `mock()` is passed its call.
 				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(parameterValue)")
+				parts.append((label: argument.label.spelledAsArgumentLabel, value: parameterValue))
 			}
 		}
-		return parts.joined(separator: ", ")
+		return parts
 	}
 
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a

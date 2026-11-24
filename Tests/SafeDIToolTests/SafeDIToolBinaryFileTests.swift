@@ -540,7 +540,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			writtenTagsByType[String(reflecting: type(of: value)), default: []].insert(writer.bytes[0])
 		}
 
-		#expect(writtenTagsByType.count == 7)
+		#expect(writtenTagsByType.count == 8)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
 			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(Self.caseCount(of: schemaMember))), "\(schemaMember)")
 		}
@@ -742,7 +742,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	func schemaDescription_describesTypeOfEveryFieldAndPayloadInWriteOrder() {
 		let lines = BinaryFile.schemaDescription.split(separator: "\n").map(String.init)
 
-		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, generatePlainDependencyTreeInitializers: Swift.Bool, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
+		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, generatePlainDependencyTreeInitializers: Swift.Bool, apiVersion: SafeDICore.SafeDIAPIVersion, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
 		#expect(lines.contains("SafeDICore.Dependency.Source: instantiated(fulfillingTypeDescription: Swift.Optional<SafeDICore.TypeDescription>, erasedToConcreteExistential: Swift.Bool), received(onlyIfAvailable: Swift.Bool), aliased(fulfillingProperty: SafeDICore.Property, erasedToConcreteExistential: Swift.Bool, onlyIfAvailable: Swift.Bool), forwarded"))
 	}
 
@@ -2085,6 +2085,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		    public init() {}
 		}
 		""".write(to: additionalDirectory.appendingPathComponent("AdditionalService.swift"), atomically: true, encoding: .utf8)
+		// A configuration of another module's file, read through the directory, holds the API version the module's own does not.
+		try """
+		#SafeDIConfiguration(apiVersion: .v3Unstable)
+		""".write(to: additionalDirectory.appendingPathComponent("AdditionalConfiguration.swift"), atomically: true, encoding: .utf8)
 		try """
 		#if FEATURE
 		@Instantiable
@@ -2521,6 +2525,7 @@ extension Instantiable.DependencyLabelInUnselectedClause: BinarySample {}
 extension PlainTypeDeclaration: BinarySample {}
 extension ReservedTypeNameDeclaration: BinarySample {}
 extension MockGeneration: BinarySample {}
+extension SafeDIAPIVersion: BinarySample {}
 extension AccessDeclaration: BinarySample {}
 extension AccessLevel: BinarySample {}
 extension Initializer: BinarySample {}

@@ -70,6 +70,18 @@ public enum ReservedName: Hashable, Sendable {
 	/// The prefix of the name of each builder function generated code declares. The prefix keeps these names out of
 	/// the namespace of the names SafeDI is given.
 	public static let builderFunctionNamePrefix = "__safeDI_"
+	/// The name of the parameter through which a `.v3Unstable` mock's builder function a cycle closes on takes the nearest
+	/// configuration of `typeIdentifier` above the pass that calls it.
+	/// The name under which a `.v3Unstable` mock binds the instance it was passed for a promoted member of a loop of
+	/// builders labeled `label`, `nil` where it builds the member.
+	public static func receivedInstanceName(of label: String) -> String {
+		"\(builderFunctionNamePrefix)received_\(label)".spelledAsJoinedIdentifier
+	}
+
+	public static func nearestConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)nearest_\(typeIdentifier)"
+	}
+
 	/// The name of the parameter through which a generated `mock()` takes its overrides. Callers of a generated
 	/// `mock()` spell it, so it never changes.
 	public static let mockOverridesParameterName = "safeDIOverrides"
