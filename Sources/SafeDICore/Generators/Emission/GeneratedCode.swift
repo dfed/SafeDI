@@ -120,12 +120,33 @@ struct GeneratedCode: Sendable {
 	/// Whether this level, under the indentations around it, is a place the type key can lay out with every place of its
 	/// tree (`TypeKeyLayout.laysOut(_:)`), which the place records as it is built.
 	var isPlaceTheTypeKeyLaysOut: Bool {
-		var code = self
-		while case let .indented(inner, _) = code.node {
-			code = inner
-		}
-		guard case let .children(children) = code.storage, case let .place(_, laysOut) = children.kind else { return false }
+		guard case let .children(children) = unindented.storage, case let .place(_, laysOut) = children.kind else { return false }
 		return laysOut
+	}
+
+	/// Whether the type key can lay out every statement this level stands for in a body, as `TypeKeyLayout.statementCodes(of:)`
+	/// reads it: the place it is, or each place of a sequence of places, from what each place recorded as it was built. It
+	/// reads the levels' storage, so asking it makes nothing: every place is built with it.
+	var statementsAreLaidOutByTypeKey: Bool {
+		guard case let .children(children) = unindented.storage else { return false }
+		switch children.kind {
+		case let .place(_, laysOut):
+			return laysOut
+		case .sequence:
+			// A sequence that holds anything but places is one statement, with no record, as a piece that is no place is.
+			return children.codes.allSatisfy(\.isPlaceTheTypeKeyLaysOut)
+		case .lines, .indented, .rootFunction, .sendableFunction, .omittingRootFunctions:
+			return false
+		}
+	}
+
+	/// This level without the indentations around it.
+	private var unindented: GeneratedCode {
+		var code = self
+		while case let .children(children) = code.storage, case .indented = children.kind {
+			code = children.codes[0]
+		}
+		return code
 	}
 
 	/// What this level of the plan is.
