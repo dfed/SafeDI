@@ -125,6 +125,8 @@ struct AliasPlaceRecord: Sendable {
 indirect enum ValuePath: Hashable, Sendable {
 	/// A declaration at the root's top (`RootDeclarationRecord`), which a function that reads it captures.
 	case rootDeclaration(String)
+	/// The nearest declaration of a label in the body that reads it: a statement, a forwarded property, or a parameter.
+	case binding(String)
 	/// A passed argument of the enclosing function, by its parameter's name, which the function is handed on every call.
 	case passedArgument(String)
 	/// The member `name` of a value.
@@ -147,12 +149,18 @@ struct PassedArgument: Hashable, Sendable {
 }
 
 /// A member of a value the place reads, which its construction calls (`<value>.<name>(<arguments>)`).
+/// Spelled `<receiver>.<name>(<ArgumentsWrapper>(<label>: <source>, …))`, or `<receiver>.<name>()` with no arguments.
 struct CalledMember: Sendable {
 	/// The value whose member is called.
-	let value: ValuePath
+	let receiver: ValuePath
 	let name: String
-	/// The type the member returns, where it differs from the place's: the place wraps it in its property's type.
-	let wrappedIn: TypeDescription?
+	/// The member's arguments, each a read of the body that makes the call.
+	let arguments: [PlaceRead]
+	/// The initializer the arguments are handed to, whose value is the member's one argument; `nil` where the member
+	/// takes the arguments themselves.
+	let argumentsWrapper: TypeDescription?
+	/// The type the member's result is wrapped in, where it differs from the place's; `nil` where it is the place's value.
+	let resultWrapper: TypeDescription?
 }
 
 /// An optional closure a construction tries before its call: `if let <bindingName> = <closure>, <each absent> == nil {
