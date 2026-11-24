@@ -298,7 +298,7 @@ struct BaseComparisonLongRunConfiguration {
 
 	/// Whether the run is requested: `SAFEDI_BASE_COMPARISON_BASE_TOOL` names the base's tool.
 	static var isRequested: Bool {
-		ProcessInfo.processInfo.environment["SAFEDI_BASE_COMPARISON_BASE_TOOL"] != nil
+		isRequested(environmentPrefix: byteComparisonPrefix)
 	}
 
 	/// The configuration a requested run reads, or the problem that keeps it from running:
@@ -307,6 +307,19 @@ struct BaseComparisonLongRunConfiguration {
 	/// corpus as `SAFEDI_GRAPH_FUZZER_FEATURES` does, and `SAFEDI_BASE_COMPARISON_STARTING_SEED` and
 	/// `SAFEDI_BASE_COMPARISON_ITERATIONS` the seeds, the whole corpus when both are unset.
 	static var current: Result<BaseComparisonLongRunConfiguration, Problem> {
+		current(environmentPrefix: byteComparisonPrefix)
+	}
+
+	/// The prefix of the byte comparison's variables.
+	static let byteComparisonPrefix = "SAFEDI_BASE_COMPARISON"
+
+	/// Whether a run whose variables begin with `prefix` is requested: `<prefix>_BASE_TOOL` names the base's tool.
+	static func isRequested(environmentPrefix prefix: String) -> Bool {
+		ProcessInfo.processInfo.environment["\(prefix)_BASE_TOOL"] != nil
+	}
+
+	/// The configuration of a run whose variables begin with `prefix`, read as `current` reads the byte comparison's.
+	static func current(environmentPrefix prefix: String) -> Result<BaseComparisonLongRunConfiguration, Problem> {
 		let environment = ProcessInfo.processInfo.environment
 		var problems = [String]()
 		func executable(_ name: String) -> URL? {
@@ -316,22 +329,22 @@ struct BaseComparisonLongRunConfiguration {
 			}
 			return URL(fileURLWithPath: path)
 		}
-		let baseTool = executable("SAFEDI_BASE_COMPARISON_BASE_TOOL")
-		let headTool = executable("SAFEDI_BASE_COMPARISON_HEAD_TOOL")
-		let reportPath = environment["SAFEDI_BASE_COMPARISON_REPORT"] ?? ""
+		let baseTool = executable("\(prefix)_BASE_TOOL")
+		let headTool = executable("\(prefix)_HEAD_TOOL")
+		let reportPath = environment["\(prefix)_REPORT"] ?? ""
 		if reportPath.isEmpty || !FileManager.default.fileExists(atPath: URL(fileURLWithPath: reportPath).deletingLastPathComponent().path) {
-			problems.append("SAFEDI_BASE_COMPARISON_REPORT must name a file in a directory that exists.")
+			problems.append("\(prefix)_REPORT must name a file in a directory that exists.")
 		}
-		let featureNames = (environment["SAFEDI_BASE_COMPARISON_FEATURES"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+		let featureNames = (environment["\(prefix)_FEATURES"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
 		let features = featureNames.compactMap(GraphFuzzerGeneratorFeature.init(rawValue:))
 		if features.count != featureNames.count {
-			problems.append("SAFEDI_BASE_COMPARISON_FEATURES names a feature that does not exist.")
+			problems.append("\(prefix)_FEATURES names a feature that does not exist.")
 		}
 		let corpusSeedCount = SafeDIToolGraphFuzzerTests.corpus(for: Set(features)).seedCount
-		let startingSeed = environment["SAFEDI_BASE_COMPARISON_STARTING_SEED"].map { UInt64($0) } ?? 0
-		let iterations = environment["SAFEDI_BASE_COMPARISON_ITERATIONS"].map { Int($0) } ?? corpusSeedCount
+		let startingSeed = environment["\(prefix)_STARTING_SEED"].map { UInt64($0) } ?? 0
+		let iterations = environment["\(prefix)_ITERATIONS"].map { Int($0) } ?? corpusSeedCount
 		guard let startingSeed, let iterations, iterations > 0 else {
-			problems.append("SAFEDI_BASE_COMPARISON_STARTING_SEED and SAFEDI_BASE_COMPARISON_ITERATIONS must name at least one seed.")
+			problems.append("\(prefix)_STARTING_SEED and \(prefix)_ITERATIONS must name at least one seed.")
 			return .failure(Problem(description: problems.joined(separator: "\n")))
 		}
 		guard problems.isEmpty, let baseTool, let headTool else {
