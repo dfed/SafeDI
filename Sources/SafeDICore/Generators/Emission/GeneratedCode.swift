@@ -51,6 +51,12 @@ struct GeneratedCode: Sendable {
 		case spelled(String)
 		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 		case place(PlacePlan)
+		/// A function the root may declare once at its top (`RootFunctionHoisting`), written as `inPlace` where it does not.
+		case rootFunction(RootFunctionRecord, inPlace: GeneratedCode)
+		/// The body of a `@Sendable` function, written as it is, which calls only functions that are `@Sendable` too.
+		case sendableFunction(GeneratedCode)
+		/// `code` without the root functions named `names`, which the root declares at its top.
+		case omittingRootFunctions(GeneratedCode, named: Set<String>)
 	}
 
 	/// Text, written as it is.
@@ -73,14 +79,58 @@ struct GeneratedCode: Sendable {
 		GeneratedCode(storage: .children(Children(.indented(indentation), [code])))
 	}
 
-	/// `code`'s text, which a writer writes as it is (`Node.spelled`). The plan is dropped once it is spelled.
+	/// `code`'s text, which a writer writes as it is (`Node.spelled`). The plan is dropped once it is spelled, unless it holds
+	/// a root function, which the root that holds the code may declare at its top instead (`RootFunctionHoisting`).
 	static func spelled(_ code: GeneratedCode) -> GeneratedCode {
-		GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
+		code.holdsRootFunction ? code : GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
+	}
+
+	/// The text of the code without its root functions, and the names of those it holds, in the order it reaches them: the
+	/// text a place's record holds where the root declares them from the place's plan.
+	func spelledWithoutRootFunctions() -> (text: String, rootFunctionNames: [String]) {
+		let names = RootFunctionHoisting.records(in: [self]).map(\.name)
+		return (GeneratedCode.omittingRootFunctions(self, named: Set(names)).spelled(), names)
+	}
+
+	/// Whether the plan holds a root function (`Node.rootFunction`) outside the text of a level it spelled.
+	var holdsRootFunction: Bool {
+		var work = [self]
+		while let code = work.popLast() {
+			switch code.node {
+			case .text, .spelled:
+				break
+			case let .sequence(pieces), let .lines(pieces):
+				work.append(contentsOf: pieces)
+			case let .indented(inner, _), let .sendableFunction(inner), let .omittingRootFunctions(inner, _):
+				work.append(inner)
+			case let .place(plan):
+				work.append(plan.code)
+			case .rootFunction:
+				return true
+			}
+		}
+		return false
 	}
 
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 	static func place(_ plan: PlacePlan) -> GeneratedCode {
 		GeneratedCode(storage: .children(Children(.place(record: plan.record), [plan.code])))
+	}
+
+	/// A function the root may declare once at its top, written as the call declares it where the root does not
+	/// (`Node.rootFunction`).
+	static func rootFunction(_ record: RootFunctionRecord) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.rootFunction(record), [.text(record.spelled(isSendable: record.isSendable))])))
+	}
+
+	/// The body of a `@Sendable` function (`Node.sendableFunction`).
+	static func sendableFunction(_ code: GeneratedCode) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.sendableFunction, [code])))
+	}
+
+	/// `code` without the root functions named `names` (`Node.omittingRootFunctions`).
+	static func omittingRootFunctions(_ code: GeneratedCode, named names: Set<String>) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.omittingRootFunctions(names), [code])))
 	}
 
 	/// The empty code.
@@ -103,6 +153,12 @@ struct GeneratedCode: Sendable {
 				.spelled(text)
 			case let .place(record):
 				.place(PlacePlan(code: children.codes[0], record: record))
+			case let .rootFunction(record):
+				.rootFunction(record, inPlace: children.codes[0])
+			case .sendableFunction:
+				.sendableFunction(children.codes[0])
+			case let .omittingRootFunctions(names):
+				.omittingRootFunctions(children.codes[0], named: names)
 			}
 		}
 	}
@@ -114,7 +170,7 @@ struct GeneratedCode: Sendable {
 		switch node {
 		case let .text(text), let .spelled(text):
 			return text
-		case .sequence, .lines, .indented, .place:
+		case .sequence, .lines, .indented, .place, .rootFunction, .sendableFunction, .omittingRootFunctions:
 			break
 		}
 		var writer = GeneratedCodeWriter()
@@ -136,6 +192,9 @@ struct GeneratedCode: Sendable {
 			case indented(String)
 			case spelled(String)
 			case place(record: PlaceRecord?)
+			case rootFunction(RootFunctionRecord)
+			case sendableFunction
+			case omittingRootFunctions(Set<String>)
 		}
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
@@ -197,12 +256,16 @@ private struct GeneratedCodeWriter {
 		case lineFeed
 		/// The end of the innermost level's code. A line feed after its last line is left out with the empty line it begins.
 		case endOfLevel
+		/// The end of the innermost `Node.omittingRootFunctions`.
+		case endOfOmission
 	}
 
 	private var bytes = [UInt8]()
 	private var levels = [Level]()
 	/// The indentation of every level, outermost first, so that the indentations a line begins with are one run of it.
 	private var indentations = [UInt8]()
+	/// The names of the root functions the root declares at its top, which are not written where they are reached.
+	private var omittedRootFunctionNames = [Set<String>]()
 
 	var text: String {
 		String(decoding: bytes, as: UTF8.self)
@@ -238,12 +301,24 @@ private struct GeneratedCodeWriter {
 					}
 				case let .place(plan):
 					work.append(.code(plan.code))
+				case let .rootFunction(record, inPlace):
+					if !omittedRootFunctionNames.contains(where: { $0.contains(record.name) }) {
+						work.append(.code(inPlace))
+					}
+				case let .sendableFunction(code):
+					work.append(.code(code))
+				case let .omittingRootFunctions(code, names):
+					omittedRootFunctionNames.append(names)
+					work.append(.endOfOmission)
+					work.append(.code(code))
 				}
 			case .lineFeed:
 				writeLineFeed(ofLevelAt: levels.count - 1)
 			case .endOfLevel:
 				levels.removeLast()
 				indentations.removeLast(indentations.count - (levels.last?.indentationEnd ?? 0))
+			case .endOfOmission:
+				omittedRootFunctionNames.removeLast()
 			}
 		}
 	}
