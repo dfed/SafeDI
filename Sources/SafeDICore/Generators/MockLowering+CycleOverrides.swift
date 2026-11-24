@@ -26,13 +26,16 @@ extension MockLowering {
 	struct AncestorOverridePath: Equatable {
 		let path: String
 		let hasConfiguration: Bool
+		/// Whether the place is built with its type's hand-written mock, whose configuration has another shape than one
+		/// built with its initializer: `validateConfigurationsAreBuiltOneWay` leaves out a place beneath a cycle edge.
+		let builtWithHandWrittenMock: Bool
 
 		/// The path a node reads its overrides at: its own field's, `path`, where `isReachable`, else the path the nearest
 		/// node of its type around it read, `nearest`, where that node read the same kind of override, else none.
-		static func own(path: String, hasConfiguration: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
+		static func own(path: String, hasConfiguration: Bool, builtWithHandWrittenMock: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
 			if isReachable {
-				AncestorOverridePath(path: path, hasConfiguration: hasConfiguration)
-			} else if let nearest, nearest.hasConfiguration == hasConfiguration {
+				AncestorOverridePath(path: path, hasConfiguration: hasConfiguration, builtWithHandWrittenMock: builtWithHandWrittenMock)
+			} else if let nearest, nearest.hasConfiguration == hasConfiguration, nearest.builtWithHandWrittenMock == builtWithHandWrittenMock {
 				nearest
 			} else {
 				nil

@@ -1034,6 +1034,7 @@ extension MockLowering {
 			let ownOverridePath = MockLowering.AncestorOverridePath.own(
 				path: "\(path).\(bindingName)",
 				hasConfiguration: hasConfiguration,
+				builtWithHandWrittenMock: usesMockInitializer,
 				isReachable: !isCycleNode && ownFieldReachable,
 				nearest: overridePathsByType[instantiable.concreteInstantiable.asSource]?.last,
 			)
