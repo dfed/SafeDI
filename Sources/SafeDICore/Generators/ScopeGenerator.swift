@@ -4732,7 +4732,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .dependencyTree:
 				self
 			case let .configurable(hooks):
-				.configurable(hooks.children[childIndex] ?? PlaceHooks())
+				.configurable({
+					var child = hooks.children[childIndex] ?? PlaceHooks()
+					child.path = hooks.path + [childIndex]
+					return child
+				}())
+			}
+		}
+
+		/// SPIKE: the path of the place this generates, in a configurable body.
+		var spikePath: [Int]? {
+			switch self {
+			case .dependencyTree:
+				nil
+			case let .configurable(hooks):
+				hooks.path
 			}
 		}
 
@@ -6942,16 +6956,111 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableProperties: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
+		spikePath: [Int]? = nil,
 	) -> PlaceRecord? {
-		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings) else { return nil }
-		return .closer(ClosingPlaceRecord(
+		closingPlaceRecord(
+			of: property,
+			instantiable: instantiable,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			closedOnFunctionName: closedOnFunctionName,
+			unavailableProperties: unavailableProperties,
+			isPlannedAtPlace: isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+			spikePath: spikePath,
+		)
+	}
+
+	/// SPIKE: production's record function for a cycle-closing place, pulled out of the writer: what the place's walk hands
+	/// it, and nothing of how the writer spells the place.
+	nonisolated func closingPlaceRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		forwardedProperties: [Property],
+		erasedToConcreteExistential: Bool,
+		closedOnFunctionName: String,
+		unavailableProperties: Set<Property>,
+		isPlannedAtPlace: Bool,
+		spikePath: [Int]?,
+	) -> PlaceRecord? {
+		guard isPlannedAtPlace, spikeIsPlannedByGenerator else { return nil }
+		var record = ClosingPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: closedOnFunctionName,
 			forwardedProperties: forwardedProperties,
 			cycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
-		))
+		)
+		record.spikePath = spikePath
+		return .closer(record)
+	}
+
+	/// SPIKE: production's record function for a built place, pulled out of the writer.
+	nonisolated func builtPlaceRecord(
+		property: Property,
+		isErased: Bool,
+		instantiable: Instantiable,
+		forwardedProperties: Set<Property>,
+		unavailableProperties: Set<Property>,
+		functionName: String,
+		hasFunction: Bool,
+		children: [GeneratedCode],
+		isPlannedAtPlace: Bool,
+		spikePath: [Int]?,
+	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		guard isPlannedAtPlace, spikeIsPlannedByGenerator, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
+		var record = BuiltPlaceRecord(
+			property: property,
+			isErased: isErased,
+			concreteType: instantiable.concreteInstantiable,
+			isExtension: instantiable.declarationType.isExtension,
+			target: spikeConstructionTarget(of: instantiable),
+			arguments: arguments,
+			forwardedProperties: forwardedProperties.sorted(),
+			cycleParameters: cycleParameters.map(\.property),
+			callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+			functionName: functionName,
+			isSendable: buildsInSendableFunction,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			lineEnd: builtInlineSeamComment.map { " \($0)" } ?? "",
+			hasFunction: hasFunction,
+			children: children,
+			node: PlanNode(),
+		)
+		record.spikePath = spikePath
+		record.spikeGenerator = ObjectIdentifier(self)
+		return .built(record)
+	}
+
+	/// SPIKE: what the place constructs, read of the generator alone.
+	nonisolated func spikeConstructionTarget(of instantiable: Instantiable) -> ConstructionTarget {
+		if let publicMockCall {
+			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
+		} else if constructsWithHandWrittenMock {
+			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
+		} else if instantiable.declarationType.isExtension {
+			.instantiate(instantiable.concreteInstantiable)
+		} else {
+			.initializer(instantiable.concreteInstantiable)
+		}
+	}
+
+	/// SPIKE: the half of `isPlannedByTypeKey` the generator decides alone.
+	nonisolated var spikeIsPlannedByGenerator: Bool {
+		valuesBindingLines.isEmpty
+			&& reboundProperties.isEmpty
+			&& memberCallLines.isEmpty
+			&& !isBuiltByFill
+			&& !fillReturnsWrapperBuilder
+	}
+
+	/// SPIKE: the half of `isPlannedByTypeKey` the production walk decides at the place.
+	nonisolated private func isPlannedAtPlace(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
+		builderFunctionNames.loopValuesBindingLines == nil
+			&& builderFunctionNames.loopLevelsName == nil
+			&& builderFunctionNames.receivedFunctionName == nil
+			&& builderFunctionNames.loopMemberDeclarations.isEmpty
+			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
 	}
 
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
@@ -7935,6 +8044,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					unavailableProperties: unavailableProperties,
 					builderFunctionNames: builderFunctionNames,
 					fillPlaceBindings: fillPlaceBindings,
+					spikePath: codeGeneration.spikePath,
 				)
 			}
 			let childCode = try await generateProperties(
@@ -7947,6 +8057,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return try placeCode(
 				around: childCode,
 				constructionHook: codeGeneration.constructionHook,
+				spikePath: codeGeneration.spikePath,
 				instantiable: instantiable,
 				property: property,
 				forwardedProperties: forwardedProperties,
@@ -8011,6 +8122,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableProperties: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
+		spikePath: [Int]? = nil,
 	) -> GeneratedCode {
 		let closedOnFunctionName = closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
 		return .place(PlacePlan(code: .text(closingCode),
@@ -8023,6 +8135,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		                        	unavailableProperties: unavailableProperties,
 		                        	builderFunctionNames: builderFunctionNames,
 		                        	fillPlaceBindings: fillPlaceBindings,
+		                        	spikePath: spikePath,
 		                        )))
 	}
 
@@ -8031,6 +8144,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func placeCode(
 		around childCode: [GeneratedCode],
 		constructionHook: ConstructionHook?,
+		spikePath: [Int]?,
 		instantiable: Instantiable,
 		property: Property,
 		forwardedProperties: Set<Property>,
@@ -8045,6 +8159,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		try .place(propertyCode(
 			around: childCode,
 			constructionHook: constructionHook,
+			spikePath: spikePath,
 			instantiable: instantiable,
 			property: property,
 			forwardedProperties: forwardedProperties,
@@ -8298,6 +8413,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func propertyCode(
 		around childCode: [GeneratedCode],
 		constructionHook: ConstructionHook? = nil,
+		spikePath: [Int]? = nil,
 		instantiable: Instantiable,
 		property: Property,
 		forwardedProperties: Set<Property>,
@@ -8355,25 +8471,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// its children in its function's body.
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
 		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
-			guard isPlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
-			return .built(BuiltPlaceRecord(
+			try builtPlaceRecord(
 				property: property,
 				isErased: erasedToConcreteExistential,
-				concreteType: instantiable.concreteInstantiable,
-				isExtension: instantiable.declarationType.isExtension,
-				target: constructionTarget,
-				arguments: arguments,
-				forwardedProperties: forwardedProperties.sorted(),
-				cycleParameters: cycleParameters.map(\.property),
-				callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+				instantiable: instantiable,
+				forwardedProperties: forwardedProperties,
+				unavailableProperties: unavailableProperties,
 				functionName: functionName,
-				isSendable: buildsInSendableFunction,
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
 				children: childCode,
-				node: PlanNode(),
-			))
+				isPlannedAtPlace: seamCall == nil && isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+				spikePath: spikePath,
+			)
 		}
 
 		let propertyType = property.propertyType
@@ -8522,6 +8631,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					unavailableProperties: unavailableProperties,
 					builderFunctionNames: builderFunctionNames,
 					fillPlaceBindings: fillPlaceBindings,
+					spikePath: spikePath,
 				) : nil
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true)

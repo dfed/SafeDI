@@ -158,7 +158,7 @@ extension ScopeGenerator {
 			lines: &bindingLines,
 		)
 		if SpikeShadow.logPath != nil {
-			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty)
+			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty, walk: walk)
 		}
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
@@ -440,6 +440,13 @@ extension MockLowering {
 		var childIndexPath = [Int]()
 		// SPIKE: the hook each place's construction would be replaced by, keyed by its path of child indices.
 		var placeHooks = [[Int]: ConstructionHook]()
+		// SPIKE: what the walk hands production's record function at each place, and what the place's statement reads.
+		var spikeMockRecords = [[Int]: PlaceRecord]()
+		var spikeDependencyArguments = [[Int]: [String]]()
+		var spikeCycleArguments = [[Int]: [String]]()
+		var spikeHasFunction = [[Int]: Bool]()
+		var spikeClosedOn = [[Int]: String]()
+		var spikeFeedError = [[Int]: String]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.
@@ -555,6 +562,9 @@ extension MockLowering {
 					if generator.publicMockCall != nil, !generator.fillsABuilder {
 						lines.append(memberLines.removeFirst())
 					}
+				}
+				if SpikeShadow.feeds, let node {
+					spikeFeed(generator: generator, node: node, isLoopMember: membership != nil, unavailableAtPlace: orderedChildren[index].unavailableProperties)
 				}
 				childIndexPath.removeLast()
 				loopMembership = nil
@@ -770,6 +780,10 @@ extension MockLowering {
 			// A closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`); a
 			// closer on a loop of builders passes a member of the level's loops its `_received` function wraps again.
 			let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames)
+			if SpikeShadow.feeds {
+				spikeClosedOn[childIndexPath] = closedOnFunctionName
+				spikeCycleArguments[childIndexPath] = cycleParameterArguments
+			}
 			// A closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -1143,10 +1157,20 @@ extension MockLowering {
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
+				if SpikeShadow.feeds {
+					spikeHasFunction[childIndexPath] = false
+					spikeDependencyArguments[childIndexPath] = dependencyArguments.map { "\($0.label): \($0.value)" }
+					spikeCycleArguments[childIndexPath] = cycleParameterArguments
+				}
 				if let overrideRead {
 					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead, call: node.spikeHookCall, construction: node.spikeConstruction)
 				}
 				return .finished(node)
+			}
+			if SpikeShadow.feeds {
+				spikeHasFunction[childIndexPath] = true
+				spikeDependencyArguments[childIndexPath] = dependencyArguments.map { "\($0.label): \($0.value)" }
+				spikeCycleArguments[childIndexPath] = cycleParameterArguments
 			}
 			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor

@@ -75,6 +75,9 @@ struct BuiltPlaceRecord: Sendable {
 	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
 	/// shared by every place that reads that code from the generator's cache.
 	let node: PlanNode
+	/// SPIKE: the place's path of child indices, and the generator that wrote it.
+	var spikePath: [Int]?
+	var spikeGenerator: ObjectIdentifier?
 }
 
 /// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
@@ -99,6 +102,8 @@ struct ClosingPlaceRecord: Sendable {
 	let forwardedProperties: [Property]
 	/// What the place passes the parameters of the function it calls.
 	let cycleArguments: [PlaceRead]
+	/// SPIKE: the place's path of child indices.
+	var spikePath: [Int]?
 }
 
 /// A rename of a value, written as the path key writes it.

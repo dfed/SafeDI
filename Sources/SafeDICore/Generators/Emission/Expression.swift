@@ -68,4 +68,6 @@ struct ConstructionHook: Hashable, Sendable {
 struct PlaceHooks: Sendable {
 	var construction: ConstructionHook?
 	var children = [Int: PlaceHooks]()
+	/// SPIKE: the place's path of child indices from the root.
+	var path = [Int]()
 }
