@@ -279,7 +279,7 @@ extension MockLowering.PublicConstructionRecord {
 			customMockName: construction.customMockName,
 			constructionIsolation: construction.constructionIsolation,
 			// What the hand-written mock returns, for a node built with it
-			// (`MockParameterNode.constructionReturnType`).
+			// (`MockLowering.PublicConstructionRecord.constructionReturnType`).
 			constructionReturnType: construction.constructionReturnType,
 			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },
 			builderParameterTypes: construction.builderParameterTypes,
@@ -364,7 +364,7 @@ extension MockLowering.PublicConstructionRecord.ChildMember {
 			return nil
 		case let .cycleClosing(_, bindingName, concreteType):
 			// A node that closes a cycle on a node of its type is configured by that type's configuration, as the emitter
-			// nests it (`MockParameterNode.needsConfigurationStruct` holds for a property cycle).
+			// nests it (a property cycle needs one).
 			self.init(
 				name: bindingName,
 				concreteType: concreteType,

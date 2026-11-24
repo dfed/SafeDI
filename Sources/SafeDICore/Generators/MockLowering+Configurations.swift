@@ -249,7 +249,7 @@ extension MockLowering {
 	static func cycleClosingOverridesField(boundAs bindingName: String, concreteType: TypeDescription) -> OverridesField {
 		OverridesField(
 			name: bindingName,
-			typeSource: "\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)",
+			typeSource: "\(concreteType.asSource).\(ScopeGenerator.mockConfigurationStructName)",
 			defaultValue: ".init()",
 			sendability: .whenConfigurationIsTypedSendable(concreteType.asSource),
 		)
@@ -396,7 +396,7 @@ extension MockLowering.ConfigurationRecord {
 		let parameterIndent = "\(innerIndent)\(ScopeGenerator.standardIndent)"
 		var lines = [
 			"\(indent)/// Configuration for how this type is constructed within a mock tree.",
-			"\(indent)struct \(ScopeGenerator.MockParameterNode.configurationStructName) {",
+			"\(indent)struct \(ScopeGenerator.mockConfigurationStructName) {",
 		]
 		var parameters = [String]()
 		var fields = [ConfigurationStorage.Field]()

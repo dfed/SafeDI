@@ -2045,7 +2045,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_aliasFulfilledByInstantiatorSibling_emittedAfterFulfillingBinding() async throws {
 		// The fulfilling property's `typeDescription` is `Instantiator<Child>`, while
-		// the MockParameterNode's `instantiatedTypeDescription` is `Child`. The
+		// the mock node's instantiated type is `Child`. The
 		// post-child-alias bookkeeping must key on the same type source for both
 		// storage and lookup, or aliases fulfilled by Instantiator siblings land in
 		// the pre-child slot and forward-reference their undeclared fulfilling

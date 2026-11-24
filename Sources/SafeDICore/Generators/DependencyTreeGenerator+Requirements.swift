@@ -151,7 +151,7 @@ extension DependencyTreeGenerator {
 				throw DependencyTreeGeneratorError.publicMockCannotBeGenerated(findings)
 			}
 		}
-		let parameters = await mockRoot.mockRootParametersWithTreeNodes(of: instantiable, flatParameterMockDefaults: mockScopes.flatParameterMockDefaults)
+		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
 		let treeNodes = parameters.treeNames.propertyNodes
 		// The declarations the mock calls, each once, in the order the mock reaches them.
 		var declarations = [TypeRequirements.Declaration]()

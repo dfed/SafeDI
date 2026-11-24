@@ -90,7 +90,7 @@ public enum MockLowering {
 				case let .built(bindingName, hasConfiguration, requiresSendable, concreteType, builderParameters, propertyType):
 					let configuredTypeName = concreteType.asSource
 					if hasConfiguration {
-						let typeSource = "\(configuredTypeName).\(ScopeGenerator.MockParameterNode.configurationStructName)"
+						let typeSource = "\(configuredTypeName).\(ScopeGenerator.mockConfigurationStructName)"
 						return ChildField(name: bindingName, typeSource: typeSource, defaultValue: ".init()", sendableForm: .init(typeSource: typeSource, defaultValue: ".init()", configuredTypeName: configuredTypeName))
 					} else {
 						let builderClosureType = "(\(builderParameters.spelled)) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
@@ -157,7 +157,7 @@ public enum MockLowering {
 		/// The types the builder that overrides the construction is handed, one per argument.
 		let builderParameterTypes: [TypeDescription]
 		/// The members that configure the node's children, in the order a public configuration declares them (inline
-		/// order, `MockParameterNode.inlineOrderPosition`).
+		/// order, `ScopeGenerator.inlineOrdered(_:property:)`).
 		let childMembers: [ChildMember]
 		/// The construction's default-valued parameters, each a member of the type's public configuration, with the default
 		/// its type's hand-written mock declares for the same label and type, else its own.
