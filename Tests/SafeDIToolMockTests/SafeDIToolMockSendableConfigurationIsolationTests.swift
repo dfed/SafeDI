@@ -357,14 +357,13 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 				}
 				""",
 				"""
-				@Instantiable
-				public final class Client: Instantiable, Sendable {
-				    @MainActor
+				@Instantiable @MainActor
+				public final class Client: Instantiable {
 				    public init(timeout: Int = 30, policy: Policy = Policy.standard, theme: Theme = Theme(), name: @autoclosure @escaping () -> String = "client") {}
 				}
 				""",
 				"""
-				@Instantiable(generatedAttributes: "@MainActor", generateMock: true)
+				@Instantiable(generateMock: true) @MainActor
 				public final class Root: Instantiable {
 				    public init(client: Client) {
 				        self.client = client
@@ -409,7 +408,7 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			        }
 			    }
 
-			    @MainActor static func mock(
+			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_client() -> Client {
