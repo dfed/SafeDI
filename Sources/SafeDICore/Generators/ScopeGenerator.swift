@@ -11502,18 +11502,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// enclosing that one needs no reservation: it builds a property on the
 	/// override's path, whose label every local of the function spells after
 	/// the function's own.
+	///
+	/// Where the function builds a node whose configuration is `Sendable` (`configurationPath`), the function reads the
+	/// whole configuration from one local instead, `<function>__overrides`, and every read beneath it is that local's
+	/// member: a configuration of the `Sendable` form whose every field is proven `Sendable` is itself `Sendable`
+	/// (`ConfigurationRecord.configurationStruct`), and it holds its fields behind one immutable reference, so the read
+	/// gives each field the value the read of the field would.
 	final class SendableOverrideExtractor {
-		init(functionName: String, names: GeneratedNameAllocator) {
+		/// - Parameter configurationPath: The path of the configuration of the node whose builder function starts the
+		///   extraction, where that configuration is `Sendable`, which the function then reads through one local.
+		init(functionName: String, names: GeneratedNameAllocator, configurationPath: String? = nil) {
 			self.functionName = functionName
 			self.names = names
+			self.configurationPath = configurationPath
 		}
 
 		/// Records that `expression` is read into a local named after the
-		/// outermost `@Sendable` function, and returns that local's name.
+		/// outermost `@Sendable` function, and returns that local's name, or the member of the configuration's local
+		/// that `expression` reads.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
-			let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
-			extractions.append((localName: localName, expression: expression))
-			return localName
+			if let configurationPath, let member = Self.member(of: expression, readFrom: configurationPath) {
+				let localName: String
+				if let configurationLocalName {
+					localName = configurationLocalName
+				} else {
+					localName = names.claim("\(functionName)__\(Self.configurationLocalNameSuffix)".spelledAsJoinedIdentifier)
+					configurationLocalName = localName
+					extractions.append((localName: localName, expression: configurationPath))
+				}
+				return localName + member
+			} else {
+				let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
+				extractions.append((localName: localName, expression: expression))
+				return localName
+			}
 		}
 
 		/// Keeps every later local apart from `names`, which a scope inside the function declares: a local named as one
@@ -11530,6 +11552,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var names: GeneratedNameAllocator
 
 		private let functionName: String
+		private let configurationPath: String?
+		/// The local the configuration at `configurationPath` is read into, once something reads it.
+		private var configurationLocalName: String?
+
+		/// The suffix of the name of the local a whole configuration is read into.
+		private static let configurationLocalNameSuffix = "overrides"
+
+		/// The member access `expression` makes of the configuration at `path` (`""` for the configuration itself), or `nil`
+		/// where it reads something else.
+		private static func member(of expression: String, readFrom path: String) -> String? {
+			if expression == path {
+				""
+			} else if expression.hasPrefix("\(path).") {
+				String(expression.dropFirst(path.count))
+			} else {
+				nil
+			}
+		}
 	}
 }
 

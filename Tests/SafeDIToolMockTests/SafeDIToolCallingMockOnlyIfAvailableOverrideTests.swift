@@ -1040,12 +1040,11 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder = safeDIOverrides.wrapperBuilder.cache
-		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
+		        let __safeDI_wrapperBuilder__overrides = safeDIOverrides.wrapperBuilder
 		        @Sendable nonisolated func __safeDI_wrapperBuilder() -> Wrapper {
 		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder?() ?? .init())
-		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
+		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__overrides.cache?() ?? .init())
+		            return if let safeDIBuilder = __safeDI_wrapperBuilder__overrides.safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
 		        }
 		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)
 		        return Screen(wrapperBuilder: wrapperBuilder)
@@ -1168,12 +1167,11 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		    ) -> Screen {
 		        _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: safeDIOverrides.cache)
-		        let __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder = safeDIOverrides.wrapperBuilder.cache
-		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
+		        let __safeDI_wrapperBuilder__overrides = safeDIOverrides.wrapperBuilder
 		        @Sendable nonisolated func __safeDI_wrapperBuilder() -> Wrapper {
 		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder?() ?? .init())
-		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
+		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__overrides.cache?() ?? .init())
+		            return if let safeDIBuilder = __safeDI_wrapperBuilder__overrides.safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
 		        }
 		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)
 		        return Screen(cache: cache, wrapperBuilder: wrapperBuilder)
