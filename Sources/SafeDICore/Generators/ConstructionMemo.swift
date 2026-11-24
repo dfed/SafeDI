@@ -117,16 +117,30 @@ struct ConstructionMemo {
 		/// What the place's build reads of the generators the pass before created for its subtree, with the settled cycle
 		/// parameters a `CycleParameterSeed` gives it in place of what they found (`SubtreeDigests`): empty in a first pass.
 		let previousPass: SubtreeDigests.ID
-		/// The generator the pass before built at the place, by its identity, which only partitions the places of a later
-		/// pass: two places the pass before built one generator at read alike the context that generator's build read, so
-		/// a later pass's lookup asks only the places that shared one, as the pass before shared them, never every place
-		/// of the scope. `nil` in a first pass. It is compared only, never ordered or emitted, and kept alive by the pass
-		/// before's tree while the pass runs.
-		let previousPassGenerator: ObjectIdentifier?
+		/// The generator the pass before built at the place, which only partitions the places of a later pass: two places
+		/// the pass before built one generator at read alike the context that generator's build read, so a later pass's
+		/// lookup asks only the places that shared one, as the pass before shared them, never every place of the scope
+		/// (asking them all scanned 1.14 million candidates on the mock-12 benchmark module, where a partition scans 220,000).
+		/// `nil` in a first pass. Compared and hashed by identity only, never ordered or emitted; the key holds the generator
+		/// itself, so its identity cannot pass to another generator while any key that names it can be compared.
+		let previousPassGenerator: PreviousPassGenerator?
 
 		/// This key with the pass before's generator `previousPassGenerator`.
-		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
+		func withPreviousPassGenerator(_ previousPassGenerator: PreviousPassGenerator?) -> Key {
 			Key(scope: scope, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forMockGeneration: forMockGeneration, validatesForwardedProperties: validatesForwardedProperties, buildsWithHandWrittenMocks: buildsWithHandWrittenMocks, mayPassNil: mayPassNil, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, reboundProperties: reboundProperties, spellings: spellings, previousPass: previousPass, previousPassGenerator: previousPassGenerator)
+		}
+	}
+
+	/// A generator of the pass before, compared and hashed by its identity alone, which it keeps alive.
+	struct PreviousPassGenerator: Hashable {
+		let generator: ScopeGenerator
+
+		static func == (lhs: Self, rhs: Self) -> Bool {
+			lhs.generator === rhs.generator
+		}
+
+		func hash(into hasher: inout Hasher) {
+			hasher.combine(ObjectIdentifier(generator))
 		}
 	}
 
