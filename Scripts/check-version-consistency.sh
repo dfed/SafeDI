@@ -111,7 +111,9 @@ while read -r identity version; do
 done <<< "$pins"
 
 for identity in "${MAPPED_PACKAGES[@]}"; do
-    if ! echo "$pins" | grep -q -E "^$identity( |\$)"; then
+    # A here-string, not `echo … | grep -q`: under `pipefail` that pipe fails at random, because grep exits at its
+    # first match and echo, which writes a line at a time, dies of the closed pipe.
+    if ! grep -q -E "^$identity( |\$)" <<< "$pins"; then
         fail "Scripts/check-version-consistency.sh maps $identity to a MODULE.bazel module, but Package.resolved does not pin it. Remove it from MAPPED_PACKAGES and bazel_module_for_package, and remove its bazel_dep from MODULE.bazel if SafeDI no longer uses it."
     fi
 done
