@@ -414,7 +414,7 @@ private struct Rendering {
 		var isConfigurationInitializer = false
 		/// The names of the builder functions the node is in, outermost first, each with the construction it builds by
 		/// (`Self.construction(builtBy:)`).
-		var enclosingBuilderFunctions = [(name: String, construction: String?)]()
+		var enclosingBuilderFunctions = [(name: String, returnType: String?, construction: String?)]()
 	}
 
 	let fields: GraphFuzzerMockDifference.Fields
@@ -458,7 +458,7 @@ private struct Rendering {
 			scope.optionalParametersOfPublicMock = scope.isPublicMockMethod ? Set(declaration.signature.parameterClause.parameters.filter { $0.defaultValue?.value.is(NilLiteralExprSyntax.self) == true }.map { ($0.secondName ?? $0.firstName).text }) : []
 			scope.isConfigurationInitializer = false
 			if scope.isInFunctionBody, declaration.name.text.hasPrefix(Self.builderFunctionPrefix) {
-				scope.enclosingBuilderFunctions.append((name: declaration.name.text, construction: Self.construction(builtBy: declaration)))
+				scope.enclosingBuilderFunctions.append((name: declaration.name.text, returnType: declaration.signature.returnClause?.type.trimmedDescription, construction: Self.construction(builtBy: declaration)))
 			}
 			scope.isInFunctionBody = true
 		} else if node.is(InitializerDeclSyntax.self) {
@@ -794,8 +794,11 @@ private struct Rendering {
 		var current: (path: [String], owner: String)? = ([], configurationOwner(named: mockOverridesStructName, extendedType: extendedType))
 		// Each builder function whose path resolved, with the path and owner it leaves.
 		var resolved = [(construction: String?, path: [String], owner: String)]()
-		for function in scope.enclosingBuilderFunctions {
-			if let (path, owner) = current, let label = labelBuilt(byFunctionNamed: function.name, amongFieldsOf: owner), let field = fields[owner]?[label] {
+		for (index, function) in scope.enclosingBuilderFunctions.enumerated() {
+			// A function that builds again what an enclosing function builds, as the same type built the same way, is a
+			// lap of a cycle, which reads no field of its own even where its owner has one (`MockLowering.cycleNodeKey`).
+			let isLap = function.construction != nil && scope.enclosingBuilderFunctions[..<index].contains { $0.returnType == function.returnType && $0.construction == function.construction }
+			if !isLap, let (path, owner) = current, let label = labelBuilt(byFunctionNamed: function.name, amongFieldsOf: owner), let field = fields[owner]?[label] {
 				current = (path + [label], field.type)
 			} else if let construction = function.construction, let ancestor = resolved.last(where: { $0.construction == construction }) {
 				// A function beneath a cycle edge that builds again a type an enclosing function built the same way reads
