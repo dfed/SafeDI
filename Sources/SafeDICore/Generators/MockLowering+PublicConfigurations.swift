@@ -160,11 +160,15 @@ extension MockLowering {
 			documentation: "Overrides how `\(concreteType.asSource)` is constructed. Parameters match the type’s initializer or custom mock method.",
 		))
 		var lines = [String]()
-		lines.append("/// Configuration for how `\(concreteType.asSource)` is constructed within the public mock trees of \(context.moduleName.map { "module `\($0)`" } ?? "this module").")
-		lines.append("nonisolated public struct \(configurationTypeName) {")
-		lines.append(contentsOf: ScopeGenerator.publicStructBody(members: members, indent: ScopeGenerator.standardIndent))
-		lines.append("}")
-		lines.append("")
+		// In `.v3Unstable`, a type with a public mock of its own is configured by that mock's `SafeDIOverrides`, so only its
+		// construction functions are declared here.
+		if !context.v3PublicMockTypes.contains(concreteType) {
+			lines.append("/// Configuration for how `\(concreteType.asSource)` is constructed within the public mock trees of \(context.moduleName.map { "module `\($0)`" } ?? "this module").")
+			lines.append("nonisolated public struct \(configurationTypeName) {")
+			lines.append(contentsOf: ScopeGenerator.publicStructBody(members: members, indent: ScopeGenerator.standardIndent))
+			lines.append("}")
+			lines.append("")
+		}
 		lines.append("extension \(concreteType.asSource) {")
 		// One provider per label, value type and default, across the type's constructions: two of one label differ in the
 		// type they return, which each call's argument selects.
@@ -246,7 +250,7 @@ extension MockLowering {
 				documentation: nil,
 			)
 		case let .built(isConfigured, builderClosureType, childRequiresSendable, accessTypes):
-			if isConfigured, let configurationTypeName = context.configurationTypeNameByType[member.concreteType] {
+			if isConfigured, let configurationTypeName = context.configurationTypeSpelling(of: member.concreteType) {
 				// In `.v3Unstable`, `nil` reads the type's defaults.
 				let isV3 = context.apiVersion == .v3Unstable
 				let typeSource = isV3 ? "\(configurationTypeName)?" : configurationTypeName

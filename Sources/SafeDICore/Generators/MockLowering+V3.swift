@@ -216,15 +216,24 @@ extension MockLowering {
 	struct V3ConfigurationNames: Sendable, Equatable {
 		init() {
 			fileScopeNameByType = [:]
+			publicNameByType = [:]
 		}
 
-		init(foreignTypes: [TypeDescription], moduleName: String?) {
+		/// - Parameter publicNameByType: The public configuration of each type the module's public mocks configure, which
+		///   is the type's only configuration in the module: an internal mock builds such a type as a public mock does.
+		init(foreignTypes: [TypeDescription], moduleName: String?, publicNameByType: [TypeDescription: String]) {
 			fileScopeNameByType = PublicMockContext.configurationTypeNames(of: foreignTypes, moduleName: moduleName)
+			self.publicNameByType = publicNameByType
 		}
 
 		/// The name of the configuration of `type`.
 		func typeName(of type: TypeDescription) -> String {
-			fileScopeNameByType[type] ?? "\(type.asSource).\(ReservedName.mockOverridesTypeName)"
+			publicNameByType[type] ?? fileScopeNameByType[type] ?? "\(type.asSource).\(ReservedName.mockOverridesTypeName)"
+		}
+
+		/// Whether the module configures `type` with a public configuration, which an internal mock builds it through.
+		func isConfiguredPublicly(_ type: TypeDescription) -> Bool {
+			publicNameByType[type] != nil
 		}
 
 		/// The name of the configuration of `type` where the module declares it at file scope, else `nil`.
@@ -233,5 +242,6 @@ extension MockLowering {
 		}
 
 		private let fileScopeNameByType: [TypeDescription: String]
+		private let publicNameByType: [TypeDescription: String]
 	}
 }

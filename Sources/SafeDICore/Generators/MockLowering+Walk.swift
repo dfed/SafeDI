@@ -430,6 +430,12 @@ extension MockLowering {
 		var v3PromotedLoopMemberInstanceNames = [Property: String]()
 		/// In `.v3Unstable`, what the module names each type's configuration.
 		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
+
+		/// Whether a configured node of `type` is built with its type's construction function, reading its public
+		/// configuration: in a public mock, and in `.v3Unstable`, wherever the module configures the type publicly.
+		func buildsPublicly(_ type: TypeDescription) -> Bool {
+			buildsPublicMock || (isV3 && v3ConfigurationNames.isConfiguredPublicly(type))
+		}
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
@@ -1436,13 +1442,13 @@ extension MockLowering {
 					walkOrder: configurationEntry.walkOrder,
 				)
 				// A public mock's node records the construction its type's construction function makes.
-				if buildsPublicMock {
+				if buildsPublicly(configuredNode.instantiable.concreteInstantiable) {
 					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)
 					record.publicConstruction?.fulfillers = record.fulfillers
 				}
 				configurationRecords.append(record)
 				finishConfiguredNode(configuredNode, recordIndex: configurationRecords.count - 1)
-			} else if buildsPublicMock, configuredNode.hasConfiguration {
+			} else if buildsPublicly(configuredNode.instantiable.concreteInstantiable), configuredNode.hasConfiguration {
 				// Every node a public mock builds with a construction function declares it, beneath a
 				// repeated configured ancestor too (`ScopeGenerator.collectPublicConstructionNodes`).
 				var record = ConfigurationRecord(of: configuredNode, children: [])
@@ -1459,7 +1465,7 @@ extension MockLowering {
 				finishConfiguredNode(configuredNode, recordIndex: nil)
 			}
 			// A public mock's configured node calls its type's construction function.
-			var endLines: [String] = if buildsPublicMock, configuredNode.hasConfiguration {
+			var endLines: [String] = if buildsPublicly(configuredNode.instantiable.concreteInstantiable), configuredNode.hasConfiguration {
 				configuredNode.publicBuilderFunctionEndLines(children: children, overrideRead: functionOverrideRead, indent: indent)
 			} else {
 				configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
