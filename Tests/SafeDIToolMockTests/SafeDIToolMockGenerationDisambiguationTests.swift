@@ -7003,15 +7003,14 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.accountView { safeDIBuilder(session) } else { AccountView(session: session) }
 		        }
 		        let accountView: AccountView = __safeDI_accountView()
-		        let __safeDI_guestViewBuilder__guestViewBuilder_prompt_safeDIBuilder = safeDIOverrides.guestViewBuilder.prompt
-		        let __safeDI_guestViewBuilder__safeDIBuilder = safeDIOverrides.guestViewBuilder.safeDIBuilder
+		        let __safeDI_guestViewBuilder__overrides = safeDIOverrides.guestViewBuilder
 		        @Sendable nonisolated func __safeDI_guestViewBuilder(session_GuestSession: GuestSession) -> GuestView {
 		            func __safeDI_prompt() -> SignInPrompt {
 		                let session: GuestSession = session_GuestSession_
-		                return if let safeDIBuilder = __safeDI_guestViewBuilder__guestViewBuilder_prompt_safeDIBuilder { safeDIBuilder(session) } else { SignInPrompt(session: session) }
+		                return if let safeDIBuilder = __safeDI_guestViewBuilder__overrides.prompt { safeDIBuilder(session) } else { SignInPrompt(session: session) }
 		            }
 		            let prompt: SignInPrompt = __safeDI_prompt()
-		            return if let safeDIBuilder = __safeDI_guestViewBuilder__safeDIBuilder { safeDIBuilder(session_GuestSession, prompt) } else { GuestView(session_GuestSession: session_GuestSession, prompt: prompt) }
+		            return if let safeDIBuilder = __safeDI_guestViewBuilder__overrides.safeDIBuilder { safeDIBuilder(session_GuestSession, prompt) } else { GuestView(session_GuestSession: session_GuestSession, prompt: prompt) }
 		        }
 		        let guestViewBuilder = SendableInstantiator<GuestView> {
 		            __safeDI_guestViewBuilder(session_GuestSession: $0)
