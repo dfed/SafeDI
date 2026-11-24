@@ -3144,7 +3144,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				let seamSpelling = hole.scopeSeamType.strippingGenerics.asSource
 				let seamSimpleName = seamSpelling[(seamSpelling.lastIndex(of: ".").map { seamSpelling.index(after: $0) } ?? seamSpelling.startIndex)...]
 				var remedies = [
-					"instantiate the seam where \(closingTypeName) builds `\(closingProperty.typeDescription.asInstantiatedType.asSource)` (`@Instantiated let \(seamSimpleName.prefix(1).lowercased() + seamSimpleName.dropFirst())Builder: Instantiator<\(hole.scopeSeamType.asSource)>`), so the cycle re-enters through the initializer SafeDI generates for \(seamName)",
+					"instantiate `\(hole.scopeSeamType.asSource)` where \(closingTypeName) builds `\(closingProperty.typeDescription.asInstantiatedType.asSource)` (`@Instantiated let \(seamSimpleName.prefix(1).lowercased() + seamSimpleName.dropFirst())Builder: Instantiator<\(hole.scopeSeamType.asSource)>`), so the cycle re-enters through the initializer SafeDI generates for \(seamName)",
 					fulfillRemedy(seamModule),
 				]
 				if closesOnOwnerOfHole {

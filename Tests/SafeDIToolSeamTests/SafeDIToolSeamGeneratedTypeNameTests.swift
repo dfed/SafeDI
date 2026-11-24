@@ -583,7 +583,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 	mutating func generate_reportsDuplicateName_whenCallingModuleDeclaresInstantiableNamedLikeSeam() async {
 		// `App` declares an @Instantiable `Home` beside `Feature`'s seam `Home`, which it can name too: the duplicate-name
 		// error, whose remedy is to rename one.
-		let message = "error: `Home` is declared in modules `App` and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name, and every seam and public mock a run reads. Rename one."
+		let message = "error: `Home` is declared in modules `App` and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name, and every type declared with `generateDependencyTree: true` or `generateMock: .public` that a run reads. Rename one."
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]?["Home.swift"] ?? ""):3:1: \(message)

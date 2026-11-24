@@ -32,12 +32,11 @@ two artifacts:
     The rule collects the rest of the modules beneath them in
     `SafeDIInfo.transitive_module_infos`, as rules_swift collects
     `SwiftInfo.transitive_modules`. SafeDITool reads one of those only
-    in a module that declares a root or a seam, and only when it
+    in a module that declares a root or a type with `generateDependencyTree: true`, and only when it
     declares a type the module's dependency trees need, so a mock
     builds a deeper type only if a tree of its module uses that module
-    or the module is listed. The artifact also carries what a seam or
-    public mock of a module this one depends on needs, so a module is
-    never listed only for another module's seam or public mock. The
+    or the module is listed. The artifact also carries what a type with `generateDependencyTree: true` or `generateMock: .public` in a module this one depends on needs, so a module is
+    never listed only for such a type of another module. The
     SafeDI manual's "Which modules to list" says more.
 
 This rule mirrors the Tuist plugin's `SafeDI.preCompileScript`
@@ -108,7 +107,7 @@ module's package (`package_name`, which the compiler receives as
 so a consumer knows which module and package declare each
 `@Instantiable` type, and records the module each `deps` entry's
 `.safedi` names as one of the module's dependencies, along with the
-modules beneath them that a module that declares a root or a seam
+modules beneath them that a module that declares a root or a type with `generateDependencyTree: true`
 reads.
 `safedi_swift_library` passes the module name its `swift_library`
 compiles: the `module_name` attribute, or the name rules_swift derives
@@ -328,13 +327,12 @@ Prefer `safedi_swift_library`, which declares this target and the
             doc = """The `safedi_compile` labels of the modules this
 module depends on directly, whose `.safedi` module-info artifacts this
 rule consumes for cross-module `@Instantiable` type resolution. A module
-that declares a root or a seam also reads the modules beneath them
+that declares a root or a type with `generateDependencyTree: true` also reads the modules beneath them
 that its dependency trees need, which the rule collects. A module also
 lists each deeper module whose types the mocks SafeDI generates for it
 should build and no dependency tree of the module uses. Each
-`.safedi` carries what a seam or public mock of a module it depends on
-needs, so a module is never listed only for another module's seam or
-public mock. The SafeDI manual's "Which modules to list" says more.""",
+`.safedi` carries what a type with `generateDependencyTree: true` or `generateMock: .public` in a module it depends on
+needs, so a module is never listed only for such a type of another module. The SafeDI manual's "Which modules to list" says more.""",
         ),
         "defines": attr.string_list(
             default = [],
@@ -414,14 +412,13 @@ def safedi_swift_library(
         srcs: Swift sources in this module.
         safedi_deps: The `<name>_safedi` (or `safedi_compile`) labels of
             the modules this module depends on directly. A module that
-            declares a root or a seam also reads the modules beneath
+            declares a root or a type with `generateDependencyTree: true` also reads the modules beneath
             them that its dependency trees need, which the rule
             collects. A module also lists each deeper module whose
             types the mocks SafeDI generates for it should build and
             no dependency tree of the module uses. Each module's `.safedi`
-            carries what a seam or public mock of a module it depends on
-            needs, so a module is never listed only for another module's
-            seam or public mock. The SafeDI manual's "Which modules to
+            carries what a type with `generateDependencyTree: true` or `generateMock: .public` in a module it depends on
+            needs, so a module is never listed only for such a type of another module. The SafeDI manual's "Which modules to
             list" says more. List the libraries themselves in `deps`.
         defines: Passed to both targets.
         copts: Passed to both targets. `safedi_compile` reads only the
