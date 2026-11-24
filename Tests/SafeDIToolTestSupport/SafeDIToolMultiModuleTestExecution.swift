@@ -408,6 +408,9 @@ func executeSafeDIToolMultiModuleTest(
 		))
 	}
 	let writtenModulesByName = Dictionary(uniqueKeysWithValues: writtenModules.map { ($0.fixture.name, $0) })
+	if integration == .moduleInfo, moduleInfoOverrides.isEmpty, modulesBeneath == nil, !discardsStoredSeamSignatures {
+		try GraphDump.write(writtenModules, fixtureRoot: fixtureRoot)
+	}
 
 	var outputs = [String: ModuleTestOutput]()
 	// What `modulesBeneath` gave for each module it was asked about, which a record's inputs hold.
@@ -755,7 +758,7 @@ private func expectMockConditionAgrees(configured configuredCondition: String?, 
 }
 
 /// A module's fixture files as written, and what the harness computed for it.
-private struct WrittenModule {
+struct WrittenModule {
 	let fixture: ModuleFixture
 	/// `<fixture root>/<packageName>`, or `<fixture root>/checkouts/<packageName>` for a checkout package.
 	let packageDirectory: URL
