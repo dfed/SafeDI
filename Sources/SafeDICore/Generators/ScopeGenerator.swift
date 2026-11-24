@@ -7964,7 +7964,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
 			// stays until fills are planned.
-			return Self.textPlace(valuesBindingLines + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse))
+			// The payloads bound at the site's path are places of their own, as a scope's are (`valuesBindingPlaces`), so the
+			// site's place binds only its property and the function it declares; where a loop's box holds them, the site's
+			// text holds them too.
+			let valuesBindingPlaces = valuesBindingPlaces(builderFunctionNames: builderFunctionNames)
+			let sitePlace = Self.holeSitePlace(
+				text: (valuesBindingPlaces == nil ? valuesBindingLines : "") + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse),
+				of: property,
+				at: site,
+				functionName: builderFunctionNames.functionName,
+				valuesBindings: valuesBindings,
+				bindsValuesBindings: valuesBindingPlaces == nil,
+				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
+				carrierUse: siteCarrierUse,
+			)
+			guard let valuesBindingPlaces else { return sitePlace }
+			return .sequence(valuesBindingPlaces + [sitePlace])
 		case let .fill(hole, functionName):
 			// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
 			let fillCode = try await generateFillCode(
