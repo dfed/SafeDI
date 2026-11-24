@@ -2468,9 +2468,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
-	// The time limit only turns a hang into a failure; see
-	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit; see `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedPathFromEarlierSiblingsEndsInReceivedCycle() async {
 		// Each layer holds a Left and a Right service that both receive the two services of the
@@ -2544,9 +2543,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
-	// The time limit only turns a hang into a failure; see
-	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit; see `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedPathFromEarlierSiblingReturnsToItsFirstReceivedProperty() async {
 		// Each layer holds a Left and a Right service that both receive the two services of the
@@ -2622,9 +2620,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
-	// The time limit only turns a hang into a failure; see
-	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit; see `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedInstantiatorPathFromEarlierSiblingsEndsInReceivedCycle() async {
 		// Each layer holds a Left and a Right service that both receive Instantiators of the two
@@ -2697,9 +2694,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
-	// The time limit only turns a hang into a failure; see
-	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
-	@Test(.timeLimit(.minutes(10)))
+	// No time limit; see `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedAliasPathFromEarlierSiblingsEndsInReceivedCycleOfLazyCycles() async {
 		// Each layer holds a Left and a Right service that instantiate Instantiators of each other and
