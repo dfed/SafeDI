@@ -201,6 +201,21 @@ extension ScopeGenerator {
 			// A public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context)
 		} else {
+			// Each class of builder functions declared once (`MockLowering+SharedBuilders.swift`).
+			if let functions = walk.sharedBuilders.functions, !functions.isEmpty,
+			   !nodes.contains(where: {
+			   	if case .built = $0 {
+			   		false
+			   	} else if case .alias = $0 {
+			   		false
+			   	} else {
+			   		true
+			   	}
+			   }),
+			   let sharedBody = MockLowering.sharingBuilderFunctions(ofBody: bindingLines, bodyIndent: bodyIndent, functions: functions)
+			{
+				bindingLines = sharedBody
+			}
 			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 		}
 	}
@@ -338,6 +353,8 @@ extension MockLowering {
 		/// The name the level renames the builder function of the node the walk is about to build to
 		/// (`ScopeGenerator.mockLoweringBuilderFunctionNames(of:boundAs:enclosingFunctionNames:)`), which that node takes.
 		var pendingRenamedFunctionName: String?
+		/// The builder functions the walk declared, for the shared layout.
+		var sharedBuilders = MockLowering.SharedBuilders()
 		/// The names a receive is handed in place of its label, by label and then type: a node named apart from a sibling
 		/// that shares its label (`ScopeGenerator.disambiguatePropertyLabels(forProperties:)`), which its receivers bind again under
 		/// the label in their builder functions, until a declaration of the label hides it.
@@ -1156,6 +1173,12 @@ extension MockLowering {
 				lines.append(contentsOf: valuesBindingLines)
 			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
+			// The shared layout lays out only places whose function reads its own override and nothing
+			// the layout does not record (`MockLowering+SharedBuilders.swift`).
+			if overrideRead == nil || startsExtraction || node.requiresSendable || !node.cycleParameters.isEmpty || ownLoopMembership != nil || usesMockInitializer || node.inlinePlace != nil || node.promotedParameterName != nil || !valuesBindingLines.isEmpty || !generator.memberCallsInsideBuilderFunction.isEmpty || !rebindingLines.isEmpty || !node.sendableAutoclosureBindings.isEmpty || buildsPublicMock {
+				sharedBuilders.cannotShare()
+			}
+			sharedBuilders.opening(MockLowering.SharedBuilderFunction(name: node.functionName, overridePath: nodePath, overrideParameterType: ""))
 			lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(indent)\(ScopeGenerator.standardIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 			lines.append(contentsOf: rebindingLines)
 			lines.append(contentsOf: node.receiverBindingLines(indent: indent))
@@ -1284,6 +1307,18 @@ extension MockLowering {
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
+			var sharedBindings = configuredNode.receiverBindings.map { (name: $0.property.label, typeSource: $0.property.typeDescription.asSource) }
+			for child in children {
+				switch child {
+				case let .built(childNode):
+					sharedBindings.append((name: childNode.bindingName, typeSource: childNode.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: childNode.typesDeclaredEscaping).asSource))
+				case .alias:
+					break
+				case .publicMockCall, .cycleClosing:
+					sharedBuilders.cannotShare()
+				}
+			}
+			sharedBuilders.closing(bindings: sharedBindings, overrideParameterType: configuredNode.overridesField.typeSource)
 			let oneWayParentConcreteType = parentConcreteType
 			// A node whose type repeats a configured node around it, or beneath one, records nothing.
 			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration {
