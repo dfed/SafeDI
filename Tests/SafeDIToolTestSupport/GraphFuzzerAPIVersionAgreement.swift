@@ -389,20 +389,7 @@ extension GraphFuzzerAPIVersionAgreement {
 		let seeds: [UInt64]
 	}
 
-	static let pendingShapes = [
-		PendingShape(
-			reason: "A promoted received builder in a loop of builders that is configured: the loop rebinds it with `if let` over `SafeDIReceived`",
-			seeds: [15, 30, 136],
-		),
-		PendingShape(
-			reason: "A `@Sendable` function captures the mocked type's `SafeDIOverrides`, which is not `Sendable`",
-			seeds: [55, 74, 78, 116],
-		),
-		PendingShape(
-			reason: "A builder function a cycle closes on is handed another type's configuration",
-			seeds: [101],
-		),
-	]
+	static let pendingShapes: [PendingShape] = []
 
 	/// The reason `seed` is pending, if it is.
 	static func pendingReason(ofSeed seed: UInt64) -> String? {
