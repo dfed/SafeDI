@@ -47,7 +47,7 @@ extension TypeKeyLayout {
 				}
 			}
 		}
-		var allocator = GeneratedNameAllocator(reserving: Set<String>())
+		var allocator = GeneratedNameAllocator(reserving: namesInScope)
 		functionNames = membersByClass.indices.map { owner in
 			guard let representative = representative(of: owner) else { return "" }
 			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
@@ -96,13 +96,13 @@ extension TypeKeyLayout {
 				lineEnd: representative.lineEnd,
 			).spelled()
 		}
-		return spelledStatements(ofClass: 0, indentation: "        ", functionCode: functionCode)
+		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
 	}
 
 	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.
 	func spelledStatements(ofClass owner: Int, indentation: String, functionCode: [GeneratedCode]) -> [GeneratedCode]? {
 		var code = [GeneratedCode]()
-		for (index, statement) in statements(ofClass: owner).enumerated() {
+		for (index, statement) in statements(ofClass: owner).enumerated() where owner != 0 || index >= outerDeclarationCount {
 			let site = CallSite(owner: owner, index: index)
 			for function in hoistedFunctions[site] ?? [] {
 				code.append(.indented(functionCode[function], by: indentation))
@@ -251,7 +251,7 @@ extension TypeKeyLayout {
 		let receivedType = read.property.typeDescription
 		if receivedType == declaredType || (receivedType.isOptional && receivedType.unwrapped == declaredType) {
 			return read.label
-		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType {
+		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType || receivedType == instanceType {
 			return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else {
 			guard let instanceType = declaredType.lazilyInstantiatedInstanceType, declaredType.isOptional, receivedType.isOptional, receivedType == instanceType else { return nil }
