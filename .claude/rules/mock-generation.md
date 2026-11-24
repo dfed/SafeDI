@@ -1,12 +1,14 @@
 ---
 paths:
-  - "Sources/SafeDICore/Generators/**/*"
+  - "Sources/SafeDICore/Generators/{MockLowering*,DependencyTreeGenerator+Mock*,*PublicMock*}.swift"
   - "Sources/SafeDICore/Models/{Scope,Property,Dependency,InstantiableStruct,MockGeneration}.swift"
   - "Sources/SafeDIToolLibrary/InstantiableResolution.swift"
   - "Tests/**/*Mock*.swift"
 ---
 
 # Mock generation specifics
+
+This file does not load with `ScopeGenerator.swift`, yet it governs that file's mock declarations: `mockRootParameters`, `seamMockBuilders`, and every declaration there whose name contains `mock` or `Mock`. Read it before changing one.
 
 - **Share logic between production and mock paths where possible.** Validation, scope population, and other shared concerns should live in common helpers rather than being duplicated between `createTypeDescriptionToScopeMapping` and `createMockTypeDescriptionToScopeMapping`. When adding validation to one path, check whether the other path needs it too.
 - **Selected construction initializer.** `InstantiableVisitor.canonicalConstructionInitializer` is the single initializer SafeDI selects for construction (first init that fulfills the type's dependencies). `Instantiable.initializer` is populated from it, and mock generation emits against its signature. Validation that only matters for the path SafeDI uses (e.g., diagnosing `Self.*` in default expressions) should gate on this — walking every entry in `visitor.initializers` false-positives on unused overloads.

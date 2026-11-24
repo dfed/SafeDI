@@ -143,6 +143,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | "Cycle mechanisms": cycle closing, builder function names, sibling order, deep walks | `.claude/rules/cycle-generation.md` |
 | "Cycle mechanisms": a cycle or received-property walk | `.claude/rules/cycle-validation.md` |
 | "Mock generation specifics": `mock()` bodies, hand-written mocks, overrides | `.claude/rules/mock-generation.md` |
+| `mockRootParameters` or `seamMockBuilders` in `ScopeGenerator.swift`, which does not load it | `.claude/rules/mock-generation.md` |
 | promotion to the mock root, parameter naming | `.claude/rules/mock-root-promotion.md` |
 | `LazilyInstantiated` anywhere | `.claude/rules/lazily-instantiated.md` |
 | `generateMock: .public`, generated attributes; a public mock's or a seam's own mock's builders that take nothing | `.claude/rules/public-mocks.md`, `public-mock-builders.md`, `calling-mock-hole-builders.md` |
