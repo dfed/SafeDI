@@ -11534,7 +11534,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		private let functionName: String
 	}
-
 }
 
 // MARK: - DefaultParameter
