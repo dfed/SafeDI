@@ -266,12 +266,33 @@ struct SafeDIToolBaseComparisonTests {
 	}
 
 	/// An executable shell script running `body`.
+	///
+	/// It is written under another name through a descriptor that closes on `exec`, and takes its name once that
+	/// descriptor is closed. Linux refuses to execute a file that any process holds open for writing ("Text file
+	/// busy"), and a process that another test spawns while the script is being written inherits every descriptor of
+	/// the test process that does not close on `exec`, for as long as it runs. Foundation's atomic write opens one
+	/// that does not, so a script written with it once failed to start, with a compile another test had started
+	/// holding it open.
 	private static func script(_ body: String, filesToDelete: inout [URL]) throws -> URL {
 		let file = TestTemporaryDirectory.uniquePath(prefix: "safedi-base-comparison-tool-", pathExtension: "sh")
+		let fileBeingWritten = file.appendingPathExtension("writing")
 		filesToDelete.append(file)
+		filesToDelete.append(fileBeingWritten)
 		try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-		try ("#!/bin/sh\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)
-		try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+		let descriptor = open(fileBeingWritten.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o755)
+		guard descriptor >= 0 else {
+			throw ProcessSpawnError(executablePath: fileBeingWritten.path, operation: "open", errorNumber: errno)
+		}
+		let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
+		do {
+			try handle.write(contentsOf: Data(("#!/bin/sh\n" + body + "\n").utf8))
+			try handle.close()
+		} catch {
+			try? handle.close()
+			throw error
+		}
+		try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fileBeingWritten.path)
+		try FileManager.default.moveItem(at: fileBeingWritten, to: file)
 		return file
 	}
 }
