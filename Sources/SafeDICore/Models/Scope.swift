@@ -942,7 +942,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		/// The declared property a dependency of this scope's type reads for `property`, which it receives only if
 		/// available, or `nil` when `property` is unavailable: a property this scope creates, else the nearest declaration
-		/// of its label (see `NearestDeclarations.binding(of:)`).
+		/// of its label (see `NearestDeclarations.resolvingBinding(of:)`).
 		func binding(of property: Property) -> Property? {
 			scope.createdBinding(of: property) ?? Self.binding(of: property, in: nearestDeclarations, log: &log)
 		}
@@ -3511,13 +3511,8 @@ extension NearestDeclarations {
 
 	/// The binding a receive of `property` only if available reads, or `nil` when the property is unavailable: the
 	/// first of `property.formsReadByOnlyIfAvailableReceive` that the nearest declaration of its label binds, unless a
-	/// form it reads is still being built between that declaration and the receiver.
-	func binding(of property: Property) -> Property? {
-		resolvingBinding(of: property).binding
-	}
-
-	/// `binding(of:)`, with the depth of the scope that made the nearest declaration of `property`'s label the nearest
-	/// (see `resolving(_:)`).
+	/// form it reads is still being built between that declaration and the receiver; with the depth of the scope that
+	/// made the nearest declaration of `property`'s label the nearest (see `resolving(_:)`).
 	func resolvingBinding(of property: Property) -> (binding: Property?, depth: Int) {
 		let (nearestDeclaration, depth) = resolving(property.label)
 		guard let nearestDeclaration else { return (nil, depth) }

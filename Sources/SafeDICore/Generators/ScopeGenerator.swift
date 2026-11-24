@@ -10126,7 +10126,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lazilyInstantiatedBindingNameMap[receivedProperty.label, default: [:]][receivedProperty.typeDescription] = lazilyInstantiatedBindingNameByProperty[receivedProperty.asUnwrappedProperty]
 		}
 		// A call of another module's public mock that takes the wrapper only if available is passed the wrapper a required
-		// receive of the label makes the mock bind, as it reads that declaration (`NearestDeclarations.binding(of:)`): the
+		// receive of the label makes the mock bind, as it reads that declaration (`NearestDeclarations.resolvingBinding(of:)`): the
 		// call receives the optional form, which no parameter of this mock stands for.
 		for receivedProperty in parameters.lazilyInstantiatedReceivedProperties where !receivedProperty.typeDescription.isOptional {
 			let optionalType = TypeDescription.optional(receivedProperty.typeDescription)
