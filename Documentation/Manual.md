@@ -953,6 +953,8 @@ public final class DefaultUserService: UserService, Instantiable {
 
 By default, `generateMock` is `false` and no mock is generated. A mock generated with `generateMock: true` is `internal`; to call it from other modules, see [Cross-module mock generation](#cross-module-mock-generation). Generated mocks are wrapped in `#if DEBUG`, or in the condition your module’s [`#SafeDIConfiguration`](#safediconfiguration) sets as `mockConditionalCompilation`. To bind a generated mock to a global actor, or give it other attributes, see [Attributes for generated declarations](#attributes-for-generated-declarations).
 
+Generated mocks compile in every build where their condition is set. Under the default, `DEBUG`, that is every debug build of the module, including app builds that never run a test or a preview, so the mocks add to those builds’ compile time. To keep them out of debug app builds, set `mockConditionalCompilation` to a condition only your test and preview builds define, such as `"SAFEDI_MOCKS"`, and add it to those builds’ active compilation conditions. Put your [hand-written mocks and `mockOnly` declarations](#declarations-that-only-feed-mock-generation) under the same condition, and use [one condition across modules](#calling-a-public-mock-from-another-module) whose mocks call each other.
+
 ### Using generated mocks
 
 Each `@Instantiable` type with `generateMock: true` gets a generated `mock()` static method that builds its full dependency subtree. When the mock can build every dependency in that subtree, it can be called without arguments, as in `DefaultUserService.mock()` in a test, or in a preview:
