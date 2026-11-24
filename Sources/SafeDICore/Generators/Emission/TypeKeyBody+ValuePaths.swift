@@ -86,7 +86,8 @@ extension ValuePath {
 	var reads: [PlaceRead] {
 		switch self {
 		case .rootDeclaration,
-		     .passedArgument:
+		     .passedArgument,
+		     .emptyInitialization:
 			[]
 		case let .read(read):
 			[read]
@@ -102,7 +103,8 @@ extension ValuePath {
 	var passedArgumentNames: [String] {
 		switch self {
 		case .rootDeclaration,
-		     .read:
+		     .read,
+		     .emptyInitialization:
 			[]
 		case let .passedArgument(name):
 			[name]
@@ -129,6 +131,8 @@ extension ValuePath {
 			"\(value.shape)?.\(name)"
 		case let .call(name, value, arguments, argumentsWrapper):
 			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
+		case let .emptyInitialization(type):
+			"new:\(type.asSource)"
 		}
 	}
 }
@@ -149,14 +153,16 @@ extension PassedArgument {
 
 extension PassedArgument {
 	/// The argument for a closer's structural key: its parameter, its type and the label it reads, never the declaration
-	/// that resolves to, which `checkEveryRead` proves alike at every member; `nil` for a value that is neither a read nor
-	/// a passed argument, which keeps the root one per path.
+	/// that resolves to, which `checkEveryRead` proves alike at every member; a new value as itself; `nil` for any other
+	/// value, which keeps the root one per path.
 	var closerShape: String? {
 		switch value {
 		case let .read(read):
 			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)"
 		case let .passedArgument(name):
 			"passed|\(parameterName)|\(type.asSource)|passed:\(name)"
+		case .emptyInitialization:
+			shape
 		case .rootDeclaration,
 		     .member,
 		     .optionalMember,
@@ -264,6 +270,8 @@ extension TypeKeyLayout {
 			return name
 		case let .read(read):
 			return spelledValue(of: read, inClass: owner, before: index)
+		case let .emptyInitialization(type):
+			return "\(type.asSource)()"
 		case let .member(name, value):
 			return spelledValuePath(value, inClass: owner, before: index).map { "\($0).\(name)" }
 		case let .optionalMember(name, value):
