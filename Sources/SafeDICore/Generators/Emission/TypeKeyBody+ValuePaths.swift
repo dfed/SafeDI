@@ -22,6 +22,7 @@ extension BuiltPlaceRecord {
 	/// The reads the place's construction makes where it is built: its arguments, then the reads of each alternative's
 	/// closure and of the values that must be absent, then the reads of its construction value.
 	var constructionReads: [PlaceRead] {
+		guard sharingFields != nil else { return arguments }
 		var reads = arguments
 		for alternative in alternatives {
 			reads.append(contentsOf: alternative.closure.reads)
@@ -38,18 +39,21 @@ extension BuiltPlaceRecord {
 	/// The values the place's function is handed and declares for its body: what its wrapper forwards, then its passed
 	/// arguments, which a read in its body resolves to as it resolves to a forwarded value.
 	var parameterProperties: [Property] {
-		forwardedProperties + passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
+		guard let sharingFields else { return forwardedProperties }
+		return forwardedProperties + sharingFields.passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
 	}
 
 	/// The reads the place's call makes in its parent's body: what it passes its cycle parameters, then the reads of what
 	/// it hands its passed arguments.
 	var callSiteReads: [PlaceRead] {
-		callCycleArguments + passedArguments.flatMap(\.value.reads)
+		guard let sharingFields else { return callCycleArguments }
+		return callCycleArguments + sharingFields.passedArguments.flatMap(\.value.reads)
 	}
 
 	/// The shape of what the place's construction does besides calling its target, for a structural key: never a label a
 	/// read names apart from the read itself.
 	var constructionShape: [String] {
+		guard sharingFields != nil else { return [] }
 		var shape = alternatives.map { alternative in
 			"alternative|\(alternative.closure.shape)|\(alternative.bindingName ?? "")|\(alternative.requiresAbsent.map(\.shape).joined(separator: ","))|\(alternative.use)|\(alternative.resultWrapper?.asSource ?? "")"
 		}
@@ -63,7 +67,7 @@ extension BuiltPlaceRecord {
 extension ClosingPlaceRecord {
 	/// The reads the closing call makes: what it passes the cycle parameters, then the reads of its passed arguments.
 	var callSiteReads: [PlaceRead] {
-		cycleArguments + passedArguments.flatMap(\.value.reads)
+		passedArguments.isEmpty ? cycleArguments : cycleArguments + passedArguments.flatMap(\.value.reads)
 	}
 }
 

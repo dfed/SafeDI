@@ -78,12 +78,40 @@ struct BuiltPlaceRecord: Sendable {
 	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
 	/// shared by every place that reads that code from the generator's cache.
 	let node: PlanNode
+	/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
+	/// as small to copy as one that holds none of it.
+	var sharingFields: PlaceSharingFields?
+
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
-	var passedArguments = [PassedArgument]()
+	var passedArguments: [PassedArgument] {
+		get { sharingFields?.passedArguments ?? [] }
+		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives) }
+	}
+
 	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
-	var constructionValue: ConstructionValue?
-	/// The optional closures the construction tries first, in order, before calling `target` or `calledMember`.
-	var alternatives = [ConstructionAlternative]()
+	var constructionValue: ConstructionValue? {
+		get { sharingFields?.constructionValue }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives) }
+	}
+
+	/// The optional closures the construction tries first, in order, before calling `target` or its construction value.
+	var alternatives: [ConstructionAlternative] {
+		get { sharingFields?.alternatives ?? [] }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue) }
+	}
+}
+
+/// The box of `BuiltPlaceRecord.sharingFields`. It holds its values for as long as a record holds it.
+final class PlaceSharingFields: Sendable {
+	let passedArguments: [PassedArgument]
+	let constructionValue: ConstructionValue?
+	let alternatives: [ConstructionAlternative]
+
+	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative]) {
+		self.passedArguments = passedArguments
+		self.constructionValue = constructionValue
+		self.alternatives = alternatives
+	}
 }
 
 /// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
