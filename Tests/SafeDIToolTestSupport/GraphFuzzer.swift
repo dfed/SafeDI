@@ -2853,6 +2853,7 @@ enum GraphFuzzerGenerator {
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
+			sharedPlacesRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedPlacesRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2933,6 +2934,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTypeBuiltAtSeveralPlacesOfOneMock(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3378,6 +3381,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
 		/// every shape of that tree.
 		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTypeBuiltAtSeveralPlacesOfOneMock`' choices: whether a graph gains `ShareHost`'s tree, and
+		/// every shape of that tree.
+		private var sharedPlacesRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8067,6 +8073,134 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
+
+		// MARK: One type built at several places of one mock
+
+		/// How a parent of `addingTypeBuiltAtSeveralPlacesOfOneMock`'s tree holds `ShareLeaf`.
+		private enum SharedPlaceKind: CaseIterable {
+			/// `@Instantiated let shareLeaf: ShareLeaf`.
+			case constant
+			/// `@Instantiated let shareLeafBuilder: Instantiator<ShareLeaf>`, or its `Sendable` kind.
+			case instantiator
+			/// `@Instantiated(fulfilledByType: "ShareLeaf", erasedToConcreteExistential: true) let shareLeafErased:
+			/// ErasedInstantiator<(), AnyShareLeaf>`, or its `Sendable` kind.
+			case erasedInstantiator
+			/// `@Instantiated let shareLeafLazy: LazilyInstantiated<ShareLeaf>`, or its `Sendable` kind.
+			case lazilyInstantiated
+			/// `@Instantiated let shareFormBuilder: Instantiator<ShareForm>`, whose `ShareForm` forwards `shareValue` and
+			/// builds `ShareLeaf`.
+			case forwardingInstantiator
+			/// `@Instantiated let shareMiddle: ShareMiddle`, which builds `ShareInner`, which builds `ShareLeaf`: three levels
+			/// beneath the mock's root.
+			case deep
+		}
+
+		/// The base corpus's draw, in one graph of eight, of one type a mock builds at several places of its tree, each with
+		/// an override path of its own, the shape a mock that declares one builder function per class of places, each
+		/// handed its place's configuration, must build exactly as one per place does. `ShareHost`, whose mock is
+		/// generated and which no root reaches, instantiates `shareToken` and two or three parents (`ShareParent0`, …),
+		/// each holding `ShareLeaf` in a way of its own (`SharedPlaceKind`): directly, through an instantiator, an erased
+		/// instantiator or a lazily instantiated wrapper, through `ShareForm`'s instantiator, which forwards `shareValue`, or
+		/// three levels down through `ShareMiddle` and `ShareInner`. `ShareLeaf` receives `shareToken`, now and then builds
+		/// `SharePart`, so its override is a configuration, and now and then receives `shareValue` only if available, which
+		/// only `ShareForm`'s place provides, and `shareNote`, which one parent declares. Half the time a second parent of one
+		/// kind repeats the first's, so one class of places is built under two parents. `sharedPlacesRandom` draws only for
+		/// this pass, after every other, and only in the base corpus.
+		private mutating func addingTypeBuiltAtSeveralPlacesOfOneMock(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, sharedPlacesRandom.percentChance(12) else { return declarations }
+			var declarations = declarations
+			let isSendable = sendability == .sendable
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let erasedInstantiator = isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator"
+			let lazilyInstantiated = isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let leafBuildsPart = sharedPlacesRandom.percentChance(60)
+			let leafReceivesValue = sharedPlacesRandom.percentChance(50)
+			let leafReceivesNote = sharedPlacesRandom.percentChance(40)
+			let parentCount = sharedPlacesRandom.percentChance(50) ? 2 : 3
+			var kinds = [SharedPlaceKind]()
+			for _ in 0..<parentCount {
+				kinds.append(sharedPlacesRandom.element(of: SharedPlaceKind.allCases))
+			}
+			if sharedPlacesRandom.percentChance(50) {
+				kinds[1] = kinds[0]
+			}
+			let noteParentIndex = sharedPlacesRandom.integer(in: 0...(parentCount - 1))
+			func name(_ suffix: String) -> String {
+				"\(prefix)\(suffix)"
+			}
+			func append(_ suffix: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration], additionalDeclarations: [String] = []) {
+				var declaration = TypeDeclaration(
+					name: name(suffix),
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				)
+				declaration.additionalDeclarations = additionalDeclarations
+				declarations.append(declaration)
+			}
+			let leafName = name("ShareLeaf")
+			let leafPlace = PropertyDeclaration(attribute: "@Instantiated", label: "shareLeaf", type: leafName)
+			append("ShareToken", [])
+			append("ShareNote", [])
+			append("ShareValue", [])
+			var leafProperties = [PropertyDeclaration(attribute: "@Received", label: "shareToken", type: name("ShareToken"))]
+			if leafBuildsPart {
+				append("SharePart", [])
+				leafProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "sharePart", type: name("SharePart")))
+			}
+			if leafReceivesValue {
+				leafProperties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "shareValue", type: name("ShareValue") + "?"))
+			}
+			if leafReceivesNote {
+				leafProperties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "shareNote", type: name("ShareNote") + "?"))
+			}
+			let erasedName = name("AnyShareLeaf")
+			let eraser = "public struct \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(leafName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(leafName)\n}"
+			append("ShareLeaf", leafProperties, additionalDeclarations: kinds.contains(.erasedInstantiator) ? [eraser] : [])
+			if kinds.contains(.forwardingInstantiator) {
+				append("ShareForm", [
+					PropertyDeclaration(attribute: "@Forwarded", label: "shareValue", type: name("ShareValue")),
+					leafPlace,
+				])
+			}
+			if kinds.contains(.deep) {
+				append("ShareInner", [leafPlace])
+				append("ShareMiddle", [PropertyDeclaration(attribute: "@Instantiated", label: "shareInner", type: name("ShareInner"))])
+			}
+			var hostProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "shareToken", type: name("ShareToken"))]
+			for (index, kind) in kinds.enumerated() {
+				var parentProperties = [PropertyDeclaration]()
+				if leafReceivesNote, index == noteParentIndex {
+					parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "shareNote", type: name("ShareNote")))
+				}
+				switch kind {
+				case .constant:
+					parentProperties.append(leafPlace)
+				case .instantiator:
+					parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "shareLeafBuilder", type: "\(instantiator)<\(leafName)>"))
+				case .erasedInstantiator:
+					parentProperties.append(PropertyDeclaration(
+						attribute: "@Instantiated(fulfilledByType: \"\(leafName)\", erasedToConcreteExistential: true)",
+						label: "shareLeafErased",
+						type: "\(erasedInstantiator)<(), \(erasedName)>",
+					))
+				case .lazilyInstantiated:
+					parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "shareLeafLazy", type: "\(lazilyInstantiated)<\(leafName)>"))
+				case .forwardingInstantiator:
+					parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "shareFormBuilder", type: "\(instantiator)<\(name("ShareForm"))>"))
+				case .deep:
+					parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "shareMiddle", type: name("ShareMiddle")))
+				}
+				append("ShareParent\(index)", parentProperties)
+				hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "shareParent\(index)", type: name("ShareParent\(index)")))
+			}
+			append("ShareHost", generatesMock: true, hostProperties)
+			return declarations
+		}
+
+		private static let sharedPlacesRandomSeedMask: UInt64 = 0x7368617265506C63
 
 		// MARK: Cycle parameters
 
