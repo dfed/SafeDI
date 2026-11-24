@@ -1937,7 +1937,115 @@ struct SafeDIToolMockSharedBuilderTests: ~Copyable {
 		])
 	}
 
+	// MARK: Tests – generated size
+
+	/// Layers of four screens, each building a model and, through instantiators, the three screens of the next layer
+	/// whose index in their layer differs from its own; every screen and the home that builds the first layer are mocked.
+	/// A mock of it builds one builder function per path from its type to a screen, so today its lines grow with three to
+	/// the power of its depth. The mocks are thousands of lines long, so their line count stands in for them: a mock that
+	/// writes one builder function per type in it writes far fewer, and one that stops doing so writes this many again.
+	@Test(arguments: [
+		(layerCount: 3, generatedLineCount: 2_136),
+		(layerCount: 4, generatedLineCount: 4_460),
+		(layerCount: 5, generatedLineCount: 10_564),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_writesPinnedLineCount_whenEveryScreenOfLayeredScreensIsMocked(layerCount: Int, generatedLineCount: Int) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.layeredScreens(layerCount: layerCount),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles.count == layerCount * 4 + 1)
+		#expect(Self.lineCount(of: output) == generatedLineCount)
+	}
+
+	/// Screens that each forward an `id`, receive the root's `service`, and build, through instantiators, the next three
+	/// screens around a ring, so every screen's tree builds itself again: the shape of issue #646, with every screen
+	/// mocked. The mocks are thousands of lines long, so their line count stands in for them.
+	@Test(arguments: [
+		(screenCount: 4, generatedLineCount: 2_733),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_writesPinnedLineCount_whenEveryScreenOfRingOfScreensIsMocked(screenCount: Int, generatedLineCount: Int) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.ringOfScreens(screenCount: screenCount),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles.count == screenCount)
+		#expect(Self.lineCount(of: output) == generatedLineCount)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// The lines of every file `output` generated.
+	private static func lineCount(of output: TestOutput) -> Int {
+		(output.generatedFiles ?? [:]).values.reduce(0) { $0 + $1.split(separator: "\n", omittingEmptySubsequences: false).count }
+	}
+
+	private static func declaration(of name: String, attributes: String, properties: [(attribute: String, label: String, type: String)]) -> String {
+		var lines = ["@Instantiable\(attributes)", "public final class \(name): Instantiable {"]
+		lines.append("    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {")
+		lines.append(contentsOf: properties.map { "        self.\($0.label) = \($0.label)" })
+		lines.append("    }")
+		lines.append("")
+		lines.append(contentsOf: properties.map { "    @\($0.attribute) let \($0.label): \($0.type)" })
+		lines.append("}")
+		return lines.joined(separator: "\n")
+	}
+
+	/// `Home` builds the four screens of the first of `layerCount` layers through instantiators; each screen forwards an
+	/// `id`, receives `service`, builds its model, and builds the three screens of the next layer whose index in their
+	/// layer differs from its own. The last layer's models receive nothing more.
+	private static func layeredScreens(layerCount: Int) -> [String] {
+		var files = [String]()
+		files.append(declaration(of: "Home", attributes: "(generateMock: true)", properties: [(attribute: "Instantiated", label: "service", type: "Service")] + (0..<4).map {
+			(attribute: "Instantiated", label: "screen\($0)Builder", type: "Instantiator<Screen\($0)>")
+		}))
+		files.append(declaration(of: "Service", attributes: "", properties: []))
+		for layer in 0..<layerCount {
+			for position in 0..<4 {
+				let index = layer * 4 + position
+				var properties = [
+					(attribute: "Forwarded", label: "id", type: "Int"),
+					(attribute: "Received", label: "service", type: "Service"),
+					(attribute: "Instantiated", label: "model\(index)", type: "Model\(index)"),
+				]
+				if layer + 1 < layerCount {
+					properties.append(contentsOf: (0..<4).filter { $0 != position }.map {
+						(attribute: "Instantiated", label: "screen\((layer + 1) * 4 + $0)Builder", type: "Instantiator<Screen\((layer + 1) * 4 + $0)>")
+					})
+				}
+				files.append(
+					declaration(of: "Screen\(index)", attributes: "(generateMock: true)", properties: properties)
+						+ "\n\n"
+						+ declaration(of: "Model\(index)", attributes: "", properties: [
+							(attribute: "Received", label: "id", type: "Int"),
+							(attribute: "Received", label: "service", type: "Service"),
+						]),
+				)
+			}
+		}
+		return files
+	}
+
+	/// `screenCount` screens, each forwarding an `id`, receiving `service`, and building the next three screens around
+	/// the ring through instantiators. `Service` is built by the mock of each screen, which receives it.
+	private static func ringOfScreens(screenCount: Int) -> [String] {
+		var files = [declaration(of: "Service", attributes: "", properties: [])]
+		for index in 0..<screenCount {
+			files.append(declaration(of: "Screen\(index)", attributes: "(generateMock: true)", properties: [
+				(attribute: "Forwarded", label: "id", type: "Int"),
+				(attribute: "Received", label: "service", type: "Service"),
+			] + (1...3).map {
+				(attribute: "Instantiated", label: "screen\((index + $0) % screenCount)Builder", type: "Instantiator<Screen\((index + $0) % screenCount)>")
+			}))
+		}
+		return files
+	}
 }
