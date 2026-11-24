@@ -13616,6 +13616,7 @@ struct GraphFuzzerFailure: Equatable {
 		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements()`):
 		/// the levels a scope enum would nest by type would depend on the path.
 		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
+		case rootFunctionTextDiffersForOneKey = "two root functions of one root with one key have different text"
 		/// A place's path in a seam's tree repeats a declaration (`GraphFuzzerPlaceFacts.chainRepeats`): a scope value's
 		/// chain would repeat one, which a build that closes a cycle, being the first build, never makes.
 		case placeChainRepeatsDeclaration = "a place's path in a seam's tree repeats a declaration"
@@ -14468,6 +14469,7 @@ struct GraphFuzzerToolRuns {
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
+		rootFunctionKeyDisagreements: [String] = [],
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -14480,6 +14482,7 @@ struct GraphFuzzerToolRuns {
 		self.drawnHolePlaces = drawnHolePlaces
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
+		self.rootFunctionKeyDisagreements = rootFunctionKeyDisagreements
 		self.placeFacts = placeFacts
 		self.withoutSecondPath = withoutSecondPath
 		self.remedyRuns = remedyRuns
@@ -14518,6 +14521,8 @@ struct GraphFuzzerToolRuns {
 	let valueOracle: GraphFuzzerValueOracleRun?
 	let withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)?
 	let placeLevelDisagreements: [String]
+	/// Each key a root reaches root functions of with two texts (`collectingRootFunctionKeyDisagreements(during:)`).
+	let rootFunctionKeyDisagreements: [String]
 	let placeFacts: GraphFuzzerPlaceFacts
 	let withoutSecondPath: GraphFuzzerSecondPathRun?
 	let remedyRuns: [GraphFuzzerRemedyRun]
@@ -14604,6 +14609,18 @@ struct GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .placeLevelsDifferBetweenBuildsOfType,
 			details: "\(placeLevelDisagreements.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// The failure of a graph one of whose roots reaches two root functions with one key and different text, or `nil`: a
+	/// root declares a root function once per name, from the first call that reaches it (`RootFunctionHoisting`), so its
+	/// key must name everything its text is a function of. Nothing in the generator compares the text.
+	var rootFunctionKeyFailure: GraphFuzzerFailure? {
+		guard !rootFunctionKeyDisagreements.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .rootFunctionTextDiffersForOneKey,
+			details: "\(rootFunctionKeyDisagreements.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
 		)
 	}
 
@@ -15326,7 +15343,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -16156,15 +16173,18 @@ enum GraphFuzzerOracle {
 		// The validation walk skips a subtree whose walk along an equal context completed and found nothing. A graph whose
 		// first run skipped one is run again with no skip, which must give the same outcome (`cleanSubtreeSkipFailure`).
 		let (skippedSubtrees, skippedSubtreesContinuation) = AsyncStream.makeStream(of: Void.self)
-		let ((firstOutcome, placeLevelDisagreements), placeFacts) = try await collectingPlaceFacts(during: {
-			try await collectingPlaceLevelDisagreements(during: {
-				try await ValidationWalkObservation.$observer.withValue({ observation in
-					if case .skippedCleanSubtree = observation {
-						skippedSubtreesContinuation.yield()
+		// Every root's root functions with one key must have one text (`rootFunctionKeyFailure`).
+		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
+			try await collectingPlaceFacts(during: {
+				try await collectingPlaceLevelDisagreements(during: {
+					try await ValidationWalkObservation.$observer.withValue({ observation in
+						if case .skippedCleanSubtree = observation {
+							skippedSubtreesContinuation.yield()
+						}
+					}) {
+						try await toolOutcome(of: fixture)
 					}
-				}) {
-					try await toolOutcome(of: fixture)
-				}
+				})
 			})
 		})
 		skippedSubtreesContinuation.finish()
@@ -16293,6 +16313,7 @@ enum GraphFuzzerOracle {
 			valueOracle: valueOracle,
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
+			rootFunctionKeyDisagreements: rootFunctionKeyDisagreements,
 			placeFacts: placeFacts,
 			withoutSecondPath: withoutSecondPath,
 			remedyRuns: remedyRuns,

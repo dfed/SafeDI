@@ -1166,21 +1166,21 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
+		            .init(a: { values_log, values_z in __safeDI_apiBuilder_F_A_Scope() })
+		        }
+		        func __safeDI_apiBuilder_F_A_Scope() -> F.__safeDI_ApiCarrier_A<any Api> {
+		            .init(api: {
+		                let api: any Api = Live(log: log)
+		                return api
+		            })
+		        }
 		        func __safeDI_log() -> Log {
 		            Log()
 		        }
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        func __safeDI_f() -> F {
 		            _ = F.__safeDI_F_3674AAE4F944CA7B.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
-		                .init(a: { values_log, values_z in __safeDI_apiBuilder_F_A_Scope() })
-		            }
-		            func __safeDI_apiBuilder_F_A_Scope() -> F.__safeDI_ApiCarrier_A<any Api> {
-		                .init(api: {
-		                    let api: any Api = Live(log: log)
-		                    return api
-		                })
-		            }
 		            return F(__safeDI_log: log.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_F())
 		        }
 		        let f: F = __safeDI_f()
@@ -1496,18 +1496,18 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
+		            .init(a: { values_log, values_z in __safeDI_apiBuilder_F_A_Scope() })
+		        }
+		        func __safeDI_apiBuilder_F_A_Scope() -> F.__safeDI_ApiCarrier_A<any Api> {
+		            .init(api: {
+		                let api: any Api = Live(log: log)
+		                return api
+		            })
+		        }
 		        let log = Log()
 		        func __safeDI_f() -> F {
 		            _ = F.__safeDI_F_3674AAE4F944CA7B.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
-		                .init(a: { values_log, values_z in __safeDI_apiBuilder_F_A_Scope() })
-		            }
-		            func __safeDI_apiBuilder_F_A_Scope() -> F.__safeDI_ApiCarrier_A<any Api> {
-		                .init(api: {
-		                    let api: any Api = Live(log: log)
-		                    return api
-		                })
-		            }
 		            return F(__safeDI_log: log, __safeDI_apiBuilder: __safeDI_apiBuilder_F())
 		        }
 		        let f: F = __safeDI_f()
