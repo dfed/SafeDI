@@ -8374,7 +8374,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
 		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
 			guard isPlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
-			return .built(BuiltPlaceRecord(
+			// A mock's place whose construction the walk hooked with its override tries the override first.
+			var alternatives = [ConstructionAlternative]()
+			if let constructionHook {
+				guard let alternative = MockLowering.constructionAlternative(
+					of: constructionHook,
+					construction: Expression.construction(constructionTarget, arguments: constructionArguments).spelled,
+					argumentValues: arguments.map(\.source.spelled),
+					erasedType: erasedToConcreteExistential ? property.typeDescription.asInstantiatedType : nil,
+				) else { return nil }
+				alternatives.append(alternative)
+			}
+			var record = BuiltPlaceRecord(
 				property: property,
 				isErased: erasedToConcreteExistential,
 				concreteType: instantiable.concreteInstantiable,
@@ -8391,7 +8402,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				hasFunction: hasFunction,
 				children: childCode,
 				node: PlanNode(),
-			))
+			)
+			if !alternatives.isEmpty {
+				record.alternatives = alternatives
+			}
+			return .built(record)
 		}
 
 		let propertyType = property.propertyType

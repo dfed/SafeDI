@@ -96,6 +96,7 @@ extension ScopeGenerator {
 				leadingMemberWhitespace: indent,
 				fillPlaceBindings: .none,
 			)
+			detail += "\t" + Self.recordCounts(of: code)
 			let productionBody = GeneratedCode.lines(code).spelled().split(separator: "\n", omittingEmptySubsequences: false).map(String.init).filter { !$0.allSatisfy(\.isWhitespace) }
 			if productionBody == mockBody {
 				outcome = "SAME"
@@ -104,7 +105,7 @@ extension ScopeGenerator {
 				let index = (0..<min(productionBody.count, mockBody.count)).first { productionBody[$0] != mockBody[$0] } ?? min(productionBody.count, mockBody.count)
 				let p = index < productionBody.count ? productionBody[index] : "<end>"
 				let m = index < mockBody.count ? mockBody[index] : "<end>"
-				detail = "\tline=\(index)\tprod=\(p.trimmingCharacters(in: .whitespaces))\tmock=\(m.trimmingCharacters(in: .whitespaces))\tprodLines=\(productionBody.count)\tmockLines=\(mockBody.count)"
+				detail += "\tline=\(index)\tprod=\(p.trimmingCharacters(in: .whitespaces))\tmock=\(m.trimmingCharacters(in: .whitespaces))\tprodLines=\(productionBody.count)\tmockLines=\(mockBody.count)"
 			}
 		} catch {
 			outcome = "THREW"
@@ -112,5 +113,40 @@ extension ScopeGenerator {
 		}
 		let test = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_TEST"] ?? ""
 		SpikeShadow.append("\(outcome)\t\(instantiable.concreteInstantiable.asSource)\t\(features.sorted().joined(separator: ","))\tnodes=\(depth)\thooks=\(hooks.count)\(detail)\t\(test)")
+	}
+
+	/// SPIKE: how many places of `code` record what, and how many plan nodes and types the built ones name.
+	static func recordCounts(of code: [GeneratedCode]) -> String {
+		var places = 0, built = 0, builtWithAlternative = 0, closers = 0, aliases = 0, unrecorded = 0
+		var nodes = Set<PlanNode>()
+		var types = Set<String>()
+		var stack = code
+		while let next = stack.popLast() {
+			switch next.node {
+			case .text, .spelled:
+				break
+			case let .sequence(codes), let .lines(codes):
+				stack += codes
+			case let .indented(inner, _):
+				stack.append(inner)
+			case let .place(plan):
+				places += 1
+				stack.append(plan.code)
+				switch plan.record {
+				case let .built(record):
+					built += 1
+					if !record.alternatives.isEmpty { builtWithAlternative += 1 }
+					nodes.insert(record.node)
+					types.insert(record.concreteType.asSource)
+				case .closer:
+					closers += 1
+				case .alias:
+					aliases += 1
+				case nil:
+					unrecorded += 1
+				}
+			}
+		}
+		return "places=\(places)\tbuilt=\(built)\tbuiltWithOverride=\(builtWithAlternative)\tclosers=\(closers)\taliases=\(aliases)\tunrecorded=\(unrecorded)\tnodes=\(nodes.count)\ttypes=\(types.count)"
 	}
 }
