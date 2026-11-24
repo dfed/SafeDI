@@ -87,6 +87,23 @@ struct SafeDIToolMockSharedCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsEachFillPlaceOnce_whenMockRootReachesCallWhoseFillHoldsPlaceAtTwoPlaces() async throws {
+		// `Live`, the fill of `F`'s `api`, instantiates `logger: any Logger`, which nothing fulfills, so each mock takes a
+		// builder for it, which the builder function of the call binds for the fill. `Root` reaches the call beneath `A` and
+		// beneath `B`, alike: a tree that held one generator of the call at both places would bind the place twice.
+		let appTypes = [
+			"public protocol Logger: AnyObject {}",
+			Self.live(declarations: ["@Instantiated let logger: any Logger"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let f: F"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let f: F"]),
+			Self.mockedType(named: "Other", declarations: ["@Instantiated let f: F"]),
+			Self.mockedType(named: "Root", declarations: ["@Instantiated let a: A", "@Instantiated let b: B"]),
+		]
+		try await expectSameAppFilesInEverySetting(appTypes: appTypes)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatesSameMocksWithMemoAsWithout_whenMockRootsDifferInCallerValueFillReads() async throws {
 		// `Live`, the fill of `F`'s `api`, receives `token`, which `F` does not hold, so the fill reads the caller's: `Root0`
 		// declares the value, and `Root1` declares it lazily, so its fill reads the wrapper's instance.
