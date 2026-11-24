@@ -709,7 +709,7 @@ extension DependencyTreeGenerator {
 		internerSpace: ConstructionInternerSpace,
 		builtInlineSeamComment: @escaping @Sendable (Instantiable) -> String? = { _ in nil },
 		keepsFirstPassTrees: Bool = false,
-		isolation: isolated (any Actor)? = #isolation,
+		isolation _: isolated (any Actor)? = #isolation,
 	) async throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: nil) }
@@ -916,7 +916,6 @@ extension DependencyTreeGenerator {
 		}
 		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams, proof: proof, firstPassTrees: firstPassTrees)
 	}
-
 
 	/// How many tasks settle one level of a module's seam components at once.
 	private static var seamSignatureWidth: Int {
