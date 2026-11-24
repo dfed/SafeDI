@@ -605,7 +605,7 @@ extension DependencyTreeGenerator {
 			let capturingFunction = if let seamType = capture.capturingSeamType {
 				"`\(seamType.asSource)`’s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`’s tree reads it, and that closure"
 			} else if capture.capturingFillIsPassedOn {
-				"The function SafeDI generates to fill the builder for `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` is passed to a seam from inside a `@Sendable` function, or to a seam that takes it `@Sendable`, so it is `@Sendable` too, and it"
+				"The function SafeDI generates to fill the builder for `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` is passed to the initializer SafeDI generates for a type with `generateDependencyTree: true` from inside a `@Sendable` function, or to one that takes it `@Sendable`, so it is `@Sendable` too, and it"
 			} else if let fillSeamType = capture.capturingFillSeamType {
 				"`\(fillSeamType.asSource)`’s tree builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it"
 			} else {
@@ -950,7 +950,7 @@ extension DependencyTreeGenerator {
 						? "declare `\(type.asSource)` `public` with `generateMock: .public`"
 						: "give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
 						// A seam's tree is one a mock builds inline, which the user may not expect.
-						+ (isSeam ? ": mocks build a seam’s tree inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
+						+ (isSeam ? ": mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
 				} else {
 					nil
 				}

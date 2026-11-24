@@ -86,12 +86,13 @@ public enum SafeDI {
 	///     consumes: each target whose types this target or the code
 	///     SafeDI generates for its roots and mocks uses, so a target that
 	///     declares a root lists every target beneath it, and one that
-	///     declares a seam lists each target beneath it whose types the
-	///     seam's tree should build. Each resolves to
-	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`, and carries what a
-	///     seam or public mock of a module it depends on needs, so a
-	///     target is never listed only for another module's seam or public
-	///     mock. The SafeDI manual's "Which modules to list" says more.
+	///     declares a type with `generateDependencyTree: true` lists each
+	///     target beneath it whose types that type's tree should build.
+	///     Each resolves to `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`,
+	///     and carries what a type with `generateDependencyTree: true` or
+	///     `generateMock: .public` in a module it depends on needs, so a
+	///     target is never listed only for such a type of another module.
+	///     The SafeDI manual's "Which modules to list" says more.
 	///     Tuist target dependencies must guarantee build order.
 	public static func preCompileScript(
 		module: String,

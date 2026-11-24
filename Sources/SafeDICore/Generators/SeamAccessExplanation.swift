@@ -118,7 +118,7 @@ enum SeamAccessExplanation {
 			// public mock requires it to be `public` cannot be narrower, so the compiler then requires the type to be wider.
 			let compilerRequirement = seamAccessIsRequiredByPublicMock
 				? "if \(name(type)) is narrower than `\(neededLevel.spelledOnGeneratedDeclaration)`, the compiler then requires it to be `\(neededLevel.spelledOnGeneratedDeclaration)`"
-				: "the compiler may then require \(name(seam))’s initializer, and so the seam, to be narrower"
+				: "the compiler may then require \(name(seam))’s initializer, and so \(name(seam)), to be narrower"
 			remedies.append("declare `@\(Dependency.Source.receivedRawValue) let \(parameter.label): \(type.asSource)` on \(name(seam)), so that its initializer, which the compiler checks, states how visible \(name(type)) is (\(compilerRequirement))")
 		}
 		remedies += causeRemedies(cause, neededLevel: neededLevel)

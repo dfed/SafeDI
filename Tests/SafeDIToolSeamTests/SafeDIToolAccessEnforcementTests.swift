@@ -3139,7 +3139,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// mock builds inline `public` with a public mock, which the mock would call instead.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let path = Self.declarationPath(of: "ProfileScreen.swift", in: "Feature", fixtures: fixtures, under: integration)
-			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam’s tree inline, and this mock would call the mock `Feature` generates instead."
+			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `Feature` generates instead."
 			return """
 			\(path):18:5: error: `ProfileStore`’s initializer is `internal`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, \(remedy)
 			\(path):18:5-18:5: fixit: package\(" ")
@@ -3159,7 +3159,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// BZ-4: a sandboxed Bazel action is handed `Feature`'s `.safedi` but not its files, so each error is reported
 		// where `LoggedInView` instantiates the seam, naming the module that must change.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam’s tree inline, and this mock would call the mock `Feature` generates instead."
+			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `Feature` generates instead."
 			return """
 			\(fixtures["App"]!["Root.swift"]):24:5: error: `BioFormatter` is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `BioFormatter` `package` in module `Feature` to fix, \(remedy)
 			\(fixtures["App"]!["Root.swift"]):24:5: error: `BioFormatter`’s initializer is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` in module `Feature` to fix, \(remedy)

@@ -680,7 +680,7 @@ private enum CollectInstantiablesError: SourceLocatedError {
 		let declaredIn = "`\(type.asSource)` is declared in modules \(listed(moduleNames))"
 			+ (repeatingModuleNames.isEmpty ? ". " : ", and more than once in \(listed(repeatingModuleNames)). ")
 		// `distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)` leaves such a name whole.
-		let reason = nameRule + (isSeamOrPublicMockAmongThem ? ", and every seam and public mock a run reads" : "")
+		let reason = nameRule + (isSeamOrPublicMockAmongThem ? ", and every type declared with `generateDependencyTree: true` or `generateMock: .public` that a run reads" : "")
 			+ (isEachInsideCompilerDecidedBlock ? ", and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. " : ". ")
 		// A module's duplicates share a name whichever other module is renamed, so they are resolved first.
 		let rename = renameRemedy(forTypeCount: moduleNames.count)

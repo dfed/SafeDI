@@ -1537,7 +1537,7 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenHiddenTypesOfOneNameAreSeams(integration: MultiModuleIntegration) async {
-		let message = "error: `Inner` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name, and every seam and public mock a run reads. Rename one."
+		let message = "error: `Inner` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name, and every type declared with `generateDependencyTree: true` or `generateMock: .public` that a run reads. Rename one."
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(Self.path(of: "Inner.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
@@ -2141,13 +2141,13 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 
 	/// The error at a hidden `store` or its generated-mock reach, whose fix leads with what keeps it out of the app.
 	private static func hiddenStoreMockMessage(subject: String, module moduleName: String, seam seamName: String, fixed fixedDeclaration: String) -> String {
-		"error: \(subject) is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot \(subject.contains("initializer") || subject.contains("instantiate") ? "call" : "construct") it in the code SafeDI generates. Give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build a seam’s tree inline, and this mock would call the mock `\(moduleName)` generates instead. Making \(fixedDeclaration) `public` instead also needs a new name, if module `App` can then name another type called `Store`."
+		"error: \(subject) is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot \(subject.contains("initializer") || subject.contains("instantiate") ? "call" : "construct") it in the code SafeDI generates. Give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `\(moduleName)` generates instead. Making \(fixedDeclaration) `public` instead also needs a new name, if module `App` can then name another type called `Store`."
 	}
 
 	/// The error at an `internal` seam initializer a root mock would call, with its fix-it.
 	private static func seamInitializerMockDiagnostics(atPath path: String, seam seamName: String, module moduleName: String) -> String {
 		"""
-		\(path):3:5: error: `\(seamName)`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build a seam’s tree inline, and this mock would call the mock `\(moduleName)` generates instead.
+		\(path):3:5: error: `\(seamName)`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `\(moduleName)` generates instead.
 		\(path):3:5-3:5: fixit: public\u{20}
 		"""
 	}
