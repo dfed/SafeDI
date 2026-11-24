@@ -1,0 +1,15 @@
+tokens created once the tree is built: 0
+left: services: ["left pair", "left built pair"]
+left: pairs read left's token: true
+left: levels were handed left's token: true
+left: the built pair's level was handed left's pair: true
+right: services: ["right pair", "right built pair"]
+right: pairs read right's token: true
+right: levels were handed right's token: true
+right: the built pair's level was handed right's pair: true
+the sides' tokens differ: true
+tokens created before the top pair: 0
+top: service: top built pair
+top: token is neither side's: true
+a second right has its own token and services: true right pair right built pair true
+tokens created at the end: 1
