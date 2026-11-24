@@ -84,6 +84,9 @@ struct BuiltPlaceRecord: Sendable {
 	var constructionValue: ConstructionValue?
 	/// The optional closures the construction tries first, in order, before calling `target` or `calledMember`.
 	var alternatives = [ConstructionAlternative]()
+	/// The names of the root functions the place's code calls (`RootFunctionRecord`), which the root declares and nothing
+	/// renames, so calling one keeps no place one per path.
+	var calledRootFunctionNames = [String]()
 }
 
 /// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
@@ -131,6 +134,12 @@ struct AliasPlaceRecord: Sendable {
 	/// The names of the functions the text calls, compared as text: where sharing would name a callee apart, the engine
 	/// rewrites the name in the text or keeps the place one per path, never assuming the name stays.
 	var calledFunctionNames = [String]()
+	/// The names of the functions the text declares in the body that holds it, which no function the engine declares in
+	/// that body or around it takes. A call of one of them is not among `calledFunctionNames`.
+	var declaredFunctionNames = [String]()
+	/// The names of the root functions the text calls (`RootFunctionRecord`), which the text does not declare: the root
+	/// declares them, from the place's plan, and nothing renames them, so none is among `calledFunctionNames`.
+	var calledRootFunctionNames = [String]()
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction

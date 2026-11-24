@@ -53,9 +53,7 @@
 /// can name, by holding each pass's tree and seed (`keepAlive(passTree:seed:)`), so no key names an object whose address
 /// another object can take while the memo lives. A root's own place is never stored. A tree built with a seam root or a
 /// mock root's builders reads its own `SeamHoles`, constant within the tree but not across trees, so it neither reads nor
-/// keeps a shared memo. A first pass starts each generator's code as it creates it, and a tree's last pass collects and
-/// starts its generators, so a generator a later tree reuses from a pass that was neither has not started: its code
-/// starts when the scope above it asks for it, as any generator's does that starts nothing early. What is constant in a
+/// keeps a shared memo. What is constant in a
 /// pass of one tree and not across trees is either in the key (the flags) or kept to the tree (its `SeamHoles`, and the
 /// start order of a tree with holes). The list of every input and stored value and why each is covered is
 /// `.claude/rules/construction-memo.md`.
@@ -126,7 +124,6 @@ struct ConstructionMemo {
 		let property: PropertyID
 		let erasedToConcreteExistential: Bool
 		let forMockGeneration: Bool
-		let startsCodeGeneration: Bool
 		let validatesForwardedProperties: Bool
 		let buildsWithHandWrittenMocks: Bool
 		/// Whether a declaration enclosing the tree holds a receive a mock passes `nil`
@@ -153,7 +150,6 @@ struct ConstructionMemo {
 				property: property,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: startsCodeGeneration,
 				validatesForwardedProperties: validatesForwardedProperties,
 				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 				mayPassNil: mayPassNil,
@@ -166,15 +162,10 @@ struct ConstructionMemo {
 		}
 	}
 
-	/// A finished place's generator, with the reads of the context above it its subtree made and its scope count, which
-	/// the place's parent counts as its own child's.
+	/// A finished place's generator, with the reads of the context above it its subtree made.
 	struct Entry {
 		let reads: ConstructionLog
 		let generator: ScopeGenerator
-		let subtreeScopeCount: Int
-		/// The generators the build started or collected to start, in order, which a later pass that reuses the generator
-		/// collects again.
-		let startedBeneath: StartedGenerators
 		/// Whether the build found, everywhere in its subtree, what it read from the pass before: the same cycle parameters,
 		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
 		/// read from the pass before, so it builds this generator again (see `settledReuse`).
@@ -182,28 +173,6 @@ struct ConstructionMemo {
 		/// The generator's `CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
 		/// that reuses it to merge.
 		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
-	}
-
-	/// Every group of generators one pass started or collected to start, each group on one task, in order
-	/// (`ScopeRecord.createScopeGenerator`), which the pass's entries share: each names its own part, so no entry copies
-	/// the generators beneath its place, which made a deep chain's entries hold a number of generators that grows with the
-	/// square of its depth.
-	final class StartLog {
-		private(set) var groups = [[ScopeGenerator]]()
-
-		func append(_ group: [ScopeGenerator]) {
-			groups.append(group)
-		}
-	}
-
-	/// The part of a pass's start log one place's build started or collected.
-	struct StartedGenerators {
-		let log: StartLog
-		let positions: Range<Int>
-
-		var groups: ArraySlice<[ScopeGenerator]> {
-			log.groups[positions]
-		}
 	}
 
 	/// A reuse of an entry by another place: the entry, with the depths its reads are answered at in the place's context.

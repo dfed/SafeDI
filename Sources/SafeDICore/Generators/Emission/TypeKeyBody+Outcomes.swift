@@ -27,7 +27,7 @@ extension TypeKeyLayout {
 			.statement(owner: owner, index: position)
 		} else if owner == 0 {
 			.none
-		} else if representative(of: owner)?.forwardedProperties.contains(where: { $0.label == label }) == true {
+		} else if representative(of: owner)?.parameterProperties.contains(where: { $0.label == label }) == true {
 			.forwarded(owner: owner, label: label)
 		} else if outcomes[owner][label] == .passed {
 			.read(owner: owner, label: label)
@@ -112,7 +112,7 @@ extension TypeKeyLayout {
 		case let .statement(owner, index):
 			property(of: statements(ofClass: owner)[index])?.typeDescription
 		case let .forwarded(owner, label):
-			representative(of: owner)?.forwardedProperties.first(where: { $0.label == label })?.typeDescription
+			representative(of: owner)?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .read(owner, label):
 			parameterTypes[owner][label]
 		}
