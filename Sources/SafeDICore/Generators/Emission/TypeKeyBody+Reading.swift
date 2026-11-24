@@ -35,7 +35,7 @@ extension TypeKeyLayout {
 	/// Reads the root's body, after `declareOuter(_:)` declared it.
 	mutating func read(_ rootBody: [GeneratedCode]) -> Bool {
 		var viewsByKey = [ViewKey: Int]()
-		var frames = [(body: 0, children: rootBody, next: 0)]
+		var frames = [(body: 0, children: Self.statementCodes(of: rootBody), next: 0)]
 		while let frame = frames.last {
 			guard frame.next < frame.children.count else {
 				frames.removeLast()
@@ -99,7 +99,7 @@ extension TypeKeyLayout {
 						))
 						viewsByKey[key] = newBody
 						statement = .built(body: newBody)
-						frames.append((body: newBody, children: built.children, next: 0))
+						frames.append((body: newBody, children: Self.statementCodes(of: built.children), next: 0))
 					}
 				} else {
 					guard built.children.isEmpty, built.cycleParameters.isEmpty else { return false }
@@ -143,7 +143,7 @@ extension TypeKeyLayout {
 				continue
 			}
 			var children = [PlaceRecord]()
-			for code in current.children {
+			for code in Self.statementCodes(of: current.children) {
 				guard let record = Self.record(of: code) else { return nil }
 				children.append(record)
 			}
@@ -211,7 +211,7 @@ extension TypeKeyLayout {
 			case nil:
 				return false
 			case let .built(built):
-				stack.append(contentsOf: built.children)
+				stack.append(contentsOf: statementCodes(of: built.children))
 			case .closer:
 				break
 			case let .alias(alias):
@@ -226,6 +226,29 @@ extension TypeKeyLayout {
 	static func unindentedText(of code: GeneratedCode) -> String? {
 		guard case let .indented(inner, _) = code.node else { return nil }
 		return inner.spelled()
+	}
+
+	/// The statements of a body whose children are `codes`: each child, or each place of a child that is places one after
+	/// another, as a scope's payload bindings precede its place (`ScopeGenerator.valuesBindingPlaces`), each indented as
+	/// the child is.
+	static func statementCodes(of codes: [GeneratedCode]) -> [GeneratedCode] {
+		var statements = [GeneratedCode]()
+		for code in codes {
+			var indentations = [String]()
+			var inner = code
+			while case let .indented(wrapped, indentation) = inner.node {
+				indentations.append(indentation)
+				inner = wrapped
+			}
+			guard case let .sequence(pieces) = inner.node, pieces.allSatisfy({ record(of: $0) != nil }) else {
+				statements.append(code)
+				continue
+			}
+			for piece in pieces {
+				statements.append(indentations.reversed().reduce(piece) { code, indentation in .indented(code, by: indentation) })
+			}
+		}
+		return statements
 	}
 
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.

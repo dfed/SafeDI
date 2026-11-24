@@ -414,12 +414,12 @@ extension ScopeRecord {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
-		// A root of the dependency tree that the type key lays out (`TypeKeyBody`) starts no code early, decided here, before
-		// its tree starts any. Its body is laid out from the plan of every place, at the context each place is reached in,
+		// A root of the dependency tree, or a seam's own tree, that the type key lays out (`TypeKeyBody`) starts no code
+		// early, decided here, before its tree starts any. Its body is laid out from the plan of every place, at the context each place is reached in,
 		// which the root asks for once its tree exists; an early start generates each large subtree's code at the context of
-		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Seams, mocks
-		// and trees built only to read their sets keep their starts.
-		let startsCodeGeneration = startsCodeGeneration && !(mockBuilders == nil && !forMockGeneration && (seamRoot == nil || seamRoot?.signature.builders.isEmpty == true))
+		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Mocks and trees
+		// built only to read their sets keep their starts.
+		let startsCodeGeneration = startsCodeGeneration && !(mockBuilders == nil && !forMockGeneration)
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,
@@ -2988,6 +2988,42 @@ struct SeamHoles: Sendable {
 			"let \(bindingName) = \(expression(readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
 		}
 
+		/// What `line(readingInstancesOf:)` reads, as the type key lists a text place's reads: the struct its member is called
+		/// on, the run struct a carrier's member takes or the run before this one, and each field it reads of the scope.
+		func reads(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>) -> [PlaceRead] {
+			var names = [String]()
+			if let formsRunAfter {
+				names.append(contentsOf: formsRunAfter.map { [$0] } ?? [])
+			} else {
+				names.append(memberCall.parentName)
+				if case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil, !isLetChild, let structBindingName = carrierUse?.structBindingName {
+					names.append(structBindingName)
+				}
+			}
+			// A name the seam's tree binds for a level or a payload is read as a value of its own, whatever its type.
+			var reads = names.map { name in
+				PlaceRead(argumentLabel: name, label: name, property: Property(label: name, typeDescription: .simple(name: name)), source: .binding(label: name))
+			}
+			let isLetChildOfCarrier = formsRunAfter == nil && isLetChild
+			guard !isLetChildOfCarrier else { return reads }
+			let readFields = if formsRunAfter == nil, case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+				Array(fields[carrierUse?.extras ?? 0..<fields.count])
+			} else {
+				fields
+			}
+			for field in readFields {
+				let label = field.property.label
+				let readsInstance = !field.isDeferredParameter && lazilyInstantiatedInstanceProperties.contains(field.property.asUnwrappedProperty)
+				reads.append(PlaceRead(
+					argumentLabel: label,
+					label: label,
+					property: field.property,
+					source: readsInstance ? .lazyInstance(label: label, throughOptional: false) : .binding(label: label),
+				))
+			}
+			return reads
+		}
+
 		/// The value `line(readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` binds.
 		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 			if let formsRunAfter {
@@ -3599,17 +3635,6 @@ extension ScopeGeneratorUnderConstruction {
 				seamHoles: seamHoles,
 				namesBoundBySeam: namesBoundBySeam,
 			)
-			// A large subtree starts its own code and that of the small subtrees directly beneath it, in groups, as
-			// `scopeGenerator(collectingGeneratorsToStartInto:startedGenerators:startLog:)` starts a tree built for emission.
-			if reseating.subtreeScopeCount >= scopeCountOfLargeSubtree, !seamRoot.signature.builders.isEmpty {
-				var groupsStartingNow = groupsOfLargeSubtreeSize(reseating.smallSubtrees)
-				groupsStartingNow.append([reseated])
-				for group in groupsStartingNow {
-					let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
-					guard !group.isEmpty else { continue }
-					startCodeGeneration(of: group, spellsPlans: group.first !== reseated)
-				}
-			}
 			if stack.isEmpty {
 				reseatedTree = reseated
 			} else {
