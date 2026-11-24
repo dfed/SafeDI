@@ -10237,7 +10237,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderFunctionNames: Set<String>
 		/// The places inside the fills of the tree's calls of other modules' public mocks (`FillPlace`), in the order the calls
 		/// are generated, each a place of a builder `mock()` takes. The query and a public mock's promotion read a tree that
-		/// holds no internal mock's call, so a tree read from the parameter tree leaves these four empty.
+		/// holds no internal mock's call, so their names leave these four empty (`treeNames(of:readsFills:)`).
 		var fillPlaces = [FillPlace]()
 		/// The labels the types of those fills' trees declare.
 		var namesDeclaredInFills = Set<String>()
@@ -10246,7 +10246,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The family of each builder the tree's calls pass up, by the property each call's leaf receives it as.
 		var passedUpBuilderFamilies = [Property: MockLowering.PassedUpBuilderFamily]()
 		/// Every node of the tree that builds a type, a node that closes a cycle included, each before its children, depth
-		/// first in generation order; a tree read from the parameter tree leaves it empty.
+		/// first in generation order.
 		var propertyNodes = [PropertyNode]()
 
 		/// A node of the mock's tree that builds a type: what it builds, and where it is in the tree.
@@ -10269,57 +10269,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The names of the mock tree `parameterTree` of the mocked type, `instantiable`.
-	static func mockTreeNames(of parameterTree: [MockTreeItem], mockedType instantiable: Instantiable) async -> MockTreeNames {
-		let treePropertyNodes = parameterTree.propertyNodes
-		let mockedTypeUncoveredDependencies = uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes, holeSiteProperties: Set(parameterTree.holeSiteProperties))
-		var uncoveredDependencies = UncoveredDependencies()
-		// The mocked type is built in the body of `mock()`, outside every builder function.
-		for dependency in mockedTypeUncoveredDependencies {
-			uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
-		}
-		// When a child has a custom mock method, its @Instantiated deps that aren't in the scope map become builder arguments.
-		// These must surface as flat params so the mock body can pass them.
-		await collectUncoveredDependenciesFromTree(
-			treePropertyNodes,
-			namesDeclaredByEnclosingBuilderFunctions: [],
-			into: &uncoveredDependencies,
-		)
-		let creatingTypesByProperty = uncoveredDependencies.properties.isEmpty
-			? [:]
-			: typesCreatingDependencies(
-				ofMockedType: instantiable,
-				mockedTypeDependencies: mockedTypeUncoveredDependencies,
-				treePropertyNodes: treePropertyNodes,
-			)
-		var builderFunctionNames = Set<String>()
-		var nodesToVisit = treePropertyNodes
-		while let node = nodesToVisit.popLast() {
-			builderFunctionNames.insert(functionName(toBuildPropertyNamed: node.propertyLabel))
-			nodesToVisit += node.propertyChildren
-		}
-		return MockTreeNames(
-			rootProperties: treePropertyNodes.map(\.property),
-			mockedTypeUncoveredDependencies: mockedTypeUncoveredDependencies,
-			uncoveredDependencies: uncoveredDependencies.properties.indices.map { index in
-				MockTreeNames.UncoveredDependency(
-					dependency: uncoveredDependencies.dependencies[index],
-					isHiddenWhereReferenced: uncoveredDependencies.indicesHiddenWhereReferenced.contains(index),
-					isInstantiatedInSendableFunction: uncoveredDependencies.indicesInstantiatedInSendableFunction.contains(index),
-					creatingTypes: creatingTypesByProperty[uncoveredDependencies.properties[index]] ?? [],
-				)
-			},
-			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions(of: treePropertyNodes),
-			builderFunctionNames: builderFunctionNames,
-		)
-	}
-
 	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
 		let parameterTree = await rootMockParameterTree
-		return await mockRootParameters(
+		return mockRootParameters(
 			instantiable: instantiable,
 			mockDefaults: mockDefaults,
-			treeNames: Self.mockTreeNames(of: parameterTree, mockedType: instantiable),
+			treeNames: treeNames(of: instantiable, readsFills: false).names,
 			parameterTree: parameterTree,
 		)
 	}
@@ -11780,139 +11735,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// Walks the parameter tree and collects `@Instantiated` dependencies from child
-	/// types that aren't fulfilled by their own child nodes. These are deps that
-	/// surface through builder arguments (especially via custom mock methods) but aren't
-	/// fulfilled by any type in the scope map. `async` for the reason `generateMockBodyBindings` is.
-	///
-	/// A type is passed such a dependency where it is built, inside the builder functions of the nodes
-	/// above it. `namesDeclaredByEnclosingBuilderFunctions` holds the names those functions declare –
-	/// their parameters and the bindings of their dependencies, other than the dependencies they are
-	/// passed themselves – which hide a parameter of the same name there.
-	private static func collectUncoveredDependenciesFromTree(
-		_ nodes: [MockParameterNode],
-		namesDeclaredByEnclosingBuilderFunctions: Set<String>,
-		into uncoveredDependencies: inout UncoveredDependencies,
-	) async {
-		for node in nodes {
-			let propertyChildren = node.propertyChildren
-			var uncoveredLabels = Set<String>()
-			for dependency in uncoveredInstantiatedDependencies(of: node) {
-				uncoveredLabels.insert(dependency.property.label)
-				uncoveredDependencies.add(
-					dependency,
-					isHiddenWhereReferenced: namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label),
-					// The node is built inside a `@Sendable` builder function: its own, or one around it.
-					isInstantiatedInSendableFunction: node.requiresSendable,
-				)
-			}
-			// Skip recursion into property cycle children — they're self-references
-			// whose deps would incorrectly surface as uncovered.
-			let nonCycleChildren = propertyChildren.filter { !$0.isPropertyCycle }
-			guard !nonCycleChildren.isEmpty else { continue }
-			var namesDeclaredByChildrensEnclosingBuilderFunctions = namesDeclaredByEnclosingBuilderFunctions
-			for dependency in node.dependencies where !uncoveredLabels.contains(dependency.property.label) {
-				namesDeclaredByChildrensEnclosingBuilderFunctions.insert(dependency.property.label)
-			}
-			await collectUncoveredDependenciesFromTree(
-				nonCycleChildren,
-				namesDeclaredByEnclosingBuilderFunctions: namesDeclaredByChildrensEnclosingBuilderFunctions,
-				into: &uncoveredDependencies,
-			)
-		}
-	}
-
-	/// The `@Instantiated` dependencies of `node`'s type that the mock cannot build, which `mock()` takes as
-	/// parameters: those no property child of the node builds.
-	private static func uncoveredInstantiatedDependencies(of node: MockParameterNode) -> [Dependency] {
-		// Nearly every node builds every dependency it instantiates.
-		var childLabels: Set<String>?
-		return node.dependencies.filter { dependency in
-			switch dependency.source {
-			case .instantiated:
-				if childLabels == nil {
-					childLabels = Set(node.propertyChildren.map(\.propertyLabel)).union(node.children.holeSiteProperties.map(\.label))
-				}
-				return childLabels?.contains(dependency.property.label) == false
-			case .received, .aliased, .forwarded:
-				return false
-			}
-		}
-	}
-
-	/// The `@Instantiated` dependencies of the mocked type, `instantiable`, that the mock cannot build, which
-	/// `mock()` takes as parameters: those no node of the mock root's tree, `treePropertyNodes`, builds. A node
-	/// promoted to the root under a dependency's label, of another type, does not build it. The `LazilyInstantiated`
-	/// the mock builds the dependency as, when the tree receives that, does.
-	private static func uncoveredInstantiatedDependencies(
-		ofMockedType instantiable: Instantiable,
-		treePropertyNodes: [MockParameterNode],
-		holeSiteProperties: Set<Property>,
-	) -> [Dependency] {
-		// The properties the tree's nodes build, each also as the instance of a `LazilyInstantiated` it builds, collected
-		// once rather than for each dependency.
-		var builtProperties: Set<Property>?
-		return instantiable.dependencies.filter { dependency in
-			switch dependency.source {
-			case .instantiated:
-				guard !holeSiteProperties.contains(dependency.property) else { return false }
-				if builtProperties == nil {
-					var properties = Set<Property>()
-					for node in treePropertyNodes {
-						let property = node.property
-						properties.insert(property)
-						if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
-							properties.insert(instanceProperty)
-						}
-					}
-					builtProperties = properties
-				}
-				return builtProperties?.contains(dependency.property) == false
-			case .received, .aliased, .forwarded:
-				return false
-			}
-		}
-	}
-
-	/// The types that create each dependency the mock cannot build, each type once however many places in the tree build
-	/// it: the mocked type, then the types of its tree depth first, each type's children in the order it declares them
-	/// rather than the order they are built in, followed at the mock root by the dependencies the mock promotes. The tree
-	/// is walked with a stack, since it can be as deep as the module has types.
-	private static func typesCreatingDependencies(
-		ofMockedType instantiable: Instantiable,
-		mockedTypeDependencies: [Dependency],
-		treePropertyNodes: [MockParameterNode],
-	) -> [Property: [TypeDescription]] {
-		var typesByProperty = [Property: [TypeDescription]]()
-		for dependency in mockedTypeDependencies {
-			typesByProperty[dependency.property, default: []].append(instantiable.concreteInstantiable)
-		}
-		var nodesToVisit = Array(inDeclarationOrder(treePropertyNodes, declaredBy: instantiable.dependencies).reversed())
-		while let node = nodesToVisit.popLast() {
-			for dependency in uncoveredInstantiatedDependencies(of: node)
-				where typesByProperty[dependency.property]?.contains(node.concreteType) != true
-			{
-				typesByProperty[dependency.property, default: []].append(node.concreteType)
-			}
-			// As `collectUncoveredDependenciesFromTree` does, whose parameters these are.
-			let nonCycleChildren = node.propertyChildren.filter { !$0.isPropertyCycle }
-			nodesToVisit.append(contentsOf: inDeclarationOrder(nonCycleChildren, declaredBy: node.dependencies).reversed())
-		}
-		return typesByProperty
-	}
-
-	/// `nodes`, the children of a type that declares `dependencies`, in the order it declares them; any it does not
-	/// declare, which the mock promotes to its root, stay in their order after those.
-	private static func inDeclarationOrder(_ nodes: [MockParameterNode], declaredBy dependencies: [Dependency]) -> [MockParameterNode] {
-		var declarationIndexByLabel = [String: Int]()
-		for (index, dependency) in dependencies.enumerated() where declarationIndexByLabel[dependency.property.label] == nil {
-			declarationIndexByLabel[dependency.property.label] = index
-		}
-		return nodes.indices
-			.sorted { (declarationIndexByLabel[nodes[$0].propertyLabel] ?? dependencies.count, $0) < (declarationIndexByLabel[nodes[$1].propertyLabel] ?? dependencies.count, $1) }
-			.map { nodes[$0] }
-	}
-
 	// MARK: Mock Parameter Naming
 
 	/// Computes disambiguated property labels for the properties of a list of nodes at the same scope level.
@@ -11976,23 +11798,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			|| labelMap.contains(where: { label, namesByTypeDescription in namesByTypeDescription.values.contains { $0 != label } })
 		else { return labels }
 		return Set(properties.map { labelMap[$0.label]?[$0.typeDescription] ?? $0.label })
-	}
-
-	/// The names the builder functions beneath a mock root's scope may declare: the labels of the
-	/// dependencies of each node of the tree whose root-level property nodes are `nodes` – the parameters of
-	/// its builder function, the receivers rebound in it, and the bindings of the properties it instantiates
-	/// and aliases.
-	private static func namesDeclaredInBuilderFunctions(of nodes: [MockParameterNode]) -> Set<String> {
-		var names = Set<String>()
-		// A stack of the nodes left to visit, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = nodes
-		while let node = nodesToVisit.popLast() {
-			for dependency in node.dependencies {
-				names.insert(dependency.property.label)
-			}
-			nodesToVisit.append(contentsOf: node.propertyChildren)
-		}
-		return names
 	}
 
 	/// The overrides of a mock root's `onlyIfAvailable` received properties, one per property, in the

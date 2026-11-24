@@ -46,6 +46,8 @@ extension ScopeGenerator {
 			builders: nil,
 			hasOverrides: false,
 			typesDeclaredEscaping: [],
+			// A mock root that builds nothing has no receivers.
+			receiverModulesByLabel: [:],
 			context: publicMockContext,
 		)
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -93,31 +95,6 @@ extension ScopeGenerator {
 			} ?? false
 			return isWrapperOfOwnInstance ? nil : property
 		})
-	}
-
-	/// The modules that declare a receiver of each label in this mock root's tree, as `publicMockPlan` admits them: a type of
-	/// the tree whose declaration receives a dependency of that label, or aliases one. Walked with a stack, since a tree can
-	/// be as deep as the module has types.
-	private func publicMockReceiverModules(context: PublicMockContext) -> [String: Set<String?>] {
-		var modulesByLabel = [String: Set<String?>]()
-		var generatorsToVisit = orderedChildGenerators
-		while let generator = generatorsToVisit.popLast() {
-			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
-				let moduleName = context.moduleNameByType[instantiable.concreteInstantiable]
-				for dependency in instantiable.dependencies {
-					switch dependency.source {
-					case .received:
-						modulesByLabel[dependency.property.label, default: []].insert(moduleName)
-					case let .aliased(fulfillingProperty, _, _):
-						modulesByLabel[fulfillingProperty.label, default: []].insert(moduleName)
-					case .instantiated, .forwarded:
-						break
-					}
-				}
-			}
-			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
-		}
-		return modulesByLabel
 	}
 
 	/// The public mock of `instantiable`, whose tree's top-level nodes are `nodes`, in generation order, bound by
@@ -272,7 +249,7 @@ extension ScopeGenerator {
 			builders: mockBuilders,
 			hasOverrides: hasOverrides,
 			typesDeclaredEscaping: signature.typesDeclaredEscaping,
-			receiverModulesByLabel: publicMockReceiverModules(context: publicMockContext),
+			receiverModulesByLabel: Self.receiverModules(in: signature.propertyNodes, context: publicMockContext),
 			filledFamilies: filledCallBuilders.families.isEmpty ? nil : (families: filledCallBuilders.families, namesInBody: publicMockNamesInBody(namesFillsDeclare: filledCallBuilders.namesFillsDeclare)),
 			context: publicMockContext,
 		)
