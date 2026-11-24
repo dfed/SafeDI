@@ -49,7 +49,7 @@ enum GraphDump {
 		}
 		let body = try JSONSerialization.data(withJSONObject: moduleEntries, options: [.sortedKeys])
 		// FNV-1a: the same graph from two tests is one file.
-		let digest = body.reduce(UInt64(0xCBF2_9CE4_8422_2325)) { ($0 ^ UInt64($1)) &* 0x0000_0100_0000_01B3 }
+		let digest = body.reduce(UInt64(0xCBF29CE484222325)) { ($0 ^ UInt64($1)) &* 0x00000100000001B3 }
 		let graph: [String: Any] = [
 			"seed": digest,
 			"corpus": "suite",
