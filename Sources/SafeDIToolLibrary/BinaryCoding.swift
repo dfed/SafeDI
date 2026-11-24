@@ -285,7 +285,7 @@ struct BinaryWriter {
 					strings.append(string)
 				}
 				// The string is kept so that its storage, and so the address it is found by, is not freed and reused.
-				stringIndicesByRepresentation.insert(index, for: representation)
+				stringIndicesByRepresentation.setValue(index, for: representation)
 				valuesHeldForTheirStorage.append(string)
 				writeUnsigned(index)
 			}
@@ -346,10 +346,6 @@ struct BinaryWriter {
 		sharesSignatureValues = wasSharing
 	}
 
-	/// Writes the value `write` writes as ``writeShared(_:)`` does, but keyed by the bytes it writes, which are equal
-	/// exactly when two values read back equal in every respect, even where their type's `==` ignores a difference, as
-	/// a type description's does for `any`. A value written again wrote no string the table lacked, since every string it
-	/// names was written with the value it repeats, so removing its bytes leaves the table as it was.
 	/// Writes `value` as ``writeSharedByBytes(_:)`` writes what `write` writes, which must be the same bytes whatever was
 	/// written before and however the writer is set. A value held as the same words as one written before, such as an
 	/// indirect enum's case in the same box, is that value, so it is written as that one was without writing it out to
@@ -362,7 +358,7 @@ struct BinaryWriter {
 		if let index = sharedValueIndicesByRepresentation.value(for: representation) {
 			writeUnsigned(index + 1)
 		} else {
-			sharedValueIndicesByRepresentation.insert(writeSharedByBytes(write), for: representation)
+			sharedValueIndicesByRepresentation.setValue(writeSharedByBytes(write), for: representation)
 			// The value is kept so that its storage, and so the address it is found by, is not freed and reused.
 			valuesHeldForTheirStorage.append(value)
 		}
@@ -496,37 +492,35 @@ private protocol WordsKey: Equatable {
 private struct TableByWords<Key: WordsKey, Value> {
 	func value(for key: Key) -> Value? {
 		guard !slots.isEmpty else { return nil }
-		var slot = Int(truncatingIfNeeded: key.hash >> 32) & (slots.count - 1)
-		while let filled = slots[slot] {
-			if filled.key == key {
-				return filled.value
-			}
-			slot = (slot + 1) & (slots.count - 1)
-		}
-		return nil
+		return slots[slot(for: key)]?.value
 	}
 
-	mutating func insert(_ value: Value, for key: Key) {
+	/// Gives `key` the value `value`, in place of the one it has when it has one.
+	mutating func setValue(_ value: Value, for key: Key) {
 		if (count + 1) * 2 > slots.count {
 			let filled = slots.compactMap(\.self)
 			slots = [(key: Key, value: Value)?](repeating: nil, count: Swift.max(slots.count * 2, 64))
 			for (key, value) in filled {
-				place(value, for: key)
+				slots[slot(for: key)] = (key, value)
 			}
 		}
-		count += 1
-		place(value, for: key)
+		let slot = slot(for: key)
+		if slots[slot] == nil {
+			count += 1
+		}
+		slots[slot] = (key, value)
 	}
 
 	private var slots = [(key: Key, value: Value)?]()
 	private var count = 0
 
-	private mutating func place(_ value: Value, for key: Key) {
+	/// The slot that holds `key`, or the empty one it belongs in. The table is never full.
+	private func slot(for key: Key) -> Int {
 		var slot = Int(truncatingIfNeeded: key.hash >> 32) & (slots.count - 1)
-		while slots[slot] != nil {
+		while let filled = slots[slot], filled.key != key {
 			slot = (slot + 1) & (slots.count - 1)
 		}
-		slots[slot] = (key, value)
+		return slot
 	}
 }
 
@@ -573,6 +567,17 @@ private struct UnsignedPair: WordsKey {
 
 	var hash: UInt64 {
 		(first &* 0x9E3779B185EBCA87) ^ (second &* 0xC2B2AE3D27D4EB4F)
+	}
+}
+
+/// What a reader finds a value it read before by: bytes of the value or their checksum, how many bytes, and the type read.
+private struct RepeatableValueKey: WordsKey {
+	let bytes: UInt64
+	let length: UInt64
+	let type: UInt64
+
+	var hash: UInt64 {
+		(bytes &* 0x9E3779B185EBCA87) ^ (length &* 0xC2B2AE3D27D4EB4F) ^ (type &* 0x165667B19E3779F9)
 	}
 }
 
@@ -803,6 +808,81 @@ struct BinaryReader {
 		}
 	}
 
+	/// Reads a value inside a seam signature as `read` reads it, or hands back the value read before from the same bytes
+	/// elsewhere without reading it again: a signature repeats the same lists at thousands of places, and each copy of a
+	/// list of hole fields is hundreds of bytes for every field.
+	///
+	/// Only a value whose reading added no shared value is handed back, so the same bytes read as the same value, of the
+	/// same length, and reading them again would change nothing else. A value of fewer than eight bytes is found by those
+	/// bytes; a longer one by its first eight, which give the lengths of the values that begin with them, and then by the
+	/// checksum of that many bytes, which are compared.
+	///
+	/// Called only where ``sharesSignatureValues`` holds.
+	mutating func readSharingStorageOfRepeats<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let start = offset
+		let type = UInt64(UInt(bitPattern: ObjectIdentifier(Value.self)))
+		let leadingByteCount = Swift.min(bytes.count - start, 8)
+		var leadingBytes: UInt64 = 0
+		withUnsafeMutableBytes(of: &leadingBytes) { $0.copyMemory(from: UnsafeRawBufferPointer(rebasing: bytes[start..<start + leadingByteCount])) }
+		let leadingKey = RepeatableValueKey(bytes: leadingBytes, length: 8, type: type)
+		let lengths = leadingByteCount == 8 ? lengthsOfRepeatableValuesByLeadingBytes.value(for: leadingKey) ?? [] : []
+		for length in lengths where start + length <= bytes.count {
+			if let value: Value = repeatableValue(readFrom: start, length: length, type: type) {
+				offset = start + length
+				return value
+			}
+		}
+		var shorterLength = Swift.min(leadingByteCount, 7)
+		while shorterLength >= 2 {
+			if let value: Value = repeatableValue(readFrom: start, length: shorterLength, type: type) {
+				offset = start + shorterLength
+				return value
+			}
+			shorterLength -= 1
+		}
+		let sharedValueCount = sharedValues.count
+		let value = try read(&self)
+		let length = offset - start
+		guard sharedValues.count == sharedValueCount, length >= 2 else {
+			return value
+		}
+		// Found now only when too many lengths of values begin with its first bytes for it to be found before it was read.
+		if let valueReadBefore: Value = repeatableValue(readFrom: start, length: length, type: type) {
+			return valueReadBefore
+		}
+		repeatableValues.setValue((start, SharedValueBox(value)), for: repeatableValueKey(ofBytesAt: start, length: length, type: type))
+		if length >= 8, lengths.count < Self.maximumLengthsOfRepeatableValuesWithSameLeadingBytes, !lengths.contains(length) {
+			lengthsOfRepeatableValuesByLeadingBytes.setValue(lengths + [length], for: leadingKey)
+		}
+		return value
+	}
+
+	/// The value of `Value` read before from the same `length` bytes as those at `start`, when one was.
+	private func repeatableValue<Value>(readFrom start: Int, length: Int, type: UInt64) -> Value? {
+		guard let read = repeatableValues.value(for: repeatableValueKey(ofBytesAt: start, length: length, type: type)),
+		      UnsafeRawBufferPointer(rebasing: bytes[read.start..<read.start + length]).elementsEqual(UnsafeRawBufferPointer(rebasing: bytes[start..<start + length]))
+		else { return nil }
+		return (read.box as? SharedValueBox<Value>)?.value
+	}
+
+	/// What a value of `length` bytes at `start` is found by: the bytes themselves when they are fewer than eight, and
+	/// otherwise their checksum.
+	private func repeatableValueKey(ofBytesAt start: Int, length: Int, type: UInt64) -> RepeatableValueKey {
+		let valueBytes = UnsafeRawBufferPointer(rebasing: bytes[start..<start + length])
+		if length < 8 {
+			var shortBytes: UInt64 = 0
+			withUnsafeMutableBytes(of: &shortBytes) { $0.copyMemory(from: valueBytes) }
+			return RepeatableValueKey(bytes: shortBytes, length: UInt64(length), type: type)
+		} else {
+			return RepeatableValueKey(bytes: BinaryFile.checksum(of: valueBytes), length: UInt64(length), type: type)
+		}
+	}
+
+	/// How many lengths of values that begin with the same eight bytes are tried before a value is read.
+	private static var maximumLengthsOfRepeatableValuesWithSameLeadingBytes: Int {
+		8
+	}
+
 	/// Reads a value written as a string and then a value shared by its bytes, as `read` reads it, and hands the same
 	/// value back wherever the same string and the same shared value follow again: a signature names a few hundred
 	/// distinct properties hundreds of thousands of times, and a property hashes its type when it is made.
@@ -821,7 +901,7 @@ struct BinaryReader {
 		} else {
 			offset = start
 			let value = try read(&self)
-			valuesByStringAndSharedValue.insert(SharedValueBox(value), for: key)
+			valuesByStringAndSharedValue.setValue(SharedValueBox(value), for: key)
 			return value
 		}
 	}
@@ -847,6 +927,12 @@ struct BinaryReader {
 	private var decodesStringsUpFront = true
 	private var sharedValues = [AnyObject]()
 	private var valuesByStringAndSharedValue = TableByWords<UnsignedPair, AnyObject>()
+	/// Each value ``readSharingStorageOfRepeats(_:)`` read and can hand back, with where its bytes start: by its bytes when
+	/// they are fewer than eight, and otherwise by their checksum. One box per distinct value, for as long as the reader
+	/// lives.
+	private var repeatableValues = TableByWords<RepeatableValueKey, (start: Int, box: AnyObject)>()
+	/// The lengths of the values in `repeatableValues` of eight bytes or more, by their first eight bytes.
+	private var lengthsOfRepeatableValuesByLeadingBytes = TableByWords<RepeatableValueKey, [Int]>()
 	private var nestingDepth = 0
 
 	private mutating func readByte() throws(BinaryDecodingError) -> UInt8 {
@@ -987,6 +1073,22 @@ extension Optional: BinaryCodable where Wrapped: BinaryCodable {
 
 extension Array: BinaryCodable where Element: BinaryCodable {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		// A list inside a type description, which nests, is read in this frame alone: a type's lists are never shared.
+		if reader.sharesSignatureValues {
+			self = try reader.readSharingStorageOfRepeats { reader throws(BinaryDecodingError) in
+				try [Element](readingElementsFrom: &reader)
+			}
+		} else {
+			let count = try reader.readCount()
+			self.init()
+			reserveCapacity(count)
+			for _ in 0..<count {
+				try append(Element(readingFrom: &reader))
+			}
+		}
+	}
+
+	private init(readingElementsFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		let count = try reader.readCount()
 		self.init()
 		reserveCapacity(count)
