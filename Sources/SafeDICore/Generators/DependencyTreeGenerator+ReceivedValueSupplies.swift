@@ -26,11 +26,14 @@ extension DependencyTreeGenerator {
 	/// many places hand or build it; the order is the trees'.
 	/// - Throws: The error `generate` reports when the trees are not valid.
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies {
-		let roots = try dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), startsCodeGeneration: false).roots
+		let trees = try dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), startsCodeGeneration: false)
+		let roots = trees.roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
 		for root in roots {
-			let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable)
+			let tree = await SeamTreeOverlay.$current.withValue(trees.overlay) {
+				await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable)
+			}
 			supplies.append(contentsOf: tree.supplies)
 			constructedTypes.append(contentsOf: tree.constructedTypes)
 		}

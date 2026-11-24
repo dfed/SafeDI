@@ -125,10 +125,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.fillReturnsWrapperBuilder = fillReturnsWrapperBuilder
 		seamAndFillFields.innerScopesCalledWithForwardedValue = innerScopesCalledWithForwardedValue
 		if let fill {
-			scopeData = .fill(hole: fill.hole, functionName: fill.functionName)
+			constructedScopeData = .fill(hole: fill.hole, functionName: fill.functionName)
 			description = fill.hole.builderLabel
 		} else if let property {
-			scopeData = .property(
+			constructedScopeData = .property(
 				instantiable: instantiable,
 				property: property,
 				forwardedProperties: Set(
@@ -143,7 +143,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			description = instantiable.concreteInstantiable.asSource
 		} else {
-			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
+			constructedScopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
 			description = instantiable.concreteInstantiable.asSource
 		}
 		self.property = property
@@ -173,7 +173,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			children: propertiesToGenerate,
 		)
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
-		fieldsCarriedBySites = Self.fieldsCarriedBySites(
+		constructedFieldsCarriedBySites = Self.fieldsCarriedBySites(
 			containsBuildSite: containsBuildSite,
 			fill: fill.map { (boundLabels: $0.boundLabels, caseHoles: $0.caseHoles) },
 			instantiable: instantiable,
@@ -243,9 +243,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailableDependencies = Self.onlyIfAvailableDependencies(of: instantiable.dependencies, cycleParameters: cycleParameters)
 		// A forwarded lazily instantiated property is also received by value, as the instance it creates.
 		let forwardedProperties = if forwardedLazilyInstantiatedInstanceProperties.isEmpty {
-			scopeData.forwardedProperties
+			constructedScopeData.forwardedProperties
 		} else {
-			scopeData.forwardedProperties.union(forwardedLazilyInstantiatedInstanceProperties)
+			constructedScopeData.forwardedProperties.union(forwardedLazilyInstantiatedInstanceProperties)
 		}
 		// A scope that closes a cycle builds nothing, but the builder function it calls declares what its type instantiates
 		// and forwards, so an alias of one of those is bound inside that function, which binds its own: the scope receives
@@ -355,7 +355,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		seamAndFillFields.boxedLoops = loopBoxes.boxedLoops
 		seamAndFillFields.loopLevelsTypesInTree = loopBoxes.loopLevelsTypesInTree
-		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
+		constructedSeamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		self.reboundProperties = if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
 			Self.reboundProperties(
 				reboundProperties,
@@ -1233,8 +1233,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		self.fulfillingExpression = fulfillingExpression
-		seamAndFillFieldsStorage = nil
-		scopeData = .alias(
+		constructedSeamAndFillFieldsStorage = nil
+		constructedScopeData = .alias(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -1303,7 +1303,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = false
 		placeHoldingProperties = nil
-		fieldsCarriedBySites = []
+		constructedFieldsCarriedBySites = []
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
@@ -1329,7 +1329,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		carrierSite: SeamHoles.CarrierSite? = nil,
 	) {
-		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
+		constructedScopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		self.ownerPropertyStack = ownerPropertyStack
 		self.ownerConcreteTypeStack = ownerConcreteTypeStack
 		receivedProperties = []
@@ -1382,12 +1382,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seamAndFillFields = SeamAndFillFields()
 		seamAndFillFields.valuesBindings = carrierSite?.formations ?? []
 		seamAndFillFields.siteCarrierUse = carrierSite?.use
-		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
+		constructedSeamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = true
 		placeHoldingProperties = nil
-		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
+		constructedFieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
@@ -1397,31 +1397,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		constructsWithHandWrittenMock = false
 	}
 
-	/// A generator of a seam's tree that the seam's first signature pass built, made again for the seam's emission from
-	/// its final signature, `seamRoot`, and `seamHoles`, the `SeamHoles` that signature gives, with `children` in its own
-	/// children's place, each already made again: what the generator's construction read of `SeamHoles`, and what it
-	/// worked out from its children's, is found again; everything else is the first pass's, which the final signature
-	/// leaves alone (see `seam-signature-passes.md`). `sitePath` is the generator's path from the seam's root, its own property
-	/// last, and `namesBoundBySeam` what `SeamHoles.namesBoundBySeam` names, joined once for the whole tree.
-	///
-	/// Every stored property is set here, as `ReseatedField.byStoredProperty` classifies it: the compiler requires each
-	/// `let`, and a test requires the classification to name every stored property, `var`s included.
-	///
-	/// The tree holds no call of a seam or a public mock, no fill and no hole passed up (`confirmingPassFindsNothingNew`),
-	/// so none of the fields those set needs to be found again.
-	init(
-		reseating generator: ScopeGenerator,
-		children: [ScopeGenerator],
+	/// What the seam's emission reads in place of what `generator`, a generator of the tree the seam's first signature pass
+	/// built, stored at construction: what its construction read of `SeamHoles`, and what it worked out from its children's.
+	/// Its children's entries must already be in `SeamTreeOverlay.current`. PROTOTYPE of D2's overlay.
+	nonisolated static func overlayEntry(
+		of generator: ScopeGenerator,
 		sitePath: [Property],
 		seamRoot: SeamRoot,
 		seamHoles: SeamHoles,
 		namesBoundBySeam: Set<String>,
-	) {
-		var fields = generator.seamAndFillFieldsStorage?.fields ?? SeamAndFillFields()
-		var scopeData = generator.scopeData
-		var fieldsCarriedBySites = generator.fieldsCarriedBySites
+	) -> SeamTreeOverlay.Entry {
+		var fields = generator.constructedSeamAndFillFieldsStorage?.fields ?? SeamAndFillFields()
+		var scopeData = generator.constructedScopeData
+		var fieldsCarriedBySites = generator.constructedFieldsCarriedBySites
 		var builtInstantiable: Instantiable?
-		switch generator.scopeData {
+		switch generator.constructedScopeData {
 		case let .hole(property, erasedToConcreteExistential, _):
 			let site = seamHoles.site(at: sitePath)
 			let carrierSite = seamHoles.carrierSite(at: sitePath)
@@ -1438,6 +1428,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			break
 		}
 		if let builtInstantiable {
+			let children = generator.children
 			fields.valuesBindings = seamHoles.valuesBindings(at: sitePath)
 			fields.memberCallsInsideFunction = seamHoles.memberCallsInsideFunction(at: sitePath)
 			fields.namesBoundBySeam = namesBoundBySeam
@@ -1455,67 +1446,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				children: children,
 			)
 		}
-		self.scopeData = scopeData
-		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(fields)
-		self.fieldsCarriedBySites = fieldsCarriedBySites
-		propertiesToGenerateSlot = DeferredReleaseSlot(children)
-		description = generator.description
-		receivedProperties = generator.receivedProperties
-		receivedOnlyByPublicMockCalls = generator.receivedOnlyByPublicMockCalls
-		passedByPublicMockCalls = generator.passedByPublicMockCalls
-		ownerPropertyStack = generator.ownerPropertyStack
-		ownerConcreteTypeStack = generator.ownerConcreteTypeStack
-		closedOnFillPathDeclarationsBeneath = generator.closedOnFillPathDeclarationsBeneath
-		requiredReceivedProperties = generator.requiredReceivedProperties
-		unwrappedOptionalRequiredReceivedProperties = generator.unwrappedOptionalRequiredReceivedProperties
-		onlyIfAvailableUnwrappedReceivedProperties = generator.onlyIfAvailableUnwrappedReceivedProperties
-		onlyIfAvailableAliasFulfillingProperty = generator.onlyIfAvailableAliasFulfillingProperty
-		requiredOnlyIfAvailableAliasProperties = generator.requiredOnlyIfAvailableAliasProperties
-		requiredAliasFulfillingProperties = generator.requiredAliasFulfillingProperties
-		cycleClosedOnDeclarations = generator.cycleClosedOnDeclarations
-		isReferencedByCycleClosingScope = generator.isReferencedByCycleClosingScope
-		closedOnDeclaration = generator.closedOnDeclaration
-		declaration = generator.declaration
-		cycleParameters = generator.cycleParameters
-		cycleParameterUnavailableProperties = generator.cycleParameterUnavailableProperties
-		callSiteLazilyInstantiatedInstanceProperties = generator.callSiteLazilyInstantiatedInstanceProperties
-		foundCycleParameters = generator.foundCycleParameters
-		unpassableCycleLabelsInTree = generator.unpassableCycleLabelsInTree
-		cycleParametersChangedInTree = generator.cycleParametersChangedInTree
-		receivedBuilderLoops = generator.receivedBuilderLoops
-		orderedPropertyToGenerateIndices = generator.orderedPropertyToGenerateIndices
-		receivedBuilderLoopsChangedInTree = generator.receivedBuilderLoopsChangedInTree
-		publicMockLevelReentriesChangedInTree = generator.publicMockLevelReentriesChangedInTree
-		reboundProperties = generator.reboundProperties
-		cycleClosedOnDeclarationsReferencedFromSendableFunction = generator.cycleClosedOnDeclarationsReferencedFromSendableFunction
-		buildsInSendableFunction = generator.buildsInSendableFunction
-		declaresBuilderFunction = generator.declaresBuilderFunction
-		childrenTakePartInCycle = generator.childrenTakePartInCycle
-		holdsCycleClosingScope = generator.holdsCycleClosingScope
-		cycleParameterSearchInputs = generator.cycleParameterSearchInputs
-		typesDeclaredEscaping = generator.typesDeclaredEscaping
-		unavailableOptionalProperties = generator.unavailableOptionalProperties
-		onlyIfAvailableDependencies = generator.onlyIfAvailableDependencies
-		propertiesToDeclare = generator.propertiesToDeclare
-		instantiatedDependenciesNotGenerated = generator.instantiatedDependenciesNotGenerated
-		passesUpBuilder = generator.passesUpBuilder
-		holdsCallReenteringEnclosingFill = generator.holdsCallReenteringEnclosingFill
-		fillStructBoundLabelsChangedInTree = generator.fillStructBoundLabelsChangedInTree
-		fillBindsDeferredFieldsFromStruct = generator.fillBindsDeferredFieldsFromStruct
-		fillEmitsCode = generator.fillEmitsCode
-		isBuiltByFill = generator.isBuiltByFill
-		fillReturnsWrapperBuilder = generator.fillReturnsWrapperBuilder
-		treeHoldsCallOrFill = generator.treeHoldsCallOrFill
-		treeHoldsSendableFunction = generator.treeHoldsSendableFunction
-		containsBuildSite = generator.containsBuildSite
-		placeHoldingProperties = generator.placeHoldingProperties
-		lazilyInstantiatedInstanceProperties = generator.lazilyInstantiatedInstanceProperties
-		fulfillingPropertyIsLazilyInstantiatedInstance = generator.fulfillingPropertyIsLazilyInstantiatedInstance
-		declaredLazilyInstantiatedInstanceProperty = generator.declaredLazilyInstantiatedInstanceProperty
-		fulfillingBindingIsOptional = generator.fulfillingBindingIsOptional
-		fulfillingExpression = generator.fulfillingExpression
-		property = generator.property
-		constructsWithHandWrittenMock = generator.constructsWithHandWrittenMock
+		return SeamTreeOverlay.Entry(scopeData: scopeData, seamAndFillFieldsStorage: SeamAndFillFieldsStorage.storing(fields), fieldsCarriedBySites: fieldsCarriedBySites)
 	}
 
 	/// How `init(reseating:children:sitePath:seamRoot:seamHoles:namesBoundBySeam:)` sets a stored property.
@@ -4753,7 +4684,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock]
 	}
 
-	let scopeData: ScopeData
+	let constructedScopeData: ScopeData
+	/// What the writer reads: the seam tree overlay's, where one holds this generator, else what construction stored.
+	nonisolated var scopeData: ScopeData {
+		SeamTreeOverlay.current?.entries[ObjectIdentifier(self)]?.scopeData ?? constructedScopeData
+	}
 
 	/// The fields only a seam's tree, a fill, or a call of another module's public mock sets: every other scope, nearly
 	/// all of a tree, holds them at their defaults. A tree has a generator per path, so they are kept behind one
@@ -4854,7 +4789,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// See `SeamAndFillFields`.
-	nonisolated private let seamAndFillFieldsStorage: SeamAndFillFieldsStorage?
+	nonisolated private let constructedSeamAndFillFieldsStorage: SeamAndFillFieldsStorage?
+	nonisolated private var seamAndFillFieldsStorage: SeamAndFillFieldsStorage? {
+		if let entry = SeamTreeOverlay.current?.entries[ObjectIdentifier(self)] {
+			return entry.seamAndFillFieldsStorage
+		} else {
+			return constructedSeamAndFillFieldsStorage
+		}
+	}
 	/// The received properties that some receiver in this subtree requires — a `@Received`
 	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
 	let requiredReceivedProperties: Set<Property>
@@ -5469,7 +5411,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The fields the scope structs of the sites in this generator's subtree carry whose nearest declaration on each
 	/// site's path is above this scope: a fill the seam generates binds each of the filled seam's fields they carry,
 	/// whether or not its own tree reads it.
-	let fieldsCarriedBySites: Set<Property>
+	let constructedFieldsCarriedBySites: Set<Property>
+	nonisolated var fieldsCarriedBySites: Set<Property> {
+		SeamTreeOverlay.current?.entries[ObjectIdentifier(self)]?.fieldsCarriedBySites ?? constructedFieldsCarriedBySites
+	}
 	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
 	/// further up the tree. Passing one to this scope’s initializer reads that instance, which instantiates it.
 	private let lazilyInstantiatedInstanceProperties: Set<Property>

@@ -428,7 +428,7 @@ extension DependencyTreeGenerator {
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
-	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
+	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature], overlay: SeamTreeOverlay) {
 		var (seamRoots, firstPassTrees) = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
 		// seam's tier included, whose construction the leaf's initializer at the tier's level describes.
@@ -474,6 +474,7 @@ extension DependencyTreeGenerator {
 		)
 		var constructionMemo = ConstructionMemo()
 		var rootScopeGenerators = [RootScopeInfo]()
+		var treeOverlay = SeamTreeOverlay()
 		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
 			try rootScopeGenerators.append(RootScopeInfo(
@@ -508,12 +509,15 @@ extension DependencyTreeGenerator {
 			// built here would (`seam-signature-passes.md`); the pass's tree is released once it is.
 			let scopeGenerator: ScopeGenerator
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
-				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
+				scopeGenerator = firstPassTree
+				let seamOverlay = ScopeGenerator.overlay(ofTreeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
+				treeOverlay.merge(seamOverlay)
+				SeamTreeOverlayConflicts.reportReuse(of: seam.concreteInstantiable.asSource, entries: seamOverlay.entries.count)
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
 					let treeBuiltAnew = try builtTree(startingCodeGeneration: false)
 					observer(ReusedSeamTree(
 						signature: StoredSeamSignature(seamType: seam.concreteInstantiable, signature: finalSeamRoot.signature),
-						reusedTreeCode: { try await scopeGenerator.generatePlan().spelled() },
+						reusedTreeCode: { try await SeamTreeOverlay.$current.withValue(seamOverlay) { try await scopeGenerator.generatePlan().spelled() } },
 						builtTreeCode: { try await treeBuiltAnew.generatePlan().spelled() },
 					))
 				}
@@ -532,7 +536,7 @@ extension DependencyTreeGenerator {
 		let storedSeamSignatures = generatedSeamTypes.sorted().compactMap { seamType in
 			seamRoots[seamType].map { StoredSeamSignature(seamType: seamType, signature: $0?.signature) }
 		}
-		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules, storedSeamSignatures)
+		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules, storedSeamSignatures, treeOverlay)
 	}
 
 	/// The seam world's scopes, frozen, in which every reach of a seam with a signature calls its generated initializer.

@@ -331,8 +331,11 @@ public actor DependencyTreeGenerator {
 		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof) : nil
 		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
 		// frees the memory its frames took when it ends, which on a deep module took as long as releasing the trees.
+		let treeOverlay = trees?.overlay
 		if request.generatesDependencyTrees, let trees {
-			try await validateBeforeGeneratingCode(of: trees.roots)
+			try await SeamTreeOverlay.$current.withValue(treeOverlay) {
+				try await validateBeforeGeneratingCode(of: trees.roots)
+			}
 		}
 		// The roots' plans generate in a child task while the warnings and the DOT graph are made from the same trees.
 		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
@@ -349,7 +352,7 @@ public actor DependencyTreeGenerator {
 			// The trees as the work below reads them, released at the end of this block, or as an error in the roots' and
 			// seams' code leaves it, which is reported before any mock is built.
 			let trees = trees
-			(plans, warnings, drawnTree) = try await withThrowingTaskGroup(
+			(plans, warnings, drawnTree) = try await SeamTreeOverlay.$current.withValue(treeOverlay) { try await withThrowingTaskGroup(
 				of: [PlannedRoot].self,
 				returning: ([PlannedRoot], [SourceDiagnostic], String?).self,
 			) { taskGroup in
@@ -371,7 +374,7 @@ public actor DependencyTreeGenerator {
 				}
 				let plans = try await taskGroup.next() ?? []
 				return (plans, warnings, drawnTree)
-			}
+			} }
 		}
 		// A read, not an assignment, so the optimizer cannot keep the trees past this point.
 		_ = consume trees
@@ -598,6 +601,8 @@ public actor DependencyTreeGenerator {
 		let rootsOfOtherModules: [Instantiable]
 		/// See `GenerationResults.storedSeamSignatures`.
 		let storedSeamSignatures: [StoredSeamSignature]
+		/// PROTOTYPE: what the reused seam trees' generators read in place of their construction's.
+		var overlay = SeamTreeOverlay()
 	}
 
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
@@ -616,6 +621,7 @@ public actor DependencyTreeGenerator {
 		var validatedScopes = Set<Scope>()
 		var rootsOfOtherModules = [Instantiable]()
 		var storedSeamSignatures = [StoredSeamSignature]()
+		var overlay = SeamTreeOverlay()
 		let rootScopeGenerators: [RootScopeInfo] = try {
 			// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 			// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
@@ -696,13 +702,14 @@ public actor DependencyTreeGenerator {
 			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
 			storedSeamSignatures = seamWorldRoots.storedSeamSignatures
+			overlay = seamWorldRoots.overlay
 			return seamWorldRoots.roots
 		}()
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
-		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules, storedSeamSignatures: storedSeamSignatures)
+		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules, storedSeamSignatures: storedSeamSignatures, overlay: overlay)
 	}
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
