@@ -5342,7 +5342,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenAnExtractedLocalReadsTheFieldOfAnotherDefault() async throws {
 		let differences = try await Self.differences(of: Self.lazyCycleOfSendableBuildersWithDefaultsFixture, under: Self.reversalOfTypeNames, editingOutcome: { files in
 			let fileName = Self.mockFileName(of: "T8")
-			files[fileName] = Self.replacing("__t7Builder_t8Builder_count = safeDIOverrides.t7Builder.t8Builder.count", with: "__t7Builder_t8Builder_count = safeDIOverrides.t7Builder.t8Builder.size", in: files[fileName])
+			files[fileName] = Self.replacing("count: __safeDI_t7Builder__overrides.t8Builder.count()", with: "count: __safeDI_t7Builder__overrides.t8Builder.size()", in: files[fileName])
 		})
 
 		#expect(differences.filter { $0.fileName == Self.mockFileName(of: "T8") }.map(\.aspect) == [.mockCode])
@@ -7389,7 +7389,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 608, judgedWithNamed: 399, named: 1_075, conversions: 0, fills: 504)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 676, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 91, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
 	static let seamCorpusFixtureHash: UInt64 = 0x47F14B403A57189F
@@ -9063,7 +9063,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xDCF1DB4FDF35DE32
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4D1CB3AB50E6ADEC
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9107,14 +9107,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(publicMockBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [897],
-		),
-		// The value-forms draw (`drawValueFormsBesidePublicMockCall`): a type of a calling mock's tree receives `formSession` as
-		// `FormMark` beside a call of another module's public mock that takes it as `FormSession`, and the mock hands the call
-		// the `FormMark` binding. Main generates the same code; the fix is a pull request of its own.
-		GraphFuzzerKnownIssue(
-			reason: "A calling mock hands a call of another module's public mock the binding of another type that its tree holds under the label the call takes, so the call is passed a `FormMark` where it takes a `FormSession`",
-			signatures: [.compilerError(containing: "_FormMark")],
-			seeds: [16, 83, 436, 444, 508, 982],
 		),
 		// The design's output stability: an internal consumer that passes up the places of two public mocks of one hole
 		// type names the builders it takes for them apart, after each called type, so `T6Twin`'s call renames `T6`'s.

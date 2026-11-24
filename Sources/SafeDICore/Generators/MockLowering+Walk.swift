@@ -310,7 +310,7 @@ extension MockLowering {
 	struct Walk {
 		/// The global back edges of the module's mock graphs, beneath which a node reads no override.
 		let cycleEdges: Set<ScopeGenerator.CycleEdge>
-		/// The nodes built around the node the walk is at, each as `ScopeGenerator.MockParameterNode.cycleNodeKey` spells it:
+		/// The nodes built around the node the walk is at, each as `MockLowering.cycleNodeKey(of:builtAs:)` spells it:
 		/// a node that repeats one reads no override of its own.
 		var ancestorTypes = Set<String>()
 		/// The concrete type of the node whose children the walk is at, or `nil` at the mock's root.
@@ -412,7 +412,7 @@ extension MockLowering {
 		/// Whether the walk lowers a public mock, whose configured nodes call their types' construction functions.
 		var buildsPublicMock = false
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
-		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
+		// builder function reads (`ScopeGenerator.MockValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
 		// The properties of the nodes a public mock promotes at its root's level, each bound from the
 		// parameter its caller passes, named as its plan names it (`promotedParameterNames`).
@@ -724,7 +724,12 @@ extension MockLowering {
 				bindingName: aliasBindingName,
 				fulfillingProperty: fulfillingProperty,
 				fulfillingName: instanceWrapper.map { wrapper in
-					"\(renames[wrapper.label]?[wrapper.typeDescription] ?? wrapper.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					// A public mock's wrapper parameter is named apart where its root binds another value of the label
+					// (`instancesReadThroughPublicMockWrapperParameters`).
+					let wrapperName = renames[wrapper.label]?[wrapper.typeDescription]
+						?? (buildsPublicMock ? publicMockWrapperParameterNames[wrapper.label]?[wrapper.typeDescription] : nil)
+						?? wrapper.label
+					return "\(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} ?? lazilyInstantiatedNames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? renames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? fulfillingProperty.label,
 				isErased: erasedToConcreteExistential,
 				isOnlyIfAvailable: onlyIfAvailable,
@@ -1149,13 +1154,18 @@ extension MockLowering {
 			}
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// A node whose configuration holds its default-valued parameters is built in a builder
-			// function, as `MockParameterNode.requiresFunctionWrapper` says.
+			// function.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
 			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
-			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
+			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
+			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
+			// does too (`ScopeGenerator.sendableConfigurationTypeNames()`), so each field is proven `Sendable` and the
+			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
+			let configurationPath = hasConfiguration && !buildsPublicMock ? nodePath : nil
+			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
 			// The payloads of the cases nested by type that lead through the node to a place, bound before
@@ -1310,7 +1320,7 @@ extension MockLowering {
 				let parentConcreteType = instantiable.concreteInstantiable.asSource
 				// A child beneath an edge in `cycleEdges` has no member in its parent's configuration, public or internal.
 				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
-				// The members are in inline order, as `SafeDIOverrides`' are (`MockParameterNode.inlineOrderPosition`).
+				// The members are in inline order, as `SafeDIOverrides`' are (`inlineOrdered(_:property:)`).
 				var record = ConfigurationRecord(of: configuredNode, children: generator.inlineOrdered(recordedChildren, property: \.property))
 				// What a configuration generated from the record imports.
 				record.fulfillers = configurationFulfillers(of: configuredNode)
@@ -1464,7 +1474,7 @@ extension MockLowering {
 		}
 
 		/// The types of the values the node's override is handed, joined: one per argument its construction is passed, which
-		/// leaves out a parameter left to its default (`ScopeGenerator.MockParameterNode.callSiteArguments`).
+		/// leaves out a parameter left to its default (`ScopeGenerator.MockConstruction.callSiteArguments`).
 		private var builderParameterTypes: String {
 			MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesMockInitializer).spelled
 		}
@@ -1626,8 +1636,8 @@ extension MockLowering {
 			}
 		}
 
-		/// Whether the node builds a property, which gives its parent a configuration of its own
-		/// (`ScopeGenerator.MockParameterNode.needsConfigurationStruct`), whether or not that configuration has a field for it.
+		/// Whether the node builds a property, which gives its parent a configuration of its own,
+		/// whether or not that configuration has a field for it.
 		var isPropertyNode: Bool {
 			switch self {
 			case .built, .publicMockCall, .cycleClosing: true
@@ -1720,8 +1730,8 @@ extension MockLowering {
 		}
 	}
 
-	/// The key a node of `property`, built as `instantiable`, repeats a node around it by, as
-	/// `ScopeGenerator.MockParameterNode.cycleNodeKey` spells it.
+	/// The key a node of `property`, built as `instantiable`, repeats a node around it by: the property and the concrete
+	/// type, so a node reads no override of its own where both repeat an ancestor's.
 	static func cycleNodeKey(of property: Property, builtAs instantiable: Instantiable) -> String {
 		"\(property.typeDescription.asInstantiatedType.asSource) fulfilled by \(instantiable.concreteInstantiable.asSource)"
 	}

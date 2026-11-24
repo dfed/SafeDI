@@ -38,6 +38,8 @@ two artifacts:
     or the module is listed. The artifact also carries what a type with `generateDependencyTree: true` or `generateMock: .public` in a module this one depends on needs, so a module is
     never listed only for such a type of another module. The
     SafeDI manual's "Which modules to list" says more.
+    A module no SafeDI module depends on, such as an app, sets
+    `is_depended_upon = False` and writes no `.safedi`.
 
 This rule mirrors the Tuist plugin's `SafeDI.preCompileScript`
 helper, which writes the same two artifacts in one invocation. Doing
@@ -134,7 +136,9 @@ _SAFEDITOOL_TOOLCHAIN_TYPE = Label("//bazel:safeditool_toolchain_type")
 SafeDIInfo = provider(
     doc = "Module info artifact (`.safedi`) emitted by `safedi_compile`.",
     fields = {
-        "module_info": "The `.safedi` file describing this module's @Instantiable surface.",
+        "module_info": """The `.safedi` file describing this module's
+@Instantiable surface, or `None` for a module that sets
+`is_depended_upon = False`, which no module may list.""",
         "transitive_module_infos": """A depset of this module's `.safedi`
 file and that of every module beneath it, collected through `deps` as
 rules_swift collects `SwiftInfo.transitive_modules`.""",
@@ -176,7 +180,17 @@ def _compilation_conditions_from_copts(copts):
     return conditions
 
 def _safedi_compile_impl(ctx):
-    module_info = ctx.actions.declare_file(ctx.label.name + ".safedi")
+    for dependency in ctx.attr.deps:
+        if dependency[SafeDIInfo].module_info == None:
+            fail(("%s lists %s, which sets `is_depended_upon = False` and so " +
+                  "writes no `.safedi` for a module to read. Remove " +
+                  "`is_depended_upon = False` from %s, or remove it from " +
+                  "this module's `safedi_deps`.") % (ctx.label, dependency.label, dependency.label))
+
+    # A module nothing depends on, such as an app, writes no `.safedi`:
+    # no module reads it, and writing it is a large part of a top
+    # module's run.
+    module_info = ctx.actions.declare_file(ctx.label.name + ".safedi") if ctx.attr.is_depended_upon else None
     combined = ctx.actions.declare_file(ctx.label.name + ".swift")
 
     # The files `--split-combined-output-mocks` spreads the mocks over,
@@ -214,8 +228,6 @@ def _safedi_compile_impl(ctx):
         input_csv.path,
         "--combined-output",
         combined.path,
-        "--module-info-output",
-        module_info.path,
         # rules_swift hands swiftc the same execution-root-relative paths
         # this rule writes to the CSV, so the generated `#sourceLocation`
         # directives can name them and stay free of machine-specific paths.
@@ -228,6 +240,8 @@ def _safedi_compile_impl(ctx):
         "--unused-inputs-list-output",
         unused_inputs.path,
     ]
+    if module_info:
+        arguments += ["--module-info-output", module_info.path]
     if mock_files:
         arguments.append("--split-combined-output-mocks")
 
@@ -288,7 +302,7 @@ def _safedi_compile_impl(ctx):
         executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
         toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
         inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath]),
-        outputs = [combined, module_info, unused_inputs] + mock_files,
+        outputs = [combined, unused_inputs] + mock_files + ([module_info] if module_info else []),
         unused_inputs_list = unused_inputs,
         arguments = arguments,
         mnemonic = "SafeDI",
@@ -303,7 +317,7 @@ def _safedi_compile_impl(ctx):
         DefaultInfo(files = depset([combined] + mock_files)),
         SafeDIInfo(
             module_info = module_info,
-            transitive_module_infos = depset([module_info], transitive = module_infos_of_dependencies),
+            transitive_module_infos = depset([module_info] if module_info else [], transitive = module_infos_of_dependencies),
         ),
     ]
 
@@ -362,6 +376,14 @@ name rules_swift derives from that library's label.
 which the compiler receives as `-package-name`. Leave it empty when
 the library has none.""",
         ),
+        "is_depended_upon": attr.bool(
+            default = True,
+            doc = """Whether another module lists this one in its `deps`.
+Set it to `False` only on a module no SafeDI module depends on, such as
+an app: the rule then writes no `.safedi`, which saves the time a top
+module spends writing what its dependencies' files carry, and a module
+that lists this one fails analysis with an error naming this attribute.""",
+        ),
         "split_mocks": attr.bool(
             default = False,
             doc = """Whether to spread the generated mocks over 32 files,
@@ -389,6 +411,7 @@ def safedi_swift_library(
         defines = [],
         copts = [],
         package_name = None,
+        is_depended_upon = True,
         split_mocks = False,
         tags = None,
         testonly = None,
@@ -426,6 +449,11 @@ def safedi_swift_library(
         package_name: The package the `swift_library` belongs to, which
             the compiler receives as `-package-name` and which
             `package` declarations need. Passed to both targets.
+        is_depended_upon: Whether another module lists `<name>_safedi`
+            in its `safedi_deps`. Set it to False only on a module no
+            SafeDI module depends on, such as an app: SafeDI then writes
+            no `.safedi` for it, and a module that lists it fails
+            analysis with an error naming this argument.
         split_mocks: Whether to spread the generated mocks over 32
             files, so that an edit recompiles only the files whose mocks
             it changed. False, the default, keeps them in the one
@@ -449,6 +477,7 @@ def safedi_swift_library(
         # rules_swift names it.
         module_name = kwargs.get("module_name") or derive_swift_module_name(native.package_name(), name),
         package_name = package_name,
+        is_depended_upon = is_depended_upon,
         split_mocks = split_mocks,
         tags = tags,
         testonly = testonly,

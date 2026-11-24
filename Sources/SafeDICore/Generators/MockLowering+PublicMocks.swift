@@ -147,7 +147,7 @@ extension ScopeGenerator {
 		}
 		if hasOverrides {
 			// The members are in inline order: the build's order without a child that holds a place starting after its
-			// siblings (`MockParameterNode.inlineOrderPosition`).
+			// siblings (`inlineOrdered(_:property:)`).
 			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
 			lines.append(MockLowering.publicOverridesStruct(
 				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
@@ -187,7 +187,7 @@ extension ScopeGenerator {
 
 	/// The plan of the public mock of `instantiable`, whose root's signature is `signature`, that promotes `promotedNodes`,
 	/// under the names given, and takes the builders its calls fill (`filledCallBuilders`) optional, as `publicMockPlan`
-	/// plans it from the emitter's parameter tree.
+	/// plans it from the walk's node records (`MockTreeNames.propertyNodes`).
 	func publicMockPlan(
 		of instantiable: Instantiable,
 		signature: MockLowering.RootSignature,
@@ -258,7 +258,7 @@ extension ScopeGenerator {
 	/// The names the narrowest tier's body of this root's public mock declares beside its parameters, apart from which its
 	/// optional builders are named: each property's builder function and each dependency's label of every type its tree
 	/// builds, and the labels its calls' fills declare (`namesFillsDeclare`), as `publicMockOptionalBuilders` reads them
-	/// from a parameter tree. Walked with a stack, since a tree can be as deep as the module has types.
+	/// from the walk's node records. Walked with a stack, since a tree can be as deep as the module has types.
 	private func publicMockNamesInBody(namesFillsDeclare: Set<String>) -> Set<String> {
 		var namesInBody = namesFillsDeclare
 		var generatorsToVisit = orderedChildGenerators
@@ -286,7 +286,7 @@ extension PublicMockPlan {
 
 extension ScopeGenerator {
 	/// The elements in inline order: the build's order without a child that holds a place starting after its siblings
-	/// (`MockParameterNode.inlineOrderPosition`), an element of no child keeping its place after them.
+	/// (`computeOrderedPropertyToGenerateIndices(startingCarriersLast:)`), an element of no child keeping its place after them.
 	nonisolated func inlineOrdered<Element>(_ elements: [Element], property: (Element) -> Property) -> [Element] {
 		let children = propertiesToGenerate
 		var inlinePositionByProperty = [Property: Int]()
@@ -349,8 +349,8 @@ extension MockLowering.Walk {
 		// scope beneath refers to (`ScopeGenerator.mockLoweringBuilderFunctionNames`).
 		let holeFunctionName = pendingRenamedFunctionName
 		pendingRenamedFunctionName = nil
-		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as the
-		// emitter's `MockAliasNode.holeSite` does.
+		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as a
+		// seam's site does.
 		lines.append(GeneratedCodeText.indentingNonEmptyLines(
 			of: ScopeGenerator.buildSiteCode(
 				of: property,

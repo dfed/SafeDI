@@ -1923,7 +1923,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2207,7 +2207,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2252,7 +2252,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2362,8 +2362,11 @@ jobs:
   # shape (45 to 308 MB, 2026-11-20). Four shapes with the largest peaks,
   # each one module without seams (a graph of screens that reach one
   # another, with and without mocks, thirty-three mocks over layers of
-  # screens, and a mock 1,500 levels deep), fail at 1.1 times with the same
-  # 8 MB, since memory is decided where the peak is largest. It also fails
+  # screens, and a mock 1,500 levels deep), also fail at 1.1 times with the
+  # same 8 MB, since memory is decided where the peak is largest, on their
+  # peak in runs with one allocator arena: with glibc's arenas one tool's
+  # peak on one graph sits at either of two levels a tenth apart, which
+  # failed changes that used no more memory. It also fails
   # when a module's `.safedi`
   # file is twice the base's size, because storing seam signatures once made
   # one 400 times its size unnoticed.
@@ -2497,7 +2500,12 @@ jobs:
       # 44630955284) and about 13 seconds more for I800-seam (probe run
       # 44359835414), so those four add about a minute and a half. With
       # eleven timed runs of those four in place of five it took 6.0 minutes
-      # (run 45110501373, comparing a tool with itself). The limit is about
+      # (run 45110501373, comparing a tool with itself). With five timed runs
+      # and five runs with one allocator arena of each tool on those four,
+      # the four took 229 seconds where they had taken 207, on a four-core
+      # Linux machine comparing a tool with itself; in this container the
+      # step took 7.5 minutes (run 45332820533), on a runner whose other
+      # shapes ran a third slower than in run 45110501373. The limit is about
       # twice the measurement: a head tool slow enough to pass it fails the
       # wall-time limit on its shapes first.
       - name: Compare Generate Time
@@ -2888,7 +2896,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Unpack Test Bundle
@@ -2917,7 +2925,7 @@ jobs:
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolGraphFuzzerTests/longRun'
       - name: Download the Base Tool
         if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: base-safedi-tool
           path: base-tool
@@ -2987,7 +2995,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: graph-fuzzer-report-*
           path: reports
@@ -3092,7 +3100,7 @@ jobs:
       # download that finds nothing is not this step's failure.
       - name: Download Coverage Reports
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: line-coverage-*
           path: ${{ runner.temp }}/line-coverage
@@ -3145,16 +3153,16 @@ jobs:
           # Main's history, for the merge base.
           fetch-depth: 0
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: graph-fuzzer-test-bundle
       - name: Download Unit Suite Profile
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: unit-suite-profile
           path: unit-suite
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: graph-fuzzer-report-*
           path: reports
@@ -3373,7 +3381,9 @@ jobs:
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    # To check out the download action.
+    permissions:
+      contents: read
     steps:
       - name: Require the Seven Groups
         env:
@@ -3381,8 +3391,13 @@ jobs:
         run: |
           echo "Build and Test on Latest Swift (seven groups): $GROUPS_RESULT"
           test "$GROUPS_RESULT" = success
+      # The download below is a local action, which needs its files checked out.
+      - name: Checkout the Download Action
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions/download-artifact
       - name: Download the Groups' Test Counts
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: latest-swift-test-count-*
           path: latest-swift-test-counts

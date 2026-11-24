@@ -155,7 +155,7 @@ extension MockLowering.Walk {
 			}
 			let configurationRead = overrideReachable
 				? readingOverride("\(nodePath).\(argument.label)", localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(argument.label)")
-				: "\(instantiable.concreteInstantiable.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)().\(argument.label)"
+				: "\(instantiable.concreteInstantiable.asSource).\(ScopeGenerator.mockConfigurationStructName)().\(argument.label)"
 			// The field is a closure, called where the type is built, for an `@autoclosure` parameter, and for every value
 			// that is not a function where the configuration is `@Sendable`-typed (`resolveBuilderArguments`).
 			let typeDescription = argument.typeDescription.strippingEscaping
@@ -165,8 +165,7 @@ extension MockLowering.Walk {
 		}
 	}
 
-	/// The arguments `construction` surfaces where no override reaches its node
-	/// (`ScopeGenerator.MockParameterNode.callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`): each
+	/// The arguments `construction` surfaces where no override reaches its node: each
 	/// dependency, each parameter without a default, and, where the node is built with `init`, each default the type's
 	/// hand-written mock declares too.
 	private static func argumentsSurfacedWithoutOverride(
@@ -182,8 +181,7 @@ extension MockLowering.Walk {
 	}
 
 	/// Whether the construction of a node of `instantiable` that no override reaches reads a default from a configuration it
-	/// builds afresh: whether an argument it surfaces there is no dependency
-	/// (`ScopeGenerator.MockParameterNode.readsConfigurationBuiltAfresh(handWrittenMockDefaultParameters:)`).
+	/// builds afresh: whether an argument it surfaces there is no dependency.
 	mutating func readsConfigurationBuiltAfresh(of instantiable: Instantiable, usesMockInitializer: Bool) -> Bool {
 		let construction = mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer)
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]

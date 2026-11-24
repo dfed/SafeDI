@@ -2020,8 +2020,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
-			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
+			        let __safeDI_b__overrides = safeDIOverrides.b
 			        @Sendable nonisolated func __safeDI_b() -> B {
 			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			                @Sendable nonisolated func __safeDI_a() -> A {
@@ -2029,10 +2028,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			                    return A(b: b)
 			                }
 			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-			            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
 			        let b: B = __safeDI_b()
 			        return A(b: b)
@@ -2043,7 +2042,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
@@ -2100,7 +2099,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension C {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
 			        ) {
@@ -2128,7 +2127,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 			extension B {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            cBuilder: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)? = nil
@@ -2206,8 +2205,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
-			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
+			        let __safeDI_b__overrides = safeDIOverrides.b
 			        @Sendable nonisolated func __safeDI_b() -> B {
 			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			                @Sendable nonisolated func __safeDI_a() -> A {
@@ -2215,10 +2213,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			                    return A(b: b)
 			                }
 			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-			            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
 			        let b: B = __safeDI_b()
 			        return A(b: b)
@@ -2229,7 +2227,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
@@ -2286,7 +2284,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension C {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
 			        ) {
@@ -2314,7 +2312,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 			extension B {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            cBuilder: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (SendableInstantiator<C>) -> B)? = nil
@@ -2401,8 +2399,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
-			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
+			        let __safeDI_b__overrides = safeDIOverrides.b
 			        @Sendable nonisolated func __safeDI_b() -> B {
 			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			                @Sendable nonisolated func __safeDI_a() -> A {
@@ -2411,10 +2408,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			                    return A(b: b, x: x)
 			                }
 			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-			            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
 			        let b: B = __safeDI_b()
 			        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { X() }
@@ -2426,7 +2423,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            x: (@Sendable () -> X)? = nil,
@@ -2510,8 +2507,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
-			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
+			        let __safeDI_b__overrides = safeDIOverrides.b
 			        @Sendable nonisolated func __safeDI_b() -> B {
 			            func __safeDI_cBuilder() -> C {
 			                @Sendable nonisolated func __safeDI_a() -> A {
@@ -2519,10 +2515,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			                    return A(b: b)
 			                }
 			                let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                return if let safeDIBuilder = __safeDI_b__b_cBuilder_safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			                return if let safeDIBuilder = __safeDI_b__overrides.cBuilder.safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
 			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            return if let safeDIBuilder = __safeDI_b__safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			            return if let safeDIBuilder = __safeDI_b__overrides.safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
 			        }
 			        let b: B = __safeDI_b()
 			        return A(b: b)
@@ -2533,7 +2529,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            b: B.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (B) -> A)? = nil
@@ -2590,7 +2586,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#if DEBUG
 			extension C {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            _ safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)? = nil
 			        ) {
@@ -2618,7 +2614,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 			extension B {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            cBuilder: C.SafeDIMockConfiguration = .init(),
 			            _ safeDIBuilder: (@Sendable (Instantiator<C>) -> B)? = nil

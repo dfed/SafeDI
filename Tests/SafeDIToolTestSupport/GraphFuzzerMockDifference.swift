@@ -735,16 +735,25 @@ private struct Rendering {
 		return boundValue(of: read) ?? read
 	}
 
-	/// The labels `expression` names in turn, when it is `safeDIOverrides.<label>.<label>…`.
+	/// The labels `expression` names in turn, when it is `safeDIOverrides.<label>.<label>…`, or such a read's members
+	/// read through the local a `@Sendable` function binds a whole configuration to.
 	private func labelsRead(by expression: ExprSyntax) -> [String]? {
 		var labels = [String]()
 		var current = expression
-		while let access = current.as(MemberAccessExprSyntax.self), let base = access.base {
-			labels.append(access.declName.baseName.text)
-			current = base
+		while true {
+			while let access = current.as(MemberAccessExprSyntax.self), let base = access.base {
+				labels.append(access.declName.baseName.text)
+				current = base
+			}
+			guard let reference = current.as(DeclReferenceExprSyntax.self) else { return nil }
+			if reference.baseName.text == mockOverridesParameterName {
+				return labels.reversed()
+			} else if let value = boundValue(of: current) {
+				current = value
+			} else {
+				return nil
+			}
 		}
-		guard current.as(DeclReferenceExprSyntax.self)?.baseName.text == mockOverridesParameterName else { return nil }
-		return labels.reversed()
 	}
 
 	/// Whether every one of `labels` names a field of the struct the one before it holds, and one of those fields is dropped.
