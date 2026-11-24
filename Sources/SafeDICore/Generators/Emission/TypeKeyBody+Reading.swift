@@ -22,8 +22,18 @@ extension TypeKeyLayout {
 	// MARK: Reading the path key's plan
 
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
-	mutating func read(_ rootBody: [GeneratedCode]) -> Bool {
+	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
+	mutating func declareOuter(_ properties: [Property]) {
 		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameterLabels: []))
+		for property in properties {
+			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
+			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
+		}
+		outerDeclarationCount = properties.count
+	}
+
+	/// Reads the root's body, after `declareOuter(_:)` declared it.
+	mutating func read(_ rootBody: [GeneratedCode]) -> Bool {
 		var viewsByKey = [ViewKey: Int]()
 		var frames = [(body: 0, children: rootBody, next: 0)]
 		while let frame = frames.last {

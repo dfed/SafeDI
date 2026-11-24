@@ -32,9 +32,14 @@
 /// the path key's body. So the type key never changes a value the path key builds.
 enum TypeKeyBody {
 	/// The statements of a root's body in the type key's layout, each indented as a root's statements are, or `nil` where the
-	/// root keeps `rootBody`, the path key's statements.
-	static func statements(ofRootBody rootBody: [GeneratedCode]) -> [GeneratedCode]? {
+	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
+	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
+	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
+	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
+		layout.declareOuter(outerDeclarations)
+		layout.namesInScope = namesInScope
 		guard layout.read(rootBody) else { return nil }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
 		guard layout.computeReads() else { return nil }
@@ -139,6 +144,10 @@ struct TypeKeyLayout {
 	}
 
 	var bodies = [Body]()
+	/// The number of the root body's first statements that stand for declarations outside it, which are never spelled.
+	var outerDeclarationCount = 0
+	/// The names bound around the root's body, which no function the layout declares takes.
+	var namesInScope = Set<String>()
 	/// The views other than the root's in post-order of the view DAG.
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.

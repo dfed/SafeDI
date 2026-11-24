@@ -9264,10 +9264,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
-				// A seam's root is hosted as its text until seam bodies are planned (`.claude/rules/emission-decisions.md`).
+				// A seam that leaves nothing to its caller lays its body out by the type key, as a root does, reading its
+				// parameters as the declarations before the body; a seam with builders is hosted as its text until seam bodies
+				// are planned (`.claude/rules/emission-decisions.md`).
+				let layout: [GeneratedCode]? = signature.builders.isEmpty
+					? TypeKeyBody.statements(ofRootBody: generatedProperties, outerDeclarations: signature.parameters.map { parameter in
+						guard case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil else { return parameter.property }
+						return Property(label: parameter.property.label, typeDescription: .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [parameter.property.typeDescription]))
+					}, namesInScope: Set(signature.parameters.map(\.internalName)))
+					: nil
 				var bodyLines = memoLines
-				if !generatedProperties.isEmpty {
-					bodyLines.append(GeneratedCode.lines(generatedProperties).spelled())
+				let bodyStatements = layout ?? generatedProperties
+				if !bodyStatements.isEmpty {
+					bodyLines.append(GeneratedCode.lines(bodyStatements).spelled())
 				}
 				bodyLines.append("\(bodyIndent)self.init(\(argumentList))")
 				body = bodyLines.joined(separator: "\n")

@@ -419,7 +419,7 @@ extension ScopeRecord {
 		// which the root asks for once its tree exists; an early start generates each large subtree's code at the context of
 		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Seams, mocks
 		// and trees built only to read their sets keep their starts.
-		let startsCodeGeneration = startsCodeGeneration && !(seamRoot == nil && mockBuilders == nil && !forMockGeneration)
+		let startsCodeGeneration = startsCodeGeneration && !(mockBuilders == nil && !forMockGeneration && (seamRoot == nil || seamRoot?.signature.builders.isEmpty == true))
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,
@@ -3601,7 +3601,7 @@ extension ScopeGeneratorUnderConstruction {
 			)
 			// A large subtree starts its own code and that of the small subtrees directly beneath it, in groups, as
 			// `scopeGenerator(collectingGeneratorsToStartInto:startedGenerators:startLog:)` starts a tree built for emission.
-			if reseating.subtreeScopeCount >= scopeCountOfLargeSubtree {
+			if reseating.subtreeScopeCount >= scopeCountOfLargeSubtree, !seamRoot.signature.builders.isEmpty {
 				var groupsStartingNow = groupsOfLargeSubtreeSize(reseating.smallSubtrees)
 				groupsStartingNow.append([reseated])
 				for group in groupsStartingNow {
