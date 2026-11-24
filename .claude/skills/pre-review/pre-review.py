@@ -721,7 +721,7 @@ def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps, i
     if uncommitted:
         lines.append("uncommitted changes in the checkout: they are not this head's, and no check saw them")
         ready = False
-    for name in ("lint", "instruction files", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
+    for name in ("lint", "conflict markers", "instruction files", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
         text, passed, details = steps.get(name, ("not run", False, []))
         lines.append(f"{name}: {text}")
         lines += [f"  {detail}" for detail in details]
@@ -1006,6 +1006,24 @@ def changed_lines(arguments, top, head, status):
     sys.exit(completed.returncode)
 
 
+# What `git grep` is asked for: a line that opens one side of a conflict (`<<<<<<< ours`) or closes it
+# (`>>>>>>> theirs`). The `=======` between them is left out, since Markdown underlines a heading with one.
+CONFLICT_MARKER = r"^(<<<<<<<|>>>>>>>)( |$)"
+
+
+def conflict_markers_step(status_code, lines):
+    """The step that fails on a conflict marker left in any tracked text file of the head, which no other step
+    reads for: lint formats Swift only, and a rules file with a marker in it is still under its limit. `git grep`
+    exits 1 when it finds nothing, and prints `path:line:text` for each line it finds."""
+    if status_code == 1:
+        return ("passed", True, [])
+    if status_code != 0:
+        return (f"failed: git grep exited {status_code}", False, [line[:240] for line in lines[-5:]])
+    found = [":".join(line.split(":", 2)[:2]) for line in lines]
+    files = sorted({line.split(":", 1)[0] for line in found})
+    return (f"failed: {len(found)} conflict marker line(s) in {len(files)} file(s)", False, found[:20] + ([f"and {len(found) - 20} more"] if len(found) > 20 else []))
+
+
 def instruction_files_step(status_code, seconds, lines):
     """The step that runs `Scripts/check-claude-instruction-files.sh`, as "Check Markdown links" does: each file's
     limit, and what the rules files load together for one source file, which no one file's size shows. The script
@@ -1040,6 +1058,8 @@ def pre_push(arguments, top, head, status):
     with scratch_worktree(top, head) as worktree:
         status_code, seconds, lines = timed(runner + ["./CLI/lint.sh", "--check"], worktree)
         steps["lint"] = (f"passed, {duration(seconds)}" if status_code == 0 else f"failed, {duration(seconds)}", status_code == 0, [] if status_code == 0 else lines[-5:])
+        status_code, _, lines = timed(["git", "grep", "-n", "-I", "-E", CONFLICT_MARKER, "--", "."], worktree)
+        steps["conflict markers"] = conflict_markers_step(status_code, lines)
         # Seconds, and CI's "Check Markdown links" fails on it: without the runner, since it needs git and Python only.
         steps["instruction files"] = instruction_files_step(*timed(["Scripts/check-claude-instruction-files.sh"], worktree))
 
@@ -2256,7 +2276,7 @@ def self_test():
         {"Sources/A.swift": {"3": 0, "4": 0, "6": 0, "11": 0, "12": 0, "22": 0}, "Sources/B.swift": {"1": 0, "2": 0}, "Sources/New.swift": {"1": 0}, "Sources/Unrecorded.swift": {"1": 0}},
         hunks,
     ), [("Sources/A.swift", 3), ("Sources/A.swift", 6), ("Sources/A.swift", 22), ("Sources/B.swift", 1)])
-    passed_steps = {"lint": ("passed, 50 s", True, []), "instruction files": ("passed, 9 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    passed_steps = {"lint": ("passed, 50 s", True, []), "conflict markers": ("passed", True, []), "instruction files": ("passed, 9 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
     expect("a whole-tree failure names the platform that measured it and the one CI also counts", [measured_on_one_platform("linux"), measured_on_one_platform("darwin")], [
         "measured on Linux only; CI also counts macOS, so push over a listed line only by saying in the pull request why macOS executes it",
         "measured on macOS only; CI also counts Linux, so push over a listed line only by saying in the pull request why Linux executes it",
@@ -2266,6 +2286,7 @@ def self_test():
         "head: abc (lane), 2 commit(s) measured from origin/main at 123",
         "toolchain: Swift 6.4: this says nothing of another Swift or platform",
         "lint: passed, 50 s",
+        "conflict markers: passed",
         "instruction files: passed, 9 s",
         "tests: passed",
         "changed-line coverage: passed, 5 min 9 s",
@@ -2337,6 +2358,23 @@ def self_test():
         [instruction_files_step(0, 9, ["noise"]), instruction_files_step(1, 9, [f"line {number}" for number in range(30)])[:2], instruction_files_step(1, 9, [f"line {number}" for number in range(30)])[2][::19]],
         [("passed, 9 s", True, []), ("failed, 9 s: Scripts/check-claude-instruction-files.sh exited 1", False), ["line 10", "line 29"]],
     )
+    expect(
+        "the conflict markers step passes when git grep finds nothing, names each marker line by path and line, and fails when git grep itself fails",
+        [
+            conflict_markers_step(1, []),
+            conflict_markers_step(0, [".claude/rules/a.md:12:<<<<<<< HEAD", ".claude/rules/a.md:20:>>>>>>> lane", "Sources/B.swift:3:<<<<<<< Updated upstream"]),
+            conflict_markers_step(0, [f"a.md:{number}:<<<<<<< x" for number in range(25)])[2][-2:],
+            conflict_markers_step(128, ["fatal: not a git repository"]),
+        ],
+        [
+            ("passed", True, []),
+            ("failed: 3 conflict marker line(s) in 2 file(s)", False, [".claude/rules/a.md:12", ".claude/rules/a.md:20", "Sources/B.swift:3"]),
+            ["a.md:19", "and 5 more"],
+            ("failed: git grep exited 128", False, ["fatal: not a git repository"]),
+        ],
+    )
+    expect("the conflict marker pattern takes a side's first and last line, and neither a heading's underline nor a longer run", [bool(re.search(CONFLICT_MARKER, line)) for line in ("<<<<<<< HEAD", ">>>>>>> lane", "<<<<<<<", "=======", "<<<<<<<<", " <<<<<<< HEAD")], [True, True, True, False, False, False])
+    expect("a block without the conflict markers step is not a pass", pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "conflict markers"})[0].splitlines()[-1], "result: DO NOT PUSH")
     expect("a block without the instruction files step is not a pass", pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "instruction files"})[0].splitlines()[-6:-4] + [pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "instruction files"})[0].splitlines()[-1]], ["instruction files: not run", "tests: passed", "result: DO NOT PUSH"])
     expect("a block whose only failures are inherited says to push and how many there are", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "tests": ("2 failed: 0 new on head, 2 also failing on base", True, [])}, inherited=2)[0].splitlines()[-1], "result: PUSH (inherited failures: 2)")
     expect("inherited failures do not turn another step's failure into a push", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "lint": ("failed", False, [])}, inherited=2)[0].splitlines()[-1], "result: DO NOT PUSH")
