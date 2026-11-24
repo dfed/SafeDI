@@ -1,0 +1,10 @@
+sessions created once the tree is built: 0
+sessions created after the panel's screen: 0
+the panel's reader: panel true
+the panel's built reader: panel true
+sessions created after the first screen: 1
+the first screen's readers: first first
+the second screen's readers: second second
+the top readers share the caller's session: true
+the caller's session is not the panel's: true
+sessions created at the end: 1

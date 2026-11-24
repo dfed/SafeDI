@@ -1,0 +1,11 @@
+sessions created once the tree is built: []
+sessions created after the right: ["second"]
+the right's holder: second
+the right's built holder: second
+sessions created after the top holder: ["second", "session"]
+the top holder: session
+sessions created after the left: ["second", "session", "first"]
+the left's holder: first
+the left's built holder: first
+a second right's holder shares the session: true
+sessions created at the end: ["second", "session", "first"]

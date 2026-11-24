@@ -1,0 +1,10 @@
+sessions created once the tree is built: 0
+sessions created after the panel: 0
+the panel's inner reads the panel's session: true
+the panel's built inner reads the panel's session: true
+sessions created after the panel's readers: 0
+sessions created after the top inner: 0
+sessions created after the top reader: 1
+the top reader does not read the panel's session: true
+a second top inner's reader shares the caller's session: true
+sessions created at the end: 1
