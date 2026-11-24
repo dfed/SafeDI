@@ -713,6 +713,49 @@ def source_targets(description):
     return sorted(targets)
 
 
+EXAMPLE_PACKAGE = "Examples/Example Package Integration"
+# What decides whether the plugin still wires the tool into an adopter's build: the plugin, the tool's command line,
+# the package manifest, and the example itself.
+EXAMPLE_PACKAGE_INPUTS = ("Plugins/", "Sources/SafeDITool/", "Sources/SafeDIToolLibrary/", "Package.swift", EXAMPLE_PACKAGE + "/")
+
+
+def owes_example_package(changed_paths, platform=sys.platform):
+    """Why the example package is not built, or None when it is: it is built on macOS, when the change touches what
+    its build depends on. CI builds it on every pull request; in five weeks eight of the fourteen build failures only
+    a macOS job reported were this package's, in debug, in release and under the Swift Build backend."""
+    if platform != "darwin":
+        return "not needed: built on macOS only"
+    if not any(path == prefix or (prefix.endswith("/") and path.startswith(prefix)) for path in changed_paths for prefix in EXAMPLE_PACKAGE_INPUTS):
+        return "not needed: the change touches neither the plugin, the tool's command line, Package.swift nor the example"
+    return None
+
+
+def example_package_builds(build_help):
+    """The builds of the example package, as ci.yml's "Build Package, Tuist and Bazel Integrations" runs them on the
+    unchanged example: (what it is called, its arguments after `swift build`, its scratch folder, the logger the
+    generated root must build). The Swift Build backend's builds are left out where `swift build --help` does not
+    offer it."""
+    backends = ["native"] + (["swiftbuild"] if "swiftbuild" in build_help else [])
+    builds = []
+    for backend in backends:
+        builds.append((f"{backend} debug", ["--build-system", backend], f".build/pre-push-example-{backend}-debug", "ConsoleEventLogger()"))
+        builds.append((f"{backend} release", ["--build-system", backend, "-c", "release", "-Xswiftc", "-Onone"], f".build/pre-push-example-{backend}-release", "DisabledEventLogger()"))
+    return builds
+
+
+def example_package_step(results, seconds):
+    """`results` holds, per build that ran, (what it is called, its exit status, its lines, the generated root's text
+    or None when no file was found, the logger that text must build). The first build that fails stops the rest."""
+    for name, status_code, lines, generated, logger in results:
+        if status_code != 0:
+            return (f"failed, {duration(seconds)}: the {name} build exited {status_code}", False, [line[:240] for line in lines if "error:" in line][:20] or lines[-5:])
+        if generated is None:
+            return (f"failed, {duration(seconds)}: the {name} build wrote no Root+SafeDI.swift", False, [])
+        if logger not in generated:
+            return (f"failed, {duration(seconds)}: the {name} build's Root+SafeDI.swift does not build {logger}", False, [])
+    return (f"passed, {duration(seconds)}: {', '.join(name for name, *_ in results)}", True, [])
+
+
 def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps, inherited=0):
     """What `--pre-push` prints, and whether every step passed. `inherited` is how many tests fail on the head that
     fail on the base too: they do not stop a push, and the result says how many there are."""
@@ -721,7 +764,7 @@ def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps, i
     if uncommitted:
         lines.append("uncommitted changes in the checkout: they are not this head's, and no check saw them")
         ready = False
-    for name in ("lint", "conflict markers", "instruction files", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
+    for name in ("lint", "conflict markers", "example package", "instruction files", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
         text, passed, details = steps.get(name, ("not run", False, []))
         lines.append(f"{name}: {text}")
         lines += [f"  {detail}" for detail in details]
@@ -1128,6 +1171,23 @@ def pre_push(arguments, top, head, status):
             thread.start()
         for thread in threads:
             thread.join()
+
+        # After the two above, not beside them: it builds swift-syntax up to four more times on a first run.
+        not_owed = owes_example_package(output_of("git", "diff", "--name-only", f"{base}..HEAD").splitlines())
+        if not_owed:
+            steps["example package"] = (not_owed, True, [])
+        else:
+            results, example_seconds = [], 0
+            for name, build_arguments, scratch, logger in example_package_builds(output_of("swift", "build", "--help", check=False)):
+                outputs = pathlib.Path(worktree.path) / scratch / "plugins" / "outputs"
+                shutil.rmtree(outputs, ignore_errors=True)
+                status_code, seconds, lines = timed(runner + ["swift", "build"] + build_arguments + ["--scratch-path", scratch, "--package-path", EXAMPLE_PACKAGE], worktree)
+                generated = next((path.read_text() for path in sorted(outputs.rglob("Root+SafeDI.swift")) if "RootModule" in path.parts and "SafeDIOutput" in path.parts), None) if status_code == 0 else None
+                results.append((name, status_code, lines, generated, logger))
+                example_seconds += seconds
+                if status_code != 0:
+                    break
+            steps["example package"] = example_package_step(results, example_seconds)
     text, ready = pre_push_block(head, output_of("git", "rev-parse", "--abbrev-ref", "HEAD"), f"{arguments.base} at {base[:9]}", int(output_of("git", "rev-list", "--count", f"{base}..HEAD")), bool(status), toolchain, steps, inherited[0])
     print(text)
     sys.exit(0 if ready else 1)
@@ -2276,7 +2336,7 @@ def self_test():
         {"Sources/A.swift": {"3": 0, "4": 0, "6": 0, "11": 0, "12": 0, "22": 0}, "Sources/B.swift": {"1": 0, "2": 0}, "Sources/New.swift": {"1": 0}, "Sources/Unrecorded.swift": {"1": 0}},
         hunks,
     ), [("Sources/A.swift", 3), ("Sources/A.swift", 6), ("Sources/A.swift", 22), ("Sources/B.swift", 1)])
-    passed_steps = {"lint": ("passed, 50 s", True, []), "conflict markers": ("passed", True, []), "instruction files": ("passed, 9 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    passed_steps = {"lint": ("passed, 50 s", True, []), "conflict markers": ("passed", True, []), "example package": ("not needed: built on macOS only", True, []), "instruction files": ("passed, 9 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
     expect("a whole-tree failure names the platform that measured it and the one CI also counts", [measured_on_one_platform("linux"), measured_on_one_platform("darwin")], [
         "measured on Linux only; CI also counts macOS, so push over a listed line only by saying in the pull request why macOS executes it",
         "measured on macOS only; CI also counts Linux, so push over a listed line only by saying in the pull request why Linux executes it",
@@ -2287,6 +2347,7 @@ def self_test():
         "toolchain: Swift 6.4: this says nothing of another Swift or platform",
         "lint: passed, 50 s",
         "conflict markers: passed",
+        "example package: not needed: built on macOS only",
         "instruction files: passed, 9 s",
         "tests: passed",
         "changed-line coverage: passed, 5 min 9 s",
@@ -2374,6 +2435,45 @@ def self_test():
         ],
     )
     expect("the conflict marker pattern takes a side's first and last line, and neither a heading's underline nor a longer run", [bool(re.search(CONFLICT_MARKER, line)) for line in ("<<<<<<< HEAD", ">>>>>>> lane", "<<<<<<<", "=======", "<<<<<<<<", " <<<<<<< HEAD")], [True, True, True, False, False, False])
+    expect(
+        "the example package is built on macOS when the change touches the plugin, the tool's command line, the manifest or the example",
+        [owes_example_package(paths, platform) for paths, platform in (
+            (["Plugins/SafeDIGenerator/SafeDIGenerateDependencyTree.swift"], "darwin"),
+            (["Sources/SafeDIToolLibrary/SafeDITool.swift"], "darwin"),
+            (["Package.swift"], "darwin"),
+            ([f"{EXAMPLE_PACKAGE}/Package.swift"], "darwin"),
+            (["Sources/SafeDICore/Generators/ScopeGenerator.swift", "Tests/A.swift", "Package.swift.md"], "darwin"),
+            (["Plugins/SafeDIGenerator/SafeDIGenerateDependencyTree.swift"], "linux"),
+        )],
+        [None, None, None, None, "not needed: the change touches neither the plugin, the tool's command line, Package.swift nor the example", "not needed: built on macOS only"],
+    )
+    expect(
+        "the example package builds in debug and release, and with the Swift Build backend where swift build offers it",
+        [[(name, scratch, logger) for name, _, scratch, logger in example_package_builds(text)] for text in ("--build-system <native|swiftbuild|xcode>", "--build-system <native|xcode>")],
+        [
+            [("native debug", ".build/pre-push-example-native-debug", "ConsoleEventLogger()"), ("native release", ".build/pre-push-example-native-release", "DisabledEventLogger()"), ("swiftbuild debug", ".build/pre-push-example-swiftbuild-debug", "ConsoleEventLogger()"), ("swiftbuild release", ".build/pre-push-example-swiftbuild-release", "DisabledEventLogger()")],
+            [("native debug", ".build/pre-push-example-native-debug", "ConsoleEventLogger()"), ("native release", ".build/pre-push-example-native-release", "DisabledEventLogger()")],
+        ],
+    )
+    expect("a release build of the example passes -c release", [arguments for name, arguments, _, _ in example_package_builds("") if name == "native release"], [["--build-system", "native", "-c", "release", "-Xswiftc", "-Onone"]])
+    expect(
+        "the example package step passes when every build wrote a root that builds its configuration's logger, and fails on the first build that did not",
+        [
+            example_package_step([("native debug", 0, [], "let logger = ConsoleEventLogger()", "ConsoleEventLogger()"), ("native release", 0, [], "DisabledEventLogger()", "DisabledEventLogger()")], 95),
+            example_package_step([("native debug", 0, [], "ConsoleEventLogger()", "ConsoleEventLogger()"), ("native release", 0, [], "ConsoleEventLogger()", "DisabledEventLogger()")], 95),
+            example_package_step([("native debug", 1, ["Compiling", "error: SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive", "note: x"], None, "ConsoleEventLogger()")], 30),
+            example_package_step([("native debug", 1, ["a", "b"], None, "ConsoleEventLogger()")], 30),
+            example_package_step([("swiftbuild debug", 0, [], None, "ConsoleEventLogger()")], 30),
+        ],
+        [
+            ("passed, 1 min 35 s: native debug, native release", True, []),
+            ("failed, 1 min 35 s: the native release build's Root+SafeDI.swift does not build DisabledEventLogger()", False, []),
+            ("failed, 30 s: the native debug build exited 1", False, ["error: SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive"]),
+            ("failed, 30 s: the native debug build exited 1", False, ["a", "b"]),
+            ("failed, 30 s: the swiftbuild debug build wrote no Root+SafeDI.swift", False, []),
+        ],
+    )
+    expect("a block without the example package step is not a pass", pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "example package"})[0].splitlines()[-1], "result: DO NOT PUSH")
     expect("a block without the conflict markers step is not a pass", pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "conflict markers"})[0].splitlines()[-1], "result: DO NOT PUSH")
     expect("a block without the instruction files step is not a pass", pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "instruction files"})[0].splitlines()[-6:-4] + [pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "instruction files"})[0].splitlines()[-1]], ["instruction files: not run", "tests: passed", "result: DO NOT PUSH"])
     expect("a block whose only failures are inherited says to push and how many there are", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "tests": ("2 failed: 0 new on head, 2 also failing on base", True, [])}, inherited=2)[0].splitlines()[-1], "result: PUSH (inherited failures: 2)")
