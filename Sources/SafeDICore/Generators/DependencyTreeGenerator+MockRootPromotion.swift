@@ -656,7 +656,7 @@ extension DependencyTreeGenerator {
 	) -> PublicMockRootLevel {
 		let parameterNames = ScopeGenerator.mockRootParameterNames(of: parameters)
 		let mockedTypeAccess = parameterAccess(instantiable.effectiveTypeAccess)
-		let receiverModulesByLabel = ScopeGenerator.receiverModules(in: parameters.parameterTree, context: context)
+		let receiverModulesByLabel = ScopeGenerator.receiverModules(in: parameters.treeNames.propertyNodes, context: context)
 		// The wrapper `mock()` binds around each instance it takes for a type that receives a `LazilyInstantiated`, by the
 		// instance's property, the first `mock()` binds where wrappers of two kinds share an instance.
 		var wrapperByInstance = [Property: Property]()
@@ -745,7 +745,7 @@ extension DependencyTreeGenerator {
 			formsMockedTypeProvides.formUnion(Self.formsProvided(by: dependency.property))
 		}
 		var receiversByField = [Property: [SeamSignature.Receiver]]()
-		for (index, receiver) in ScopeGenerator.treeReceivers(in: parameters.parameterTree, mockedType: instantiable).enumerated() {
+		for (index, receiver) in ScopeGenerator.treeReceivers(in: parameters.treeNames.propertyNodes, mockedType: instantiable).enumerated() {
 			// An alias received only if available spells its fulfilling property non-optional, as its receiver records it, and
 			// receives the field's optional form.
 			let (receivedProperty, receivedForm, aliasProperty): (Property?, Property?, Property?) = switch receiver.dependency.source {

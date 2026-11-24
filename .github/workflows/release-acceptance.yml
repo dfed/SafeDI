@@ -212,11 +212,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Download Test Bundle
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: ${{ env.BUNDLE }}
       - name: Download Older Release
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           name: release-acceptance-older-release
       - name: Unpack
@@ -276,7 +276,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Download Shard Reports
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/download-artifact
         with:
           pattern: release-acceptance-report-*
           path: reports
