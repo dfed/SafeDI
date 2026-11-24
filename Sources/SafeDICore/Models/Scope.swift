@@ -758,10 +758,10 @@ extension ScopeRecord {
 					var found: (reuse: ConstructionMemo.Reuse, isPreviousPassReuse: Bool)?
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
 						found = (reuse, false)
-					} else if let key, let reuse = previousPassMemo?.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
-						// The pass before built a place of this key from what this place reads of it: building the place again would
-						// build the same generator. Its code starts as the build would have started it, and the memo holds it for
-						// the places after it.
+					} else if let key, let reuse = previousPassMemo?.reuse(ofPreviousPassGenerator: scopeGeneratorsUnderConstruction[index].previousPassChildGenerator, for: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
+						// The pass before built this place's generator under this key, so from what this place reads of it: building
+						// the place again would build the same generator. Its code starts as the build would have started it, and the
+						// memo holds it for the places after it.
 						for group in reuse.entry.startedBeneath.groups {
 							let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
 							guard !group.isEmpty else { continue }

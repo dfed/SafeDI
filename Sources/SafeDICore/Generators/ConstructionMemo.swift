@@ -89,6 +89,7 @@ struct ConstructionMemo {
 			break
 		case .acrossTrees:
 			entriesByKey = firstPassMemo.entriesByKey
+			entriesByGenerator = firstPassMemo.entriesByGenerator
 			keyedScopes = firstPassMemo.keyedScopes
 		}
 	}
@@ -179,13 +180,36 @@ struct ConstructionMemo {
 		}
 	}
 
+	/// The entry of `generator`, the pass before's generator at a place, where this memo, the pass before's, stored it under
+	/// `key`, the place's own, and `context` answers its reads alike, or `nil`. The key names what the place's build reads
+	/// of the pass before, so the generator was stored under it exactly when it found what it was built with: building the
+	/// place again would build it again. Only that generator is asked, never the other entries of the key: a later pass's
+	/// key holds no context, so they number every place of the key the pass before built, and asking each of them cost
+	/// a later pass more than its builds.
+	func reuse(ofPreviousPassGenerator generator: ScopeGenerator?, for key: Key, in context: ConstructionContext) -> Reuse? {
+		guard let generator,
+		      let stored = entriesByGenerator[ObjectIdentifier(generator)],
+		      stored.key == key,
+		      let reads = stored.entry.reads.answeredAlike(in: context)
+		else { return nil }
+		return Reuse(entry: stored.entry, reads: reads)
+	}
+
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ScopeRecord) {
 		entriesByKey[key, default: []].append(entry)
+		let generator = ObjectIdentifier(entry.generator)
+		if entriesByGenerator[generator] == nil {
+			entriesByGenerator[generator] = (key, entry)
+		}
 		keyedScopes.append(scope)
 	}
 
 	private var entriesByKey = [Key: [Entry]]()
+	/// Each stored generator's first entry with its key, by the generator's identity, which the entry keeps alive, so no
+	/// other generator takes it while the memo lives. Compared only, never ordered: which generator a place asks for is
+	/// the one its pass before built there.
+	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
 	private var keyedScopes = [ScopeRecord]()
 
@@ -195,16 +219,19 @@ struct ConstructionMemo {
 		get {
 			var oracleMemo = ConstructionMemo(sharing: .acrossTrees)
 			oracleMemo.entriesByKey = oracleEntriesByKey
+			oracleMemo.entriesByGenerator = oracleEntriesByGenerator
 			oracleMemo.keyedScopes = oracleKeyedScopes
 			return oracleMemo
 		}
 		set {
 			oracleEntriesByKey = newValue.entriesByKey
+			oracleEntriesByGenerator = newValue.entriesByGenerator
 			oracleKeyedScopes = newValue.keyedScopes
 		}
 	}
 
 	private var oracleEntriesByKey = [Key: [Entry]]()
+	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [ScopeRecord]()
 
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
