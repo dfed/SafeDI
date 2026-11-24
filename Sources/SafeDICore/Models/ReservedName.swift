@@ -81,6 +81,7 @@ public enum ReservedName: Hashable, Sendable {
 	public static func nearestConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
 		"\(builderFunctionNamePrefix)nearest_\(typeIdentifier)"
 	}
+
 	/// The name of the parameter through which a generated `mock()` takes its overrides. Callers of a generated
 	/// `mock()` spell it, so it never changes.
 	public static let mockOverridesParameterName = "safeDIOverrides"
