@@ -187,13 +187,19 @@ extension ScopeGenerator {
 	/// function with the records the configurable path wrote, and counting the walk's plan nodes.
 	static func compareRecords(production: [BuiltPlaceRecord], walk: MockLowering.Walk, root: String) -> String {
 		let walkRecords = walk.placePathsInWalkOrder.compactMap { path -> BuiltPlaceRecord? in
-			if case let .built(record) = walk.builtRecords[path] { record } else { nil }
+			if case let .built(record) = walk.builtRecords[path] {
+				record
+			} else {
+				nil
+			}
 		}
 		var differences = [String: Int]()
 		var examples = [String: String]()
 		func differ(_ field: String, _ example: @autoclosure () -> String) {
 			differences[field, default: 0] += 1
-			if examples[field] == nil { examples[field] = example() }
+			if examples[field] == nil {
+				examples[field] = example()
+			}
 		}
 		if production.count != walkRecords.count {
 			differ("count", "prod=\(production.count) walk=\(walkRecords.count)")
@@ -203,17 +209,39 @@ extension ScopeGenerator {
 				differ("place", "\(p.property.asSource) vs \(m.property.asSource)")
 				continue
 			}
-			if p.isErased != m.isErased { differ("isErased", p.property.asSource) }
-			if p.target != m.target { differ("target", p.property.asSource) }
-			if readKey(p.arguments) != readKey(m.arguments) { differ("arguments", "\(readKey(p.arguments)) vs \(readKey(m.arguments))") }
-			if p.forwardedProperties != m.forwardedProperties { differ("forwarded", p.property.asSource) }
-			if p.cycleParameters != m.cycleParameters { differ("cycleParameters", p.property.asSource) }
-			if readKey(p.callCycleArguments) != readKey(m.callCycleArguments) { differ("callCycleArguments", "\(readKey(p.callCycleArguments)) vs \(readKey(m.callCycleArguments))") }
-			if p.functionName != m.functionName { differ("functionName", "\(p.functionName) vs \(m.functionName)") }
-			if p.isSendable != m.isSendable { differ("isSendable", p.property.asSource) }
-			if p.lineEnd != m.lineEnd { differ("lineEnd", p.property.asSource) }
-			if p.hasFunction != m.hasFunction { differ("hasFunction", "\(p.property.asSource) prod=\(p.hasFunction) walk=\(m.hasFunction)") }
-			if alternativeKey(p.alternatives) != alternativeKey(m.alternatives) { differ("alternatives", "\(alternativeKey(p.alternatives)) vs \(alternativeKey(m.alternatives))") }
+			if p.isErased != m.isErased {
+				differ("isErased", p.property.asSource)
+			}
+			if p.target != m.target {
+				differ("target", p.property.asSource)
+			}
+			if readKey(p.arguments) != readKey(m.arguments) {
+				differ("arguments", "\(readKey(p.arguments)) vs \(readKey(m.arguments))")
+			}
+			if p.forwardedProperties != m.forwardedProperties {
+				differ("forwarded", p.property.asSource)
+			}
+			if p.cycleParameters != m.cycleParameters {
+				differ("cycleParameters", p.property.asSource)
+			}
+			if readKey(p.callCycleArguments) != readKey(m.callCycleArguments) {
+				differ("callCycleArguments", "\(readKey(p.callCycleArguments)) vs \(readKey(m.callCycleArguments))")
+			}
+			if p.functionName != m.functionName {
+				differ("functionName", "\(p.functionName) vs \(m.functionName)")
+			}
+			if p.isSendable != m.isSendable {
+				differ("isSendable", p.property.asSource)
+			}
+			if p.lineEnd != m.lineEnd {
+				differ("lineEnd", p.property.asSource)
+			}
+			if p.hasFunction != m.hasFunction {
+				differ("hasFunction", "\(p.property.asSource) prod=\(p.hasFunction) walk=\(m.hasFunction)")
+			}
+			if alternativeKey(p.alternatives) != alternativeKey(m.alternatives) {
+				differ("alternatives", "\(alternativeKey(p.alternatives)) vs \(alternativeKey(m.alternatives))")
+			}
 		}
 		let differenceText = differences.keys.sorted().map { "\($0)=\(differences[$0, default: 0])" }.joined(separator: ",")
 		let exampleText = examples.keys.sorted().map { "\($0): \(examples[$0, default: ""])" }.joined(separator: " || ")
