@@ -10126,7 +10126,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lazilyInstantiatedBindingNameMap[receivedProperty.label, default: [:]][receivedProperty.typeDescription] = lazilyInstantiatedBindingNameByProperty[receivedProperty.asUnwrappedProperty]
 		}
 		// A call of another module's public mock that takes the wrapper only if available is passed the wrapper a required
-		// receive of the label makes the mock bind, as it reads that declaration (`NearestDeclarations.binding(of:)`): the
+		// receive of the label makes the mock bind, as it reads that declaration (`NearestDeclarations.resolvingBinding(of:)`): the
 		// call receives the optional form, which no parameter of this mock stands for.
 		for receivedProperty in parameters.lazilyInstantiatedReceivedProperties where !receivedProperty.typeDescription.isOptional {
 			let optionalType = TypeDescription.optional(receivedProperty.typeDescription)
@@ -11508,7 +11508,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// outermost `@Sendable` function, and returns that local's name, or the member of the configuration's local
 		/// that `expression` reads.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
-			if let configurationPath, let member = Self.member(of: expression, readFrom: configurationPath) {
+			if let configurationPath, expression.hasPrefix("\(configurationPath).") {
 				let localName: String
 				if let configurationLocalName {
 					localName = configurationLocalName
@@ -11517,7 +11517,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					configurationLocalName = localName
 					extractions.append((localName: localName, expression: configurationPath))
 				}
-				return localName + member
+				return localName + expression.dropFirst(configurationPath.count)
 			} else {
 				let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
 				extractions.append((localName: localName, expression: expression))
@@ -11545,18 +11545,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// The suffix of the name of the local a whole configuration is read into.
 		private static let configurationLocalNameSuffix = "overrides"
-
-		/// The member access `expression` makes of the configuration at `path` (`""` for the configuration itself), or `nil`
-		/// where it reads something else.
-		private static func member(of expression: String, readFrom path: String) -> String? {
-			if expression == path {
-				""
-			} else if expression.hasPrefix("\(path).") {
-				String(expression.dropFirst(path.count))
-			} else {
-				nil
-			}
-		}
 	}
 }
 
