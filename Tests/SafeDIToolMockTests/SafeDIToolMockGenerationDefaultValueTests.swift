@@ -2088,7 +2088,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		#if DEBUG
 		extension Child {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            plain: @Sendable @escaping () -> Void = {},
 		            taking: @Sendable @escaping (@Sendable () -> Void) -> Void = { _ in },

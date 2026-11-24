@@ -265,7 +265,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			#if DEBUG
 			extension Child {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            grand: (@Sendable () -> Grand)? = nil,
 			            capacity: @autoclosure @escaping @Sendable () -> Int = 10,
@@ -391,7 +391,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			#if DEBUG
 			extension Child {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            capacity: @autoclosure @escaping @Sendable () -> Int = 10,
 			            _ safeDIBuilder: (@Sendable (Int) -> Child)? = nil

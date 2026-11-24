@@ -199,7 +199,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
@@ -398,7 +398,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping Instantiator<Hole>.Builder) -> PanelTwin)? = nil,
@@ -590,7 +590,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
@@ -783,7 +783,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
@@ -1230,7 +1230,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
@@ -1431,7 +1431,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping @Sendable () -> AnyHole) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping @Sendable () -> AnyHole) -> PanelTwin)? = nil,
@@ -1632,7 +1632,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping SendableInstantiator<Hole>.Builder) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping SendableInstantiator<Hole>.Builder) -> PanelTwin)? = nil,
@@ -1831,7 +1831,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping ErasedInstantiator<HoleArguments, AnyHole>.Builder) -> Panel)? = nil,
 		            panelTwin: (@Sendable (@escaping ErasedInstantiator<HoleArguments, AnyHole>.Builder) -> PanelTwin)? = nil,
@@ -2053,7 +2053,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			#if DEBUG
 			extension Screen {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
 			            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
@@ -2612,7 +2612,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
@@ -2720,7 +2720,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil

@@ -8553,7 +8553,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		#if DEBUG
 		extension Beta {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            _ safeDIBuilder: (@Sendable (SendableInstantiator<Alpha>) -> Beta)? = nil
 		        ) {
@@ -8581,7 +8581,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 		extension Alpha {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            beta: Beta.SafeDIMockConfiguration = .init(),
 		            _ safeDIBuilder: (@Sendable (SendableInstantiator<Beta>) -> Alpha)? = nil
@@ -8615,7 +8615,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 
 		extension Gamma {
 		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
+		    nonisolated struct SafeDIMockConfiguration: Sendable {
 		        init(
 		            flag: @autoclosure @escaping @Sendable () -> Bool = true,
 		            _ safeDIBuilder: (@Sendable (Bool) -> Gamma)? = nil

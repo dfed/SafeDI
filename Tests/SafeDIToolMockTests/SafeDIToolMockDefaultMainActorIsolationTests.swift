@@ -320,7 +320,7 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 			#if DEBUG
 			extension Client {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            timeout: @autoclosure @escaping @Sendable () -> Int = 30,
 			            _ safeDIBuilder: (@Sendable (Int) -> Client)? = nil
@@ -354,7 +354,7 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 
 			extension Worker {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            logger: (@Sendable () -> any Logging)? = nil,
 			            client: Client.SafeDIMockConfiguration = .init(),
@@ -400,7 +400,7 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 
 			extension Cache {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            limit: @autoclosure @escaping @Sendable () -> Int = 10,
 			            _ safeDIBuilder: (@Sendable (Int) -> Cache)? = nil
@@ -434,7 +434,7 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 
 			extension Pong {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            label: @autoclosure @escaping @Sendable () -> String = "pong",
 			            _ safeDIBuilder: (@Sendable (String, SendableInstantiator<Ping>) -> Pong)? = nil
@@ -468,7 +468,7 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 
 			extension Ping {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            pongBuilder: Pong.SafeDIMockConfiguration = .init(),
 			            label: @autoclosure @escaping @Sendable () -> String = "ping",
