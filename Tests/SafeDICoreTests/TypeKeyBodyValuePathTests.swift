@@ -71,6 +71,50 @@ struct TypeKeyBodyValuePathTests {
 		}) == nil)
 	}
 
+	@Test
+	func statements_passesANewValue_whenACallHandsAPassedArgumentAValueThatReadsNoDeclaration() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .emptyInitialization(.simple(name: "Cfg")), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
+	}
+
+	@Test
+	func statements_passesANewValue_whenACloserHandsThePassedArgumentOfTheFunctionItClosesOn() throws {
+		let configuration = PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .emptyInitialization(.simple(name: "Cfg")), staysOutsideSendableFunctions: false)
+		var closer = ClosingPlaceRecord(
+			property: Property(label: "bBuilder", typeDescription: .simple(name: "Instantiator", generics: [.simple(name: "B")])),
+			isErased: false,
+			isExtension: false,
+			closedOnFunctionName: "__safeDI_b",
+			forwardedProperties: [],
+			cycleArguments: [],
+		)
+		closer.passedArguments = [configuration]
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [PlaceRead(argumentLabel: "bBuilder", label: "bBuilder", property: closer.property, source: .binding(label: "bBuilder"))],
+			children: [.place(PlacePlan(code: .text("let bBuilder = Instantiator<B> { __safeDI_b(cfg: Cfg()) }"), record: .closer(closer)))],
+		) { built in
+			built.passedArguments = [configuration]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: Cfg())
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
+	}
+
 	private static let idRead = PlaceRead(
 		argumentLabel: "id",
 		label: "id",
@@ -78,8 +122,8 @@ struct TypeKeyBodyValuePathTests {
 		source: .binding(label: "id"),
 	)
 
-	/// `let id = 1`, then a place that builds `b: B` with `arguments` in a function of its own, as `configure` records it.
-	private static func rootBody(arguments: [PlaceRead] = [], _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
+	/// `let id = 1`, then a place that builds `b: B` with `arguments` in a function of its own, whose body builds `children`, as `configure` records it.
+	private static func rootBody(arguments: [PlaceRead] = [], children: [GeneratedCode] = [], _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
 		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
 		var built = BuiltPlaceRecord(
 			property: Property(label: "b", typeDescription: .simple(name: "B")),
@@ -96,7 +140,7 @@ struct TypeKeyBodyValuePathTests {
 			typesDeclaredEscaping: [],
 			lineEnd: "",
 			hasFunction: true,
-			children: [],
+			children: children,
 			node: PlanNode(),
 		)
 		configure(&built)
