@@ -1146,7 +1146,12 @@ extension MockLowering {
 				return .finished(node)
 			}
 			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
-			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
+			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
+			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
+			// does too (`ScopeGenerator.sendableConfigurationTypeNames()`), so each field is proven `Sendable` and the
+			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
+			let configurationPath = hasConfiguration && !buildsPublicMock ? nodePath : nil
+			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
 			// The payloads of the cases nested by type that lead through the node to a place, bound before
