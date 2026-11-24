@@ -588,9 +588,9 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		            let cache = if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
 		            func __safeDI_holderBuilder() -> Holder {
 		                _ = Cache.__safeDI_Cache_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                let cache = Cache.__safeDI_mock()
+		                let cache = if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
 		                let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
-		                return Holder(cache: cache, holderBuilder: holderBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
 		            }
 		            let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }

@@ -1513,7 +1513,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            func __safeDI_y() -> A {
 		                func __safeDI_z() -> B {
 		                    let y = Instantiator<A>(__safeDI_y)
-		                    return B(y: y)
+		                    return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(y) } else { B(y: y) }
 		                }
 		                let z = Instantiator<B>(__safeDI_z)
 		                return A(z: z, engine: engine)

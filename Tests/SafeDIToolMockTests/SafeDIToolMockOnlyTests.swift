@@ -6120,7 +6120,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            func __safeDI_firstBuilder() -> First {
 		                func __safeDI_secondBuilder() -> Second {
 		                    let firstBuilder = Instantiator<First>(__safeDI_firstBuilder)
-		                    return Second(firstBuilder: firstBuilder)
+		                    return if let safeDIBuilder = safeDIOverrides.second.safeDIBuilder { safeDIBuilder(firstBuilder) } else { Second(firstBuilder: firstBuilder) }
 		                }
 		                let secondBuilder = Instantiator<Second>(__safeDI_secondBuilder)
 		                func __safeDI_service() -> ServiceProtocol {
@@ -6379,7 +6379,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		            func __safeDI_firstBuilder() -> First {
 		                func __safeDI_secondBuilder() -> Second {
 		                    let firstBuilder = Instantiator<First>(__safeDI_firstBuilder)
-		                    return Second(firstBuilder: firstBuilder)
+		                    return if let safeDIBuilder = safeDIOverrides.second.safeDIBuilder { safeDIBuilder(firstBuilder) } else { Second(firstBuilder: firstBuilder) }
 		                }
 		                let secondBuilder = Instantiator<Second>(__safeDI_secondBuilder)
 		                func __safeDI_service() -> ServiceProtocol {

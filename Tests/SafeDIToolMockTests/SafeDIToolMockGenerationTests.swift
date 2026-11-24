@@ -10366,7 +10366,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		                #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 5)
 		                let otherBuilder: Instantiator<Node> = childBuilder
 		                #sourceLocation()
-		                return Node(childBuilder: childBuilder, otherBuilder: otherBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.safeDIBuilder { safeDIBuilder(childBuilder, otherBuilder) } else { Node(childBuilder: childBuilder, otherBuilder: otherBuilder) }
 		            }
 		            let childBuilder = Instantiator<Node>(__safeDI_childBuilder)
 		            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 5)
@@ -14740,8 +14740,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            func __safeDI_bBuilder() -> B {
 		                func __safeDI_aFactory() -> A {
 		                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                    let leaf = Leaf()
-		                    return A(bBuilder: bBuilder, leaf: leaf)
+		                    let leaf = if let safeDIBuilder = safeDIOverrides.aBuilder.leaf { safeDIBuilder() } else { Leaf() }
+		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(bBuilder, leaf) } else { A(bBuilder: bBuilder, leaf: leaf) }
 		                }
 		                let aFactory = Instantiator<A>(__safeDI_aFactory)
 		                return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder { safeDIBuilder(aFactory) } else { B(aFactory: aFactory) }
@@ -15458,7 +15458,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_childBuilder() -> Child {
 		            func __safeDI_selfBuilder() -> Child {
 		                let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
-		                return Child(selfBuilder: selfBuilder, service: service)
+		                return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(selfBuilder, service) } else { Child(selfBuilder: selfBuilder, service: service) }
 		            }
 		            let selfBuilder = Instantiator<Child>(__safeDI_selfBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(selfBuilder, service) } else { Child(selfBuilder: selfBuilder, service: service) }

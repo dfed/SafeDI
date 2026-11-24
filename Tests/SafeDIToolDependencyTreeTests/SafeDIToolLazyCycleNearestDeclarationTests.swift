@@ -2774,7 +2774,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                        let aBuilder = Instantiator<A> {
 		                            __safeDI_aBuilder(renamed: nil)
 		                        }
-		                        return X(renamed: nil, aBuilder: aBuilder)
+		                        return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(nil, aBuilder) } else { X(renamed: nil, aBuilder: aBuilder) }
 		                    }
 		                    let x: X = __safeDI_x()
 		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
@@ -3533,7 +3533,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                                let bBuilder = Instantiator<B> {
 		                                    __safeDI_bBuilder(renamed: nil)
 		                                }
-		                                return X(renamed: nil, bBuilder: bBuilder)
+		                                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.safeDIBuilder { safeDIBuilder(nil, bBuilder) } else { X(renamed: nil, bBuilder: bBuilder) }
 		                            }
 		                            let source: X = __safeDI_source()
 		                            #sourceLocation(file: "\(fixtures["C.swift"])", line: 10)
@@ -4085,7 +4085,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                        let aBuilder = Instantiator<A> {
 		                            __safeDI_aBuilder(renamed: nil)
 		                        }
-		                        return X(aBuilder: aBuilder)
+		                        return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(aBuilder) } else { X(aBuilder: aBuilder) }
 		                    }
 		                    let source: X = __safeDI_source()
 		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
