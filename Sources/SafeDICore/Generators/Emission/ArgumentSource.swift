@@ -38,9 +38,9 @@ indirect enum ArgumentSource: Hashable, Sendable {
 	/// struct the caller passes up (`ScopeGenerator.publicMockBuilderStructValuesByLabel`), held as spelled until seam
 	/// and public mock calls are planned.
 	case builderArgument(String)
-	/// What a seam call or a public mock's call passes for one of the seam's holes (`holeArgumentValuesByLabel`), held as
-	/// spelled until seam and public mock calls are planned.
-	case holeArgument(String)
+	/// A value the enclosing code already spelled, passed as it is: what a seam call or a public mock's call passes for one
+	/// of the seam's holes (`holeArgumentValuesByLabel`), held as spelled until seam and public mock calls are planned.
+	case spelledArgument(String)
 
 	var spelled: String {
 		switch self {
@@ -57,7 +57,7 @@ indirect enum ArgumentSource: Hashable, Sendable {
 		case let .optionalWrapper(value, wrapperType):
 			"\(value.spelled).map { value in \(wrapperType.asSource)({ value }) }"
 		case let .builderArgument(value),
-		     let .holeArgument(value):
+		     let .spelledArgument(value):
 			value
 		}
 	}

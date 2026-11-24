@@ -2382,6 +2382,11 @@ def self_test():
     expect("a failed step gives its lines and says not to push", pre_push_block("abc", "lane", "b", 1, False, "t", failed_steps)[0].splitlines()[-3:], ["release build: failed, 2 min 0 s: 1 warning(s) in SafeDI's own sources", f"  {build_log[0]}", "result: DO NOT PUSH"])
     expect("a step that did not run, and uncommitted changes, are not a pass", [pre_push_block("abc", "lane", "b", 1, False, "t", {"lint": ("passed", True, [])})[1], pre_push_block("abc", "lane", "b", 1, True, "t", passed_steps)[1]], [False, False])
 
+    # `.claude/hooks/pre-push`, the git hook that refuses to push an unformatted checkout, has a self-test of its own.
+    # It runs here because this self-test already runs in "Check Agent Skill Scripts on Linux".
+    hook = subprocess.run(["bash", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hooks", "pre-push"), "--self-test"], capture_output=True, text=True)
+    expect("the git pre-push hook passes its own self-test", (hook.returncode, hook.stdout.strip(), hook.stderr.strip()), (0, "self-test passed", ""))
+
     if failures:
         for failure in failures:
             print(f"self-test failed: {failure}", file=sys.stderr)

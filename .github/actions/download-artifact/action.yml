@@ -1,0 +1,59 @@
+name: Download Artifact
+description: >-
+  actions/download-artifact, tried up to three times. A job that starts seconds after the job it needs uploaded an
+  artifact can be told "No artifacts found for ID" although the artifact exists: the listing names it before it can be
+  fetched. The second attempt comes 10 seconds after the first and the third 30 seconds after the second; the third's
+  failure fails the step with the error download-artifact gave. For artifacts of this run only: it passes no run-id or
+  github-token.
+
+inputs:
+  name:
+    description: Name of the one artifact to download. Without it and without a pattern, every artifact of the run.
+    default: ''
+  pattern:
+    description: A glob of the artifacts to download. Ignored when name is given.
+    default: ''
+  path:
+    description: Directory to download into.
+    default: ${{ github.workspace }}
+  merge-multiple:
+    description: With several artifacts, whether their files go into one directory rather than one directory each.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - id: first
+      continue-on-error: true
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.name }}
+        pattern: ${{ inputs.pattern }}
+        path: ${{ inputs.path }}
+        merge-multiple: ${{ inputs.merge-multiple }}
+    - if: ${{ steps.first.outcome == 'failure' }}
+      shell: bash
+      run: |
+        echo "The download failed. Trying again in 10 seconds: an artifact uploaded seconds ago can be listed before it can be fetched."
+        sleep 10
+    - id: second
+      if: ${{ steps.first.outcome == 'failure' }}
+      continue-on-error: true
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.name }}
+        pattern: ${{ inputs.pattern }}
+        path: ${{ inputs.path }}
+        merge-multiple: ${{ inputs.merge-multiple }}
+    - if: ${{ steps.second.outcome == 'failure' }}
+      shell: bash
+      run: |
+        echo "The download failed. Trying again in 30 seconds: an artifact uploaded seconds ago can be listed before it can be fetched."
+        sleep 30
+    - if: ${{ steps.second.outcome == 'failure' }}
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.name }}
+        pattern: ${{ inputs.pattern }}
+        path: ${{ inputs.path }}
+        merge-multiple: ${{ inputs.merge-multiple }}
