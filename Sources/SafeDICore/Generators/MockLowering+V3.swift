@@ -235,13 +235,17 @@ extension MockLowering {
 		init() {
 			fileScopeNameByType = [:]
 			publicNameByType = [:]
+			publicMockTypes = []
 		}
 
 		/// - Parameter publicNameByType: The public configuration of each type the module's public mocks configure, which
 		///   is the type's only configuration in the module: an internal mock builds such a type as a public mock does.
-		init(foreignTypes: [TypeDescription], moduleName: String?, publicNameByType: [TypeDescription: String]) {
+		/// - Parameter publicMockTypes: The types of the module's public mocks, each configured by its mock's root
+		///   `SafeDIOverrides` (`PublicMockContext.v3PublicMockTypes`).
+		init(foreignTypes: [TypeDescription], moduleName: String?, publicNameByType: [TypeDescription: String], publicMockTypes: Set<TypeDescription>) {
 			fileScopeNameByType = PublicMockContext.configurationTypeNames(of: foreignTypes, moduleName: moduleName)
 			self.publicNameByType = publicNameByType
+			self.publicMockTypes = publicMockTypes
 		}
 
 		/// The name of the configuration of `type`.
@@ -254,6 +258,13 @@ extension MockLowering {
 			publicNameByType[type] != nil
 		}
 
+		/// Whether `type`'s configuration is its public mock's root `SafeDIOverrides`, which holds its defaults in the root's
+		/// form even where it is `Sendable`-typed (`PublicMockPlan.v3RootDefaultMembers`), never as the closures a
+		/// module-level `Sendable` configuration stores.
+		func isConfiguredByPublicMockRoot(_ type: TypeDescription) -> Bool {
+			publicMockTypes.contains(type)
+		}
+
 		/// The name of the configuration of `type` where the module declares it at file scope, else `nil`.
 		func fileScopeName(of type: TypeDescription) -> String? {
 			fileScopeNameByType[type]
@@ -261,5 +272,6 @@ extension MockLowering {
 
 		private let fileScopeNameByType: [TypeDescription: String]
 		private let publicNameByType: [TypeDescription: String]
+		private let publicMockTypes: Set<TypeDescription>
 	}
 }

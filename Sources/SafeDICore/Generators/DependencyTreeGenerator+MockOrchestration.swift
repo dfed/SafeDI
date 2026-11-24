@@ -247,6 +247,7 @@ extension DependencyTreeGenerator {
 				},
 				moduleName: moduleName,
 				publicNameByType: v3PublicNameByType,
+				publicMockTypes: publicMockContext?.v3PublicMockTypes ?? [],
 			)
 		}
 		let mockContext = configuredMockContext

@@ -206,9 +206,11 @@ extension MockLowering.Walk {
 		nodePath: String,
 		overrideReachable: Bool,
 	) -> [(label: String, value: String)] {
-		// A `@Sendable`-typed configuration stores every default as a `@Sendable` closure, which the read calls
-		// (`ScopeGenerator.publicBuilderArguments`).
+		// A `@Sendable`-typed module-level configuration stores every default as a `@Sendable` closure, which the read calls
+		// (`ScopeGenerator.publicBuilderArguments`); a public mock's root `SafeDIOverrides` holds them in the root's form,
+		// which the construction function takes as they are.
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
+			&& !v3ConfigurationNames.isConfiguredByPublicMockRoot(instantiable.concreteInstantiable)
 		var dependencyValues = dependencyArguments[...]
 		return construction.callSiteArguments.compactMap { argument in
 			if MockLowering.dependency(passedTo: argument, among: instantiable.dependencies) != nil {
