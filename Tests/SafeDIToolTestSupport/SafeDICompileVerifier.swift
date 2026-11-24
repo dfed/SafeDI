@@ -949,7 +949,18 @@ private func spawnAndWait(
 	let environmentVector: [UnsafeMutablePointer<CChar>?] = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
 	defer { environmentVector.forEach { free($0) } }
 	var processIdentifier = pid_t()
-	let spawnResult = posix_spawn(&processIdentifier, executablePath, &fileActions, &attributes, argumentVector, environmentVector)
+	var spawnResult = posix_spawn(&processIdentifier, executablePath, &fileActions, &attributes, argumentVector, environmentVector)
+	// Linux refuses to execute a file that any process holds open for writing ("Text file busy"). A test that writes
+	// an executable and closes it can still meet that: a process another thread is spawning holds a copy of every
+	// descriptor of the test process from its fork until its `exec`, which closes those that close on `exec`. That
+	// lasts well under a millisecond, so the spawn is tried again for up to a second. In 4,000 spawns of a script
+	// just written, beside three threads spawning processes, one met it, and its second try started the script.
+	var triesWhileBusy = 0
+	while spawnResult == ETXTBSY, triesWhileBusy < 200 {
+		usleep(5_000)
+		triesWhileBusy += 1
+		spawnResult = posix_spawn(&processIdentifier, executablePath, &fileActions, &attributes, argumentVector, environmentVector)
+	}
 	guard spawnResult == 0 else {
 		throw ProcessSpawnError(executablePath: executablePath, operation: "posix_spawn", errorNumber: spawnResult)
 	}
