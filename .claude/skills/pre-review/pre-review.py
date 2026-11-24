@@ -721,7 +721,7 @@ def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps, i
     if uncommitted:
         lines.append("uncommitted changes in the checkout: they are not this head's, and no check saw them")
         ready = False
-    for name in ("lint", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
+    for name in ("lint", "instruction files", "tests", "changed-line coverage", "whole-tree coverage", "release build"):
         text, passed, details = steps.get(name, ("not run", False, []))
         lines.append(f"{name}: {text}")
         lines += [f"  {detail}" for detail in details]
@@ -1006,6 +1006,15 @@ def changed_lines(arguments, top, head, status):
     sys.exit(completed.returncode)
 
 
+def instruction_files_step(status_code, seconds, lines):
+    """The step that runs `Scripts/check-claude-instruction-files.sh`, as "Check Markdown links" does: each file's
+    limit, and what the rules files load together for one source file, which no one file's size shows. The script
+    prints a line for each thing it fails on."""
+    if status_code == 0:
+        return (f"passed, {duration(seconds)}", True, [])
+    return (f"failed, {duration(seconds)}: Scripts/check-claude-instruction-files.sh exited {status_code}", False, [line[:240] for line in lines[-20:]])
+
+
 def pre_push(arguments, top, head, status):
     try:
         base = output_of("git", "merge-base", arguments.base, "HEAD")
@@ -1031,6 +1040,8 @@ def pre_push(arguments, top, head, status):
     with scratch_worktree(top, head) as worktree:
         status_code, seconds, lines = timed(runner + ["./CLI/lint.sh", "--check"], worktree)
         steps["lint"] = (f"passed, {duration(seconds)}" if status_code == 0 else f"failed, {duration(seconds)}", status_code == 0, [] if status_code == 0 else lines[-5:])
+        # Seconds, and CI's "Check Markdown links" fails on it: without the runner, since it needs git and Python only.
+        steps["instruction files"] = instruction_files_step(*timed(["Scripts/check-claude-instruction-files.sh"], worktree))
 
         # Before anything that builds the head: the base is measured in this worktree, once per base and platform.
         started, base_was_kept = time.time(), base_counts_path(base).exists()
@@ -2245,7 +2256,7 @@ def self_test():
         {"Sources/A.swift": {"3": 0, "4": 0, "6": 0, "11": 0, "12": 0, "22": 0}, "Sources/B.swift": {"1": 0, "2": 0}, "Sources/New.swift": {"1": 0}, "Sources/Unrecorded.swift": {"1": 0}},
         hunks,
     ), [("Sources/A.swift", 3), ("Sources/A.swift", 6), ("Sources/A.swift", 22), ("Sources/B.swift", 1)])
-    passed_steps = {"lint": ("passed, 50 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    passed_steps = {"lint": ("passed, 50 s", True, []), "instruction files": ("passed, 9 s", True, []), "tests": ("passed", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
     expect("a whole-tree failure names the platform that measured it and the one CI also counts", [measured_on_one_platform("linux"), measured_on_one_platform("darwin")], [
         "measured on Linux only; CI also counts macOS, so push over a listed line only by saying in the pull request why macOS executes it",
         "measured on macOS only; CI also counts Linux, so push over a listed line only by saying in the pull request why Linux executes it",
@@ -2255,6 +2266,7 @@ def self_test():
         "head: abc (lane), 2 commit(s) measured from origin/main at 123",
         "toolchain: Swift 6.4: this says nothing of another Swift or platform",
         "lint: passed, 50 s",
+        "instruction files: passed, 9 s",
         "tests: passed",
         "changed-line coverage: passed, 5 min 9 s",
         "whole-tree coverage: passed (base from the cache): every untouched line a test ran on 123 still runs in one",
@@ -2320,6 +2332,12 @@ def self_test():
             ("generated code compiled in the suites the change touches only (1 min 1 s); every other test ran with its compile skipped", 2, []),
         ],
     )
+    expect(
+        "the instruction files step passes on the script's status and gives its last lines when it fails",
+        [instruction_files_step(0, 9, ["noise"]), instruction_files_step(1, 9, [f"line {number}" for number in range(30)])[:2], instruction_files_step(1, 9, [f"line {number}" for number in range(30)])[2][::19]],
+        [("passed, 9 s", True, []), ("failed, 9 s: Scripts/check-claude-instruction-files.sh exited 1", False), ["line 10", "line 29"]],
+    )
+    expect("a block without the instruction files step is not a pass", pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "instruction files"})[0].splitlines()[-6:-4] + [pre_push_block("abc", "lane", "b", 1, False, "t", {name: step for name, step in passed_steps.items() if name != "instruction files"})[0].splitlines()[-1]], ["instruction files: not run", "tests: passed", "result: DO NOT PUSH"])
     expect("a block whose only failures are inherited says to push and how many there are", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "tests": ("2 failed: 0 new on head, 2 also failing on base", True, [])}, inherited=2)[0].splitlines()[-1], "result: PUSH (inherited failures: 2)")
     expect("inherited failures do not turn another step's failure into a push", pre_push_block("abc", "lane", "b", 1, False, "t", {**passed_steps, "lint": ("failed", False, [])}, inherited=2)[0].splitlines()[-1], "result: DO NOT PUSH")
     failed_steps = {**passed_steps, "release build": ("failed, 2 min 0 s: 1 warning(s) in SafeDI's own sources", False, [build_log[0]])}
