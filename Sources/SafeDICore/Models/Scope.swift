@@ -703,6 +703,9 @@ extension ScopeRecord {
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
 		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
 		let startLog = ConstructionMemo.StartLog()
+		// The generators of the calls that pass fills this tree holds, none of which it may hold twice
+		// (`ConstructionMemo.Entry.callGenerators`).
+		var callGeneratorsInTree = Set<ObjectIdentifier>()
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
@@ -716,8 +719,9 @@ extension ScopeRecord {
 						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
 					}
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
-					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
+					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), besideCallGenerators: callGeneratorsInTree, drawing: draw) {
 						reusedPlaceObserver?(scope.instantiable.concreteInstantiable.asSource, previousPassGenerator == nil)
+						callGeneratorsInTree.formUnion(reuse.entry.callGenerators)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
@@ -765,6 +769,8 @@ extension ScopeRecord {
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators, startLog: startLog)
+				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
+				callGeneratorsInTree.formUnion(callGenerators)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
@@ -779,6 +785,7 @@ extension ScopeRecord {
 							startedBeneath: ConstructionMemo.StartedGenerators(log: startLog, positions: createdScope.startLogIndex..<startLog.groups.count),
 							isSettled: isSettled,
 							cycleClosingRedeclaredLabels: createdScope.cycleClosingRedeclaredLabels,
+							callGenerators: callGenerators,
 						), for: key, keepingAlive: createdScope.builtScope.identity)
 					}
 					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: &createdScope, readsAnsweredAbove: readsAnsweredAbove, isSettled: isSettled)
@@ -797,12 +804,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	///   - depth: This scope's depth in the tree: 0 for the root, and one more than the scope that creates it otherwise.
 	///   - fillPathStackCount: How many of the outermost entries of `contextStack` are the path of the seam whose hole the
 	///     enclosing fill fills (`SeamSignature.Hole.fillPropertyStack`): none outside a fill, and a nested fill's are its own.
+	///   - fillCallDepth: Inside a fill, the depth of the call that passes the innermost enclosing fill, or `nil` outside one.
 	init(
 		scope: ConstructionScope,
 		property builtProperty: (property: Property, id: PropertyID)?,
 		contextStack: ContextStack,
 		depth: Int,
 		fillPathStackCount: Int = 0,
+		fillCallDepth: Int? = nil,
 		nearestDeclarations inheritedNearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
@@ -847,7 +856,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// validation sees it (a lazily instantiated property as the constant it stands for), built for the same
 			// concrete type. A lazily instantiated declaration's instance is on the stack just inside the declaration.
 			closedOn = contextStack.entryClosedOn(byPropertyID: propertyID, concreteTypeID: scope.concreteTypeID, interner: interner)
-			log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: closedOn?.entry.depth ?? -1)
+			log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: Self.depth(ofAnswerAt: closedOn?.entry.depth, insideFillOfCallAt: fillCallDepth))
 			childContextStack.push(property, id: propertyID, concreteType: scope.instantiable.concreteInstantiable, concreteTypeID: scope.concreteTypeID, depth: depth, interner: interner)
 			// Building the property adds its forms to the nearest declaration of its label, which it reads.
 			let (buildingDeclaration, buildingDepth) = nearestDeclarations.resolving(property.label)
@@ -865,6 +874,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		let isPropertyCycle = closedOnDeclaration != nil
 		self.fillPathStackCount = fillPathStackCount
+		self.fillCallDepth = fillCallDepth
 		// How many declarations of the fill's path lie beneath the one this scope closes on, when it closes on one: generation's
 		// own finding, which the check of a fill reads instead of working the membership out again. A lazily instantiated
 		// declaration's instance is its own entry of the stack, and no declaration.
@@ -880,7 +890,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		let closedOnContext = closedOnDeclaration.flatMap { closedOnDeclaration in
 			let context = cycleParameterContexts[closedOnDeclaration]
-			log.record(.cycleParameterContext(closedOnDeclaration), answer: .cycleParameterContext(context?.parameters), depth: context?.depth ?? -1)
+			log.record(.cycleParameterContext(closedOnDeclaration), answer: .cycleParameterContext(context?.parameters), depth: Self.depth(ofAnswerAt: context?.depth, insideFillOfCallAt: fillCallDepth))
 			return context
 		}
 		// The function's body reads each parameter's label from the parameter, which hides every other declaration of the
@@ -932,7 +942,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		/// The declared property a dependency of this scope's type reads for `property`, which it receives only if
 		/// available, or `nil` when `property` is unavailable: a property this scope creates, else the nearest declaration
-		/// of its label (see `NearestDeclarations.binding(of:)`).
+		/// of its label (see `NearestDeclarations.resolvingBinding(of:)`).
 		func binding(of property: Property) -> Property? {
 			scope.createdBinding(of: property) ?? Self.binding(of: property, in: nearestDeclarations, log: &log)
 		}
@@ -1124,7 +1134,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 						let fieldsOfLabel = places.flatMap { $0.fields.filter { $0.property.label == label } }
 						return Self.parameterField(of: fieldsOfLabel, reading: reads.filter { $0.label == label }) ?? field
 					}
-					let callersOwnLabels = Self.callersOwnLabels(amongLabelsOf: caseFields.fields, carrying: carriedLabels, at: places, reading: reads, handedFrom: childNearestDeclarations, by: publicMockCall, whereFillsReenterCall: fillsReenterCall)
+					let callersOwnLabels = Self.callersOwnLabels(amongLabelsOf: caseFields.fields, carrying: carriedLabels, at: places, reading: reads, handedFrom: childNearestDeclarations, by: publicMockCall, whereFillsReenterCall: fillsReenterCall, log: &log)
 					caseFields.fields.removeAll { callersOwnLabels.labels.contains($0.property.label) }
 					caseFields.callerReadLabels.subtract(callersOwnLabels.labels)
 					mockRootBindingByLabelByCaseKey[caseKey] = callersOwnLabels.mockRootBindingByLabel
@@ -1300,8 +1310,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
 		self.log = log
-		// A fill, a scope inside one, and every scope of a tree with holes read context the log does not cover.
-		isMemoizable = fill == nil && enclosingFills.isEmpty && seamHoles.isEmpty && seamRoot == nil && mockBuilders == nil && holeArguments.isEmpty
+		// Every scope of a tree with holes reads context the log does not cover, and so does a call that passes fills outside a
+		// mock's tree, until production trees are measured with it.
+		subtreeIsShareable = seamHoles.isEmpty && seamRoot == nil && mockBuilders == nil && (holeArguments.isEmpty || forMockGeneration)
+		// A fill and a scope inside one are built only as part of the call that passes the fill, whose place is stored whole.
+		isMemoizable = subtreeIsShareable && fill == nil && enclosingFills.isEmpty
+		if !holeArguments.isEmpty {
+			isCall = true
+		}
+	}
+
+	/// The nearest declaration of `label` among `nearestDeclarations`, logged in `log`.
+	@discardableResult
+	private static func logNearestDeclaration(of label: String, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> NearestDeclaration? {
+		let (declaration, depth) = nearestDeclarations.resolving(label)
+		log.record(.nearestDeclaration(label), answer: .nearestDeclaration(declaration), depth: depth)
+		return declaration
 	}
 
 	/// The binding a receive of `property` only if available reads, among `nearestDeclarations`, logged in `log`.
@@ -1330,9 +1354,24 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// Whether this scope records what its subtree reads: where it has a construction memo key, or is beneath a scope that
 	/// has one, whose stored entry holds those reads. Elsewhere the reads are never stored, and no scope above keeps them.
 	let recordsReads: Bool
-	/// Whether this scope's generator may be stored in a construction memo, or reuse one stored there: neither it nor a
-	/// scope beneath it is a fill, is inside one, or is in a tree with holes.
+	/// Whether this scope's generator may be stored in a construction memo, or reuse one stored there: it is no fill and in
+	/// none, and its subtree is shareable (`subtreeIsShareable`).
 	private(set) var isMemoizable: Bool
+	/// Whether nothing in this scope's subtree reads context the log does not cover: no scope is in a tree with holes or is a
+	/// hole's generator, and every call that passes fills is in a mock's tree. A fill's subtree that is shareable leaves the
+	/// call that passes the fill memoizable, since everything a fill is built from is the call's scope, which the call's key
+	/// names, and reads the fill's subtree logs.
+	private(set) var subtreeIsShareable: Bool
+	/// Whether this scope is a call of another module's public mock or a seam that passes fills (non-empty `holeArguments`).
+	private var isCall = false
+	/// The generators of the calls in this scope's subtree that pass fills, as `ConstructionMemo.Entry.callGenerators` holds
+	/// them, the scope's own excepted until it is created (see `callGenerators(including:)`).
+	private var callGeneratorsBeneath = Set<ObjectIdentifier>()
+
+	/// `callGeneratorsBeneath`, with `generator`, this scope's, where it is a call that passes fills.
+	func callGenerators(including generator: ScopeGenerator) -> Set<ObjectIdentifier> {
+		isCall ? callGeneratorsBeneath.union([ObjectIdentifier(generator)]) : callGeneratorsBeneath
+	}
 
 	/// Whether a call inside the trees of `holeArguments`' fills reaches one of `calledBuilders`' enums again, so that it
 	/// re-enters a level function the call that passes those fills declares for it: a call of the same builder, which
@@ -1490,9 +1529,16 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		if !isSettled {
 			childrenAreSettled = false
 		}
-		if !child.isMemoizable {
+		// A fill's subtree, and the fill itself, are never stored alone, but leave this scope, the call that passes the
+		// fill, memoizable when nothing in them reads context the log does not cover.
+		let childKeepsThisScopeMemoizable = child.fill != nil ? child.subtreeIsShareable : child.isMemoizable
+		if !childKeepsThisScopeMemoizable {
 			isMemoizable = false
 		}
+		if !child.subtreeIsShareable {
+			subtreeIsShareable = false
+		}
+		callGeneratorsBeneath.formUnion(child.callGenerators(including: childGenerator))
 	}
 
 	/// Merges a child's `CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
@@ -1514,6 +1560,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		if !reuse.entry.isSettled {
 			childrenAreSettled = false
 		}
+		callGeneratorsBeneath.formUnion(reuse.entry.callGenerators)
 	}
 
 	/// Whether every child this scope created or reused found everywhere in its subtree what it read from the pass before
@@ -1523,8 +1570,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// Whether `generator`, this scope's, found everywhere in its subtree what its build read from the pass before: its
 	/// children did, and it found the cycle parameters and loops of builders the pass before's generator for the place
 	/// found, spelled alike.
+	///
+	/// A call that passes fills is never settled, so neither is any scope above it: what a call's build reads from the pass
+	/// before, its fills' findings among it (`ScopeGenerator.fillDeferredLabelsHiddenByReenteringCalls`,
+	/// `fillLabelsReadOnlyAsPlaceField` and the others `init` reads of `previousPassGenerator`), is not compared here, and
+	/// settled reuse saves nothing the profile shows above a call.
 	func isSettled(building generator: ScopeGenerator) -> Bool {
-		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
+		!isCall && childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
@@ -1573,7 +1625,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
-	func fillUnderConstruction(fill: Fill, scope: ConstructionScope, context fillContext: ScopeRecord.FillContext) throws -> ScopeGeneratorUnderConstruction {
+	mutating func fillUnderConstruction(fill: Fill, scope: ConstructionScope, context fillContext: ScopeRecord.FillContext) throws -> ScopeGeneratorUnderConstruction {
 		var fill = fill
 		let hole = fill.hole
 		try validateForwardedProperties(of: hole.property, declaredAt: hole.declarationLocation, on: hole.ownerType, seeingThroughModulesNamed: hole.declaringModuleNames, building: scope.instantiable)
@@ -1616,9 +1668,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// form or none, the mock may build a value of its own, which no fill can read: the declaration stays uncarried, a
 		// deliberate gap against the twin, whose seam takes the value as a parameter (`seam-holes.md`, and the message of
 		// `declarationBoundAfterSite` for such a declaration).
+		// Whether the caller binds the form reads the caller's nearest declaration of the label, logged whole.
+		var log = log
 		fill.hole.uncarriedDeclarations.removeAll { declaration in
-			declaration.isBoundFromCallersArgument && childNearestDeclarations.binds(declaration.property)
+			guard declaration.isBoundFromCallersArgument else { return false }
+			Self.logNearestDeclaration(of: declaration.property.label, in: childNearestDeclarations, log: &log)
+			return childNearestDeclarations.binds(declaration.property)
 		}
+		self.log = log
 		fill.callerLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		let fieldLabels = Set(boundFields.map(\.property.label))
 		var fieldInstanceProperties = Set<Property>()
@@ -1658,6 +1715,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			contextStack: fillContext.contextStack,
 			depth: depth + 1,
 			fillPathStackCount: fillContext.contextStack.count,
+			fillCallDepth: depth,
 			nearestDeclarations: fillNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) && !mockRootBoundLabels.contains($0.label) }.union(fieldInstanceProperties),
 			seamRoot: nil,
@@ -1694,6 +1752,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// A hole's generator holds the whole path to it (its owner's stacks), which the memo's log does not cover: a tree
 		// built only to find a seam's or public mock's signature has holes but no `seamHoles`.
 		isMemoizable = false
+		subtreeIsShareable = false
 		childGenerators.append(ScopeGenerator(
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -1720,6 +1779,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			contextStack: childContextStack,
 			depth: depth + 1,
 			fillPathStackCount: fillPathStackCount,
+			fillCallDepth: fillCallDepth,
 			nearestDeclarations: nearestDeclarations(ofChildBuilding: property),
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			seamRoot: nil,
@@ -1930,12 +1990,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					reads.unavailableProperties.insert(form)
 				}
 			}
-			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties).spelled
+			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
 			let memo = field.memoProperty
-			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties).spelled
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties, log: &log).spelled
 		}
 		return reads
 	}
@@ -1958,14 +2018,15 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// declaration of the form, its instance where the scope holds it lazily, or `nil`. A `LazilyInstantiated` form the
 	/// scope does not declare, where it declares the instance – a route of a seam's tree binds the wrapper and the caller
 	/// the value – is a wrapper the call makes of the caller's value, so the fill reads the instance where its tree reads
-	/// it on every route, as inline does; an optional one maps an optional value the scope declares.
-	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) -> ArgumentSource {
-		guard let binding = nearestDeclarations.binding(of: property) else {
+	/// it on every route, as inline does; an optional one maps an optional value the scope declares. Each binding read is
+	/// logged in `log`: two places a construction memo shares the call at can differ in it alone.
+	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>, log: inout ConstructionLog) -> ArgumentSource {
+		guard let binding = binding(of: property, in: nearestDeclarations, log: &log) else {
 			guard let instanceProperty = property.asLazilyInstantiatedInstanceProperty,
-			      let instanceBinding = nearestDeclarations.binding(of: instanceProperty)
+			      let instanceBinding = binding(of: instanceProperty, in: nearestDeclarations, log: &log)
 			else { return .nil }
 			let wrapperType = property.typeDescription.unwrapped
-			let instance = callerArgument(reading: instanceProperty, of: nearestDeclarations, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
+			let instance = callerArgument(reading: instanceProperty, of: nearestDeclarations, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, log: &log)
 			return instanceBinding.typeDescription.isOptional
 				? .optionalWrapper(of: instance, wrapperType: wrapperType)
 				: .wrapper(of: instance, wrapperType: wrapperType)
@@ -2030,6 +2091,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		handedFrom callerDeclarations: NearestDeclarations,
 		by call: PublicMockCall,
 		whereFillsReenterCall fillsReenterCall: Bool,
+		log: inout ConstructionLog,
 	) -> CallersOwnLabels {
 		let labelsHandedFromCaller = Set(call.passedParameters.compactMap { parameter in
 			parameter.builder == nil && parameter.dependency.source.isReceived ? parameter.dependency.property.label : nil
@@ -2057,7 +2119,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			guard labelsHandedFromCaller.contains(label),
 			      !formsRead.isEmpty,
 			      places.allSatisfy({ isCalledMocksCopy(of: label, at: $0) }),
-			      let callerDeclaration = callerDeclarations[label]
+			      let callerDeclaration = logNearestDeclaration(of: label, in: callerDeclarations, log: &log)
 			else { continue }
 			// Where a fill re-enters the call, a label the payload carries, or the caller's mock root binds, keeps its field: the
 			// re-entering call hands its own nearest declaration (`PublicMockLevelFunctions.Reentry`).
@@ -2118,7 +2180,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// which it passes each place it does not fill: a seam's caller fills every place an enum reaches or none, a public
 	/// mock's caller each place it can. An internal mock takes each builder it passes up as a parameter, which the call
 	/// passes as its leaf's dependency of the builder's label: an empty value here, or the parameter called with the scope.
-	private func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
+	private mutating func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
@@ -2217,10 +2279,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The values a call inside a fill hands the level function of the dispatcher keyed `key`, which an enclosing call
 	/// declares, when it re-enters it: each value the function takes of the caller's scope, read of this call's own. A value
 	/// the levels between the two calls bind is the one inline reads there, which the enclosing call's caller does not see.
-	private func enclosingLevelReentryArguments(ofDispatcherKeyed key: String) -> [String] {
-		(enclosingLevelReentries[key]?.parameters ?? []).map { property in
-			CallArgument(label: property.label, source: Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties)).spelled
+	private mutating func enclosingLevelReentryArguments(ofDispatcherKeyed key: String) -> [String] {
+		var arguments = [String]()
+		for property in enclosingLevelReentries[key]?.parameters ?? [] {
+			arguments.append(CallArgument(label: property.label, source: Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties, log: &log)).spelled)
 		}
+		return arguments
 	}
 
 	/// For a call of another module's public mock, the call of each level function an enclosing call declares that a case of
@@ -2229,7 +2293,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// same builder does, handing it what it takes of the caller's scope read of this call's own
 	/// (`enclosingLevelReentryArguments(ofDispatcherKeyed:)`), and the struct of each level of the caller's it takes, which
 	/// the member of the case of this call's own struct returns (`PublicMockLevelFunctions.Member.reentry`).
-	private var enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] {
+	private mutating func enclosingLevelCalls() -> [String: PublicMockLevelFunctions.EnclosingLevelCall] {
 		var calls = [String: PublicMockLevelFunctions.EnclosingLevelCall]()
 		for dispatcher in dispatchersOfThisCall {
 			for dispatcherCase in dispatcher.cases {
@@ -2248,6 +2312,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [[ScopeGenerator]]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: ConstructionMemo.StartLog) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
+		// Both read the caller's declarations, which they log.
+		let builderCallArguments = builderCallArguments(fillNames: fillNames)
+		let enclosingLevelCalls = scope.publicMockCall == nil ? [:] : enclosingLevelCalls()
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -2289,7 +2356,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					)
 				}
 			},
-			builderCallArguments: builderCallArguments(fillNames: fillNames),
+			builderCallArguments: builderCallArguments,
 			fillDispatchers: dispatchersOfThisCall,
 			// A public mock's call names a level that needs a second function apart from every name the call claimed.
 			namesTakenByCall: scope.publicMockCall == nil ? [] : namesOfThisCall.taken,
@@ -2320,7 +2387,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			previousPassFillSendableWrapperReads: previousPassGenerator?.fillSendableWrapperReads ?? [:],
 			previousPassFillLabelsReadOnlyAsPlaceField: previousPassGenerator?.fillLabelsReadOnlyAsPlaceField ?? [:],
 			previousPassPublicMockLevelReentries: previousPassGenerator?.publicMockLevelReentries ?? [:],
-			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
+			enclosingLevelCalls: enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
@@ -2450,6 +2517,20 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let childContextStack: ContextStack
 	/// See `init(scope:property:contextStack:depth:fillPathStackCount:…)`.
 	private let fillPathStackCount: Int
+	/// See `init(scope:property:contextStack:depth:fillPathStackCount:fillCallDepth:…)`.
+	private let fillCallDepth: Int?
+
+	/// The depth a read of the stack or of the cycle parameter contexts is logged at, given `answerDepth`, the depth of the
+	/// scope that put the answer there, or `nil` for a miss. Outside a fill, a miss and the path of a seam whose hole is filled
+	/// (-1) are the tree's. Inside a fill, the stack holds only the fill's path (`SeamSignature.Hole.fillPropertyStack`) and
+	/// what the fill's own scopes push, and the contexts only what they set: the fill path comes from the hole the call fills,
+	/// a function of the call's scope, which its construction memo key names, so a miss or a fill path entry is answered at the
+	/// call's depth, inside any entry of the call's place, and is never asked of the context of another place the call is
+	/// reused at, whose stack the fill does not read.
+	private static func depth(ofAnswerAt answerDepth: Int?, insideFillOfCallAt fillCallDepth: Int?) -> Int {
+		max(answerDepth ?? -1, fillCallDepth ?? -1)
+	}
+
 	/// See `ScopeGenerator.closedOnFillPathDeclarationsBeneath`.
 	private let closedOnFillPathDeclarationsBeneath: Int?
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property, where this scope's type
@@ -3430,13 +3511,8 @@ extension NearestDeclarations {
 
 	/// The binding a receive of `property` only if available reads, or `nil` when the property is unavailable: the
 	/// first of `property.formsReadByOnlyIfAvailableReceive` that the nearest declaration of its label binds, unless a
-	/// form it reads is still being built between that declaration and the receiver.
-	func binding(of property: Property) -> Property? {
-		resolvingBinding(of: property).binding
-	}
-
-	/// `binding(of:)`, with the depth of the scope that made the nearest declaration of `property`'s label the nearest
-	/// (see `resolving(_:)`).
+	/// form it reads is still being built between that declaration and the receiver; with the depth of the scope that
+	/// made the nearest declaration of `property`'s label the nearest (see `resolving(_:)`).
 	func resolvingBinding(of property: Property) -> (binding: Property?, depth: Int) {
 		let (nearestDeclaration, depth) = resolving(property.label)
 		guard let nearestDeclaration else { return (nil, depth) }
