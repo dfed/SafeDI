@@ -72,6 +72,12 @@ public enum ReservedName: Hashable, Sendable {
 	public static let builderFunctionNamePrefix = "__safeDI_"
 	/// The name of the parameter through which a `.v3Unstable` mock's builder function a cycle closes on takes the nearest
 	/// configuration of `typeIdentifier` above the pass that calls it.
+	/// The name under which a `.v3Unstable` mock binds the instance it was passed for a promoted member of a loop of
+	/// builders labeled `label`, `nil` where it builds the member.
+	public static func receivedInstanceName(of label: String) -> String {
+		"\(builderFunctionNamePrefix)received_\(label)".spelledAsJoinedIdentifier
+	}
+
 	public static func nearestConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
 		"\(builderFunctionNamePrefix)nearest_\(typeIdentifier)"
 	}

@@ -165,9 +165,8 @@ extension MockLowering.Walk {
 				}
 				continue
 			}
-			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
 			let children = generator.orderedChildGenerators
-			let isConfigured = children.contains { $0.mockLoweringBuiltProperty != nil } || !configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer).isEmpty
+			let isConfigured = isV3Configured(generator)
 			var frame = Frame(generator: generator, declaration: ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable))
 			if isConfigured {
 				frame.configuredTypes.insert(instantiable.concreteInstantiable)
@@ -177,6 +176,13 @@ extension MockLowering.Walk {
 			toVisit.append(contentsOf: children.reversed())
 		}
 		return targets
+	}
+
+	/// Whether the node `generator` builds has a configuration: a child it builds, or a default-valued parameter.
+	mutating func isV3Configured(_ generator: ScopeGenerator) -> Bool {
+		guard case let .property(instantiable, property, _, _, _, _) = generator.scopeData else { return false }
+		let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
+		return generator.orderedChildGenerators.contains { $0.mockLoweringBuiltProperty != nil } || !configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer).isEmpty
 	}
 
 	/// The nearest configuration of `concreteType` in lexical scope, if any.

@@ -425,6 +425,8 @@ extension MockLowering {
 		var v3CycleTargets = [ObjectIdentifier: V3CycleTarget]()
 		var v3TargetsAround = [(declaration: ScopeGenerator.BuiltDeclaration, target: V3CycleTarget)]()
 		var v3ScopePushes = [(types: [TypeDescription], pushedTarget: Bool)]()
+		// The configured loop members `mock()` promotes, each bound from its `SafeDIReceived` before its loop.
+		var v3PromotedLoopMemberInstanceNames = [Property: String]()
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
@@ -539,6 +541,21 @@ extension MockLowering {
 			defer {
 				loopMembers = enclosingLoopMembers
 				loopUnit = enclosingLoopUnit
+			}
+			// In `.v3Unstable`, a configured member of a loop the mock promotes is bound from its `SafeDIReceived` before the
+			// loop: its instance, which the loop's wrappers made again hand where `mock()` was passed one, and its configuration.
+			if isV3, parentConcreteType == nil, !loopMembers.isEmpty {
+				for (generator, bindingName) in zip(generators, bindingNames) {
+					guard let bindingName, case let .property(instantiable, property, _, _, _, _) = generator.scopeData, loopMembers[property] != nil, promotedProperties.contains(property), isV3Configured(generator) else { continue }
+					let parameterName = promotedParameterNames[property] ?? bindingName
+					let instanceName = ReservedName.receivedInstanceName(of: bindingName)
+					let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
+					lines.append("\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)) = switch \(parameterName) {")
+					lines.append("\(indent)case let .instance(instance): (instance, .init())")
+					lines.append("\(indent)case let .built(configuration): (nil, configuration)")
+					lines.append("\(indent)}")
+					v3PromotedLoopMemberInstanceNames[property] = instanceName
+				}
 			}
 			for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
 				let membership = index < loops.count ? loops[index] : nil
@@ -1036,7 +1053,7 @@ extension MockLowering {
 					memberRebindingLines = []
 					for reboundProperty in generator.reboundProperties {
 						if let member = loopMembers[reboundProperty], promotedProperties.contains(reboundProperty), member.rename == nil, reboundProperty != property || member.receivedFunctionName == nil {
-							memberRebindingLines.append(MockLowering.promotedWrapperBindingLine(of: member.typeDescription, named: member.bindingName, passing: member.bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: "\(indent)\(ScopeGenerator.standardIndent)"))
+							memberRebindingLines.append(MockLowering.promotedWrapperBindingLine(of: member.typeDescription, named: member.bindingName, passing: v3PromotedLoopMemberInstanceNames[reboundProperty] ?? member.bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: "\(indent)\(ScopeGenerator.standardIndent)"))
 						} else {
 							memberRebindingLines.append(contentsOf: MockLowering.rebindingLines(of: [reboundProperty], among: loopMembers, ownProperty: property, indent: "\(indent)\(ScopeGenerator.standardIndent)"))
 						}
@@ -1069,7 +1086,12 @@ extension MockLowering {
 			var v3TargetParameters = [String]()
 			var v3TargetArguments = [String]()
 			if isV3, hasConfiguration {
-				let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
+				// A configuration of a node around this one bound under the same name would be hidden from the nodes beneath.
+				var configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
+				let configurationNamesInScope = Set(v3ConfigurationsInScope.values.joined().map(\.expression))
+				while configurationNamesInScope.contains(configurationName) {
+					configurationName += "_"
+				}
 				nodePath = configurationName
 				let concreteType = instantiable.concreteInstantiable
 				if !isPromotedInV3 {
@@ -1185,7 +1207,8 @@ extension MockLowering {
 			if parentConcreteType == nil, promotedProperties.contains(property) {
 				node.promotedParameterName = promotedParameterNames[property] ?? bindingName
 			}
-			if isPromotedInV3, hasConfiguration {
+			node.v3ReceivedInstanceName = v3PromotedLoopMemberInstanceNames[property]
+			if isPromotedInV3, hasConfiguration, node.v3ReceivedInstanceName == nil {
 				node.v3ReceivedConfigurationName = nodePath
 			}
 			node.v3TargetParameters = v3TargetParameters
@@ -1437,7 +1460,7 @@ extension MockLowering {
 				let bindingLines = loopMembership.declaresBinding
 					? member.receivedFunctionName == nil
 					? Array(endLines.dropFirst(2))
-					: configuredNode.promotedParameterName.map { [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: $0, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)] }
+					: (configuredNode.v3ReceivedInstanceName ?? configuredNode.promotedParameterName).map { [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: $0, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)] }
 					?? MockLowering.wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)
 					: []
 				endLines = Array(endLines.prefix(2))
@@ -1516,6 +1539,9 @@ extension MockLowering {
 		/// In `.v3Unstable`, where a cycle closes on the node's builder function, the parameters it takes for its configuration
 		/// and the nearest configurations of the other types its subtree builds, after its cycle parameters.
 		var v3TargetParameters = [String]()
+		/// In `.v3Unstable`, where the node is a configured member of a loop the mock promotes, the name of the instance
+		/// `mock()` was passed for it, `nil` where it builds the node, bound before the loop.
+		var v3ReceivedInstanceName: String?
 		// The `@Sendable` autoclosure parameters of the values the node's type instantiates that the
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
 		// Also the places it instantiates that a builder of `mock()` builds.
@@ -1690,7 +1716,7 @@ extension MockLowering {
 				return [MockLowering.v3ReceivedBindingLine(of: property, boundAs: bindingName, passing: promotedParameterName, configurationName: v3ReceivedConfigurationName, building: call, indent: indent)]
 			}
 			guard property.propertyType.isConstant else {
-				return [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: promotedParameterName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)]
+				return [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: v3ReceivedInstanceName ?? promotedParameterName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)]
 			}
 			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: "\(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"))"]
 		}
