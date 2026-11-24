@@ -438,7 +438,7 @@ extension ScopeRecord {
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
 			// every reuse either sharing makes. The places it keys are the oracle's, not the tree's, so no test sees them.
 			var oracleMemo = constructionMemo.oracleMemo
-			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) {
+			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) { try ConstructionMemoOracle.$reusedPlaceObserver.withValue(nil) {
 				try createdTree(
 					in: table,
 					nearestDeclarations: nearestDeclarations,
@@ -452,7 +452,7 @@ extension ScopeRecord {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
 				)
-			}
+			} }
 			constructionMemo.oracleMemo = oracleMemo
 			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
 			// graph compares the seeded build with the plain pass loop as well.
@@ -495,7 +495,6 @@ extension ScopeRecord {
 		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
 		// pass's findings (see `CycleParameterPlan`), or `nil` where the tree is not planned.
 		var cycleParameterSeed: CycleParameterSeed?
-		var firstPassMemo = ConstructionMemo()
 		// The memo of the pass before, whose settled generators a pass reuses (see `ConstructionMemo.settledReuse`), and the
 		// place-holding properties that pass read.
 		var previousPassMemo: ConstructionMemo?
@@ -525,7 +524,9 @@ extension ScopeRecord {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
 			}
-			var passMemo = previousPassGenerator == nil && sharesMemo ? constructionMemo.memoForFirstPass : ConstructionMemo()
+			// A memo shared across trees carries each pass to the pass after it, whose keys name the generators of the pass
+			// before, so a later pass of this tree reuses what a later pass of another tree built from the same generator.
+			var passMemo = sharesMemo ? constructionMemo.memo(forPassAfter: previousPassMemo) : ConstructionMemo()
 			// A place whose generator the pass before built settled is reused across passes only while the passes share
 			// the place-holding properties every place's build reads.
 			let settledPassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
@@ -573,7 +574,6 @@ extension ScopeRecord {
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 			)
 			if previousPassGenerator == nil {
-				firstPassMemo = passMemo
 				cycleParameterSeed = Self.cycleParameterSeed(
 					ofFirstPassTree: scopeGenerator,
 					seamRoot: seamRoot,
@@ -583,6 +583,9 @@ extension ScopeRecord {
 				)
 			} else {
 				cycleParameterSeed = nil
+			}
+			if sharesMemo {
+				passMemo.keepAlive(passTree: scopeGenerator, seed: cycleParameterSeed)
 			}
 			previousPassMemo = passMemo
 			placeHoldingPropertiesOfPreviousPass = placeHoldingPropertiesByType
@@ -604,8 +607,8 @@ extension ScopeRecord {
 		// the whole mock pass, so no later mock root reads the memo after a root that failed. A change that adds a
 		// construction error the mock pass catches owes a test that such a root, first, in the middle and last, reports
 		// the same errors, and leaves the other roots the same mocks, with the memo shared between mock roots and without it.
-		if sharesMemo {
-			constructionMemo.keepEntries(ofFirstPass: firstPassMemo)
+		if sharesMemo, let previousPassMemo {
+			constructionMemo.keepEntries(ofLastPass: previousPassMemo)
 		}
 		return scopeGenerator
 	}
@@ -694,6 +697,7 @@ extension ScopeRecord {
 		let sharingSchedule = ConstructionSharingSchedule.current
 		var lookupCount = 0
 		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
+		let reusedPlaceObserver = ConstructionMemoOracle.reusedPlaceObserver
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
@@ -713,6 +717,7 @@ extension ScopeRecord {
 					}
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
+						reusedPlaceObserver?(scope.instantiable.concreteInstantiable.asSource, previousPassGenerator == nil)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
@@ -908,6 +913,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
 			scope.declaredLazilyInstantiatedInstanceProperties
+		} else if property == nil, forMockGeneration {
+			// A mock root's tree is given only the instances it reads through the wrappers its public mock takes as
+			// parameters, which the root binds beside its own declarations, naming apart any two of one label
+			// (`ScopeGenerator.mockRootTopLevelNames`), as `childNearestDeclarations` joins them below: no declaration of
+			// the root hides one.
+			lazilyInstantiatedInstanceProperties.union(scope.declaredLazilyInstantiatedInstanceProperties)
 		} else if scope.declaredLazilyInstantiatedInstanceProperties.isEmpty,
 		          !lazilyInstantiatedInstanceProperties.contains(where: { scope.declaredLabels.contains($0.label) })
 		{
@@ -2869,7 +2880,7 @@ struct SeamHoles: Sendable {
 	/// reads the seam's deferred parameter or a lazily instantiated declaration of the label. A deferred parameter's own
 	/// field takes the `LazilyInstantiated` itself. A label in `bindingNamesPassedByName` is read under the name it maps to:
 	/// a public mock passes a type that name rather than binding it again under the label inside the type's builder
-	/// function, where a payload of the type's level is built (`MockParameterNode.valuesBindings`). A field of a
+	/// function, where a payload of the type's level is built (`ScopeGenerator.valuesBindingsBeforeBuilderFunction`). A field of a
 	/// `LazilyInstantiated` a public mock binds under a name apart, beside the instance it takes under the label, is read
 	/// under the name `lazilyInstantiatedBindingNames` gives it by label and wrapper type where the wrapper is in scope: the
 	/// mock's root level holds the wrapper (`DependencyTreeGenerator.PublicMockRootLevel`).
