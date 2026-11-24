@@ -290,7 +290,9 @@ struct BinaryWriter {
 	/// two equal values that do not share their storage writes both to bytes, and a module's view holds each value once
 	/// per file it was read from, so its signatures named one value from thousands of places.
 	mutating func writeShared<Value: BinaryCodable & BidirectionalCollection & Equatable>(_ value: Value) where Value.Element: Hashable {
-		let storage = value.withContiguousStorageIfAvailable { UnsafeRawPointer($0.baseAddress) } ?? nil
+		let storage = value.withContiguousStorageIfAvailable { elements in
+			UnsafeRawPointer(elements.baseAddress).map { SharedValueStorage(valueType: ObjectIdentifier(Value.self), address: $0, count: elements.count) }
+		} ?? nil
 		if let storage, let written = sharedValueIndicesByStorage[storage] {
 			writeUnsigned(written.index + 1)
 			return
@@ -444,8 +446,16 @@ struct BinaryWriter {
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
 	private var sharedValueIndices = [AnyHashable: UInt64]()
-	/// The index of each value written through ``writeShared(_:)``, by the address of its storage, with the value.
-	private var sharedValueIndicesByStorage = [UnsafeRawPointer: (index: UInt64, value: Any)]()
+	/// Where a value written through ``writeShared(_:)`` keeps its elements: with its type and count, since every empty
+	/// collection of every type can share one address.
+	private struct SharedValueStorage: Hashable {
+		let valueType: ObjectIdentifier
+		let address: UnsafeRawPointer
+		let count: Int
+	}
+
+	/// The index of each value written through ``writeShared(_:)``, by its storage, with the value.
+	private var sharedValueIndicesByStorage = [SharedValueStorage: (index: UInt64, value: Any)]()
 	private var sharedValueIndicesByBytes = [[UInt8]: UInt64]()
 	private var sharedValueCount: UInt64 = 0
 	private var nestingDepth = 0
