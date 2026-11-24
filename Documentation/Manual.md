@@ -1513,6 +1513,8 @@ The edit-loop gain needs a compile that recompiles only the files whose bytes ch
 
 See [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
+A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and `SafeDITool query needs` cannot read the module.
+
 For [Stardoc](https://github.com/bazelbuild/stardoc) and other `bzl_library` tooling, a `bzl_library` of your own that loads `safedi.bzl` can list `@safedi//bazel:safedi` in its `deps`.
 
 Bazel runs the prebuilt `SafeDITool` from the SafeDI release on macOS (arm64 or x86_64) and Linux (x86_64 or arm64), the same binary the `SafeDIGenerator` plugin and the Tuist plugin run. The first build that needs it downloads it from the release’s GitHub assets, so that build needs network access to GitHub, or a [repository cache](https://bazel.build/run/build#repository-cache) that holds the binary. Bazel checks it against the sha256 recorded in the release’s source archive. On any other machine, Bazel builds `SafeDITool` from source. To always build it from source, add this line to your `.bazelrc`:
@@ -1570,6 +1572,8 @@ In `Project.swift`, `import SafeDITuist`, and give each first-party target ([Gen
 `module` names the directory, under the one that holds `Project.swift`, whose Swift files the script passes to `SafeDITool`. List every Swift source of the target in its `sources`, not in `additionalDirectoriesToInclude`: Tuist does not rebuild when those files change, and cannot read them under user script sandboxing.
 
 `dependencies` lists the module name (`PRODUCT_MODULE_NAME`) of each target whose `.safedi` file the script reads, as [Which modules to list](#which-modules-to-list) describes. Each listed target must run the script too.
+
+A target that no SafeDI target depends on, such as your app, passes `isDependedUpon: false`, and its script writes no `.safedi`, which saves the time the top target of a deep graph spends writing a copy of what its dependencies’ files carry. A target that lists it in `dependencies` fails with an error that names the argument.
 
 Each listed target must also write its `.safedi` file before this target’s script runs. So this target must depend on each one, directly or through another target.
 

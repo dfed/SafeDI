@@ -42,10 +42,12 @@ extension ScopeGenerator {
 			promotedNodes: [],
 			onlyIfAvailableOverrides: [],
 			wrapperParameterByInstance: [:],
-			parameterTree: [],
+			treePropertyNodes: [],
 			builders: nil,
 			hasOverrides: false,
 			typesDeclaredEscaping: [],
+			// A mock root that builds nothing has no receivers.
+			receiverModulesByLabel: [:],
 			context: publicMockContext,
 		)
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -93,31 +95,6 @@ extension ScopeGenerator {
 			} ?? false
 			return isWrapperOfOwnInstance ? nil : property
 		})
-	}
-
-	/// The modules that declare a receiver of each label in this mock root's tree, as `publicMockPlan` admits them: a type of
-	/// the tree whose declaration receives a dependency of that label, or aliases one. Walked with a stack, since a tree can
-	/// be as deep as the module has types.
-	private func publicMockReceiverModules(context: PublicMockContext) -> [String: Set<String?>] {
-		var modulesByLabel = [String: Set<String?>]()
-		var generatorsToVisit = orderedChildGenerators
-		while let generator = generatorsToVisit.popLast() {
-			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
-				let moduleName = context.moduleNameByType[instantiable.concreteInstantiable]
-				for dependency in instantiable.dependencies {
-					switch dependency.source {
-					case .received:
-						modulesByLabel[dependency.property.label, default: []].insert(moduleName)
-					case let .aliased(fulfillingProperty, _, _):
-						modulesByLabel[fulfillingProperty.label, default: []].insert(moduleName)
-					case .instantiated, .forwarded:
-						break
-					}
-				}
-			}
-			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
-		}
-		return modulesByLabel
 	}
 
 	/// The public mock of `instantiable`, whose tree's top-level nodes are `nodes`, in generation order, bound by
@@ -170,7 +147,7 @@ extension ScopeGenerator {
 		}
 		if hasOverrides {
 			// The members are in inline order: the build's order without a child that holds a place starting after its
-			// siblings (`MockParameterNode.inlineOrderPosition`).
+			// siblings (`inlineOrdered(_:property:)`).
 			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
 			lines.append(MockLowering.publicOverridesStruct(
 				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
@@ -210,7 +187,7 @@ extension ScopeGenerator {
 
 	/// The plan of the public mock of `instantiable`, whose root's signature is `signature`, that promotes `promotedNodes`,
 	/// under the names given, and takes the builders its calls fill (`filledCallBuilders`) optional, as `publicMockPlan`
-	/// plans it from the emitter's parameter tree.
+	/// plans it from the walk's node records (`MockTreeNames.propertyNodes`).
 	func publicMockPlan(
 		of instantiable: Instantiable,
 		signature: MockLowering.RootSignature,
@@ -268,11 +245,11 @@ extension ScopeGenerator {
 			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides,
 			wrapperParameterByInstance: wrapperParameterByInstance,
-			parameterTree: [],
+			treePropertyNodes: [],
 			builders: mockBuilders,
 			hasOverrides: hasOverrides,
 			typesDeclaredEscaping: signature.typesDeclaredEscaping,
-			receiverModulesByLabel: publicMockReceiverModules(context: publicMockContext),
+			receiverModulesByLabel: Self.receiverModules(in: signature.propertyNodes, context: publicMockContext),
 			filledFamilies: filledCallBuilders.families.isEmpty ? nil : (families: filledCallBuilders.families, namesInBody: publicMockNamesInBody(namesFillsDeclare: filledCallBuilders.namesFillsDeclare)),
 			context: publicMockContext,
 		)
@@ -281,7 +258,7 @@ extension ScopeGenerator {
 	/// The names the narrowest tier's body of this root's public mock declares beside its parameters, apart from which its
 	/// optional builders are named: each property's builder function and each dependency's label of every type its tree
 	/// builds, and the labels its calls' fills declare (`namesFillsDeclare`), as `publicMockOptionalBuilders` reads them
-	/// from a parameter tree. Walked with a stack, since a tree can be as deep as the module has types.
+	/// from the walk's node records. Walked with a stack, since a tree can be as deep as the module has types.
 	private func publicMockNamesInBody(namesFillsDeclare: Set<String>) -> Set<String> {
 		var namesInBody = namesFillsDeclare
 		var generatorsToVisit = orderedChildGenerators
@@ -309,7 +286,7 @@ extension PublicMockPlan {
 
 extension ScopeGenerator {
 	/// The elements in inline order: the build's order without a child that holds a place starting after its siblings
-	/// (`MockParameterNode.inlineOrderPosition`), an element of no child keeping its place after them.
+	/// (`computeOrderedPropertyToGenerateIndices(startingCarriersLast:)`), an element of no child keeping its place after them.
 	nonisolated func inlineOrdered<Element>(_ elements: [Element], property: (Element) -> Property) -> [Element] {
 		let children = propertiesToGenerate
 		var inlinePositionByProperty = [Property: Int]()
@@ -372,8 +349,8 @@ extension MockLowering.Walk {
 		// scope beneath refers to (`ScopeGenerator.mockLoweringBuilderFunctionNames`).
 		let holeFunctionName = pendingRenamedFunctionName
 		pendingRenamedFunctionName = nil
-		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as the
-		// emitter's `MockAliasNode.holeSite` does.
+		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as a
+		// seam's site does.
 		lines.append(GeneratedCodeText.indentingNonEmptyLines(
 			of: ScopeGenerator.buildSiteCode(
 				of: property,

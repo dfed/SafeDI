@@ -82,7 +82,9 @@ macro_target_exclusions() {
 hashed_sources() {
 	local exclusions exclusion
 	exclusions=$(macro_target_exclusions)
-	if ! echo "$exclusions" | grep -qx 'Sources/SafeDICore/Generators'; then
+	# A here-string, not `echo … | grep -q`: under `pipefail` that pipe fails at random, because grep exits at its
+	# first match and echo, which writes a line at a time, dies of the closed pipe.
+	if ! grep -qx 'Sources/SafeDICore/Generators' <<<"$exclusions"; then
 		echo "compile-check-identity.sh: found no SafeDICore/Generators in the exclude list of the SafeDIMacros target in Package.swift." >&2
 		return 1
 	fi
