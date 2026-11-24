@@ -452,6 +452,7 @@ extension ScopeGenerator {
 			// a `SafeDIOverrides`.
 			hasOverrides: !treePropertyNodes.isEmpty,
 			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
+			receiverModulesByLabel: receiverModules(in: parameters.treeNames.propertyNodes, context: context),
 			context: context,
 		)
 		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
@@ -535,14 +536,12 @@ extension ScopeGenerator {
 		builders shapedBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		hasOverrides: Bool,
 		typesDeclaredEscaping: Set<TypeDescription>,
-		// D1 lane hook (lane C): the mock lowering, which reads no parameter tree, hands the receivers' modules it finds.
-		receiverModulesByLabel givenReceiverModulesByLabel: [String: Set<String?>]? = nil,
+		receiverModulesByLabel: [String: Set<String?>],
 		// D1 lane hook (lane C): and the families its calls fill, with the names the narrowest tier's body declares.
 		filledFamilies givenFilledFamilies: (families: [ScopeGenerator.FilledFamily], namesInBody: Set<String>)? = nil,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
-		let receiverModulesByLabel = givenReceiverModulesByLabel ?? receiverModules(in: parameterTree, context: context)
 		// The cause of each access computed, by type and receive label, which a parameter of that access records.
 		var accessCauses = [String: TypeAccessProof.Cause]()
 		func access(of type: TypeDescription, receivedAs label: String?) -> AccessLevel {
@@ -837,25 +836,23 @@ extension ScopeGenerator {
 		return context.access(ofTypes: [type], admittedModules: admittedModules)
 	}
 
-	/// The modules that declare a receiver of each label in `items`' tree: a type whose declaration receives a
-	/// dependency of that label, required or only if available. A type with no entry is proven by the mentions of the
-	/// mocked type's module and of these modules.
-	static func receiverModules(in items: [MockTreeItem], context: PublicMockContext) -> [String: Set<String?>] {
+	/// The modules that declare a receiver of each label in the tree of `nodes` (`MockTreeNames.propertyNodes`): a type
+	/// whose declaration receives a dependency of that label, required or only if available. A type with no entry is
+	/// proven by the mentions of the mocked type's module and of these modules.
+	static func receiverModules(in nodes: [MockTreeNames.PropertyNode], context: PublicMockContext) -> [String: Set<String?>] {
 		var modulesByLabel = [String: Set<String?>]()
-		// A stack of the nodes left to visit, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = items.propertyNodes
-		while let node = nodesToVisit.popLast() {
-			for dependency in node.dependencies {
+		for node in nodes {
+			let moduleName = context.moduleNameByType[node.instantiable.concreteInstantiable]
+			for dependency in node.instantiable.dependencies {
 				switch dependency.source {
 				case .received:
-					modulesByLabel[dependency.property.label, default: []].insert(context.moduleNameByType[node.concreteType])
+					modulesByLabel[dependency.property.label, default: []].insert(moduleName)
 				case let .aliased(fulfillingProperty, _, _):
-					modulesByLabel[fulfillingProperty.label, default: []].insert(context.moduleNameByType[node.concreteType])
+					modulesByLabel[fulfillingProperty.label, default: []].insert(moduleName)
 				case .instantiated, .forwarded:
 					break
 				}
 			}
-			nodesToVisit.append(contentsOf: node.propertyChildren)
 		}
 		return modulesByLabel
 	}
@@ -1194,8 +1191,8 @@ extension ScopeGenerator {
 		}
 		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
 		let ownModules: Set<String?> = [context.moduleName, instantiable.moduleName]
-		let receiverModulesByLabel = Self.receiverModules(in: parameters.parameterTree, context: context)
-		let treeReceivers = Self.treeReceivers(in: parameters.parameterTree, mockedType: instantiable)
+		let receiverModulesByLabel = Self.receiverModules(in: parameters.treeNames.propertyNodes, context: context)
+		let treeReceivers = Self.treeReceivers(in: parameters.treeNames.propertyNodes, mockedType: instantiable)
 		var omittedParameters = [PublicMockFinding.OmittedRequiredParameter]()
 		func check(_ property: Property, kind: PublicMockFinding.OmittedRequiredParameter.Kind) {
 			let isForwarded = if case .forwarded = kind {
@@ -1316,21 +1313,18 @@ extension ScopeGenerator {
 		return receive
 	}
 
-	/// The declarations in `items`' tree that receive or instantiate a dependency, by its label, in tree order: the
-	/// mocked type's own first.
-	static func receivers(in items: [MockTreeItem], mockedType: Instantiable) -> [String: [(declaringType: TypeDescription, dependency: Dependency)]] {
-		Dictionary(grouping: treeReceivers(in: items, mockedType: mockedType)) { $0.dependency.property.label }
+	/// The declarations in the tree of `nodes` (`MockTreeNames.propertyNodes`) that receive or instantiate a dependency, by
+	/// its label, in tree order: the mocked type's own first.
+	static func receivers(in nodes: [MockTreeNames.PropertyNode], mockedType: Instantiable) -> [String: [(declaringType: TypeDescription, dependency: Dependency)]] {
+		Dictionary(grouping: treeReceivers(in: nodes, mockedType: mockedType)) { $0.dependency.property.label }
 	}
 
-	/// Each dependency a declaration in `items`' tree declares, with that declaration, in tree order: the mocked type's
-	/// own first.
-	static func treeReceivers(in items: [MockTreeItem], mockedType: Instantiable) -> [(declaringType: TypeDescription, dependency: Dependency)] {
+	/// Each dependency a declaration in the tree of `nodes` (`MockTreeNames.propertyNodes`, each before its children)
+	/// declares, with that declaration, in tree order: the mocked type's own first.
+	static func treeReceivers(in nodes: [MockTreeNames.PropertyNode], mockedType: Instantiable) -> [(declaringType: TypeDescription, dependency: Dependency)] {
 		var receivers = mockedType.dependencies.map { (declaringType: mockedType.concreteInstantiable, dependency: $0) }
-		// Depth first, in tree order, on a stack of its own, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = Array(items.propertyNodes.reversed())
-		while let node = nodesToVisit.popLast() {
-			receivers += node.dependencies.map { (declaringType: node.concreteType, dependency: $0) }
-			nodesToVisit.append(contentsOf: node.propertyChildren.reversed())
+		for node in nodes {
+			receivers += node.instantiable.dependencies.map { (declaringType: node.instantiable.concreteInstantiable, dependency: $0) }
 		}
 		return receivers
 	}

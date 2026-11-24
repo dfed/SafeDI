@@ -84,6 +84,9 @@ extension MockLowering {
 		/// calls' builders and the places inside their fills read (`filledCallBuilders`).
 		var seamMockBuilders = [ScopeGenerator.MockRootParameters.SeamMockBuilder]()
 
+		/// The nodes of the tree that build a type, each before its children (`MockTreeNames.propertyNodes`).
+		var propertyNodes = [ScopeGenerator.MockTreeNames.PropertyNode]()
+
 		/// A builder `mock()` takes for every builder of one hole type and family its tree's calls pass up
 		/// (`MockRootParameters.SeamMockBuilder`).
 		struct PassedUpBuilder {
@@ -428,14 +431,15 @@ extension ScopeGenerator {
 		)
 		signature.passedUpBuilders = passedUpBuilders
 		signature.seamMockBuilders = parameters.seamMockBuilders
+		signature.propertyNodes = tree.names.propertyNodes
 		// The overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		return signature
 	}
 
 	/// The classification of this mock root's parameters as `query needs` reads it, with the nodes of its tree
-	/// (`MockTreeNames.propertyNodes`): the tree's names without its calls' fills or passed-up builders, as a tree read from
-	/// the parameter tree leaves them.
+	/// (`MockTreeNames.propertyNodes`): the tree's names without its calls' fills or passed-up builders, and without the
+	/// parameter tree, which `query needs` does not read.
 	func mockRootParametersWithTreeNodes(
 		of instantiable: Instantiable,
 		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
@@ -445,7 +449,7 @@ extension ScopeGenerator {
 
 	/// What the names of `mock()`'s parameters are chosen from in the tree of a mock root: its bindings, the names its
 	/// builder functions declare, and the `@Instantiated` dependencies the mock cannot build.
-	private struct TreeNames {
+	struct TreeNames {
 		/// What the classification reads of the tree.
 		let names: ScopeGenerator.MockTreeNames
 		/// The `@Instantiated` dependencies of the mocked type itself that the mock cannot build.
@@ -458,8 +462,8 @@ extension ScopeGenerator {
 	/// builds its label (for the mocked type, its property or a `LazilyInstantiated` of it). The tree is walked with a stack,
 	/// since it can be as deep as the module has types.
 	/// - Parameter readsFills: Whether to read the families of the builders the calls pass up, and the calls that fill
-	///   builders with the places inside their fills, which a tree read from the parameter tree leaves out.
-	private func treeNames(of instantiable: Instantiable, readsFills: Bool = true) -> TreeNames {
+	///   builders with the places inside their fills, which only the mock's own lowering reads.
+	func treeNames(of instantiable: Instantiable, readsFills: Bool = true) -> TreeNames {
 		/// A node of the tree that builds a type, and where it is among the nodes the type above it builds: its declaration
 		/// index there, or none for a node the mock promotes, then its index in generation order. A node keeps only its own
 		/// position and the index of the node above it, so a deep tree copies no path per node; the path and the names the
