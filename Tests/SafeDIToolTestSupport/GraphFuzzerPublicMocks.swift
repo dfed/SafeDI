@@ -683,6 +683,8 @@ struct GraphFuzzerPublicMockDraw {
 		var holeAttributesRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleAttributesRandomSeedMask)
 		var receivedHoleHostRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockReceivedHoleHostRandomSeedMask)
 		var sendableWrapperRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSendableWrapperRandomSeedMask)
+		var sendableAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSendableAutoclosureRandomSeedMask)
+		drawsSendableAutoclosureDefault = sendableAutoclosureRandom.percentChance(20)
 		drawsHoleForwardingValue = holeForwardingRandom.percentChance(60)
 		drawsHoleMockOnMainActor = holeAttributesRandom.percentChance(25)
 		drawsHoleHandWrittenMock = holeAttributesRandom.percentChance(30)
@@ -781,6 +783,9 @@ struct GraphFuzzerPublicMockDraw {
 	private let builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit?
 	/// Whether an `ErasedInstantiator` hole forwards `holeTicket: Int`, which `HoleFill` forwards.
 	private var drawsHoleForwardingValue = false
+	/// Whether each leaf takes a `@Sendable` `@autoclosure` with a default, which its public mock takes as an optional
+	/// `@Sendable` closure and a mock that builds the leaf in its tree reads before the construction.
+	private var drawsSendableAutoclosureDefault = false
 	/// Whether `T6` spells `mockAttributes: "@MainActor"`, and whether it names a hand-written `customMock` that `T6Deck`
 	/// builds it with (`publicMockHoleAttributesRandomSeedMask`).
 	private var drawsHoleMockOnMainActor = false
@@ -886,6 +891,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// (`GraphFuzzerPublicMockOutputFeature.consumerSendableFactory`) in a share of the accepted graphs that clears its floor
 	/// with margin: rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockSendableWrapperRandomSeedMask: UInt64 = 0x7075626D6B737772
+	/// Draws only whether the leaves take `pollInterval: @autoclosure @escaping @Sendable () -> Int = 3`
+	/// (`drawsSendableAutoclosureDefault`): a roll added after the rest of the draw was pinned, so that its other shapes
+	/// are drawn as before.
+	static let publicMockSendableAutoclosureRandomSeedMask: UInt64 = 0x7075626D6B736163
 	/// Draws only whether an `ErasedInstantiator` hole forwards a value, `holeTicket: Int`, which `HoleFill` forwards
 	/// (`holeForwardsValue`): a roll added after the rest of the draw was pinned, so that its other shapes are drawn as
 	/// before.
@@ -950,6 +959,9 @@ struct GraphFuzzerPublicMockDraw {
 		let name: String
 		let type: String
 		let defaultValue: String
+		/// Whether the parameter is an `@autoclosure` of `type`, a function type, which a type that stores every
+		/// parameter stores as that function.
+		var isAutoclosure = false
 	}
 
 	/// An `@Instantiable` class.
@@ -1394,6 +1406,9 @@ struct GraphFuzzerPublicMockDraw {
 			}
 			if random.percentChance(12) {
 				leaf.declaration.defaults.append(DefaultParameter(name: "onTap", type: isSendableGraph ? "@Sendable () -> Void" : "() -> Void", defaultValue: "{}"))
+			}
+			if drawsSendableAutoclosureDefault {
+				leaf.declaration.defaults.append(DefaultParameter(name: "pollInterval", type: "@Sendable () -> Int", defaultValue: "3", isAutoclosure: true))
 			}
 			// A value the leaf's tree receives only if available that a consumer may hold: a public type declared in an
 			// extension of the namespace `Dock` that spells no access level, which `Dock`'s declaration caps: a `package`
@@ -3290,7 +3305,7 @@ struct GraphFuzzerPublicMockDraw {
 			GraphFuzzerSpelling.isFunctionType(type) ? "@escaping \(type)" : type
 		}
 		let parameters = declaration.properties.map { "\($0.label): \(parameterType($0.type))" }
-			+ declaration.defaults.map { "\($0.argumentLabel.map { "\($0) " } ?? "")\($0.name): \(parameterType($0.type)) = \($0.defaultValue)" }
+			+ declaration.defaults.map { "\($0.argumentLabel.map { "\($0) " } ?? "")\($0.name): \($0.isAutoclosure ? "@autoclosure @escaping \($0.type)" : parameterType($0.type)) = \($0.defaultValue)" }
 		// The initializer is no wider than its type, nor than the narrowest type it names, so that the fixture compiles.
 		let initializerAccess = min(declaration.initializerAccess ?? declaration.access, declaration.narrowestNamedAccess, declaration.access)
 		let nonisolated = declaration.initializerIsNonisolated ? "nonisolated " : declaration.initializerSpellsMainActor ? "@MainActor " : ""
@@ -3446,10 +3461,10 @@ extension GraphFuzzerToolRuns {
 		var structs: [(name: String, opening: String, structOpening: String?)] = if types.declarations["\(prefix)CarrierShelf"] != nil {
 			[("`\(prefix)CarrierShelf`'s module-level configuration", "_\(prefix)CarrierShelf_MockConfiguration {", nil)]
 		} else {
-			[("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {", "struct SafeDIOverrides {")]
+			[("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {", "struct SafeDIOverrides")]
 		}
 		if types.declarations["\(prefix)CarrierLocal"] != nil {
-			structs.append(("`\(prefix)CarrierShelf`'s `SafeDIMockConfiguration`", "extension \(prefix)CarrierShelf {", "struct SafeDIMockConfiguration {"))
+			structs.append(("`\(prefix)CarrierShelf`'s `SafeDIMockConfiguration`", "extension \(prefix)CarrierShelf {", "struct SafeDIMockConfiguration"))
 		}
 		var problems = [String]()
 		for (structName, opening, structOpening) in structs {
@@ -3515,7 +3530,7 @@ extension GraphFuzzerOracle {
 
 	/// The labels of the first initializer of a struct in `contents`, a generated file, in the order it takes them: the
 	/// struct whose declaration line ends with `opening`, or, where `structOpening` is given, the first struct after it, and
-	/// before any other extension, whose declaration line ends with `structOpening`. `nil` where `contents` declares no such
+	/// before any other extension, whose declaration line contains `structOpening`. `nil` where `contents` declares no such
 	/// struct.
 	static func initializerLabels(after opening: String, struct structOpening: String?, in contents: String) -> [String]? {
 		var lines = contents.split(separator: "\n", omittingEmptySubsequences: false).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.makeIterator()
@@ -3528,7 +3543,7 @@ extension GraphFuzzerOracle {
 				// Another extension, of this type or another, before the struct: look for the struct after the opening again.
 				foundOpening = line.hasSuffix(opening)
 			} else if expectsStruct, let structOpening {
-				expectsStruct = !line.hasSuffix(structOpening)
+				expectsStruct = !line.contains(structOpening)
 			} else if line.hasSuffix("init(") {
 				var labels = [String]()
 				while let parameter = lines.next(), !parameter.hasPrefix(")") {

@@ -1591,7 +1591,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"fulfillingExpression": .copied,
 			"property": .copied,
 			"constructsWithHandWrittenMock": .copied,
-			"fillCodeByKey": .startsEmpty,
 			"unavailablePropertiesToGenerateCodeTask": .startsEmpty,
 			"unavailablePropertiesToGeneratedCode": .startsEmpty,
 			"orderedPropertyToGenerateIndices": .copied,
@@ -3910,7 +3909,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 				// The call's fills are its children, declared in the builder function that makes the call and generated with
-				// that function's body's `propertiesGeneratedLater`, as `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates
+				// that function's body's `propertiesGeneratedLater`, as `mockLoweringFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates
 				// them. A call a fill makes is led to by the dependency that leads to the call the fill is passed to.
 				let callReferenceLocation = fillReferenceLocation ?? .some(declarationLocationByProperty[childProperty].flatMap(\.self) ?? scopeDeclarationLocation)
 				let fillsPropertiesGeneratedLater = child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater)
@@ -5653,14 +5652,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// For a scope that calls another module's public mock and fills its builders, the code of the fills, which a mock
-	/// declares before the call, by the `propertiesGeneratedLater` and `FillPlaceBindings` the fills are generated with: each
-	/// builds the hole's property as the module that declares the fulfilling type builds it. Empty until
-	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` returns.
-	private var fillCodeByKey = [FillCodeKey: [String]]()
-
-	// D1 lane hook (lane C): the mock lowering reads a call's fills as the emitter generates them, storing nothing.
-	/// The code of the fills with `propertiesGeneratedLater` and `fillPlaceBindings`, as
-	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates it, without keeping it in `fillCodeByKey`.
+	/// declares before the call, generated with `propertiesGeneratedLater` and `fillPlaceBindings`, the names the mock root
+	/// hands the call: each builds the hole's property as the module that declares the fulfilling type builds it. Stored
+	/// nowhere, since mock roots that share the call each hand it their own names (`construction-memo-calls.md`).
 	func mockLoweringFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws -> [String] {
 		try await generateProperties(
 			propertiesGeneratedLater: propertiesGeneratedLater,
@@ -5668,13 +5662,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			leadingMemberWhitespace: "",
 			fillPlaceBindings: fillPlaceBindings,
 		).map { $0.spelled() }
-	}
-
-	/// What a call's fills are generated with: the code differs by both, since a mock root hands each call the names of its
-	/// own builders (`FillPlaceBindings`).
-	private struct FillCodeKey: Hashable {
-		let propertiesGeneratedLater: Set<Property>
-		let fillPlaceBindings: FillPlaceBindings
 	}
 
 	/// Every argument of `generatePropertyCode` but `codeGeneration`, which is `.dependencyTree` wherever the key is made,
@@ -11502,19 +11489,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// enclosing that one needs no reservation: it builds a property on the
 	/// override's path, whose label every local of the function spells after
 	/// the function's own.
+	///
+	/// Where the function builds a node whose configuration is `Sendable` (`configurationPath`), the function reads the
+	/// whole configuration from one local instead, `<function>__overrides`, and every read beneath it is that local's
+	/// member: a configuration of the `Sendable` form whose every field is proven `Sendable` is itself `Sendable`
+	/// (`ConfigurationRecord.configurationStruct`), and it holds its fields behind one immutable reference, so the read
+	/// gives each field the value the read of the field would.
 	final class SendableOverrideExtractor {
-		init(functionName: String, names: GeneratedNameAllocator) {
+		/// - Parameter configurationPath: The path of the configuration of the node whose builder function starts the
+		///   extraction, where that configuration is `Sendable`, which the function then reads through one local.
+		init(functionName: String, names: GeneratedNameAllocator, configurationPath: String? = nil) {
 			self.functionName = functionName
 			self.names = names
+			self.configurationPath = configurationPath
 		}
 
 		/// Records that `expression` is read into a local named after the
-		/// outermost `@Sendable` function, and returns that local's name.
+		/// outermost `@Sendable` function, and returns that local's name, or the member of the configuration's local
+		/// that `expression` reads. An expression read before, as the override path of a type a cycle builds again is
+		/// the path of the nearest same-type place above it, returns the local that read it, so one override is read
+		/// into one local.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
-			let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
-			extractions.append((localName: localName, expression: expression))
-			return localName
+			if let configurationPath, let member = Self.member(of: expression, readFrom: configurationPath) {
+				let localName: String
+				if let configurationLocalName {
+					localName = configurationLocalName
+				} else {
+					localName = names.claim("\(functionName)__\(Self.configurationLocalNameSuffix)".spelledAsJoinedIdentifier)
+					configurationLocalName = localName
+					extractions.append((localName: localName, expression: configurationPath))
+				}
+				return localName + member
+			} else if let localName = localNameByExpression[expression] {
+				return localName
+			} else {
+				let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
+				extractions.append((localName: localName, expression: expression))
+				localNameByExpression[expression] = localName
+				return localName
+			}
 		}
+
+		/// The local each expression extracted so far was read into.
+		private var localNameByExpression = [String: String]()
 
 		/// Keeps every later local apart from `names`, which a scope inside the function declares: a local named as one
 		/// would be hidden by it where it is read.
@@ -11530,6 +11547,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var names: GeneratedNameAllocator
 
 		private let functionName: String
+		private let configurationPath: String?
+		/// The local the configuration at `configurationPath` is read into, once something reads it.
+		private var configurationLocalName: String?
+
+		/// The suffix of the name of the local a whole configuration is read into.
+		private static let configurationLocalNameSuffix = "overrides"
+
+		/// The member access `expression` makes of the configuration at `path` (`""` for the configuration itself), or `nil`
+		/// where it reads something else.
+		private static func member(of expression: String, readFrom path: String) -> String? {
+			if expression == path {
+				""
+			} else if expression.hasPrefix("\(path).") {
+				String(expression.dropFirst(path.count))
+			} else {
+				nil
+			}
+		}
 	}
 }
 

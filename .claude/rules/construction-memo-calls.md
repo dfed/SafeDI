@@ -1,0 +1,22 @@
+---
+paths:
+  - "Sources/SafeDICore/Generators/ConstructionMemo.swift"
+  - "Sources/SafeDICore/Models/Scope.swift"
+  - "Sources/SafeDICore/Generators/MockLowering+PublicMockCalls.swift"
+---
+
+# Calls the construction memo shares
+
+In a mock's tree, a call of another module's public mock that passes fills (non-empty `holeArguments`) is a place the construction memo stores and reuses whole, its fills and everything inside them included. Mock roots that call one public mock alike then build the call, its fills and their trees once, which was most of a calling module's `generate` (a module of 30 hole types and 30 calling mocks went from 0.41 to 0.14 s). `construction-memo.md` holds the memo's argument; this file holds what a call adds to it.
+
+**Why a call's build is a function of its key and its logged reads.** The fills a call passes, their names, dispatchers and builder arguments are derived from `scope.holeArguments`, `calledBuilders` and `publicMockCall`, which the key names, and from the caller's declarations. Outside a fill and in a tree without seam holes, `enclosingFills`, `enclosingFillNames`, the carried inner scopes and level re-entries are empty, and every `SeamHoles` read is `nil` or empty. A fill's tree is built inside the call's place, so each read it makes of the caller's declarations is logged like any other. Three reads of the caller's declarations that the call makes outside a fill's scopes are logged too: `callerArgument` (every binding it reads, for the root dispatcher's arguments, a memo's argument and a re-entering call's arguments) as `binding`, and the uncarried-declaration check in `fillUnderConstruction` and `callersOwnLabels` as whole `nearestDeclaration` reads. A new read of the caller's declarations at a call goes through the log, in the same change.
+
+**Admission.** `subtreeIsShareable` is cleared by seam holes, a seam root, a mock root's builders, a hole generator, and a call outside a mock's tree, and carries up through every ancestor and through a fill to its call. A fill and the scopes inside one keep `memoKey` `nil`, so they are never stored alone. Production calls stay excluded until a production tree is measured with them and PR 7b makes one memo serve one frozen map by construction: a call's fills are resolved through the table (`ConstructionScope.HoleArgument`), so sharing them relies on the mock roots' memo serving no overlaid table, which holds because a tree with a seam root or a mock root's builders keeps its own.
+
+**Depths inside a fill.** A fill's stack holds only its fill path (`SeamSignature.Hole.fillPropertyStack`, from the hole, so from the call) and what its own scopes push, and its cycle parameter contexts start empty. A `declarationClosedOn` or `cycleParameterContext` read inside a fill that misses, or that a fill path entry answers (depth -1), is logged at the depth of the call that passes the innermost fill (`fillCallDepth`), so the call's entry drops it rather than asking another place's stack, which the fill never reads.
+
+**Settling.** A call is never settled, nor is any scope above it (`isSettled(building:)`): what a call reads from its pass before, its fills' findings among it, is not compared by `foundAlike`. A call is reused within a pass and across mock roots, never by `settledReuse`.
+
+**One place per tree.** A tree holds each call generator at most once (`ConstructionMemo.Entry.callGenerators`, `reuse(of:in:besideCallGenerators:drawing:)`). A mock root's lowering keys a call's fills, builders and fill place bindings by the call's generator (`MockLowering.FilledCallBuilders`, `FillPlaceBindings.bindingsByGenerator`, `holeBuildersByCall`), and reads each node's `requiresSendable` for its builder family, so one generator at two places of a root would bind its fill places twice and give both places one family. Across roots each root's lowering builds its own maps, so a call another root built is read with this root's names and families. A change that lets one tree hold a call generator twice first keys those maps by place.
+
+**Emission.** A call's fill code is generated per root (`mockLoweringFillCode`, stored nowhere), since it reads the root's `FillPlaceBindings`. The children of a fill cache their code by `UnavailablePropertiesCacheKey`, whose key holds the fill place bindings, so a shared call's children are generated once per distinct bindings.

@@ -65,9 +65,11 @@ extension MockLowering.Walk {
 	/// Starts the extraction of the `@Sendable` builder function named `functionName`, which a node of the current level
 	/// declares outside every other `@Sendable` function: its locals are claimed from the level's names. Returns the
 	/// extractor that was in effect, which `endExtraction(restoring:)` restores.
-	mutating func startExtraction(inFunctionNamed functionName: String) -> ScopeGenerator.SendableOverrideExtractor? {
+	/// - Parameter configurationPath: The path of the node's configuration where the function reads it whole
+	///   (`SendableOverrideExtractor`).
+	mutating func startExtraction(inFunctionNamed functionName: String, configurationPath: String? = nil) -> ScopeGenerator.SendableOverrideExtractor? {
 		let enclosingExtractor = sendableOverrideExtractor
-		sendableOverrideExtractor = ScopeGenerator.SendableOverrideExtractor(functionName: functionName, names: levelNames[levelNames.count - 1])
+		sendableOverrideExtractor = ScopeGenerator.SendableOverrideExtractor(functionName: functionName, names: levelNames[levelNames.count - 1], configurationPath: configurationPath)
 		return enclosingExtractor
 	}
 

@@ -412,8 +412,9 @@ private struct Rendering {
 		var isPublicMockMethod = false
 		var optionalParametersOfPublicMock = Set<String>()
 		var isConfigurationInitializer = false
-		/// The names of the builder functions the node is in, outermost first.
-		var enclosingBuilderFunctions = [String]()
+		/// The names of the builder functions the node is in, outermost first, each with the construction it builds by
+		/// (`Self.construction(builtBy:)`).
+		var enclosingBuilderFunctions = [(name: String, construction: String?)]()
 	}
 
 	let fields: GraphFuzzerMockDifference.Fields
@@ -457,7 +458,7 @@ private struct Rendering {
 			scope.optionalParametersOfPublicMock = scope.isPublicMockMethod ? Set(declaration.signature.parameterClause.parameters.filter { $0.defaultValue?.value.is(NilLiteralExprSyntax.self) == true }.map { ($0.secondName ?? $0.firstName).text }) : []
 			scope.isConfigurationInitializer = false
 			if scope.isInFunctionBody, declaration.name.text.hasPrefix(Self.builderFunctionPrefix) {
-				scope.enclosingBuilderFunctions.append(declaration.name.text)
+				scope.enclosingBuilderFunctions.append((name: declaration.name.text, construction: Self.construction(builtBy: declaration)))
 			}
 			scope.isInFunctionBody = true
 		} else if node.is(InitializerDeclSyntax.self) {
@@ -734,16 +735,25 @@ private struct Rendering {
 		return boundValue(of: read) ?? read
 	}
 
-	/// The labels `expression` names in turn, when it is `safeDIOverrides.<label>.<label>…`.
+	/// The labels `expression` names in turn, when it is `safeDIOverrides.<label>.<label>…`, or such a read's members
+	/// read through the local a `@Sendable` function binds a whole configuration to.
 	private func labelsRead(by expression: ExprSyntax) -> [String]? {
 		var labels = [String]()
 		var current = expression
-		while let access = current.as(MemberAccessExprSyntax.self), let base = access.base {
-			labels.append(access.declName.baseName.text)
-			current = base
+		while true {
+			while let access = current.as(MemberAccessExprSyntax.self), let base = access.base {
+				labels.append(access.declName.baseName.text)
+				current = base
+			}
+			guard let reference = current.as(DeclReferenceExprSyntax.self) else { return nil }
+			if reference.baseName.text == mockOverridesParameterName {
+				return labels.reversed()
+			} else if let value = boundValue(of: current) {
+				current = value
+			} else {
+				return nil
+			}
 		}
-		guard current.as(DeclReferenceExprSyntax.self)?.baseName.text == mockOverridesParameterName else { return nil }
-		return labels.reversed()
 	}
 
 	/// Whether every one of `labels` names a field of the struct the one before it holds, and one of those fields is dropped.
@@ -779,13 +789,27 @@ private struct Rendering {
 	/// function around it, and the name it is bound to when it builds in a binding rather than in a function's return.
 	private func pathOfNode(at position: Syntax, in scope: Scope) -> [String]? {
 		guard let extendedType = scope.extendedType else { return nil }
-		var owner = configurationOwner(named: mockOverridesStructName, extendedType: extendedType)
-		var path = [String]()
+		// The path and owner the builder functions around the node imply, or `nil` beneath an edge whose function reads no
+		// overrides: a cycle edge, which leaves its field out of its owner's configuration.
+		var current: (path: [String], owner: String)? = ([], configurationOwner(named: mockOverridesStructName, extendedType: extendedType))
+		// Each builder function whose path resolved, with the path and owner it leaves.
+		var resolved = [(construction: String?, path: [String], owner: String)]()
 		for function in scope.enclosingBuilderFunctions {
-			guard let label = labelBuilt(byFunctionNamed: function, amongFieldsOf: owner), let field = fields[owner]?[label] else { return nil }
-			path.append(label)
-			owner = field.type
+			if let (path, owner) = current, let label = labelBuilt(byFunctionNamed: function.name, amongFieldsOf: owner), let field = fields[owner]?[label] {
+				current = (path + [label], field.type)
+			} else if let construction = function.construction, let ancestor = resolved.last(where: { $0.construction == construction }) {
+				// A function beneath a cycle edge that builds again a type an enclosing function built the same way reads
+				// the overrides of that nearest ancestor, so its path is the ancestor's. An erased place builds its type
+				// as a plain one does, so the construction, not the type the function returns, decides.
+				current = (ancestor.path, ancestor.owner)
+			} else {
+				current = nil
+			}
+			if let (path, owner) = current {
+				resolved.append((construction: function.construction, path: path, owner: owner))
+			}
 		}
+		guard var path = current?.path else { return nil }
 		if let bindingName = nameBound(aroundNodeAt: position) {
 			path.append(bindingName)
 		}
@@ -809,6 +833,40 @@ private struct Rendering {
 			ancestor = current.parent
 		}
 		return statement.flatMap { binding(of: $0)?.name }
+	}
+
+	/// The construction a builder function builds its node by, the call its default branch returns once any erasure
+	/// around it is unwrapped: `T` for `T(…)`, `T.<method>` for a static method such as a hand-written mock or
+	/// `instantiate(…)`; else the type the function returns.
+	static func construction(builtBy declaration: FunctionDeclSyntax) -> String? {
+		var expression: ExprSyntax? = declaration.body?.statements.last.flatMap(Self.valueExpression(of:))
+		while let ifExpression = expression?.as(IfExprSyntax.self) {
+			expression = ifExpression.elseBody.flatMap { $0.as(CodeBlockSyntax.self) }?.statements.last.flatMap(Self.valueExpression(of:))
+		}
+		while let call = expression?.as(FunctionCallExprSyntax.self) {
+			if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self), reference.baseName.text.first?.isUppercase == true {
+				// An erasure wraps the construction as its one unlabeled argument.
+				guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil, argument.expression.is(FunctionCallExprSyntax.self) else {
+					return reference.baseName.text
+				}
+				expression = argument.expression
+			} else if let member = call.calledExpression.as(MemberAccessExprSyntax.self), let base = member.base?.as(DeclReferenceExprSyntax.self), base.baseName.text.first?.isUppercase == true {
+				return "\(base.baseName.text).\(member.declName.baseName.text)"
+			} else {
+				break
+			}
+		}
+		return declaration.signature.returnClause?.type.trimmedDescription
+	}
+
+	private static func valueExpression(of item: CodeBlockItemSyntax) -> ExprSyntax? {
+		if let statement = item.item.as(ReturnStmtSyntax.self) {
+			statement.expression
+		} else if let statement = item.item.as(ExpressionStmtSyntax.self) {
+			statement.expression
+		} else {
+			item.item.as(ExprSyntax.self)
+		}
 	}
 
 	private static let builderFunctionPrefix = "__safeDI_"
