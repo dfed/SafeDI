@@ -7135,6 +7135,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var generatedProperties = [GeneratedCode]()
 		/// The bodies of the fills a dispatcher holds, by fill.
 		var inlinedFills = [String: FillDispatcher.InlinedFill]()
+		/// The keys of `inlinedFills` whose tree reads a value neither its case's payload nor its parameters hand it: a
+		/// declaration around the call, which the dispatcher holding the fill captures.
+		var inlinedFillKeysReadingCallersDeclarations = Set<String>()
 	}
 
 	// `generateProperties` awaits each child's code between the synchronous functions below, for the reason
@@ -7350,6 +7353,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		   !body.fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
 		{
 			body.inlinedFills[key] = inlinedFill
+			let handedLabels = Set((child.generator.fillFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
+			if !child.generator.receivedProperties.allSatisfy({ handedLabels.contains($0.label) }) {
+				body.inlinedFillKeysReadingCallersDeclarations.insert(key)
+			}
 		} else {
 			body.generatedProperties.append(code)
 		}
@@ -7389,7 +7396,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call's dispatchers follow its fills, each a function that returns its level's struct. One that captures nothing
 		// of the call is a root function, which the root may declare once for every call (`RootFunctionHoisting`).
 		let labelsHiddenByReenteringCalls = Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined())
-		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills, capturesCallerDeclarations: !body.callerArgumentByParameter.isEmpty || !body.callerMemoArgumentByMemo.isEmpty)
+		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills.filter { !body.inlinedFillKeysReadingCallersDeclarations.contains($0.key) }, capturesCallerDeclarations: !body.callerArgumentByParameter.isEmpty || !body.callerMemoArgumentByMemo.isEmpty)
 		for dispatcher in body.callDispatchers {
 			let isSendable = sendableFillKeys.contains(dispatcher.key)
 			guard rootFunctionKeys.contains(dispatcher.key) else {
