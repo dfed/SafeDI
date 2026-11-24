@@ -1,0 +1,5 @@
+first's header: first's header
+second's header: second's screen override
+plain's header: plain's header override
+each construction creates its own clock: true
+a screen and its header share the screen's clock: true

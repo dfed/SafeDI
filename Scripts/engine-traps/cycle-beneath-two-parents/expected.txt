@@ -1,0 +1,10 @@
+left: leaves by lap (A, B, A, B): ["left A", "left B", "left A", "left B"]
+left: every lap's leaf reads left's token: true
+left: each lap's reader reads the id its node was forwarded: true
+left: each lap's reader reads left's token: true
+left: readers by lap: ["left reader", "left reader", "left reader"]
+right: leaves by lap (A, B, A, B): ["right A", "built", "right A", "built"]
+right: every lap's leaf reads right's token: true
+right: each lap's reader reads the id its node was forwarded: true
+right: each lap's reader reads right's token: true
+right: readers by lap: ["built", "built", "built"]

@@ -1,0 +1,16 @@
+first's leaf: first's leaf
+second's leaf: built
+third's leaf: third's leaf
+three tokens: true
+first's mid reads first's token: true
+first's leaf reads first's token: true
+second's mid reads second's token: true
+second's leaf reads second's token: true
+third's mid reads the root's token: true
+third's leaf reads the root's token: true
+first's leaf, second overridden: built
+second's leaf, second overridden: second's mid override
+third's leaf, second overridden: built
+production: first's mid and leaf read first's token: true
+production: second's mid and leaf read second's token: true
+production: third's mid and leaf read the root's token: true

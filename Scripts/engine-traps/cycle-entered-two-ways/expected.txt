@@ -1,0 +1,10 @@
+entered at A, lap 1, A's leaf: A's entry
+entered at A, lap 1, B's leaf: B beneath A's entry
+entered at A, lap 2, A's leaf: A's entry
+entered at A, lap 2, B's leaf: B beneath A's entry
+entered at A, lap 3, A's leaf: A's entry
+entered at B, lap 1, B's leaf: B's entry
+entered at B, lap 1, A's leaf: built
+entered at B, lap 2, B's leaf: B's entry
+entered at B, lap 2, A's leaf: built
+entered at B, lap 3, B's leaf: B's entry

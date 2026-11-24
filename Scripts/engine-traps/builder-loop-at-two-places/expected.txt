@@ -1,0 +1,17 @@
+the two parents hold tokens of their own: true
+left's B, built by left's A, reads left's token: true
+right's B, built by right's A, reads right's token: true
+right's B on the second lap reads right's token: true
+right's B built directly reads right's token: true
+left's B on the second lap reads left's token: true
+left's B built directly: left's B override
+left's B built by left's A: left's B override
+left's A: 
+left's A built by left's B: 
+right's B built directly: 
+right's B built by right's A: 
+right's A: right's A override
+right's A built by right's B: right's A override
+production: left's B, built by left's A, reads left's token: true
+production: right's B, built by right's A, reads right's token: true
+production: right's B on the second lap reads right's token: true
