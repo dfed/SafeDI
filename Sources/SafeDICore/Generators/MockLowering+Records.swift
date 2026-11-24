@@ -69,6 +69,52 @@ extension MockLowering {
 	}
 }
 
+extension MockLowering {
+	/// What the mock walk hands production's record function (`ScopeGenerator.builtPlaceRecord(of:…)`) at one built place:
+	/// whether the place writes a builder function, the name of that function, the names its construction reads its
+	/// values under where the mock binds them apart from their labels, and the override it tries first.
+	struct BuiltPlaceInputs {
+		let functionName: String
+		let hasFunction: Bool
+		let readNames: [Property: String]
+		let alternatives: [ConstructionAlternative]
+	}
+
+	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
+	/// (`argumentValues(of:given:…)`), by the property the dependency declares: a name bound apart, the lazy wrapper whose
+	/// instance it reads, or a parameter of `mock()`. A dependency passed `nil` reads nothing, as production's record says.
+	static func readNames(
+		of initializer: Initializer,
+		given dependencies: [Dependency],
+		argumentValues: [(label: String, value: String)],
+	) -> [Property: String] {
+		let passedDependencies = initializer.arguments.compactMap { dependency(passedTo: $0, among: dependencies) }
+		var readNames = [Property: String]()
+		for (dependency, argument) in zip(passedDependencies, argumentValues) where argument.value != "nil" {
+			let instanceSuffix = ".\(Dependency.lazilyInstantiatedInstancePropertyName)"
+			let name = argument.value.hasSuffix(instanceSuffix) ? String(argument.value.dropLast(instanceSuffix.count)) : argument.value
+			if name != dependency.property.label {
+				readNames[dependency.property] = name
+			}
+		}
+		return readNames
+	}
+
+	/// The alternative a place tries before its construction where the walk reads its override at `overrideRead`, whose
+	/// result is wrapped in `resultWrapper`; `nil` where the read is no value path, as a local an extractor bound it to.
+	static func overrideAlternative(reading overrideRead: String, resultWrapper: TypeDescription?) -> ConstructionAlternative? {
+		overrideReadPath(overrideRead).map { closure in
+			ConstructionAlternative(
+				closure: closure,
+				bindingName: ReservedName.configurationBuilderPropertyName,
+				requiresAbsent: [],
+				use: .calledWithConstructionArguments,
+				resultWrapper: resultWrapper,
+			)
+		}
+	}
+}
+
 extension ArgumentSource {
 	/// This source read under `name` where it reads the declaration of `label`: what a read becomes where a mock binds the
 	/// label apart (`ScopeGenerator.builtPlaceRecord(of:…readNames:…)`).
@@ -88,5 +134,62 @@ extension ArgumentSource {
 		     .spelledArgument:
 			self
 		}
+	}
+}
+
+extension MockLowering.Walk {
+	/// A generator in one context it is written in: what production's plan node is made once for (`planNode(…)` in
+	/// `ScopeGenerator`).
+	struct PlanNodeKey: Hashable {
+		let generator: ObjectIdentifier
+		let unavailableProperties: Set<Property>
+	}
+
+	/// Keeps what the walk hands production's record function at the built place it is lowering.
+	mutating func recordInputs(
+		of node: MockLowering.ConstantNode,
+		hasFunction: Bool,
+		overrideRead: String?,
+		initializer: Initializer,
+		instantiable: Instantiable,
+		dependencyArguments: [(label: String, value: String)],
+	) {
+		var alternatives = [ConstructionAlternative]()
+		if let overrideRead {
+			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
+			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper) else { return }
+			alternatives.append(alternative)
+		}
+		builtPlaceInputs[childIndexPath] = MockLowering.BuiltPlaceInputs(
+			functionName: node.functionName,
+			hasFunction: hasFunction,
+			readNames: MockLowering.readNames(of: initializer, given: instantiable.dependencies, argumentValues: dependencyArguments),
+			alternatives: alternatives,
+		)
+	}
+
+	/// Records, through production's record function, the built place the walk lowered `node` at.
+	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) throws {
+		guard case .built = node,
+		      let inputs = builtPlaceInputs[childIndexPath],
+		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
+		else { return }
+		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties)
+		let planNode = planNodes[key] ?? PlanNode()
+		planNodes[key] = planNode
+		builtRecords[childIndexPath] = try generator.builtPlaceRecord(
+			of: property,
+			instantiable: instantiable,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			unavailableProperties: unavailableProperties,
+			functionName: inputs.functionName,
+			hasFunction: inputs.hasFunction,
+			children: [],
+			node: planNode,
+			isPlannedAtPlace: seamCall == nil && !isLoopMember,
+			readNames: inputs.readNames,
+			alternatives: inputs.alternatives,
+		)
 	}
 }
