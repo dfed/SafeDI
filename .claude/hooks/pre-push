@@ -1,10 +1,10 @@
 #!/bin/bash
 # A git pre-push hook: refuses a push while SwiftFormat would change the checkout that is pushed.
 #
-# Git runs it once `git config core.hooksPath .claude/hooks` is set in a clone (or with `--global`, which makes every
-# clone on the machine use its own `.claude/hooks`, and leaves a repository without that folder with no hooks). Unlike
-# `lint-before-push.sh`, which Claude Code runs only in a session that started inside the checkout, git runs this one
-# for every push from the clone, whatever started it and from whichever directory. `git push --no-verify` skips it.
+# Git runs it once `git config core.hooksPath .claude/hooks` is set in a clone. Set it per clone, never with `--global`:
+# a global hooks path replaces the hooks of every other repository on the machine. Unlike `lint-before-push.sh`, which
+# Claude Code runs only in a session that started inside the checkout, git runs this one for every push from the clone,
+# whatever started it and from whichever directory. `git push --no-verify` skips it.
 #
 #   .claude/hooks/pre-push --self-test   pushes from stand-in clones and checks which pushes git refuses.
 #
@@ -20,7 +20,6 @@ self_test() {
 	git config --global user.name "Self Test"
 	git config --global user.email "self-test@example.com"
 	git config --global init.defaultBranch trunk
-	git config --global core.hooksPath .claude/hooks
 	git init -q --bare "$scratch/remote.git"
 	# $1 names the clone; $2 is its CLI/lint.sh, or empty for a repository that has none.
 	clone() {
@@ -35,6 +34,7 @@ self_test() {
 		git -C "$scratch/$1" add -A
 		git -C "$scratch/$1" commit -q -m "A commit"
 		git -C "$scratch/$1" remote add origin "$scratch/remote.git"
+		git -C "$scratch/$1" config core.hooksPath .claude/hooks
 	}
 	# $1 describes the case; $2 is "refused" or "pushed"; the rest is the command, run from $scratch.
 	expect() {
