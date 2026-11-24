@@ -135,7 +135,9 @@ extension ScopeGenerator {
 				switch plan.record {
 				case let .built(record):
 					built += 1
-					if !record.alternatives.isEmpty { builtWithAlternative += 1 }
+					if !record.alternatives.isEmpty {
+						builtWithAlternative += 1
+					}
 					nodes.insert(record.node)
 					types.insert(record.concreteType.asSource)
 				case .closer:
