@@ -51,21 +51,36 @@ extension GraphFuzzerFixture {
 		})
 	}
 
-	/// The graph with its module selecting `version`: the argument added to the `#SafeDIConfiguration` the graph
-	/// declares, or a configuration of its own after the first file's declarations. A graph in one module only.
+	/// The graph with every module selecting `version`, since the tool requires one API version across the modules it
+	/// reads: the argument added to the `#SafeDIConfiguration` a module declares, or a configuration of its own after the
+	/// declarations of the module's first file. A file of a split graph that names no module is the same-package
+	/// caller's, as `enablingPlainDependencyTreeInitializers(in:)` reads it.
 	func selectingAPIVersion(_ version: GraphFuzzerAPIVersion) -> GraphFuzzerFixture {
 		let argument = "apiVersion: .\(version.rawValue)"
-		var contents = swiftFileContent
-		if let index = contents.firstIndex(where: { $0.contains("#SafeDIConfiguration(") }) {
-			var lines = contents[index].components(separatedBy: "\n")
-			for lineIndex in lines.indices where lines[lineIndex].hasPrefix("#SafeDIConfiguration(") {
-				let line = lines[lineIndex]
-				lines[lineIndex] = line.hasSuffix("()") ? "#SafeDIConfiguration(\(argument))" : String(line.dropLast()) + ", \(argument))"
-				break
+		let isSplit = swiftFileContent.contains { GraphFuzzerModule(declaredIn: $0) != nil }
+		var moduleOrder = [GraphFuzzerModule?]()
+		var indicesByModule = [GraphFuzzerModule?: [Int]]()
+		for (index, content) in swiftFileContent.enumerated() {
+			let module: GraphFuzzerModule? = isSplit ? (GraphFuzzerModule(declaredIn: content) ?? .samePackageCaller) : nil
+			if indicesByModule[module] == nil {
+				moduleOrder.append(module)
 			}
-			contents[index] = lines.joined(separator: "\n")
-		} else if !contents.isEmpty {
-			contents[0] += "\n#SafeDIConfiguration(\(argument))\n"
+			indicesByModule[module, default: []].append(index)
+		}
+		var contents = swiftFileContent
+		for module in moduleOrder {
+			let indices = indicesByModule[module] ?? []
+			if let index = indices.first(where: { contents[$0].contains("#SafeDIConfiguration(") }) {
+				var lines = contents[index].components(separatedBy: "\n")
+				for lineIndex in lines.indices where lines[lineIndex].hasPrefix("#SafeDIConfiguration(") {
+					let line = lines[lineIndex]
+					lines[lineIndex] = line.hasSuffix("()") ? "#SafeDIConfiguration(\(argument))" : String(line.dropLast()) + ", \(argument))"
+					break
+				}
+				contents[index] = lines.joined(separator: "\n")
+			} else if let index = indices.first {
+				contents[index] += "\n#SafeDIConfiguration(\(argument))\n"
+			}
 		}
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: contents)
 	}
@@ -223,9 +238,17 @@ enum GraphFuzzerAPIVersionAgreement {
 		var unbuildableBuilderProbeCount = 0
 	}
 
-	/// The fixture both sides start from: the base corpus graph drawn storing every parameter, with every class mocked.
-	static func fixture(forSeed seed: UInt64) -> GraphFuzzerFixture {
-		GraphFuzzerGenerator.fixture(forSeed: seed, storingEveryParameter: true).mockingEveryClass.addingTwiceBuiltUnbuildableOwner
+	/// The fixture both sides start from: the corpus's graph drawn storing every parameter. A base corpus graph also has
+	/// every class mocked and a type that builds an owner of an unbuildable dependency twice; a public mock corpus graph
+	/// is drawn as it is, since its mocks are what the corpus draws.
+	static func fixture(forSeed seed: UInt64, in corpus: GraphFuzzerReleaseAcceptanceCorpus = .base) -> GraphFuzzerFixture {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features, storingEveryParameter: true)
+		switch corpus {
+		case .base:
+			return fixture.mockingEveryClass.addingTwiceBuiltUnbuildableOwner
+		case .seam, .publicMock:
+			return fixture
+		}
 	}
 
 	/// Judges `seeds`, running the graphs of each batch concurrently and comparing a batch's values in one comparison;
@@ -234,6 +257,7 @@ enum GraphFuzzerAPIVersionAgreement {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func verdicts(
 		forSeeds seeds: [UInt64],
+		of corpus: GraphFuzzerReleaseAcceptanceCorpus = .base,
 		batchSize: Int = 25,
 		batchLimits: DifferentialValueLimits = DifferentialValueLimits(),
 	) async throws -> [SeedVerdict] {
@@ -243,7 +267,7 @@ enum GraphFuzzerAPIVersionAgreement {
 		try await withThrowingTaskGroup(of: [SeedVerdict].self) { group in
 			for batch in batches {
 				group.addTask {
-					try await batchVerdicts(forSeeds: batch, limits: batchLimits)
+					try await batchVerdicts(forSeeds: batch, of: corpus, limits: batchLimits)
 				}
 			}
 			for try await batchVerdicts in group {
@@ -262,13 +286,15 @@ enum GraphFuzzerAPIVersionAgreement {
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func seedRun(_ seed: UInt64) async throws -> SeedRun {
+	private static func seedRun(_ seed: UInt64, of corpus: GraphFuzzerReleaseAcceptanceCorpus) async throws -> SeedRun {
 		var filesToDelete = [URL]()
-		let v2Fixture = fixture(forSeed: seed)
-		let v3Fixture = v2Fixture.declaringUnbuildableBuilderCalls.selectingAPIVersion(.v3Unstable)
+		let v2Fixture = fixture(forSeed: seed, in: corpus)
+		// Only the base corpus draws the dependencies a mock cannot build that the D12 probes call with builders.
+		let judgesUnbuildableBuilders = corpus == .base
+		let v3Fixture = (judgesUnbuildableBuilders ? v2Fixture.declaringUnbuildableBuilderCalls : v2Fixture).selectingAPIVersion(.v3Unstable)
 		let v2Run = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: v2Fixture, filesToDelete: &filesToDelete)
 		let v3Run = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: v3Fixture, filesToDelete: &filesToDelete)
-		let classification = GraphFuzzerReleaseAcceptance.classify(older: v2Run, current: v3Run) { v2Fixture.differentialValueProbes(generatedFiles: $0.filter { !$0.key.hasSuffix("+SafeDIMock.swift") || $0.value.contains("static func mock(") }) }
+		let classification = GraphFuzzerReleaseAcceptance.classify(older: v2Run, current: v3Run) { v2Fixture.differentialValueProbes(generatedFiles: $0.filter { !$0.key.hasSuffix("+SafeDIMock.swift") || $0.value.contains("static func mock(") }).map(Self.callingV3Mock(_:)) }
 		// `SAFEDI_API_VERSION_AGREEMENT_DUMP` names a directory to write each seed's `.v3Unstable` fixture, both sides'
 		// generated files and their compiles' output into, to read a disagreement by hand.
 		if let dump = ProcessInfo.processInfo.environment["SAFEDI_API_VERSION_AGREEMENT_DUMP"] {
@@ -294,7 +320,7 @@ enum GraphFuzzerAPIVersionAgreement {
 		else {
 			return SeedRun(seed: seed, classification: classification, graphs: [], unbuildableBuilderProbeCount: 0, filesToDelete: filesToDelete)
 		}
-		let samples = GraphFuzzerReleaseAcceptanceCorpus.base.forwardedPropertiesSamples(of: v2Fixture)
+		let samples = corpus.forwardedPropertiesSamples(of: v2Fixture)
 		var graphs = [DifferentialValueGraph(
 			name: "seed \(seed)",
 			feature: DifferentialValuePath(fixture: v3Fixture, generatedFiles: v3GeneratedFiles),
@@ -303,7 +329,7 @@ enum GraphFuzzerAPIVersionAgreement {
 			samples: samples,
 		)]
 		var unbuildableBuilderProbeCount = 0
-		let unbuildableBuilderProbes = v3Fixture.unbuildableBuilderProbes(v3GeneratedFiles: v3GeneratedFiles)
+		let unbuildableBuilderProbes = judgesUnbuildableBuilders ? v3Fixture.unbuildableBuilderProbes(v3GeneratedFiles: v3GeneratedFiles) : []
 		if !unbuildableBuilderProbes.isEmpty, let twin = v2Fixture.makingUnbuildableTypesInstantiable?.selectingAPIVersion(.v3Unstable) {
 			let twinRun = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: twin, filesToDelete: &filesToDelete)
 			switch twinRun.outcome {
@@ -324,8 +350,27 @@ enum GraphFuzzerAPIVersionAgreement {
 		return SeedRun(seed: seed, classification: classification, graphs: graphs, unbuildableBuilderProbeCount: unbuildableBuilderProbeCount, filesToDelete: filesToDelete)
 	}
 
+	/// `probe` with its `.v3Unstable` side passing what a `.v2` probe hands a mock as `.v3Unstable` takes it: a mock's own
+	/// optional default, `T.mock(name: v)`, in its overrides, `T.mock(safeDIOverrides: .init(name: v))`, and a value the
+	/// mock cannot build, `T.mock(label: v)`, as a builder, `T.mock(label: { v })` (D12). Every other probe calls `mock()`
+	/// with no argument, or a root, and is left as it is. The `.v2` side calls the mock as the probe does.
+	static func callingV3Mock(_ probe: DifferentialValueProbe) -> DifferentialValueProbe {
+		let expression = probe.expression
+		guard probe.knownRightExpression == nil,
+		      expression.hasSuffix(")"),
+		      let call = expression.range(of: ".mock("),
+		      let colon = expression[call.upperBound...].range(of: ": ")
+		else { return probe }
+		let label = expression[call.upperBound..<colon.lowerBound]
+		guard !label.isEmpty, label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { return probe }
+		let value = expression[colon.upperBound..<expression.index(before: expression.endIndex)]
+		let callee = expression[..<call.upperBound]
+		let v3Expression = label == "name" ? "\(callee)safeDIOverrides: .init(name: \(value)))" : "\(callee)\(label): { \(value) })"
+		return DifferentialValueProbe(name: probe.name, expression: v3Expression, knownRightExpression: expression)
+	}
+
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func batchVerdicts(forSeeds seeds: [UInt64], limits: DifferentialValueLimits) async throws -> [SeedVerdict] {
+	private static func batchVerdicts(forSeeds seeds: [UInt64], of corpus: GraphFuzzerReleaseAcceptanceCorpus, limits: DifferentialValueLimits) async throws -> [SeedVerdict] {
 		var filesToDelete = [URL]()
 		defer {
 			for file in filesToDelete {
@@ -334,7 +379,7 @@ enum GraphFuzzerAPIVersionAgreement {
 		}
 		let runs = try await withThrowingTaskGroup(of: SeedRun.self) { group in
 			for seed in seeds {
-				group.addTask { try await seedRun(seed) }
+				group.addTask { try await seedRun(seed, of: corpus) }
 			}
 			var runs = [SeedRun]()
 			for try await run in group {
@@ -396,9 +441,24 @@ extension GraphFuzzerAPIVersionAgreement {
 		),
 	]
 
-	/// The reason `seed` is pending, if it is.
-	static func pendingReason(ofSeed seed: UInt64) -> String? {
-		pendingShapes.first { $0.seeds.contains(seed) }?.reason
+	/// The public mock corpus's pending seeds, as `pendingShapes` lists the base corpus's.
+	static let publicMockPendingShapes: [PendingShape] = []
+
+	/// The pending shapes of `corpus`.
+	static func pendingShapes(of corpus: GraphFuzzerReleaseAcceptanceCorpus) -> [PendingShape] {
+		switch corpus {
+		case .base:
+			pendingShapes
+		case .publicMock:
+			publicMockPendingShapes
+		case .seam:
+			[]
+		}
+	}
+
+	/// The reason `seed` of `corpus` is pending, if it is.
+	static func pendingReason(ofSeed seed: UInt64, in corpus: GraphFuzzerReleaseAcceptanceCorpus = .base) -> String? {
+		pendingShapes(of: corpus).first { $0.seeds.contains(seed) }?.reason
 	}
 
 	/// Seeds of the ordinary suite's gate: graphs whose `.v2` and `.v3Unstable` mocks agree, together holding at least ten
@@ -408,4 +468,24 @@ extension GraphFuzzerAPIVersionAgreement {
 	/// builder is called once and its value handed to every instance fails seeds 2, 7, 13, 45, 62 and 73, whose
 	/// `ZTwiceHost` builds the owner twice (`addingTwiceBuiltUnbuildableOwner`).
 	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 117]
+
+	/// The public mock corpus's smoke seeds: graphs whose `.v2` and `.v3Unstable` public mocks agree, together holding at
+	/// least ten compared graphs, among them seeds whose probes pass a leaf its own `name` (31) or a consumer a value its mock
+	/// cannot build (6, 9), each spelled the `.v3Unstable` way by `callingV3Mock(_:)`.
+	/// A hand mutation that has a `.v3Unstable` public mock ignore `safeDIOverrides` for its type's own optional-typed default
+	/// (`PublicMockGeneration`'s `v3RootDefaultMembers`, binding the default provider in place of the member) fails seeds 31
+	/// and 440 as values that differ and seed 329 as generated code that does not compile.
+	static let publicMockSmokeSeeds: [UInt64] = [6, 9, 31, 118, 123, 139, 158, 182, 191, 208, 329, 440]
+
+	/// The smoke seeds of `corpus`.
+	static func smokeSeeds(of corpus: GraphFuzzerReleaseAcceptanceCorpus) -> [UInt64] {
+		switch corpus {
+		case .base:
+			smokeSeeds
+		case .publicMock:
+			publicMockSmokeSeeds
+		case .seam:
+			[]
+		}
+	}
 }

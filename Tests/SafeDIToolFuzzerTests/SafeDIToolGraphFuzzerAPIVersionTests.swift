@@ -29,14 +29,20 @@ struct SafeDIToolGraphFuzzerAPIVersionTests {
 		let environment = ProcessInfo.processInfo.environment
 		let seeds = Self.seeds(from: environment["SAFEDI_API_VERSION_AGREEMENT_SEEDS"] ?? "")
 		let report = GraphFuzzerReport(path: environment["SAFEDI_API_VERSION_AGREEMENT_REPORT"])
-		report.append("api-version-agreement seeds=\(seeds.count)")
+		// `SAFEDI_API_VERSION_AGREEMENT_CORPUS` names the corpus by its release acceptance name: `base`, the default, or
+		// `public-mock`.
+		guard let corpus = GraphFuzzerReleaseAcceptanceCorpus(rawValue: environment["SAFEDI_API_VERSION_AGREEMENT_CORPUS"] ?? "base"), corpus != .seam else {
+			Issue.record("SAFEDI_API_VERSION_AGREEMENT_CORPUS names no corpus the oracle runs: use base or public-mock.")
+			return
+		}
+		report.append("api-version-agreement corpus=\(corpus.rawValue) seeds=\(seeds.count)")
 		guard compileVerificationIsEnabled else {
 			report.append("problem The agreement oracle compiles generated code. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			Issue.record("The agreement oracle compiles generated code. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			return
 		}
 		let start = Date()
-		let verdicts = try await GraphFuzzerAPIVersionAgreement.verdicts(forSeeds: seeds)
+		let verdicts = try await GraphFuzzerAPIVersionAgreement.verdicts(forSeeds: seeds, of: corpus)
 		var classCounts = [GraphFuzzerReleaseAcceptanceClass: Int]()
 		var unbuildableBuilderProbeCount = 0
 		var unbuildableBuilderGraphCount = 0
@@ -49,14 +55,14 @@ struct SafeDIToolGraphFuzzerAPIVersionTests {
 				unbuildableBuilderGraphCount += 1
 			}
 			report.append("seed \(verdict.seed) \(verdict.verdict.classDescription) roots=\(verdict.verdict.rootProbeCount) mocks=\(verdict.verdict.mockProbeCount) d12=\(verdict.unbuildableBuilderProbeCount)")
-			let pendingReason = GraphFuzzerAPIVersionAgreement.pendingReason(ofSeed: verdict.seed)
+			let pendingReason = GraphFuzzerAPIVersionAgreement.pendingReason(ofSeed: verdict.seed, in: corpus)
 			if let pendingReason, verdict.verdict.verdictClass == .currentDoesNotCompile {
 				report.append("    pending: \(pendingReason)")
 				continue
 			}
 			if let pendingReason, !verdict.verdict.verdictClass.isBreak, verdict.verdict.verdictClass != .valuesNotCompared {
 				report.append("stale \(verdict.seed) \(pendingReason)")
-				Issue.record(Comment(rawValue: "Seed \(verdict.seed) is listed as pending (\(pendingReason)) but is class \(verdict.verdict.verdictClass.rawValue): remove it from `GraphFuzzerAPIVersionAgreement.pendingShapes`."))
+				Issue.record(Comment(rawValue: "Seed \(verdict.seed) is listed as pending (\(pendingReason)) but is class \(verdict.verdict.verdictClass.rawValue): remove it from its corpus's pending shapes in `GraphFuzzerAPIVersionAgreement`."))
 				continue
 			}
 			guard verdict.verdict.verdictClass.isBreak || verdict.verdict.verdictClass == .valuesNotCompared else { continue }
@@ -82,14 +88,27 @@ struct SafeDIToolGraphFuzzerAPIVersionTests {
 		#expect(verdicts.map(\.unbuildableBuilderProbeCount).reduce(0, +) >= 10)
 	}
 
+	@Test(.disabled(if: !compileVerificationIsEnabled, "Compares compiled values"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func publicMockSmokeSeeds_agreeAcrossAPIVersions_withTenGraphsCompared() async throws {
+		let verdicts = try await GraphFuzzerAPIVersionAgreement.verdicts(forSeeds: GraphFuzzerAPIVersionAgreement.publicMockSmokeSeeds, of: .publicMock)
+		for verdict in verdicts where verdict.verdict.verdictClass != .valuesAgree {
+			Issue.record(Comment(rawValue: "Seed \(verdict.seed): .v3Unstable class \(verdict.verdict.verdictClass.rawValue) against .v2\n\(verdict.verdict.details)"))
+		}
+		#expect(verdicts.count(where: { $0.verdict.verdictClass == .valuesAgree }) >= 10)
+	}
+
 	@Test
 	func pendingShapes_listEachSeedOnceInIncreasingOrder_outsideTheSmokeSeeds() {
-		let seeds = GraphFuzzerAPIVersionAgreement.pendingShapes.flatMap(\.seeds)
-		#expect(Set(seeds).count == seeds.count)
-		for shape in GraphFuzzerAPIVersionAgreement.pendingShapes {
-			#expect(shape.seeds == shape.seeds.sorted())
+		for corpus in [GraphFuzzerReleaseAcceptanceCorpus.base, .publicMock] {
+			let shapes = GraphFuzzerAPIVersionAgreement.pendingShapes(of: corpus)
+			let seeds = shapes.flatMap(\.seeds)
+			#expect(Set(seeds).count == seeds.count)
+			for shape in shapes {
+				#expect(shape.seeds == shape.seeds.sorted())
+			}
+			#expect(Set(seeds).isDisjoint(with: GraphFuzzerAPIVersionAgreement.smokeSeeds(of: corpus)))
 		}
-		#expect(Set(seeds).isDisjoint(with: GraphFuzzerAPIVersionAgreement.smokeSeeds))
 	}
 
 	@Test
@@ -155,6 +174,52 @@ struct SafeDIToolGraphFuzzerAPIVersionTests {
 		#expect(fixture.selectingAPIVersion(.v2).swiftFileContent == [
 			"@Instantiable\npublic final class S7_T0: Instantiable {}\n\n#SafeDIConfiguration(apiVersion: .v2)\n",
 			"@Instantiable\npublic final class S7_T1: Instantiable {}\n",
+		])
+	}
+
+	@Test
+	func selectingAPIVersion_selectsVersionInEveryModule_whenGraphIsSplitAcrossModules() {
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"// module: FuzzFeature\n@Instantiable\npublic final class S7_T0: Instantiable {}\n",
+			"// module: FuzzFeature\n// file: SafeDIConfiguration.swift\n#SafeDIConfiguration(mockConditionalCompilation: nil)\n",
+			"@Instantiable\npublic final class S7_T7: Instantiable {}\n",
+			"// module: FuzzOther\n@Instantiable\npublic final class S7_T8: Instantiable {}\n",
+			"// module: FuzzOther\n@Instantiable\npublic final class S7_T9: Instantiable {}\n",
+		])
+		#expect(fixture.selectingAPIVersion(.v3Unstable).swiftFileContent == [
+			"// module: FuzzFeature\n@Instantiable\npublic final class S7_T0: Instantiable {}\n",
+			"// module: FuzzFeature\n// file: SafeDIConfiguration.swift\n#SafeDIConfiguration(mockConditionalCompilation: nil, apiVersion: .v3Unstable)\n",
+			"@Instantiable\npublic final class S7_T7: Instantiable {}\n\n#SafeDIConfiguration(apiVersion: .v3Unstable)\n",
+			"// module: FuzzOther\n@Instantiable\npublic final class S7_T8: Instantiable {}\n\n#SafeDIConfiguration(apiVersion: .v3Unstable)\n",
+			"// module: FuzzOther\n@Instantiable\npublic final class S7_T9: Instantiable {}\n",
+		])
+	}
+
+	@Test
+	func callingV3Mock_passesOwnDefaultInOverridesAndUnbuildableValueAsBuilder_whenProbePassesArgument() {
+		let probes = [
+			DifferentialValueProbe("S7_T0.mock(name: \"probe\")"),
+			DifferentialValueProbe("S7_UnbuildableScreen.mock(unbuildableFilter: S7_UnbuildableFilter())"),
+			DifferentialValueProbe("S7_T1.mock()"),
+			DifferentialValueProbe("S7_Root0()"),
+		].map(GraphFuzzerAPIVersionAgreement.callingV3Mock(_:))
+		#expect(probes.map(\.name) == [
+			"S7_T0.mock(name: \"probe\")",
+			"S7_UnbuildableScreen.mock(unbuildableFilter: S7_UnbuildableFilter())",
+			"S7_T1.mock()",
+			"S7_Root0()",
+		])
+		#expect(probes.map(\.expression) == [
+			"S7_T0.mock(safeDIOverrides: .init(name: \"probe\"))",
+			"S7_UnbuildableScreen.mock(unbuildableFilter: { S7_UnbuildableFilter() })",
+			"S7_T1.mock()",
+			"S7_Root0()",
+		])
+		#expect(probes.map(\.knownRightExpression) == [
+			"S7_T0.mock(name: \"probe\")",
+			"S7_UnbuildableScreen.mock(unbuildableFilter: S7_UnbuildableFilter())",
+			nil,
+			nil,
 		])
 	}
 
