@@ -66,10 +66,14 @@ public enum MockLowering {
 		/// The declarations whose modules code that builds the node's type for its property needs imported, where it does
 		/// not name them (`FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)`).
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
+		/// Whether the configuration is `.v3Unstable`'s: named `SafeDIOverrides`, every child's field optional.
+		var isV3 = false
+		/// In `.v3Unstable`, what the module names each type's configuration.
+		var v3ConfigurationNames = V3ConfigurationNames()
 
 		/// The configuration's fields for the node's children, in the order its initializer takes them.
 		var childFields: [ChildField] {
-			childFieldSources.map(\.childField)
+			childFieldSources.map { isV3 ? $0.v3ChildField(names: v3ConfigurationNames) : $0.childField }
 		}
 
 		/// The type of the closure that overrides how the node is built, returning its concrete type.
@@ -84,6 +88,8 @@ public enum MockLowering {
 			/// `requiresSendable`.
 			case built(bindingName: String, hasConfiguration: Bool, requiresSendable: Bool, concreteType: TypeDescription, builderParameters: MockLowering.BuilderParameters, propertyType: TypeDescription)
 			case spelled(ChildField)
+			/// A node that closes a cycle, spelled as the node of `concreteType` it repeats is.
+			case closingCycle(ChildField, concreteType: TypeDescription)
 
 			var childField: ChildField {
 				switch self {
@@ -96,7 +102,23 @@ public enum MockLowering {
 						let builderClosureType = "(\(builderParameters.spelled)) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
 						return ChildField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendableForm: .init(typeSource: "(@Sendable \(builderClosureType))?", defaultValue: "nil", configuredTypeName: nil))
 					}
-				case let .spelled(childField):
+				case let .spelled(childField), let .closingCycle(childField, _):
+					return childField
+				}
+			}
+
+			/// The child's field in `.v3Unstable`'s configuration: a configured child's configuration is optional and `nil` by
+			/// default, so that a child left unset reads its type's defaults.
+			func v3ChildField(names: V3ConfigurationNames) -> ChildField {
+				switch self {
+				case let .built(bindingName, hasConfiguration, _, concreteType, _, _) where hasConfiguration:
+					let typeSource = "\(names.typeName(of: concreteType))?"
+					return ChildField(name: bindingName, typeSource: typeSource, defaultValue: "nil", sendableForm: .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: concreteType.asSource))
+				case let .closingCycle(field, concreteType) where field.defaultValue == ".init()":
+					// A node that closes a cycle is configured like the node it repeats.
+					let typeSource = "\(names.typeName(of: concreteType))?"
+					return ChildField(name: field.name, typeSource: typeSource, defaultValue: "nil", sendableForm: field.sendableForm.map { .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: $0.configuredTypeName) })
+				case .built, .spelled, .closingCycle:
 					return childField
 				}
 			}

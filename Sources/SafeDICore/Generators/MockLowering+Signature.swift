@@ -69,7 +69,13 @@ extension MockLowering {
 		let typesDeclaredEscaping: Set<TypeDescription>
 		// The wrappers an internal mock binds around the instances it is passed of the
 		// `LazilyInstantiated` values its tree receives and cannot build, each name and value, in property order.
-		let lazilyInstantiatedBindings: [(name: String, value: String)]
+		var lazilyInstantiatedBindings: [(name: String, value: String)]
+		/// Of `lazilyInstantiatedBindings`, each wrapper around the value of a dependency the mocked type instantiates and the
+		/// mock cannot build: the index of its binding, the dependency, and the wrapper's type.
+		var wrappersOfMockedTypeUncoveredValues = [(index: Int, property: Property, wrapperTypeSource: String)]()
+		/// In `.v3Unstable`, the dependencies the mocked type instantiates whose value `mock()` reads through the wrapper of
+		/// `wrappersOfMockedTypeUncoveredValues` it builds around the builder, by property, with the wrapper's name.
+		var v3UncoveredValuesReadThroughWrappers = [Property: String]()
 		/// The name each receive of such a wrapper, by label and type, is passed by, never bound again under its label.
 		let lazilyInstantiatedBindingNamesByLabelAndType: [String: [TypeDescription: String]]
 		// The labels the builder functions of the root's tree declare, which a root alias named apart
@@ -212,8 +218,8 @@ extension MockLowering {
 			}
 		}
 
-		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = []) -> [String] {
-			var lines = (forwardedParameters + rootDefaultParameters).map { line(of: $0, indent: indent) }
+		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = [], includingRootDefaults: Bool = true, beforeUncovered: [String] = []) -> [String] {
+			var lines = (forwardedParameters + (includingRootDefaults ? rootDefaultParameters : [])).map { line(of: $0, indent: indent) }
 			var buildersToList = builders[...]
 			for parameter in flatReceivedParameters {
 				while let builder = buildersToList.first, builder.label < parameter.property.label {
@@ -223,8 +229,55 @@ extension MockLowering {
 				lines.append(line(of: parameter, indent: indent))
 			}
 			lines.append(contentsOf: buildersToList.map { "\(indent)\($0.declaration)" })
+			lines.append(contentsOf: beforeUncovered)
 			lines.append(contentsOf: uncoveredParameters.map { line(of: $0, indent: indent) })
 			return lines
+		}
+
+		/// The signature in `.v3Unstable`'s mock API: `mock()` takes a builder for each `@Instantiated` dependency it cannot
+		/// build, which each type that instantiates the dependency calls for an instance of its own, as the app creates one
+		/// for each, `@Sendable` where a `@Sendable` builder function calls it.
+		var v3: RootSignature {
+			let builderParameters = uncoveredRootParameters.map { parameter in
+				ScopeGenerator.MockRootParameters.UncoveredParameter(
+					property: parameter.property,
+					label: parameter.label,
+					typeSource: "@escaping \(parameter.isSendableAutoclosure ? "@Sendable " : "")() -> \(parameter.typeSource)",
+					instantiatedType: parameter.instantiatedType,
+					isSendableAutoclosure: true,
+					creatingTypes: parameter.creatingTypes,
+				)
+			}
+			var signature = RootSignature(
+				forwardedParameters: forwardedParameters,
+				rootDefaultParameters: rootDefaultParameters,
+				flatReceivedParameters: flatReceivedParameters,
+				uncoveredParameters: builderParameters.map {
+					Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.typeSource, name: $0.label)
+				},
+				uncoveredRootParameters: builderParameters,
+				sharedValueDocumentation: [],
+				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+				renamesByLabelAndType: renamesByLabelAndType,
+				uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lazilyInstantiatedBindings: lazilyInstantiatedBindings,
+				lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+				namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
+			)
+			signature.passedUpBuilders = passedUpBuilders
+			signature.seamMockBuilders = seamMockBuilders
+			// The wrapper around the value of a dependency the mocked type instantiates calls its builder when first read, and
+			// the value is read through it, as the mock of a type that can build the dependency creates the instance its
+			// wrapper holds when the mocked type is built.
+			signature.wrappersOfMockedTypeUncoveredValues = wrappersOfMockedTypeUncoveredValues
+			for wrapper in wrappersOfMockedTypeUncoveredValues {
+				guard let parameter = builderParameters.first(where: { $0.property == wrapper.property }) else { continue }
+				let name = lazilyInstantiatedBindings[wrapper.index].name
+				signature.lazilyInstantiatedBindings[wrapper.index].value = "\(wrapper.wrapperTypeSource) { \(MockLowering.sendableAutoclosureLocalName(of: parameter.label))() }"
+				signature.v3UncoveredValuesReadThroughWrappers[wrapper.property] = name
+			}
+			return signature
 		}
 
 		private func line(of parameter: Parameter, indent: String) -> String {
@@ -241,7 +294,13 @@ extension MockLowering {
 extension ScopeGenerator {
 	/// The parameters of this mock root's `mock()` other than its overrides.
 	func lowerRootSignature(of instantiable: Instantiable, context: MockContext) -> MockLowering.RootSignature {
-		lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults)
+		let signature = lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults)
+		switch context.apiVersion {
+		case .v2:
+			return signature
+		case .v3Unstable:
+			return signature.v3
+		}
 	}
 
 	/// The same, read with the defaults of the module's flat parameters, which is all of the module's mock context the
@@ -372,6 +431,7 @@ extension ScopeGenerator {
 		// receive the wrapper, the mocked type included, are passed by name (`mockRootTopLevelNames`).
 		let topLevelNames = Self.mockRootTopLevelNames(of: parameters, parameterNames: parameterNames)
 		var lazilyInstantiatedBindings = [(name: String, value: String)]()
+		var wrappersOfMockedTypeUncoveredValues = [(index: Int, property: Property, wrapperTypeSource: String)]()
 		for (property, bindingName) in zip(topLevelNames.lazilyInstantiatedPropertiesToBind, topLevelNames.lazilyInstantiatedBindingNames) where !wrappersTakenAsParameters.contains(property) {
 			let instanceProperty = property.asValidatedForDependencyCycles
 			let wrapperTypeSource = property.typeDescription.asSource
@@ -382,6 +442,11 @@ extension ScopeGenerator {
 			          let parameter = flatUncoveredParameters.first(where: { $0.property == instanceProperty })
 			{
 				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
+				// A `SendableLazilyInstantiated` keeps the value v3 reads eagerly: its `@Sendable` closure cannot capture the
+				// builder, which is not `@Sendable`. A deliberate gap against the twin, which creates the value on first read.
+				if !property.propertyType.isSendable {
+					wrappersOfMockedTypeUncoveredValues.append((lazilyInstantiatedBindings.count, instanceProperty, wrapperTypeSource))
+				}
 				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(parameter.label) }"))
 			} else if let index = flatReceivedProperties.firstIndex(of: Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))) {
 				lazilyInstantiatedBindings.append((bindingName, "\(flatReceivedNames[index]).map { instance in \(wrapperTypeSource) { instance } }"))
@@ -428,6 +493,7 @@ extension ScopeGenerator {
 		)
 		signature.passedUpBuilders = passedUpBuilders
 		signature.seamMockBuilders = parameters.seamMockBuilders
+		signature.wrappersOfMockedTypeUncoveredValues = wrappersOfMockedTypeUncoveredValues
 		// The overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		return signature

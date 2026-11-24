@@ -130,6 +130,7 @@ struct MacroTargetSourceTests {
 		"Models/PlainTypeDeclaration.swift",
 		"Models/Property.swift",
 		"Models/ReservedName.swift",
+		"Models/SafeDIAPIVersion.swift",
 		"Models/SafeDIConfiguration.swift",
 		"Models/SeamAccess.swift",
 		"Models/TypeDescription.swift",

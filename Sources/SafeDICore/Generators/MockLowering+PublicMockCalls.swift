@@ -242,11 +242,12 @@ extension MockLowering.Walk {
 		// The member that configures the call is a `@Sendable` closure where the call is built inside a `@Sendable` function,
 		// or where the configuration holding it is `@Sendable`-typed (`publicMockOverridesMember(sendable:)`).
 		let overridesAreSendable = isInsideSendableFunction || generator.buildsInSendableFunction || parentConcreteType.map(sendableConfigurationTypeNames.contains) ?? false
-		let node = MockLowering.PublicMockCallNode(
+		var node = MockLowering.PublicMockCallNode(
 			property: property,
 			calledType: instantiable.concreteInstantiable,
 			call: publicMockCall,
 			overridesAreSendable: overridesAreSendable,
+			isV3: isV3,
 			overrideClosureType: overrideBuilders.map { _ in
 				let parameterTypes = initializer.arguments.map { argument in
 					(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
@@ -387,7 +388,7 @@ extension MockLowering.Walk {
 			overrideRead = nodePath
 		}
 		if readsOverride, publicMockCall.takesOverrides {
-			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : overrideRead)")
+			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : isV3 ? "\(overrideRead) ?? .init()" : overrideRead)")
 		}
 		let unerasedCall = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
 		let defaultCall = erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)(\(unerasedCall))" : unerasedCall
@@ -411,6 +412,11 @@ extension MockLowering.Walk {
 		// A call a public mock promotes at its root's level reads its caller's value first, which only a call with no builder
 		// bound again is lowered for.
 		let isPromoted = parentConcreteType == nil && promotedProperties.contains(property)
+		// In `.v3Unstable`, an internal mock that promotes a received value another module's public mock builds takes it as
+		// an optional instance, which its root declares (`v3MockWithTree`).
+		if isPromoted, isV3, !buildsPublicMock {
+			node.v3PromotedParameterName = property.label
+		}
 		func instantiatorBindingLines() -> [String] {
 			isPromoted
 				? [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: property.label, passing: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)]
@@ -543,9 +549,13 @@ extension MockLowering {
 		/// Whether the member that configures the call is a `@Sendable` closure: the call is built inside a `@Sendable`
 		/// function, or the configuration that holds the member is `@Sendable`-typed.
 		let overridesAreSendable: Bool
+		/// Whether the calling mock is `.v3Unstable`'s, whose member is optional, `nil` reading the called mock's defaults.
+		let isV3: Bool
 		/// For a call of a mock that takes no overrides, the type of the closure that builds the called type, where the call
 		/// offers one (`ScopeGenerator.MockParameterNode.offersOverrideClosure`).
 		let overrideClosureType: String?
+		/// In `.v3Unstable`, the parameter of the calling internal mock that passes the node's value, where the mock promotes it.
+		var v3PromotedParameterName: String?
 
 		/// The member of the calling mock's overrides that configures the call: the called mock's own `SafeDIOverrides`, or,
 		/// for a mock that takes none, the closure that builds the called type, where the call offers one.
@@ -560,8 +570,8 @@ extension MockLowering {
 					)
 					: OverridesField(
 						name: property.label,
-						typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
-						defaultValue: ".init()",
+						typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)\(isV3 ? "?" : "")",
+						defaultValue: isV3 ? "nil" : ".init()",
 						sendability: .never,
 					)
 			} else if let overrideClosureType {

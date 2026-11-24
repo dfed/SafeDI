@@ -29,6 +29,9 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	/// the one generated code calls, a plain one for code a person writes. It decides only the code the module generates
 	/// for its own types, so a module that reads another module's `.safedi` file never reads it.
 	public let generatePlainDependencyTreeInitializers: Bool
+	/// The form of generated mock API the module selects. Every module of an app selects the same one, so a module's
+	/// `.safedi` file holds it for the modules that depend on it to compare.
+	public let apiVersion: SafeDIAPIVersion
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
 	public var sourceFilePath: String?
@@ -42,6 +45,7 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 		additionalMocksToGenerate: [String] = [],
 		mockConditionalCompilation: String? = "DEBUG",
 		generatePlainDependencyTreeInitializers: Bool = false,
+		apiVersion: SafeDIAPIVersion = .v2,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		self.additionalImportedModules = additionalImportedModules
@@ -49,18 +53,21 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.mockConditionalCompilation = mockConditionalCompilation
 		self.generatePlainDependencyTreeInitializers = generatePlainDependencyTreeInitializers
+		self.apiVersion = apiVersion
 		self.declarationLocation = declarationLocation
 	}
 
 	/// This configuration as a module's `.safedi` file holds it, with `generatePlainDependencyTreeInitializers` at its
 	/// default: no reader of the file reads it, so turning it on or off leaves the file's bytes, and the builds of the
-	/// modules that read the file, as they were.
+	/// modules that read the file, as they were. It keeps `apiVersion`, which the modules that read the file compare
+	/// with their own.
 	public var asHeldByModuleInfoFile: SafeDIConfiguration {
 		var configuration = SafeDIConfiguration(
 			additionalImportedModules: additionalImportedModules,
 			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
 			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockConditionalCompilation: mockConditionalCompilation,
+			apiVersion: apiVersion,
 			declarationLocation: declarationLocation,
 		)
 		configuration.sourceFilePath = sourceFilePath

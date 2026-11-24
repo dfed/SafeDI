@@ -41,7 +41,7 @@ extension MockLowering {
 		let rootedTypeNames = Set(roots.map(\.mockedType.asSource))
 		var seenTypeNames = Set<String>()
 		var rootedStructs = [String: String]()
-		var sharedExtensions = [(typeName: String, structCode: String)]()
+		var sharedExtensions = [(typeName: String, structCode: String, isFileScope: Bool)]()
 		let rootsInOrder = zip(roots, loweredRoots).sorted { $0.0.mockedType < $1.0.mockedType }
 		let recordsInRootOrder = rootsInOrder.map(\.1.records)
 		let recordsReadingConfiguration = Self.recordsReadingConfiguration(of: loweredRoots.map(\.records))
@@ -65,7 +65,7 @@ extension MockLowering {
 				if rootedTypeNames.contains(typeName) {
 					rootedStructs[typeName] = structCode
 				} else {
-					sharedExtensions.append((typeName: typeName, structCode: structCode))
+					sharedExtensions.append((typeName: typeName, structCode: structCode, isFileScope: structRecord.isFileScopeInV3))
 					recordFulfillers(of: structRecord, inMockOf: root)
 				}
 			}
@@ -78,7 +78,7 @@ extension MockLowering {
 				if rootedTypeNames.contains(typeName) {
 					rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
 				} else {
-					sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
+					sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames), isFileScope: record.isFileScopeInV3))
 					// `generateMockCode` records the fulfillers of the node that reads the configuration,
 					// where its construction differs.
 					let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
@@ -92,7 +92,7 @@ extension MockLowering {
 			let code = loweredRoot.code
 			guard let structCode = rootedStructs[root.mockedType.asSource] else { return code }
 			let configurationCode = Self.configurationCode(
-				extensions: [(typeName: root.mockedType.asSource, structCode: structCode)],
+				extensions: [(typeName: root.mockedType.asSource, structCode: structCode, isFileScope: false)],
 				publicDeclarations: [],
 				mockConditionalCompilation: mockConditionalCompilation,
 			)
@@ -226,14 +226,14 @@ extension MockLowering {
 		return typesInOrder.compactMap { chosenCandidates[$0].map { (rootIndex: $0.rootIndex, record: $0.record) } }
 	}
 
-	/// The code that declares each of `extensions`' structs in an extension of its type, then `publicDeclarations`, under the
-	/// mock condition.
+	/// The code that declares each of `extensions`' structs in an extension of its type, or at file scope where it is one
+	/// (`isFileScopeInV3`), then `publicDeclarations`, under the mock condition.
 	private static func configurationCode(
-		extensions: [(typeName: String, structCode: String)],
+		extensions: [(typeName: String, structCode: String, isFileScope: Bool)],
 		publicDeclarations: [String],
 		mockConditionalCompilation: String?,
 	) -> String {
-		let body = (extensions.map { "extension \($0.typeName) {\n\($0.structCode)\n}" } + publicDeclarations).joined(separator: "\n\n")
+		let body = (extensions.map { $0.isFileScope ? $0.structCode : "extension \($0.typeName) {\n\($0.structCode)\n}" } + publicDeclarations).joined(separator: "\n\n")
 		return if let mockConditionalCompilation {
 			"#if \(mockConditionalCompilation)\n\(body)\n#endif\n"
 		} else {
@@ -391,13 +391,32 @@ extension MockLowering.ConfigurationRecord {
 	// A configuration `@Sendable`-typed, `typeNames` naming the types whose configurations are.
 	func configurationStruct(amongConfigurationsTypedSendable typeNames: Set<String>) -> String {
 		let requiresSendable = typeNames.contains(concreteType.asSource)
-		let indent = ScopeGenerator.standardIndent
+		// In `.v3Unstable`, the configuration of a type another module declares is at file scope (`V3ConfigurationNames`).
+		let fileScopeName = isV3 ? v3ConfigurationNames.fileScopeName(of: concreteType) : nil
+		let indent = fileScopeName == nil ? ScopeGenerator.standardIndent : ""
 		let innerIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 		let parameterIndent = "\(innerIndent)\(ScopeGenerator.standardIndent)"
-		var lines = [
-			"\(indent)/// Configuration for how this type is constructed within a mock tree.",
-			"\(indent)struct \(ScopeGenerator.MockParameterNode.configurationStructName) {",
-		]
+		var lines = if let fileScopeName {
+			[
+				"/// Configures `\(concreteType.asSource.spelledWithoutBackticks)` wherever a mock in this module builds it: inside another mock’s tree, or on a later pass of",
+				"/// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its",
+				"/// path, or that type’s defaults where there is none.",
+				"\(requiresSendable ? "nonisolated " : "")struct \(fileScopeName) {",
+			]
+		} else if isV3 {
+			[
+				"\(indent)/// Configures `\(concreteType.asSource.spelledWithoutBackticks)` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of",
+				"\(indent)/// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its",
+				"\(indent)/// path, or that type’s defaults where there is none.",
+				// Beneath a wrapper, the configuration is read off the main actor, by a `@Sendable nonisolated` builder function.
+				"\(indent)\(requiresSendable ? "nonisolated " : "")struct \(ReservedName.mockOverridesTypeName) {",
+			]
+		} else {
+			[
+				"\(indent)/// Configuration for how this type is constructed within a mock tree.",
+				"\(indent)struct \(ScopeGenerator.MockParameterNode.configurationStructName) {",
+			]
+		}
 		var parameters = [String]()
 		var fields = [ConfigurationStorage.Field]()
 		for childField in childFields {
@@ -417,7 +436,13 @@ extension MockLowering.ConfigurationRecord {
 				isProvenSendable: isProvenSendable,
 			))
 		}
-		for defaultField in defaultFields {
+		// At file scope, a default the type's declaration spells is read through a provider the type declares, where the
+		// names the declaration's default reads, members of the type among them, are in scope.
+		let providers = fileScopeName == nil ? [] : fileScopeDefaultProviders(requiresSendable: requiresSendable)
+		for var defaultField in defaultFields {
+			if let provider = providers.first(where: { $0.label == defaultField.label }) {
+				defaultField.defaultExpression = "\(concreteType.asSource).\(provider.name)()"
+			}
 			let (parameter, field) = requiresSendable
 				? defaultField.sendableConfigurationParameter(indent: parameterIndent)
 				: defaultField.configurationParameter(indent: parameterIndent)
@@ -445,7 +470,36 @@ extension MockLowering.ConfigurationRecord {
 		lines.append("")
 		lines.append(contentsOf: storage.declarations(indent: innerIndent))
 		lines.append("\(indent)}")
+		if !providers.isEmpty {
+			lines.append("")
+			lines.append("extension \(concreteType.asSource) {")
+			for provider in providers {
+				lines.append("\(ScopeGenerator.standardIndent)nonisolated static func \(provider.name)() -> \(provider.typeSource) { \(provider.expression) }")
+			}
+			lines.append("}")
+		}
 		return lines.joined(separator: "\n")
+	}
+
+	/// The providers a file-scope configuration's defaults read (`isFileScopeInV3`): one per default other than a magic
+	/// literal, which is evaluated where the configuration is made, and `nil`, each declared in an extension
+	/// of the type, and `nonisolated`, as the initializer of a configuration nested in the type is. A closure-typed default
+	/// is returned `@Sendable` where the configuration is `@Sendable`-typed (`requiresSendable`).
+	func fileScopeDefaultProviders(requiresSendable: Bool) -> [(label: String, name: String, typeSource: String, expression: String)] {
+		defaultFields.compactMap { defaultField in
+			guard !defaultField.defaultExpression.hasPrefix("#"), defaultField.defaultExpression != "nil" else { return nil }
+			return (
+				label: defaultField.label,
+				name: "\(ReservedName.builderFunctionNamePrefix)configurationDefault_\(defaultField.label)".spelledAsJoinedIdentifier,
+				typeSource: requiresSendable && defaultField.isClosureType && !defaultField.isAutoclosure && !defaultField.valueTypeDescription.isSendableFunction ? "@Sendable \(defaultField.valueTypeSource)" : defaultField.valueTypeSource,
+				expression: defaultField.defaultExpression,
+			)
+		}
+	}
+
+	/// Whether the configuration is `.v3Unstable`'s of a type another module declares, declared at file scope.
+	var isFileScopeInV3: Bool {
+		isV3 && v3ConfigurationNames.fileScopeName(of: concreteType) != nil
 	}
 
 	/// The documentation of the builder a configuration holds.

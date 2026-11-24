@@ -206,7 +206,26 @@ extension DependencyTreeGenerator {
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 
 		let foreignPublicMocks = seams.foreignPublicMocks
-		let mockContext = ScopeGenerator.MockContext(
+		// In `.v3Unstable`, a type with a public mock of its own is configured by that mock's `SafeDIOverrides`, and every
+		// type a public mock configures has one configuration in the module, its public one.
+		var v3PublicNameByType = [TypeDescription: String]()
+		let publicMockContext = publicMockContext.map { context in
+			var context = context
+			switch apiVersion {
+			case .v2:
+				break
+			case .v3Unstable:
+				context.v3PublicMockTypes = Set(mockRoots.lazy.filter { $0.instantiable.generateMock == .public }.map(\.instantiable.concreteInstantiable))
+				for type in Self.typesBuiltInPublicMockTrees(of: mockRoots) {
+					v3PublicNameByType[type] = context.configurationTypeSpelling(of: type)
+				}
+				for type in context.v3PublicMockTypes {
+					v3PublicNameByType[type] = context.configurationTypeSpelling(of: type)
+				}
+			}
+			return context
+		}
+		var configuredMockContext = ScopeGenerator.MockContext(
 			mockConditionalCompilation: mockConditionalCompilation,
 			flatParameterMockDefaults: flatParameterMockDefaults,
 			cycleEdges: cycleEdges,
@@ -214,7 +233,24 @@ extension DependencyTreeGenerator {
 			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			publicMockContext: publicMockContext,
 			foreignPublicMocks: foreignPublicMocks,
+			apiVersion: apiVersion,
 		)
+		switch apiVersion {
+		case .v2:
+			break
+		case .v3Unstable:
+			let moduleName = emittingModule?.identity.moduleName
+			configuredMockContext.v3ConfigurationNames = MockLowering.V3ConfigurationNames(
+				foreignTypes: typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+					guard let moduleName, let declaringModuleName = instantiable.moduleName, declaringModuleName != moduleName else { return nil }
+					return instantiable.concreteInstantiable
+				},
+				moduleName: moduleName,
+				publicNameByType: v3PublicNameByType,
+				publicMockTypes: publicMockContext?.v3PublicMockTypes ?? [],
+			)
+		}
+		let mockContext = configuredMockContext
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
@@ -332,6 +368,21 @@ extension DependencyTreeGenerator {
 	/// the comment the `public` declarations this module generates carry, naming the types they name that it reads no
 	/// declaration of, or `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Made once by each
 	/// call that needs it.
+	/// The concrete types built in the trees of `mockRoots`' public mocks, other than through a call of another module's
+	/// public mock. Walked with a stack, since a tree can be as deep as the module has types.
+	static func typesBuiltInPublicMockTrees(of mockRoots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]) -> Set<TypeDescription> {
+		var types = Set<TypeDescription>()
+		var generatorsToVisit = mockRoots.filter { $0.instantiable.generateMock == .public }.flatMap(\.scopeGenerator.orderedChildGenerators)
+		while let generator = generatorsToVisit.popLast() {
+			guard generator.publicMockCall == nil else { continue }
+			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
+				types.insert(instantiable.concreteInstantiable)
+			}
+			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
+		}
+		return types
+	}
+
 	func makePublicMockContext(proof: TypeAccessProof) -> PublicMockContext {
 		var moduleNameByType = [TypeDescription: String]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
@@ -340,7 +391,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let moduleName = emittingModule?.identity.moduleName
-		return PublicMockContext(
+		var context = PublicMockContext(
 			proof: proof,
 			unreadTypeComment: seams.carriesUnreadTypeComment ? UnreadTypeComment(proof: proof, mentioningModule: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: true)) : nil,
 			moduleNameByType: moduleNameByType,
@@ -357,6 +408,8 @@ extension DependencyTreeGenerator {
 				}
 			},
 		)
+		context.apiVersion = apiVersion
+		return context
 	}
 
 	/// What every mock root is built from: the scope of each type a mock can build, and what completes a mock

@@ -191,7 +191,8 @@ extension DependencyTreeGenerator {
 							name: parameter.name,
 							type: parameter.type,
 							dependency: Dependency(
-								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
+								// A builder is received under its label, which `.v3Unstable` names its parameter apart from.
+								property: isRequired && parameter.builder == nil && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
 								source: .received(onlyIfAvailable: !isRequired),
 								declarationLocation: ownPlan.instantiable.declarationLocation,
 							),
@@ -289,6 +290,8 @@ extension DependencyTreeGenerator {
 					foreignDeclarationsSeenByModule: seams.foreignDeclarationsSeenByModule,
 				),
 				plainTypeDeclarations: visible.plainTypeDeclarations,
+				// The whole app generates one form of the mock API.
+				apiVersion: apiVersion,
 			)
 			// The generator computes for this run, or for the run this generator computes for in turn.
 			let run = GenerationLayerObservation.runOfOtherModulesGenerator ?? GenerationLayerObservation.Run(moduleName: seams.currentModule.moduleName)
@@ -330,6 +333,7 @@ extension DependencyTreeGenerator {
 			emittingModule: emittingModule,
 			seams: seams,
 			plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
+			apiVersion: apiVersion,
 		)
 		// A computation over the callers' view that fails reports its own error, as the callers' generation would.
 		let callersPlan = try await callersGenerator.publicMockPlans(ofOwnTypes: [type]).plan(of: type)
