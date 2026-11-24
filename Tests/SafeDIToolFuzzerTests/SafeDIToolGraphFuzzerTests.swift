@@ -3804,6 +3804,60 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1155() async throws {
+		// A `customMock` whose argument takes a dependency the generated mock passes it by label. Stage D1's lowering once
+		// matched the argument by label and type, left the argument out.
+		try await Self.expectRollPasses(forSeed: 1_155)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1341() async throws {
+		// `T3`'s `customMock(t1Builder:t3:)` takes `t3`, the `S1341_T3` the type receives under its own label, which the
+		// generated mock passes `t3: t3`. Stage D1's lowering once left that argument out.
+		try await Self.expectRollPasses(forSeed: 1_341)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersPublicMockPassingNodeToOptionalFormItsTypeReceivesOnlyIfAvailable_forSeed137() async throws {
+		// `T1`, whose public mock binds `badge: S137_Badge`, receives `badge: S137_Badge?` only if available, which the root
+		// is passed `badge: badge`. Stage D1's lowering once passed a public mock's root no node's optional form.
+		try await Self.expectRollPasses(forSeed: 137, features: [.generateMockPublic])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersMockPassingNodeToOptionalFormItsTypeRequires_forSeed1095() async throws {
+		// `T3` requires `t2BuilderAlias: Instantiator<S1095_T2>?`, which its mock's root binds non-optional and passes
+		// `t2BuilderAlias: t2BuilderAlias`. Stage D1's lowering once passed a root a binding's optional form only where the
+		// root received it only if available.
+		try await Self.expectRollPasses(forSeed: 1_095)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersMockBuildingByValueTypeThatForwardsValues_forSeed907() async throws {
+		// The remedy oracle's graph forwards `lazyAnyT4` on `T1`, which `T0` builds by value as `AnyT1`, a graph production
+		// rejects; its mocks pass the value by name from the scope. Stage D1's lowering once left such a node unsupported.
+		try await Self.expectRollPasses(forSeed: 907)
+	}
+
+	/// Expects `seed`'s graph, drawn with `features`, to pass every oracle but its corpus's known issues of the seed, as
+	/// the long run judges it: a roll of a shape stage D1's lowering of mocks once generated otherwise than the mock
+	/// emitter it replaced.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func expectRollPasses(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature> = []) async throws {
+		let knownIssue = corpus(for: features).knownIssues.first { $0.seeds.contains(seed) }
+		for result in try await GraphFuzzerOracle.results(forSeeds: [seed], features: features) {
+			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssue, retentionIsJudged: result.isJudgedForRetention) {
+				record(finding, fixture: result.fixture)
+			}
+		}
+	}
+
+	@Test
 	func fixture_drawsMockOnlyExtensionBeforeMockedStructServiceThatTypesReceive_forSeed0() {
 		// Every root instantiates `Service`, a `struct` with `generateMock: true` in a mixed graph, and `T0` and `T2`
 		// receive it. Its `mockOnly` extension, under `#if DEBUG` before its production declaration, names `preview()`
@@ -7332,10 +7386,10 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
-	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 641, judgedWithNamed: 422, named: 1_129, conversions: 0, fills: 528)
+	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 608, judgedWithNamed: 399, named: 1_075, conversions: 0, fills: 504)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 716, judgedDrawingRetentionShape: 136, judgedThroughHandWrittenBuilder: 96, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 676, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 91, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
 	static let seamCorpusFixtureHash: UInt64 = 0x47F14B403A57189F
@@ -8840,62 +8894,75 @@ struct SafeDIToolGraphFuzzerTests {
 	/// whether or not the graph fails: at least ten each (`acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachGatingDraw`). Pins:
 	/// derived on CI.
 	static let publicMockCorpusAcceptedDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
-		.placeInsidePublicMockFill: 331,
-		.placeInsidePublicMockFillFilledByConsumer: 242,
-		.placeInsidePublicMockFillHoldsLoopOfBuilders: 114,
-		.placeInsidePublicMockFillOnForwardingRoute: 137,
-		.placeInsidePublicMockFillPassedUp: 89,
-		.placeInsidePublicMockFillReadsForwardedValue: 65,
-		.placeInsidePublicMockFillReadsOuterValue: 72,
-		.retentionPublicMockValueBeforeBuilder: 136,
-		.retentionPublicMockValueBeforeBuilderFillReadsValue: 40,
-		.retentionPublicMockValueBeforeBuilderLeafThroughInstantiator: 69,
-		.selfBuildingPublicMock: 360,
-		.selfBuildingPublicMockFillReadsToken: 80,
-		.selfBuildingPublicMockPassedUp: 82,
-		.selfBuildingPublicMockPlaceBeneath: 120,
-		.selfBuildingPublicMockReceivesBuilder: 186,
-		.selfBuildingPublicMockThroughSendableInstantiator: 32,
-		.selfBuildingPublicMockThroughStep: 96,
-		.sharedConstructionPublicMock: 254,
-		.sharedConstructionPublicMockBeneathCycleEdge: 59,
+		.placeInsidePublicMockFill: 316,
+		.placeInsidePublicMockFillFilledByConsumer: 228,
+		.placeInsidePublicMockFillHoldsLoopOfBuilders: 109,
+		.placeInsidePublicMockFillOnForwardingRoute: 128,
+		.placeInsidePublicMockFillPassedUp: 88,
+		.placeInsidePublicMockFillReadsForwardedValue: 63,
+		.placeInsidePublicMockFillReadsOuterValue: 70,
+		.retentionPublicMockValueBeforeBuilder: 131,
+		.retentionPublicMockValueBeforeBuilderFillReadsValue: 39,
+		.retentionPublicMockValueBeforeBuilderLeafThroughInstantiator: 65,
+		.selfBuildingPublicMock: 344,
+		.selfBuildingPublicMockFillReadsToken: 77,
+		.selfBuildingPublicMockPassedUp: 78,
+		.selfBuildingPublicMockPlaceBeneath: 115,
+		.selfBuildingPublicMockReceivesBuilder: 177,
+		.selfBuildingPublicMockThroughSendableInstantiator: 29,
+		.selfBuildingPublicMockThroughStep: 91,
+		.sharedConstructionPublicMock: 244,
+		.sharedConstructionPublicMockBeneathCycleEdge: 56,
 		.sharedConstructionPublicMockBesideDeclaringModulesOwn: 55,
-		.sharedConstructionPublicMockErased: 107,
-		.sharedConstructionPublicMockExtensionBased: 103,
-		.sharedConstructionPublicMockInDeclaringModule: 70,
-		.keywordLabeledPublicMock: 246,
-		.keywordLabeledPublicMockBesideInternalConfiguration: 110,
+		.sharedConstructionPublicMockErased: 104,
+		.sharedConstructionPublicMockExtensionBased: 99,
+		.sharedConstructionPublicMockInDeclaringModule: 68,
+		.keywordLabeledPublicMock: 238,
+		.keywordLabeledPublicMockBesideInternalConfiguration: 107,
 		.sharedConstructionPublicMockOneHolder: 47,
-		.sharedConstructionPublicMockWithoutMockFirst: 101,
-		.holeHandWrittenMockBuiltInPublicMock: 90,
-		.holeMockIsolatedToMainActor: 81,
-		.overrideClosureCall: 332,
-		.overrideClosureCallCanHand: 196,
-		.overrideClosureCallFillReadsCalledMocksOtherPlace: 43,
-		.overrideClosureCallFillReadsCalledMocksParameter: 42,
-		.overrideClosureCallFillReadsConsumersValue: 30,
-		.overrideClosureCallFillReadsValueCalledMockRenames: 40,
-		.overrideClosureCallInternalCallerPassesPlaceUp: 76,
-		.overrideClosureCallPlaceIsErasedInstantiator: 93,
-		.overrideClosureCallPublicCallerPassesPlaceUp: 75,
-		.carrierBeforeSibling: 131,
-		.carrierBeforeSiblingBetweenSiblings: 53,
-		.carrierBeforeSiblingThroughSameModuleSeam: 66,
-		.carrierBeforeSiblingBeneathConfiguredChild: 60,
-		.wrapperReadByValuePublicMock: 243,
-		.wrapperReadByValuePublicMockMockedTypeReadsValue: 75,
-		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 70,
-		.wrapperReadByValuePublicMockReaderThroughInstantiator: 124,
-		.wrapperReadByValuePublicMockSendably: 47,
-		.wrapperReadByValuePublicMockTreeReadsValue: 98,
-		.ownOptionalDefaultOnNonisolatedTypeThatBuilds: 528,
+		.sharedConstructionPublicMockWithoutMockFirst: 96,
+		.holeHandWrittenMockBuiltInPublicMock: 87,
+		.holeMockIsolatedToMainActor: 77,
+		.overrideClosureCall: 311,
+		.overrideClosureCallCanHand: 184,
+		.overrideClosureCallFillReadsCalledMocksOtherPlace: 39,
+		.overrideClosureCallFillReadsCalledMocksParameter: 39,
+		.overrideClosureCallFillReadsConsumersValue: 28,
+		.overrideClosureCallFillReadsValueCalledMockRenames: 38,
+		.overrideClosureCallInternalCallerPassesPlaceUp: 72,
+		.overrideClosureCallPlaceIsErasedInstantiator: 90,
+		.overrideClosureCallPublicCallerPassesPlaceUp: 67,
+		.carrierBeforeSibling: 127,
+		.carrierBeforeSiblingBetweenSiblings: 52,
+		.carrierBeforeSiblingThroughSameModuleSeam: 64,
+		.carrierBeforeSiblingBeneathConfiguredChild: 59,
+		.wrapperReadByValuePublicMock: 235,
+		.wrapperReadByValuePublicMockMockedTypeReadsValue: 73,
+		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 66,
+		.wrapperReadByValuePublicMockReaderThroughInstantiator: 119,
+		.wrapperReadByValuePublicMockSendably: 43,
+		.wrapperReadByValuePublicMockTreeReadsValue: 96,
+		.ownOptionalDefaultOnNonisolatedTypeThatBuilds: 503,
 		.promotedHolePublicMock: 87,
 		.promotedHolePublicMockLazily: 75,
 		.promotedHolePublicMockPassedUp: 17,
 		.promotedHolePublicMockPublicConsumer: 40,
 		.promotedHolePublicMockSendableLazily: 12,
-		.unbuildableValuePublicMockCall: 180,
-		.unbuildableValuePublicMockCallPublicTier: 180,
+		.unbuildableValuePublicMockCall: 174,
+		.unbuildableValuePublicMockCallPublicTier: 174,
+		.carrierBeforeSiblingBeneathInternallyConfiguredChild: 26,
+		.valueFormsBesidePublicMockCall: 257,
+		.valueFormsBesidePublicMockCallBeneathCycleEdge: 49,
+		.valueFormsBesidePublicMockCallCalledTakesOptional: 88,
+		.valueFormsBesidePublicMockCallCalledTreeReceivesValue: 90,
+		.valueFormsBesidePublicMockCallConsumerReceivesValue: 106,
+		.valueFormsBesidePublicMockCallEmptyPublicMock: 108,
+		.valueFormsBesidePublicMockCallLabelOfAnotherType: 98,
+		.valueFormsBesidePublicMockCallPublicConsumer: 86,
+		.valueFormsBesidePublicMockCallPublicOptionalWrapperBesideOtherType: 42,
+		.valueFormsBesidePublicMockCallRenamed: 63,
+		.valueFormsBesidePublicMockCallTwoWrapperForms: 19,
+		.valueFormsBesidePublicMockCallUnbuildableValue: 119,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -8934,18 +9001,18 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x3CD0DE8E31A9C40D
-	static let publicMockCorpusAcceptedSeedCount = 897
-	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x918F646016343CAD
+	static let publicMockCorpusFixtureHash: UInt64 = 0x879556EAB9AFFCD7
+	static let publicMockCorpusAcceptedSeedCount = 854
+	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
 	/// value oracle compares.
-	static let publicMockCorpusValueOracleInspectedGraphCount = 897
+	static let publicMockCorpusValueOracleInspectedGraphCount = 854
 	/// How many of the public mock corpus's graphs the tool rejects because a caller provides a value the tier of the public
 	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's: the graphs of
 	/// `GraphFuzzerPublicMockDrawFeature.unbuildableValuePublicMockCallTierOmits`, a value of a type whose spelling SafeDI
 	/// cannot read that the consumer's `mock()` is passed because it cannot build it. No holder of `Dock` is one, since SafeDI
 	/// reads `Dock`'s declaration inside a platform-conditioned block. Pins: derived on CI.
-	static let publicMockCorpusOmittedValueGraphCount = 7
+	static let publicMockCorpusOmittedValueGraphCount = 6
 	/// How many of the public mock corpus's graphs name a type no declaration SafeDI reads declares, which the oracle
 	/// compares with their read twin.
 	static let publicMockCorpusReadTwinGraphCount = 260
@@ -8959,7 +9026,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// fill, in a module that calls `T6`'s public mock, that reads the `holeContext` `T6` declares outside the `@Sendable`
 	/// function above its hole (`GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker`), which rejects seed 157.
 	static let publicMockCorpusErrorGraphCounts = [
-		49, 0, 7, 0, 37, 0, 0, 8, 1,
+		49, 0, 6, 0, 37, 0, 0, 7, 1,
 	]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
@@ -8996,7 +9063,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x76097F9BB74E8DE4
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xDCF1DB4FDF35DE32
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9015,8 +9082,8 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 618, 649,
-				653, 677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
+				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 649, 653,
+				677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
 			],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -9032,7 +9099,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [176, 429, 455, 543, 685, 799],
+			seeds: [176, 455, 685],
 		),
 		// As above, with the optional builder of a hole type a calling mock's calls fill, which is listed among the flat
 		// parameters by label as a required builder is; and a lazy cycle's configuration field.
@@ -9040,6 +9107,14 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(publicMockBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [897],
+		),
+		// The value-forms draw (`drawValueFormsBesidePublicMockCall`): a type of a calling mock's tree receives `formSession` as
+		// `FormMark` beside a call of another module's public mock that takes it as `FormSession`, and the mock hands the call
+		// the `FormMark` binding. Main generates the same code; the fix is a pull request of its own.
+		GraphFuzzerKnownIssue(
+			reason: "A calling mock hands a call of another module's public mock the binding of another type that its tree holds under the label the call takes, so the call is passed a `FormMark` where it takes a `FormSession`",
+			signatures: [.compilerError(containing: "_FormMark")],
+			seeds: [16, 83, 436, 444, 508, 982],
 		),
 		// The design's output stability: an internal consumer that passes up the places of two public mocks of one hole
 		// type names the builders it takes for them apart, after each called type, so `T6Twin`'s call renames `T6`'s.
@@ -9059,7 +9134,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 156, 161, 242, 326, 327, 474, 629, 731, 821, 881, 977, 983],
+			seeds: [18, 22, 156, 242, 326, 327, 474, 629, 731, 821, 881, 983],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
@@ -9125,7 +9200,6 @@ struct SafeDIToolGraphFuzzerTests {
 		labels: [],
 		sameSupply: [
 			79, 122, 128, 136, 145, 230, 266, 332, 352, 411, 420, 427, 539, 580, 658, 681, 740, 786, 814, 823, 827, 853,
-			977,
 		],
 		sameSupplyReason: callingMockTakesHoleValueReason,
 		sameSupplyBuilderKindFlips: [406, 463],
@@ -9276,12 +9350,25 @@ struct SafeDIToolGraphFuzzerTests {
 		.carrierBeforeSiblingBetweenSiblings: 55,
 		.carrierBeforeSiblingThroughSameModuleSeam: 76,
 		.carrierBeforeSiblingBeneathConfiguredChild: 65,
+		.carrierBeforeSiblingBeneathInternallyConfiguredChild: 29,
 		.wrapperReadByValuePublicMock: 257,
 		.wrapperReadByValuePublicMockMockedTypeReadsValue: 78,
 		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 77,
 		.wrapperReadByValuePublicMockReaderThroughInstantiator: 129,
 		.wrapperReadByValuePublicMockSendably: 49,
 		.wrapperReadByValuePublicMockTreeReadsValue: 102,
+		.valueFormsBesidePublicMockCall: 324,
+		.valueFormsBesidePublicMockCallUnbuildableValue: 158,
+		.valueFormsBesidePublicMockCallPublicConsumer: 108,
+		.valueFormsBesidePublicMockCallBeneathCycleEdge: 61,
+		.valueFormsBesidePublicMockCallCalledTakesOptional: 103,
+		.valueFormsBesidePublicMockCallTwoWrapperForms: 29,
+		.valueFormsBesidePublicMockCallRenamed: 79,
+		.valueFormsBesidePublicMockCallConsumerReceivesValue: 149,
+		.valueFormsBesidePublicMockCallEmptyPublicMock: 136,
+		.valueFormsBesidePublicMockCallLabelOfAnotherType: 150,
+		.valueFormsBesidePublicMockCallCalledTreeReceivesValue: 135,
+		.valueFormsBesidePublicMockCallPublicOptionalWrapperBesideOtherType: 53,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

@@ -663,16 +663,30 @@ extension DependencyTreeGenerator {
 			/// Where the hand-written mock is declared. Several map entries can carry the same mock.
 			let mockDeclarationLocations: [Dependency.DeclarationLocation?]
 			/// The first node, in mock root order, that the hand-written mock builds.
-			let builtByMock: ScopeGenerator.BuiltMockParameterNode
+			let builtByMock: BuiltConstruction
 			/// The first node, in mock root order, built without the hand-written mock.
-			let builtWithoutMock: ScopeGenerator.BuiltMockParameterNode
+			let builtWithoutMock: BuiltConstruction
+
+			// D1 lane hook (lane D): what the diagnostic reads of a node, which the emitter's nodes and the lowering's
+			// records both give (`MockLowering+OneWay.swift`).
+			/// A node a generated mock builds: the property, the type that declares it, the mock whose tree holds it, and
+			/// the construction it is built with.
+			struct BuiltConstruction {
+				let property: Property
+				/// The concrete type whose scope declares the property, as generated code spells it: the mock root's at the
+				/// top of the tree.
+				let parent: String
+				let mockRoot: TypeDescription
+				let customMockName: String?
+				let isExtensionBased: Bool
+			}
 
 			var sourceDiagnostics: [SourceDiagnostic] {
 				let typeName = "`\(concreteType.asSource)`"
-				let mockName = "`\(builtByMock.node.customMockName ?? InstantiableVisitor.mockMethodName)`"
+				let mockName = "`\(builtByMock.customMockName ?? InstantiableVisitor.mockMethodName)`"
 				// Built without its mock, a type declared by an extension calls its `instantiate(…)` method, whose
 				// default-valued parameters are fields of the struct, as an initializer's are.
-				let construction = if builtWithoutMock.node.isExtensionBased {
+				let construction = if builtWithoutMock.isExtensionBased {
 					"`\(InstantiableVisitor.instantiateMethodName)(…)` method"
 				} else {
 					"initializer"
@@ -687,8 +701,8 @@ extension DependencyTreeGenerator {
 			}
 
 			/// The property a node builds, the type that declares it, and the generated mock that builds it.
-			private static func describe(_ builtNode: ScopeGenerator.BuiltMockParameterNode) -> String {
-				"`\(builtNode.node.property.asSource)` on `\(builtNode.parent.asSource)` in `\(builtNode.mockRoot.asSource).\(InstantiableVisitor.mockMethodName)()`"
+			private static func describe(_ builtNode: BuiltConstruction) -> String {
+				"`\(builtNode.property.asSource)` on `\(builtNode.parent)` in `\(builtNode.mockRoot.asSource).\(InstantiableVisitor.mockMethodName)()`"
 			}
 		}
 

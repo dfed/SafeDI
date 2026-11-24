@@ -392,6 +392,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `CarrierShelf`, a type `CarrierHome` builds, declares the three, so that `CarrierShelf`'s module-level configuration,
 	/// which `CarrierHome`'s overrides nest, takes them in declaration order.
 	case carrierBeforeSiblingBeneathConfiguredChild
+	/// `CarrierLocal`, a type of the declaring module with an internal mock, builds `CarrierShelf` too, so that `CarrierShelf`'s
+	/// internal `SafeDIMockConfiguration` takes the three in declaration order, as its module-level configuration does.
+	case carrierBeforeSiblingBeneathInternallyConfiguredChild
 	/// On a stream of its own (`publicMockWrapperReadByValueRandomSeedMask`), a value a public mock takes as the wrapper its
 	/// tree receives that its tree also reads by value: `WrapNode`, a `.public` type of the declaring module, which cannot
 	/// build `WrapSession`, receives it and builds `WrapReader`, which receives it in the other form, one of them as a
@@ -408,6 +411,37 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case wrapperReadByValuePublicMockSendably
 	/// `WrapNode` builds `WrapReader` through an `Instantiator`.
 	case wrapperReadByValuePublicMockReaderThroughInstantiator
+	/// On a stream of its own (`publicMockValueFormsRandomSeedMask`), one value received in several forms beside a call of
+	/// a public mock that takes it: `FormScreen`, a mocked consumer, builds `FormCache`, a `.public` type of the declaring
+	/// module that receives `formSession` by value, only if available or lazily, and one to three siblings, each receiving
+	/// it by value, only if available, through either wrapper kind (the `Sendable` one only in a `Sendable` graph),
+	/// through an optional wrapper only if available, renamed, or as another type.
+	case valueFormsBesidePublicMockCall
+	/// `FormSession` is a plain class no module builds, so that the consumer's mock takes it too.
+	case valueFormsBesidePublicMockCallUnbuildableValue
+	/// `FormScreen`'s mock is `.public`.
+	case valueFormsBesidePublicMockCallPublicConsumer
+	/// `FormScreen` builds `FormHolder`, which builds `FormCache` and itself again through an instantiator, an edge
+	/// `cycleEdges` prunes.
+	case valueFormsBesidePublicMockCallBeneathCycleEdge
+	/// `FormCache` receives the value only if available.
+	case valueFormsBesidePublicMockCallCalledTakesOptional
+	/// Two siblings receive the value through two wrapper forms: a `LazilyInstantiated` beside a
+	/// `SendableLazilyInstantiated`, or a wrapper beside an optional wrapper.
+	case valueFormsBesidePublicMockCallTwoWrapperForms
+	/// A sibling renames the value.
+	case valueFormsBesidePublicMockCallRenamed
+	/// `FormScreen` itself receives the value too.
+	case valueFormsBesidePublicMockCallConsumerReceivesValue
+	/// `FormScreen` also builds `FormBadge`, a `.public` type that takes nothing, whose public mock builds nothing but itself.
+	case valueFormsBesidePublicMockCallEmptyPublicMock
+	/// A type receives the label as `FormMark`, another type than the value's, so that the mock names the two apart.
+	case valueFormsBesidePublicMockCallLabelOfAnotherType
+	/// `FormCache` builds `FormCacheEntry`, which receives the label in a form of its own.
+	case valueFormsBesidePublicMockCallCalledTreeReceivesValue
+	/// `FormScreen`'s public mock receives an optional wrapper of the value only if available beside a sibling that
+	/// receives the label as `FormMark`, so that it names the wrapper apart by its type.
+	case valueFormsBesidePublicMockCallPublicOptionalWrapperBesideOtherType
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -416,7 +450,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
 	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `carrierBeforeSibling…`,
-	/// `wrapperReadByValuePublicMock…`, and `T6`'s mock isolated to the main
+	/// `wrapperReadByValuePublicMock…`, `valueFormsBesidePublicMockCall…`, and `T6`'s mock isolated to the main
 	/// actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the
 	/// public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	/// `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
@@ -429,6 +463,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
 			|| rawValue.hasPrefix("carrierBeforeSibling")
 			|| rawValue.hasPrefix("wrapperReadByValuePublicMock")
+			|| rawValue.hasPrefix("valueFormsBesidePublicMockCall")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 			|| self == .ownOptionalDefaultOnNonisolatedTypeThatBuilds
 	}
@@ -705,6 +740,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawCarrierBeforeSiblingPublicMock(random: &carrierOrderRandom)
 		var wrapperReadByValueRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockWrapperReadByValueRandomSeedMask)
 		drawWrapperReadByValuePublicMock(random: &wrapperReadByValueRandom)
+		var valueFormsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockValueFormsRandomSeedMask)
+		drawValueFormsBesidePublicMockCall(random: &valueFormsRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -840,6 +877,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// reads by value (`drawWrapperReadByValuePublicMock`): rolls added after the rest of the draw was pinned, so that its
 	/// other shapes are drawn as before.
 	static let publicMockWrapperReadByValueRandomSeedMask: UInt64 = 0x7075626D6B777276
+	/// Draws only one value received in several forms beside a call of a public mock that takes it
+	/// (`drawValueFormsBesidePublicMockCall`): rolls added after the rest of the draw was pinned, so that its other shapes
+	/// are drawn as before.
+	static let publicMockValueFormsRandomSeedMask: UInt64 = 0x7075626D6B76666D
 	/// Draws only whether a `Sendable` graph the main stream draws without a `Sendable` wrapper above a leaf (`T9`) draws one
 	/// anyway, and in which consumer module, so that a consumer's overrides hold a `@Sendable` factory
 	/// (`GraphFuzzerPublicMockOutputFeature.consumerSendableFactory`) in a share of the accepted graphs that clears its floor
@@ -2809,13 +2850,18 @@ struct GraphFuzzerPublicMockDraw {
 	/// module-level configuration, takes them in declaration order, as the internal mock does
 	/// (`GraphFuzzerToolRuns.publicMockOverridesOrderFailure`). `CarrierApp`, a mocked consumer in one consumer module,
 	/// builds `CarrierHome`, so that its mock calls `CarrierHome`'s public mock, and `CarrierLive` beside it fills the
-	/// place. Every roll is made before any is read.
+	/// place. Half the draws that declare `CarrierShelf` also declare `CarrierLocal`, a type of the declaring module with an
+	/// internal mock that builds `CarrierShelf`, so that `CarrierShelf`'s internal `SafeDIMockConfiguration`, which a module
+	/// with a public mock configuring the type once took in build order, takes the three in declaration order too. Every roll
+	/// is made before any is read.
 	private mutating func drawCarrierBeforeSiblingPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(15)
 		let holdsThroughSeam = random.percentChance(50)
 		let holderBetweenSiblings = random.percentChance(30)
 		let beneathConfiguredChild = random.percentChance(40)
 		let consumerModuleRoll = random.integer(in: 0...1)
+		// Drawn last, so that the draws before it are the draws they were.
+		let shelfMockedInternallyToo = random.percentChance(50)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
@@ -2845,6 +2891,13 @@ struct GraphFuzzerPublicMockDraw {
 			shelf.properties = siblings
 			home.properties = [Property(attribute: "@Instantiated", label: "carrierShelf", type: shelf.name)]
 			declaringModuleDeclarations.append(Self.renderer(of: shelf))
+			if shelfMockedInternallyToo {
+				// An internal mock beside the public one that configures `CarrierShelf` too.
+				var local = InstantiableClass(name: name("CarrierLocal"), conformances: conformances)
+				local.mockGeneration = "true"
+				local.properties = [Property(attribute: "@Instantiated", label: "carrierShelf", type: shelf.name)]
+				declaringModuleDeclarations.append(Self.renderer(of: local))
+			}
 		} else {
 			home.properties = siblings
 		}
@@ -2922,6 +2975,160 @@ struct GraphFuzzerPublicMockDraw {
 		}
 		files.append(File(module: .seamModule, declarations: [Self.renderer(of: node), Self.renderer(of: reader), session]))
 		files.append(File(module: consumerModule, declarations: [Self.renderer(of: screen), sessionExtension]))
+	}
+
+	/// One value received in several forms beside a call of a public mock that takes it, in seven graphs in twenty, the shapes
+	/// of the defects the mock emitter's rewrite fixed: `FormScreen`, a mocked consumer in one consumer module, `true` or, one
+	/// draw in three, `.public`, receives `formToken`, a plain class nothing builds, so that it is never a production root,
+	/// and, two draws in five, `formSession` in one of the siblings' forms. It builds `FormCache`, a `.public` type of the
+	/// declaring module with an `internal` initializer, so that it calls its public mock, directly or, one draw in four,
+	/// through `FormHolder`, which builds `FormCache` and itself again through an instantiator, an edge `cycleEdges` prunes.
+	/// `FormCache` receives `formSession` by value, only if available, or as a `LazilyInstantiated`. Beside it `FormScreen`
+	/// builds one to three siblings, `FormFeed1`…, each now and then through an instantiator, each receiving `formSession` by
+	/// value, only if available, through either wrapper kind (the `Sendable` one only in a graph whose types are all
+	/// `Sendable`), through an optional `LazilyInstantiated` only if available, or renamed from `formSession`. `FormSession`
+	/// conforms to `Instantiable` by hand, and the consumer's module builds it through an extension of its own, so the
+	/// declaring module's mock takes it; or, half the time, it is a plain class no module builds, so the consumer's mock takes
+	/// it too. A sibling now and then receives the label as `FormMark`, another type, which the mock names apart. Two draws in
+	/// five `FormCache` builds `FormCacheEntry`, which receives the label as an optional wrapper only if available, by value,
+	/// or as `FormMark`. Two `.public` consumers in five receive an optional wrapper of it only if available, a
+	/// `SendableLazilyInstantiated` half the time in a `Sendable` graph, beside a first sibling that receives `FormMark`. Two
+	/// draws in five `FormScreen` also builds `FormBadge`, a `.public` type of the declaring module with an
+	/// `internal` initializer that takes nothing, whose public mock builds nothing but the type. Every roll is made before
+	/// any is read.
+	private mutating func drawValueFormsBesidePublicMockCall(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(35)
+		let sessionIsBuildable = random.percentChance(50)
+		let consumerIsPublic = random.percentChance(33)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerReceivesSession = random.percentChance(40)
+		let consumerFormRoll = random.integer(in: 0...5)
+		let cacheFormRoll = random.integer(in: 0...9)
+		let buildsThroughHolder = random.percentChance(25)
+		let siblingCount = random.integer(in: 1...3)
+		let siblingFormRolls = (0..<3).map { _ in random.integer(in: 0...6) }
+		let siblingsThroughInstantiator = (0..<3).map { _ in random.percentChance(20) }
+		let buildsEmptyPublicMock = random.percentChance(40)
+		let cacheBuildsEntry = random.percentChance(40)
+		let entryFormRoll = random.integer(in: 0...3)
+		let publicConsumerHoldsOptionalWrapperBesideOtherType = random.percentChance(40)
+		let optionalWrapperIsSendable = random.percentChance(50)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let sessionName = name("FormSession")
+		let tokenName = name("FormToken")
+		let markName = name("FormMark")
+		/// The property a type receiving `formSession` in form `roll` declares.
+		func sessionProperty(form roll: Int) -> Property {
+			switch roll {
+			case 0:
+				Property(attribute: "@Received", label: "formSession", type: sessionName)
+			case 1:
+				Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "\(sessionName)?")
+			case 2:
+				Property(attribute: "@Received", label: "formSession", type: "LazilyInstantiated<\(sessionName)>")
+			case 3:
+				isSendableGraph
+					? Property(attribute: "@Received", label: "formSession", type: "SendableLazilyInstantiated<\(sessionName)>")
+					: Property(attribute: "@Received", label: "formSession", type: "LazilyInstantiated<\(sessionName)>")
+			case 4:
+				Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "LazilyInstantiated<\(sessionName)>?")
+			case 6:
+				Property(attribute: "@Received", label: "formSession", type: markName)
+			default:
+				Property(attribute: "@Received(fulfilledByDependencyNamed: \"formSession\", ofType: \(sessionName).self)", label: "currentFormSession", type: sessionName)
+			}
+		}
+		var cache = InstantiableClass(name: name("FormCache"), conformances: conformances)
+		cache.mockGeneration = ".public"
+		cache.initializerAccess = .internal
+		cache.properties = [cacheFormRoll < 5 ? sessionProperty(form: 0) : cacheFormRoll < 8 ? sessionProperty(form: 1) : sessionProperty(form: 2)]
+		var entry: InstantiableClass?
+		if cacheBuildsEntry {
+			// A type of the called mock's own tree that receives the label in another form.
+			var cacheEntry = InstantiableClass(name: name("FormCacheEntry"), conformances: conformances)
+			cacheEntry.properties = switch entryFormRoll {
+			case 0:
+				[Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "LazilyInstantiated<\(sessionName)>?")]
+			case 1:
+				[Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "\(isSendableGraph ? "SendableLazilyInstantiated" : "LazilyInstantiated")<\(sessionName)>?")]
+			case 2:
+				[sessionProperty(form: 0)]
+			default:
+				[sessionProperty(form: 6)]
+			}
+			cache.properties.append(Property(attribute: "@Instantiated", label: "formCacheEntry", type: cacheEntry.name))
+			entry = cacheEntry
+		}
+		var screen = InstantiableClass(name: name("FormScreen"), conformances: conformances)
+		screen.mockGeneration = consumerIsPublic ? ".public" : "true"
+		screen.properties = [Property(attribute: "@Received", label: "formToken", type: tokenName)]
+		var siblingForms = siblingFormRolls
+		if consumerIsPublic, publicConsumerHoldsOptionalWrapperBesideOtherType {
+			// A public mock whose own optional wrapper, received only if available, shares its label with another type a
+			// sibling receives, so that the mock names the wrapper apart by its wrapper type.
+			screen.properties.append(isSendableGraph && optionalWrapperIsSendable
+				? Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "SendableLazilyInstantiated<\(sessionName)>?")
+				: sessionProperty(form: 4))
+			siblingForms[0] = 6
+		} else if consumerReceivesSession {
+			screen.properties.append(sessionProperty(form: consumerFormRoll))
+		}
+		var consumerDeclarations = [(Rendering) -> String]()
+		if buildsThroughHolder {
+			var holder = InstantiableClass(name: name("FormHolder"), conformances: conformances)
+			holder.properties = [
+				Property(attribute: "@Instantiated", label: "formCache", type: cache.name),
+				Property(attribute: "@Instantiated", label: "formHolderBuilder", type: "Instantiator<\(holder.name)>"),
+			]
+			screen.properties.append(Property(attribute: "@Instantiated", label: "formHolder", type: holder.name))
+			consumerDeclarations.append(Self.renderer(of: holder))
+		} else {
+			screen.properties.append(Property(attribute: "@Instantiated", label: "formCache", type: cache.name))
+		}
+		for index in 1...siblingCount {
+			var sibling = InstantiableClass(name: name("FormFeed\(index)"), conformances: conformances)
+			sibling.properties = [sessionProperty(form: siblingForms[index - 1])]
+			screen.properties.append(siblingsThroughInstantiator[index - 1]
+				? Property(attribute: "@Instantiated", label: "formFeed\(index)Builder", type: "Instantiator<\(sibling.name)>")
+				: Property(attribute: "@Instantiated", label: "formFeed\(index)", type: sibling.name))
+			consumerDeclarations.append(Self.renderer(of: sibling))
+		}
+		var declaringModuleDeclarations = [Self.renderer(of: cache), Self.renderer(of: InstantiableClass(name: markName, conformances: conformances))]
+		if let entry {
+			declaringModuleDeclarations.append(Self.renderer(of: entry))
+		}
+		if buildsEmptyPublicMock {
+			// A `.public` type that takes nothing and builds nothing, whose public mock is one call of its initializer.
+			var badge = InstantiableClass(name: name("FormBadge"), conformances: conformances)
+			badge.mockGeneration = ".public"
+			badge.initializerAccess = .internal
+			screen.properties.append(Property(attribute: "@Instantiated", label: "formBadge", type: badge.name))
+			declaringModuleDeclarations.append(Self.renderer(of: badge))
+		}
+		consumerDeclarations.insert(Self.renderer(of: screen), at: 0)
+		let token: (Rendering) -> String = { rendering in
+			"\(rendering.modifier(.public))final class \(tokenName): Sendable {\n\t\(rendering.modifier(.public))init() {}\n}"
+		}
+		declaringModuleDeclarations.append(token)
+		if sessionIsBuildable {
+			// `FormSession` conforms to `Instantiable` by hand, so that only the consumer's module, through an extension of its
+			// own, builds it.
+			declaringModuleDeclarations.append { rendering in
+				"\(rendering.modifier(.public))final class \(sessionName): Instantiable, Sendable {\n\t\(rendering.modifier(.public))init() {}\n}"
+			}
+			consumerDeclarations.append { rendering in
+				"@Instantiable(conformsElsewhere: true)\nextension \(sessionName) {\n\t\(rendering.modifier(.public))static func instantiate() -> \(sessionName) {\n\t\t\(sessionName)()\n\t}\n}"
+			}
+		} else {
+			declaringModuleDeclarations.append { rendering in
+				"\(rendering.modifier(.public))final class \(sessionName): Sendable {\n\t\(rendering.modifier(.public))init() {}\n}"
+			}
+		}
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: consumerDeclarations))
 	}
 
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
@@ -3223,7 +3430,8 @@ extension GraphFuzzerToolRuns {
 	/// (`GraphFuzzerPublicMockDrawFeature.carrierBeforeSibling`), whose `CarrierHome` `SafeDIOverrides`, or whose
 	/// `CarrierShelf` module-level configuration where `CarrierShelf` declares the holder, takes the holder and its siblings
 	/// in another order than their declaration: the order the internal mock takes them in, whatever order the public mock
-	/// builds them in (the contract's rule 7). `nil` for any other graph. With `MockParameterNode.inInlineOrder` returning
+	/// builds them in (the contract's rule 7); or, where `CarrierLocal`'s internal mock configures `CarrierShelf` too, whose
+	/// internal `SafeDIMockConfiguration` does. `nil` for any other graph. With `MockParameterNode.inInlineOrder` returning
 	/// its nodes in build order, the holder last, seeds 17, 22, 24, 57, 89, 186 and 246 fail.
 	var publicMockOverridesOrderFailure: GraphFuzzerFailure? {
 		guard knownRightOutcome != nil, case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
@@ -3232,23 +3440,36 @@ extension GraphFuzzerToolRuns {
 		guard let declaredLabels = GraphFuzzerPublicMockDraw.carrierBeforeSiblingDeclaredLabels(in: types, prefix: prefix) else { return nil }
 		// The struct whose initializer takes the three: the module-level configuration of `CarrierShelf`, or the overrides
 		// `CarrierHome`'s extension declares.
-		let (structName, opening) = if types.declarations["\(prefix)CarrierShelf"] != nil {
-			("`\(prefix)CarrierShelf`'s module-level configuration", "_\(prefix)CarrierShelf_MockConfiguration {")
+		// The structs whose initializers take the three: the module-level configuration of `CarrierShelf`, and its internal
+		// configuration where `CarrierLocal`'s internal mock configures it too, or the overrides `CarrierHome`'s extension
+		// declares.
+		var structs: [(name: String, opening: String, structOpening: String?)] = if types.declarations["\(prefix)CarrierShelf"] != nil {
+			[("`\(prefix)CarrierShelf`'s module-level configuration", "_\(prefix)CarrierShelf_MockConfiguration {", nil)]
 		} else {
-			("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {")
+			[("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {", "struct SafeDIOverrides {")]
 		}
-		let takenLabels = generatedFiles.keys.sorted().lazy.compactMap { fileName in
-			generatedFiles[fileName].flatMap { GraphFuzzerOracle.initializerLabels(after: opening, struct: opening.hasPrefix("extension ") ? "struct SafeDIOverrides {" : nil, in: $0) }
-		}.first
-		guard let takenLabels else {
-			return GraphFuzzerFailure(seed: fixture.seed, kind: .publicMockOverridesFollowBuildOrder, details: "No generated file declares \(structName).\nThis graph:\n\(firstOutcome.description)")
+		if types.declarations["\(prefix)CarrierLocal"] != nil {
+			structs.append(("`\(prefix)CarrierShelf`'s `SafeDIMockConfiguration`", "extension \(prefix)CarrierShelf {", "struct SafeDIMockConfiguration {"))
 		}
-		let takenDeclaredLabels = takenLabels.filter(declaredLabels.contains)
-		guard takenDeclaredLabels != declaredLabels else { return nil }
+		var problems = [String]()
+		for (structName, opening, structOpening) in structs {
+			let takenLabels = generatedFiles.keys.sorted().lazy.compactMap { fileName in
+				generatedFiles[fileName].flatMap { GraphFuzzerOracle.initializerLabels(after: opening, struct: structOpening, in: $0) }
+			}.first
+			if let takenLabels {
+				let takenDeclaredLabels = takenLabels.filter(declaredLabels.contains)
+				if takenDeclaredLabels != declaredLabels {
+					problems.append("\(structName) takes \(takenDeclaredLabels.joined(separator: ", ")), where its type declares \(declaredLabels.joined(separator: ", ")).")
+				}
+			} else {
+				problems.append("No generated file declares \(structName).")
+			}
+		}
+		guard !problems.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
 			kind: .publicMockOverridesFollowBuildOrder,
-			details: "\(structName) takes \(takenDeclaredLabels.joined(separator: ", ")), where its type declares \(declaredLabels.joined(separator: ", ")).\nThis graph:\n\(firstOutcome.description)",
+			details: "\(problems.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
 		)
 	}
 
@@ -3293,14 +3514,18 @@ extension GraphFuzzerOracle {
 	static let publicMockStaleValueErrorMarker = "the same values at every level of that cycle"
 
 	/// The labels of the first initializer of a struct in `contents`, a generated file, in the order it takes them: the
-	/// struct whose declaration line ends with `opening`, or, where `structOpening` is given, the first struct after it whose
-	/// declaration line ends with `structOpening`. `nil` where `contents` declares no such struct.
+	/// struct whose declaration line ends with `opening`, or, where `structOpening` is given, the first struct after it, and
+	/// before any other extension, whose declaration line ends with `structOpening`. `nil` where `contents` declares no such
+	/// struct.
 	static func initializerLabels(after opening: String, struct structOpening: String?, in contents: String) -> [String]? {
 		var lines = contents.split(separator: "\n", omittingEmptySubsequences: false).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.makeIterator()
 		var expectsStruct = structOpening != nil
 		var foundOpening = false
 		while let line = lines.next() {
 			if !foundOpening {
+				foundOpening = line.hasSuffix(opening)
+			} else if expectsStruct, line.hasPrefix("extension ") {
+				// Another extension, of this type or another, before the struct: look for the struct after the opening again.
 				foundOpening = line.hasSuffix(opening)
 			} else if expectsStruct, let structOpening {
 				expectsStruct = !line.hasSuffix(structOpening)
@@ -4212,6 +4437,44 @@ extension GraphFuzzerPublicMockDraw {
 				features.insert(.wrapperReadByValuePublicMockReaderThroughInstantiator)
 			}
 		}
+		if let screen = types.declarations["\(prefix)FormScreen"], types.declarations["\(prefix)FormCache"] != nil {
+			features.insert(.valueFormsBesidePublicMockCall)
+			let cache = types.declarations["\(prefix)FormCache"]
+			if !fixture.swiftFileContent.contains(where: { $0.contains("extension \(prefix)FormSession {") }) {
+				features.insert(.valueFormsBesidePublicMockCallUnbuildableValue)
+			}
+			if screen.arguments.contains("generateMock: .public") {
+				features.insert(.valueFormsBesidePublicMockCallPublicConsumer)
+			}
+			if types.declarations["\(prefix)FormHolder"] != nil {
+				features.insert(.valueFormsBesidePublicMockCallBeneathCycleEdge)
+			}
+			if cache?.properties.contains(where: { $0.type == "\(prefix)FormSession?" }) == true {
+				features.insert(.valueFormsBesidePublicMockCallCalledTakesOptional)
+			}
+			let siblingTypes = (1...3).compactMap { types.declarations["\(prefix)FormFeed\($0)"] }.flatMap(\.properties).map(\.type)
+			if Set(siblingTypes.filter { $0.contains("LazilyInstantiated<") }).count > 1 {
+				features.insert(.valueFormsBesidePublicMockCallTwoWrapperForms)
+			}
+			if (1...3).compactMap({ types.declarations["\(prefix)FormFeed\($0)"] }).contains(where: { $0.properties.contains { $0.label == "currentFormSession" } }) {
+				features.insert(.valueFormsBesidePublicMockCallRenamed)
+			}
+			if screen.properties.contains(where: { $0.label == "formSession" || $0.label == "currentFormSession" }) {
+				features.insert(.valueFormsBesidePublicMockCallConsumerReceivesValue)
+			}
+			if types.declarations["\(prefix)FormBadge"] != nil {
+				features.insert(.valueFormsBesidePublicMockCallEmptyPublicMock)
+			}
+			if screen.arguments.contains("generateMock: .public"), screen.properties.contains(where: { $0.label == "formSession" && $0.type.hasSuffix(">?") }), fixture.swiftFileContent.contains(where: { $0.contains("let formSession: \(prefix)FormMark") }) {
+				features.insert(.valueFormsBesidePublicMockCallPublicOptionalWrapperBesideOtherType)
+			}
+			if types.declarations["\(prefix)FormCacheEntry"] != nil {
+				features.insert(.valueFormsBesidePublicMockCallCalledTreeReceivesValue)
+			}
+			if fixture.swiftFileContent.contains(where: { $0.contains("let formSession: \(prefix)FormMark") }) {
+				features.insert(.valueFormsBesidePublicMockCallLabelOfAnotherType)
+			}
+		}
 		if let home = types.declarations["\(prefix)LabelHome"], let hole = home.properties.first(where: { $0.attribute == "@Instantiated" }) {
 			features.insert(.holeLabelReceivedByPromotedSibling)
 			if hole.label == "labelGadget_lazilyInstantiated" {
@@ -4233,6 +4496,9 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if types.declarations["\(prefix)CarrierShelf"] != nil {
 				features.insert(.carrierBeforeSiblingBeneathConfiguredChild)
+			}
+			if types.declarations["\(prefix)CarrierLocal"] != nil {
+				features.insert(.carrierBeforeSiblingBeneathInternallyConfiguredChild)
 			}
 		}
 		return features

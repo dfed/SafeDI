@@ -406,6 +406,82 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_namesOptionalBuilderApart_whenAliasInMockTreeHasBuildersLabel() async throws {
+		// `G`, beside the call of `F`, renames `f` as `apiBuilder`, the label the optional builder of `any Api` would take.
+		let app = """
+		@Instantiable
+		public struct G: Instantiable {
+		    public init(apiBuilder: F) {
+		        self.apiBuilder = apiBuilder
+		    }
+
+		    @Received(fulfilledByDependencyNamed: "f", ofType: F.self) public let apiBuilder: F
+		}
+		"""
+		let modules = Self.modules(feat: Self.featWithApi, app: [app, Self.live, Self.fakes, Self.root(instantiating: ["f: F", "g: G"])])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: (() -> any Api)? = nil,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Root.mock().f.api is App.Live", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }).g.apiBuilder.api", "App.Fake()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesBuilderOfFillsPlaceAfterPassedUpBuilder_whenFillPlaceIsOfAnotherHoleType() async throws {
+		// `F`'s place of `any Api` has no fulfiller in `App`, so the mock passes it up; its place of `any Service` is filled by
+		// `LiveService`, whose `any Store` no declaration fulfills.
+		let feat = """
+		import Base
+		import SafeDI
+
+		@Instantiable(generateMock: .public)
+		public struct F: Instantiable {
+		    init(api: any Api, service: any Service) {
+		        self.api = api
+		        self.service = service
+		    }
+
+		    @Instantiated public let api: any Api
+		    @Instantiated public let service: any Service
+		}
+		"""
+		let app = """
+		@Instantiable(fulfillingAdditionalTypes: [Service.self])
+		public struct LiveService: Service, Instantiable {
+		    public init(store: any Store) {
+		        self.store = store
+		    }
+
+		    @Instantiated public let store: any Store
+		}
+
+		public struct FakeStore: Store {
+		    public init() {}
+		}
+		"""
+		let modules = Self.modules(base: "public protocol Api {}\n\npublic protocol Service {}\n\npublic protocol Store {}", feat: feat, app: [app, Self.fakes, Self.root(instantiating: ["f: F"])])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: @escaping () -> any Api,",
+			"serviceBuilder: (() -> any Service)? = nil,",
+			"storeBuilder: @escaping () -> any Store,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("(Root.mock(apiBuilder: { App.Fake() }, storeBuilder: { App.FakeStore() }).f.service as! App.LiveService).store", "App.FakeStore()"),
+			("Root.mock(apiBuilder: { App.Fake() }, storeBuilder: { App.FakeStore() }).f.api", "App.Fake()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_readsEachRootsOwnBuilder_whenTwoRootsMakeOneCallUnderOtherNamesAndFamilies() async throws {
 		// `Hub`, which makes the call of `F`, is built by two mock roots: `First` directly, whose builder is `apiBuilder`,
 		// and `Second` inside a `@Sendable` function beside a property labeled `apiSendableBuilder`, whose builder is
@@ -717,6 +793,127 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 	/// The modules of the join: `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily,
 	/// so a pass-up gate passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required, and `H`'s one place is
 	/// filled. Where `buildsGInline`, `Root` also instantiates `G`, whose public initializer lets the mock build it inline.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsInstantiatorPlaceAnAdapterOfItsBuilder_whenAnotherCallsPlaceOfHoleTypeIsPlain() async throws {
+		// `First` holds `Gizmo` in an `Instantiator` and `Second` by value; `App` sees no `Gizmo` it can build, so `Screen`'s
+		// mock takes one builder, `() -> Gizmo`, and hands `First`'s call an adapter that takes the forwarded value.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: [
+				"Core.swift": """
+				import SafeDI
+
+				open class Gizmo: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct First: Instantiable {
+				    init(gizmoBuilder: Instantiator<Gizmo>) {
+				        self.gizmoBuilder = gizmoBuilder
+				    }
+
+				    @Instantiated let gizmoBuilder: Instantiator<Gizmo>
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct Second: Instantiable {
+				    init(gizmo: Gizmo) {
+				        self.gizmo = gizmo
+				    }
+
+				    @Instantiated let gizmo: Gizmo
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: [
+				"Screen.swift": """
+				import Core
+				import SafeDI
+
+				@Instantiable(generateMock: true)
+				public struct Screen: Instantiable {
+				    public init(first: First, second: Second) {
+				        self.first = first
+				        self.second = second
+				    }
+
+				    @Instantiated let first: First
+				    @Instantiated let second: Second
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let pluginComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "First", declaringModule: "Core")
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            first: ((@escaping Instantiator<Gizmo>.Builder) -> First)? = nil,
+			            second: ((@escaping () -> Gizmo) -> Second)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                first: first,
+			                second: second
+			            )
+			        }
+
+			        var first: ((@escaping Instantiator<Gizmo>.Builder) -> First)? { __safeDI_storage.first }
+			        var second: ((@escaping () -> Gizmo) -> Second)? { __safeDI_storage.second }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                first: ((@escaping Instantiator<Gizmo>.Builder) -> First)?,
+			                second: ((@escaping () -> Gizmo) -> Second)?
+			            ) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let first: ((@escaping Instantiator<Gizmo>.Builder) -> First)?
+			            let second: ((@escaping () -> Gizmo) -> Second)?
+			        }
+			    }
+
+			    static func mock(
+			        gizmoBuilder: @escaping () -> Gizmo,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let __safeDI_gizmoBuilder = gizmoBuilder
+			        let __safeDI_gizmoBuilder_: Instantiator<Gizmo>.Builder = { _ in __safeDI_gizmoBuilder() }
+			        _ = First.__safeDI_First_mock_F35A1ABA2A8BD0CD.self\(pluginComment)
+			        func __safeDI_first() -> First {
+			            let gizmoBuilder: Instantiator<Gizmo>.Builder = __safeDI_gizmoBuilder_
+			            return if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(gizmoBuilder) } else { First.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder)) }
+			        }
+			        let first: First = __safeDI_first()
+			        _ = Second.__safeDI_Second_mock_4AA306DE1EA05F15.self\(pluginComment)
+			        func __safeDI_second() -> Second {
+			            let gizmoBuilder: () -> Gizmo = __safeDI_gizmoBuilder
+			            return if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(gizmoBuilder) } else { Second.__safeDI_mock(gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder)) }
+			        }
+			        let second: Second = __safeDI_second()
+			        return Screen(first: first, second: second)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
 	private static func joinModules(caller: Caller, buildsGInline: Bool, holdsH: Bool = true) -> [ModuleFixture] {
 		let feat = """
 		import SafeDI

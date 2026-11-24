@@ -1880,11 +1880,969 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesInstanceOfItsWrapperToCalledMock_whenCalledMockTakesValueByValue() async throws {
+		// `Screen`'s public mock takes the `LazilyInstantiated<Session>` `Screen` receives, and calls `Called`'s public mock,
+		// which `Core` takes `store` by value for: the call reads the wrapper's instance, and the override closure is handed
+		// it.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: [
+				"Called.swift": """
+				import SafeDI
+
+				public final class Session: Sendable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct Called: Instantiable {
+				    init(store: Session) {
+				        self.store = store
+				    }
+
+				    @Received let store: Session
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: [
+				"Screen.swift": """
+				import Core
+				import SafeDI
+
+				@Instantiable(generateMock: .public)
+				public struct Screen: Instantiable {
+				    public init(called: Called, store: LazilyInstantiated<Session>) {
+				        self.called = called
+				        self.store = store
+				    }
+
+				    @Instantiated let called: Called
+				    @Received let store: LazilyInstantiated<Session>
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let pluginComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "Called", declaringModule: "Core")
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            called: ((Session) -> Called)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                called: called
+			            )
+			        }
+
+			        public var called: ((Session) -> Called)? { __safeDI_storage.called }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                called: ((Session) -> Called)?
+			            ) {
+			                self.called = called
+			            }
+
+			            let called: ((Session) -> Called)?
+			        }
+			    }
+
+			    public static func mock(
+			        store: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(store: store, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        store: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Called.__safeDI_Called_mock_35D60D3448326177.self\(pluginComment)
+			        let called = if let safeDIBuilder = safeDIOverrides.called { safeDIBuilder(store.instance) } else { Called.__safeDI_mock(store: store.instance) }
+			        return Screen(called: called, store: store)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_C5D8DBF23AB87C61 {}
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// `Session`'s `instantiate()`, declared apart from `Session`, which `Feed` declares.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsCallInstanceOfWrapperMockTakes_whenCalledMockTakesValueByValue() async throws {
+		// `Screen`'s public mock takes `filter` as the `LazilyInstantiated` `Screen` receives, and `Cache`'s public mock takes
+		// the value itself, so the call is handed the wrapper's instance.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			public protocol FilterProtocol {}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(filter: any FilterProtocol) {
+			        self.filter = filter
+			    }
+
+			    @Received let filter: any FilterProtocol
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public struct Screen: Instantiable {
+			    public init(filter: LazilyInstantiated<any FilterProtocol>, cache: Cache) {
+			        self.filter = filter
+			        self.cache = cache
+			    }
+
+			    @Received let filter: LazilyInstantiated<any FilterProtocol>
+			    @Instantiated let cache: Cache
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            cache: ((any FilterProtocol) -> Cache)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache
+		            )
+		        }
+
+		        public var cache: ((any FilterProtocol) -> Cache)? { __safeDI_storage.cache }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                cache: ((any FilterProtocol) -> Cache)?
+		            ) {
+		                self.cache = cache
+		            }
+
+		            let cache: ((any FilterProtocol) -> Cache)?
+		        }
+		    }
+
+		    public static func mock(
+		        filter: LazilyInstantiated<any FilterProtocol>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        filter: LazilyInstantiated<any FilterProtocol>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Cache.__safeDI_Cache_mock_867B723751B5576A.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let cache = if let safeDIBuilder = safeDIOverrides.cache { safeDIBuilder(filter.instance) } else { Cache.__safeDI_mock(filter: filter.instance) }
+		        return Screen(filter: filter, cache: cache)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_56AE1F4DEB22648A {}
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsCallInstanceOfWrapperBoundApart_whenMockPromotesBothWrapperKindsOfValueCalledMockTakesByValue() async throws {
+		// `Screen`'s mock promotes `session` as both wrapper kinds, which it names apart, and `Cache`'s public mock takes the
+		// value itself, so the call is handed the instance of the `LazilyInstantiated` bound apart.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			struct Screen: Instantiable {
+			    init(feed: Feed, uploader: Uploader, cache: Cache) {
+			        self.feed = feed
+			        self.uploader = uploader
+			        self.cache = cache
+			    }
+
+			    @Instantiated let feed: Feed
+			    @Instantiated let uploader: Uploader
+			    @Instantiated let cache: Cache
+			}
+
+			@Instantiable
+			struct Feed: Instantiable {
+			    init(session: LazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: LazilyInstantiated<Session>
+			}
+
+			@Instantiable
+			struct Uploader: Instantiable {
+			    init(session: SendableLazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: SendableLazilyInstantiated<Session>
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session_LazilyInstantiated__Session: (() -> Session)? = nil,
+		            feed: ((LazilyInstantiated<Session>) -> Feed)? = nil,
+		            session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? = nil,
+		            uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? = nil,
+		            cache: Cache.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session_LazilyInstantiated__Session: session_LazilyInstantiated__Session,
+		                feed: feed,
+		                session_SendableLazilyInstantiated__Session: session_SendableLazilyInstantiated__Session,
+		                uploader: uploader,
+		                cache: cache
+		            )
+		        }
+
+		        var session_LazilyInstantiated__Session: (() -> Session)? { __safeDI_storage.session_LazilyInstantiated__Session }
+		        var feed: ((LazilyInstantiated<Session>) -> Feed)? { __safeDI_storage.feed }
+		        var session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? { __safeDI_storage.session_SendableLazilyInstantiated__Session }
+		        var uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? { __safeDI_storage.uploader }
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_LazilyInstantiated__Session: (() -> Session)?,
+		                feed: ((LazilyInstantiated<Session>) -> Feed)?,
+		                session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?,
+		                uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?,
+		                cache: Cache.SafeDIOverrides
+		            ) {
+		                self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		                self.feed = feed
+		                self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
+		                self.uploader = uploader
+		                self.cache = cache
+		            }
+
+		            let session_LazilyInstantiated__Session: (() -> Session)?
+		            let feed: ((LazilyInstantiated<Session>) -> Feed)?
+		            let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
+		            let uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?
+		            let cache: Cache.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_session_LazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session_LazilyInstantiated__Session { safeDIBuilder() } else { Session() }
+		        }
+		        let session_LazilyInstantiated__Session = LazilyInstantiated<Session>(__safeDI_session_LazilyInstantiated__Session)
+		        func __safeDI_feed() -> Feed {
+		            let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session) } else { Feed(session: session) }
+		        }
+		        let feed: Feed = __safeDI_feed()
+		        let __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder = safeDIOverrides.session_SendableLazilyInstantiated__Session
+		        @Sendable nonisolated func __safeDI_session_SendableLazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder { safeDIBuilder() } else { Session() }
+		        }
+		        let session_SendableLazilyInstantiated__Session = SendableLazilyInstantiated<Session>(__safeDI_session_SendableLazilyInstantiated__Session)
+		        func __safeDI_uploader() -> Uploader {
+		            let session: SendableLazilyInstantiated<Session> = session_SendableLazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.uploader { safeDIBuilder(session) } else { Uploader(session: session) }
+		        }
+		        let uploader: Uploader = __safeDI_uploader()
+		        _ = Cache.__safeDI_Cache_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_cache() -> Cache {
+		            let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		            return Cache.__safeDI_mock(session: session.instance, safeDIOverrides: safeDIOverrides.cache)
+		        }
+		        let cache: Cache = __safeDI_cache()
+		        return Screen(feed: feed, uploader: uploader, cache: cache)
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsCallInstanceOfWrapperBoundApart_whenMockPromotesSendableWrapperOfValueFirst() async throws {
+		// As `mock_handsCallInstanceOfWrapperBoundApart_whenMockPromotesBothWrapperKindsOfValueCalledMockTakesByValue`, with the
+		// `SendableLazilyInstantiated` received first.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			struct Screen: Instantiable {
+			    init(uploader: Uploader, feed: Feed, cache: Cache) {
+			        self.uploader = uploader
+			        self.feed = feed
+			        self.cache = cache
+			    }
+
+			    @Instantiated let uploader: Uploader
+			    @Instantiated let feed: Feed
+			    @Instantiated let cache: Cache
+			}
+
+			@Instantiable
+			struct Feed: Instantiable {
+			    init(session: LazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: LazilyInstantiated<Session>
+			}
+
+			@Instantiable
+			struct Uploader: Instantiable {
+			    init(session: SendableLazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: SendableLazilyInstantiated<Session>
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? = nil,
+		            uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? = nil,
+		            session_LazilyInstantiated__Session: (() -> Session)? = nil,
+		            feed: ((LazilyInstantiated<Session>) -> Feed)? = nil,
+		            cache: Cache.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session_SendableLazilyInstantiated__Session: session_SendableLazilyInstantiated__Session,
+		                uploader: uploader,
+		                session_LazilyInstantiated__Session: session_LazilyInstantiated__Session,
+		                feed: feed,
+		                cache: cache
+		            )
+		        }
+
+		        var session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? { __safeDI_storage.session_SendableLazilyInstantiated__Session }
+		        var uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? { __safeDI_storage.uploader }
+		        var session_LazilyInstantiated__Session: (() -> Session)? { __safeDI_storage.session_LazilyInstantiated__Session }
+		        var feed: ((LazilyInstantiated<Session>) -> Feed)? { __safeDI_storage.feed }
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?,
+		                uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?,
+		                session_LazilyInstantiated__Session: (() -> Session)?,
+		                feed: ((LazilyInstantiated<Session>) -> Feed)?,
+		                cache: Cache.SafeDIOverrides
+		            ) {
+		                self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
+		                self.uploader = uploader
+		                self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		                self.feed = feed
+		                self.cache = cache
+		            }
+
+		            let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
+		            let uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?
+		            let session_LazilyInstantiated__Session: (() -> Session)?
+		            let feed: ((LazilyInstantiated<Session>) -> Feed)?
+		            let cache: Cache.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder = safeDIOverrides.session_SendableLazilyInstantiated__Session
+		        @Sendable nonisolated func __safeDI_session_SendableLazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder { safeDIBuilder() } else { Session() }
+		        }
+		        let session_SendableLazilyInstantiated__Session = SendableLazilyInstantiated<Session>(__safeDI_session_SendableLazilyInstantiated__Session)
+		        func __safeDI_uploader() -> Uploader {
+		            let session: SendableLazilyInstantiated<Session> = session_SendableLazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.uploader { safeDIBuilder(session) } else { Uploader(session: session) }
+		        }
+		        let uploader: Uploader = __safeDI_uploader()
+		        func __safeDI_session_LazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session_LazilyInstantiated__Session { safeDIBuilder() } else { Session() }
+		        }
+		        let session_LazilyInstantiated__Session = LazilyInstantiated<Session>(__safeDI_session_LazilyInstantiated__Session)
+		        func __safeDI_feed() -> Feed {
+		            let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session) } else { Feed(session: session) }
+		        }
+		        let feed: Feed = __safeDI_feed()
+		        _ = Cache.__safeDI_Cache_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_cache() -> Cache {
+		            let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		            return Cache.__safeDI_mock(session: session.instance, safeDIOverrides: safeDIOverrides.cache)
+		        }
+		        let cache: Cache = __safeDI_cache()
+		        return Screen(uploader: uploader, feed: feed, cache: cache)
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsCallInstanceOfWrapperBoundApart_whenCallAndWrapperReceiversAreBeneathMockedType() async throws {
+		// `Screen`'s mock promotes `session`, which `Feed`'s tree receives as both wrapper kinds, and `Feed` calls `Cache`'s
+		// public mock, which takes the value itself.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			struct Screen: Instantiable {
+			    init(feed: Feed) {
+			        self.feed = feed
+			    }
+
+			    @Instantiated let feed: Feed
+			}
+
+			@Instantiable
+			struct Feed: Instantiable {
+			    init(detail: Detail, uploader: Uploader, cache: Cache) {
+			        self.detail = detail
+			        self.uploader = uploader
+			        self.cache = cache
+			    }
+
+			    @Instantiated let detail: Detail
+			    @Instantiated let uploader: Uploader
+			    @Instantiated let cache: Cache
+			}
+
+			@Instantiable
+			struct Detail: Instantiable {
+			    init(session: LazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: LazilyInstantiated<Session>
+			}
+
+			@Instantiable
+			struct Uploader: Instantiable {
+			    init(session: SendableLazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: SendableLazilyInstantiated<Session>
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session_LazilyInstantiated__Session: (() -> Session)? = nil,
+		            session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? = nil,
+		            feed: Feed.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session_LazilyInstantiated__Session: session_LazilyInstantiated__Session,
+		                session_SendableLazilyInstantiated__Session: session_SendableLazilyInstantiated__Session,
+		                feed: feed
+		            )
+		        }
+
+		        var session_LazilyInstantiated__Session: (() -> Session)? { __safeDI_storage.session_LazilyInstantiated__Session }
+		        var session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? { __safeDI_storage.session_SendableLazilyInstantiated__Session }
+		        var feed: Feed.SafeDIMockConfiguration { __safeDI_storage.feed }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_LazilyInstantiated__Session: (() -> Session)?,
+		                session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?,
+		                feed: Feed.SafeDIMockConfiguration
+		            ) {
+		                self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		                self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
+		                self.feed = feed
+		            }
+
+		            let session_LazilyInstantiated__Session: (() -> Session)?
+		            let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
+		            let feed: Feed.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_session_LazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session_LazilyInstantiated__Session { safeDIBuilder() } else { Session() }
+		        }
+		        let session_LazilyInstantiated__Session = LazilyInstantiated<Session>(__safeDI_session_LazilyInstantiated__Session)
+		        let __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder = safeDIOverrides.session_SendableLazilyInstantiated__Session
+		        @Sendable nonisolated func __safeDI_session_SendableLazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder { safeDIBuilder() } else { Session() }
+		        }
+		        let session_SendableLazilyInstantiated__Session = SendableLazilyInstantiated<Session>(__safeDI_session_SendableLazilyInstantiated__Session)
+		        func __safeDI_feed() -> Feed {
+		            func __safeDI_detail() -> Detail {
+		                let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		                return if let safeDIBuilder = safeDIOverrides.feed.detail { safeDIBuilder(session) } else { Detail(session: session) }
+		            }
+		            let detail: Detail = __safeDI_detail()
+		            func __safeDI_uploader() -> Uploader {
+		                let session: SendableLazilyInstantiated<Session> = session_SendableLazilyInstantiated__Session
+		                return if let safeDIBuilder = safeDIOverrides.feed.uploader { safeDIBuilder(session) } else { Uploader(session: session) }
+		            }
+		            let uploader: Uploader = __safeDI_uploader()
+		            _ = Cache.__safeDI_Cache_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_cache() -> Cache {
+		                let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		                return Cache.__safeDI_mock(session: session.instance, safeDIOverrides: safeDIOverrides.feed.cache)
+		            }
+		            let cache: Cache = __safeDI_cache()
+		            return if let safeDIBuilder = safeDIOverrides.feed.safeDIBuilder { safeDIBuilder(detail, uploader, cache) } else { Feed(detail: detail, uploader: uploader, cache: cache) }
+		        }
+		        let feed: Feed = __safeDI_feed()
+		        return Screen(feed: feed)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Feed {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            detail: ((LazilyInstantiated<Session>) -> Detail)? = nil,
+		            uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? = nil,
+		            cache: Cache.SafeDIOverrides = .init(),
+		            _ safeDIBuilder: ((Detail, Uploader, Cache) -> Feed)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                detail: detail,
+		                uploader: uploader,
+		                cache: cache,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var detail: ((LazilyInstantiated<Session>) -> Detail)? { __safeDI_storage.detail }
+		        var uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? { __safeDI_storage.uploader }
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Detail, Uploader, Cache) -> Feed)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                detail: ((LazilyInstantiated<Session>) -> Detail)?,
+		                uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?,
+		                cache: Cache.SafeDIOverrides,
+		                safeDIBuilder: ((Detail, Uploader, Cache) -> Feed)?
+		            ) {
+		                self.detail = detail
+		                self.uploader = uploader
+		                self.cache = cache
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let detail: ((LazilyInstantiated<Session>) -> Detail)?
+		            let uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?
+		            let cache: Cache.SafeDIOverrides
+		            let safeDIBuilder: ((Detail, Uploader, Cache) -> Feed)?
+		        }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsCallInstanceOfWrapperBoundApart_whenCallIsInsideCycleOfInstantiators() async throws {
+		// `Holder`, which builds itself again through `holderBuilder`, calls `Cache`'s public mock, beside the two wrapper
+		// kinds of `session` that `Screen`'s mock promotes.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			struct Screen: Instantiable {
+			    init(feed: Feed, uploader: Uploader, holder: Holder) {
+			        self.feed = feed
+			        self.uploader = uploader
+			        self.holder = holder
+			    }
+
+			    @Instantiated let feed: Feed
+			    @Instantiated let uploader: Uploader
+			    @Instantiated let holder: Holder
+			}
+
+			@Instantiable
+			struct Holder: Instantiable {
+			    init(cache: Cache, holderBuilder: Instantiator<Holder>) {
+			        self.cache = cache
+			        self.holderBuilder = holderBuilder
+			    }
+
+			    @Instantiated let cache: Cache
+			    @Instantiated let holderBuilder: Instantiator<Holder>
+			}
+
+			@Instantiable
+			struct Feed: Instantiable {
+			    init(session: LazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: LazilyInstantiated<Session>
+			}
+
+			@Instantiable
+			struct Uploader: Instantiable {
+			    init(session: SendableLazilyInstantiated<Session>) {
+			        self.session = session
+			    }
+
+			    @Received let session: SendableLazilyInstantiated<Session>
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session_LazilyInstantiated__Session: (() -> Session)? = nil,
+		            feed: ((LazilyInstantiated<Session>) -> Feed)? = nil,
+		            session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? = nil,
+		            uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? = nil,
+		            holder: Holder.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session_LazilyInstantiated__Session: session_LazilyInstantiated__Session,
+		                feed: feed,
+		                session_SendableLazilyInstantiated__Session: session_SendableLazilyInstantiated__Session,
+		                uploader: uploader,
+		                holder: holder
+		            )
+		        }
+
+		        var session_LazilyInstantiated__Session: (() -> Session)? { __safeDI_storage.session_LazilyInstantiated__Session }
+		        var feed: ((LazilyInstantiated<Session>) -> Feed)? { __safeDI_storage.feed }
+		        var session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)? { __safeDI_storage.session_SendableLazilyInstantiated__Session }
+		        var uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)? { __safeDI_storage.uploader }
+		        var holder: Holder.SafeDIMockConfiguration { __safeDI_storage.holder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session_LazilyInstantiated__Session: (() -> Session)?,
+		                feed: ((LazilyInstantiated<Session>) -> Feed)?,
+		                session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?,
+		                uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?,
+		                holder: Holder.SafeDIMockConfiguration
+		            ) {
+		                self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		                self.feed = feed
+		                self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
+		                self.uploader = uploader
+		                self.holder = holder
+		            }
+
+		            let session_LazilyInstantiated__Session: (() -> Session)?
+		            let feed: ((LazilyInstantiated<Session>) -> Feed)?
+		            let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
+		            let uploader: ((SendableLazilyInstantiated<Session>) -> Uploader)?
+		            let holder: Holder.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_session_LazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session_LazilyInstantiated__Session { safeDIBuilder() } else { Session() }
+		        }
+		        let session_LazilyInstantiated__Session = LazilyInstantiated<Session>(__safeDI_session_LazilyInstantiated__Session)
+		        func __safeDI_feed() -> Feed {
+		            let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session) } else { Feed(session: session) }
+		        }
+		        let feed: Feed = __safeDI_feed()
+		        let __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder = safeDIOverrides.session_SendableLazilyInstantiated__Session
+		        @Sendable nonisolated func __safeDI_session_SendableLazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder { safeDIBuilder() } else { Session() }
+		        }
+		        let session_SendableLazilyInstantiated__Session = SendableLazilyInstantiated<Session>(__safeDI_session_SendableLazilyInstantiated__Session)
+		        func __safeDI_uploader() -> Uploader {
+		            let session: SendableLazilyInstantiated<Session> = session_SendableLazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.uploader { safeDIBuilder(session) } else { Uploader(session: session) }
+		        }
+		        let uploader: Uploader = __safeDI_uploader()
+		        func __safeDI_holder() -> Holder {
+		            _ = Cache.__safeDI_Cache_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_cache() -> Cache {
+		                let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		                return Cache.__safeDI_mock(session: session.instance, safeDIOverrides: safeDIOverrides.holder.cache)
+		            }
+		            let cache: Cache = __safeDI_cache()
+		            func __safeDI_holderBuilder() -> Holder {
+		                _ = Cache.__safeDI_Cache_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_cache() -> Cache {
+		                    let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		                    return Cache.__safeDI_mock(session: session.instance)
+		                }
+		                let cache: Cache = __safeDI_cache()
+		                let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
+		                return Holder(cache: cache, holderBuilder: holderBuilder)
+		            }
+		            let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
+		        }
+		        let holder: Holder = __safeDI_holder()
+		        return Screen(feed: feed, uploader: uploader, holder: holder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Holder {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            cache: Cache.SafeDIOverrides = .init(),
+		            _ safeDIBuilder: ((Cache, Instantiator<Holder>) -> Holder)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Cache, Instantiator<Holder>) -> Holder)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                cache: Cache.SafeDIOverrides,
+		                safeDIBuilder: ((Cache, Instantiator<Holder>) -> Holder)?
+		            ) {
+		                self.cache = cache
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let cache: Cache.SafeDIOverrides
+		            let safeDIBuilder: ((Cache, Instantiator<Holder>) -> Holder)?
+		        }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
 	private static let sessionInstantiate = """
 	import SafeDI
 

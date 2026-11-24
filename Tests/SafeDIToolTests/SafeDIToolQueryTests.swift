@@ -3327,6 +3327,238 @@ struct SafeDIToolQueryTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsUncoveredDependencyNamedApart_whenBuilderFunctionAroundTypeDeclaringItDeclaresItsLabel() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("App", [
+					"""
+					public protocol RemoteApi {}
+
+					@Instantiable(generateMock: true)
+					public struct Screen: Instantiable {
+					    public init(child: Child) {
+					        self.child = child
+					    }
+
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(api: Api, grand: Grand) {
+					        self.api = api
+					        self.grand = grand
+					    }
+
+					    @Instantiated let api: Api
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Api: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Grand: Instantiable {
+					    public init(api: any RemoteApi) {
+					        self.api = api
+					    }
+
+					    @Instantiated let api: any RemoteApi
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Grand` is built inside `Child`'s builder function, whose `api` would hide a parameter named `api`.
+		#expect(output.formatted == """
+		`Screen` is built from declarations in 1 module:
+
+		App
+		  @Instantiable Api
+		  @Instantiable Child
+		  @Instantiable Grand
+		  @Instantiable Screen
+
+		@Forwarded parameters of `Screen`:
+		  (none)
+
+		Dependencies of `Screen` no @Instantiable declaration fulfills:
+		  api_RemoteApi: any RemoteApi
+		    No @Instantiable declaration fulfills `RemoteApi`.
+
+		`Screen.mock()` is generated in App from the same declarations.
+
+		Required @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Defaulted @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Required parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  api_RemoteApi: any RemoteApi
+		    No @Instantiable declaration fulfills `RemoteApi`.
+
+		Defaulted parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsNoParameterForLazilyInstantiatedReceive_whenMockedTypeForwardsIt() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("App", [
+					"public final class Session {}",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: LazilyInstantiated<Session>, feed: Feed) {
+					        self.session = session
+					        self.feed = feed
+					    }
+
+					    @Forwarded let session: LazilyInstantiated<Session>
+					    @Instantiated let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: LazilyInstantiated<Session>) {
+					        self.session = session
+					    }
+
+					    @Received let session: LazilyInstantiated<Session>
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Feed` receives the wrapper `Screen` forwards, so `mock()` takes nothing for it but the forwarded parameter.
+		#expect(output.formatted == """
+		`Screen` is built from declarations in 1 module:
+
+		App
+		  @Instantiable Feed
+		  @Instantiable Screen
+
+		@Forwarded parameters of `Screen`:
+		  session: LazilyInstantiated<Session>
+
+		Dependencies of `Screen` no @Instantiable declaration fulfills:
+		  (none)
+
+		`Screen.mock()` is generated in App from the same declarations.
+
+		Required @Forwarded parameters of `Screen.mock()`:
+		  session: LazilyInstantiated<Session>
+
+		Defaulted @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Required parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+	}
+
+	@Test
+	mutating func query_reportsNoParameterForWrapperInstance_whenPromotedDependencyReceivesOptionalWrapperBesideForwardedInstance() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("App", [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed, uploader: Uploader) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+					    @Forwarded let session: Session
+					    @Received let feed: Feed
+					    @Received let uploader: Uploader
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: LazilyInstantiated<Session>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+					    @Received(onlyIfAvailable: true) let session: LazilyInstantiated<Session>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Uploader: Instantiable {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Logger: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init(logger: Logger) { self.logger = logger }
+					    @Received let logger: Logger
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`Screen` is built from declarations in 1 module:
+
+		App
+		  @Instantiable Feed
+		  @Instantiable Screen
+		  @Instantiable Uploader
+
+		@Forwarded parameters of `Screen`:
+		  session: Session
+
+		Dependencies of `Screen` no @Instantiable declaration fulfills:
+		  (none)
+
+		`Screen.mock()` is generated in App from the same declarations.
+
+		Required @Forwarded parameters of `Screen.mock()`:
+		  session: Session
+
+		Defaulted @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Required parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
