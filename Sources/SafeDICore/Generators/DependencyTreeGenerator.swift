@@ -328,7 +328,7 @@ public actor DependencyTreeGenerator {
 		} else {
 			nil
 		}
-		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof) : nil
+		let trees = try await buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof) : nil
 		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
 		// frees the memory its frames took when it ends, which on a deep module took as long as releasing the trees.
 		if request.generatesDependencyTrees, let trees {
@@ -563,6 +563,16 @@ public actor DependencyTreeGenerator {
 
 		/// The validated scopes' table.
 		let frozenScopeMap: FrozenScopeMap
+
+		/// That this world's walks have passed, as a value a task can hold.
+		var passed: ValidationPassed {
+			ValidationPassed()
+		}
+	}
+
+	/// That the validated world's walks have passed: made only from a `ValidatedWorld`.
+	struct ValidationPassed: Sendable {
+		fileprivate init() {}
 	}
 
 	/// A root's code as a plan, which `spelled(_:)` writes once the trees are no longer needed.
@@ -610,13 +620,14 @@ public actor DependencyTreeGenerator {
 	///   - startsCodeGeneration: Whether each generator of a root's tree starts generating its code as it is created,
 	///     which trees built only to be read skip. Read only where no module holds a seam: a module that holds one always
 	///     generates code.
-	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, startsCodeGeneration: Bool = true) throws -> DependencyTrees {
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, startsCodeGeneration: Bool = true) async throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
 		var rootsOfOtherModules = [Instantiable]()
 		var storedSeamSignatures = [StoredSeamSignature]()
-		let rootScopeGenerators: [RootScopeInfo] = try {
+		let rootScopeGenerators: [RootScopeInfo]
+		do {
 			// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 			// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
 			// by property, so a seam that repeats a label is reported here rather than generating a tier that
@@ -628,7 +639,7 @@ public actor DependencyTreeGenerator {
 			try validateCalledSeamModulesShareMockCondition()
 			// A foreign seam's module info this run lacks is reported before the inlined trees, which reach that
 			// module's declarations, are found unfulfillable.
-			let foreignSeamRoots = try computeForeignSeamRoots()
+			let foreignSeamRoots = try await computeForeignSeamRoots()
 			try validateReachableTypeDescriptions(foreignSeamRoots: foreignSeamRoots)
 
 			let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
@@ -665,7 +676,7 @@ public actor DependencyTreeGenerator {
 			// checked where it is generated, so the validated scopes decide nothing about access in a module
 			// that holds a seam: a root's tree constructs the seam with its generated initializer, and the
 			// seam's tree compiles in the module that declares the seam.
-			guard !seams.isEmpty else {
+			if seams.isEmpty {
 				// Creating a generator starts generating its code, so every construction must be known to compile first.
 				let rootScopesToGenerate = try rootScopesThisModuleGenerates(
 					from: rootInstantiables.sorted().compactMap { typeDescription in
@@ -691,13 +702,14 @@ public actor DependencyTreeGenerator {
 						),
 					))
 				}
-				return roots
-			}
-			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof)
+				rootScopeGenerators = roots
+			} else {
+			let seamWorldRoots = try await seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
 			storedSeamSignatures = seamWorldRoots.storedSeamSignatures
-			return seamWorldRoots.roots
-		}()
+				rootScopeGenerators = seamWorldRoots.roots
+			}
+		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
