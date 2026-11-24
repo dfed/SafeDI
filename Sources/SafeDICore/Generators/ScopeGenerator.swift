@@ -8125,7 +8125,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.builderArgument(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: builderValue) ?? builderValue)
 				} else if let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
 					// A call that re-enters an enclosing call's level function hands it on as the enclosing call does.
-					.holeArgument(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: holeValue) ?? holeValue)
+					.spelledArgument(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: holeValue) ?? holeValue)
 				} else if let dependency, unavailableProperties.contains(dependency.property) {
 					.nil
 				} else if let dependency, dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
