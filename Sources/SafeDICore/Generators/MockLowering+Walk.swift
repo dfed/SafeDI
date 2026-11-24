@@ -436,6 +436,7 @@ extension MockLowering {
 		func buildsPublicly(_ type: TypeDescription) -> Bool {
 			buildsPublicMock || (isV3 && v3ConfigurationNames.isConfiguredPublicly(type))
 		}
+
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
