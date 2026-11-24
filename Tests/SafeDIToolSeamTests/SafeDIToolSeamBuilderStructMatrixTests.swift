@@ -113,15 +113,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder
+		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let logger = Logger()
 		            let tag = Tag()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_aBuilder.detailBuilder(logger, tag)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return A(logger: logger, tag: tag, detailBuilder: detailBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -129,11 +131,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        func __safeDI_bBuilder() -> B {
 		            let logger = Logger()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_bBuilder.detailBuilder(logger)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return B(logger: logger, detailBuilder: detailBuilder)
 		        }
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -424,15 +424,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let navigator = Navigator()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(navigator)
+		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
+		            return Leaf(api: api)
+		        }
 		        func __safeDI_detailBuilder(title: String) -> Detail {
 		            let secret = Secret()
 		            let __safeDI_Detail_values2 = __safeDI_DetailValues2(title: title, secret: secret)
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder(__safeDI_Detail_values2)
-		            func __safeDI_leafBuilder() -> Leaf {
-		                let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
-		                return Leaf(api: api)
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
 		            }
-		            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 		            return Detail(title: title, secret: secret, leafBuilder: leafBuilder)
 		        }
 		        let detailBuilder = Instantiator<Detail> {
@@ -1403,15 +1405,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let logger = Logger()
 		        let __safeDI_serviceBuilder_aBuilder = __safeDI_serviceBuilder.aBuilder(logger)
+		        func __safeDI_bBuilder(__safeDI_serviceBuilder_bBuilder: __safeDI_ServiceCarrier_B<any Service>) -> B {
+		            let badge = Badge()
+		            let service: any Service = __safeDI_serviceBuilder_bBuilder.service(badge)
+		            return B(badge: badge, service: service)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let tag = Tag()
 		            let __safeDI_serviceBuilder_bBuilder = __safeDI_serviceBuilder_aBuilder.bBuilder(tag)
-		            func __safeDI_bBuilder() -> B {
-		                let badge = Badge()
-		                let service: any Service = __safeDI_serviceBuilder_bBuilder.service(badge)
-		                return B(badge: badge, service: service)
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(__safeDI_serviceBuilder_bBuilder: __safeDI_serviceBuilder_bBuilder)
 		            }
-		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		            return A(tag: tag, bBuilder: bBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -2281,18 +2285,18 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_next.api(id)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
+		            }
+		            return Screen(id: id, api: api, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id)
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(id, api)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let api: any Api = __safeDI_apiBuilder_next.api(id)
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, api: api, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
 		            }
 		            return Screen(id: id, api: api, next: next)
 		        }
@@ -2992,18 +2996,18 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let __safeDI_serviceBuilder_screenBuilder = __safeDI_serviceBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_serviceBuilder_next: __safeDI_ServiceCarrier_Screen<any Service>) -> Screen {
+		            let service: any Service = __safeDI_serviceBuilder_next.service(id)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_serviceBuilder_next: __safeDI_serviceBuilder_next)
+		            }
+		            return Screen(id: id, service: service, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let service: any Service = __safeDI_serviceBuilder_screenBuilder.service(id)
 		            let __safeDI_serviceBuilder_next = __safeDI_serviceBuilder_screenBuilder.next(id, service)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let service: any Service = __safeDI_serviceBuilder_next.service(id)
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, service: service, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_serviceBuilder_next: __safeDI_serviceBuilder_next)
 		            }
 		            return Screen(id: id, service: service, next: next)
 		        }

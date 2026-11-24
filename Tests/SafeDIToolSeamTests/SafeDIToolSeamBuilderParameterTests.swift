@@ -1224,14 +1224,14 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let analytics = Analytics()
 		        let __safeDI_userServiceBuilder_home = __safeDI_userServiceBuilder.home(analytics)
+		        func __safeDI_avatar(__safeDI_userServiceBuilder_avatar: __safeDI_UserServiceCarrier_Avatar<any UserService>) -> Avatar {
+		            let userService: any UserService = __safeDI_userServiceBuilder_avatar.userService()
+		            return Avatar(userService: userService)
+		        }
 		        func __safeDI_home() -> Home {
 		            let session = Session()
 		            let __safeDI_userServiceBuilder_avatar = __safeDI_userServiceBuilder_home.avatar(session)
-		            func __safeDI_avatar() -> Avatar {
-		                let userService: any UserService = __safeDI_userServiceBuilder_avatar.userService()
-		                return Avatar(userService: userService)
-		            }
-		            let avatar: Avatar = __safeDI_avatar()
+		            let avatar: Avatar = __safeDI_avatar(__safeDI_userServiceBuilder_avatar: __safeDI_userServiceBuilder_avatar)
 		            return Home(session: session, avatar: avatar)
 		        }
 		        let home: Home = __safeDI_home()
@@ -1239,11 +1239,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        func __safeDI_settings() -> Settings {
 		            let theme = Theme()
 		            let __safeDI_userServiceBuilder_avatar = __safeDI_userServiceBuilder_settings.avatar(theme)
-		            func __safeDI_avatar() -> Avatar {
-		                let userService: any UserService = __safeDI_userServiceBuilder_avatar.userService()
-		                return Avatar(userService: userService)
-		            }
-		            let avatar: Avatar = __safeDI_avatar()
+		            let avatar: Avatar = __safeDI_avatar(__safeDI_userServiceBuilder_avatar: __safeDI_userServiceBuilder_avatar)
 		            return Settings(theme: theme, avatar: avatar)
 		        }
 		        let settings: Settings = __safeDI_settings()
@@ -3039,14 +3035,14 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_theme theme: Theme, __safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_home = __safeDI_userServiceBuilder.home(theme)
+		        func __safeDI_avatar(__safeDI_userServiceBuilder_avatar: __safeDI_UserServiceCarrier_Avatar<any UserService>) -> Avatar {
+		            let userService: any UserService = __safeDI_userServiceBuilder_avatar.userService()
+		            return Avatar(userService: userService)
+		        }
 		        func __safeDI_home() -> Home {
 		            let theme = Theme()
 		            let __safeDI_userServiceBuilder_avatar = __safeDI_userServiceBuilder_home.avatar(theme)
-		            func __safeDI_avatar() -> Avatar {
-		                let userService: any UserService = __safeDI_userServiceBuilder_avatar.userService()
-		                return Avatar(userService: userService)
-		            }
-		            let avatar: Avatar = __safeDI_avatar()
+		            let avatar: Avatar = __safeDI_avatar(__safeDI_userServiceBuilder_avatar: __safeDI_userServiceBuilder_avatar)
 		            return Home(avatar: avatar, theme: theme)
 		        }
 		        let home: Home = __safeDI_home()
@@ -5194,14 +5190,14 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_userServiceBuilder __safeDI_userServiceBuilder_: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_panel = __safeDI_userServiceBuilder_.panel
+		        func __safeDI_gadget() -> Gadget {
+		            let userServiceBuilder = Instantiator<Impl>(__safeDI_userServiceBuilder)
+		            return Gadget(userServiceBuilder: userServiceBuilder)
+		        }
+		        func __safeDI_userServiceBuilder() -> Impl {
+		            Impl()
+		        }
 		        func __safeDI_panel() -> Panel {
-		            func __safeDI_gadget() -> Gadget {
-		                func __safeDI_userServiceBuilder() -> Impl {
-		                    Impl()
-		                }
-		                let userServiceBuilder = Instantiator<Impl>(__safeDI_userServiceBuilder)
-		                return Gadget(userServiceBuilder: userServiceBuilder)
-		            }
 		            let gadget: Gadget = __safeDI_gadget()
 		            let userService: any UserService = __safeDI_userServiceBuilder_panel.userService(gadget)
 		            return Panel(gadget: gadget, userService: userService)
@@ -5274,24 +5270,24 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_userServiceBuilder: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_a_b = __safeDI_userServiceBuilder.a_b
+		        func __safeDI_c(__safeDI_userServiceBuilder_c: __safeDI_UserServiceCarrier_Owner<any UserService>) -> Owner {
+		            let userService: any UserService = __safeDI_userServiceBuilder_c.userService()
+		            return Owner(userService: userService)
+		        }
 		        func __safeDI_a_b() -> Left {
 		            let __safeDI_userServiceBuilder_c = __safeDI_userServiceBuilder_a_b.c
-		            func __safeDI_c() -> Owner {
-		                let userService: any UserService = __safeDI_userServiceBuilder_c.userService()
-		                return Owner(userService: userService)
-		            }
-		            let c: Owner = __safeDI_c()
+		            let c: Owner = __safeDI_c(__safeDI_userServiceBuilder_c: __safeDI_userServiceBuilder_c)
 		            return Left(c: c)
 		        }
 		        let a_b: Left = __safeDI_a_b()
 		        let __safeDI_userServiceBuilder_a = __safeDI_userServiceBuilder.a(a_b)
+		        func __safeDI_b_c(__safeDI_userServiceBuilder_b_c: __safeDI_UserServiceCarrier_Owner<any UserService>) -> Owner {
+		            let userService: any UserService = __safeDI_userServiceBuilder_b_c.userService()
+		            return Owner(userService: userService)
+		        }
 		        func __safeDI_a() -> Right {
 		            let __safeDI_userServiceBuilder_b_c = __safeDI_userServiceBuilder_a.b_c
-		            func __safeDI_b_c() -> Owner {
-		                let userService: any UserService = __safeDI_userServiceBuilder_b_c.userService()
-		                return Owner(userService: userService)
-		            }
-		            let b_c: Owner = __safeDI_b_c()
+		            let b_c: Owner = __safeDI_b_c(__safeDI_userServiceBuilder_b_c: __safeDI_userServiceBuilder_b_c)
 		            return Right(b_c: b_c)
 		        }
 		        let a: Right = __safeDI_a()
@@ -7069,12 +7065,15 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		return "extension \(seam) {\n" + (start.components(separatedBy: "\n}\n").first ?? "") + "\n}"
 	}
 
-	/// The builder function of `service` in `file`, unindented to the left margin.
+	/// The functions of `file` that fill `userServiceBuilder`, then the builder function of `service` that calls them,
+	/// unindented to the left margin.
 	private static func serviceBuilderFunction(in file: String) -> String {
 		let lines = file.components(separatedBy: "\n")
-		guard let start = lines.firstIndex(where: { $0.hasSuffix("func __safeDI_service() -> Service {") }) else { return "" }
+		guard let start = lines.firstIndex(where: { $0.hasSuffix("func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {") }),
+		      let service = lines[start...].firstIndex(where: { $0.hasSuffix("func __safeDI_service() -> Service {") })
+		else { return "" }
 		let indent = String(lines[start].prefix { $0 == " " })
-		guard let end = lines[start...].firstIndex(of: indent + "}") else { return "" }
+		guard let end = lines[service...].firstIndex(of: indent + "}") else { return "" }
 		return lines[start...end].map { String($0.dropFirst(indent.count)) }.joined(separator: "\n")
 	}
 

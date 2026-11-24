@@ -243,19 +243,16 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 				        func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>) -> A {
 				            let reader = Reader(tag: tag)
-				            func __safeDI_bBuilder() -> B {
-				                func __safeDI_tag() -> Tag {
-				                    Tag()
-				                }
-				                let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-				                let aBuilder = Instantiator<A> {
-				                    __safeDI_aBuilder(tag: tag)
-				                }
-				                return B(tag: tag, aBuilder: aBuilder)
-				            }
 				            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 				            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 				            return A(reader: reader, api: api, bBuilder: bBuilder)
+				        }
+				        func __safeDI_bBuilder() -> B {
+				            let tag = LazilyInstantiated<Tag>(__safeDI_tag)
+				            let aBuilder = Instantiator<A> {
+				                __safeDI_aBuilder(tag: tag)
+				            }
+				            return B(tag: tag, aBuilder: aBuilder)
 				        }
 				        let aBuilder = Instantiator<A> {
 				            __safeDI_aBuilder(tag: tag)

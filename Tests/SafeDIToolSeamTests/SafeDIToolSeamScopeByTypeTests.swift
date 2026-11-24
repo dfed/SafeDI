@@ -389,46 +389,46 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    public convenience init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let service = LazilyInstantiated<Service>(__safeDI_service)
 		        let __safeDI_apiBuilder_kiloBuilder = __safeDI_apiBuilder.kiloBuilder(service)
+		        func __safeDI_bravoBuilder(id: Int, __safeDI_apiBuilder_bravoBuilder: __safeDI_ApiCarrier_Bravo<any Api>) -> Bravo {
+		            let __safeDI_apiBuilder_bravoModel = __safeDI_apiBuilder_bravoBuilder.bravoModel(id)
+		            let bravoModel: BravoModel = __safeDI_bravoModel(id: id, __safeDI_apiBuilder_bravoModel: __safeDI_apiBuilder_bravoModel)
+		            return Bravo(id: id, service: service.instance, bravoModel: bravoModel)
+		        }
+		        func __safeDI_bravoModel(id: Int, __safeDI_apiBuilder_bravoModel: __safeDI_ApiCarrier_BravoModel<any Api>) -> BravoModel {
+		            let api: any Api = __safeDI_apiBuilder_bravoModel.api()
+		            return BravoModel(id: id, service: service.instance, api: api)
+		        }
+		        func __safeDI_yankeeBuilder(id: Int, __safeDI_apiBuilder_yankeeBuilder: __safeDI_ApiCarrier_Yankee<any Api>) -> Yankee {
+		            let __safeDI_apiBuilder_yankeeModel = __safeDI_apiBuilder_yankeeBuilder.yankeeModel(id)
+		            let yankeeModel: YankeeModel = __safeDI_yankeeModel(id: id, __safeDI_apiBuilder_yankeeModel: __safeDI_apiBuilder_yankeeModel)
+		            return Yankee(id: id, service: service.instance, yankeeModel: yankeeModel)
+		        }
+		        func __safeDI_yankeeModel(id: Int, __safeDI_apiBuilder_yankeeModel: __safeDI_ApiCarrier_YankeeModel<any Api>) -> YankeeModel {
+		            let api: any Api = __safeDI_apiBuilder_yankeeModel.api()
+		            return YankeeModel(id: id, service: service.instance, api: api)
+		        }
+		        func __safeDI_deltaBuilder(id: Int, __safeDI_apiBuilder_deltaBuilder: __safeDI_ApiCarrier_Delta<any Api>) -> Delta {
+		            let __safeDI_apiBuilder_deltaModel = __safeDI_apiBuilder_deltaBuilder.deltaModel(id)
+		            let deltaModel: DeltaModel = __safeDI_deltaModel(id: id, __safeDI_apiBuilder_deltaModel: __safeDI_apiBuilder_deltaModel)
+		            return Delta(id: id, service: service.instance, deltaModel: deltaModel)
+		        }
+		        func __safeDI_deltaModel(id: Int, __safeDI_apiBuilder_deltaModel: __safeDI_ApiCarrier_DeltaModel<any Api>) -> DeltaModel {
+		            let api: any Api = __safeDI_apiBuilder_deltaModel.api()
+		            return DeltaModel(id: id, service: service.instance, api: api)
+		        }
 		        func __safeDI_kiloBuilder(id: Int) -> Kilo {
 		            let kiloModel = KiloModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_bravoBuilder = __safeDI_apiBuilder_kiloBuilder.bravoBuilder(id, kiloModel)
-		            func __safeDI_bravoBuilder(id: Int) -> Bravo {
-		                let __safeDI_apiBuilder_bravoModel = __safeDI_apiBuilder_bravoBuilder.bravoModel(id)
-		                func __safeDI_bravoModel() -> BravoModel {
-		                    let api: any Api = __safeDI_apiBuilder_bravoModel.api()
-		                    return BravoModel(id: id, service: service.instance, api: api)
-		                }
-		                let bravoModel: BravoModel = __safeDI_bravoModel()
-		                return Bravo(id: id, service: service.instance, bravoModel: bravoModel)
-		            }
 		            let bravoBuilder = Instantiator<Bravo> {
-		                __safeDI_bravoBuilder(id: $0)
+		                __safeDI_bravoBuilder(id: $0, __safeDI_apiBuilder_bravoBuilder: __safeDI_apiBuilder_bravoBuilder)
 		            }
 		            let __safeDI_apiBuilder_yankeeBuilder = __safeDI_apiBuilder_kiloBuilder.yankeeBuilder(id, kiloModel, bravoBuilder)
-		            func __safeDI_yankeeBuilder(id: Int) -> Yankee {
-		                let __safeDI_apiBuilder_yankeeModel = __safeDI_apiBuilder_yankeeBuilder.yankeeModel(id)
-		                func __safeDI_yankeeModel() -> YankeeModel {
-		                    let api: any Api = __safeDI_apiBuilder_yankeeModel.api()
-		                    return YankeeModel(id: id, service: service.instance, api: api)
-		                }
-		                let yankeeModel: YankeeModel = __safeDI_yankeeModel()
-		                return Yankee(id: id, service: service.instance, yankeeModel: yankeeModel)
-		            }
 		            let yankeeBuilder = Instantiator<Yankee> {
-		                __safeDI_yankeeBuilder(id: $0)
+		                __safeDI_yankeeBuilder(id: $0, __safeDI_apiBuilder_yankeeBuilder: __safeDI_apiBuilder_yankeeBuilder)
 		            }
 		            let __safeDI_apiBuilder_deltaBuilder = __safeDI_apiBuilder_kiloBuilder.deltaBuilder(id, kiloModel, bravoBuilder, yankeeBuilder)
-		            func __safeDI_deltaBuilder(id: Int) -> Delta {
-		                let __safeDI_apiBuilder_deltaModel = __safeDI_apiBuilder_deltaBuilder.deltaModel(id)
-		                func __safeDI_deltaModel() -> DeltaModel {
-		                    let api: any Api = __safeDI_apiBuilder_deltaModel.api()
-		                    return DeltaModel(id: id, service: service.instance, api: api)
-		                }
-		                let deltaModel: DeltaModel = __safeDI_deltaModel()
-		                return Delta(id: id, service: service.instance, deltaModel: deltaModel)
-		            }
 		            let deltaBuilder = Instantiator<Delta> {
-		                __safeDI_deltaBuilder(id: $0)
+		                __safeDI_deltaBuilder(id: $0, __safeDI_apiBuilder_deltaBuilder: __safeDI_apiBuilder_deltaBuilder)
 		            }
 		            return Kilo(id: id, service: service.instance, kiloModel: kiloModel, bravoBuilder: bravoBuilder, yankeeBuilder: yankeeBuilder, deltaBuilder: deltaBuilder)
 		        }
@@ -436,46 +436,28 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            __safeDI_kiloBuilder(id: $0)
 		        }
 		        let __safeDI_apiBuilder_echoBuilder = __safeDI_apiBuilder.echoBuilder(service, kiloBuilder)
+		        func __safeDI_mikeBuilder(id: Int, __safeDI_apiBuilder_mikeBuilder: __safeDI_ApiCarrier_Mike<any Api>) -> Mike {
+		            let __safeDI_apiBuilder_mikeModel = __safeDI_apiBuilder_mikeBuilder.mikeModel(id)
+		            let mikeModel: MikeModel = __safeDI_mikeModel(id: id, __safeDI_apiBuilder_mikeModel: __safeDI_apiBuilder_mikeModel)
+		            return Mike(id: id, service: service.instance, mikeModel: mikeModel)
+		        }
+		        func __safeDI_mikeModel(id: Int, __safeDI_apiBuilder_mikeModel: __safeDI_ApiCarrier_MikeModel<any Api>) -> MikeModel {
+		            let api: any Api = __safeDI_apiBuilder_mikeModel.api()
+		            return MikeModel(id: id, service: service.instance, api: api)
+		        }
 		        func __safeDI_echoBuilder(id: Int) -> Echo {
 		            let echoModel = EchoModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_mikeBuilder = __safeDI_apiBuilder_echoBuilder.mikeBuilder(id, echoModel)
-		            func __safeDI_mikeBuilder(id: Int) -> Mike {
-		                let __safeDI_apiBuilder_mikeModel = __safeDI_apiBuilder_mikeBuilder.mikeModel(id)
-		                func __safeDI_mikeModel() -> MikeModel {
-		                    let api: any Api = __safeDI_apiBuilder_mikeModel.api()
-		                    return MikeModel(id: id, service: service.instance, api: api)
-		                }
-		                let mikeModel: MikeModel = __safeDI_mikeModel()
-		                return Mike(id: id, service: service.instance, mikeModel: mikeModel)
-		            }
 		            let mikeBuilder = Instantiator<Mike> {
-		                __safeDI_mikeBuilder(id: $0)
+		                __safeDI_mikeBuilder(id: $0, __safeDI_apiBuilder_mikeBuilder: __safeDI_apiBuilder_mikeBuilder)
 		            }
 		            let __safeDI_apiBuilder_yankeeBuilder = __safeDI_apiBuilder_echoBuilder.yankeeBuilder(id, echoModel, mikeBuilder)
-		            func __safeDI_yankeeBuilder(id: Int) -> Yankee {
-		                let __safeDI_apiBuilder_yankeeModel = __safeDI_apiBuilder_yankeeBuilder.yankeeModel(id)
-		                func __safeDI_yankeeModel() -> YankeeModel {
-		                    let api: any Api = __safeDI_apiBuilder_yankeeModel.api()
-		                    return YankeeModel(id: id, service: service.instance, api: api)
-		                }
-		                let yankeeModel: YankeeModel = __safeDI_yankeeModel()
-		                return Yankee(id: id, service: service.instance, yankeeModel: yankeeModel)
-		            }
 		            let yankeeBuilder = Instantiator<Yankee> {
-		                __safeDI_yankeeBuilder(id: $0)
+		                __safeDI_yankeeBuilder(id: $0, __safeDI_apiBuilder_yankeeBuilder: __safeDI_apiBuilder_yankeeBuilder)
 		            }
 		            let __safeDI_apiBuilder_deltaBuilder = __safeDI_apiBuilder_echoBuilder.deltaBuilder(id, echoModel, mikeBuilder, yankeeBuilder)
-		            func __safeDI_deltaBuilder(id: Int) -> Delta {
-		                let __safeDI_apiBuilder_deltaModel = __safeDI_apiBuilder_deltaBuilder.deltaModel(id)
-		                func __safeDI_deltaModel() -> DeltaModel {
-		                    let api: any Api = __safeDI_apiBuilder_deltaModel.api()
-		                    return DeltaModel(id: id, service: service.instance, api: api)
-		                }
-		                let deltaModel: DeltaModel = __safeDI_deltaModel()
-		                return Delta(id: id, service: service.instance, deltaModel: deltaModel)
-		            }
 		            let deltaBuilder = Instantiator<Delta> {
-		                __safeDI_deltaBuilder(id: $0)
+		                __safeDI_deltaBuilder(id: $0, __safeDI_apiBuilder_deltaBuilder: __safeDI_apiBuilder_deltaBuilder)
 		            }
 		            return Echo(id: id, service: service.instance, echoModel: echoModel, mikeBuilder: mikeBuilder, yankeeBuilder: yankeeBuilder, deltaBuilder: deltaBuilder)
 		        }
@@ -486,43 +468,16 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		        func __safeDI_zuluBuilder(id: Int) -> Zulu {
 		            let zuluModel = ZuluModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_mikeBuilder = __safeDI_apiBuilder_zuluBuilder.mikeBuilder(id, zuluModel)
-		            func __safeDI_mikeBuilder(id: Int) -> Mike {
-		                let __safeDI_apiBuilder_mikeModel = __safeDI_apiBuilder_mikeBuilder.mikeModel(id)
-		                func __safeDI_mikeModel() -> MikeModel {
-		                    let api: any Api = __safeDI_apiBuilder_mikeModel.api()
-		                    return MikeModel(id: id, service: service.instance, api: api)
-		                }
-		                let mikeModel: MikeModel = __safeDI_mikeModel()
-		                return Mike(id: id, service: service.instance, mikeModel: mikeModel)
-		            }
 		            let mikeBuilder = Instantiator<Mike> {
-		                __safeDI_mikeBuilder(id: $0)
+		                __safeDI_mikeBuilder(id: $0, __safeDI_apiBuilder_mikeBuilder: __safeDI_apiBuilder_mikeBuilder)
 		            }
 		            let __safeDI_apiBuilder_bravoBuilder = __safeDI_apiBuilder_zuluBuilder.bravoBuilder(id, zuluModel, mikeBuilder)
-		            func __safeDI_bravoBuilder(id: Int) -> Bravo {
-		                let __safeDI_apiBuilder_bravoModel = __safeDI_apiBuilder_bravoBuilder.bravoModel(id)
-		                func __safeDI_bravoModel() -> BravoModel {
-		                    let api: any Api = __safeDI_apiBuilder_bravoModel.api()
-		                    return BravoModel(id: id, service: service.instance, api: api)
-		                }
-		                let bravoModel: BravoModel = __safeDI_bravoModel()
-		                return Bravo(id: id, service: service.instance, bravoModel: bravoModel)
-		            }
 		            let bravoBuilder = Instantiator<Bravo> {
-		                __safeDI_bravoBuilder(id: $0)
+		                __safeDI_bravoBuilder(id: $0, __safeDI_apiBuilder_bravoBuilder: __safeDI_apiBuilder_bravoBuilder)
 		            }
 		            let __safeDI_apiBuilder_deltaBuilder = __safeDI_apiBuilder_zuluBuilder.deltaBuilder(id, zuluModel, mikeBuilder, bravoBuilder)
-		            func __safeDI_deltaBuilder(id: Int) -> Delta {
-		                let __safeDI_apiBuilder_deltaModel = __safeDI_apiBuilder_deltaBuilder.deltaModel(id)
-		                func __safeDI_deltaModel() -> DeltaModel {
-		                    let api: any Api = __safeDI_apiBuilder_deltaModel.api()
-		                    return DeltaModel(id: id, service: service.instance, api: api)
-		                }
-		                let deltaModel: DeltaModel = __safeDI_deltaModel()
-		                return Delta(id: id, service: service.instance, deltaModel: deltaModel)
-		            }
 		            let deltaBuilder = Instantiator<Delta> {
-		                __safeDI_deltaBuilder(id: $0)
+		                __safeDI_deltaBuilder(id: $0, __safeDI_apiBuilder_deltaBuilder: __safeDI_apiBuilder_deltaBuilder)
 		            }
 		            return Zulu(id: id, service: service.instance, zuluModel: zuluModel, mikeBuilder: mikeBuilder, bravoBuilder: bravoBuilder, deltaBuilder: deltaBuilder)
 		        }
@@ -533,43 +488,16 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		        func __safeDI_alphaBuilder(id: Int) -> Alpha {
 		            let alphaModel = AlphaModel(id: id, service: service.instance)
 		            let __safeDI_apiBuilder_mikeBuilder = __safeDI_apiBuilder_alphaBuilder.mikeBuilder(id, alphaModel)
-		            func __safeDI_mikeBuilder(id: Int) -> Mike {
-		                let __safeDI_apiBuilder_mikeModel = __safeDI_apiBuilder_mikeBuilder.mikeModel(id)
-		                func __safeDI_mikeModel() -> MikeModel {
-		                    let api: any Api = __safeDI_apiBuilder_mikeModel.api()
-		                    return MikeModel(id: id, service: service.instance, api: api)
-		                }
-		                let mikeModel: MikeModel = __safeDI_mikeModel()
-		                return Mike(id: id, service: service.instance, mikeModel: mikeModel)
-		            }
 		            let mikeBuilder = Instantiator<Mike> {
-		                __safeDI_mikeBuilder(id: $0)
+		                __safeDI_mikeBuilder(id: $0, __safeDI_apiBuilder_mikeBuilder: __safeDI_apiBuilder_mikeBuilder)
 		            }
 		            let __safeDI_apiBuilder_bravoBuilder = __safeDI_apiBuilder_alphaBuilder.bravoBuilder(id, alphaModel, mikeBuilder)
-		            func __safeDI_bravoBuilder(id: Int) -> Bravo {
-		                let __safeDI_apiBuilder_bravoModel = __safeDI_apiBuilder_bravoBuilder.bravoModel(id)
-		                func __safeDI_bravoModel() -> BravoModel {
-		                    let api: any Api = __safeDI_apiBuilder_bravoModel.api()
-		                    return BravoModel(id: id, service: service.instance, api: api)
-		                }
-		                let bravoModel: BravoModel = __safeDI_bravoModel()
-		                return Bravo(id: id, service: service.instance, bravoModel: bravoModel)
-		            }
 		            let bravoBuilder = Instantiator<Bravo> {
-		                __safeDI_bravoBuilder(id: $0)
+		                __safeDI_bravoBuilder(id: $0, __safeDI_apiBuilder_bravoBuilder: __safeDI_apiBuilder_bravoBuilder)
 		            }
 		            let __safeDI_apiBuilder_yankeeBuilder = __safeDI_apiBuilder_alphaBuilder.yankeeBuilder(id, alphaModel, mikeBuilder, bravoBuilder)
-		            func __safeDI_yankeeBuilder(id: Int) -> Yankee {
-		                let __safeDI_apiBuilder_yankeeModel = __safeDI_apiBuilder_yankeeBuilder.yankeeModel(id)
-		                func __safeDI_yankeeModel() -> YankeeModel {
-		                    let api: any Api = __safeDI_apiBuilder_yankeeModel.api()
-		                    return YankeeModel(id: id, service: service.instance, api: api)
-		                }
-		                let yankeeModel: YankeeModel = __safeDI_yankeeModel()
-		                return Yankee(id: id, service: service.instance, yankeeModel: yankeeModel)
-		            }
 		            let yankeeBuilder = Instantiator<Yankee> {
-		                __safeDI_yankeeBuilder(id: $0)
+		                __safeDI_yankeeBuilder(id: $0, __safeDI_apiBuilder_yankeeBuilder: __safeDI_apiBuilder_yankeeBuilder)
 		            }
 		            return Alpha(id: id, service: service.instance, alphaModel: alphaModel, mikeBuilder: mikeBuilder, bravoBuilder: bravoBuilder, yankeeBuilder: yankeeBuilder)
 		        }
@@ -1399,13 +1327,13 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let apiValues_store = Clock()
 		        let __safeDI_apiBuilder_store = __safeDI_apiBuilder.store(apiValues_store)
+		        func __safeDI_shelf(__safeDI_apiBuilder_shelf: __safeDI_ApiCarrier_Shelf<any Api>) -> Shelf {
+		            let api: any Api = __safeDI_apiBuilder_shelf.api()
+		            return Shelf(api: api)
+		        }
 		        func __safeDI_store() -> Store {
 		            let __safeDI_apiBuilder_shelf = __safeDI_apiBuilder_store.shelf
-		            func __safeDI_shelf() -> Shelf {
-		                let api: any Api = __safeDI_apiBuilder_shelf.api()
-		                return Shelf(api: api)
-		            }
-		            let shelf: Shelf = __safeDI_shelf()
+		            let shelf: Shelf = __safeDI_shelf(__safeDI_apiBuilder_shelf: __safeDI_apiBuilder_shelf)
 		            return Store(shelf: shelf)
 		        }
 		        let store: Store = __safeDI_store()

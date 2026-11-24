@@ -185,13 +185,15 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder.stepBuilder(logger)
+		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        func __safeDI_stepBuilder() -> Step {
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_stepBuilder.detailBuilder
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Step(detailBuilder: detailBuilder)
 		        }
 		        let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
