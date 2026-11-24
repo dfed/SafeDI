@@ -6879,6 +6879,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The record of this scope's place where it calls another module's seam and is built by value: its text, with the reads
+	/// of the call's arguments, or `nil` where the type key does not plan it.
+	nonisolated private func seamCallRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		code: GeneratedCode,
+		declaredFunctionName: String?,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
+		inlinePlaceBuilder: FillPlaceBindings.HoleBuilder?,
+	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+		      inlinePlaceBuilder == nil,
+		      cycleParameters.isEmpty,
+		      let reads = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
+		else { return nil }
+		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: code.spelled(), reads: reads)
+		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
+		return .alias(record)
+	}
+
 	/// The record of this scope's place where it closes a cycle on the function named `closedOnFunctionName`, or `nil` where
 	/// the type key does not plan it.
 	nonisolated private func closingRecord(
@@ -8451,6 +8473,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)),
 				]))
 			}
+			let code = GeneratedCode.sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, inlinePlaceBuilder: inlinePlaceBuilder))])
 			let record: PlaceRecord? = if isPropertyCycle {
 				isPlannedByTypeKey ? closingRecord(
 					of: property,
@@ -8462,10 +8485,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					builderFunctionNames: builderFunctionNames,
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
+			} else if seamCall != nil {
+				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
+				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder) : nil
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true)
 			}
-			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, inlinePlaceBuilder: inlinePlaceBuilder))])).with(record: record)
+			return place(code: code).with(record: record)
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
 			// The builder function is the one a constant with children declares. A constant calls it
@@ -8492,8 +8518,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(Self.lazilyInstantiatedValue(of: property, callingFunctionNamed: functionName, cycleArguments: cycleArguments, erasedToConcreteExistential: erasedToConcreteExistential, inlinePlaceBuilder: inlinePlaceBuilder))"
 			}
 
-			return PlacePlan(code: function.spelled(after: valuesBindingLines, followedBy: lastLine),
-			                 record: try builtRecord(functionName: functionName, hasFunction: true))
+			let code = function.spelled(after: valuesBindingLines, followedBy: lastLine)
+			let record: PlaceRecord? = if seamCall != nil {
+				try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder)
+			} else {
+				try builtRecord(functionName: functionName, hasFunction: true)
+			}
+			return PlacePlan(code: code, record: record)
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
@@ -8539,8 +8570,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 
 			// The payloads a seam's tree binds before building a scope that leads to a place.
-			return PlacePlan(code: .sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")]),
-			                 record: try builtRecord(functionName: functionName, hasFunction: hasGeneratedContent))
+			let code = GeneratedCode.sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")])
+			// A call of another module's seam is written as its text, which the type key lays out with the reads it lists: its
+			// builder function holds the guard line, which the type key's constructions do not write.
+			let record: PlaceRecord? = if seamCall != nil {
+				try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder)
+			} else {
+				try builtRecord(functionName: functionName, hasFunction: hasGeneratedContent)
+			}
+			return PlacePlan(code: code, record: record)
 		}
 	}
 
