@@ -364,7 +364,7 @@ struct ConstructionLog {
 	enum Read: Hashable {
 		/// The nearest declaration of a label, read whole (`NearestDeclarations.build(_:)` adds to it).
 		case nearestDeclaration(String)
-		/// The binding a receive of a property only if available reads (`NearestDeclarations.binding(of:)`).
+		/// The binding a receive of a property only if available reads (`NearestDeclarations.resolvingBinding(of:)`).
 		case binding(Property)
 		/// The declaration a scope building a property for a concrete type closes a cycle on, if any, by their IDs.
 		case declarationClosedOn(PropertyID, TypeID)
