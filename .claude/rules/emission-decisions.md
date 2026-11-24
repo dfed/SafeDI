@@ -1,6 +1,7 @@
 ---
 paths:
   - "Sources/SafeDICore/Generators/ScopeGenerator.swift"
+  - "Sources/SafeDICore/Generators/ScopeGenerator+{FillDispatcher,Fills,SeamRoot,Sites}.swift"
   - "Sources/SafeDICore/Generators/PublicMockGeneration.swift"
   - "Sources/SafeDICore/Generators/PublicMockLevelFunctions.swift"
   - "Sources/SafeDICore/Generators/GeneratedImportAccess.swift"

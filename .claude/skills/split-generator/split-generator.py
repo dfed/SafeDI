@@ -68,8 +68,9 @@ class Problem(Exception):
 
 # MARK: Reading Swift
 
-def string_end(text, index):
-    """The index after the string literal that starts at `index`, whose interpolations may hold literals of their own."""
+def string_end(text, index, interpolations=None):
+    """The index after the string literal that starts at `index`, whose interpolations may hold literals of their own.
+    Where `interpolations` is a list, the (start, end) of each interpolation's code is appended to it."""
     length = len(text)
     hashes = len(re.match(r"#*", text[index:]).group(0))
     index += hashes
@@ -80,13 +81,16 @@ def string_end(text, index):
     while index < length and not text.startswith(closing, index):
         if text.startswith(escape + "(", index):
             index += len(escape) + 1
+            interpolation_start = index
             depth = 1
             while index < length and depth:
                 if text[index] == '"' or re.match(r'#+"', text[index:]):
-                    index = string_end(text, index)
+                    index = string_end(text, index, interpolations)
                     continue
                 depth += {"(": 1, ")": -1}.get(text[index], 0)
                 index += 1
+            if interpolations is not None:
+                interpolations.append((interpolation_start, index - 1))
         elif text.startswith(escape, index):
             index += len(escape) + 1
         else:
@@ -94,8 +98,9 @@ def string_end(text, index):
     return min(length, index + len(closing))
 
 
-def masked(text):
-    """`text` with every comment and string literal's characters replaced by spaces, so that offsets stay."""
+def masked(text, keeping_interpolations=False):
+    """`text` with every comment and string literal's characters replaced by spaces, so that offsets stay; where
+    `keeping_interpolations`, the code inside each string literal's interpolations stays, since it names declarations."""
     out = list(text)
     index = 0
     length = len(text)
@@ -123,8 +128,13 @@ def masked(text):
             blank(index, end)
             index = end
         elif text[index] == '"' or (text[index] == "#" and re.match(r'#+"', text[index:])):
-            end = string_end(text, index)
+            interpolations = []
+            end = string_end(text, index, interpolations)
             blank(index, end)
+            if keeping_interpolations:
+                for start, interpolation_end in interpolations:
+                    for position in range(start, interpolation_end):
+                        out[position] = text[position]
             index = end
         else:
             index += 1
@@ -383,7 +393,8 @@ def loosen_access(units):
     words_by_target = {}
     unit_words = {}
     for unit in units:
-        unit_words[id(unit)] = words(unit.code)
+        # A name a string literal's interpolation reads is a use too (`"\\(name)"`), which `unit.code` blanks.
+        unit_words[id(unit)] = words(masked("\n".join(unit.lines), keeping_interpolations=True))
     declarations = []  # (unit, offset, level, kind, name, depth)
     for unit in units:
         for offset, level, kind, name, depth in private_declarations(unit):
@@ -939,6 +950,16 @@ def self_test(root):
         {"Sites.swift": site.replace('"Sources/Generator.swift",\n\tcode: "report.count', '"Sources/Generator+Validation.swift",\n\tcode: "report.count'), "Notes.md": "`Generator.swift` and its `Generator+*.swift` files hold it.\n"},
         extra={"Sites.swift": site, "Notes.md": "`Generator.swift` holds it.\n"},
         map_extra={"relocate": [{"file": "Sites.swift"}], "replace": [{"file": "Notes.md", "old": "`Generator.swift` holds it.", "new": "`Generator.swift` and its `Generator+*.swift` files hold it."}]},
+    )
+    interpolation_source = "// License\n\nimport Foundation\n\nactor Generator {\n\tprivate let count = 1\n\n\tfunc describe() -> String {\n\t\t\"count: \\(count)\"\n\t}\n}\n"
+    case(
+        "a name read only inside a string interpolation loosens too",
+        [["func describe", "Generator+Description.swift"]], 0,
+        {
+            "Sources/Generator.swift": "// License\n\nimport Foundation\n\nactor Generator {\n\tlet count = 1\n}\n",
+            "Sources/Generator+Description.swift": "// License\n\nimport Foundation\n\nextension Generator {\n\tfunc describe() -> String {\n\t\t\"count: \\(count)\"\n\t}\n}\n",
+        },
+        source=interpolation_source,
     )
     private_type_in_signature = SELF_TEST_SOURCE.replace("report.count + offset", "self.report(for: 1).count + offset").replace("private func untouched", "func untouched")
     case(
