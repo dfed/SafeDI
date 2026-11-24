@@ -513,8 +513,8 @@ extension DependencyTreeGenerator {
 					let treeBuiltAnew = try builtTree(startingCodeGeneration: false)
 					observer(ReusedSeamTree(
 						signature: StoredSeamSignature(seamType: seam.concreteInstantiable, signature: finalSeamRoot.signature),
-						reusedTreeCode: { try await scopeGenerator.generateCode() },
-						builtTreeCode: { try await treeBuiltAnew.generateCode() },
+						reusedTreeCode: { try await scopeGenerator.generatePlan().spelled() },
+						builtTreeCode: { try await treeBuiltAnew.generatePlan().spelled() },
 					))
 				}
 			} else {

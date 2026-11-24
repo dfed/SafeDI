@@ -152,7 +152,6 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
-
 		// The declarations the mock calls, each once, in the order the mock reaches them.
 		var declarations = [TypeRequirements.Declaration]()
 		var recordedDeclarations = Set<TypeRequirements.Declaration>()
