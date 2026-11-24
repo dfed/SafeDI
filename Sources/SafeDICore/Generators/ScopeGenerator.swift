@@ -7085,7 +7085,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The code of each of `requests`, in their order, each on a task of its own (`appendConcurrentChildCode`).
 	private static func concurrentChildCode(
 		of requests: [ChildCodeRequest],
-		codeGeneration: CodeGeneration,
+		codeGeneration _: CodeGeneration,
 		leadingWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> [ChildCode] {

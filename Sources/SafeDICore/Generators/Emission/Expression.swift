@@ -65,7 +65,7 @@ struct ConstructionHook: Hashable, Sendable {
 	let builder: String
 	let call: String
 	/// The construction the place is built with where it is not overridden, where it differs from the production one.
-	var construction: String? = nil
+	var construction: String?
 }
 
 /// The hooks of one place of a configurable body and of the places beneath it, by child index (`OrderedChild.index`).

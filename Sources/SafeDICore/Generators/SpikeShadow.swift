@@ -33,11 +33,23 @@ extension ScopeGenerator {
 			insert(&tree, path[...])
 		}
 		var features = Set<String>()
-		if instantiable.generateMock == .public { features.insert("public") }
-		if flatRenames { features.insert("flatRenames") }
-		let instantiated = Set(instantiable.dependencies.filter { if case .instantiated = $0.source { true } else { false } }.map(\.property.label))
+		if instantiable.generateMock == .public {
+			features.insert("public")
+		}
+		if flatRenames {
+			features.insert("flatRenames")
+		}
+		let instantiated = Set(instantiable.dependencies.filter {
+			if case .instantiated = $0.source {
+				true
+			} else {
+				false
+			}
+		}.map(\.property.label))
 		for child in children {
-			if let property = child.property, !instantiated.contains(property.label) { features.insert("promoted") }
+			if let property = child.property, !instantiated.contains(property.label) {
+				features.insert("promoted")
+			}
 		}
 		var stack = children
 		var depth = 0
@@ -45,18 +57,32 @@ extension ScopeGenerator {
 			depth += 1
 			switch generator.scopeData {
 			case let .property(_, property, _, _, isPropertyCycle, seamCall):
-				if isPropertyCycle { features.insert("cycle") }
-				if seamCall != nil { features.insert("seamCall") }
-				if !property.propertyType.isConstant { features.insert("wrapper") }
+				if isPropertyCycle {
+					features.insert("cycle")
+				}
+				if seamCall != nil {
+					features.insert("seamCall")
+				}
+				if !property.propertyType.isConstant {
+					features.insert("wrapper")
+				}
 			case .alias: features.insert("alias")
 			case .fill: features.insert("fill")
 			case .hole: features.insert("hole")
 			case .root: break
 			}
-			if await !generator.cycleParameters.isEmpty { features.insert("cycleParameters") }
-			if !generator.receivedBuilderLoops.loopByChildIndex.isEmpty { features.insert("loop") }
-			if generator.publicMockCall != nil { features.insert("publicMockCall") }
-			if await generator.buildsInSendableFunction { features.insert("sendable") }
+			if await !generator.cycleParameters.isEmpty {
+				features.insert("cycleParameters")
+			}
+			if !generator.receivedBuilderLoops.loopByChildIndex.isEmpty {
+				features.insert("loop")
+			}
+			if generator.publicMockCall != nil {
+				features.insert("publicMockCall")
+			}
+			if await generator.buildsInSendableFunction {
+				features.insert("sendable")
+			}
 			stack += generator.children
 		}
 		let mockBody = mockLines.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init).filter { !$0.allSatisfy(\.isWhitespace) }
