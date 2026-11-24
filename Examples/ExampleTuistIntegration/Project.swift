@@ -49,6 +49,8 @@ let project = Project(
 				SafeDI.preCompileScript(
 					module: "ExampleTuistIntegration",
 					dependencies: ["Subproject"],
+					// No target depends on the app, so its script writes no `.safedi`.
+					isDependedUpon: false,
 				),
 			],
 			dependencies: [
