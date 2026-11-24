@@ -32,7 +32,7 @@ import SwiftSyntax
 enum ActorStateRuleCheck {
 	/// The actors under `Sources/SafeDICore` the rule does not cover yet, each with the reason.
 	static let actorsNotYetCovered = [
-		"ScopeGenerator": "its code memo, which `generateCode` fills, goes when production output is rewritten, and its mock parameter tree task, which an `async` getter sets, goes when mock output is",
+		"ScopeGenerator": "its code memo, which `generateCode` fills, goes when production output is rewritten",
 	]
 
 	/// The actors `files` declare under `Sources/SafeDICore` that the rule covers, by name, each with the names of its

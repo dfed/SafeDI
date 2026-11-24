@@ -449,7 +449,7 @@ extension DependencyTreeGenerator {
 				parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
 				context: publicMockContext,
 			),
-			receiversByLabel: ScopeGenerator.receivers(in: parameters.parameterTree, mockedType: instantiable),
+			receiversByLabel: ScopeGenerator.receivers(in: parameters.treeNames.propertyNodes, mockedType: instantiable),
 			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 		)
 	}
