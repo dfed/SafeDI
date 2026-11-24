@@ -35,7 +35,7 @@ enum PlaceRecord: Sendable {
 
 /// A read a construction or a call makes: the argument it passes, the label it reads, the property its receiver declares,
 /// and where the path key reads it from.
-struct PlaceRead: Sendable {
+struct PlaceRead: Hashable, Sendable {
 	/// The argument's label at the call.
 	let argumentLabel: String
 	/// The label the argument reads.
@@ -80,8 +80,8 @@ struct BuiltPlaceRecord: Sendable {
 	let node: PlanNode
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments = [PassedArgument]()
-	/// Where set, the construction calls this member of a value it reads in place of `target`.
-	var calledMember: CalledMember?
+	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
+	var constructionValue: ConstructionValue?
 	/// The optional closures the construction tries first, in order, before calling `target` or `calledMember`.
 	var alternatives = [ConstructionAlternative]()
 }
@@ -109,6 +109,8 @@ struct ClosingPlaceRecord: Sendable {
 	/// What the place passes the parameters of the function it calls.
 	let cycleArguments: [PlaceRead]
 	/// What the place hands the passed arguments of the function it calls (`BuiltPlaceRecord.passedArguments`), in order.
+	/// Unlike a built place's, these and their count are part of the closer's structural key: the closer's call must match
+	/// the function it closes on.
 	var passedArguments = [PassedArgument]()
 }
 
@@ -121,24 +123,29 @@ struct AliasPlaceRecord: Sendable {
 	let text: String
 }
 
-/// A value reached from a declaration by members: what a passed argument or an alternative reads.
+/// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction
+/// reads. A value rooted at a root declaration that stays outside `@Sendable` functions stays outside them too.
 indirect enum ValuePath: Hashable, Sendable {
 	/// A declaration at the root's top (`RootDeclarationRecord`), which a function that reads it captures.
 	case rootDeclaration(String)
-	/// The nearest declaration of a label in the body that reads it: a statement, a forwarded property, or a parameter.
-	case binding(String)
+	/// An ordinary read of the body that holds the value: a statement, a forwarded property, or a parameter, as the path key
+	/// reads it.
+	case read(PlaceRead)
 	/// A passed argument of the enclosing function, by its parameter's name, which the function is handed on every call.
 	case passedArgument(String)
 	/// The member `name` of a value.
 	case member(String, of: ValuePath)
 	/// The member `name` of an optional value, read through the optional.
 	case optionalMember(String, of: ValuePath)
+	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
+	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
+	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
 }
 
 /// A value a call hands the function it calls on every call, which the function never captures: places that share one
 /// function can each be handed another value. A call spells it from the values it reads itself (`ValuePath`), so it is a
-/// read of every call site that the engine checks as it checks a `PlaceRead`, and part of a place's structural key only
-/// through its parameter's name and type.
+/// read of every call site that the engine checks as it checks a `PlaceRead`, and part of a built place's structural key
+/// only through its parameter's name and type.
 struct PassedArgument: Hashable, Sendable {
 	/// The parameter's name in the called function.
 	let parameterName: String
@@ -146,20 +153,15 @@ struct PassedArgument: Hashable, Sendable {
 	let type: TypeDescription
 	/// The value the call hands it.
 	let value: ValuePath
+	/// Whether the value cannot cross into a `@Sendable` function: a call made inside one cannot hand it on, so no
+	/// function sharing moves such a call into one.
+	let staysOutsideSendableFunctions: Bool
 }
 
-/// A member of a value the place reads, which its construction calls (`<value>.<name>(<arguments>)`).
-/// Spelled `<receiver>.<name>(<ArgumentsWrapper>(<label>: <source>, …))`, or `<receiver>.<name>()` with no arguments.
-struct CalledMember: Sendable {
-	/// The value whose member is called.
-	let receiver: ValuePath
-	let name: String
-	/// The member's arguments, each a read of the body that makes the call.
-	let arguments: [PlaceRead]
-	/// The initializer the arguments are handed to, whose value is the member's one argument; `nil` where the member
-	/// takes the arguments themselves.
-	let argumentsWrapper: TypeDescription?
-	/// The type the member's result is wrapped in, where it differs from the place's; `nil` where it is the place's value.
+/// A construction that is a value other than a call of the built type: `value`, wrapped in `resultWrapper` where set.
+struct ConstructionValue: Hashable, Sendable {
+	let value: ValuePath
+	/// The type the value is wrapped in, where it differs from the place's; `nil` where it is the place's value.
 	let resultWrapper: TypeDescription?
 }
 
@@ -170,7 +172,8 @@ struct ConstructionAlternative: Sendable {
 	let closure: ValuePath
 	/// The name the closure is bound to where it is optional; `nil` where it is not, and is used as read.
 	let bindingName: String?
-	/// Values that must be `nil` for the closure to be used.
+	/// Values that must be `nil` for the closure to be used: a builder a public mock's caller hands a place built inline is
+	/// used only where the place's own override is not set (`HoleBuilder.inlinePlaceValue`).
 	let requiresAbsent: [ValuePath]
 	/// How the closure gives the place's value.
 	let use: Use
