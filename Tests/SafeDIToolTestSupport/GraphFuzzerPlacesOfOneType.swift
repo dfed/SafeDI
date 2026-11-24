@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// The roll of one type built at two places (`SafeDIToolGraphFuzzerSharedPlacesTests`): a graph whose root reaches
+/// The roll of one type built at two places (`SafeDIToolGraphFuzzerPlacesOfOneTypeTests`): a graph whose root reaches
 /// `Shared` through two branches, each branch a chain of one to three types, the last of which builds `Shared` by value
 /// or through an `Instantiator`. `Shared` receives `token`, which each branch's chain or the root instantiates, so the
 /// two places are handed one `Token` only where the root holds it. Each place is drawn on its own:
@@ -35,7 +35,7 @@
 /// with a function written out by hand from the drawn graph (`knownRightProduction`, `knownRightMock`), which builds
 /// each place with its own value. A generator that shares one builder per type across places must keep every place's
 /// token, tag, instance and lap apart for the two to agree.
-struct GraphFuzzerSharedPlacesGraph {
+struct GraphFuzzerPlacesOfOneTypeGraph {
 	init(seed: UInt64) {
 		self.seed = seed
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x534841524544504C)
