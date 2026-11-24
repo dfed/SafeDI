@@ -96,7 +96,7 @@ extension TypeKeyLayout {
 				lineEnd: representative.lineEnd,
 			).spelled()
 		}
-		return spelledStatements(ofClass: 0, indentation: "        ", functionCode: functionCode)
+		return spelledStatements(ofClass: 0, indentation: TypeKeyBody.rootStatementIndentation, functionCode: functionCode)
 	}
 
 	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.

@@ -48,7 +48,7 @@ extension TypeKeyLayout {
 			// which reads only the root's declarations before it, as the type key's code declares them: functions are all
 			// declared in the root's body, so no function beneath it could keep reads it does not list.
 			if body == 0, !Self.laysOut(frame.children[frame.next]) {
-				guard case let .built(built) = record, let text = Self.unindentedText(of: frame.children[frame.next]) else { return false }
+				guard case let .built(built) = record, let text = Self.unindentedText(of: frame.children[frame.next], omittingRootFunctionsNamed: rootFunctionNames) else { return false }
 				namesInScope.insert(built.functionName)
 				bodies[0].positionsByLabel[built.property.label, default: []].append(bodies[0].statements.count)
 				bodies[0].statements.append(.alias(AliasPlaceRecord(property: built.property, fulfillingProperty: nil, text: text, reads: [])))
@@ -224,9 +224,9 @@ extension TypeKeyLayout {
 
 	/// The text of a statement of the root's body without the indentation the root gives it, which the type key's spelling
 	/// gives it again.
-	static func unindentedText(of code: GeneratedCode) -> String? {
+	static func unindentedText(of code: GeneratedCode, omittingRootFunctionsNamed names: Set<String>) -> String? {
 		guard case let .indented(inner, _) = code.node else { return nil }
-		return inner.spelled()
+		return GeneratedCode.omittingRootFunctions(inner, named: names).spelled()
 	}
 
 	/// The statements of a body whose children are `codes`: each child, or each place of a child that is places one after

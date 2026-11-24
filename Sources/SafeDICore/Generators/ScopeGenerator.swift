@@ -6897,8 +6897,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		      cycleParameters.isEmpty,
 		      let reads = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
-		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: code.spelled(), reads: reads)
+		// The root declares the root functions the call reaches, which its text leaves out.
+		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
+		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
+		record.calledRootFunctionNames = rootFunctionNames
 		return .alias(record)
 	}
 
@@ -8084,8 +8087,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	@inline(never)
 	private static func rootCode(of rootInitializer: RootInitializer, writing childCode: consuming [GeneratedCode]) -> GeneratedCode {
 		// The type key lays the body out again from the path key's plan, or keeps the path key's body where it cannot.
+		// A root the type key leaves on the path layout still declares its root functions once, at its top.
 		guard let statements = TypeKeyBody.statements(ofRootBody: childCode) else {
-			return rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
+			let hoisted = RootFunctionHoisting.hoisted(childCode, indentation: TypeKeyBody.rootStatementIndentation)
+			return rootInitializer.spelled(writing: BuilderFunctionGraph(body: hoisted.map(Statement.verbatim)))
 		}
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}
@@ -9339,7 +9344,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					namesInScope: Set(signature.parameters.map(\.internalName) + signature.builders.map(\.internalName)),
 				)
 				var bodyLines = memoLines
-				let bodyStatements = layout ?? generatedProperties
+				let bodyStatements = layout ?? RootFunctionHoisting.hoisted(generatedProperties, indentation: bodyIndent)
 				if !bodyStatements.isEmpty {
 					bodyLines.append(GeneratedCode.lines(bodyStatements).spelled())
 				}
