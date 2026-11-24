@@ -412,8 +412,8 @@ private struct Rendering {
 		var isPublicMockMethod = false
 		var optionalParametersOfPublicMock = Set<String>()
 		var isConfigurationInitializer = false
-		/// The names of the builder functions the node is in, outermost first.
-		var enclosingBuilderFunctions = [String]()
+		/// The names of the builder functions the node is in, outermost first, each with the type it returns.
+		var enclosingBuilderFunctions = [(name: String, returnType: String?)]()
 	}
 
 	let fields: GraphFuzzerMockDifference.Fields
@@ -457,7 +457,7 @@ private struct Rendering {
 			scope.optionalParametersOfPublicMock = scope.isPublicMockMethod ? Set(declaration.signature.parameterClause.parameters.filter { $0.defaultValue?.value.is(NilLiteralExprSyntax.self) == true }.map { ($0.secondName ?? $0.firstName).text }) : []
 			scope.isConfigurationInitializer = false
 			if scope.isInFunctionBody, declaration.name.text.hasPrefix(Self.builderFunctionPrefix) {
-				scope.enclosingBuilderFunctions.append(declaration.name.text)
+				scope.enclosingBuilderFunctions.append((name: declaration.name.text, returnType: declaration.signature.returnClause?.type.trimmedDescription))
 			}
 			scope.isInFunctionBody = true
 		} else if node.is(InitializerDeclSyntax.self) {
@@ -779,13 +779,26 @@ private struct Rendering {
 	/// function around it, and the name it is bound to when it builds in a binding rather than in a function's return.
 	private func pathOfNode(at position: Syntax, in scope: Scope) -> [String]? {
 		guard let extendedType = scope.extendedType else { return nil }
-		var owner = configurationOwner(named: mockOverridesStructName, extendedType: extendedType)
-		var path = [String]()
+		// The path and owner the builder functions around the node imply, or `nil` beneath an edge whose function reads no
+		// overrides: a cycle edge, which leaves its field out of its owner's configuration.
+		var current: (path: [String], owner: String)? = ([], configurationOwner(named: mockOverridesStructName, extendedType: extendedType))
+		// Each builder function whose path resolved, with the path and owner it leaves.
+		var resolved = [(returnType: String?, path: [String], owner: String)]()
 		for function in scope.enclosingBuilderFunctions {
-			guard let label = labelBuilt(byFunctionNamed: function, amongFieldsOf: owner), let field = fields[owner]?[label] else { return nil }
-			path.append(label)
-			owner = field.type
+			if let (path, owner) = current, let label = labelBuilt(byFunctionNamed: function.name, amongFieldsOf: owner), let field = fields[owner]?[label] {
+				current = (path + [label], field.type)
+			} else if let returnType = function.returnType, let ancestor = resolved.last(where: { $0.returnType == returnType }) {
+				// A function beneath a cycle edge that builds again a type an enclosing function built reads the
+				// overrides of that nearest same-type ancestor, so its path is the ancestor's.
+				current = (ancestor.path, ancestor.owner)
+			} else {
+				current = nil
+			}
+			if let (path, owner) = current {
+				resolved.append((returnType: function.returnType, path: path, owner: owner))
+			}
 		}
+		guard var path = current?.path else { return nil }
 		if let bindingName = nameBound(aroundNodeAt: position) {
 			path.append(bindingName)
 		}
