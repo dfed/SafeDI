@@ -173,18 +173,18 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 
 				extension Root {
 				    public init() {
+				        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+				            .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
+				        }
+				        func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+				            .init(api: { scope_tag, scope_reader, scope_bBuilder in
+				                let tag = scope_tag
+				                let api: any Api = LiveApi(tag: tag)
+				                return api
+				            })
+				        }
 				        func __safeDI_hub() -> Hub {
 				            _ = Hub.__safeDI_Hub_193F7642B27B2ED9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-				                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
-				            }
-				            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
-				                .init(api: { scope_tag, scope_reader, scope_bBuilder in
-				                    let tag = scope_tag
-				                    let api: any Api = LiveApi(tag: tag)
-				                    return api
-				                })
-				            }
 				            return Hub(__safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 				        }
 				        let hub: Hub = __safeDI_hub()
@@ -277,18 +277,18 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 
 				extension Root {
 				    public init() {
+				        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+				            .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
+				        }
+				        func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+				            .init(api: { scope_tag, scope_reader, scope_bBuilder in
+				                let tag = scope_tag
+				                let api: any Api = LiveApi(tag: tag.instance)
+				                return api
+				            })
+				        }
 				        func __safeDI_hub() -> Hub {
 				            _ = Hub.__safeDI_Hub_2176C1B85F5362C0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-				                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
-				            }
-				            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
-				                .init(api: { scope_tag, scope_reader, scope_bBuilder in
-				                    let tag = scope_tag
-				                    let api: any Api = LiveApi(tag: tag.instance)
-				                    return api
-				                })
-				            }
 				            return Hub(__safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 				        }
 				        let hub: Hub = __safeDI_hub()

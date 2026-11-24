@@ -119,14 +119,14 @@ struct SafeDIToolSeamFilledCallBesidePlaceTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_inner in
+		                let service: any Service = LiveService()
+		                return service
+		            })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_655C7EE201FC4037.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_inner in
-		                    let service: any Service = LiveService()
-		                    return service
-		                })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()

@@ -304,18 +304,18 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Home() -> Home.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: { scope_tag, scope_reader in
+			                let service: any Service = Impl(tag: tag)
+			                return service
+			            })
+			        }
 			        func __safeDI_tag() -> Tag {
 			            Tag()
 			        }
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        func __safeDI_home() -> Home {
 			            _ = Home.__safeDI_Home_3246A33D3BB184B5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Home() -> Home.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: { scope_tag, scope_reader in
-			                    let service: any Service = Impl(tag: tag)
-			                    return service
-			                })
-			            }
 			            return Home(__safeDI_tag: tag.instance, __safeDI_serviceBuilder: __safeDI_serviceBuilder_Home())
 			        }
 			        let home: Home = __safeDI_home()
