@@ -13612,17 +13612,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder = safeDIOverrides.wrapperBuilder.analytics
-		        let __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder = safeDIOverrides.wrapperBuilder.service
-		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
+		        let __safeDI_wrapperBuilder__overrides = safeDIOverrides.wrapperBuilder
 		        @Sendable nonisolated func __safeDI_wrapperBuilder() -> Wrapper {
 		            func __safeDI_analytics() -> Analytics {
-		                if let safeDIBuilder = __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder { safeDIBuilder() } else { Analytics() }
+		                if let safeDIBuilder = __safeDI_wrapperBuilder__overrides.analytics { safeDIBuilder() } else { Analytics() }
 		            }
 		            let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		            _ = Service.__safeDI_Service_mock_8D69AB86D0326E72.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.__safeDI_mock(analytics: analytics, theme: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder?() ?? .init())
-		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(analytics, service) } else { Wrapper(analytics: analytics, service: service) }
+		            let service = Service.__safeDI_mock(analytics: analytics, theme: nil, safeDIOverrides: __safeDI_wrapperBuilder__overrides.service?() ?? .init())
+		            return if let safeDIBuilder = __safeDI_wrapperBuilder__overrides.safeDIBuilder { safeDIBuilder(analytics, service) } else { Wrapper(analytics: analytics, service: service) }
 		        }
 		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)
 		        return Board(wrapperBuilder: wrapperBuilder)
