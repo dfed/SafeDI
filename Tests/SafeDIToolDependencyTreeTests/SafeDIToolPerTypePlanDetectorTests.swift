@@ -63,16 +63,18 @@ struct SafeDIToolPerTypePlanDetectorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_detectsNoUnpassableCycleLabel_whenOnlyTypeOffTheCycleDeclaresLabelTheCycleReceivesInTwoForms() async throws {
-		// The cycle through `A` receives `x` as `X?`, `Y?` and `Y`, but only `D`, which is on no cycle, declares it: no cycle
-		// closes around that declaration, so no function's parameter has to carry the forms, which a test of the whole
-		// tree (`DependencyTreeGenerator.canHoldUnpassableCycleLabel(inTreeRootedAt:)`) would not tell.
+		// The cycle through `A` receives `x` as `X?`, `Y?`, `Y` and `LazilyInstantiated<Y>`, but only `D`, which is on no
+		// cycle, declares it: no cycle closes around that declaration, so no function's parameter has to carry the forms,
+		// which a test of the whole tree (`DependencyTreeGenerator.canHoldUnpassableCycleLabel(inTreeRootedAt:)`) would not
+		// tell. `D`'s own tree receives two forms of it, so counting what a declaration off every cycle reaches would fire.
 		let answers = try await detectorAnswers(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let d: D", "@Instantiated let sBuilder: Instantiator<S>"]),
 			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?"]),
 			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: Y?"]),
-			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let e: E"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<Y>", "@Instantiated let e: E", "@Instantiated let f: F"]),
 			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Received let x: Y"]),
+			seamFixtureType(named: "F", isFinalClass: true, declarations: ["@Received let x: LazilyInstantiated<Y>"]),
 			seamFixtureType(named: "S", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
 			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
@@ -92,7 +94,7 @@ struct SafeDIToolPerTypePlanDetectorTests: ~Copyable {
 	private mutating func detectorAnswers(of swiftFileContent: [String]) async throws -> [String] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		await PerTypePlanDetectorObservation.$observer.withValue({ answers in
-			continuation.yield("\(answers.rootType): may hold \(answers.mayHoldUnpassableCycleLabel ? "an" : "no") unpassable cycle label; today’s tree holds \(answers.unpassableCycleLabelsInTree)")
+			continuation.yield("\(answers.rootType): may hold \(answers.mayHoldUnpassableCycleLabel ? "an" : "no") unpassable cycle label; today’s tree holds [\(answers.unpassableCycleLabelsInTree.joined(separator: ", "))]")
 		}) {
 			_ = try? await executeSafeDIToolTest(
 				swiftFileContent: swiftFileContent,
