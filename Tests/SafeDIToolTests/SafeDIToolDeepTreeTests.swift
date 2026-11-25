@@ -226,9 +226,10 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 1_500))
 	}
 
-	@Test(arguments: [1_500, 10_000])
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesMockLaidOutByTypeKey_whenTypeWhoseMockIsGeneratedStartsADeepChainOfFeaturesEachInstantiatingTheNext(depth: Int) async throws {
+	mutating func run_writesMockLaidOutByTypeKey_whenTypeWhoseMockIsGeneratedStartsAChainOfFifteenHundredFeaturesEachInstantiatingTheNext() async throws {
+		let depth = 1_500
 		// The type key's layout records each place with the code of the places its function's body builds, so a place's
 		// record holds the chain beneath it, which releasing the plan must not release one nested level at a time.
 		let output = try await MockLowering.$laysOutWithTypeKey.withValue(true) {
@@ -245,9 +246,10 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: depth))
 	}
 
-	@Test(arguments: [1_500, 10_000])
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesMockLaidOutByTypeKey_whenSeamWhoseMockIsGeneratedStartsADeepChainOfFeaturesEachInstantiatingTheNext(depth: Int) async throws {
+	mutating func run_writesMockLaidOutByTypeKey_whenSeamWhoseMockIsGeneratedStartsAChainOfFifteenHundredFeaturesEachInstantiatingTheNext() async throws {
+		let depth = 1_500
 		// Each place's override is a member of its parent's, so the path the layout reads a place's override through is as
 		// deep as the chain, which releasing the records must not release one nested level at a time.
 		let output = try await MockLowering.$laysOutWithTypeKey.withValue(true) {

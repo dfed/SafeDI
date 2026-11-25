@@ -24,7 +24,7 @@ extension TypeKeyLayout {
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
 	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
 	mutating func declareOuter(_ properties: [Property]) {
-		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameterLabels: []))
+		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], outerView: [:], forwardedLabels: [], cycleParameterLabels: []))
 		for property in properties {
 			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
 			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
@@ -95,6 +95,7 @@ extension TypeKeyLayout {
 							record: built,
 							isInSendableFamily: isInSendableFamily,
 							domainLabels: labels,
+							outerView: outerView,
 							forwardedLabels: Set(built.parameterProperties.map(\.label)),
 							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
 						))
@@ -322,6 +323,10 @@ extension TypeKeyLayout {
 		      !bodies[body].forwardedLabels.contains(label),
 		      !bodies[body].cycleParameterLabels.contains(label)
 		{
+			// The body's view resolved its domain's labels outside it when the walk reached it.
+			if let resolved = bodies[body].outerView[label] {
+				return resolved
+			}
 			index = bodies[body].position
 			body = bodies[body].parent
 		}
