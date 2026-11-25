@@ -74,11 +74,11 @@ extension ScopeGenerator {
 		walk.sendableConfigurationTypeNames = context.sendableConfigurationTypeNames
 		// A public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
-		// The mocked type's own initializer takes the root's level, an actor's into its isolation. A deliberate gap: a public
-		// mock's configurations are never `Sendable`, and its construction functions are handed the override closures, so
-		// nothing it builds for an actor can be kept apart from the overrides; such a mock does not compile in Swift 6
-		// (`sendableConfigurationTypeNames()` says the same).
-		walk.isInsideActorArgument = instantiable.declarationType == .actorType && instantiable.generateMock != .public
+		// The mocked type's own initializer takes the root's level, an actor's into its isolation, so the root's children
+		// read their overrides as a `@Sendable` builder function does. A public mock's configurations are never `Sendable`, so
+		// it reads each field into a local of its own, and its construction functions take an actor's arguments `sending`
+		// (`MockLowering.PublicConstructionRecord.sendsArguments`).
+		walk.isInsideActorArgument = instantiable.declarationType == .actorType
 		// The nodes a public mock promotes, each bound from its caller's value when passed one.
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
 		// Each override binds its receive's label, in the optional form a receive only if available
@@ -1173,7 +1173,7 @@ extension MockLowering {
 			let wasInsideActorArgument = isInsideActorArgument
 			// The node's children are its initializer's arguments: an actor's, or, outside a lazy wrapper's builder
 			// function, what an enclosing actor's argument is built from.
-			isInsideActorArgument = (instantiable.declarationType == .actorType && !usesMockInitializer && !buildsPublicMock) || (isInsideActorArgument && !isWrapped)
+			isInsideActorArgument = (instantiable.declarationType == .actorType && !usesMockInitializer) || (isInsideActorArgument && !isWrapped)
 			// The payloads of the cases nested by type that lead through the node to a place, bound before
 			// its builder function, after a wrapper's override locals and before a constant's, and the members a `@Sendable`
 			// function calls at its top (`MockLowering+PublicMocks.swift`).

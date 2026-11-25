@@ -11096,15 +11096,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A worklist rather than recursion, since the tree can be as deep as the module has types.
 		// Whether a generator's children build what an actor's initializer is handed, outside every lazy wrapper's builder
 		// function: such a child reads its overrides as a `@Sendable` builder function does (`isInsideActorArgument`
-		// in `MockLowering+Walk.swift`). A mock root that is an actor takes its level so. A public mock's tree, whose
-		// configurations are never `Sendable`, is a deliberate gap, as the walk states.
-		let rootInstantiable: Instantiable? = if case let .root(instantiable, _) = scopeData {
-			instantiable
+		// in `MockLowering+Walk.swift`). A mock root that is an actor takes its level so, in an internal mock and a public one
+		// alike.
+		let rootIsActor = if case let .root(instantiable, _) = scopeData {
+			instantiable.declarationType == .actorType
 		} else {
-			nil
+			false
 		}
-		let tracksActorArguments = rootInstantiable?.generateMock != .public
-		var generatorsToVisit = [(generator: self, insideSendableScope: false, insideActorArgument: tracksActorArguments && rootInstantiable?.declarationType == .actorType)]
+		var generatorsToVisit = [(generator: self, insideSendableScope: false, insideActorArgument: rootIsActor)]
 		while let (generator, insideSendableScope, insideActorArgument) = generatorsToVisit.popLast() {
 			for child in generator.propertiesToGenerate {
 				if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
@@ -11123,7 +11122,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 					}
 					let usesMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType)
-					let childInsideActorArgument = (tracksActorArguments && childInstantiable.declarationType == .actorType && !usesMockInitializer) || (insideActorArgument && !isWrapped)
+					let childInsideActorArgument = (childInstantiable.declarationType == .actorType && !usesMockInitializer) || (insideActorArgument && !isWrapped)
 					generatorsToVisit.append((generator: child, insideSendableScope: childInsideSendableScope, insideActorArgument: childInsideActorArgument))
 				}
 			}
