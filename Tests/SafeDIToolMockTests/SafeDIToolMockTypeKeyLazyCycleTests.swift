@@ -69,25 +69,30 @@ struct SafeDIToolMockTypeKeyLazyCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_laysOutSameShape_whenThreeTypeCycleIsNamedInEveryOrder() async throws {
-		// Each of the six namings starts the depth-first walk at another type of the cycle, so each of its three edges is
-		// left out under two of them. Renamed back, every mock is the canonical naming's.
+	mutating func mock_laysOutSameShape_whenThreeTypeCycleIsNamedInOrdersThatLeaveOutOneEdge() async throws {
+		// The depth-first walk starts at the cycle's type whose name sorts first and leaves out the edge into it, so each
+		// of the cycle's three edges is left out under two of the six namings. Which configuration fields a mock has
+		// follows the left-out edge, as in the walk (the rename oracle's `.mockConfigurationFieldPresence`), so only two
+		// namings that leave out one edge must lay out the same mocks once renamed back.
 		let canonicalNames = ["Alpha", "Bravo", "Charlie"]
-		var canonicalMocks: [String: String]?
+		var mocksByLeftOutEdgeTarget = [String: (names: [String], mocks: [String: String])]()
 		for names in Self.permutations(of: canonicalNames) {
 			let mocks = try await MockLowering.$laysOutWithTypeKey.withValue(true) {
 				try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.threeTypeCycle(names: names), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
 			let renamedBack = Self.renamed(mocks.mockFiles, from: names, to: canonicalNames)
-			if let canonicalMocks {
-				for file in canonicalMocks.keys.sorted() {
-					#expect(renamedBack[file] == canonicalMocks[file], "\(file) differs when the cycle is named \(names)")
+			let firstNamed = names.min() ?? ""
+			let leftOutEdgeTarget = canonicalNames[names.firstIndex(of: firstNamed) ?? 0]
+			if let earlier = mocksByLeftOutEdgeTarget[leftOutEdgeTarget] {
+				for file in earlier.mocks.keys.sorted() {
+					#expect(renamedBack[file] == earlier.mocks[file], "\(file) differs between the namings \(earlier.names) and \(names), which leave out the edge into \(leftOutEdgeTarget)")
 				}
-				#expect(renamedBack.keys.sorted() == canonicalMocks.keys.sorted(), "named \(names)")
+				#expect(renamedBack.keys.sorted() == earlier.mocks.keys.sorted(), "named \(names)")
 			} else {
-				canonicalMocks = renamedBack
+				mocksByLeftOutEdgeTarget[leftOutEdgeTarget] = (names, renamedBack)
 			}
 		}
+		#expect(mocksByLeftOutEdgeTarget.keys.sorted() == canonicalNames)
 	}
 
 	@Test
