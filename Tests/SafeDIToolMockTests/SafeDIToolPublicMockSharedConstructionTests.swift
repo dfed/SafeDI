@@ -5439,6 +5439,143 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresConstructionFunctionWithTypesIsolation_whenInitializerSpellsGlobalActorOtherThanMainActor() async throws {
+		// `Ledger`'s initializer spells `@DatabaseActor`, a global actor SafeDI cannot tell from any other attribute, so the
+		// construction function spells no isolation and takes `Ledger`'s, the actor its initializer repeats.
+		let modules = [
+			ModuleFixture(name: "Store", packageName: "store", swiftFileContentByFilePath: ["Store.swift": """
+			import SafeDI
+
+			@globalActor
+			public actor DatabaseActor {
+			    public static let shared = DatabaseActor()
+			}
+
+			@DatabaseActor
+			@Instantiable
+			public final class Ledger: Instantiable {
+			    @DatabaseActor public init(zone: String = "UTC") {
+			        self.zone = zone
+			    }
+
+			    public let zone: String
+			}
+
+			@Instantiable(mockAttributes: "@DatabaseActor", generateMock: .public)
+			public final class Book: Instantiable {
+			    @DatabaseActor public init(ledger: Ledger) {
+			        self.ledger = ledger
+			    }
+
+			    @Instantiated let ledger: Ledger
+			}
+			"""]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Store"]?.generatedFiles == [
+			"Store.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Book {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            ledger: __safeDI_Store_Ledger_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                ledger: ledger
+			            )
+			        }
+
+			        public var ledger: __safeDI_Store_Ledger_MockConfiguration { __safeDI_storage.ledger }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                ledger: __safeDI_Store_Ledger_MockConfiguration
+			            ) {
+			                self.ledger = ledger
+			            }
+
+			            let ledger: __safeDI_Store_Ledger_MockConfiguration
+			        }
+			    }
+
+			    @DatabaseActor public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Book {
+			        Book.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    @DatabaseActor public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Book {
+			        func __safeDI_ledger() -> Ledger {
+			            return Ledger.__safeDI_init(zone: safeDIOverrides.ledger.zone, safeDIBuilder: safeDIOverrides.ledger.safeDIBuilder)
+			        }
+			        let ledger: Ledger = __safeDI_ledger()
+			        return Book(ledger: ledger)
+			    }
+			}
+
+			extension Book {
+			    public enum __safeDI_Book_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `Ledger` is constructed within the public mock trees of module `Store`.
+			nonisolated public struct __safeDI_Store_Ledger_MockConfiguration {
+			    public init(
+			        zone: String? = nil,
+			        _ safeDIBuilder: ((String) -> Ledger)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            zone: zone,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    /// `nil` keeps the default of `Ledger`’s `zone`.
+			    public var zone: String? { __safeDI_storage.zone }
+			    /// Overrides how `Ledger` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: ((String) -> Ledger)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            zone: String?,
+			            safeDIBuilder: ((String) -> Ledger)?
+			        ) {
+			            self.zone = zone
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let zone: String?
+			        let safeDIBuilder: ((String) -> Ledger)?
+			    }
+			}
+
+			extension Ledger {
+			    static func __safeDI_init(zone: String?, safeDIBuilder: ((String) -> Ledger)?) -> Ledger {
+			        let zone = zone ?? ("UTC")
+			        return if let safeDIBuilder { safeDIBuilder(zone) } else { Ledger(zone: zone) }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
