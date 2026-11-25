@@ -1634,6 +1634,274 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 		])
 	}
 
+	@Test
+	mutating func mock_compilesPublicMocks_whenActorsArgumentHasDefaultValuedParameterAndPublicMockCallsActor() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Helping {}
+
+				@Instantiable(generateMock: .public)
+				public final class Client: Instantiable, Helping {
+				    public init(timeout: Int = 30) {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public actor Store: Instantiable {
+				    public init(client: Client) {
+				        self.client = client
+				    }
+
+				    @Instantiated let client: Client
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(store: Store, client: Client) {
+				        self.store = store
+				        self.client = client
+				    }
+
+				    @Instantiated let store: Store
+				    @Instantiated let client: Client
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Client+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Client {
+			    public static func mock(
+			        timeout: Int? = nil
+			    ) -> Client {
+			        Client.__safeDI_mock(timeout: timeout)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        timeout: Int? = nil
+			    ) -> Client {
+			        let timeout = timeout ?? (30)
+			        return Client(timeout: timeout)
+			    }
+			}
+
+			extension Client {
+			    public enum __safeDI_Client_mock_641EE6583CCA40BE {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Client` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Client_MockConfiguration {
+			    public init(
+			        timeout: @autoclosure @escaping @Sendable () -> Int? = nil,
+			        _ safeDIBuilder: (@Sendable (Int) -> Client)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            timeout: timeout,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    /// `nil` keeps the default of `Client`’s `timeout`.
+			    public var timeout: @Sendable () -> Int? { __safeDI_storage.timeout }
+			    /// Overrides how `Client` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: (@Sendable (Int) -> Client)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            timeout: @escaping @Sendable () -> Int?,
+			            safeDIBuilder: (@Sendable (Int) -> Client)?
+			        ) {
+			            self.timeout = timeout
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let timeout: @Sendable () -> Int?
+			        let safeDIBuilder: (@Sendable (Int) -> Client)?
+			    }
+			}
+
+			extension Client {
+			    static func __safeDI_init(timeout: Int?, safeDIBuilder: (@Sendable (Int) -> Client)?) -> Client {
+			        let timeout = timeout ?? (30)
+			        return if let safeDIBuilder { safeDIBuilder(timeout) } else { Client(timeout: timeout) }
+			    }
+			}
+
+			/// Configuration for how `Store` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Store_MockConfiguration {
+			    public init(
+			        client: __safeDI_Client_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((sending Client) -> Store)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            client: client,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    public var client: __safeDI_Client_MockConfiguration { __safeDI_storage.client }
+			    /// Overrides how `Store` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: ((sending Client) -> Store)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            client: __safeDI_Client_MockConfiguration,
+			            safeDIBuilder: ((sending Client) -> Store)?
+			        ) {
+			            self.client = client
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let client: __safeDI_Client_MockConfiguration
+			        let safeDIBuilder: ((sending Client) -> Store)?
+			    }
+			}
+
+			extension Store {
+			    static func __safeDI_init(client: sending Client, safeDIBuilder: ((sending Client) -> Store)?) -> Store {
+			        if let safeDIBuilder { safeDIBuilder(client) } else { Store(client: client) }
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            store: __safeDI_Store_MockConfiguration = .init(),
+			            client: __safeDI_Client_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                store: store,
+			                client: client
+			            )
+			        }
+
+			        public var store: __safeDI_Store_MockConfiguration { __safeDI_storage.store }
+			        public var client: __safeDI_Client_MockConfiguration { __safeDI_storage.client }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                store: __safeDI_Store_MockConfiguration,
+			                client: __safeDI_Client_MockConfiguration
+			            ) {
+			                self.store = store
+			                self.client = client
+			            }
+
+			            let store: __safeDI_Store_MockConfiguration
+			            let client: __safeDI_Client_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_store() -> Store {
+			            let __safeDI_client__safeDIBuilder = safeDIOverrides.store.client.safeDIBuilder
+			            let __safeDI_client__store_client_timeout = safeDIOverrides.store.client.timeout
+			            func __safeDI_client() -> Client {
+			                return Client.__safeDI_init(timeout: __safeDI_client__store_client_timeout(), safeDIBuilder: __safeDI_client__safeDIBuilder)
+			            }
+			            let client: Client = __safeDI_client()
+			            return Store.__safeDI_init(client: client, safeDIBuilder: safeDIOverrides.store.safeDIBuilder)
+			        }
+			        let store: Store = __safeDI_store()
+			        func __safeDI_client() -> Client {
+			            return Client.__safeDI_init(timeout: safeDIOverrides.client.timeout(), safeDIBuilder: safeDIOverrides.client.safeDIBuilder)
+			        }
+			        let client: Client = __safeDI_client()
+			        return Screen(store: store, client: client)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"Store+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Store {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            client: __safeDI_Client_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                client: client
+			            )
+			        }
+
+			        public var client: __safeDI_Client_MockConfiguration { __safeDI_storage.client }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                client: __safeDI_Client_MockConfiguration
+			            ) {
+			                self.client = client
+			            }
+
+			            let client: __safeDI_Client_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Store {
+			        Store.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Store {
+			        let __safeDI_client__safeDIBuilder = safeDIOverrides.client.safeDIBuilder
+			        let __safeDI_client__client_timeout = safeDIOverrides.client.timeout
+			        func __safeDI_client() -> Client {
+			            return Client.__safeDI_init(timeout: __safeDI_client__client_timeout(), safeDIBuilder: __safeDI_client__safeDIBuilder)
+			        }
+			        let client: Client = __safeDI_client()
+			        return Store(client: client)
+			    }
+			}
+
+			extension Store {
+			    public enum __safeDI_Store_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
