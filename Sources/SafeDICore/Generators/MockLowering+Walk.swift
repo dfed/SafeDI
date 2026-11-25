@@ -349,6 +349,13 @@ extension MockLowering {
 		/// node read its configuration rather than a closure: a node a cycle builds again, which its parent's configuration
 		/// has no field for, reads the nearest one of its type (`MockLowering+CycleOverrides.swift`).
 		var overridePathsByType = [String: [MockLowering.AncestorOverridePath]]()
+		/// The configuration each type around the node the walk is at declares in the type key's form, nearest last, whether
+		/// or not an override reaches it: whether its place reads a configuration struct, and whether it is built with its
+		/// hand-written mock. A node a cycle builds again reads the nearest one of its type built the same way, which, beneath
+		/// the edge of a mocked lazy cycle `computeCycleEdges` leaves out, no override reaches either.
+		var relativeConfigurationsByType = [String: [MockLowering.RelativeConfiguration]]()
+		/// Whether each built node around the walk pushed onto `relativeConfigurationsByType`, nearest last.
+		var pushedRelativeConfigurations = [Bool]()
 		/// The configuration each built place around the walk reads its children's fields of, in the type key's form, nearest
 		/// last: `mock()`'s `safeDIOverrides` at the root, then each place's own parameter, `nil` for a place that reads no
 		/// configuration struct (`MockLowering.relativeConfiguration(of:…)`).
@@ -1166,10 +1173,21 @@ extension MockLowering {
 			let nodePathValue = ownOverridePath?.value ?? .member(bindingName, of: pathValue)
 			let overrideReachable = ownOverridePath != nil
 			let ownFieldIsRead = !isCycleNode && ownFieldReachable
+			let ownRelativeConfiguration = MockLowering.RelativeConfiguration(hasConfiguration: hasConfiguration, builtWithHandWrittenMock: usesMockInitializer)
+			let nearestRelativeConfiguration = relativeConfigurationsByType[instantiable.concreteInstantiable.asSource]?.last
+			// The nearest place of its type around it built the same way, which a node its parent's configuration has no
+			// field for reads, as `AncestorOverridePath.own(…)` reads it where an override reaches the nodes.
+			let nearestConfigurationIsDeclared = nearestRelativeConfiguration == ownRelativeConfiguration
+			let relativeConfiguration: MockLowering.RelativeConfiguration? = !isCycleNode || nearestConfigurationIsDeclared ? ownRelativeConfiguration : nil
+			// A node beneath a node no override reaches, beneath the edge of a mocked lazy cycle `computeCycleEdges` leaves out,
+			// reads its configuration of its parent's, as where an override reaches it: that parent is handed a configuration
+			// built afresh (`MockLowering.relativeConfiguration(of:…)`), so the node's record is the same whichever edge the
+			// order of type names leaves out.
+			let readsParentConfiguration = !isCycleNode && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 			builtPlaceConfigurationContexts[childIndexPath] = MockLowering.BuiltPlaceConfigurationContext(
 				fieldName: bindingName,
-				parentConfiguration: ownFieldIsRead ? configurationReads.last ?? nil : nil,
-				nearestIsProvided: !ownFieldIsRead && overrideReachable,
+				parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
+				nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
 				ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
 					concreteType: instantiable.concreteInstantiable,
 					builtWithHandWrittenMock: usesMockInitializer,
@@ -1383,6 +1401,10 @@ extension MockLowering {
 			if let ownOverridePath {
 				overridePathsByType[instantiable.concreteInstantiable.asSource, default: []].append(ownOverridePath)
 			}
+			if let relativeConfiguration {
+				relativeConfigurationsByType[instantiable.concreteInstantiable.asSource, default: []].append(relativeConfiguration)
+			}
+			pushedRelativeConfigurations.append(relativeConfiguration != nil)
 			configurationReads.append(hasConfiguration ? .passedArgument(MockLowering.ConfigurationParameter(
 				concreteType: instantiable.concreteInstantiable,
 				builtWithHandWrittenMock: usesMockInitializer,
@@ -1466,6 +1488,9 @@ extension MockLowering {
 			let finishedChildren = leavingConfiguredNode(configurationEntry)
 			if overrideReachable {
 				overridePathsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
+			}
+			if pushedRelativeConfigurations.removeLast() {
+				relativeConfigurationsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
 			}
 			configurationReads.removeLast()
 			parentConcreteType = enclosingParentConcreteType

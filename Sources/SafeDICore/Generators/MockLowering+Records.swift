@@ -202,7 +202,7 @@ extension MockLowering.Walk {
 	) {
 		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
 		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
-		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, readsOverride: overrideRead != nil, usesMockInitializer: usesMockInitializer)
+		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		guard configuredConstruction != .unrecorded else {
 			unrecordedReasons[childIndexPath] = "configuredUnrecorded"
 			return

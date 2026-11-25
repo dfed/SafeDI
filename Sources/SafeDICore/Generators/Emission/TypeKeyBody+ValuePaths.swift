@@ -226,13 +226,14 @@ extension PassedArgument {
 			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
 		case let .passedArgument(name):
 			"passed|\(parameterName)|\(type.asSource)|passed:\(name)|\(bindsBeforeCall)"
-		case .emptyInitialization:
+		case .emptyInitialization,
+		     // The nearest configuration of a closed-on place, or `nil` (`MockLowering.NearestConfigurations`).
+		     .spliced:
 			shape
 		case .rootDeclaration,
 		     .member,
 		     .optionalMember,
-		     .call,
-		     .spliced:
+		     .call:
 			nil
 		}
 	}

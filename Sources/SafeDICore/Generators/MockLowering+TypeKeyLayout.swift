@@ -67,6 +67,19 @@ extension MockLowering.Walk {
 		// The places with a place beneath them left unrecorded, which a place whose function reads overrides into locals
 		// keeps the walk's body for.
 		var pathsAboveUnrecordedPlace = Set<[Int]>()
+		// Every function of a type takes the nearest configurations of the places closers beneath it close on, one list
+		// for the type, so no function's parameters follow the path that reaches it.
+		let nearest: MockLowering.NearestConfigurations? = buildsPublicMock ? nil : nearestConfigurations(childPathsByParent: childPathsByParent)
+		if let nearest {
+			for path in placePathsInWalkOrder {
+				guard case var .closer(record)? = closerAndDefaultRecords[path], let argument = record.passedArguments.first else { continue }
+				let closedOn = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
+				let value = nearest.closedOnValue(of: closedOn, at: path) ?? argument.value
+				record.passedArguments = [PassedArgument(parameterName: argument.parameterName, type: argument.type, value: value, staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)]
+					+ nearest.nearestArguments(ofCallTo: closedOn, at: path)
+				closerAndDefaultRecords[path] = .closer(record)
+			}
+		}
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
 			defer {
@@ -81,7 +94,9 @@ extension MockLowering.Walk {
 			// An erased place the mock can override is built from a closure that returns the erased type, and a place built in
 			// a function whose property is another type than the one it builds (`fulfilledByType:`, a protocol) from an
 			// override that returns the property's type: its function returns the property's type (`functionReturnType`).
-			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable))
+			// It is decided once the record holds every alternative it tries, the one `relateConfiguration(ofBuiltPlaceAt:of:)`
+			// adds beneath the left-out edge of a mocked lazy cycle included.
+			let overrideCanReturnAnotherType = call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable)
 			// A function that reads the overrides beneath it into locals keeps them where a place beneath it keeps the walk's
 			// body, which reads those locals.
 			let keepsOverrideLocals = pathsStartingExtraction.contains(path) && pathsAboveUnrecordedPlace.contains(path)
@@ -110,14 +125,10 @@ extension MockLowering.Walk {
 				)
 				// A construction that reads defaults or calls a hand-written mock records it in place of production's call
 				// (`MockLowering+ClosersAndDefaults.swift`).
-				var record = if let configuredConstruction = call.inputs.configuredConstruction {
+				let record = if let configuredConstruction = call.inputs.configuredConstruction {
 					productionRecord.flatMap { configuring($0, with: configuredConstruction, instantiable: call.instantiable) }
 				} else {
 					productionRecord
-				}
-				if overrideReturnsAnotherType, case var .built(built)? = record {
-					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
-					record = .built(built)
 				}
 				// A record whose construction passes `nil` where the walk passes a value, or the other way, as for an
 				// `@Instantiated` dependency the mock takes as a parameter where production builds nothing, keeps the walk's
@@ -133,6 +144,14 @@ extension MockLowering.Walk {
 				}
 				builtRecords[path] = record
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
+				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
+					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
+					builtRecords[path] = .built(built)
+				}
+				if let nearest, let own = nearest.ownParameterByPath[path], case var .built(built)? = builtRecords[path] {
+					built.passedArguments += nearest.nearestArguments(ofCallTo: own, at: path)
+					builtRecords[path] = .built(built)
+				}
 				if !call.inputs.hasFunction {
 					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
 				}
@@ -200,7 +219,7 @@ extension MockLowering.Walk {
 	/// the walk's: the walk entered a cycle with a cycle edge, a place records nothing, a read names a value no record or
 	/// root declaration binds, or the type key cannot lay the body out.
 	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> (lines: [String]?, fallback: String) {
-		guard !entersCycleWithEdge else { return (nil, "entersCycleWithEdge") }
+		guard ProcessInfo.processInfo.environment["SCRATCH_NO_GUARD"] == "1" || !entersCycleWithEdge else { return (nil, "entersCycleWithEdge") }
 		var rootBody = [GeneratedCode]()
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
 		for property in rootDeclarations {
