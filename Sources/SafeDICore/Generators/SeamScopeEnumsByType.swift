@@ -521,7 +521,7 @@ extension DependencyTreeGenerator {
 				// A fill is handed the struct of its own level, which the called seam's or public mock's struct the case's member
 				// returns builds at the place.
 				let carriedType = ReservedName.levelType(ofEnum: fillLevelEnumType, built: builderBuiltType)
-				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: carriedType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
+				innerScope = .init(callPathLength: bindingPrefix.count, innerKey: innerKey, enumType: carriedType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
 			let enumType = enumTypeByDescribed[caseOfProperty.described]
@@ -540,7 +540,7 @@ extension DependencyTreeGenerator {
 					valuesType: .nested(name: memberValuesTypeName, parentType: enumType, generics: []),
 					fields: enumCase.values?.fields ?? [],
 					levelType: ReservedName.levelType(ofEnum: heldEnumType, built: builderBuiltType),
-					bindingPath: bindingPrefix,
+					bindingPathLength: bindingPrefix.count,
 					isCalledInsideFunction: caseOfProperty.described.isSendable && buildsInSendableFunction,
 					isLetChild: ReservedName.seamCarrier(ofEnum: enumType) != nil && enumCase.isLetChildOfCarrier(inSendableEnum: caseOfProperty.described.isSendable, isInLoop: isInComponent(of: key(of: caseOfProperty.described))),
 				)
@@ -550,7 +550,7 @@ extension DependencyTreeGenerator {
 			}
 			return SeamSignature.Hole.RouteStep(
 				caseName: enumCase.name,
-				values: .init(bindingName: "", type: .nested(name: values.typeName, parentType: enumType, generics: []), fields: values.fields, bindingPath: bindingPrefix ?? []),
+				values: .init(bindingName: "", type: .nested(name: values.typeName, parentType: enumType, generics: []), fields: values.fields),
 				innerScope: innerScope,
 				leadsIntoFill: leadsIntoFill,
 				member: member,

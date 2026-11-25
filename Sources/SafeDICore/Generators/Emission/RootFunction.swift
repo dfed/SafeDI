@@ -62,14 +62,31 @@ public struct RootFunctionKey: Hashable, Sendable {
 	/// The indentation the call writes the declaration after, which the body of every scope shares, and the root's
 	/// statements too (`ScopeGenerator.rootStatementIndentation`).
 	let indentation: String
+
+	/// The key with `isSendable` false: what two records of one name must share to be declared once.
+	var ignoringSendability: RootFunctionKey {
+		RootFunctionKey(
+			calledSeam: calledSeam,
+			level: level,
+			isSendable: false,
+			inlinedFillKeys: inlinedFillKeys,
+			fillsTakingPayloadFields: fillsTakingPayloadFields,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
+			indentation: indentation,
+		)
+	}
 }
 
 /// Declares each root function of a root's plan once, at the root's top, in the order the plan first reaches it.
 ///
-/// A name is declared at the top only where every record of it in the plan has one key and every function it calls is
-/// declared there too; every other record is written where the call put it, as it was before. A function reached inside
-/// a `@Sendable` function (`GeneratedCode.sendableFunction(_:)`) is declared `@Sendable nonisolated`, since a `@Sendable`
-/// function calls no function that is not; a name reached both inside and outside one keeps both where they are.
+/// A name is declared at the top only where every record of it in the plan has one key, but for whether it is `@Sendable`,
+/// and every function it calls is declared there too; every other record is written where the call put it, as it was
+/// before. A function reached inside a `@Sendable` function (`GeneratedCode.sendableFunction(_:)`), or called by one
+/// declared `@Sendable`, is declared `@Sendable nonisolated`, since a `@Sendable` function calls no function that is not.
+/// A name reached both inside and outside one is declared once, `@Sendable nonisolated`: its text is the same at every
+/// record of its key, so it compiles `nonisolated` wherever the one inside compiles, and it captures nothing, so plain
+/// code calls it as it called the plain one.
 public enum RootFunctionHoisting {
 	/// A root function a root's plan reaches: its key, its name, and its text as the root would declare it.
 	public struct Occurrence: Sendable {
@@ -97,9 +114,18 @@ public enum RootFunctionHoisting {
 		}
 		let declared = records.filter { !keptNames.contains($0.name) }
 		guard !declared.isEmpty else { return statements }
+		// A function a `@Sendable` one calls is `@Sendable` too, until no more is.
+		var sendableNames = Set(declared.filter(\.isSendable).map(\.name))
+		var sendableCount: Int?
+		while sendableCount != sendableNames.count {
+			sendableCount = sendableNames.count
+			for record in declared where sendableNames.contains(record.name) {
+				sendableNames.formUnion(record.calls)
+			}
+		}
 		// A call's body is indented by the levels around it, so its declarations are written after its own indentation alone.
 		return declared.map { record in
-			.indented(.text(record.spelled(isSendable: record.isSendable)), by: indentation.hasPrefix(record.key.indentation) ? String(indentation.dropFirst(record.key.indentation.count)) : "")
+			.indented(.text(record.spelled(isSendable: sendableNames.contains(record.name))), by: indentation.hasPrefix(record.key.indentation) ? String(indentation.dropFirst(record.key.indentation.count)) : "")
 		}
 			+ [.omittingRootFunctions(.lines(statements), named: Set(declared.map(\.name)))]
 	}
@@ -151,8 +177,12 @@ public enum RootFunctionHoisting {
 					occurrences.append(Occurrence(key: key, name: record.name, text: record.spelled(isSendable: key.isSendable)))
 				}
 				if let declaredKey = keyByName[record.name] {
-					if declaredKey != key {
+					if declaredKey.ignoringSendability != key.ignoringSendability {
 						conflictingNames.insert(record.name)
+					} else if key.isSendable, !declaredKey.isSendable, let index = records.firstIndex(where: { $0.name == record.name }) {
+						// Reached inside a `@Sendable` function too: declared `@Sendable` once for both.
+						keyByName[record.name] = key
+						records[index] = RootFunctionRecord(key: key, name: record.name, textWithoutAttributes: records[index].textWithoutAttributes, isSendable: true, calls: records[index].calls)
 					}
 				} else {
 					keyByName[record.name] = key

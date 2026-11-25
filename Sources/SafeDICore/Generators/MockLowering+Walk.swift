@@ -59,6 +59,7 @@ extension ScopeGenerator {
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
 		walk.sendableAutoclosureBindings = signature.sendableAutoclosureBindings
 		walk.rootOverrideNames = Set(signature.onlyIfAvailableOverrides.map(\.name))
+		walk.unavailableDependencyOverrideNames = signature.unavailableDependencyOverrideNames
 		let mockedTypeUncoveredProperties = instantiable.dependencies.compactMap { dependency -> Property? in
 			guard case .instantiated = dependency.source, signature.uncoveredProperties.contains(dependency.property) else { return nil }
 			return dependency.property
@@ -74,6 +75,11 @@ extension ScopeGenerator {
 		walk.sendableConfigurationTypeNames = context.sendableConfigurationTypeNames
 		// A public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
+		// The mocked type's own initializer takes the root's level, an actor's into its isolation, so the root's children
+		// read their overrides as a `@Sendable` builder function does. A public mock's configurations are never `Sendable`, so
+		// it reads each field into a local of its own, and its construction functions take an actor's arguments `sending`
+		// (`MockLowering.PublicConstructionRecord.sendsArguments`).
+		walk.isInsideActorArgument = instantiable.declarationType == .actorType
 		// The nodes a public mock promotes, each bound from its caller's value when passed one.
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
 		// Each override binds its receive's label, in the optional form a receive only if available
@@ -144,7 +150,9 @@ extension ScopeGenerator {
 		// receives beneath read.
 		// A public mock takes each as a parameter of `mock()` under the override's name, which binds it.
 		if instantiable.generateMock != .public {
-			bindingLines.append(contentsOf: signature.onlyIfAvailableOverrides.map { override in
+			// The override of a property instantiated only if available that nothing fulfills is bound by the type that declares
+			// the property, where production binds it.
+			bindingLines.append(contentsOf: signature.onlyIfAvailableOverrides.lazy.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] == nil }.map { override in
 				"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
 			})
 		}
@@ -251,10 +259,16 @@ extension ScopeGenerator {
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
-		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-		lines.append(parameterLines.joined(separator: ",\n"))
 		// The type the mocked type's hand-written mock returns.
-		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
+		let returnType = MockLowering.rootReturnType(of: instantiable)
+		if parameterLines.isEmpty {
+			// A tree that only binds properties to `nil`, each instantiated only if available with nothing to fulfill it.
+			lines.append("\(indent)\(mockAttributesPrefix)static func mock() -> \(returnType) {")
+		} else {
+			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
+			lines.append(parameterLines.joined(separator: ",\n"))
+			lines.append("\(indent)) -> \(returnType) {")
+		}
 		lines.append(contentsOf: bindingLines)
 		// The mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
@@ -356,6 +370,9 @@ extension MockLowering {
 		/// The names `mock()` binds its overrides of what its tree receives only if available under, which a builder
 		/// function beneath the root may declare again: the emitter names an override apart only at the root's level.
 		var rootOverrideNames = Set<String>()
+		/// The name of the override of each property instantiated only if available that nothing fulfills, which the type that
+		/// declares the property binds it from (`RootSignature.unavailableDependencyOverrideNames`).
+		var unavailableDependencyOverrideNames = [Property: String]()
 
 		/// The declarations built around the node the walk is at, by label, innermost last: a node of a label one of them
 		/// has binds it again in its own builder function, which hides the farther one, as Swift's lookup does.
@@ -456,6 +473,12 @@ extension MockLowering {
 		var levelNames = [GeneratedNameAllocator]()
 		/// Whether the walk is inside a `@Sendable` builder function, whose nodes' override closures are `@Sendable`.
 		var isInsideSendableFunction = false
+		/// Whether the nodes the walk is at build what an actor's initializer is handed, outside every lazy wrapper's builder
+		/// function: the initializer takes each argument into the actor's isolation, so in Swift 6 the argument must share no
+		/// region with `safeDIOverrides`, which `mock()` is handed. Such a node reads its overrides into a local first, as a
+		/// `@Sendable` builder function does, of the `Sendable` form (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so no
+		/// builder function beneath it captures the overrides; capturing them would join the argument to their region.
+		var isInsideActorArgument = false
 		// The loop of builders the node being built is a member of, the members of its level's loops,
 		// the loop being emitted at the level, and how the last member's lines split (`MockLowering+Loops.swift`).
 		var loopMembership: LoopMembership?
@@ -766,6 +789,23 @@ extension MockLowering {
 		) async throws -> TreeNode? {
 			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = generator.scopeData {
 				return aliasNode(of: generator, property: property, fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, onlyIfAvailable: onlyIfAvailable, declarationReference: declarationReference, bindingName: bindingName, inScope: scope, indent: indent, lines: &lines)
+			} else if case let .property(_, property, _, _, _, _) = generator.scopeData, generator.isUnavailableDependency {
+				// A property instantiated only if available that nothing fulfills is bound where production binds it to `nil`,
+				// from the override `mock()` takes of it, so it reads no declaration above its type. It is `nil` inside a
+				// `@Sendable` builder function, which could not capture the override, and where `mock()` takes none.
+				let overrideName = isInsideSendableFunction ? nil : unavailableDependencyOverrideNames[property]
+				let binding = AliasBinding(
+					property: property,
+					bindingName: bindingName ?? property.label,
+					fulfillingProperty: property,
+					fulfillingName: overrideName.map { "\(ReservedName.mockOverridesParameterName).\($0)" } ?? property.label,
+					isErased: false,
+					isOnlyIfAvailable: true,
+					isBoundToNil: overrideName == nil,
+					declarationReference: nil,
+				)
+				lines.append(binding.bindingLines(indent: indent))
+				return .alias(binding)
 			} else {
 				// A hole site and a fill, the kinds of node a public mock's tree holds besides properties
 				// and aliases, and a call of another module's public mock (`MockLowering+PublicMocks.swift`).
@@ -1016,6 +1056,7 @@ extension MockLowering {
 			let startsExtraction: Bool
 			let enclosingExtractor: ScopeGenerator.SendableOverrideExtractor?
 			let wasInsideSendableFunction: Bool
+			let wasInsideActorArgument: Bool
 			let valuesBindingLines: [String]
 			let declarationIndex: Int
 			let insertedAncestor: Bool
@@ -1054,6 +1095,7 @@ extension MockLowering {
 				startsExtraction: Bool,
 				enclosingExtractor: ScopeGenerator.SendableOverrideExtractor?,
 				wasInsideSendableFunction: Bool,
+				wasInsideActorArgument: Bool,
 				valuesBindingLines: [String],
 				declarationIndex: Int,
 				insertedAncestor: Bool,
@@ -1091,6 +1133,7 @@ extension MockLowering {
 				self.startsExtraction = startsExtraction
 				self.enclosingExtractor = enclosingExtractor
 				self.wasInsideSendableFunction = wasInsideSendableFunction
+				self.wasInsideActorArgument = wasInsideActorArgument
 				self.valuesBindingLines = valuesBindingLines
 				self.declarationIndex = declarationIndex
 				self.insertedAncestor = insertedAncestor
@@ -1329,7 +1372,7 @@ extension MockLowering {
 					overrideReachable: overrideReachable,
 				),
 				buildsInSendableFunction: generator.buildsInSendableFunction,
-				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction,
+				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction || isInsideActorArgument,
 				defaultFields: defaultFields,
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
@@ -1353,7 +1396,9 @@ extension MockLowering {
 				recordInputs(of: node, hasFunction: false, overrideRead: overrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 				return .finished(node)
 			}
-			let startsForSendableFunction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			// A node that builds an actor's argument reads its overrides as a `@Sendable` builder function does, so that no builder
+			// function beneath it captures `safeDIOverrides`.
+			let startsForSendableFunction = sendableOverrideExtractor == nil && (generator.buildsInSendableFunction || isInsideActorArgument)
 			// So does one whose construction passes a configuration read to a `@Sendable` autoclosure, which would capture
 			// the overrides the read names; a public mock passes the read to the type's construction function instead. Its
 			// configuration may be the plain form, which is not `Sendable`, so that function reads each field.
@@ -1365,12 +1410,16 @@ extension MockLowering {
 			)
 			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
 			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
-			// does too (`ScopeGenerator.sendableConfigurationTypeNames()`), so each field is proven `Sendable` and the
+			// does too (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so each field is proven `Sendable` and the
 			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
 			let configurationPath = startsForSendableFunction && hasConfiguration && !buildsPublicMock ? nodePath : nil
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
+			let wasInsideActorArgument = isInsideActorArgument
+			// The node's children are its initializer's arguments: an actor's, or, outside a lazy wrapper's builder
+			// function, what an enclosing actor's argument is built from.
+			isInsideActorArgument = (instantiable.declarationType == .actorType && !usesMockInitializer) || (isInsideActorArgument && !isWrapped)
 			// The payloads of the cases nested by type that lead through the node to a place, bound before
 			// its builder function, after a wrapper's override locals and before a constant's, and the members a `@Sendable`
 			// function calls at its top (`MockLowering+PublicMocks.swift`).
@@ -1474,6 +1523,7 @@ extension MockLowering {
 				startsExtraction: startsExtraction,
 				enclosingExtractor: enclosingExtractor,
 				wasInsideSendableFunction: wasInsideSendableFunction,
+				wasInsideActorArgument: wasInsideActorArgument,
 				valuesBindingLines: valuesBindingLines,
 				declarationIndex: declarationIndex,
 				insertedAncestor: insertedAncestor,
@@ -1548,6 +1598,7 @@ extension MockLowering {
 				ancestorTypes.remove(cycleNodeKey)
 			}
 			isInsideSendableFunction = wasInsideSendableFunction
+			isInsideActorArgument = descending.wasInsideActorArgument
 			// The construction is inside the function, so a function that starts the extraction reads its own override
 			// into a local too, after its children's.
 			// Also the defaults it reads from its configuration: an instantiator's before its override, a
@@ -2237,6 +2288,7 @@ extension MockLowering {
 		init(of instantiable: Instantiable, usesMockInitializer: Bool) {
 			arguments = (usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer)?.arguments ?? []
 			dependencies = instantiable.dependencies
+			sendsArguments = instantiable.declarationType == .actorType && !usesMockInitializer
 		}
 
 		/// The parameters' types, spelled as the closure's parameter list.
@@ -2248,13 +2300,18 @@ extension MockLowering {
 		var types: [TypeDescription] {
 			let dependencyLabels = Set(dependencies.map(\.property.label))
 			return arguments.filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+				let parameter = (argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
 					.asFunctionParameter(amongTypesDeclaredEscaping: [])
+				return sendsArguments ? .attributed(parameter, specifiers: ["sending"], attributes: []) : parameter
 			}
 		}
 
 		private let arguments: [Initializer.Argument]
 		private let dependencies: [Dependency]
+		/// Whether the closure hands each value to an actor's initializer, which takes it into the actor's isolation: Swift 6
+		/// lets a closure send only a parameter declared `sending`, so an override written as `{ worker in Store(worker: worker) }`
+		/// compiles only so. Each value the mock hands it is a local nothing else holds.
+		private let sendsArguments: Bool
 	}
 }
 

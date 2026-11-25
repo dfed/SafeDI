@@ -60,6 +60,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.bBuilder = bBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -73,6 +74,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -86,6 +88,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -99,6 +102,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -152,22 +156,22 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
+		            .init(detailBuilder: { values_logger, values_tag in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: values_tag) })
+		        }
+		        func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger, tag: Tag?) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi(logger: logger, tag: tag)
+		                return api
+		            })
+		        }
+		        func __safeDI_apiBuilder_Home_B_Scope(tag: Tag?) -> Home.__safeDI_ApiCarrier_B<any Api> {
+		            .init(detailBuilder: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: tag) })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_06E948B543409F8C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
 		                .init(aBuilder: __safeDI_apiBuilder_Home_A_Scope(), bBuilder: { values_aBuilder in __safeDI_apiBuilder_Home_B_Scope(tag: nil) })
-		            }
-		            func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
-		                .init(detailBuilder: { values_logger, values_tag in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: values_tag) })
-		            }
-		            func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger, tag: Tag?) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi(logger: logger, tag: tag)
-		                    return api
-		                })
-		            }
-		            func __safeDI_apiBuilder_Home_B_Scope(tag: Tag?) -> Home.__safeDI_ApiCarrier_B<any Api> {
-		                .init(detailBuilder: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: tag) })
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
@@ -225,6 +229,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -238,6 +243,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -251,6 +257,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -264,6 +271,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.aBuilder_Sendable = aBuilder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(aBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -277,6 +285,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.workerBuilder = workerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -292,15 +301,15 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder
 		        let __safeDI_apiSendableBuilder_aBuilder_Sendable = __safeDI_apiSendableBuilder.aBuilder_Sendable
+		        @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
+		            let __safeDI_apiSendableBuilder_workerBuilder = __safeDI_apiSendableBuilder_aBuilder_Sendable.workerBuilder()
+		            let logger = Logger()
+		            let api: any Api = __safeDI_apiSendableBuilder_workerBuilder.api(logger)
+		            return Worker(logger: logger, api: api)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let logger = Logger()
 		            let api: any Api = __safeDI_apiBuilder_aBuilder.api(logger)
-		            @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
-		                let __safeDI_apiSendableBuilder_workerBuilder = __safeDI_apiSendableBuilder_aBuilder_Sendable.workerBuilder()
-		                let logger = Logger()
-		                let api: any Api = __safeDI_apiSendableBuilder_workerBuilder.api(logger)
-		                return Worker(logger: logger, api: api)
-		            }
 		            let workerBuilder = SendableInstantiator<Worker>(__safeDI_workerBuilder)
 		            return A(logger: logger, api: api, workerBuilder: workerBuilder)
 		        }
@@ -383,6 +392,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -396,6 +406,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -409,6 +420,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -504,6 +516,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -620,6 +633,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -695,6 +709,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -806,6 +821,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -819,6 +835,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -897,6 +914,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detail = detail
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -910,6 +928,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -923,6 +942,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.workerBuilder = workerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -936,14 +956,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
+		        @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
 		            let __safeDI_apiSendableBuilder_workerBuilder = __safeDI_apiSendableBuilder.workerBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_workerBuilder.detail
-		            func __safeDI_detail() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                return Detail(api: api)
-		            }
-		            let detail: Detail = __safeDI_detail()
+		            let detail: Detail = __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Worker(detail: detail)
 		        }
 		        let workerBuilder = SendableInstantiator<Worker>(__safeDI_workerBuilder)
@@ -1003,6 +1023,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.innermost_Sendable = innermost_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(innermost_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1034,6 +1055,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() })
 		        }
@@ -1047,6 +1069,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1088,8 +1111,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                    self.gadget = gadget
 		                }
 
+		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
+		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1106,8 +1130,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                self.inner_serviceSendableBuilder = inner_serviceSendableBuilder
 		            }
 
+		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.inner_serviceSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.init(inner_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -1203,6 +1228,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.innermost_Sendable = innermost_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(innermost_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1234,6 +1260,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() })
 		        }
@@ -1247,6 +1274,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.stackBuilder_Sendable = stackBuilder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(stackBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1260,6 +1288,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.cardBuilder = cardBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(cardBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1268,15 +1297,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_serviceSendableBuilder: __safeDI_ServiceSendableCarrier<any Service>) {
+		        @Sendable nonisolated func __safeDI_cardBuilder(__safeDI_serviceSendableBuilder_stackBuilder_Sendable: __safeDI_ServiceSendableCarrier_Stack<any Service>) -> Card {
+		            let __safeDI_serviceSendableBuilder_cardBuilder = __safeDI_serviceSendableBuilder_stackBuilder_Sendable.cardBuilder()
+		            let logger = Logger()
+		            let service: any Service = __safeDI_serviceSendableBuilder_cardBuilder.service(logger)
+		            return Card(logger: logger, service: service)
+		        }
 		        @Sendable nonisolated func __safeDI_stackBuilder() -> Stack {
 		            let __safeDI_serviceSendableBuilder_stackBuilder_Sendable = __safeDI_serviceSendableBuilder.stackBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_cardBuilder() -> Card {
-		                let __safeDI_serviceSendableBuilder_cardBuilder = __safeDI_serviceSendableBuilder_stackBuilder_Sendable.cardBuilder()
-		                let logger = Logger()
-		                let service: any Service = __safeDI_serviceSendableBuilder_cardBuilder.service(logger)
-		                return Card(logger: logger, service: service)
+		            let cardBuilder = SendableInstantiator<Card> {
+		                __safeDI_cardBuilder(__safeDI_serviceSendableBuilder_stackBuilder_Sendable: __safeDI_serviceSendableBuilder_stackBuilder_Sendable)
 		            }
-		            let cardBuilder = SendableInstantiator<Card>(__safeDI_cardBuilder)
 		            return Stack(cardBuilder: cardBuilder)
 		        }
 		        let stackBuilder = SendableInstantiator<Stack>(__safeDI_stackBuilder)
@@ -1338,6 +1369,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.innermost = innermost
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(innermost: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1369,6 +1401,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1382,6 +1415,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.bBuilder = bBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1395,6 +1429,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() })
 		        }
@@ -1480,6 +1515,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.innermost = innermost
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(innermost: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1511,6 +1547,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1524,6 +1561,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -1568,7 +1606,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.detailBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -1585,7 +1623,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.service = { _ in __safeDI_builder() }
+		                    self.init(service: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1599,7 +1637,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.innermost = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(innermost: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1821,6 +1859,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -1852,6 +1891,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -1865,6 +1905,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.workerBuilder = workerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1945,6 +1986,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.panel = panel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: { __safeDI_builder() })
 		        }
@@ -1958,6 +2000,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.heldBuilder = heldBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(heldBuilder: { __safeDI_builder })
 		        }
@@ -2035,6 +2078,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -2048,6 +2092,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.panel = panel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: { __safeDI_builder() })
 		        }
@@ -2061,6 +2106,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.workerBuilder = workerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2148,6 +2194,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: { __safeDI_builder() }, held: { _ in { _ in __safeDI_builder() } })
 		        }
@@ -2230,6 +2277,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.home = home
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2261,6 +2309,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2276,6 +2325,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.next = next
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() }, next: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2386,6 +2436,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.home = home
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2399,6 +2450,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.home_Sendable = home_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(home_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2430,6 +2482,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2443,6 +2496,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -2456,6 +2510,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.screenBuilder_Sendable = screenBuilder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(screenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2469,6 +2524,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.again = again
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(again: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2479,14 +2535,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
 		        let __safeDI_apiSendableBuilder_screenBuilder_Sendable = __safeDI_apiSendableBuilder.screenBuilder_Sendable
+		        @Sendable nonisolated func __safeDI_again() -> Screen {
+		            let __safeDI_apiSendableBuilder_again = __safeDI_apiSendableBuilder_screenBuilder_Sendable.again()
+		            let api: any Api = __safeDI_apiSendableBuilder_again.api()
+		            let again = SendableInstantiator<Screen>(__safeDI_again)
+		            return Screen(api: api, again: again)
+		        }
 		        func __safeDI_screenBuilder() -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api()
-		            @Sendable nonisolated func __safeDI_again() -> Screen {
-		                let __safeDI_apiSendableBuilder_again = __safeDI_apiSendableBuilder_screenBuilder_Sendable.again()
-		                let api: any Api = __safeDI_apiSendableBuilder_again.api()
-		                let again = SendableInstantiator<Screen>(__safeDI_again)
-		                return Screen(api: api, again: again)
-		            }
 		            let again = SendableInstantiator<Screen>(__safeDI_again)
 		            return Screen(api: api, again: again)
 		        }
@@ -2566,6 +2622,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.hub_Sendable = hub_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(hub_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2597,6 +2654,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -2610,6 +2668,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.a_Sendable = a_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(a_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2623,6 +2682,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.bBuilder = bBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2633,14 +2693,16 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    public init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        @Sendable nonisolated func __safeDI_a() -> A {
 		            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable
-		            @Sendable nonisolated func __safeDI_bBuilder() -> B {
-		                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
-		                let a: A = __safeDI_a()
-		                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
-		                return B(api: api, a: a)
+		            let bBuilder = SendableInstantiator<B> {
+		                __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_apiSendableBuilder_a_Sendable)
 		            }
-		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 		            return A(bBuilder: bBuilder)
+		        }
+		        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
+		            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
+		            let a: A = __safeDI_a()
+		            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
+		            return B(api: api, a: a)
 		        }
 		        let a: A = __safeDI_a()
 		        self.init(a: a)
@@ -2711,6 +2773,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.home = home
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2724,6 +2787,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.home_Sendable = home_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(home_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2755,6 +2819,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2770,6 +2835,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.next = next
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() }, next: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2783,6 +2849,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.sendableScreenBuilder = sendableScreenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(sendableScreenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2792,28 +2859,36 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_next(__safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_next.api()
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(__safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
+		            }
+		            return Screen(api: api, next: next)
+		        }
 		        func __safeDI_screenBuilder() -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api()
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(api)
-		            func __safeDI_next() -> Screen {
-		                let api: any Api = __safeDI_apiBuilder_next.api()
-		                let next = Instantiator<Screen>(__safeDI_next)
-		                return Screen(api: api, next: next)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(__safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
 		            }
-		            let next = Instantiator<Screen>(__safeDI_next)
 		            return Screen(api: api, next: next)
 		        }
 		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        @Sendable nonisolated func __safeDI_next_(__safeDI_apiSendableBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
+		            let api: any Api = __safeDI_apiSendableBuilder_next.api()
+		            let next = Instantiator<Screen> {
+		                __safeDI_next_(__safeDI_apiSendableBuilder_next: __safeDI_apiSendableBuilder_next)
+		            }
+		            return Screen(api: api, next: next)
+		        }
 		        @Sendable nonisolated func __safeDI_sendableScreenBuilder() -> Screen {
 		            let __safeDI_apiSendableBuilder_sendableScreenBuilder = __safeDI_apiSendableBuilder.sendableScreenBuilder()
 		            let api: any Api = __safeDI_apiSendableBuilder_sendableScreenBuilder.api()
 		            let __safeDI_apiSendableBuilder_next = __safeDI_apiSendableBuilder_sendableScreenBuilder.next(api)
-		            func __safeDI_next() -> Screen {
-		                let api: any Api = __safeDI_apiSendableBuilder_next.api()
-		                let next = Instantiator<Screen>(__safeDI_next)
-		                return Screen(api: api, next: next)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next_(__safeDI_apiSendableBuilder_next: __safeDI_apiSendableBuilder_next)
 		            }
-		            let next = Instantiator<Screen>(__safeDI_next)
 		            return Screen(api: api, next: next)
 		        }
 		        let sendableScreenBuilder = SendableInstantiator<Screen>(__safeDI_sendableScreenBuilder)
@@ -2899,8 +2974,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                    self.gadget = gadget
 		                }
 
+		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
+		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -2913,8 +2989,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                self.inner_serviceBuilder = inner_serviceBuilder
 		            }
 
+		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -2972,6 +3049,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder), service: { _ in __safeDI_builder() })
 		        }
@@ -2987,6 +3065,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.next = next
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() }, next: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3033,22 +3112,22 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: Int?, tag: Tag) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
+		            .init(gadget: { _ in
+		                let gadget: any Gadget = LiveGadget(tag: tag, id: id)
+		                return gadget
+		            })
+		        }
+		        func __safeDI_gadgetBuilder_Outer_Inner(id: Int?, tag: Tag) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(screenBuilder: __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: tag), service: { values_screenBuilder in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: id, tag: tag) })
+		        }
+		        func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: Tag) -> Inner.__safeDI_ServiceCarrier_Screen<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(service: { values_id in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: values_id, tag: tag) }, next: { values_id, values_service in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: tag) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_EE81B3871ACF0FAD.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
 		                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(id: nil, tag: values.tag) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: Int?, tag: Tag) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadget: { _ in
-		                    let gadget: any Gadget = LiveGadget(tag: tag, id: id)
-		                    return gadget
-		                })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner(id: Int?, tag: Tag) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(screenBuilder: __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: tag), service: { values_screenBuilder in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: id, tag: tag) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: Tag) -> Inner.__safeDI_ServiceCarrier_Screen<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(service: { values_id in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: values_id, tag: tag) }, next: { values_id, values_service in __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: tag) })
 		            }
 		            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 		        }
@@ -3076,6 +3155,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			            self.alpha = alpha
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(alpha: { __safeDI_builder() })
 			        }
@@ -3089,6 +3169,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			            self.zeta = zeta
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(zeta: { _ in __safeDI_builder() })
 			        }
@@ -3133,8 +3214,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                    self.gadget = gadget
 			                }
 
+			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3150,8 +3232,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                    self.gadget = gadget
 			                }
 
+			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3166,9 +3249,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                self.inner_zetaBuilder = inner_zetaBuilder
 			            }
 
+			            @_alwaysEmitIntoClient
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.inner_alphaBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.inner_zetaBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(inner_alphaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, inner_zetaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3267,6 +3350,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			            self.alpha = alpha
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(alpha: { _ in __safeDI_builder() })
 			        }
@@ -3280,6 +3364,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			            self.zeta = zeta
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(zeta: { __safeDI_builder() })
 			        }
@@ -3324,8 +3409,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                    self.gadget = gadget
 			                }
 
+			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3341,8 +3427,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                    self.gadget = gadget
 			                }
 
+			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3357,9 +3444,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                self.inner_zetaBuilder = inner_zetaBuilder
 			            }
 
+			            @_alwaysEmitIntoClient
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.inner_alphaBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.inner_zetaBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(inner_alphaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, inner_zetaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }

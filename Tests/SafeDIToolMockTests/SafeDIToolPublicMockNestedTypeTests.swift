@@ -1239,10 +1239,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"Root+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Root {
-			    // These providers evaluate `Root`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Root` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
+			    @usableFromInline static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -1494,10 +1491,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 
 		#if DEBUG
 		extension Root {
-		    // These providers evaluate `Root`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Root` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    nonisolated static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
+		    static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
 
 		    public static func mock(
 		        theme: Root.Theme? = nil

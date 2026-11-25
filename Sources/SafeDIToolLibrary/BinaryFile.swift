@@ -83,7 +83,9 @@ enum BinaryFile {
 	/// The version of the layout of the header and of the primitives in ``BinaryCodable``. Changes to how a
 	/// stored type is laid out change ``schemaFingerprint`` instead. Version 2 shares repeated values inside seam signatures,
 	/// and writes the optional and Boolean fields of most other structs as one integer of flags (``BinaryFieldFlags``).
-	static let formatVersion: UInt16 = 2
+	/// Version 3 writes each module's seam signatures as an encoding of their own, with its own string table, behind its
+	/// length (``BinaryWriter/writeEncoding(_:)``), so a run decodes only those of the seams it reaches.
+	static let formatVersion: UInt16 = 3
 
 	/// Every struct and enum a file holds.
 	static var schemaMembers: [any BinarySchemaMember.Type] {
@@ -97,6 +99,8 @@ enum BinaryFile {
 			OutputFileDeclarations.self,
 			ModuleInfo.self,
 			ModuleInfoFile.self,
+			ModuleSeamSignatures.self,
+			ModulePublicMockPlans.self,
 			ModuleInfoView.self,
 			ViewedModuleIdentity.self,
 			ViewedModule.self,
@@ -126,6 +130,11 @@ enum BinaryFile {
 			TypeDescription.TupleElement.self,
 			UnorderedEquatingCollection<TypeDescription>.self,
 			StoredSeamSignature.self,
+			StoredPublicMockPlan.self,
+			StoredPublicMockPlan.Parameter.self,
+			StoredPublicMockPlan.Role.self,
+			StoredPublicMockPlan.NestedOmission.self,
+			StoredPublicMockPlan.Receiver.self,
 			SeamSignature.self,
 			SeamSignature.Receiver.self,
 			SeamSignature.NestedSeamCall.self,
@@ -176,7 +185,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0xDC7C094F17F082C3
+	static let schemaFingerprint: UInt64 = 0xF199DDE7CF7F55E6
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
