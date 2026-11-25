@@ -71,7 +71,11 @@ extension MockLowering.Walk {
 		// for the type, so no function's parameters follow the path that reaches it.
 		// A tree no closer closes hands no nearest configuration: a place a cycle builds again has a closer beneath it.
 		let closesCycle = closerAndDefaultRecords.values.contains { record in
-			if case .closer = record { true } else { false }
+			if case .closer = record {
+				true
+			} else {
+				false
+			}
 		}
 		let nearest: MockLowering.NearestConfigurations? = buildsPublicMock || !closesCycle ? nil : nearestConfigurations(childPathsByParent: childPathsByParent)
 		var parentFieldsReadByBuiltPlaces = Set<ParentFieldRead>()
