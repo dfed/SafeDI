@@ -77,7 +77,7 @@ extension MockLowering.Walk {
 			if overrideReturnsAnotherType {
 				unrecordedReasons[path] = "overrideReturnsAnotherType"
 			} else if pathsWithUnplannedLines.contains(path) {
-				unrecordedReasons[path] = "unplannedLines"
+				unrecordedReasons[path] = "unplannedLines:" + (unplannedLineKinds[path] ?? "")
 			} else if !call.isPlannedAtPlace {
 				unrecordedReasons[path] = "notPlannedAtPlace"
 			}

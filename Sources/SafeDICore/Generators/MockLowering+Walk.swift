@@ -481,6 +481,8 @@ extension MockLowering {
 		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
 		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
 		var pathsWithUnplannedLines = Set<[Int]>()
+		/// SPIKE: which kinds of unplanned statements each such place writes, for the fallback log.
+		var unplannedLineKinds = [[Int]: String]()
 		/// SPIKE: why each place has no record, for the switch's log.
 		var unrecordedReasons = [[Int]: String]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
@@ -1270,7 +1272,15 @@ extension MockLowering {
 			if isWrapped {
 				lines.append(contentsOf: valuesBindingLines)
 			}
-			if !valuesBindingLines.isEmpty || !generator.memberCallsInsideBuilderFunction.isEmpty || !rebindingLines.isEmpty || !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty || startsExtraction {
+			var unplannedKinds = [String]()
+			if !valuesBindingLines.isEmpty { unplannedKinds.append("payloadBindings") }
+			if !generator.memberCallsInsideBuilderFunction.isEmpty { unplannedKinds.append("memberCalls") }
+			if !rebindingLines.isEmpty { unplannedKinds.append("rebindings") }
+			if !receiverBindings.isEmpty { unplannedKinds.append("receiverBindings") }
+			if !node.sendableAutoclosureBindings.isEmpty { unplannedKinds.append("sendableAutoclosures") }
+			if startsExtraction { unplannedKinds.append("overrideExtraction") }
+			if !unplannedKinds.isEmpty {
+				unplannedLineKinds[childIndexPath] = unplannedKinds.joined(separator: "+")
 				pathsWithUnplannedLines.insert(childIndexPath)
 			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
