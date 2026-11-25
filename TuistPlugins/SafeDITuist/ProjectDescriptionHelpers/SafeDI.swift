@@ -308,6 +308,16 @@ private func scriptBody(module: String, dependencies: [String], isDependedUpon: 
 			;;
 	esac
 
+	# Report the default actor isolation Xcode compiles this target with
+	# (its "Default Actor Isolation" build setting), so SafeDITool can warn
+	# when the target’s `#SafeDIConfiguration` declares another. A
+	# `-default-isolation` flag in `OTHER_SWIFT_FLAGS`, passed above, wins.
+	case "$generate_help" in
+		*--build-default-isolation*)
+			set -- "$@" "--build-default-isolation=${SWIFT_DEFAULT_ACTOR_ISOLATION:-}"
+			;;
+	esac
+
 	# Name the module this target compiles and its package, which
 	# SafeDITool records in this target’s `.safedi` artifact, beside the
 	# modules the dependencies’ `.safedi` artifacts record. The package
