@@ -318,7 +318,7 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
-A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation.
+A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation. It leaves out `@_spi`, `@backDeployed` and `@objc`, which that function cannot take. An attached macro there expands on that function too; if the macro cannot, give the type a hand-written `mock()` without it, which the public mock then builds the type with.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 

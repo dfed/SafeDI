@@ -93,21 +93,36 @@ public struct Initializer: Codable, Hashable, Sendable {
 	public let arguments: [Argument]
 	/// The attributes the declaration spells, each as written, followed by its `nonisolated` modifier, which code that calls
 	/// it from another declaration repeats so that it has the declaration's isolation, or `nil` when it spells neither.
-	/// SafeDI reads no attribute's name, so it never guesses which one states an isolation: a global actor of any name, or
-	/// one spelled qualified, is copied like any other attribute. An attribute inside an `#if` clause is not read.
+	/// SafeDI reads no attribute's name to tell which one states an isolation: a global actor of any name, or one spelled
+	/// qualified, is copied like any other attribute. It leaves out only the attributes the compiler rejects on that code
+	/// (`attributeNamesLeftOut`). An attribute inside an `#if` clause is not read.
 	public let spelledAttributes: String?
+
+	/// The compiler's own attributes that code calling a declaration cannot repeat, matched by the whole name: a public mock's
+	/// construction function is `internal`, which `@_spi` and `@backDeployed` reject, and its builder parameter is a Swift
+	/// closure, which `@objc` rejects where Objective-C cannot represent it. No declaration can take these names, so no
+	/// global actor is left out.
+	static let attributeNamesLeftOut: Set<String> = ["_spi", "backDeployed", "objc"]
 
 	static func spelledAttributes(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
 		var spellings = [String]()
 		// A loop rather than a lazy sequence, whose generic iterators cost more than reading the attributes: nearly every
 		// declaration SafeDI reads has attributes and an initializer.
-		for case let .attribute(attribute) in attributes {
+		for case let .attribute(attribute) in attributes where !isLeftOut(attribute) {
 			spellings.append(attribute.trimmedDescription)
 		}
 		for modifier in modifiers where modifier.name.tokenKind == .keyword(.nonisolated) {
 			spellings.append(modifier.trimmedDescription)
 		}
 		return spellings.isEmpty ? nil : spellings.joined(separator: " ")
+	}
+
+	/// Whether `attribute` is one of `attributeNamesLeftOut`, spelled as a plain name, which a built-in attribute always is.
+	private static func isLeftOut(_ attribute: AttributeSyntax) -> Bool {
+		guard let name = IdentifierTypeSyntax(attribute.attributeName), name.genericArgumentClause == nil else {
+			return false
+		}
+		return attributeNamesLeftOut.contains(name.name.text)
 	}
 
 	public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {

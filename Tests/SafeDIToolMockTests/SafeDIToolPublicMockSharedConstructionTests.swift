@@ -5843,6 +5843,140 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [
+		"@_spi(Testing) public init(limit: Int = 3)",
+		"@backDeployed(before: macOS 99) public init(limit: Int = 3)",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresConstructionFunctionWithoutAttributeOnlyPublicDeclarationsTake_whenInitializerSpellsIt(initializer: String) async throws {
+		// `@_spi` and `@backDeployed` apply only to a `public` declaration, and a construction function is `internal`, so it
+		// repeats every attribute of the initializer but these.
+		let modules = [
+			ModuleFixture(name: "Store", packageName: "store", swiftFileContentByFilePath: ["Store.swift": """
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public final class Store: Instantiable {
+			    public init(cache: Cache) {
+			        self.cache = cache
+			    }
+
+			    @Instantiated let cache: Cache
+			}
+
+			@Instantiable
+			public struct Cache: Instantiable {
+			    \(initializer) {
+			        self.limit = limit
+			    }
+
+			    let limit: Int
+			}
+			"""]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Store"]?.generatedFiles == [
+			"Store.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Store {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            cache: __safeDI_Store_Cache_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                cache: cache
+			            )
+			        }
+
+			        public var cache: __safeDI_Store_Cache_MockConfiguration { __safeDI_storage.cache }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                cache: __safeDI_Store_Cache_MockConfiguration
+			            ) {
+			                self.cache = cache
+			            }
+
+			            let cache: __safeDI_Store_Cache_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Store {
+			        Store.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Store {
+			        func __safeDI_cache() -> Cache {
+			            return Cache.__safeDI_init(limit: safeDIOverrides.cache.limit, safeDIBuilder: safeDIOverrides.cache.safeDIBuilder)
+			        }
+			        let cache: Cache = __safeDI_cache()
+			        return Store(cache: cache)
+			    }
+			}
+
+			extension Store {
+			    public enum __safeDI_Store_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `Cache` is constructed within the public mock trees of module `Store`.
+			nonisolated public struct __safeDI_Store_Cache_MockConfiguration {
+			    public init(
+			        limit: Int? = nil,
+			        _ safeDIBuilder: ((Int) -> Cache)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            limit: limit,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    /// `nil` keeps the default of `Cache`’s `limit`.
+			    public var limit: Int? { __safeDI_storage.limit }
+			    /// Overrides how `Cache` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: ((Int) -> Cache)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            limit: Int?,
+			            safeDIBuilder: ((Int) -> Cache)?
+			        ) {
+			            self.limit = limit
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let limit: Int?
+			        let safeDIBuilder: ((Int) -> Cache)?
+			    }
+			}
+
+			extension Cache {
+			    static func __safeDI_init(limit: Int?, safeDIBuilder: ((Int) -> Cache)?) -> Cache {
+			        let limit = limit ?? (3)
+			        return if let safeDIBuilder { safeDIBuilder(limit) } else { Cache(limit: limit) }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
