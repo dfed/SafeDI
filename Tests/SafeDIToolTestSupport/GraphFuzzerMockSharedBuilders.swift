@@ -158,7 +158,7 @@ enum GraphFuzzerMockSharedBuilders {
 		return classes
 	}
 
-		/// The judgment of what a built `SafeDITool`, `tool`, generates for `fixture` with the layout on, run as the base
+	/// The judgment of what a built `SafeDITool`, `tool`, generates for `fixture` with the layout on, run as the base
 	/// comparison runs it (`GraphFuzzerBaseComparison.Layout`), or `nil` where the tool rejects the graph: so a tool built
 	/// from another commit, such as a head whose engine this checkout does not hold, is judged by its own layout's log.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
