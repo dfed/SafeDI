@@ -389,6 +389,29 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		})
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_stopsKeyingScope_whenErasedScreensInLayersWithoutCyclesReachItAlongPathsWhoseKeysDiffer() async throws {
+		// Layers of four seams, each in a module of its own and opening three screens of the next layer through erased
+		// instantiators, with no cycle: the app's walk reaches a screen of a deep layer along every path through the layers
+		// above, and each path's keys differ. A scope keyed eight times in a row with no remembered walk of an equal key is
+		// keyed no more, whether or not it reaches a cycle, so fewer keys are built for the same scopes walked; the walk
+		// reports what it reports without the skip. Keyed wherever they were reached again, the same walks built 351 and
+		// 1,011 keys.
+		var keyedCounts = [Int]()
+		var validatedCounts = [Int]()
+		for layerCount in [4, 5] {
+			let modules = Self.layeredErasedSeamModules(layerCount: layerCount)
+			let skipping = try await run(modules, skippingCleanSubtrees: true)
+			let walking = try await run(modules, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			keyedCounts.append(skipping.keyedSubtreeCount)
+			validatedCounts.append(skipping.validatedScopeCount)
+		}
+		#expect(keyedCounts == [279, 651])
+		#expect(validatedCounts == [324, 696])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -408,17 +431,36 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func run(_ fixture: [String], skippingCleanSubtrees: Bool) async throws -> Run {
-		let (stream, continuation) = AsyncStream.makeStream(of: ValidationWalkObservation.self)
-		let outcome: Outcome
-		do {
-			let output = try await ValidationWalkObservation.$skipsCleanSubtrees.withValue(skippingCleanSubtrees) {
-				try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
-					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		try await Self.observingValidationWalk(skippingCleanSubtrees: skippingCleanSubtrees) {
+			do {
+				return try await .generated(executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete).generatedFiles ?? [:])
+			} catch let error as SafeDIToolTestError {
+				return .error(Self.withFixtureNames(error.description))
+			}
+		}
+	}
+
+	/// Generates `modules` in order, as Bazel does, with every module's generated files keyed by the module's name and
+	/// the file's.
+	private mutating func run(_ modules: [ModuleFixture], skippingCleanSubtrees: Bool) async throws -> Run {
+		try await Self.observingValidationWalk(skippingCleanSubtrees: skippingCleanSubtrees) {
+			let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+			var generatedFiles = [String: String]()
+			for (moduleName, module) in output.modules {
+				for (fileName, file) in module.generatedFiles {
+					generatedFiles["\(moduleName)/\(fileName)"] = file
 				}
 			}
-			outcome = .generated(output.generatedFiles ?? [:])
-		} catch let error as SafeDIToolTestError {
-			outcome = .error(Self.withFixtureNames(error.description))
+			return .generated(generatedFiles)
+		}
+	}
+
+	private static func observingValidationWalk(skippingCleanSubtrees: Bool, _ generate: () async throws -> Outcome) async throws -> Run {
+		let (stream, continuation) = AsyncStream.makeStream(of: ValidationWalkObservation.self)
+		let outcome = try await ValidationWalkObservation.$skipsCleanSubtrees.withValue(skippingCleanSubtrees) {
+			try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await generate()
+			}
 		}
 		continuation.finish()
 		var validatedScopeCount = 0
@@ -487,6 +529,63 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }))
 		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let home: Home"]))
 		return fixture
+	}
+
+	/// `Core`, a module for each of `layerCount` layers of four seams, and `App`: each screen opens the three screens of the
+	/// next layer but the one at its own position through erased instantiators, and builds an internal model that receives
+	/// the screen's forwarded `id` and lazily builds a session; `App`'s root opens the first layer. The shape of the
+	/// erased-screens benchmark.
+	private static func layeredErasedSeamModules(layerCount: Int) -> [ModuleFixture] {
+		func erasedBuilder(of screen: Int) -> String {
+			"@Instantiated(fulfilledByType: \"Screen\(screen)\", erasedToConcreteExistential: true) public let screen\(screen)Builder: ErasedInstantiator<Int, AnyScreen>"
+		}
+		let screenCount = layerCount * 4
+		var modules = [ModuleFixture]()
+		for index in (0..<screenCount).reversed() {
+			let layer = index / 4
+			let opened = layer < layerCount - 1 ? (0..<4).filter { $0 != index % 4 }.map { (layer + 1) * 4 + $0 } : []
+			let imports = (["Core"] + opened.map { "Screen\($0)Module" }).map { "import \($0)\n" }.joined()
+			modules.append(ModuleFixture(
+				name: "Screen\(index)Module",
+				packageName: "Shop",
+				swiftFileContent: [
+					imports + "\n" + seamFixtureType(
+						named: "Screen\(index)",
+						isSeam: true,
+						isFinalClass: true,
+						declarations: ["@Forwarded public let id: Int", "@Received public let service: Service", "@Instantiated let model: Model\(index)"] + opened.map(erasedBuilder(of:)),
+					),
+					"import Core\n\n" + seamFixtureType(named: "Model\(index)", isFinalClass: true, declarations: ["@Received public let id: Int", "@Received public let service: Service", "@Instantiated public let session: LazilyInstantiated<Session>"]),
+				],
+				dependencies: ["Core"] + opened.map { "Screen\($0)Module" },
+			))
+		}
+		return [
+			ModuleFixture(
+				name: "Core",
+				packageName: "Shop",
+				swiftFileContent: [
+					"""
+					public final class AnyScreen {
+					    public init(_ screen: AnyObject) {
+					        self.screen = screen
+					    }
+
+					    public let screen: AnyObject
+					}
+					""",
+					seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+					seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+				],
+			),
+		] + modules + [
+			ModuleFixture(
+				name: "App",
+				packageName: "Shop",
+				swiftFileContent: [(["Core"] + modules.map(\.name)).map { "import \($0)\n" }.joined() + "\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let service: Service"] + (0..<4).map(erasedBuilder(of:)))],
+				dependencies: ["Core"] + modules.map(\.name),
+			),
+		]
 	}
 
 	/// Screen `i` of `screenCount` opens screens `i + 1`, `2i + 3` and `3i + 5` (modulo the count; itself and a screen
