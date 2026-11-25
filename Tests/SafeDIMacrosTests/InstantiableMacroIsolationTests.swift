@@ -109,22 +109,18 @@ import Testing
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes` and `mockAttributes`"),
 						],
 					),
 					DiagnosticSpec(
 						message: "`Root`’s initializer is `@MainActor`, and the `mock()` SafeDI generates calls it, so that `mock()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `mockAttributes`.",
 						line: 1,
 						column: 1,
-						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `mockAttributes`"),
-						],
 					),
 				],
 				macros: instantiableTestMacros,
-				applyFixIts: ["Add `@MainActor` to `generatedInitializerAttributes`"],
 				fixedSource: """
-				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor @available(macOS 14, *)", generateMock: true)
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor @available(macOS 14, *)", mockAttributes: "@MainActor", generateMock: true)
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -417,22 +413,18 @@ import Testing
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes` and `mockAttributes`"),
 						],
 					),
 					DiagnosticSpec(
 						message: "`Feature`’s initializer is `@MainActor`, and the `mock()` SafeDI generates calls it, so that `mock()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `mockAttributes`.",
 						line: 1,
 						column: 1,
-						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `mockAttributes`"),
-						],
 					),
 				],
 				macros: instantiableTestMacros,
-				applyFixIts: ["Add `@MainActor` to `generatedInitializerAttributes`"],
 				fixedSource: """
-				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor", generateMock: true)
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor", mockAttributes: "@MainActor", generateMock: true)
 				public final class Feature: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -441,6 +433,143 @@ import Testing
 				    @Instantiated private let presenter: Presenter
 				}
 				""",
+			)
+		}
+
+		@Test
+		func declaration_producesOneFixItAddingGeneratedAttributesOnce_whenSeamInitializerAndMockAreMainActorAndGeneratedAttributesStateNoIsolation() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateDependencyTree: true, generatedAttributes: "@available(macOS 14, *)", generateMock: true)
+				public final class Feature: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				public final class Feature: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Feature`’s initializer is `@MainActor`, and the initializers SafeDI generates for this type with `generateDependencyTree: true` call it, so they must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedAttributes`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "`Feature`’s initializer is `@MainActor`, and the `mock()` SafeDI generates calls it, so that `mock()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedAttributes`.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(generateDependencyTree: true, generatedAttributes: "@MainActor @available(macOS 14, *)", generateMock: true)
+				public final class Feature: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItEditsOnlyTheAttribute_whenAnotherFixItEditsTheTypesMembers() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter = Presenter()
+				}
+				""",
+				expandedSource: """
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter = Presenter()
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`presenter` must not have a default value: SafeDI passes every @Instantiated, @Received, and @Forwarded property in through the initializer. Remove `= Presenter()`.",
+						line: 7,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `= Presenter()`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRootTypeSpellsItsGlobalActorInsideIfConfig() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				#if os(iOS)
+				@MainActor
+				#endif
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				#if os(iOS)
+				@MainActor
+				#endif
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
 			)
 		}
 

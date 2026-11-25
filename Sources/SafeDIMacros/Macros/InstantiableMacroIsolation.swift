@@ -41,12 +41,16 @@ extension InstantiableMacro {
 	/// superclass, or a protocol bound to a global actor, such as `UIViewController` or SwiftUI’s `View`) can take its
 	/// global actor from there, which the macro cannot see, so it is not reported. Neither is an `@Instantiable`
 	/// extension, whose extended type’s isolation the macro cannot see, nor the mock of a type whose hand-written mock
-	/// is in a separate `mockOnly` declaration.
+	/// is in a separate `mockOnly` declaration. A type whose attribute list holds an `#if` clause is not reported either,
+	/// since the clause may state its isolation.
+	///
+	/// When the root’s or seam’s initializers and the `mock()` are both reported, the first diagnostic’s fix-it adds
+	/// `@MainActor` to every argument either reads, and the second has none, so that no two fix-its edit the attribute.
+	/// Each fix-it replaces only the `@Instantiable` attribute.
 	static func diagnoseUnstatedGlobalActorIsolation(
 		of concreteDeclaration: ConcreteDeclSyntaxProtocol,
 		instantiableMacro: AttributeSyntax,
 		visitor: InstantiableVisitor,
-		on declaration: some SyntaxProtocol,
 		context: some MacroExpansionContext,
 	) {
 		guard !visitor.conformanceListNamesOtherTypes,
@@ -56,6 +60,7 @@ extension InstantiableMacro {
 		let constructionInitializer = zip(visitor.initializers, visitor.initializerSyntaxes).first { initializer, _ in
 			initializer.isValid(forFulfilling: visitor.dependencies)
 		}
+		var findings = [UnstatedIsolation]()
 
 		// SafeDI generates initializers only for a tree that builds something: a root or seam that instantiates no
 		// dependency gets none, and its callers call its own initializer.
@@ -80,39 +85,76 @@ extension InstantiableMacro {
 		   spellsExactlyMainActor(modifiers: initializerSyntax.modifiers, attributes: initializerSyntax.attributes),
 		   !statesIsolation(visitor.generatedInitializerAttributes)
 		{
-			diagnoseUnstatedGlobalActorIsolation(
+			findings.append(UnstatedIsolation(
 				callee: .initializer(typeName: typeName),
 				generatedDeclaration: generatedInitializers,
-				instantiableMacro: instantiableMacro,
 				generatedAttributesText: visitor.generatedInitializerAttributes,
-				on: declaration,
-				context: context,
-			)
+			))
 		}
 
-		guard instantiableMacro.generateMockValue, !visitor.mockOnly else { return }
-		// A generated `mock()` calls the hand-written mock `customMockName` names, when there is one, and the
-		// construction initializer otherwise.
-		let mockCallee: (callee: FixableInstantiableError.IsolatedCallee, modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax)? = if let mockFunctionSyntax = visitor.mockFunctionSyntax, visitor.mockInitializer != nil {
-			(.handWrittenMock(methodName: mockFunctionSyntax.name.text), mockFunctionSyntax.modifiers, mockFunctionSyntax.attributes)
-		} else {
-			constructionInitializer.map { _, initializerSyntax in
-				(.initializer(typeName: typeName), initializerSyntax.modifiers, initializerSyntax.attributes)
+		if instantiableMacro.generateMockValue, !visitor.mockOnly {
+			// A generated `mock()` calls the hand-written mock `customMockName` names, when there is one, and the
+			// construction initializer otherwise.
+			let mockCallee: (callee: FixableInstantiableError.IsolatedCallee, modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax)? = if let mockFunctionSyntax = visitor.mockFunctionSyntax, visitor.mockInitializer != nil {
+				(.handWrittenMock(methodName: mockFunctionSyntax.name.text), mockFunctionSyntax.modifiers, mockFunctionSyntax.attributes)
+			} else {
+				constructionInitializer.map { _, initializerSyntax in
+					(.initializer(typeName: typeName), initializerSyntax.modifiers, initializerSyntax.attributes)
+				}
+			}
+			if let mockCallee,
+			   spellsExactlyMainActor(modifiers: mockCallee.modifiers, attributes: mockCallee.attributes),
+			   !statesIsolation(visitor.mockAttributes)
+			{
+				findings.append(UnstatedIsolation(
+					callee: mockCallee.callee,
+					generatedDeclaration: .mock,
+					generatedAttributesText: visitor.mockAttributes,
+				))
 			}
 		}
-		if let mockCallee,
-		   spellsExactlyMainActor(modifiers: mockCallee.modifiers, attributes: mockCallee.attributes),
-		   !statesIsolation(visitor.mockAttributes)
-		{
-			diagnoseUnstatedGlobalActorIsolation(
-				callee: mockCallee.callee,
-				generatedDeclaration: .mock,
-				instantiableMacro: instantiableMacro,
-				generatedAttributesText: visitor.mockAttributes,
-				on: declaration,
-				context: context,
-			)
+
+		let globalActor = "@MainActor"
+		// `generatedAttributes` stands for both arguments, so a generated declaration reads it when it is given.
+		func argumentLabel(of finding: UnstatedIsolation) -> String {
+			instantiableMacro.generatedAttributes == nil ? finding.generatedDeclaration.argumentLabel : "generatedAttributes"
 		}
+		// One fix-it adds the global actor to every argument a reported declaration reads, each once.
+		var fixItArgumentLabels = [String]()
+		var fixedAttribute = instantiableMacro
+		for finding in findings where !fixItArgumentLabels.contains(argumentLabel(of: finding)) {
+			let label = argumentLabel(of: finding)
+			fixItArgumentLabels.append(label)
+			fixedAttribute = addingAttribute(globalActor, toArgumentLabeled: label, whoseTextIs: finding.generatedAttributesText, of: fixedAttribute)
+		}
+		for (index, finding) in findings.enumerated() {
+			let error = FixableInstantiableError.unstatedGlobalActorIsolation(
+				globalActor: globalActor,
+				callee: finding.callee,
+				generatedDeclaration: finding.generatedDeclaration,
+				argumentLabel: argumentLabel(of: finding),
+				fixItArgumentLabels: fixItArgumentLabels,
+			)
+			if index == findings.startIndex {
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: error,
+					changes: [.replace(oldNode: Syntax(instantiableMacro), newNode: Syntax(fixedAttribute))],
+				))
+			} else {
+				// The first diagnostic’s fix-it already adds the global actor here, and a second fix-it editing the
+				// same attribute would collide with it.
+				context.diagnose(Diagnostic(node: Syntax(instantiableMacro), message: error.diagnostic))
+			}
+		}
+	}
+
+	/// A declaration SafeDI generates that calls a `@MainActor` callee while nothing states an isolation for it.
+	private struct UnstatedIsolation {
+		let callee: FixableInstantiableError.IsolatedCallee
+		let generatedDeclaration: FixableInstantiableError.GeneratedIsolatedDeclaration
+		/// The text of the attribute argument `generatedDeclaration` reads.
+		let generatedAttributesText: String
 	}
 
 	/// Whether a callee spells exactly `@MainActor`, and neither `nonisolated` nor `@preconcurrency`, which leave what
@@ -133,14 +175,21 @@ extension InstantiableMacro {
 	}
 
 	/// Whether a type states an isolation: it spells `nonisolated`, or an attribute without arguments other than
-	/// `instantiableMacro`, which may be a global actor whatever its name.
+	/// `instantiableMacro`, which may be a global actor whatever its name, or an `#if` clause, which may hold one.
 	private static func statesIsolation(
 		modifiers: DeclModifierListSyntax,
 		attributes: AttributeListSyntax,
 		besides instantiableMacro: AttributeSyntax,
 	) -> Bool {
 		modifiers.contains { $0.name.tokenKind == .keyword(.nonisolated) }
-			|| attributes.compactMap { $0.as(AttributeSyntax.self) }.contains { $0.id != instantiableMacro.id && $0.arguments == nil }
+			|| attributes.contains {
+				switch $0 {
+				case let .attribute(attribute):
+					attribute.id != instantiableMacro.id && attribute.arguments == nil
+				case .ifConfigDecl:
+					true
+				}
+			}
 	}
 
 	/// Whether `attributes`, the text of an attribute argument, states an isolation: it spells `nonisolated`, or an
@@ -149,46 +198,14 @@ extension InstantiableMacro {
 		attributes.split(separator: " ").contains { $0 == "nonisolated" || ($0.hasPrefix("@") && !$0.contains("(")) }
 	}
 
-	private static func diagnoseUnstatedGlobalActorIsolation(
-		callee: FixableInstantiableError.IsolatedCallee,
-		generatedDeclaration: FixableInstantiableError.GeneratedIsolatedDeclaration,
-		instantiableMacro: AttributeSyntax,
-		generatedAttributesText: String,
-		on declaration: some SyntaxProtocol,
-		context: some MacroExpansionContext,
-	) {
-		// `generatedAttributes` stands for both arguments, so the generated declaration reads it when it is given.
-		let argumentLabel = instantiableMacro.generatedAttributes == nil ? generatedDeclaration.argumentLabel : "generatedAttributes"
-		let globalActor = "@MainActor"
-		let error = FixableInstantiableError.unstatedGlobalActorIsolation(
-			globalActor: globalActor,
-			callee: callee,
-			generatedDeclaration: generatedDeclaration,
-			argumentLabel: argumentLabel,
-		)
-		context.diagnose(Diagnostic(
-			node: Syntax(instantiableMacro),
-			error: error,
-			changes: addingAttribute(
-				globalActor,
-				toArgumentLabeled: argumentLabel,
-				whoseTextIs: generatedAttributesText,
-				of: instantiableMacro,
-				on: declaration,
-			),
-		))
-	}
-
-	/// Builds fix-it changes that add `attribute` before the text of the argument `label` of an `@Instantiable`
-	/// attribute, `text`, or that add the argument, in the position the macro’s parameters give it, when the attribute
-	/// has none.
+	/// Returns `instantiableMacro` with `attribute` added before the text of its argument `label`, `text`, or with the
+	/// argument added, in the position the macro’s parameters give it, when the attribute has none.
 	private static func addingAttribute(
 		_ attribute: String,
 		toArgumentLabeled label: String,
 		whoseTextIs text: String,
 		of instantiableMacro: AttributeSyntax,
-		on declaration: some SyntaxProtocol,
-	) -> [FixIt.Change] {
+	) -> AttributeSyntax {
 		// safedi-source-rule: allow forceUnwrap — a declaration SafeDI generates is asked for by an argument (`isRoot`, `generateDependencyTree` or `generateMock`) that `isRootValue`, `InstantiableVisitor.generatesDependencyTree` and `generateMockValue` read from labeled arguments.
 		var arguments = Array(LabeledExprListSyntax(instantiableMacro.arguments!)!)
 		let attributesText = text.isEmpty ? attribute : "\(attribute) \(text)"
@@ -214,7 +231,6 @@ extension InstantiableMacro {
 		}
 		var fixedAttribute = instantiableMacro
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(arguments))
-		let rewriter = AttributeRewriter(oldID: instantiableMacro.id, replacement: fixedAttribute)
-		return [.replace(oldNode: Syntax(declaration), newNode: rewriter.rewrite(Syntax(declaration)))]
+		return fixedAttribute
 	}
 }

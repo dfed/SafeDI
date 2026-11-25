@@ -94,11 +94,14 @@ public enum FixableInstantiableError: DiagnosticError {
 	case renameOfItself(label: String, spelling: RenameOfItselfSpelling)
 	/// A declaration SafeDI generates, `generatedDeclaration`, calls `callee`, which is bound to `globalActor`, while
 	/// neither the type nor the attribute argument the generated declaration reads, `argumentLabel`, states an isolation.
+	/// The fix-it adds `globalActor` to each of `fixItArgumentLabels`: `argumentLabel`, and the label of every other
+	/// declaration the same check reports, so that one fix-it fixes them all and no two fix-its edit one attribute.
 	case unstatedGlobalActorIsolation(
 		globalActor: String,
 		callee: IsolatedCallee,
 		generatedDeclaration: GeneratedIsolatedDeclaration,
 		argumentLabel: String,
+		fixItArgumentLabels: [String],
 	)
 
 	/// What a declaration SafeDI generates calls.
@@ -304,7 +307,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			case .onlyIfAvailableOptional:
 				"`\(label)` is renamed from itself, made optional only if available, which is what `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)` does. Receive it with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`."
 			}
-		case let .unstatedGlobalActorIsolation(globalActor, callee, generatedDeclaration, argumentLabel):
+		case let .unstatedGlobalActorIsolation(globalActor, callee, generatedDeclaration, argumentLabel, _):
 			"\(callee.sentenceStart) is `\(globalActor)`, and \(generatedDeclaration.callsClause), so \(generatedDeclaration.mustBeClause) `\(globalActor)` too. SafeDI does not infer the isolation of the code it generates: add `\(globalActor)` to `\(argumentLabel)`."
 		}
 	}
@@ -484,8 +487,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				case .onlyIfAvailableOptional:
 					"Replace with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`"
 				}
-			case let .unstatedGlobalActorIsolation(globalActor, _, _, argumentLabel):
-				"Add `\(globalActor)` to `\(argumentLabel)`"
+			case let .unstatedGlobalActorIsolation(globalActor, _, _, _, fixItArgumentLabels):
+				"Add `\(globalActor)` to \(fixItArgumentLabels.map { "`\($0)`" }.joinedAsList)"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

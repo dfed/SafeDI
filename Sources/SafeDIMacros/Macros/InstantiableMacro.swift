@@ -281,7 +281,6 @@ public struct InstantiableMacro: MemberMacro {
 					of: concreteDeclaration,
 					instantiableMacro: instantiableMacro,
 					visitor: visitor,
-					on: declaration,
 					context: context,
 				)
 			}
@@ -2414,7 +2413,7 @@ extension Initializer.GenerationError {
 // MARK: - AttributeRewriter
 
 /// Replaces a single attribute in a syntax tree by matching its node ID.
-final class AttributeRewriter: SyntaxRewriter {
+private final class AttributeRewriter: SyntaxRewriter {
 	let oldID: SyntaxIdentifier
 	let replacement: AttributeSyntax
 	init(oldID: SyntaxIdentifier, replacement: AttributeSyntax) {
