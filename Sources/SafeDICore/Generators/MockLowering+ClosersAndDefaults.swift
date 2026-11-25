@@ -182,3 +182,105 @@ extension MockLowering {
 		)
 	}
 }
+
+extension MockLowering {
+	/// How the record of a built place says its construction, where production's record cannot: as production's call, as
+	/// a construction that reads defaults from its configuration or calls its type's hand-written mock, or not at all.
+	enum ConstructionRecording: Equatable {
+		/// Production's record says the construction: it calls the initializer with dependency reads alone.
+		case asProduction
+		/// The record says the construction once `MockLowering.Walk.configuring(_:with:instantiable:)` rewrites it.
+		case configured(ConfiguredConstruction)
+		/// No record can say it yet, and the place keeps its text: a public mock's construction function.
+		case unrecorded
+
+		/// The construction to record, where the place has one apart from production's.
+		var recorded: ConfiguredConstruction? {
+			switch self {
+			case let .configured(construction):
+				construction
+			case .asProduction,
+			     .unrecorded:
+				nil
+			}
+		}
+	}
+
+	/// What a built place's record holds in place of production's call where its construction reads defaults from its
+	/// configuration or calls its type's hand-written mock: whether it calls the mock, the parameter its function takes its
+	/// configuration through, whose members its defaults read (`defaultArgumentReads(of:…)`), and whether an override
+	/// reaches the place.
+	struct ConfiguredConstruction: Hashable {
+		let usesMockInitializer: Bool
+		let configurationParameter: ConfigurationParameter
+		let overrideReachable: Bool
+	}
+}
+
+extension MockLowering.Walk {
+	/// How the record of `node`, a place of `instantiable` built as `usesMockInitializer` says, says its construction.
+	/// `readsOverride` is whether an override reaches the place.
+	mutating func configuredConstruction(of node: MockLowering.ConstantNode, instantiable: Instantiable, readsOverride: Bool, usesMockInitializer: Bool) -> MockLowering.ConstructionRecording {
+		guard usesMockInitializer || constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return .asProduction }
+		// A public mock builds such a place with its type's construction function, which no record says yet.
+		guard !buildsPublicMock else { return .unrecorded }
+		return .configured(MockLowering.ConfiguredConstruction(
+			usesMockInitializer: usesMockInitializer,
+			configurationParameter: MockLowering.ConfigurationParameter(
+				concreteType: instantiable.concreteInstantiable,
+				builtWithHandWrittenMock: usesMockInitializer,
+				configurationType: MockLowering.configurationType(of: node),
+			),
+			overrideReachable: readsOverride,
+		))
+	}
+
+	/// `record`, production's record of a place of `instantiable`, with the construction `construction` says: its target the
+	/// type's hand-written mock where the place calls it, and its arguments the construction's, each dependency read as
+	/// production reads it under the construction's own label, and each default a member of the place's configuration.
+	/// `nil` where the record cannot say the construction: a dependency the construction passes that production's record
+	/// does not read, or defaults read from a configuration built afresh.
+	mutating func configuring(_ record: PlaceRecord, with construction: MockLowering.ConfiguredConstruction, instantiable: Instantiable) -> PlaceRecord? {
+		guard case let .built(built) = record else { return record }
+		var dependencyReads = [PlaceRead]()
+		let passedDependencies = mockConstruction(of: instantiable, usesMockInitializer: construction.usesMockInitializer).callSiteArguments.compactMap { argument in
+			MockLowering.dependency(passedTo: argument, among: instantiable.dependencies).map { (argument: argument, dependency: $0) }
+		}
+		for (argument, dependency) in passedDependencies {
+			guard let read = built.arguments.first(where: { $0.property == dependency.property }) else { return nil }
+			dependencyReads.append(PlaceRead(argumentLabel: argument.label, label: read.label, property: read.property, source: read.source, staysOutsideSendableFunctions: read.staysOutsideSendableFunctions))
+		}
+		guard let reads = defaultArgumentReads(
+			of: instantiable,
+			usesMockInitializer: construction.usesMockInitializer,
+			dependencyReads: dependencyReads,
+			configurationParameter: construction.configurationParameter,
+			overrideReachable: construction.overrideReachable,
+		) else { return nil }
+		var configured = BuiltPlaceRecord(
+			property: built.property,
+			isErased: built.isErased,
+			concreteType: built.concreteType,
+			isExtension: built.isExtension,
+			target: construction.usesMockInitializer
+				? .mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
+				: built.target,
+			arguments: reads.arguments,
+			forwardedProperties: built.forwardedProperties,
+			cycleParameters: built.cycleParameters,
+			callCycleArguments: built.callCycleArguments,
+			functionName: built.functionName,
+			isSendable: built.isSendable,
+			typesDeclaredEscaping: built.typesDeclaredEscaping,
+			lineEnd: built.lineEnd,
+			hasFunction: built.hasFunction,
+			children: built.children,
+			node: built.node,
+			sharingFields: built.sharingFields,
+		)
+		if !reads.argumentValues.isEmpty {
+			configured.argumentValues = reads.argumentValues
+		}
+		return .built(configured)
+	}
+}

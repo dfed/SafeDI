@@ -59,7 +59,7 @@ extension MockLowering.Walk {
 			// key's function returns the concrete one: it keeps the walk's body.
 			let isPlanned = call.isPlannedAtPlace && !(call.erasedToConcreteExistential && !call.inputs.alternatives.isEmpty)
 			do {
-				let record = try call.generator.builtPlaceRecord(
+				let productionRecord = try call.generator.builtPlaceRecord(
 					of: call.property,
 					instantiable: call.instantiable,
 					forwardedProperties: call.forwardedProperties,
@@ -73,6 +73,13 @@ extension MockLowering.Walk {
 					readNames: call.inputs.readNames,
 					alternatives: call.inputs.alternatives,
 				)
+				// A construction that reads defaults or calls a hand-written mock records it in place of production's call
+				// (`MockLowering+ClosersAndDefaults.swift`).
+				let record = if let configuredConstruction = call.inputs.configuredConstruction {
+					productionRecord.flatMap { configuring($0, with: configuredConstruction, instantiable: call.instantiable) }
+				} else {
+					productionRecord
+				}
 				// A record whose construction passes `nil` where the walk passes a value, or the other way, as for an
 				// `@Instantiated` dependency the mock takes as a parameter where production builds nothing, keeps the walk's
 				// body.

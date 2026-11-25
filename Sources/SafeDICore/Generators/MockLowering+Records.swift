@@ -82,6 +82,9 @@ extension MockLowering {
 		var labelsPassedNil = Set<String>()
 		/// The argument labels of the construction the walk passes a value.
 		var labelsPassedValue = Set<String>()
+		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
+		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
+		var configuredConstruction: ConfiguredConstruction?
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
@@ -159,9 +162,10 @@ extension MockLowering.Walk {
 		dependencyArguments: [(label: String, value: String)],
 		usesMockInitializer: Bool,
 	) {
-		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, is one the record
-		// cannot spell yet: its target is the initializer, and its arguments are reads alone.
-		guard !usesMockInitializer, !constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return }
+		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
+		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
+		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, readsOverride: overrideRead != nil, usesMockInitializer: usesMockInitializer)
+		guard configuredConstruction != .unrecorded else { return }
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
 			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
@@ -175,6 +179,7 @@ extension MockLowering.Walk {
 			alternatives: alternatives,
 			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
 			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
+			configuredConstruction: configuredConstruction.recorded,
 		)
 	}
 
