@@ -329,7 +329,7 @@ public final class Root: Instantiable { … }
 
 Each argument must be a string literal.
 
-In a module whose declarations default to the main actor (`-default-isolation MainActor`, which new Xcode 26 app targets use), give each type that conforms only to `Instantiable` `generatedAttributes: "@MainActor"`, because otherwise it is inferred `nonisolated` and its generated code cannot call its main-actor dependencies.
+In a module whose declarations default to the main actor, declare that default in the module’s [`#SafeDIConfiguration`](#default-isolation) rather than spelling `@MainActor` on each type.
 
 When a type’s hand-written mock is in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations), put `mockAttributes` on the production declaration: the generated `mock()` takes its attributes from there.
 
@@ -444,6 +444,34 @@ A `@Received` property can also receive a dependency only when it is available, 
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 - `generatePlainDependencyTreeInitializers`: For each type this module declares with `generateDependencyTree: true`, whether SafeDI pairs each initializer whose labels start with `__safeDI_` with one that has readable labels, for code you write (see [Generating a dependency tree per module](#generating-a-dependency-tree-per-module)). Default: `false`.
+- `defaultIsolation`: The isolation this module’s declarations default to: `MainActor.self` or `nil`, the values Swift’s `defaultIsolation` setting takes. See [Default isolation](#default-isolation). Default: `nil`.
+
+#### Default isolation
+
+When a module’s declarations default to the main actor (SwiftPM’s `.defaultIsolation(MainActor.self)`, or `-default-isolation MainActor`, which new Xcode 26 app targets use), state the same value in its configuration:
+
+```swift
+#SafeDIConfiguration(
+    defaultIsolation: MainActor.self
+)
+```
+
+SafeDI cannot read the build setting itself, so the two lines must agree. In such a module, each `@Instantiable` type whose `generatedAttributes`, `generatedInitializerAttributes` and `mockAttributes` are all empty is generated as if it spelled `generatedAttributes: "@MainActor"`: its root `init()`, its [seam’s initializers](#generating-a-dependency-tree-per-module) and its `mock()` are `@MainActor`. A module that reads this module’s `.safedi` file, or its files under the SwiftPM plugin, calls them as this module generated them.
+
+Text you write wins, and SafeDI never reads it: any text replaces the default rather than adding to it. So text that states no isolation, such as `generatedAttributes: "@available(iOS 17, *)"`, drops the main actor; write `"@MainActor @available(iOS 17, *)"`. To opt one type’s mock out, write `mockAttributes: "nonisolated"`.
+
+| Build setting | `defaultIsolation` | Result |
+|---|---|---|
+| main actor | `MainActor.self` | Generated code matches the module. |
+| nonisolated | `nil` | Generated code matches the module. |
+| nonisolated | `MainActor.self` | As if every type without attribute text spelled `generatedAttributes: "@MainActor"`. Code that calls these mocks runs on the main actor. |
+| main actor | `nil` | Generated code is inferred `nonisolated` where it spells nothing, and fails to compile where it builds a main-actor type. Declare the setting. |
+
+<!-- Mismatch warning: one paragraph about the warning `generate` reports when the build setting it can see disagrees with `defaultIsolation` goes here. -->
+
+What the setting cannot fix:
+- A `Sendable` wrapper (`SendableInstantiator`, `SendableErasedInstantiator`) cannot build a main-actor type: its builder runs off the main actor.
+- A type bound to a custom global actor spells that actor in `generatedAttributes`, but its mock’s other generated types follow the module default. If code on that actor builds the mock’s overrides, write `mockAttributes: "nonisolated"` on the type, or do not declare the module default.
 
 ## Delayed instantiation
 
