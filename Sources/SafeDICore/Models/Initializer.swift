@@ -92,8 +92,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 	public let hasGenericWhereClause: Bool
 	public let arguments: [Argument]
 	/// The isolation the declaration spells, which code that calls it from another declaration mirrors: `nonisolated`
-	/// for the modifier, or a global actor attribute (an attribute whose name ends in `Actor`, such as `@MainActor`),
-	/// or `nil` when it spells neither and takes its type's isolation.
+	/// for the modifier, `@MainActor` for exactly that attribute, or `nil` otherwise. SafeDI cannot tell which other
+	/// attribute names a global actor, so it reads none.
 	public let spelledIsolation: String?
 
 	static func spelledIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
@@ -102,8 +102,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 		}
 		// A loop rather than a lazy sequence, whose generic iterators cost more than reading the attributes: nearly every
 		// declaration SafeDI reads has attributes and an initializer.
-		for case let .attribute(attribute) in attributes where attribute.arguments == nil && spelledName(of: attribute.attributeName).hasSuffix("Actor") {
-			return "@\(spelledName(of: attribute.attributeName))"
+		for case let .attribute(attribute) in attributes where attribute.arguments == nil && spelledName(of: attribute.attributeName) == "MainActor" {
+			return "@MainActor"
 		}
 		return nil
 	}

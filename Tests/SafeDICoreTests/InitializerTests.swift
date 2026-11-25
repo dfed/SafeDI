@@ -30,10 +30,11 @@ struct InitializerTests {
 		("@MainActor init() {}", "@MainActor"),
 		("@available(iOS 17, *) init() {}", nil),
 		("@MainActor /* isolated */ init() {}", "@MainActor"),
-		("@Space.CustomActor init() {}", "@Space.CustomActor"),
+		("@DatabaseActor init() {}", nil),
+		("@Space.CustomActor init() {}", nil),
 		("@Space.Other init() {}", nil),
 	] as [(String, String?)])
-	func init_recordsSpelledIsolation_whenInitializerSpellsModifierOrGlobalActor(source: String, spelledIsolation: String?) throws {
+	func init_recordsSpelledIsolation_whenInitializerSpellsNonisolatedOrMainActor(source: String, spelledIsolation: String?) throws {
 		// A public mock's construction function mirrors the isolation the initializer it calls spells.
 		let initializer = try #require(Parser.parse(source: source).statements.first.flatMap { InitializerDeclSyntax($0.item) })
 		#expect(Initializer(initializer).spelledIsolation == spelledIsolation)
