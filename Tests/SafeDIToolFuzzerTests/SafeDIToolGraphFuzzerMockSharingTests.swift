@@ -26,7 +26,7 @@ struct SafeDIToolGraphFuzzerMockSharingTests {
 	@Test
 	func repetitions_namesEveryFunctionOfOneClass_whenMockDeclaresOneFunctionPerPlace() {
 		#expect(GraphFuzzerMockSharedBuilders.repetitions(in: ["Host+SafeDIMock.swift": Self.onePerPlace]) == [
-			GraphFuzzerMockSharedBuilders.Repetition(fileName: "Host+SafeDIMock.swift", mockName: "mock", functionNames: ["__safeDI_leaf", "__safeDI_leafBuilder", "__safeDI_leaf"]),
+			GraphFuzzerMockSharedBuilders.Repetition(fileName: "Host+SafeDIMock.swift", mockedTypeName: "Host", mockName: "mock", functionNames: ["__safeDI_leaf", "__safeDI_leafBuilder", "__safeDI_leaf"]),
 		])
 	}
 
@@ -58,6 +58,64 @@ struct SafeDIToolGraphFuzzerMockSharingTests {
 	}
 
 	@Test
+	func repetitions_areEmpty_whenFunctionsBuildOneTypeWithBuilderFunctionsOfOtherClassesBeneath() {
+		// `Leaf` built twice, its `Part` read from `token` beneath one place and handed `nil` beneath the other: the two
+		// functions that build `Leaf` read alike but call builder functions of two classes, so they are two classes too.
+		let mock = """
+		extension Host {
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Host {
+		        func __safeDI_part() -> Part {
+		            Part(token: nil)
+		        }
+		        func __safeDI_leafBuilder() -> Leaf {
+		            Leaf(part: __safeDI_part())
+		        }
+		        func __safeDI_part_() -> Part {
+		            Part(token: token)
+		        }
+		        func __safeDI_leaf() -> Leaf {
+		            Leaf(part: __safeDI_part_())
+		        }
+		        return Host(leafBuilder: Instantiator(__safeDI_leafBuilder), leaf: __safeDI_leaf())
+		    }
+		}
+		"""
+		#expect(GraphFuzzerMockSharedBuilders.repetitions(in: ["Host+SafeDIMock.swift": mock]) == [])
+	}
+
+	@Test
+	func repetitions_nameEachRepeatedClass_whenTwoCallsDeclareAlikeFunctionsOfTheirOwn() {
+		// Two calls of `Called`'s mock, each declaring its own `__safeDI_hole`, alike but for the override path.
+		let mock = """
+		extension Host {
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Host {
+		        func __safeDI_called() -> Called {
+		            func __safeDI_hole() -> Hole {
+		                Hole()
+		            }
+		            return Called.__safeDI_mock(hole: __safeDI_hole(), safeDIOverrides: safeDIOverrides.called)
+		        }
+		        func __safeDI_calledSecond() -> Called {
+		            func __safeDI_hole() -> Hole {
+		                Hole()
+		            }
+		            return Called.__safeDI_mock(hole: __safeDI_hole(), safeDIOverrides: safeDIOverrides.calledSecond)
+		        }
+		        return Host(called: __safeDI_called(), calledSecond: __safeDI_calledSecond())
+		    }
+		}
+		"""
+		#expect(GraphFuzzerMockSharedBuilders.repetitions(in: ["Host+SafeDIMock.swift": mock]).map(\.functionNames) == [
+			["__safeDI_called", "__safeDI_calledSecond"],
+			["__safeDI_hole", "__safeDI_hole"],
+		])
+	}
+
+	@Test
 	func repetitions_readOnlyMockBodies_whenAFileDeclaresOtherFunctions() {
 		let file = """
 		extension Host {
@@ -69,60 +127,137 @@ struct SafeDIToolGraphFuzzerMockSharingTests {
 	}
 
 	@Test
-	func description_namesMockFileAndFunctions() {
-		let repetition = GraphFuzzerMockSharedBuilders.Repetition(fileName: "A+SafeDIMock.swift", mockName: "__safeDI_mock", functionNames: ["__safeDI_a", "__safeDI_b"])
-		#expect(repetition.description == "`__safeDI_mock` in `A+SafeDIMock.swift` declares 2 functions of one class: `__safeDI_a`, `__safeDI_b`")
+	func description_namesMockTypeFileAndFunctions() {
+		let repetition = GraphFuzzerMockSharedBuilders.Repetition(fileName: "FuzzFeature.swift", mockedTypeName: "A", mockName: "__safeDI_mock", functionNames: ["__safeDI_a", "__safeDI_b"])
+		#expect(repetition.description == "`__safeDI_mock` of `A` in `FuzzFeature.swift` declares 2 functions of one class: `__safeDI_a`, `__safeDI_b`")
 	}
 
 	@Test
-	func mockSharingFailure_judgesOnlyWhereAsked() {
-		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["Host+SafeDIMock.swift": Self.onePerPlace], warnings: [])
-		let runs = GraphFuzzerToolRuns(fixture: GraphFuzzerFixture(seed: 7, swiftFileContent: []), firstOutcome: outcome, secondOutcome: outcome)
-		#expect(runs.mockSharingFailure(isJudged: false) == nil)
-		#expect(runs.mockSharingFailure(isJudged: true)?.kind == .mockSharedBodyRepeatsClass)
-		#expect(runs.mockSharingFailure(isJudged: true)?.details.hasPrefix("`mock` in `Host+SafeDIMock.swift` declares 3 functions of one class: `__safeDI_leaf`, `__safeDI_leafBuilder`, `__safeDI_leaf`\n") == true)
+	func repetitions_nameTheTypeEachMockExtends_whenOneFileHoldsSeveralMocks() {
+		let file = Self.onePerPlace + "\n" + Self.onePerPlace.replacingOccurrences(of: "Host", with: "Other")
+		#expect(GraphFuzzerMockSharedBuilders.repetitions(in: ["FuzzFeature.swift": file]).map(\.mockedTypeName) == ["Host", "Other"])
+	}
+
+	// MARK: Judgment
+
+	@Test
+	func judgment_failsRepetition_whenLayoutSaysItLaidRootOut() {
+		let repetitions = GraphFuzzerMockSharedBuilders.repetitions(in: ["Host+SafeDIMock.swift": Self.onePerPlace])
+		#expect(GraphFuzzerMockSharedBuilders.judgment(of: repetitions, outcomesByMockedType: ["Host": "laidOut"]) == .init(failures: repetitions, fallbackRootCounts: [:]))
+	}
+
+	@Test
+	func judgment_countsRootOnceUnderItsFallback_whenLayoutKeptWalkBodyOfRootRepeatingTwoClasses() {
+		let repetitions = [
+			GraphFuzzerMockSharedBuilders.Repetition(fileName: "Host+SafeDIMock.swift", mockedTypeName: "Host", mockName: "mock", functionNames: ["__safeDI_a", "__safeDI_a"]),
+			GraphFuzzerMockSharedBuilders.Repetition(fileName: "Host+SafeDIMock.swift", mockedTypeName: "Host", mockName: "mock", functionNames: ["__safeDI_b", "__safeDI_b"]),
+			GraphFuzzerMockSharedBuilders.Repetition(fileName: "Other+SafeDIMock.swift", mockedTypeName: "Other", mockName: "mock", functionNames: ["__safeDI_c", "__safeDI_c"]),
+		]
+		let outcomes = ["Host": "readUnresolved:token", "Other": "readUnresolved:note"]
+		#expect(GraphFuzzerMockSharedBuilders.judgment(of: repetitions, outcomesByMockedType: outcomes) == .init(failures: [], fallbackRootCounts: ["readUnresolved": 2]))
+	}
+
+	@Test
+	func judgment_countsRootAsUnlogged_whenLayoutWroteNothingAboutIt() {
+		let repetitions = GraphFuzzerMockSharedBuilders.repetitions(in: ["Host+SafeDIMock.swift": Self.onePerPlace])
+		#expect(GraphFuzzerMockSharedBuilders.judgment(of: repetitions, outcomesByMockedType: ["Other": "laidOut"]) == .init(failures: [], fallbackRootCounts: ["unlogged": 1]))
+	}
+
+	@Test
+	func fallbackName_keepsUnrecordedPlacesReasonAndDropsWhatNamesALabel() {
+		#expect(GraphFuzzerMockSharedBuilders.fallbackName(of: "unrecorded:unplannedLines:rebinding+overrideExtraction") == "unrecorded:unplannedLines")
+		#expect(GraphFuzzerMockSharedBuilders.fallbackName(of: "unrecorded:publicMockCall") == "unrecorded:publicMockCall")
+		#expect(GraphFuzzerMockSharedBuilders.fallbackName(of: "readUnresolved:token") == "readUnresolved")
+		#expect(GraphFuzzerMockSharedBuilders.fallbackName(of: "entersCycleWithEdge") == "entersCycleWithEdge")
+		#expect(GraphFuzzerMockSharedBuilders.fallbackName(of: nil) == "unlogged")
+	}
+
+	@Test
+	func outcomes_readEachRootsLine_whenLogHoldsOtherLines() {
+		let log = "TYPEKEY\tS1_Host\tlaidOut\nsomething else\nTYPEKEY\tS1_Other\tunrecorded:publicMockCall\n"
+		#expect(GraphFuzzerMockSharedBuilders.outcomes(inLog: log) == ["S1_Host": "laidOut", "S1_Other": "unrecorded:publicMockCall"])
 	}
 
 	// MARK: Long run
 
-	/// Judges a built tool, `SAFEDI_MOCK_SHARING_TOOL`, over a corpus's seeds (`SAFEDI_MOCK_SHARING_FEATURES`,
-	/// `…_STARTING_SEED`, `…_ITERATIONS`), appending to `SAFEDI_MOCK_SHARING_REPORT` each graph whose mocks repeat a class
-	/// and a summary. A tool that shares fails on each such graph; the run asks nothing of a tool that does not.
+	/// Judges a built tool, `SAFEDI_MOCK_SHARING_TOOL`, with its layout on, over a corpus's seeds (`SAFEDI_MOCK_SHARING_FEATURES`,
+	/// `…_STARTING_SEED`, `…_ITERATIONS`, a count or `corpus`): every repetition in a root the layout says it laid out
+	/// fails its seed, and the roots that repeat a class under each fallback are added up, appended to
+	/// `SAFEDI_MOCK_SHARING_REPORT`, and, in a run of a whole corpus, checked against the corpus's pins
+	/// (`fallbackRootCounts`), so a share the layout newly loses moves a pin.
 	@Test(.enabled(if: ProcessInfo.processInfo.environment["SAFEDI_MOCK_SHARING_TOOL"] != nil, "Set SAFEDI_MOCK_SHARING_TOOL to run"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func longRun_reportsEveryRepeatedClass_whenEnabledByEnvironment() async throws {
+	func longRun_failsRepetitionsInLaidOutRootsAndCountsTheRestByFallback_whenEnabledByEnvironment() async throws {
 		let environment = ProcessInfo.processInfo.environment
 		let tool = URL(fileURLWithPath: environment["SAFEDI_MOCK_SHARING_TOOL", default: ""])
-		let features = Set((environment["SAFEDI_MOCK_SHARING_FEATURES"] ?? "").split(separator: ",").compactMap { GraphFuzzerGeneratorFeature(rawValue: String($0)) })
+		let featureNames = environment["SAFEDI_MOCK_SHARING_FEATURES"] ?? ""
+		let features = Set(featureNames.split(separator: ",").compactMap { GraphFuzzerGeneratorFeature(rawValue: String($0)) })
+		let corpusSeedCount = UInt64(Self.corpusSeedCounts[featureNames] ?? 0)
 		let startingSeed = UInt64(environment["SAFEDI_MOCK_SHARING_STARTING_SEED"] ?? "0") ?? 0
-		let iterations = UInt64(environment["SAFEDI_MOCK_SHARING_ITERATIONS"] ?? "100") ?? 100
-		let requiresSharing = environment["SAFEDI_MOCK_SHARING_REQUIRED"] == "1"
+		let iterationsText = environment["SAFEDI_MOCK_SHARING_ITERATIONS"] ?? "100"
+		let iterations = iterationsText == "corpus" ? corpusSeedCount : UInt64(iterationsText) ?? 100
 		let report = GraphFuzzerReport(path: environment["SAFEDI_MOCK_SHARING_REPORT"] ?? "")
 		var accepted = 0
-		var repeating = [(seed: UInt64, repetitions: [GraphFuzzerMockSharedBuilders.Repetition])]()
-		try await withThrowingTaskGroup(of: (UInt64, [GraphFuzzerMockSharedBuilders.Repetition]?).self) { group in
+		var failing = [(seed: UInt64, failures: [GraphFuzzerMockSharedBuilders.Repetition])]()
+		var fallbackRootCounts = [String: Int]()
+		try await withThrowingTaskGroup(of: (UInt64, GraphFuzzerMockSharedBuilders.Judgment?).self) { group in
 			for seed in startingSeed..<(startingSeed + iterations) {
 				group.addTask {
-					try await (seed, GraphFuzzerMockSharedBuilders.repetitions(generatedBy: tool, for: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
+					try await (seed, GraphFuzzerMockSharedBuilders.judgment(generatedBy: tool, for: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
 				}
 			}
-			for try await (seed, repetitions) in group {
-				guard let repetitions else { continue }
+			for try await (seed, judgment) in group {
+				guard let judgment else { continue }
 				accepted += 1
-				if !repetitions.isEmpty {
-					repeating.append((seed, repetitions))
+				fallbackRootCounts.merge(judgment.fallbackRootCounts, uniquingKeysWith: +)
+				if !judgment.failures.isEmpty {
+					failing.append((seed, judgment.failures))
 				}
 			}
 		}
-		repeating.sort { $0.seed < $1.seed }
-		for (seed, repetitions) in repeating {
-			report.append("repeats \(seed) \(repetitions.count) \(repetitions[0])")
-			if requiresSharing {
-				Issue.record("Seed \(seed): \(repetitions.map(\.description).joined(separator: "\n"))")
-			}
+		failing.sort { $0.seed < $1.seed }
+		for (seed, failures) in failing {
+			report.append("fails \(seed) \(failures.count) \(failures[0])")
+			Issue.record("Seed \(seed): the layout laid out a mock that repeats a class: \(failures.map(\.description).joined(separator: "\n"))")
 		}
-		report.append("summary mock-sharing accepted=\(accepted) repeating=\(repeating.count) classes=\(repeating.reduce(0) { $0 + $1.repetitions.count }) functions=\(repeating.reduce(0) { $0 + $1.repetitions.reduce(0) { $0 + $1.functionNames.count } })")
+		for name in fallbackRootCounts.keys.sorted() {
+			report.append("fallback \(name) \(fallbackRootCounts[name, default: 0])")
+		}
+		report.append("summary mock-sharing seeds=\(startingSeed)..<\(startingSeed + iterations) accepted=\(accepted) failing=\(failing.count) fallback-roots=\(fallbackRootCounts.values.reduce(0, +))")
+		if startingSeed == 0, iterations == corpusSeedCount {
+			#expect(fallbackRootCounts == Self.fallbackRootCounts[featureNames], "pins of corpus `\(featureNames)`: \(fallbackRootCounts.sorted { $0.key < $1.key })")
+		}
 	}
+
+	/// Each corpus's seed count, by its `SAFEDI_MOCK_SHARING_FEATURES`.
+	static let corpusSeedCounts = [
+		"": SafeDIToolGraphFuzzerTests.corpusSeedCount,
+		"generateDependencyTree": SafeDIToolGraphFuzzerTests.seamCorpusSeedCount,
+		"generateMockPublic": SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount,
+	]
+
+	/// For each corpus, by its `SAFEDI_MOCK_SHARING_FEATURES`, the mock roots that repeat a class under each of the layout's
+	/// fallbacks, from a run of the whole corpus.
+	static let fallbackRootCounts: [String: [String: Int]] = [
+		"": [
+			"engineRefused": 2,
+			"entersCycleWithEdge": 412,
+			"readUnresolved": 15,
+			"unrecorded:unplannedLines": 43,
+		],
+		"generateDependencyTree": [
+			"entersCycleWithEdge": 64,
+			"readUnresolved": 26,
+			"unrecorded:unplannedLines": 9,
+		],
+		"generateMockPublic": [
+			"entersCycleWithEdge": 39,
+			"readUnresolved": 4,
+			"unlogged": 242,
+			"unrecorded:publicMockCall": 48,
+			"unrecorded:unplannedLines": 30,
+		],
+	]
 
 	// MARK: Generated code
 

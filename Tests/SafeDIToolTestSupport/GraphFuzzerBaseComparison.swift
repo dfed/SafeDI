@@ -227,15 +227,15 @@ enum GraphFuzzerBaseComparison {
 			}
 		}
 
-		/// Runs `tool` through every step, in an emptied work directory, and reads what the steps wrote.
-		func record(running tool: URL) async throws -> Record {
+		/// Runs `tool` through every step, in an emptied work directory, with `environment`, and reads what the steps wrote.
+		func record(running tool: URL, environment: [String: String] = ProcessInfo.processInfo.environment) async throws -> Record {
 			try? FileManager.default.removeItem(at: workDirectory)
 			for outputDirectory in ["Output", "ModuleInfo"] {
 				try FileManager.default.createDirectory(at: workDirectory.appendingPathComponent(outputDirectory), withIntermediateDirectories: true)
 			}
 			var steps = [Record.Step]()
 			for command in commands {
-				let result = try await runProcess(tool, arguments: command.arguments)
+				let result = try await runProcess(tool, arguments: command.arguments, environment: environment)
 				steps.append(Record.Step(
 					name: command.name,
 					exitCode: result.exitCode,

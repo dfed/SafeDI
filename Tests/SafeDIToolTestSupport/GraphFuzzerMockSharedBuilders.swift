@@ -17,39 +17,95 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-
 import Foundation
 import SwiftParser
 import SwiftSyntax
 
-/// Whether a mock declares one builder function per class of the places its tree builds, read from the generated code
-/// alone, whatever engine laid the body out. Within one generated `mock()` or `__safeDI_mock()` body, two local
-/// functions whose declarations are the same text once each is read without what tells one place from another – an
-/// override path (`safeDIOverrides.a.b.c`), a member chain of the configuration a function is handed, and the names of
-/// the builder functions themselves – build one class of places twice: a body that shares one function per class has
-/// none, and a body with one function per place has one for each place a type is built at.
+/// Whether a mock declares one builder function per class of the places its tree builds, read from the generated code,
+/// judged against what the type key's layout says it did with each mock root. Within one generated `mock()` or
+/// `__safeDI_mock()` body, two local functions whose declarations are the same text once each is read without what tells
+/// one place from another – an override path (`safeDIOverrides.a.b.c`), a member chain of the configuration a function is
+/// handed, and the names of the builder functions themselves – build one class of places twice: a body that shares one
+/// function per class has none, and a body with one function per place has one for each place a type is built at.
 ///
-/// The oracle judges a mock's layout, not its values, which the base value comparison judges
-/// (`GraphFuzzerBaseValueComparison`). Until every mock shares, it fails nearly every graph whose mock builds a type at two
-/// places, so it judges only a run that asks for it (`isRequested`, which the long run reads from
-/// `SAFEDI_GRAPH_FUZZER_MOCK_SHARING_ORACLE`).
+/// The layout writes one line per internal mock root it is asked to lay out (`SAFEDI_MOCK_TYPE_KEY_LOG`): `laidOut`, or
+/// the fallback that kept the root's walk body. A repetition in a root the layout says it laid out is a failure; one in a
+/// root with a fallback is counted under the fallback's name, and those counts are pinned per corpus, so a share the
+/// layout newly loses moves a pin rather than hiding among known seeds. A root the layout wrote nothing about (a public
+/// mock, whose sharing is another engine's part, or any mock of a tool without the layout) is counted as `unlogged`.
+///
+/// The judge reads a mock's layout, not its values, which the base value comparison judges
+/// (`GraphFuzzerBaseValueComparison`).
 enum GraphFuzzerMockSharedBuilders {
 	/// A class of places that a mock builds with more than one local function.
 	struct Repetition: Equatable, CustomStringConvertible {
 		let fileName: String
+		/// The type the mock's extension extends, as the layout's log names it.
+		let mockedTypeName: String
 		/// The mock function's name, `mock` or `__safeDI_mock`.
 		let mockName: String
 		/// The local functions whose normalized declarations are the same, in source order.
 		let functionNames: [String]
 
 		var description: String {
-			"`\(mockName)` in `\(fileName)` declares \(functionNames.count) functions of one class: \(functionNames.map { "`\($0)`" }.joined(separator: ", "))"
+			"`\(mockName)` of `\(mockedTypeName)` in `\(fileName)` declares \(functionNames.count) functions of one class: \(functionNames.map { "`\($0)`" }.joined(separator: ", "))"
 		}
 	}
 
-	/// Whether a run asks for the oracle.
-	static var isRequested: Bool {
-		ProcessInfo.processInfo.environment["SAFEDI_GRAPH_FUZZER_MOCK_SHARING_ORACLE"] == "1"
+	/// The judgment of one graph's mocks.
+	struct Judgment: Equatable {
+		/// The repetitions in roots the layout says it laid out.
+		var failures = [Repetition]()
+		/// For each fallback's name (`fallbackName(of:)`), the mock roots with a repetition the layout left with it.
+		var fallbackRootCounts = [String: Int]()
+	}
+
+	/// The environment that turns the layout on for a run of a built tool and has it log each root's outcome to `logFile`.
+	static func layoutEnvironment(loggingTo logFile: URL) -> [String: String] {
+		var environment = ProcessInfo.processInfo.environment
+		environment["SAFEDI_MOCK_TYPE_KEY"] = "1"
+		environment["SAFEDI_MOCK_TYPE_KEY_LOG"] = logFile.path
+		return environment
+	}
+
+	/// Each mock root's outcome in the layout's log, by the mocked type's name: `TYPEKEY<tab><type><tab><outcome>` lines.
+	static func outcomes(inLog log: String) -> [String: String] {
+		var outcomes = [String: String]()
+		for line in log.split(separator: "\n") {
+			let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
+			guard fields.count == 3, fields[0] == "TYPEKEY" else { continue }
+			outcomes[String(fields[1])] = String(fields[2])
+		}
+		return outcomes
+	}
+
+	/// The name a fallback is counted under: its kind, with an unrecorded place's reason (`unrecorded:publicMockCall`),
+	/// without what names one place or label (`readUnresolved:token` is `readUnresolved`); `unlogged` where the layout
+	/// wrote nothing about the root.
+	static func fallbackName(of outcome: String?) -> String {
+		guard let outcome else { return "unlogged" }
+		let parts = outcome.split(separator: ":", omittingEmptySubsequences: false)
+		if parts.first == "unrecorded", parts.count > 1 {
+			return "unrecorded:\(parts[1])"
+		} else {
+			return String(parts.first ?? "")
+		}
+	}
+
+	/// Judges `repetitions` against the layout's outcome of each mock root: a root counts once under its fallback however
+	/// many classes it repeats.
+	static func judgment(of repetitions: [Repetition], outcomesByMockedType outcomes: [String: String]) -> Judgment {
+		var judgment = Judgment()
+		var countedRoots = Set<String>()
+		for repetition in repetitions {
+			let outcome = outcomes[repetition.mockedTypeName]
+			if outcome == "laidOut" {
+				judgment.failures.append(repetition)
+			} else if countedRoots.insert("\(repetition.fileName)\t\(repetition.mockedTypeName)\t\(repetition.mockName)").inserted {
+				judgment.fallbackRootCounts[fallbackName(of: outcome), default: 0] += 1
+			}
+		}
+		return judgment
 	}
 
 	/// Every class of places a mock of `generatedFiles` builds with more than one local function, in file name order and
@@ -60,41 +116,67 @@ enum GraphFuzzerMockSharedBuilders {
 			let collector = MockCollector(viewMode: .sourceAccurate)
 			collector.walk(Parser.parse(source: generatedFiles[fileName, default: ""]))
 			for mock in collector.mocks {
-				var functionNamesByText = [String: [String]]()
-				var textsInOrder = [String]()
-				for function in mock.localFunctions {
-					let text = normalized(function)
-					if functionNamesByText[text] == nil {
-						textsInOrder.append(text)
+				let classes = classes(of: mock.localFunctions)
+				var functionNamesByClass = [Int: [String]]()
+				var classesInOrder = [Int]()
+				for (function, functionClass) in zip(mock.localFunctions, classes) {
+					if functionNamesByClass[functionClass] == nil {
+						classesInOrder.append(functionClass)
 					}
-					functionNamesByText[text, default: []].append(function.name.text)
+					functionNamesByClass[functionClass, default: []].append(function.declaration.name.text)
 				}
-				for text in textsInOrder {
-					guard let names = functionNamesByText[text], names.count > 1 else { continue }
-					repetitions.append(Repetition(fileName: fileName, mockName: mock.name, functionNames: names))
+				for functionClass in classesInOrder {
+					guard let names = functionNamesByClass[functionClass], names.count > 1 else { continue }
+					repetitions.append(Repetition(fileName: fileName, mockedTypeName: mock.mockedTypeName, mockName: mock.name, functionNames: names))
 				}
 			}
 		}
 		return repetitions
 	}
 
-	/// The repetitions in what a built `SafeDITool`, `tool`, generates for `fixture`, run as the base comparison runs it
-	/// (`GraphFuzzerBaseComparison.Layout`), or `nil` where the tool rejects the graph: so the oracle judges a tool built
-	/// from another commit, such as a head whose engine this checkout does not hold.
+	/// The class of each of `functions`: two functions are of one class when their declarations are the same text once
+	/// read without what tells places apart (`normalized(_:)`) and once each builder function they call is read as its own
+	/// class, so that two functions that build one type with builder functions of other classes beneath are two classes.
+	/// A call names the function its name declares nearest: one the caller declares itself, else one an enclosing body
+	/// declares. The classes are refined until they stop splitting.
+	static func classes(of functions: [LocalFunction]) -> [Int] {
+		let texts = functions.map { normalized($0.declaration, keepingBuilderFunctionNames: true) }
+		var classes = denseClasses(of: functions.map { normalized($0.declaration) })
+		for _ in functions.indices {
+			let keys = functions.indices.map { index in
+				var key = texts[index]
+				for name in referencedBuilderFunctionNames(in: key).sorted() {
+					let replacement = calledFunctionIndex(named: name, from: index, in: functions).map { "<class \(classes[$0])>" } ?? "<function>"
+					key = key.replacingOccurrences(of: #"\b\#(name)\b"#, with: replacement, options: .regularExpression)
+				}
+				return key
+			}
+			let refined = denseClasses(of: keys)
+			guard Set(refined).count > Set(classes).count else { break }
+			classes = refined
+		}
+		return classes
+	}
+
+		/// The judgment of what a built `SafeDITool`, `tool`, generates for `fixture` with the layout on, run as the base
+	/// comparison runs it (`GraphFuzzerBaseComparison.Layout`), or `nil` where the tool rejects the graph: so a tool built
+	/// from another commit, such as a head whose engine this checkout does not hold, is judged by its own layout's log.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	static func repetitions(generatedBy tool: URL, for fixture: GraphFuzzerFixture) async throws -> [Repetition]? {
+	static func judgment(generatedBy tool: URL, for fixture: GraphFuzzerFixture) async throws -> Judgment? {
 		let directory = TestTemporaryDirectory.uniquePath(prefix: "safedi-mock-sharing-")
 		defer { try? FileManager.default.removeItem(at: directory) }
 		let layout = try GraphFuzzerBaseComparison.Layout(writing: fixture, into: directory)
-		let record = try await layout.record(running: tool)
+		let logFile = directory.appendingPathComponent("type-key.log")
+		let record = try await layout.record(running: tool, environment: layoutEnvironment(loggingTo: logFile))
 		guard layout.accepts(record) else { return nil }
-		return repetitions(in: layout.generatedFiles(of: record))
+		let log = (try? String(contentsOf: logFile, encoding: .utf8)) ?? ""
+		return judgment(of: repetitions(in: layout.generatedFiles(of: record)), outcomesByMockedType: outcomes(inLog: log))
 	}
 
 	/// `function`'s declaration without what tells one place of a class from another: its own name and every name of a
 	/// builder function (`__safeDI_…`), every override path read from `safeDIOverrides` or a parameter, and each
 	/// parameter's name. Whitespace is collapsed, so indentation, which nesting decides, tells nothing apart.
-	static func normalized(_ function: FunctionDeclSyntax) -> String {
+	static func normalized(_ function: FunctionDeclSyntax, keepingBuilderFunctionNames: Bool = false) -> String {
 		var text = function.trimmedDescription
 		let ownName = function.name.text
 		var names = Set([ownName])
@@ -104,55 +186,100 @@ enum GraphFuzzerMockSharedBuilders {
 		for name in names.sorted() where name != "_" {
 			text = text.replacingOccurrences(of: #"\b\#(NSRegularExpression.escapedPattern(for: name))\b"#, with: "<name>", options: .regularExpression)
 		}
+		if !keepingBuilderFunctionNames {
+			text = text.replacingOccurrences(of: #"\b__safeDI_\w+"#, with: "<function>", options: .regularExpression)
+		}
 		return text
-			.replacingOccurrences(of: #"\b__safeDI_\w+"#, with: "<function>", options: .regularExpression)
 			.replacingOccurrences(of: #"\bsafeDIOverrides(\.\w+)*"#, with: "<override>", options: .regularExpression)
 			.replacingOccurrences(of: #"<name>(\.\w+)+"#, with: "<name>", options: .regularExpression)
 			.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
 	}
 
+	/// A function declared in a mock's body, with the index of the local function whose body declares it, `nil` for the
+	/// mock's own body.
+	struct LocalFunction {
+		let declaration: FunctionDeclSyntax
+		let parentIndex: Int?
+	}
+
 	// MARK: Private
 
 	private struct Mock {
+		let mockedTypeName: String
 		let name: String
-		let localFunctions: [FunctionDeclSyntax]
+		let localFunctions: [LocalFunction]
 	}
 
-	/// Each `mock()` or `__safeDI_mock()` a file declares, with every function declared anywhere in its body.
+	/// The index of each text's class, numbered in order of first appearance.
+	private static func denseClasses(of texts: [String]) -> [Int] {
+		var classByText = [String: Int]()
+		return texts.map { text in
+			if let existing = classByText[text] {
+				return existing
+			} else {
+				classByText[text] = classByText.count
+				return classByText.count - 1
+			}
+		}
+	}
+
+	private static let builderFunctionNameExpression = try! NSRegularExpression(pattern: #"\b__safeDI_\w+"#)
+
+	private static func referencedBuilderFunctionNames(in text: String) -> Set<String> {
+		let range = NSRange(text.startIndex..., in: text)
+		return Set(builderFunctionNameExpression.matches(in: text, range: range).compactMap { Range($0.range, in: text).map { String(text[$0]) } })
+	}
+
+	/// The function `name` calls from the function at `index`: one that function declares, else the nearest one an
+	/// enclosing body declares, or `nil` where none is a local function (a generated type's member, such as
+	/// `__safeDI_mock`).
+	private static func calledFunctionIndex(named name: String, from index: Int, in functions: [LocalFunction]) -> Int? {
+		var scope: Int? = index
+		while true {
+			if let declared = functions.indices.first(where: { functions[$0].parentIndex == scope && functions[$0].declaration.name.text == name }) {
+				return declared
+			}
+			guard let current = scope else { return nil }
+			scope = functions[current].parentIndex
+		}
+	}
+
+	/// Each `mock()` or `__safeDI_mock()` a file declares, with the type its extension extends and every function declared
+	/// anywhere in its body.
 	private final class MockCollector: SyntaxVisitor {
 		private(set) var mocks = [Mock]()
+		private var extendedTypeNames = [String]()
+
+		override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+			extendedTypeNames.append(node.extendedType.trimmedDescription)
+			return .visitChildren
+		}
+
+		override func visitPost(_: ExtensionDeclSyntax) {
+			extendedTypeNames.removeLast()
+		}
 
 		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 			guard node.name.text == "mock" || node.name.text == "__safeDI_mock", let body = node.body else { return .visitChildren }
 			let collector = LocalFunctionCollector(viewMode: .sourceAccurate)
 			collector.walk(body)
-			mocks.append(Mock(name: node.name.text, localFunctions: collector.functions))
+			mocks.append(Mock(mockedTypeName: extendedTypeNames.last ?? "", name: node.name.text, localFunctions: collector.functions))
 			return .skipChildren
 		}
 	}
 
 	private final class LocalFunctionCollector: SyntaxVisitor {
-		private(set) var functions = [FunctionDeclSyntax]()
+		private(set) var functions = [LocalFunction]()
+		private var enclosingIndices = [Int]()
 
 		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-			functions.append(node)
+			functions.append(LocalFunction(declaration: node, parentIndex: enclosingIndices.last))
+			enclosingIndices.append(functions.count - 1)
 			return .visitChildren
 		}
-	}
-}
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-extension GraphFuzzerToolRuns {
-	/// The failure of a graph a mock of which builds one class of places with two local functions, or `nil`, judged only
-	/// where `isJudged`: by default when the run asks for the oracle (`GraphFuzzerMockSharedBuilders.isRequested`).
-	func mockSharingFailure(isJudged: Bool = GraphFuzzerMockSharedBuilders.isRequested) -> GraphFuzzerFailure? {
-		guard isJudged else { return nil }
-		let repetitions = GraphFuzzerMockSharedBuilders.repetitions(in: generatedFiles)
-		guard !repetitions.isEmpty else { return nil }
-		return GraphFuzzerFailure(
-			seed: fixture.seed,
-			kind: .mockSharedBodyRepeatsClass,
-			details: "\(repetitions.map(\.description).joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
-		)
+		override func visitPost(_: FunctionDeclSyntax) {
+			enclosingIndices.removeLast()
+		}
 	}
 }
