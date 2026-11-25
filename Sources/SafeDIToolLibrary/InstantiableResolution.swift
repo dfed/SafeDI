@@ -67,6 +67,30 @@ extension ModuleInfo {
 	}
 }
 
+/// `normalizedInstantiables` with each type that `additionalMocksToGenerate` lists adopting `defaultIsolation` as its
+/// `mockAttributes` when it has none (`Instantiable.adoptingModuleDefaultIsolationForMock(_:)`): the mock this module
+/// generates for a type of another module is main-actor when either that module or this one declares the setting. A
+/// declaration whose module already supplied its `mockAttributes`, or that spells them, keeps them.
+/// - Parameters:
+///   - defaultIsolation: The `defaultIsolation` the `#SafeDIConfiguration` of the module this run generates code for
+///     declares.
+///   - additionalMocksToGenerate: The types whose mocks this run generates because they are listed.
+func adoptingDefaultIsolation(
+	_ defaultIsolation: SafeDIConfiguration.DefaultIsolation?,
+	ofAdditionalMocksToGenerate additionalMocksToGenerate: [String],
+	in normalizedInstantiables: [Instantiable],
+) -> [Instantiable] {
+	guard let defaultIsolation, !additionalMocksToGenerate.isEmpty else { return normalizedInstantiables }
+	let listedTypeNames = Set(additionalMocksToGenerate)
+	return normalizedInstantiables.map { instantiable in
+		if listedTypeNames.contains(instantiable.concreteInstantiable.asSource) {
+			instantiable.adoptingModuleDefaultIsolationForMock(defaultIsolation)
+		} else {
+			instantiable
+		}
+	}
+}
+
 /// `unnormalizedInstantiables` with each type a declaration spells – each dependency's property type, `fulfilledByType:`
 /// type, and alias `ofType:` type, the arguments of its initializer, other initializers, and hand-written mock, and that
 /// mock's return type – qualified as the compiler resolves it where the declaration spells it, so generated code outside
