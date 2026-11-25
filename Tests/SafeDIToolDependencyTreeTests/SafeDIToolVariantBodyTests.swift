@@ -145,6 +145,65 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsFunctionOfTwinPathIsBuilding_whenLazilyInstantiatedDependencyClosesCycleOnConstant() async throws {
+		// `Root` and `Detail` build `home: Home` and `Panel` builds `home: LazilyInstantiated<Home>`, twins: `Panel`'s
+		// closes the cycle on the function of `Root`'s constant, the twin its path is building. The plan's call there is
+		// of that property, beneath `Panel`'s declarations, as today's place for the call is: a second body of `Home`,
+		// since the nearest declaration of `home` there is `Panel`'s. `Detail`'s call is answered as `Root`'s is.
+		var plans = [Plan]()
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let home: Home
+					    public init(home: Home) { self.home = home }
+					}
+
+					@Instantiable public final class Home: Instantiable {
+					    @Instantiated let detailBuilder: Instantiator<Detail>
+					    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+					}
+
+					@Instantiable public final class Detail: Instantiable {
+					    @Instantiated let panelBuilder: Instantiator<Panel>
+					    @Instantiated let home: Home
+					    public init(panelBuilder: Instantiator<Panel>, home: Home) { self.panelBuilder = panelBuilder; self.home = home }
+					}
+
+					@Instantiable public final class Panel: Instantiable {
+					    @Instantiated let home: LazilyInstantiated<Home>
+					    public init(home: LazilyInstantiated<Home>) { self.home = home }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		for await plan in stream {
+			plans.append(plan)
+		}
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Home as home: Home [home = home: Home, being built] [building home: Home]",
+					"Detail as detailBuilder: Instantiator<Detail> [detailBuilder = detailBuilder: Instantiator<Detail>, being built] [building home: Home]",
+					"Panel as panelBuilder: Instantiator<Panel> [panelBuilder = panelBuilder: Instantiator<Panel>, being built] [building home: Home]",
+					"Home as home: Home [home = home: LazilyInstantiated<Home>, being built] [building home: Home]",
+				],
+				todaysBodiesPlanLacks: [],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsOneBodyPerScreen_whenScreensOpenEachOtherAtTwoSizes() async throws {
 		// Each screen opens three others, so the paths through the screens grow with every screen added, and the type
 		// key's views with them: 133 at eight screens and 1,918 at twelve (`SafeDIToolTypeKeyViewTests`). Every call of a

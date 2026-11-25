@@ -40,6 +40,15 @@ extension DependencyTreeGenerator {
 	struct VariantBodyKey: Hashable {
 		let scope: ObjectIdentifier
 		let property: Property?
+		/// The twin a path is building of each value two properties build (`CallPlaceShadow.twinValues`): a call of the
+		/// value beneath closes the cycle on that property's function, whichever property makes the call.
+		let twinsBeingBuilt: [TwinValue: Property]
+	}
+
+	/// A type on a cycle and a property that builds it, as cycle validation sees the property: what a cycle closes on.
+	struct TwinValue: Hashable {
+		let concreteType: TypeDescription
+		let property: Property
 	}
 
 	/// The bodies of one root built so far: each a generator built from a scope's copy with call places
@@ -72,6 +81,9 @@ extension DependencyTreeGenerator {
 					} else {
 						description.append(" [\(label) = nil]")
 					}
+				}
+				for twin in key.twinsBeingBuilt.values.map(\.asSource).sorted() {
+					description.append(" [building \(twin)]")
 				}
 				return description
 			}

@@ -750,13 +750,13 @@ public actor DependencyTreeGenerator {
 						var callsCompared = [ObjectIdentifier: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, labelsPassedNil: Set<String>)]]()
 						// The bodies today's places of scopes on a cycle take, in the order the walk first meets each.
 						var todaysBodies = [Int]()
-						var walk = PlaceContextWalk(ofTodaysTree: todaysTree, builtFrom: scope)
+						var walk = PlaceContextWalk(ofTodaysTree: todaysTree, builtFrom: scope, twinValues: shadow.twinValues)
 						while let (context, isCalledByCycleClosingScope) = walk.next() {
 							if let copy = shadow.copy(of: context.scope) {
 								var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &receivedPropertiesCache).received.map(\.label))
 								labelSet.insert(context.property.label)
 								let labels = labelSet.sorted()
-								let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property)
+								let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
 								let body = try bodies.body(
 									of: copy,
 									as: key,
@@ -792,7 +792,7 @@ public actor DependencyTreeGenerator {
 									callsCompared[ObjectIdentifier(context.generator), default: []].append(call)
 									walk.followCall()
 								}
-								if shadow.isOnCycle(context.scope), !context.isCalledAsTwin, !todaysBodies.contains(body) {
+								if shadow.isOnCycle(context.scope), !todaysBodies.contains(body) {
 									todaysBodies.append(body)
 								}
 								variantBodyObserver?(
@@ -808,7 +808,7 @@ public actor DependencyTreeGenerator {
 							var bodiesOfPlan = [Int]()
 							var bodiesToWalk = try [bodies.body(
 								of: rootCopy,
-								as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil),
+								as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
 								keyedBy: [],
 								answering: [],
 								beneath: NearestDeclarations(),
@@ -821,18 +821,30 @@ public actor DependencyTreeGenerator {
 									builtFrom: body.copy,
 									beneath: body.nearestDeclarations,
 									lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
+									twinValues: shadow.twinValues,
+									twinsBeingBuilt: body.key.twinsBeingBuilt,
 								)
 								while let (context, _) = bodyWalk.next() {
 									if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
 										var labelSet = Set(Self.collectReceivedProperties(from: calledScope, cache: &receivedPropertiesCache).received.map(\.label))
 										labelSet.insert(context.property.label)
-										let labels = labelSet.sorted()
+												let labels = labelSet.sorted()
+										// A call is of the function's property: where the path is building the value the call place
+										// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
+										// cycle on that property's function, beneath the calling scope's declarations.
+										let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
+										let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
+										var calledNearestDeclarations = context.nearestDeclarations
+										if functionProperty != context.property {
+											calledNearestDeclarations = context.enclosingNearestDeclarations
+											calledNearestDeclarations.build(functionProperty)
+										}
 										let calledBody = try bodies.body(
 											of: calledCopy,
-											as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: context.property),
+											as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
 											keyedBy: labels,
 											answering: labels,
-											beneath: context.nearestDeclarations,
+											beneath: calledNearestDeclarations,
 											lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 										)
 										if !bodiesOfPlan.contains(calledBody) {

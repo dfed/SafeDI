@@ -41,15 +41,16 @@ extension DependencyTreeGenerator {
 		let scope: Scope
 		let property: Property
 		let nearestDeclarations: NearestDeclarations
+		/// The declarations of the scope that builds the place, before the place's own property is being built.
+		let enclosingNearestDeclarations: NearestDeclarations
 		let lazilyInstantiatedInstanceProperties: Set<Property>
 		/// The labels the place reads as a parameter of a function it is built in that the call passes `nil`: today's
 		/// generator passes the parameter on, so it does not list a receive of such a label as passed `nil`, and the value
 		/// is `nil` for every receive of the label.
 		let labelsPassedNil: Set<String>
-		/// Whether the place is walked for a call by a scope that closes the cycle as another property than the function
-		/// was built for, a constant on a `LazilyInstantiated` of its label or the reverse (`PerTypePlan.twins`): today the
-		/// call builds what the function's property builds, and a plan's call place builds the calling property.
-		let isCalledAsTwin: Bool
+		/// The twin the place's path is building of each value two properties build (`CallPlaceShadow.twinValues`), the
+		/// place's own included: a scope beneath that closes a cycle on the value calls that property's function.
+		let twinsBeingBuilt: [TwinValue: Property]
 	}
 
 	/// A scope of today's tree that declares a builder function, which a scope beneath that closes a cycle on its
@@ -74,7 +75,10 @@ extension DependencyTreeGenerator {
 			builtFrom rootScope: Scope,
 			beneath nearestDeclarations: NearestDeclarations = NearestDeclarations(),
 			lazilyInstantiatedInstanceProperties: Set<Property> = [],
+			twinValues: Set<TwinValue>,
+			twinsBeingBuilt: [TwinValue: Property] = [:],
 		) {
+			self.twinValues = twinValues
 			places = [Place(
 				generator: todaysTree,
 				scope: rootScope,
@@ -83,7 +87,7 @@ extension DependencyTreeGenerator {
 				labelsPassedNil: [],
 				functions: [:],
 				callDescription: nil,
-				isCalledAsTwin: false,
+				twinsBeingBuilt: twinsBeingBuilt,
 			)]
 		}
 
@@ -91,7 +95,7 @@ extension DependencyTreeGenerator {
 		mutating func next() -> (context: PlaceContext, isCalledByCycleClosingScope: Bool)? {
 			calledPlace = nil
 			while placesOfScope.isEmpty, let place = places.popLast() {
-				placesOfScope = Self.childPlaces(of: place).reversed()
+				placesOfScope = Self.childPlaces(of: place, twinValues: twinValues).reversed()
 			}
 			guard let (context, place, isCalledByCycleClosingScope) = placesOfScope.popLast() else { return nil }
 			if isCalledByCycleClosingScope {
@@ -118,14 +122,15 @@ extension DependencyTreeGenerator {
 			let labelsPassedNil: Set<String>
 			let functions: [ScopeGenerator.BuiltDeclaration: FunctionPlace]
 			let callDescription: String?
-			let isCalledAsTwin: Bool
+			let twinsBeingBuilt: [TwinValue: Property]
 		}
 
+		private let twinValues: Set<TwinValue>
 		private var places: [Place]
 		private var placesOfScope = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
 		private var calledPlace: Place?
 
-		private static func childPlaces(of place: Place) -> [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)] {
+		private static func childPlaces(of place: Place, twinValues: Set<TwinValue>) -> [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)] {
 			let (generator, scope, functions, callDescription) = (place.generator, place.scope, place.functions, place.callDescription)
 			var childPlaces = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
 			let childLabelsPassedNil = place.labelsPassedNil.subtracting(scope.declaredLabels)
@@ -139,7 +144,7 @@ extension DependencyTreeGenerator {
 					// What the place of `function`, built by `child`'s call of it, is given: a member of a loop of builders
 					// makes each wrapper its tree receives inside the loop again at the top of its function, its own included,
 					// so that rebinding is the nearest declaration beneath it, and is not being built.
-					func context(of function: FunctionPlace, describedAs description: String, isCalledAsTwin: Bool) -> PlaceContext {
+					func context(of function: FunctionPlace, describedAs description: String, twinsBeingBuilt: [TwinValue: Property]) -> PlaceContext {
 						var placeNearestDeclarations = childNearestDeclarations
 						placeNearestDeclarations.build(function.property)
 						for reboundProperty in function.generator.reboundProperties {
@@ -151,14 +156,21 @@ extension DependencyTreeGenerator {
 							scope: function.scope,
 							property: function.property,
 							nearestDeclarations: placeNearestDeclarations,
+							enclosingNearestDeclarations: childNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 							labelsPassedNil: childLabelsPassedNil.union(child.generator.labelsOfCycleParametersPassedNil),
-							isCalledAsTwin: isCalledAsTwin,
+							twinsBeingBuilt: twinsBeingBuilt,
 						)
 					}
 					if case .property(_, _, _, _, false, _) = child.generator.scopeData {
 						let function = FunctionPlace(generator: child.generator, scope: childScope, property: property)
-						let context = context(of: function, describedAs: callDescription.map { "\(child.generator.scopeData.asDOTNode) \($0)" } ?? child.generator.scopeData.asDOTNode, isCalledAsTwin: place.isCalledAsTwin)
+						// The first property a path builds a twin value as is the one a call of the value beneath closes on.
+						let twinValue = TwinValue(concreteType: childScope.instantiable.concreteInstantiable, property: property.asValidatedForDependencyCycles)
+						var childTwinsBeingBuilt = place.twinsBeingBuilt
+						if twinValues.contains(twinValue), childTwinsBeingBuilt[twinValue] == nil {
+							childTwinsBeingBuilt[twinValue] = property
+						}
+						let context = context(of: function, describedAs: callDescription.map { "\(child.generator.scopeData.asDOTNode) \($0)" } ?? child.generator.scopeData.asDOTNode, twinsBeingBuilt: childTwinsBeingBuilt)
 						var childFunctions = functions
 						if let declaration = child.generator.declaration {
 							childFunctions[declaration] = function
@@ -171,7 +183,7 @@ extension DependencyTreeGenerator {
 							labelsPassedNil: context.labelsPassedNil,
 							functions: childFunctions,
 							callDescription: callDescription,
-							isCalledAsTwin: place.isCalledAsTwin,
+							twinsBeingBuilt: childTwinsBeingBuilt,
 						), false))
 					} else if callDescription == nil,
 					          let function = child.generator.closedOnDeclaration.flatMap({ functions[$0] })
@@ -179,7 +191,7 @@ extension DependencyTreeGenerator {
 						// A scope that closes a cycle builds nothing: it is a call of the function it closes on, whose places
 						// are walked again with what this call's path gives them.
 						let description = "called by \(child.generator.scopeData.asDOTNode) in \(generator.scopeData.asDOTNode)"
-						let context = context(of: function, describedAs: "\(function.generator.scopeData.asDOTNode) \(description)", isCalledAsTwin: property != function.property)
+						let context = context(of: function, describedAs: "\(function.generator.scopeData.asDOTNode) \(description)", twinsBeingBuilt: place.twinsBeingBuilt)
 						childPlaces.append((context, Place(
 							generator: function.generator,
 							scope: function.scope,
@@ -188,7 +200,7 @@ extension DependencyTreeGenerator {
 							labelsPassedNil: context.labelsPassedNil,
 							functions: functions,
 							callDescription: description,
-							isCalledAsTwin: property != function.property,
+							twinsBeingBuilt: place.twinsBeingBuilt,
 						), true))
 					}
 				}
@@ -237,6 +249,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			}
+			var propertiesByTwinValue = [TwinValue: Set<Property>]()
 			for identifier in graph.nodes {
 				if let scope = scopeByIdentifier[identifier], let copy = copyByIdentifier[identifier] {
 					for propertyToGenerate in scope.propertiesToGenerate {
@@ -244,6 +257,9 @@ extension DependencyTreeGenerator {
 						case let .instantiated(property, childScope, erasedToConcreteExistential):
 							if let child = callPlaceByIdentifier[ObjectIdentifier(childScope)] ?? copyByIdentifier[ObjectIdentifier(childScope)] {
 								copy.propertiesToGenerate.append(.instantiated(property, child, erasedToConcreteExistential: erasedToConcreteExistential))
+							}
+							if callPlaceByIdentifier[ObjectIdentifier(childScope)] != nil {
+								propertiesByTwinValue[TwinValue(concreteType: childScope.instantiable.concreteInstantiable, property: property.asValidatedForDependencyCycles), default: []].insert(property)
 							}
 						case .hole, .aliased:
 							copy.propertiesToGenerate.append(propertyToGenerate)
@@ -254,7 +270,12 @@ extension DependencyTreeGenerator {
 			self.copyByIdentifier = copyByIdentifier
 			self.calledScopeByCallPlace = calledScopeByCallPlace
 			self.callPlaceByIdentifier = callPlaceByIdentifier
+			twinValues = Set(propertiesByTwinValue.lazy.filter { $0.value.count > 1 }.map(\.key))
 		}
+
+		/// The values two properties build of one type on a cycle, a constant and a `LazilyInstantiated` of it
+		/// (`PerTypePlan.twins`): a cycle closes on whichever of the two its path built first.
+		let twinValues: Set<TwinValue>
 
 		/// Whether a copy builds `scope` as a call place: the scope is on a cycle.
 		func isOnCycle(_ scope: Scope) -> Bool {
