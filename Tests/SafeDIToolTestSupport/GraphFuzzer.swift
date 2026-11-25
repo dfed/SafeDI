@@ -8708,7 +8708,8 @@ enum GraphFuzzerGenerator {
 		/// keeps alive too. The instantiators are `Sendable` as the graph's sendability allows, and then the place is in the
 		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing. Four in ten hold `RetainLeaf`'s place in
 		/// an erased instantiator, `ErasedInstantiator` or its `Sendable` twin as the instantiators are, which `RetainLive`
-		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps.
+		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps. Four in ten roots also build
+		/// `RetainHome` through an instantiator, so that the root function oracle compares the dispatchers both builds reach.
 		///
 		/// `retentionRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
@@ -8723,6 +8724,12 @@ enum GraphFuzzerGenerator {
 			// `RetainLeaf`'s place held in an erased instantiator, which `RetainLive` fills forwarding `retainTicket`: a place
 			// whose builder takes the value it forwards (`retentionSeamValueBeforeBuilderForwardingPlace`).
 			let leafPlaceForwards = retentionRandom.percentChance(40)
+			// A second build of `RetainHome` from the root, through an instantiator, so that the root reaches each dispatcher
+			// it declares once at its top from two calls of one key, which the root function oracle compares
+			// (`GraphFuzzerToolRuns.rootFunctionKeyFailure`); a `SendableInstantiator` reaches the dispatchers in the other
+			// family. A second by-value build would not: the type key builds both in one shared function, which the root's plan
+			// reaches once.
+			let rootBuildsHomeTwice = retentionRandom.percentChance(40)
 			let isSendable = switch sendability {
 			case .nonSendable: false
 			case .sendable: true
@@ -8772,6 +8779,9 @@ enum GraphFuzzerGenerator {
 				live.properties.append(PropertyDeclaration(attribute: "@Received", label: "retainNavigator", type: navigator.name))
 			}
 			var root = instantiable("RetainRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainHome", type: home.name)])
+			if rootBuildsHomeTwice {
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "retainHomeBuilder", type: "\(instantiator)<\(home.name)>"))
+			}
 			root.instantiableArguments = ["isRoot: true"]
 			return declarations + [navigator, leaf, detail, home, live, root]
 		}
@@ -13809,6 +13819,7 @@ struct GraphFuzzerResult {
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
 		isComparedWithCleanSubtreeSkipOff: Bool = false,
+		isJudgedByRootFunctionKeyOracle: Bool = false,
 		retentionCounts: GraphFuzzerRetentionCounts = GraphFuzzerRetentionCounts(),
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -13821,6 +13832,7 @@ struct GraphFuzzerResult {
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
 		self.isComparedWithCleanSubtreeSkipOff = isComparedWithCleanSubtreeSkipOff
+		self.isJudgedByRootFunctionKeyOracle = isJudgedByRootFunctionKeyOracle
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.outcome = outcome
@@ -13884,6 +13896,9 @@ struct GraphFuzzerResult {
 	/// Whether the oracle ran the graph again with no skip of a clean subtree in the validation walk and compared the two
 	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`): its first run skipped one.
 	let isComparedWithCleanSubtreeSkipOff: Bool
+	/// Whether the root function oracle compared two texts of one key in the graph (`GraphFuzzerToolRuns.rootFunctionKeyFailure`):
+	/// some root reached one key twice.
+	let isJudgedByRootFunctionKeyOracle: Bool
 	/// What the retention oracle judged of the graph (`GraphFuzzerOracle.ValueComparisons.retentionCounts`), each count
 	/// 0 or 1 but the unpaired experiments'.
 	let retentionCounts: GraphFuzzerRetentionCounts
@@ -14481,6 +14496,7 @@ struct GraphFuzzerToolRuns {
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
 		rootFunctionKeyDisagreements: [String] = [],
+		rootFunctionKeysCompared: Int = 0,
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -14494,6 +14510,7 @@ struct GraphFuzzerToolRuns {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
 		self.rootFunctionKeyDisagreements = rootFunctionKeyDisagreements
+		self.rootFunctionKeysCompared = rootFunctionKeysCompared
 		self.placeFacts = placeFacts
 		self.withoutSecondPath = withoutSecondPath
 		self.remedyRuns = remedyRuns
@@ -14534,6 +14551,8 @@ struct GraphFuzzerToolRuns {
 	let placeLevelDisagreements: [String]
 	/// Each key a root reaches root functions of with two texts (`collectingRootFunctionKeyDisagreements(during:)`).
 	let rootFunctionKeyDisagreements: [String]
+	/// The keys a root reached root functions of more than once, each of whose texts the oracle compared.
+	let rootFunctionKeysCompared: Int
 	let placeFacts: GraphFuzzerPlaceFacts
 	let withoutSecondPath: GraphFuzzerSecondPathRun?
 	let remedyRuns: [GraphFuzzerRemedyRun]
@@ -15392,6 +15411,7 @@ enum GraphFuzzerOracle {
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,
+				isJudgedByRootFunctionKeyOracle: runs.rootFunctionKeysCompared > 0,
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
@@ -16185,7 +16205,7 @@ enum GraphFuzzerOracle {
 		// first run skipped one is run again with no skip, which must give the same outcome (`cleanSubtreeSkipFailure`).
 		let (skippedSubtrees, skippedSubtreesContinuation) = AsyncStream.makeStream(of: Void.self)
 		// Every root's root functions with one key must have one text (`rootFunctionKeyFailure`).
-		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
+		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements, rootFunctionKeysCompared) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
 					try await ValidationWalkObservation.$observer.withValue({ observation in
@@ -16325,6 +16345,7 @@ enum GraphFuzzerOracle {
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
 			rootFunctionKeyDisagreements: rootFunctionKeyDisagreements,
+			rootFunctionKeysCompared: rootFunctionKeysCompared,
 			placeFacts: placeFacts,
 			withoutSecondPath: withoutSecondPath,
 			remedyRuns: remedyRuns,

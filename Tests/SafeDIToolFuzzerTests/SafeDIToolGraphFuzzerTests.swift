@@ -6597,6 +6597,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
 		var cleanSubtreeSkipOffGraphCount = 0
+		var rootFunctionKeyJudgedGraphCount = 0
 		var builderSurfaceCounts = [String: Int]()
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
@@ -6659,6 +6660,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isComparedWithRecomputedSignatures: results[index].isComparedWithRecomputedSignatures,
 								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
 								isComparedWithCleanSubtreeSkipOff: results[index].isComparedWithCleanSubtreeSkipOff,
+								isJudgedByRootFunctionKeyOracle: results[index].isJudgedByRootFunctionKeyOracle,
 								retentionCounts: results[index].retentionCounts,
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
@@ -6749,6 +6751,9 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isComparedWithCleanSubtreeSkipOff {
 								cleanSubtreeSkipOffGraphCount += 1
 							}
+							if result.isJudgedByRootFunctionKeyOracle {
+								rootFunctionKeyJudgedGraphCount += 1
+							}
 							if let valueOracle = result.valueOracle {
 								valueOracleCounts.add(valueOracle, isCompared: result.isComparedByValueOracle)
 							}
@@ -6834,6 +6839,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle ran again with no skip of a clean subtree in the validation walk, against no pin: a run of the
 		// whole corpus checks the floor below.
 		report.append("clean-subtree-skips \(cleanSubtreeSkipOffGraphCount) \(corpus.name)")
+		// The graphs in which the root function oracle compared two texts of one key, against no pin: a run of the whole seam
+		// corpus checks the floor below.
+		report.append("root-function-keys \(rootFunctionKeyJudgedGraphCount) \(corpus.name)")
 		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
 		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
 		if corpus.features.contains(.generateDependencyTree) {
@@ -6910,6 +6918,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if cleanSubtreeSkipOffGraphCount < Self.cleanSubtreeSkipOffGraphFloor {
 				reportProblem("The oracle ran \(cleanSubtreeSkipOffGraphCount) graphs of the \(corpus.name) corpus again with no skip of a clean subtree in the validation walk, fewer than \(Self.cleanSubtreeSkipOffGraphFloor): the oracle that compares the two runs judges too few graphs to stand in for unit tests.")
+			}
+			if corpus.features.contains(.generateDependencyTree), rootFunctionKeyJudgedGraphCount < Self.rootFunctionKeyJudgedGraphFloor {
+				reportProblem("The root function oracle compared two texts of one key in \(rootFunctionKeyJudgedGraphCount) graphs of the \(corpus.name) corpus, fewer than \(Self.rootFunctionKeyJudgedGraphFloor): it judges too few graphs to stand in for unit tests.")
 			}
 			if readTwinGraphCount != corpus.readTwinGraphCount {
 				reportProblem("The oracle compared \(readTwinGraphCount) graphs of the \(corpus.name) corpus with their read twin, but \(corpus.readTwinGraphCount) are pinned.")
@@ -7376,6 +7387,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The fewest graphs of a corpus the oracle must run again with no skip of a clean subtree in the validation walk
 	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`) for that comparison to stand in for unit tests.
 	static let cleanSubtreeSkipOffGraphFloor = 10
+
+	/// The fewest graphs of the seam corpus in which the root function oracle must compare two texts of one key
+	/// (`GraphFuzzerToolRuns.rootFunctionKeyFailure`) for it to stand in for unit tests.
+	static let rootFunctionKeyJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 115, judgedDrawingRetentionShape: 111, judgedThroughHandWrittenBuilder: 69, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 77, "SendableErasedInstantiator": 22, "Instantiator": 73, "SendableInstantiator": 21])
