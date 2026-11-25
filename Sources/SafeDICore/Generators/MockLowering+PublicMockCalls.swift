@@ -271,7 +271,7 @@ extension MockLowering.Walk {
 		}
 		let innerIndent = filledCall == nil ? indent : "\(indent)\(ScopeGenerator.standardIndent)"
 		let holeBuilders = filledCallBuilders.fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(generator)] ?? [:]
-		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel
+		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel(propertiesGeneratedLater: filledCall?.propertiesGeneratedLater ?? [])
 		let holeArgumentValuesByLabel = generator.holeArgumentValuesByLabel
 		let lazilyInstantiatedInstances = generator.mockLoweringLazilyInstantiatedInstanceProperties
 		let lazilyInstantiatedNamesOfLabels = lazilyInstantiatedNames
@@ -390,6 +390,9 @@ extension MockLowering.Walk {
 		var extractionLines = [String]()
 		// A call beneath an edge in `cycleEdges`, or beneath a node that is, reads no override: its parent's configuration
 		// has no field for it, so the called mock builds with its own defaults.
+		if !cycleEdges.isEmpty {
+			builtConcreteTypesBesideCycleEdges.insert(instantiable.concreteInstantiable.asSource)
+		}
 		let readsOverride = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 		let overrideRead: String
 		if readsOverride, publicMockCall.takesOverrides || overrideBuilders != nil {
@@ -478,6 +481,10 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "publicMockCall:promoted"
 		} else if !extractionLines.isEmpty, boundOverride == nil {
 			unrecordedReasons[childIndexPath] = "publicMockCall:sendableExtraction"
+		} else if boundOverride == nil, readsOverride, publicMockCall.takesOverrides || overrideBuilders != nil, MockLowering.overrideReadPath(overrideRead) == nil {
+			// The call reads its override through a local an enclosing `@Sendable` function's extractor binds, which the type
+			// key, reading overrides by their paths, does not declare. Its own function's extraction is handed it (`boundOverride`).
+			unrecordedReasons[childIndexPath] = "publicMockCall:extractedOverrideRead"
 		} else if filledCall != nil || !passesOnlyReads || overrideBuilders != nil || boundOverride != nil {
 			// A call that passes builders is a built place with a function of its own (`recordPublicMockCallPlace`).
 			recordsAsPlace = true

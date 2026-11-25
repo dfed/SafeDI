@@ -56,6 +56,13 @@ extension MockLowering {
 		)
 	}
 
+	/// An override read a place's construction makes: its text, and the value path it reads where it names the overrides'
+	/// members (`overrideReadPath(_:)`), `nil` where it reads a local a `@Sendable` function's extractor bound it to.
+	struct OverrideRead {
+		let text: String
+		let path: ValuePath?
+	}
+
 	/// The value path of an override read spelled `safeDIOverrides.<member>.<member>…`, or `nil` for any other read, such
 	/// as a local a `@Sendable` function's extractor bound it to.
 	static func overrideReadPath(_ read: String) -> ValuePath? {
@@ -85,6 +92,33 @@ extension MockLowering {
 		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
 		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
 		var configuredConstruction: ConfiguredConstruction?
+		/// The override the place's construction reads, as the walk spelled it, or `nil`.
+		var overrideReadText: String?
+
+		/// What of these the place's record reads beyond its generator, which a plan node is made once for: one generator
+		/// can be lowered at two places that differ in them, whose records then differ.
+		var recordedKey: RecordedKey {
+			RecordedKey(
+				functionName: functionName,
+				hasFunction: hasFunction,
+				readNames: readNames,
+				labelsPassedNil: labelsPassedNil,
+				labelsPassedValue: labelsPassedValue,
+				configuredConstruction: configuredConstruction,
+				overrideReadText: overrideReadText,
+			)
+		}
+
+		struct RecordedKey: Hashable {
+			let functionName: String
+			let hasFunction: Bool
+			let readNames: [Property: String]
+			let labelsPassedNil: Set<String>
+			let labelsPassedValue: Set<String>
+			let configuredConstruction: ConfiguredConstruction?
+			let overrideReadText: String?
+		}
+
 		/// The construction function a public mock's configured place calls instead (`MockLowering+PublicRecords.swift`).
 		var publicConstruction: PublicConstructionInputs?
 	}
@@ -111,8 +145,8 @@ extension MockLowering {
 
 	/// The alternative a place tries before its construction where the walk reads its override at `overrideRead`, whose
 	/// result is wrapped in `resultWrapper`; `nil` where the read is no value path, as a local an extractor bound it to.
-	static func overrideAlternative(reading overrideRead: String, resultWrapper: TypeDescription?) -> ConstructionAlternative? {
-		overrideReadPath(overrideRead).map { closure in
+	static func overrideAlternative(reading overrideRead: ValuePath?, resultWrapper: TypeDescription?) -> ConstructionAlternative? {
+		overrideRead.map { closure in
 			ConstructionAlternative(
 				closure: closure,
 				bindingName: ReservedName.configurationBuilderPropertyName,
@@ -149,16 +183,21 @@ extension ArgumentSource {
 extension MockLowering.Walk {
 	/// A generator in one context it is written in: what production's plan node is made once for (`planNode(…)` in
 	/// `ScopeGenerator`).
+	///
+	/// Mock roots share one construction memo, so whether two places hold one generator follows the order the roots are
+	/// built in. The key therefore also holds what the place's record reads beyond the generator (`BuiltPlaceInputs.RecordedKey`):
+	/// two places of one generator share a node only where their records agree, as places of two generators never do.
 	struct PlanNodeKey: Hashable {
 		let generator: ObjectIdentifier
 		let unavailableProperties: Set<Property>
+		let inputs: MockLowering.BuiltPlaceInputs.RecordedKey
 	}
 
 	/// Keeps what the walk hands production's record function at the built place it is lowering.
 	mutating func recordInputs(
 		of node: MockLowering.ConstantNode,
 		hasFunction: Bool,
-		overrideRead: String?,
+		overrideRead: MockLowering.OverrideRead?,
 		initializer: Initializer,
 		instantiable: Instantiable,
 		dependencyArguments: [(label: String, value: String)],
@@ -182,7 +221,7 @@ extension MockLowering.Walk {
 			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded,
 			// except in an internal mock, whose record reads the override of the configuration its call hands it
 			// (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the read its path names.
-			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper)
+			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead.path, resultWrapper: node.overrideResultWrapper)
 				?? internalMockOverrideAlternative(of: node)
 			else {
 				unrecordedReasons[childIndexPath] = "overrideLocal"
@@ -198,6 +237,7 @@ extension MockLowering.Walk {
 			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
 			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
 			configuredConstruction: configuredConstruction.recorded,
+			overrideReadText: overrideRead?.text,
 		)
 	}
 
@@ -207,7 +247,7 @@ extension MockLowering.Walk {
 		      let inputs = builtPlaceInputs[childIndexPath],
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
 		else { return }
-		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties)
+		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties, inputs: inputs.recordedKey)
 		let planNode = planNodes[key] ?? PlanNode()
 		planNodes[key] = planNode
 		// The record is made once the walk is done (`recordBuiltPlaces()`), when the records of the places in its builder

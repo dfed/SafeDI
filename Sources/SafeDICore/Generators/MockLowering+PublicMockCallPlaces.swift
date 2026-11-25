@@ -270,16 +270,31 @@ extension MockLowering.Walk {
 		return Set([ReservedName.mockOverridesParameterName] + holeBuilders.map(\.name) + filledCallBuilders.passedUpBuilderNames.values)
 	}
 
+	/// Where the tree receives one label as two types, or the mock binds one name under two types, as its forms of one
+	/// label seen from two receivers can, the name takes the type spelled first in sorted order, never the one a set's or
+	/// dictionary's order lists last; the type key checks each read against the declaration it resolves to, and keeps the
+	/// walk's body where the type is not the declaration's.
 	func publicMockCallOuterTypes(of generator: ScopeGenerator) -> [String: TypeDescription] {
 		var outerTypes = [String: TypeDescription]()
-		for property in generator.receivedProperties {
-			outerTypes[property.label] = property.typeDescription
-		}
-		for namesByType in [renames, lazilyInstantiatedNames].flatMap(\.values) {
-			for (type, name) in namesByType {
+		func declare(_ name: String, as type: TypeDescription) {
+			guard let existing = outerTypes[name], existing.asSource < type.asSource else {
 				outerTypes[name] = type
+				return
 			}
 		}
+		for property in generator.receivedProperties {
+			declare(property.label, as: property.typeDescription)
+		}
+		var boundTypes = [String: TypeDescription]()
+		for namesByType in [renames, lazilyInstantiatedNames].flatMap(\.values) {
+			for (type, name) in namesByType {
+				guard let existing = boundTypes[name], existing.asSource < type.asSource else {
+					boundTypes[name] = type
+					continue
+				}
+			}
+		}
+		outerTypes.merge(boundTypes) { _, bound in bound }
 		for (property, name) in filledCallBuilders.passedUpBuilderNames {
 			outerTypes[name] = property.typeDescription.strippingEscaping
 		}

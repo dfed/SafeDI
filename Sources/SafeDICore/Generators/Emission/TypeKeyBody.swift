@@ -188,6 +188,8 @@ struct TypeKeyLayout {
 	var classByBody = [Int]()
 	/// Each class's members, in walk order.
 	var membersByClass = [[Int]]()
+	/// The labels each class's function is handed (`BuiltPlaceRecord.parameterProperties`), empty for the root's.
+	var parameterLabelsByClass = [Set<String>]()
 	/// The classes each class's body calls, and the call sites of each class.
 	var calleesByClass = [Set<Int>]()
 	var callSitesByClass = [Set<CallSite>]()

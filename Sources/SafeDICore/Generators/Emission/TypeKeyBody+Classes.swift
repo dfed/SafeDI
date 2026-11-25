@@ -90,6 +90,10 @@ extension TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
+		// Every lookup in a class's body asks whether its function is handed a label, so each class's labels are kept once.
+		parameterLabelsByClass = membersByClass.map { members in
+			members.first.flatMap { bodies[$0].record }.map { Set($0.parameterProperties.map(\.label)) } ?? []
+		}
 	}
 
 	func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {

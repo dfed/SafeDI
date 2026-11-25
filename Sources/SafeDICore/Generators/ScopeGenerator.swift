@@ -5070,6 +5070,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFieldsStorage?.fields.fillKey
 	}
 
+	/// What a fill's tree is generated with of `propertiesGeneratedLater`, the properties the caller builds after the call:
+	/// each field the fill binds (`fillStructBoundLabels`) hides the caller's declaration of its label, as the nearest
+	/// declaration inline reads, so a receive of it is handed the field, which the route's level binds or, on a route that
+	/// binds none, the root dispatcher or level function hands `nil` for a value the caller builds later.
+	nonisolated private func fillBodyPropertiesGeneratedLater(_ propertiesGeneratedLater: Set<Property>) -> Set<Property> {
+		let boundLabels = fillStructBoundLabels
+		guard !boundLabels.isEmpty, !propertiesGeneratedLater.isEmpty else { return propertiesGeneratedLater }
+		return propertiesGeneratedLater.filter { !boundLabels.contains($0.label) }
+	}
+
 	/// For a fill, the labels of the fields of its hole's struct it binds from the struct: every field but those bound
 	/// from a parameter the seam defers, which the fill reads from the caller's scope, as inline, unless a call inside a
 	/// fill of the same seam call passes this fill on beneath another declaration of the label
@@ -6890,8 +6900,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What the construction of `instantiable` in this scope's builder function reads, for the type key, or `nil` where it is
 	/// constructed with anything but its initializer's arguments. It throws what the path key's construction
-	/// (`constructionArgumentList(of:unavailableProperties:holeBuilders:)`), which makes the same call first, throws.
-	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
+	/// (`constructionArgumentList(of:unavailableProperties:propertiesGeneratedLater:holeBuilders:)`), which makes the same call first, throws.
+	/// It reads nothing but this generator and `unavailableProperties`, so every place of one generator written in one context
+	/// reads alike.
+	nonisolated func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
 		guard builderCallArguments.isEmpty else { return nil }
 		return try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 	}
@@ -7020,8 +7032,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isPlannedAtPlace: Bool,
 		readNames: [Property: String] = [:],
 		alternatives: [ConstructionAlternative] = [],
+		constructionReads computedConstructionReads: Result<[PlaceRead]?, Initializer.GenerationError>? = nil,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
-		guard isPlannedAtPlace, isPlannedByGenerator, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
+		// A caller that writes many places of one generator in one context hands the construction's reads it computed once for
+		// them (`constructionReads(of:unavailableProperties:)`).
+		guard isPlannedAtPlace, isPlannedByGenerator else { return nil }
+		let constructionReads = if let computedConstructionReads {
+			try computedConstructionReads.get()
+		} else {
+			try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
+		}
+		guard let arguments = constructionReads else { return nil }
 		var record = BuiltPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
@@ -7066,19 +7087,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call.
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false) -> Bool {
-		isPlannedByGenerator(separatingValuesBindings: separatesValuesBindings) && isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
+		(valuesBindingLines.isEmpty || separatesValuesBindings)
+			&& isPlannedBesideValuesBindings
+			&& isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
 	}
 
 	/// The half of `isPlannedByTypeKey(builderFunctionNames:fillPlaceBindings:)` the generator decides alone, whichever walk
 	/// writes its place: no payload binding, no wrapper made again, no member call, and no fill's own place.
 	nonisolated var isPlannedByGenerator: Bool {
-		isPlannedByGenerator(separatingValuesBindings: false)
+		valuesBindingLines.isEmpty && isPlannedBesideValuesBindings
 	}
 
-	/// `isPlannedByGenerator`, where payload bindings are no obstacle when the place's payloads are places of their own.
-	nonisolated private func isPlannedByGenerator(separatingValuesBindings: Bool) -> Bool {
-		(valuesBindingLines.isEmpty || separatingValuesBindings)
-			&& reboundProperties.isEmpty
+	/// What the generator decides alone of whether the type key plans its place, beside its payload bindings: no wrapper
+	/// made again, no member call, and no fill's own place.
+	nonisolated private var isPlannedBesideValuesBindings: Bool {
+		reboundProperties.isEmpty
 			&& memberCallLines.isEmpty
 			&& !isBuiltByFill
 			&& !fillReturnsWrapperBuilder
@@ -7615,16 +7638,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return generatedProperties
 	}
 
-	/// What this scope's call of another module's public mock passes each builder, by label: the call of the builder's root
-	/// level function (`PublicMockLevelFunctions.rootCallsByLabel`), or the struct the caller passes up where the call fills
+	/// What this scope's call of another module's public mock passes each builder, by label, where the call's fills are
+	/// generated with `propertiesGeneratedLater`: the call of the builder's root level function
+	/// (`PublicMockLevelFunctions.rootCallsByLabel(passingNilFor:)`), or the struct the caller passes up where the call fills
 	/// no place of the builder.
-	nonisolated var publicMockBuilderStructValuesByLabel: [String: String] {
+	nonisolated func publicMockBuilderStructValuesByLabel(propertiesGeneratedLater: Set<Property>) -> [String: String] {
+		let rootCallsByLabel = publicMockLevelFunctions?.rootCallsByLabel(passingNilFor: callerReadLabelsBuiltAfterCall(propertiesGeneratedLater: propertiesGeneratedLater)) ?? [:]
 		var valuesByLabel = [String: String]()
 		for builderCallArgument in builderCallArguments {
 			guard let builderStruct = builderCallArgument.builderStruct else { continue }
-			valuesByLabel[builderCallArgument.label] = publicMockLevelFunctions?.rootCallsByLabel[builderCallArgument.label] ?? builderStruct.upValue
+			valuesByLabel[builderCallArgument.label] = rootCallsByLabel[builderCallArgument.label] ?? builderStruct.upValue
 		}
 		return valuesByLabel
+	}
+
+	/// The labels this scope's call's fills read of the caller's scope that no fill finds available, where the fills are
+	/// generated with `propertiesGeneratedLater`: the caller builds the value after the call, so each fill reads `nil`, and
+	/// the root level function is handed `nil`, as a seam's root dispatcher is (`callerArgumentByParameter`), rather than a
+	/// value not yet declared.
+	nonisolated private func callerReadLabelsBuiltAfterCall(propertiesGeneratedLater: Set<Property>) -> Set<String> {
+		var unavailableLabels = Set<String>()
+		var availableLabels = Set<String>()
+		for child in orderedChildrenComputedAfresh(propertiesGeneratedLater: propertiesGeneratedLater) where child.generator.fillKey != nil && child.generator.fillEmitsCode {
+			let callerReads = child.generator.fillCallerReads
+			for label in callerReads.argumentByLabel.keys {
+				let forms = callerReads.dependencies.map(\.property).filter { $0.label == label }
+				if forms.allSatisfy(child.unavailableProperties.contains) {
+					unavailableLabels.insert(label)
+				} else {
+					availableLabels.insert(label)
+				}
+			}
+		}
+		return unavailableLabels.subtracting(availableLabels)
 	}
 
 	/// The body of `fill`, whose function is `code` indented by `leadingMemberWhitespace`, as the dispatcher case that calls
@@ -8114,7 +8160,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		):
 			// Only the children's code is awaited here: what the scope writes around it is decided and spelled by the
 			// synchronous functions below (`.claude/rules/emission-decisions.md`, "A spelling holds no subtree text longer").
-			let argumentList = try constructionArgumentList(of: instantiable, unavailableProperties: unavailableProperties, holeBuilders: fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(self)] ?? [:])
+			let argumentList = try constructionArgumentList(of: instantiable, unavailableProperties: unavailableProperties, propertiesGeneratedLater: propertiesGeneratedLater, holeBuilders: fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(self)] ?? [:])
 			if isPropertyCycle, let closingCode = cycleClosingCode(
 				of: property,
 				erasedToConcreteExistential: erasedToConcreteExistential,
@@ -8170,7 +8216,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				at: site,
 				functionName: builderFunctionNames.functionName,
 				valuesBindings: valuesBindings,
-				bindsValuesBindings: valuesBindingPlaces == nil,
 				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
 				carrierUse: siteCarrierUse,
 			)
@@ -8387,10 +8432,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// lives on a thread's stack while it runs.
 
 	/// What the construction of `instantiable` in this scope's builder function passes the function it calls.
+	/// - Parameter propertiesGeneratedLater: The properties generated after this scope, from which its body's children,
+	///   the fills of a call of another module's public mock among them, are generated (`bodyPropertiesGeneratedLater(_:)`).
 	/// - Parameter holeBuilders: For a call of another module's public mock, the builders `mock()` takes for the places of
 	///   each called builder it fills, by the called builder's label (`FillPlaceBindings.holeBuildersByCall`).
 	@inline(never)
-	private func constructionArgumentList(of instantiable: Instantiable, unavailableProperties: Set<Property>, holeBuilders: [String: FillPlaceBindings.HoleBuilder]) throws -> String {
+	private func constructionArgumentList(of instantiable: Instantiable, unavailableProperties: Set<Property>, propertiesGeneratedLater: Set<Property>, holeBuilders: [String: FillPlaceBindings.HoleBuilder]) throws -> String {
 		// A type built with its hand-written mock, as one built with its initializer, is constructed inside its builder
 		// function, whose own parameters hide the declarations of their labels where it is called.
 		if publicMockCall != nil, let mockInitializer = instantiable.mockInitializer {
@@ -8398,9 +8445,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// in signature order, a builder it fills among them, and no `safeDIOverrides`: no override reaches a fill. A
 			// by-value parameter whose label the tree holds as a lazily instantiated property is passed its instance, as
 			// a call outside a fill is (`dependencyArgument`).
-			mockInitializer.arguments.map { argument in
+			let builderStructValuesByLabel = publicMockBuilderStructValuesByLabel(propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater))
+			return mockInitializer.arguments.map { argument in
 				let dependency = instantiable.dependencies.first { $0.property.label == argument.innerLabel }
-				let source: ArgumentSource = if let builderValue = publicMockBuilderStructValuesByLabel[argument.innerLabel] {
+				let source: ArgumentSource = if let builderValue = builderStructValuesByLabel[argument.innerLabel] {
 					.builderArgument(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: builderValue) ?? builderValue)
 				} else if let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
 					// A call that re-enters an enclosing call's level function hands it on as the enclosing call does.
@@ -8420,7 +8468,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// initializer is; each other parameter of the mock keeps its default. One without a default, whose dependency
 			// only an inactive clause declares, reaches here only in a build that compiles no generated mock, which never
 			// compiles the call, as it never compiles the same call outside a fill.
-			mockInitializer.createHandWrittenMockArgumentList(
+			return mockInitializer.createHandWrittenMockArgumentList(
 				given: instantiable.dependencies,
 				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -8436,7 +8484,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// called tree reads the value only behind an instantiator, the instance is created at the call rather than at
 			// that first read; elsewhere the called type's own construction reads it, and only the order of creation within
 			// that construction moves.
-			try instantiable.generateArgumentList(
+			return try instantiable.generateArgumentList(
 				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			)
@@ -8534,7 +8582,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// code: the builder function, where the scope declares one, and the declaration of the property. A scope that closes
 	/// a lazily instantiated or constant cycle is written by `cycleClosingCode(of:erasedToConcreteExistential:unavailableProperties:builderFunctionNames:)`.
 	/// - Parameter argumentList: What the construction passes the function it calls
-	///   (`constructionArgumentList(of:unavailableProperties:)`).
+	///   (`constructionArgumentList(of:unavailableProperties:propertiesGeneratedLater:holeBuilders:)`).
 	@inline(never)
 	private func propertyCode(
 		around childCode: [GeneratedCode],
@@ -9385,7 +9433,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let indent = Self.standardIndent
 		let childCode = try await generateProperties(
 			codeGeneration: codeGeneration,
-			propertiesGeneratedLater: propertiesGeneratedLater,
+			propertiesGeneratedLater: fillBodyPropertiesGeneratedLater(propertiesGeneratedLater),
 			enclosingFunctionNames: enclosingFunctionNames,
 			leadingMemberWhitespace: indent,
 			fillPlaceBindings: fillPlaceBindings,
