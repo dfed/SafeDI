@@ -2,9 +2,13 @@
 
 # Checks that the versions SafeDI states in more than one place agree:
 #
-# - Each package Package.resolved pins for SwiftPM is either the same
-#   version of a module MODULE.bazel depends on for Bazel, or listed below
-#   as needed by SwiftPM alone.
+# - Each package Package.resolved pins for SwiftPM is either at or above
+#   the version of a module MODULE.bazel depends on for Bazel, or listed
+#   below as needed by SwiftPM alone. A `bazel_dep` version is the lowest
+#   version SafeDI accepts, which Bazel users are held to, so raising it
+#   breaks them. The pin SafeDI resolves for its own SwiftPM builds may be
+#   newer: swift-syntax's prebuilt libraries exist only for recent
+#   versions, and its builds of the macro use them only when it pins one.
 # - SafeDI's own version is the same in MODULE.bazel's `module(…)`, the
 #   release URL of Package.swift's binary target, and Plugins/Shared.swift's
 #   `safeDIVersion`: the three places Scripts/update-version.sh writes.
@@ -76,6 +80,24 @@ bazel_dep_versions() {
     sed -n -E "s/^[[:space:]]*bazel_dep\(name = \"$1\", version = \"([^\"]*)\".*/\1/p" MODULE.bazel
 }
 
+# Succeeds when version $1 is at or above version $2. Both are dotted
+# numbers, such as 604.0.0; a component that is not a number fails.
+version_at_least() {
+    awk -v pinned="$1" -v minimum="$2" 'BEGIN {
+        count_pinned = split(pinned, p, ".")
+        count_minimum = split(minimum, m, ".")
+        count = count_pinned > count_minimum ? count_pinned : count_minimum
+        for (i = 1; i <= count; i++) {
+            a = (i <= count_pinned) ? p[i] : 0
+            b = (i <= count_minimum) ? m[i] : 0
+            if (a !~ /^[0-9]+$/ || b !~ /^[0-9]+$/) exit 1
+            if (a + 0 > b + 0) exit 0
+            if (a + 0 < b + 0) exit 1
+        }
+        exit 0
+    }'
+}
+
 echo "Checking dependency versions..."
 
 pins=$(resolved_pins)
@@ -97,8 +119,8 @@ while read -r identity version; do
             # The Bazel Central Registry names a version it patched for
             # Bazel with a `.bcr.N` suffix on the upstream version.
             upstream_version=$(echo "$bazel_version" | sed -E 's/\.bcr\.[0-9]+$//')
-            if [ "$upstream_version" != "$version" ]; then
-                fail "MODULE.bazel depends on $module $bazel_version, but Package.resolved pins $identity to $version. Change MODULE.bazel's bazel_dep on $module to $version. The Bazel Central Registry must host that version, and its version may carry a .bcr.N suffix (such as $version.bcr.1). Until the registry hosts it, pin Package.resolved to $upstream_version instead."
+            if ! version_at_least "$version" "$upstream_version"; then
+                fail "MODULE.bazel depends on $module $bazel_version, but Package.resolved pins $identity to $version, which is not at or above it. Package.resolved must pin $module's version or a newer one: MODULE.bazel's version is the lowest SafeDI accepts. Pin Package.resolved to $upstream_version or newer, or lower MODULE.bazel's bazel_dep on $module, which the Bazel Central Registry must host (its version may carry a .bcr.N suffix, such as $version.bcr.1)."
             else
                 printf '  %-24s Package.resolved %-12s MODULE.bazel %s %s\n' "$identity" "$version" "$module" "$bazel_version"
             fi
