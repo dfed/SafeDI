@@ -13864,8 +13864,9 @@ struct GraphFuzzerResult {
 	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
 	/// without its package's name.
 	let isComparedAcrossIntegrations: Bool
-	/// Whether the oracle ran the graph with every module info's seam signatures discarded and compared the two runs
-	/// (`GraphFuzzerToolRuns.storedSeamSignaturesDisagreeFailure`): the graph is split across modules and declares a seam.
+	/// Whether the oracle ran the graph with every module info's seam signatures and public mock plans discarded and
+	/// compared the two runs (`GraphFuzzerToolRuns.storedSeamSignaturesDisagreeFailure`): the graph is split across
+	/// modules and declares a seam or a public mock.
 	let isComparedWithRecomputedSignatures: Bool
 	/// Whether the oracle ran the graph's read twin and compared it with the graph (`GraphFuzzerToolRuns.readTwinFailure`):
 	/// the graph names a type no declaration SafeDI reads declares.
@@ -14822,8 +14823,9 @@ struct GraphFuzzerToolRuns {
 	}
 
 	/// The failure of a graph split across modules whose modules generate other code or report other diagnostics when each
-	/// reads the signatures of the seams it calls from their modules' `.safedi` files than when it computes them again from
-	/// the declarations those files carry, or `nil`: a module's stored signature must be the one each caller would compute.
+	/// reads the signatures of the seams it calls, and the plans of the public mocks its mocks call, from their modules'
+	/// `.safedi` files than when it computes them again from the declarations those files carry, or `nil`: a module's
+	/// stored signature or plan must be the one each caller would compute.
 	var storedSeamSignaturesDisagreeFailure: GraphFuzzerFailure? {
 		guard let recomputedSignaturesOutcome, recomputedSignaturesOutcome != firstOutcome else { return nil }
 		return GraphFuzzerFailure(
@@ -16227,10 +16229,11 @@ enum GraphFuzzerOracle {
 		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
 			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
 			: nil
-		// A graph split across modules that declares a seam is run again with every `.safedi` file's seam signatures
-		// discarded, so each module computes the signatures of the seams it calls from the declarations: the two must
-		// agree byte for byte (`storedSeamSignaturesDisagreeFailure`).
-		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.declaresSeam
+		// A graph split across modules that declares a seam or a public mock is run again with every `.safedi` file's seam
+		// signatures and public mock plans discarded, so each module computes the signatures of the seams it calls and the
+		// plans of the public mocks its mocks call from the declarations: the two must agree byte for byte
+		// (`storedSeamSignaturesDisagreeFailure`).
+		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && (fixture.declaresSeam || GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic))
 			? try await toolOutcome(of: fixture, discardingStoredSeamSignatures: true)
 			: nil
 		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
