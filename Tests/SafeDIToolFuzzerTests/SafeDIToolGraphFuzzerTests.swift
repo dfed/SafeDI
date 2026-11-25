@@ -9364,6 +9364,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,
+		.outerFulfillerPublicMockCall: 135,
 		.holeLabelReceivedByPromotedSibling: 8,
 		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 2,
 		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 3,

@@ -138,7 +138,7 @@ extension DependencyTreeGenerator {
 			let moduleSeam = module.seams[0].seam
 			// A module info carries the signatures its module's own run computed, beside the declarations it computed them
 			// from and only once every validation passed, so a module whose every seam has one is read, never computed again.
-			// A foreign public mock's plan is computed again (`computePublicMockPlans`), a deliberate gap.
+			// A foreign public mock's plan is read the same way (`computePublicMockPlans`).
 			// The module's stored signatures are decoded here, once, and only for a module whose every seam has one.
 			let storedSeamRoots: [(type: TypeDescription, seamRoot: ScopeGenerator.SeamRoot?)]
 			if module.seams.allSatisfy({ $0.seam.storedSignatures != nil }), let storedSignatures = moduleSeam.storedSignatures {
