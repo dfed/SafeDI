@@ -47,7 +47,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
 		instantiableTypeNamesInAnyClause: [String],
 		plainTypeDeclarations: [PlainTypeDeclaration],
-		seamSignatures: [StoredSeamSignature],
+		seamSignatures: ModuleSeamSignatures,
 		view: ModuleInfoView,
 	) {
 		self.moduleName = moduleName
@@ -66,6 +66,40 @@ public struct ModuleInfoFile: Codable, Sendable {
 		self.view = view
 	}
 
+	init(
+		moduleName: String,
+		ownEntryChecksum: UInt64? = nil,
+		packageName: String?,
+		dependencyModuleNames: [String],
+		imports: [ImportStatement],
+		mockImports: [ImportStatement],
+		instantiables: [Instantiable],
+		configurations: [SafeDIConfiguration],
+		filesWithUnexpectedNodes: [String]?,
+		conditionalCompilationDecisions: [ConditionalCompilationDecision],
+		instantiableTypeNamesInAnyClause: [String],
+		plainTypeDeclarations: [PlainTypeDeclaration],
+		seamSignatures: [StoredSeamSignature],
+		view: ModuleInfoView,
+	) {
+		self.init(
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations,
+			seamSignatures: ModuleSeamSignatures(seamSignatures),
+			view: view,
+		)
+	}
+
 	/// The file of `module`, named `moduleName`, which a run that writes a module info file always knows.
 	/// - Parameter storesOwnEntryChecksum: Whether the file stores the checksum of its own entry, which a view that refers to
 	///   the module holds: written by a run whose view refers to modules, so that every file a reference can name has it.
@@ -82,7 +116,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: module.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: module.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: module.plainTypeDeclarations,
-			seamSignatures: seamSignatures,
+			seamSignatures: ModuleSeamSignatures(seamSignatures),
 			view: view,
 		)
 		if storesOwnEntryChecksum {
@@ -118,7 +152,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 	let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// The signature of each seam the module declares, sorted by seam, as the module's run computed it: a module that
 	/// calls one reads it here rather than computing it again. Empty for a module that declares no seam.
-	let seamSignatures: [StoredSeamSignature]
+	let seamSignatures: ModuleSeamSignatures
 	/// What the module's dependents need of the modules it depends on, directly or not.
 	let view: ModuleInfoView
 
@@ -198,10 +232,10 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: plainTypeDeclarations,
-			seamSignatures: [],
+			seamSignatures: .empty,
 			view: ModuleInfoView(
 				moduleGraph: view.moduleGraph,
-				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: []) },
+				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: .empty) },
 				references: view.references,
 			),
 		)
@@ -253,7 +287,7 @@ extension ViewedModule {
 
 	/// This entry with no seam signatures.
 	var withoutSeamSignatures: ViewedModule {
-		ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: [])
+		ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: .empty)
 	}
 }
 
@@ -286,7 +320,7 @@ struct ViewedModule: Codable {
 	let instantiables: [Instantiable]
 	let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// See `ModuleInfoFile.seamSignatures`.
-	let seamSignatures: [StoredSeamSignature]
+	let seamSignatures: ModuleSeamSignatures
 
 	/// Whether the module declares a seam or a public mock.
 	var declaresSeamOrPublicMock: Bool {
@@ -420,17 +454,10 @@ struct MergedModuleInfoView {
 		}
 		// A module's file and every view carry the same signatures of its seams, without positions.
 		let directModuleNames = Set(directModules.map(\.file.moduleName))
-		// Keyed by seam, so that a run calling every seam of a module looks each up once rather than scanning the module's
-		// signatures per seam. Of two signatures of one seam, the first is kept.
-		var storedSeamSignatures = [String: [TypeDescription: StoredSeamSignature]]()
-		for (moduleName, declaration) in declarations where !declaration.entry.seamSignatures.isEmpty {
-			var signaturesBySeam = [TypeDescription: StoredSeamSignature]()
-			for signature in declaration.entry.seamSignatures where signaturesBySeam[signature.seamType] == nil {
-				signaturesBySeam[signature.seamType] = signature
-			}
-			storedSeamSignatures[moduleName] = signaturesBySeam
-		}
-		storedSeamSignaturesByModuleName = storedSeamSignatures
+		// Each module's signatures stay as read, undecoded, until a run reaches one of the module's seams.
+		storedSeamSignaturesByModuleName = declarations
+			.filter { !$0.value.entry.seamSignatures.isEmpty }
+			.mapValues(\.entry.seamSignatures)
 		identitiesByModuleName = identities.mapValues(\.identity)
 		declarationsByModuleName = declarations.mapValues(\.entry)
 		self.directModuleNames = directModuleNames
@@ -459,9 +486,9 @@ struct MergedModuleInfoView {
 	let declarationsByModuleName: [String: ViewedModule]
 	/// The modules whose files the run was given.
 	let directModuleNames: Set<String>
-	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own,
-	/// with positions, for a module whose file the run was given, each by the seam, as its module's run names it.
-	let storedSeamSignaturesByModuleName: [String: [TypeDescription: StoredSeamSignature]]
+	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own for a
+	/// module whose file the run was given.
+	let storedSeamSignaturesByModuleName: [String: ModuleSeamSignatures]
 	/// The view the run's own module info file carries.
 	let view: ModuleInfoView
 
@@ -507,5 +534,104 @@ struct UnresolvableModuleReferenceError: Error, CustomStringConvertible {
 
 	var description: String {
 		"SafeDI could not find the module info of module `\(moduleName)`, which \(referringFilePaths.map { "`\($0)`" }.joined(separator: " and ")) \(referringFilePaths.count == 1 ? "refers" : "refer") to: a view that refers to modules is read with the module info of every module beneath, which SafeDI’s Bazel rule passes with `--transitive-module-info-file-path`. Pass the module info of `\(moduleName)` that way, or build the modules without `--module-info-views-refer-to-modules`."
+	}
+}
+
+/// The signatures a module info file holds of its module's seams (`ModuleInfoFile.seamSignatures`): the seams, read with
+/// the file, and their signatures, which the file holds as an encoding of their own (``BinaryWriter/writeEncoding(_:)``)
+/// that a run decodes only when it reaches one of the module's seams. A module's file and every view that copies its
+/// declarations carry its signatures, and the module that reads them calls the seams of few of the modules it reads.
+struct ModuleSeamSignatures: Sendable {
+	init(_ signatures: [StoredSeamSignature]) {
+		seamTypes = signatures.map(\.seamType)
+		storage = .decoded(signatures)
+	}
+
+	init(seamTypes: [TypeDescription], encoding: [UInt8]) {
+		self.seamTypes = seamTypes
+		storage = .encoded(encoding)
+	}
+
+	static let empty = ModuleSeamSignatures([])
+
+	/// The seam of each signature, in the order of the signatures.
+	let seamTypes: [TypeDescription]
+
+	var isEmpty: Bool {
+		seamTypes.isEmpty
+	}
+
+	/// The signatures, decoded each time this is read from a file's encoding.
+	var decoded: [StoredSeamSignature] {
+		get throws(BinaryDecodingError) {
+			switch storage {
+			case let .decoded(signatures):
+				signatures
+			case let .encoded(encoding):
+				try Self.signatures(decodingFrom: encoding)
+			}
+		}
+	}
+
+	/// The signatures as a run that reaches one of the module's seams reads them. The file's body checksum covers the
+	/// encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws after
+	/// reading a stored signature runs again computing every signature (`Generate.generate(buildLog:)`).
+	var stored: StoredSeamSignatures {
+		StoredSeamSignatures { try decoded }
+	}
+
+	/// The encoding the file holds: the bytes read, written back unchanged, or the signatures encoded each type
+	/// description and repeated field once (``BinaryWriter/writeSharingSignatureValues(_:)``), their positions absent when
+	/// `writesPositionsAsAbsent`. Only a run's own signatures hold positions: a file is written with them absent.
+	func encoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
+		switch storage {
+		case let .decoded(signatures):
+			var writer = BinaryWriter()
+			if writesPositionsAsAbsent {
+				writer.writingPositionsAsAbsent { writer in
+					writer.writeSharingSignatureValues { $0.write(signatures) }
+				}
+			} else {
+				writer.writeSharingSignatureValues { $0.write(signatures) }
+			}
+			return writer.encoded
+		case let .encoded(encoding):
+			return encoding
+		}
+	}
+
+	// MARK: Private
+
+	private enum Storage: Sendable {
+		case decoded([StoredSeamSignature])
+		case encoded([UInt8])
+	}
+
+	private let storage: Storage
+
+	private static func signatures(decodingFrom encoding: [UInt8]) throws(BinaryDecodingError) -> [StoredSeamSignature] {
+		// `withUnsafeBytes` rethrows untyped, so the read is carried out of it as a result.
+		try encoding.withUnsafeBytes { bytes in
+			Result { () throws(BinaryDecodingError) in
+				var reader = try BinaryReader(bytes: bytes)
+				let signatures = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in
+					try reader.read() as [StoredSeamSignature]
+				}
+				try reader.finish()
+				return signatures
+			}
+		}.get()
+	}
+}
+
+extension ModuleSeamSignatures: Codable {
+	init(from decoder: any Decoder) throws {
+		try self.init(decoder.singleValueContainer().decode([StoredSeamSignature].self))
+	}
+
+	/// Encodes the signatures, as `SafeDITool dump` prints them.
+	func encode(to encoder: any Encoder) throws {
+		var container = encoder.singleValueContainer()
+		try container.encode(decoded)
 	}
 }

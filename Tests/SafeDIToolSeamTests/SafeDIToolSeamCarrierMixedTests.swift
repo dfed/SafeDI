@@ -65,6 +65,7 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -78,6 +79,7 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -91,6 +93,7 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -131,20 +134,20 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 
 		extension Root {
 		    \(root.generatedInitializerDeclaration) {
+		        @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
+		            .init(screenBuilder: { __safeDI_apiBuilder_Home_Screen_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
+		            .init(detailBuilder: { values_id, values_token in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, token: values_token) })
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(id: Int, token: Token) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = Impl(id: id, token: token)
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_383C96112B20F131.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
-		                .init(screenBuilder: { __safeDI_apiBuilder_Home_Screen_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(detailBuilder: { values_id, values_token in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, token: values_token) })
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(id: Int, token: Token) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
-		                    let api: any Api = Impl(id: id, token: token)
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -201,6 +204,7 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -214,6 +218,7 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -227,6 +232,7 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }

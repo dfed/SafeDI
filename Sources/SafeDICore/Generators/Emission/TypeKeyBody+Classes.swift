@@ -136,7 +136,8 @@ extension TypeKeyLayout {
 			let arguments = record.arguments.map { "\($0.argumentLabel):\($0.label):\($0.property.asSource)" }.joined(separator: ",")
 			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"
 		case let .alias(record):
-			return "alias|\(record.text)"
+			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
+			return "alias|\(record.text)|\(reads)"
 		}
 	}
 

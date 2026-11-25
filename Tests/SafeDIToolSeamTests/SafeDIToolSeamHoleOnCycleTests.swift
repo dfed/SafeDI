@@ -282,6 +282,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -297,6 +298,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
 			        }
@@ -310,6 +312,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -365,24 +368,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() })
+			        }
+			        func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
+			            .init(
+			                cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
+			                api: { scope_mark, scope_reader, scope_cBuilder in
+			                    let mark = scope_mark
+			                    let api: any Api = LiveApi(mark: mark)
+			                    return api
+			                }
+			            )
+			        }
+			        func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+			            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
+			        }
 			        func __safeDI_hub() -> Hub {
 			            _ = Hub.__safeDI_Hub_FA5369582812EEA1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-			                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() })
-			            }
-			            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
-			                .init(
-			                    cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
-			                    api: { scope_mark, scope_reader, scope_cBuilder in
-			                        let mark = scope_mark
-			                        let api: any Api = LiveApi(mark: mark)
-			                        return api
-			                    }
-			                )
-			            }
-			            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
-			                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
-			            }
 			            return Hub(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
@@ -431,6 +434,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.t = t
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -446,6 +450,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
 			        }
@@ -459,6 +464,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -535,25 +541,25 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() }, t: { values_mark, values_tBuilder, values_cBuilder in __safeDI_apiBuilder_Hub_T_Scope() })
+			        }
+			        func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
+			            .init(
+			                cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
+			                api: { scope_mark, scope_reader, scope_cBuilder in
+			                    let mark = scope_mark
+			                    let api: any Api = LiveApi(mark: mark)
+			                    return api
+			                }
+			            )
+			        }
+			        func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+			            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
+			        }
 			        let mark = Mark()
 			        func __safeDI_hub() -> Hub {
 			            _ = Hub.__safeDI_Hub_5ADBAC71ED742FF9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-			                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() }, t: { values_mark, values_tBuilder, values_cBuilder in __safeDI_apiBuilder_Hub_T_Scope() })
-			            }
-			            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
-			                .init(
-			                    cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
-			                    api: { scope_mark, scope_reader, scope_cBuilder in
-			                        let mark = scope_mark
-			                        let api: any Api = LiveApi(mark: mark)
-			                        return api
-			                    }
-			                )
-			            }
-			            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
-			                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
-			            }
 			            return Hub(__safeDI_mark: mark, __safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
@@ -601,6 +607,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.t = t
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -616,6 +623,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
 			        }
@@ -629,6 +637,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -708,24 +717,24 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() }, t: { values_mark, values_tBuilder, values_cBuilder in __safeDI_apiBuilder_Hub_T_Scope() })
+			        }
+			        func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
+			            .init(
+			                cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
+			                api: { scope_mark, scope_reader, scope_cBuilder in
+			                    let mark = scope_mark
+			                    let api: any Api = LiveApi(mark: mark)
+			                    return api
+			                }
+			            )
+			        }
+			        func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+			            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
+			        }
 			        func __safeDI_hub() -> Hub {
 			            _ = Hub.__safeDI_Hub_8FFA03E540887149.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-			                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() }, t: { values_mark, values_tBuilder, values_cBuilder in __safeDI_apiBuilder_Hub_T_Scope() })
-			            }
-			            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
-			                .init(
-			                    cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
-			                    api: { scope_mark, scope_reader, scope_cBuilder in
-			                        let mark = scope_mark
-			                        let api: any Api = LiveApi(mark: mark)
-			                        return api
-			                    }
-			                )
-			            }
-			            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
-			                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
-			            }
 			            return Hub(__safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
@@ -902,6 +911,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(api: { _ in __safeDI_builder() })
 			        }
@@ -915,6 +925,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.a_Sendable = a_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(a_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -928,6 +939,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -963,20 +975,20 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
+			            .init(a_Sendable: __safeDI_apiSendableBuilder_Hub_A_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiSendableCarrier_A<any Api> {
+			            .init(bBuilder: { __safeDI_apiBuilder_Hub_B_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_apiBuilder_Hub_B_Scope() -> Hub.__safeDI_ApiCarrier_B<any Api> {
+			            .init(api: { scope_a in
+			                let api: any Api = LiveApi()
+			                return api
+			            })
+			        }
 			        func __safeDI_hub() -> Hub {
 			            _ = Hub.__safeDI_Hub_2987642971A9E8B1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
-			                .init(a_Sendable: __safeDI_apiSendableBuilder_Hub_A_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiSendableCarrier_A<any Api> {
-			                .init(bBuilder: { __safeDI_apiBuilder_Hub_B_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_B_Scope() -> Hub.__safeDI_ApiCarrier_B<any Api> {
-			                .init(api: { scope_a in
-			                    let api: any Api = LiveApi()
-			                    return api
-			                })
-			            }
 			            return Hub(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()

@@ -134,6 +134,7 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _, _, _, _, _, _, _ in __safeDI_builder() })
 		        }
@@ -284,6 +285,7 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -491,6 +493,7 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }

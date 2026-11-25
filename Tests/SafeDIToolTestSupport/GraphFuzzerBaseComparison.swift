@@ -203,9 +203,8 @@ enum GraphFuzzerBaseComparison {
 		}
 	}
 
-	/// A graph's files written to disk as one of the two flows reads them, and the steps that flow runs, which the value
-	/// comparison (`GraphFuzzerBaseValueComparison`) runs too.
-	struct Layout {
+	/// A graph's files written to disk as one of the two flows reads them, and the steps that flow runs.
+	private struct Layout {
 		let flow: Flow
 		let directory: URL
 		/// Where every step writes, emptied before each tool runs.

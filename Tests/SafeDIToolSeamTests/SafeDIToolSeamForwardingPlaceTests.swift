@@ -65,6 +65,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.erased = erased
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
 		            self.init(erased: { _, _ in __safeDI_builder })
 		        }
@@ -78,6 +79,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _, _ in __safeDI_builder })
 		        }
@@ -173,6 +175,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.shell = shell
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(shell: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -186,6 +189,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.toolbar = toolbar
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(toolbar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -199,6 +203,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.panelBuilder = panelBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(panelBuilder: { __safeDI_builder })
 		        }
@@ -215,14 +220,14 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        let navigator = Navigator()
 		        let theme = Theme()
 		        let __safeDI_liveGadget_AnyGadgetBuilder_shell = __safeDI_liveGadget_AnyGadgetBuilder.shell(navigator, theme)
+		        func __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_LiveGadget_AnyGadgetCarrier_Toolbar<AnyGadget>) -> Toolbar {
+		            let panelBuilder = ErasedInstantiator<String, AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder_toolbar.panelBuilder())
+		            return Toolbar(panelBuilder: panelBuilder)
+		        }
 		        func __safeDI_shell() -> Shell {
 		            let style = Style()
 		            let __safeDI_liveGadget_AnyGadgetBuilder_toolbar = __safeDI_liveGadget_AnyGadgetBuilder_shell.toolbar(style)
-		            func __safeDI_toolbar() -> Toolbar {
-		                let panelBuilder = ErasedInstantiator<String, AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder_toolbar.panelBuilder())
-		                return Toolbar(panelBuilder: panelBuilder)
-		            }
-		            let toolbar: Toolbar = __safeDI_toolbar()
+		            let toolbar: Toolbar = __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_liveGadget_AnyGadgetBuilder_toolbar)
 		            return Shell(style: style, toolbar: toolbar)
 		        }
 		        let shell: Shell = __safeDI_shell()
@@ -290,6 +295,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _ in __safeDI_builder })
 		        }
@@ -364,6 +370,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _ in __safeDI_builder })
 		        }
@@ -446,6 +453,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -461,6 +469,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.ownerBuilder = ownerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder }, ownerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -562,6 +571,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.erased = erased
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _ in __safeDI_builder }, erased: { _, _, _ in __safeDI_builder })
 		        }
@@ -648,6 +658,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.erased = erased
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _ in __safeDI_builder }, erased: { _, _, _ in __safeDI_builder })
 		        }
@@ -744,6 +755,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.c = c
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
 		            self.init(a: .init(__safeDI_noScope: __safeDI_builder), b: { _ in .init(__safeDI_noScope: __safeDI_builder) }, c: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -757,6 +769,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.place = place
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(place: { __safeDI_builder })
 		        }
@@ -770,6 +783,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.place = place
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(place: { __safeDI_builder })
 		        }
@@ -783,6 +797,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.place = place
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
 		            self.init(place: { __safeDI_builder })
 		        }
@@ -859,6 +874,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.c = c
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
 		            self.init(a: .init(__safeDI_noScope: __safeDI_builder), b: { _ in .init(__safeDI_noScope: __safeDI_builder) }, c: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -872,6 +888,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.place = place
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(place: { __safeDI_builder })
 		        }
@@ -885,6 +902,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.place = place
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(place: { __safeDI_builder })
 		        }
@@ -898,6 +916,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.place = place
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Swift.Int, __safeDI_Built>.Builder) {
 		            self.init(place: { __safeDI_builder })
 		        }
@@ -966,6 +985,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.later = later
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(now: { _, _ in __safeDI_builder() }, lazy: { _, _, _ in __safeDI_builder() }, later: { _, _, _, _ in { _ in __safeDI_builder() } })
 		        }
@@ -1061,6 +1081,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(now: { _ in __safeDI_builder() }, held: { _, _ in { _ in __safeDI_builder() } })
 		        }
@@ -1143,6 +1164,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.void = void
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(tuple: { _ in { _ in __safeDI_builder() } }, void: { _, _ in { _ in __safeDI_builder() } })
 		        }
@@ -1223,6 +1245,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.later = later
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(held: { _ in { _ in __safeDI_builder() } }, later: { _, _ in { _ in __safeDI_builder() } })
 		        }
@@ -1591,6 +1614,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -1604,6 +1628,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.sendablePart = sendablePart
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(sendablePart: { __safeDI_builder })
 		        }
@@ -1636,6 +1661,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.inner = inner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1649,6 +1675,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.inner_Sendable = inner_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1748,6 +1775,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.later = later
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(later: { _ in { _ in __safeDI_builder() } })
 		        }
@@ -1761,6 +1789,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.sendableLater = sendableLater
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(sendableLater: { { _ in __safeDI_builder() } })
 		        }
@@ -1793,6 +1822,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.inner = inner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1806,6 +1836,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.inner_Sendable = inner_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1933,6 +1964,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.inner = inner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1990,6 +2022,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2005,6 +2038,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.next = next
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(panel: { _ in __safeDI_builder }, next: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2019,18 +2053,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_liveGadget_GadgetBuilder_screenBuilder = __safeDI_liveGadget_GadgetBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
+		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
+		            }
+		            return Screen(id: id, panel: panel, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_screenBuilder.panel(id))
 		            let __safeDI_liveGadget_GadgetBuilder_next = __safeDI_liveGadget_GadgetBuilder_screenBuilder.next(id, panel)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, panel: panel, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
 		            }
 		            return Screen(id: id, panel: panel, next: next)
 		        }
@@ -2099,6 +2133,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2114,6 +2149,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.next = next
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(panel: { _ in __safeDI_builder }, next: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2128,18 +2164,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_liveGadget_GadgetBuilder_screenBuilder = __safeDI_liveGadget_GadgetBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
+		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
+		            }
+		            return Screen(id: id, panel: panel, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_screenBuilder.panel(id))
 		            let __safeDI_liveGadget_GadgetBuilder_next = __safeDI_liveGadget_GadgetBuilder_screenBuilder.next(id, panel)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, panel: panel, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
 		            }
 		            return Screen(id: id, panel: panel, next: next)
 		        }
@@ -2163,6 +2199,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.home = home
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2255,6 +2292,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.built = built
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(built: { __safeDI_builder })
 		        }
@@ -2268,6 +2306,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.pair = pair
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(built: Built, count: Int), __safeDI_Built>.Builder) {
 		            self.init(pair: { __safeDI_builder })
 		        }
@@ -2374,6 +2413,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -2387,6 +2427,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.sendableHeld = sendableHeld
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Built.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(sendableHeld: { __safeDI_builder })
 		        }
@@ -2561,6 +2602,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.panel = panel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(panel: { _ in __safeDI_builder })
 		        }
@@ -2644,6 +2686,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.owner = owner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(now: { _ in __safeDI_builder() }, owner: { _, _ in .init(__safeDI_noScope: { _ in __safeDI_builder() }) })
 		        }
@@ -2657,6 +2700,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -2670,6 +2714,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.ownerBuilder = ownerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(ownerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2779,6 +2824,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.owner = owner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(later: { { _ in __safeDI_builder() } }, same: { _ in { _ in __safeDI_builder() } }, owner: { _, _ in .init(__safeDI_noScope: { _ in __safeDI_builder() }) })
 		        }
@@ -2792,6 +2838,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<StringPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -2887,6 +2934,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<StringPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -2902,6 +2950,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.ownerBuilder = ownerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(later: { { _ in __safeDI_builder() } }, ownerBuilder: { .init(__safeDI_noScope: { _ in __safeDI_builder() }) })
 		        }
@@ -3051,6 +3100,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.pair = pair
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(pair: { _, _ in __safeDI_builder })
 		        }
@@ -3064,6 +3114,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _ in __safeDI_builder })
 		        }
@@ -3166,6 +3217,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<MainPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -3179,6 +3231,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.sendableHeld = sendableHeld
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<MainPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(sendableHeld: { __safeDI_builder })
 		        }
@@ -3283,6 +3336,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.owner = owner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(owner: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3296,6 +3350,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -3390,6 +3445,7 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		            self.erased = erased
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Token, __safeDI_Built>.Builder) {
 		            self.init(erased: { __safeDI_builder })
 		        }

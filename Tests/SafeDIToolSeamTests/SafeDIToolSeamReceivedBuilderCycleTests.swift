@@ -608,6 +608,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -621,6 +622,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -658,18 +660,18 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_widgetBuilder_Flow() -> Flow.__safeDI_WidgetCarrier<any Widget> {
+			            .init(aBuilder: __safeDI_widgetBuilder_Flow_A_Scope())
+			        }
+			        func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
+			            .init(widget: { scope_bBuilder in
+			                let bBuilder = scope_bBuilder
+			                let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                return widget
+			            })
+			        }
 			        func __safeDI_flow() -> Flow {
 			            _ = Flow.__safeDI_Flow_A812EE8BDE488F76.self\(Self.callComment(module: "Feature"))
-			            func __safeDI_widgetBuilder_Flow() -> Flow.__safeDI_WidgetCarrier<any Widget> {
-			                .init(aBuilder: __safeDI_widgetBuilder_Flow_A_Scope())
-			            }
-			            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
-			                .init(widget: { scope_bBuilder in
-			                    let bBuilder = scope_bBuilder
-			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-			                    return widget
-			                })
-			            }
 			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
 			        }
 			        let flow: Flow = __safeDI_flow()
@@ -710,6 +712,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -723,6 +726,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -760,18 +764,18 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Flow() -> Flow.__safeDI_WidgetSendableCarrier<any Widget> {
+			            .init(aBuilder: { __safeDI_widgetBuilder_Flow_A_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
+			            .init(widget: { scope_bBuilder in
+			                let bBuilder = scope_bBuilder
+			                let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                return widget
+			            })
+			        }
 			        func __safeDI_flow() -> Flow {
 			            _ = Flow.__safeDI_Flow_F90885A67E70FC66.self\(Self.callComment(module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Flow() -> Flow.__safeDI_WidgetSendableCarrier<any Widget> {
-			                .init(aBuilder: { __safeDI_widgetBuilder_Flow_A_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
-			                .init(widget: { scope_bBuilder in
-			                    let bBuilder = scope_bBuilder
-			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-			                    return widget
-			                })
-			            }
 			            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow())
 			        }
 			        let flow: Flow = __safeDI_flow()
@@ -816,6 +820,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.xBuilder = xBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(xBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -829,6 +834,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.p = p
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(p: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -842,6 +848,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -855,6 +862,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -903,24 +911,24 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_widgetBuilder_Flow() -> Flow.__safeDI_WidgetCarrier<any Widget> {
+			            .init(xBuilder: __safeDI_widgetBuilder_Flow_X_Scope())
+			        }
+			        func __safeDI_widgetBuilder_Flow_X_Scope() -> Flow.__safeDI_WidgetCarrier_X<any Widget> {
+			            .init(p: __safeDI_widgetBuilder_Flow_P_Scope())
+			        }
+			        func __safeDI_widgetBuilder_Flow_P_Scope() -> Flow.__safeDI_WidgetCarrier_P<any Widget> {
+			            .init(aBuilder: __safeDI_widgetBuilder_Flow_A_Scope())
+			        }
+			        func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
+			            .init(widget: { scope_bBuilder, scope_xBuilder in
+			                let bBuilder = scope_bBuilder
+			                let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                return widget
+			            })
+			        }
 			        func __safeDI_flow() -> Flow {
 			            _ = Flow.__safeDI_Flow_924FCAF3F7011E9C.self\(Self.callComment(module: "Feature"))
-			            func __safeDI_widgetBuilder_Flow() -> Flow.__safeDI_WidgetCarrier<any Widget> {
-			                .init(xBuilder: __safeDI_widgetBuilder_Flow_X_Scope())
-			            }
-			            func __safeDI_widgetBuilder_Flow_X_Scope() -> Flow.__safeDI_WidgetCarrier_X<any Widget> {
-			                .init(p: __safeDI_widgetBuilder_Flow_P_Scope())
-			            }
-			            func __safeDI_widgetBuilder_Flow_P_Scope() -> Flow.__safeDI_WidgetCarrier_P<any Widget> {
-			                .init(aBuilder: __safeDI_widgetBuilder_Flow_A_Scope())
-			            }
-			            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
-			                .init(widget: { scope_bBuilder, scope_xBuilder in
-			                    let bBuilder = scope_bBuilder
-			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-			                    return widget
-			                })
-			            }
 			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
 			        }
 			        let flow: Flow = __safeDI_flow()
@@ -968,6 +976,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -981,6 +990,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -994,6 +1004,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -1053,25 +1064,25 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_widgetBuilder_Flow() -> Flow.__safeDI_WidgetCarrier<any Widget> {
+			            .init(aBuilder: __safeDI_widgetBuilder_Flow_A_Scope(), bBuilder: __safeDI_widgetBuilder_Flow_B_Scope())
+			        }
+			        func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
+			            .init(widget: { scope_bBuilder, scope_mark in
+			                let mark = scope_mark
+			                let widget: any Widget = DefaultWidget(mark: mark)
+			                return widget
+			            })
+			        }
+			        func __safeDI_widgetBuilder_Flow_B_Scope() -> Flow.__safeDI_WidgetCarrier_B<any Widget> {
+			            .init(widget: { scope_aBuilder, scope_mark in
+			                let mark = scope_mark
+			                let widget: any Widget = DefaultWidget(mark: mark)
+			                return widget
+			            })
+			        }
 			        func __safeDI_flow() -> Flow {
 			            _ = Flow.__safeDI_Flow_B9495D8C150DFE63.self\(Self.callComment(module: "Feature"))
-			            func __safeDI_widgetBuilder_Flow() -> Flow.__safeDI_WidgetCarrier<any Widget> {
-			                .init(aBuilder: __safeDI_widgetBuilder_Flow_A_Scope(), bBuilder: __safeDI_widgetBuilder_Flow_B_Scope())
-			            }
-			            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.__safeDI_WidgetCarrier_A<any Widget> {
-			                .init(widget: { scope_bBuilder, scope_mark in
-			                    let mark = scope_mark
-			                    let widget: any Widget = DefaultWidget(mark: mark)
-			                    return widget
-			                })
-			            }
-			            func __safeDI_widgetBuilder_Flow_B_Scope() -> Flow.__safeDI_WidgetCarrier_B<any Widget> {
-			                .init(widget: { scope_aBuilder, scope_mark in
-			                    let mark = scope_mark
-			                    let widget: any Widget = DefaultWidget(mark: mark)
-			                    return widget
-			                })
-			            }
 			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
 			        }
 			        let flow: Flow = __safeDI_flow()
@@ -1116,6 +1127,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(bBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1129,6 +1141,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -1200,6 +1213,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.leaf = leaf
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder), leaf: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1215,6 +1229,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(leaf: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, widget: { _, _, _ in __safeDI_builder() })
 			        }
@@ -1228,6 +1243,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.leaf = leaf
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(leaf: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1241,6 +1257,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { __safeDI_builder() })
 			        }
@@ -1359,6 +1376,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(flow: { _ in .init(__safeDI_noScope: __safeDI_builder) }, a: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1372,6 +1390,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1385,6 +1404,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }

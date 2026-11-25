@@ -116,6 +116,20 @@ extension DependencyTreeGenerator {
 		var expandedModules = Set<String>()
 		var visibleDeclarationsByModuleName = [String: SeamResolution.VisibleDeclarations]()
 		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, seenBy: nil).reversed())
+		// The stored signatures of the modules this module's trees reach are decoded side by side, each once, before the
+		// loop reads them: decoding is most of reading a module info file, and the loop runs one module at a time.
+		let modulesWithStoredSignatures = modulesToCompute.compactMap { module in
+			module.seams.allSatisfy { $0.seam.storedSignatures != nil } ? module.seams[0].seam.storedSignatures.map { (moduleName: module.moduleName, storedSignatures: $0) } : nil
+		}
+		var decodedStoredSignaturesByModuleName = try await Dictionary(
+			zip(
+				modulesWithStoredSignatures.map(\.moduleName),
+				BoundedConcurrency.map(modulesWithStoredSignatures.map(\.storedSignatures), width: ProcessInfo.processInfo.activeProcessorCount) { storedSignatures, _ in
+					try storedSignatures.read()
+				},
+			),
+			uniquingKeysWith: { first, _ in first },
+		)
 		while let module = modulesToCompute.last {
 			guard !computedModules.contains(module.moduleName) else {
 				modulesToCompute.removeLast()
@@ -125,8 +139,19 @@ extension DependencyTreeGenerator {
 			// A module info carries the signatures its module's own run computed, beside the declarations it computed them
 			// from and only once every validation passed, so a module whose every seam has one is read, never computed again.
 			// A foreign public mock's plan is computed again (`computePublicMockPlans`), a deliberate gap.
-			let storedSeamRoots = module.seams.compactMap { seam in
-				seam.seam.storedSignature.map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0) }) }
+			// The module's stored signatures are decoded here, once, and only for a module whose every seam has one.
+			let storedSeamRoots: [(type: TypeDescription, seamRoot: ScopeGenerator.SeamRoot?)]
+			if module.seams.allSatisfy({ $0.seam.storedSignatures != nil }), let storedSignatures = moduleSeam.storedSignatures {
+				var storedSignatureBySeam = [TypeDescription: StoredSeamSignature]()
+				// Of two signatures of one seam, the first is kept.
+				for stored in try decodedStoredSignaturesByModuleName.removeValue(forKey: module.moduleName) ?? storedSignatures.read() where storedSignatureBySeam[stored.seamType] == nil {
+					storedSignatureBySeam[stored.seamType] = stored
+				}
+				storedSeamRoots = module.seams.compactMap { seam in
+					storedSignatureBySeam[seam.type].map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0) }) }
+				}
+			} else {
+				storedSeamRoots = []
 			}
 			if storedSeamRoots.count == module.seams.count {
 				modulesToCompute.removeLast()
@@ -497,12 +522,11 @@ extension DependencyTreeGenerator {
 			seamRoot.generatesPlainInitializers = seams.generatesPlainDependencyTreeInitializers
 			let finalSeamRoot = seamRoot
 			let declaredTypeNames = declaredTypeNames
-			func builtTree(startingCodeGeneration startsCodeGeneration: Bool) throws -> ScopeGenerator {
+			func builtTree() throws -> ScopeGenerator {
 				try Self.seamRootGenerator(
 					rootScope: seamRootScope,
 					in: .seamWorld(seamWorld),
 					seamRoot: finalSeamRoot,
-					startsCodeGeneration: startsCodeGeneration,
 					declaredTypeNames: declaredTypeNames,
 				)
 			}
@@ -512,7 +536,7 @@ extension DependencyTreeGenerator {
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
 				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
-					let treeBuiltAnew = try builtTree(startingCodeGeneration: false)
+					let treeBuiltAnew = try builtTree()
 					observer(ReusedSeamTree(
 						signature: StoredSeamSignature(seamType: seam.concreteInstantiable, signature: finalSeamRoot.signature),
 						reusedTreeCode: { try await scopeGenerator.generatePlan().spelled() },
@@ -520,7 +544,7 @@ extension DependencyTreeGenerator {
 					))
 				}
 			} else {
-				scopeGenerator = try builtTree(startingCodeGeneration: true)
+				scopeGenerator = try builtTree()
 			}
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
@@ -838,7 +862,18 @@ extension DependencyTreeGenerator {
 				}
 				return SeamComponentInput(plan: plan, knownSeamRoots: reachedSeamRoots, ownScopeEnums: reachedScopeEnums)
 			}
-			let taskCount = min(width, inputs.count)
+			// A level runs on more than one task only where its components reach mostly types of their own: at least half
+			// of the types they reach, counted once per component, are distinct. Components that reach the same types run
+			// several times slower side by side than one after another, all reading the same scopes and records, so they gain
+			// no wall time and spend the processor time of every task. Measured on Linux with four processors: a module of
+			// ten layers of four seams, each reaching the layers beneath it (N5i-10, whose first level reaches 75% distinct
+			// types and every level after it 47% down to 28%), took 1.39 s of CPU in parallel and 0.73 s in turn, at the same wall
+			// time; 1,200 seams that each reach a leaf of their own (E6d-1200, one level of 67% distinct types) settle in
+			// parallel 21% faster in wall time than in turn, at the same CPU. The sets are the plans' own, so this adds no walk.
+			let reachedTypeCount = inputs.reduce(0) { $0 + $1.plan.reachableTypeDescriptions.count }
+			let distinctReachedTypeCount = inputs.reduce(into: Set<TypeDescription>()) { $0.formUnion($1.plan.reachableTypeDescriptions) }.count
+			let taskCount = 2 * distinctReachedTypeCount >= reachedTypeCount ? min(width, inputs.count) : 1
+			SeamSignatureObservation.observesLevels?(SeamSignatureLevel(componentCount: inputs.count, taskCount: taskCount))
 			let settledInputs: [SettledSeamComponent]
 			if taskCount <= 1 {
 				settledInputs = try inputs.map { try Self.settle($0, context: context, baseFrozenScopeMap: baseFrozenScopeMap) }
@@ -1040,7 +1075,6 @@ extension DependencyTreeGenerator {
 						rootScope: rootScope,
 						in: construction.signaturePass(over: frozenScopeMap),
 						seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
-						startsCodeGeneration: false,
 						declaredTypeNames: declaredTypeNames,
 					)
 					let seamRoot = try Self.seamRoot(
@@ -1581,7 +1615,6 @@ extension DependencyTreeGenerator {
 		rootScope: Scope,
 		in world: SeamTreeWorld,
 		seamRoot: ScopeGenerator.SeamRoot,
-		startsCodeGeneration: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
 		var nearestDeclarations = NearestDeclarations()
@@ -1615,7 +1648,6 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			erasedToConcreteExistential: false,
-			startsCodeGeneration: startsCodeGeneration,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
 		)
@@ -2352,6 +2384,21 @@ public enum SeamSignatureObservation {
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
+	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
+	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+}
+
+/// One level of a module's seam components, as `seamSignatures` settles it.
+public struct SeamSignatureLevel: Equatable, Sendable {
+	/// How many components the level holds.
+	public let componentCount: Int
+	/// How many tasks settle them.
+	public let taskCount: Int
+
+	public init(componentCount: Int, taskCount: Int) {
+		self.componentCount = componentCount
+		self.taskCount = taskCount
+	}
 }
 
 /// Observes the trees of the seams this module generates that emission makes again from their first signature pass's

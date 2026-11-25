@@ -28,21 +28,31 @@ struct InitializerTests {
 		("init() {}", nil),
 		("nonisolated init() {}", "nonisolated"),
 		("@MainActor init() {}", "@MainActor"),
-		("@available(iOS 17, *) init() {}", nil),
+		("@available(iOS 17, *) init() {}", "@available(iOS 17, *)"),
 		("@MainActor /* isolated */ init() {}", "@MainActor"),
+		("@DatabaseActor init() {}", "@DatabaseActor"),
 		("@Space.CustomActor init() {}", "@Space.CustomActor"),
-		("@Space.Other init() {}", nil),
+		("@_Concurrency.MainActor init() {}", "@_Concurrency.MainActor"),
+		("@available(iOS 17, *)\n@MainActor public init() {}", "@available(iOS 17, *) @MainActor"),
+		("@MainActor nonisolated init() {}", "@MainActor nonisolated"),
+		("@objc init() {}", nil),
+		("@objc(make) @MainActor init() {}", "@MainActor"),
+		("@_spi(Testing) public init() {}", nil),
+		("@backDeployed(before: macOS 99) public init() {}", nil),
+		("@objcMembers init() {}", "@objcMembers"),
+		("@Space.objc init() {}", "@Space.objc"),
+		("@objcActor init() {}", "@objcActor"),
 	] as [(String, String?)])
-	func init_recordsSpelledIsolation_whenInitializerSpellsModifierOrGlobalActor(source: String, spelledIsolation: String?) throws {
-		// A public mock's construction function mirrors the isolation the initializer it calls spells.
+	func init_recordsSpelledAttributesAsWritten_whenInitializerSpellsAttributesOrNonisolated(source: String, spelledAttributes: String?) throws {
+		// A public mock's construction function repeats the attributes the initializer it calls spells, reading no name.
 		let initializer = try #require(Parser.parse(source: source).statements.first.flatMap { InitializerDeclSyntax($0.item) })
-		#expect(Initializer(initializer).spelledIsolation == spelledIsolation)
+		#expect(Initializer(initializer).spelledAttributes == spelledAttributes)
 	}
 
 	@Test
-	func init_recordsSpelledIsolation_whenFunctionSpellsGlobalActor() throws {
-		let function = try #require(Parser.parse(source: "@MainActor static func mock() -> T { T() }").statements.first.flatMap { FunctionDeclSyntax($0.item) })
-		#expect(Initializer(function).spelledIsolation == "@MainActor")
+	func init_recordsSpelledAttributes_whenFunctionSpellsGlobalActor() throws {
+		let function = try #require(Parser.parse(source: "@DatabaseActor static func mock() -> T { T() }").statements.first.flatMap { FunctionDeclSyntax($0.item) })
+		#expect(Initializer(function).spelledAttributes == "@DatabaseActor")
 	}
 
 	@Test

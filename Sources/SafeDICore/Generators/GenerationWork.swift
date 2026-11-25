@@ -31,9 +31,7 @@
 ///
 /// `observer` is task-local. It sees every step `generate` runs: building each tree and computing each seam's signature in
 /// `generate`'s own task and its children, and emitting each scope's code on the task `ScopeGenerator.generateCode`
-/// creates for it, which inherits the observer of the task that asks for the code: `generate`'s, or the detached task's
-/// that starts a large subtree's code early (`Scope.startCodeGeneration(of:)`), which is handed the observer of the task
-/// that starts it. A step passes no `Step` (`taking(_:by:)` with `nil`) where its work is not counted:
+/// creates for it, which inherits the observer of the task that asks for the code. A step passes no `Step` (`taking(_:by:)` with `nil`) where its work is not counted:
 /// `identifierSafeNames` counts only for a seam's signature.
 public struct GenerationWork: Sendable {
 	/// A step of generation whose work is counted.
@@ -64,6 +62,24 @@ public struct GenerationWork: Sendable {
 		/// Laying a production root's body out by the type key (`TypeKeyBody`): each view of the plan, one for all of a
 		/// plan node's places that agree on what they read outside it, is laid out once, so the views count, not the places.
 		case layingOutTypeKeyViews
+		/// Finding the root functions a root's body holds (`RootFunctionHoisting`): each level of the plan the walk reads.
+		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
+		/// and its levels do not grow with the paths through the tree.
+		case findingRootFunctions
+		/// Looking a place up in the construction memo (`ConstructionMemo.reuse(of:in:besideCallGenerators:drawing:)`): each
+		/// candidate of the place's key whose log the lookup asks. The candidates are found by what their reads of the
+		/// declaration a cycle closes on were answered, so a lookup asks the ones its context answers alike, not every
+		/// candidate a tree with cycles stored for the key.
+		case askingMemoCandidates
+		/// Filing an entry of the construction memo under its cycle reads (`ConstructionMemo`'s `Candidates`): each cycle read
+		/// of the entry's subtree. A key files its entries once it holds two, so a chain of places with one entry each
+		/// files none; filing every entry listed the reads of a chain of n places n² times.
+		case filingMemoEntryReads
+		/// Asking whether a read of a type key class's statement is `nil` in every member of the class
+		/// (`TypeKeyLayout.checkEveryRead`): each member's statement read. The answer is the class's, so each read is asked
+		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
+		/// n² times.
+		case checkingReadsAtEveryMember
 	}
 
 	/// The step that did the work.

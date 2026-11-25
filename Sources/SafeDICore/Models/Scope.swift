@@ -373,8 +373,6 @@ extension ScopeRecord {
 	///     available against the nearest declaration of its label (see `ScopeGeneratorUnderConstruction`).
 	///   - seamRoot: What the root generator emits when the tree is a seam's: its signature and the hand-written
 	///     initializer's arguments. `nil` for a root of the dependency tree and for a mock root.
-	///   - startsCodeGeneration: Whether each generator of a dependency tree starts generating its code as soon as
-	///     it is created, which a tree built only to read its generators' sets skips.
 	///   - validatesForwardedProperties: Whether each erased instantiator's first generic argument is checked against the
 	///     `@Forwarded` properties of the type it builds. The inline tree of another module's seam, built only to read its
 	///     generators' sets, skips it: that seam's module and the fills of its holes check every erased instantiator of
@@ -391,9 +389,7 @@ extension ScopeRecord {
 	/// those parameters, and count what they pass among the properties they receive. Nearly every tree has no such
 	/// scope and is created once. A pass changes a scope's parameters only through the parameters of the functions it
 	/// is nested in or that are nested in it, which only add to what it receives or declares, so the passes end once
-	/// the parameters at each level of nesting have settled. The first pass starts each generator's code as the
-	/// generator is created, since nearly every tree takes one pass; a later pass starts none until the passes end,
-	/// and then only the last pass's, since nothing reads the code of a pass that is not the last.
+	/// the parameters at each level of nesting have settled.
 	///
 	/// A tree that holds a place of a hole is also created again when a scope's children would start in another order by
 	/// what its type's properties hold (`SeamDeclarationGraph`) than by what their subtrees hold on its path, which only a
@@ -409,17 +405,10 @@ extension ScopeRecord {
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
-		startsCodeGeneration: Bool = true,
 		validatesForwardedProperties: Bool = true,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
-		// A root of the dependency tree that the type key lays out (`TypeKeyBody`) starts no code early, decided here, before
-		// its tree starts any. Its body is laid out from the plan of every place, at the context each place is reached in,
-		// which the root asks for once its tree exists; an early start generates each large subtree's code at the context of
-		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Seams, mocks
-		// and trees built only to read their sets keep their starts.
-		let startsCodeGeneration = startsCodeGeneration && !(seamRoot == nil && mockBuilders == nil && !forMockGeneration)
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,
@@ -428,15 +417,13 @@ extension ScopeRecord {
 			mockBuilders: mockBuilders,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
-			startsCodeGeneration: startsCodeGeneration,
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
 		)
 		if let observer = ConstructionMemoOracle.observer {
-			// The oracle's two builds start no code, so nothing changes either while it is read. The build with the memo
-			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
-			// every reuse either sharing makes. The places it keys are the oracle's, not the tree's, so no test sees them.
+			// The build with the memo shares it across every tree created with this memo, whatever the memo's own sharing,
+			// so that the oracle judges every reuse either sharing makes. The places it keys are the oracle's, not the tree's, so no test sees them.
 			var oracleMemo = constructionMemo.oracleMemo
 			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) { try ConstructionMemoOracle.$reusedPlaceObserver.withValue(nil) {
 				try createdTree(
@@ -447,7 +434,6 @@ extension ScopeRecord {
 					mockBuilders: mockBuilders,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					forMockGeneration: forMockGeneration,
-					startsCodeGeneration: false,
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
@@ -466,7 +452,6 @@ extension ScopeRecord {
 					mockBuilders: mockBuilders,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					forMockGeneration: forMockGeneration,
-					startsCodeGeneration: false,
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
@@ -486,7 +471,6 @@ extension ScopeRecord {
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
-		startsCodeGeneration: Bool,
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
@@ -506,7 +490,6 @@ extension ScopeRecord {
 		let sharesMemo = seamRoot == nil && mockBuilders == nil
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
-		var generatorsToStart: [[ScopeGenerator]]?
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
@@ -521,9 +504,6 @@ extension ScopeRecord {
 			|| ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true
 		let scopesBuiltAtOnePlace = keysPlacesAtOnePlace || !ConstructionMemo.isEnabled ? nil : ScopesBuiltAtOnePlace(treeRootedAt: root)
 		repeat {
-			if previousPassGenerator != nil {
-				generatorsToStart = []
-			}
 			// A memo shared across trees carries each pass to the pass after it, whose keys name the generators of the pass
 			// before, so a later pass of this tree reuses what a later pass of another tree built from the same generator.
 			var passMemo = sharesMemo ? constructionMemo.memo(forPassAfter: previousPassMemo) : ConstructionMemo()
@@ -533,7 +513,6 @@ extension ScopeRecord {
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
-				var discardedGeneratorsToStart = generatorsToStart
 				_ = try createScopeGenerator(
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -541,12 +520,10 @@ extension ScopeRecord {
 					mockBuilders: mockBuilders,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					forMockGeneration: forMockGeneration,
-					startsCodeGeneration: startsCodeGeneration,
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					previousPassGenerator: nil,
 					cycleParameterSeed: nil,
-					generatorsToStart: &discardedGeneratorsToStart,
 					placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 					memo: &passMemo,
 					settledPassMemo: nil,
@@ -561,12 +538,10 @@ extension ScopeRecord {
 				mockBuilders: mockBuilders,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: startsCodeGeneration,
 				validatesForwardedProperties: validatesForwardedProperties,
 				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
 				cycleParameterSeed: cycleParameterSeed,
-				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
 				settledPassMemo: settledPassMemo,
@@ -599,9 +574,6 @@ extension ScopeRecord {
 				}
 			}
 		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockLevelReentriesChangedInTree
-		for group in generatorsToStart ?? [] {
-			ScopeGeneratorUnderConstruction.startCodeGeneration(of: group)
-		}
 		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
 		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
 		// the whole mock pass, so no later mock root reads the memo after a root that failed. A change that adds a
@@ -639,8 +611,6 @@ extension ScopeRecord {
 
 	/// One pass of `createScopeGenerator`, which reads the parameters of the builder functions lazy cycles close on
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
-	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
-	///   generators whose code to start, in the order they are created, in the groups that each start on one task.
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
 	/// - Parameter scopesBuiltAtOnePlace: The scopes the tree builds at one place only, whose places are not keyed, looked up
@@ -655,12 +625,10 @@ extension ScopeRecord {
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
-		startsCodeGeneration: Bool,
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterSeed: CycleParameterSeed?,
-		generatorsToStart: inout [[ScopeGenerator]]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
 		settledPassMemo: ConstructionMemo?,
@@ -682,7 +650,6 @@ extension ScopeRecord {
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
-			startsCodeGeneration: startsCodeGeneration,
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassGenerator,
@@ -698,11 +665,6 @@ extension ScopeRecord {
 		var lookupCount = 0
 		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
 		let reusedPlaceObserver = ConstructionMemoOracle.reusedPlaceObserver
-		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
-		var startedGenerators = Set<ObjectIdentifier>()
-		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
-		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
-		let startLog = ConstructionMemo.StartLog()
 		// The generators of the calls that pass fills this tree holds, none of which it may hold twice
 		// (`ConstructionMemo.Entry.callGenerators`).
 		var callGeneratorsInTree = Set<ObjectIdentifier>()
@@ -725,13 +687,7 @@ extension ScopeRecord {
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
-						// Its code starts as the build would have started it, and the memo holds it for the places after it.
-						for group in reuse.entry.startedBeneath.groups {
-							let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
-							guard !group.isEmpty else { continue }
-							generatorsToStart?.append(group)
-							startLog.append(group)
-						}
+						// The memo holds it for the places after it.
 						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else {
@@ -743,7 +699,6 @@ extension ScopeRecord {
 							isKeyed: key != nil,
 						)
 						child.memoKey = key
-						child.startLogIndex = startLog.groups.count
 						scopeGeneratorsUnderConstruction.append(child)
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
@@ -768,7 +723,7 @@ extension ScopeRecord {
 				))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
-				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators, startLog: startLog)
+				let scopeGenerator = createdScope.scopeGenerator()
 				let callGenerators = createdScope.callGenerators(including: scopeGenerator)
 				callGeneratorsInTree.formUnion(callGenerators)
 				if scopeGeneratorsUnderConstruction.isEmpty {
@@ -781,8 +736,6 @@ extension ScopeRecord {
 						memo.store(ConstructionMemo.Entry(
 							reads: readsAnsweredAbove,
 							generator: scopeGenerator,
-							subtreeScopeCount: createdScope.subtreeScopeCount,
-							startedBeneath: ConstructionMemo.StartedGenerators(log: startLog, positions: createdScope.startLogIndex..<startLog.groups.count),
 							isSettled: isSettled,
 							cycleClosingRedeclaredLabels: createdScope.cycleClosingRedeclaredLabels,
 							callGenerators: callGenerators,
@@ -824,7 +777,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		enclosingLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
-		startsCodeGeneration: Bool,
 		validatesForwardedProperties: Bool,
 		fill: Fill? = nil,
 		buildsWithHandWrittenMocks: Bool = false,
@@ -1055,7 +1007,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		self.isPropertyCycle = isPropertyCycle
 		self.closedOnDeclaration = closedOnDeclaration
 		self.forMockGeneration = forMockGeneration
-		self.startsCodeGeneration = startsCodeGeneration
 		self.validatesForwardedProperties = validatesForwardedProperties
 		self.buildsWithHandWrittenMocks = buildsWithHandWrittenMocks
 		// A scope that closes a cycle calls no seam; any other seam call passes a builder for each of the seam's holes. A
@@ -1482,33 +1433,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// the generator keeps for a place that reuses it (`ConstructionMemo.Entry`). No generator keeps one. An alias or a hole
 	/// has none.
 	private(set) var cycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
-	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
-	/// which generates a line or two, is not counted.
-	private(set) var subtreeScopeCount = 1
-	/// The generators among `childGenerators` whose code starts early only if this scope's subtree is large (see
-	/// `startsCodeBeneathALargeSubtree`), each with the number of scopes in its subtree.
-	private var childGeneratorsStartingBeneathALargeSubtree = [SmallSubtree]()
-
-	/// A small subtree directly beneath a scope, whose code starts early when that scope's subtree is large.
-	private struct SmallSubtree {
-		let generator: ScopeGenerator
-		let scopeCount: Int
-	}
-
-	/// The smallest subtree, in scopes, whose root starts generating its code as soon as the tree exists, and starts the
-	/// code of the small subtrees directly beneath it as well, in groups of at least this many scopes, one task each
-	/// (`groupsOfLargeSubtreeSize(_:)`). Every other scope's code starts when the scope above it asks for it, on a task
-	/// created then and released once the code is done. A running task holds its code's async frames, so where scopes wait
-	/// on one another, as in #646's graphs of instantiators, starting every scope's code at once ran most of the tree's
-	/// frames together; a small subtree's scopes now run one after another, as each is asked for, while large subtrees,
-	/// and the groups of small subtrees beneath each, still generate in parallel.
-	///
-	/// Measured with release builds, median of three runs, against every scope starting early: #646's 16 screens peaked at
-	/// 727 MB with 16, 634 MB with 64 and 639 MB with 256, rather than 1,054 MB, and took 2.43, 2.53 and 2.63 s rather than
-	/// 2.62 s; a tree of 265,000 lines took 1.54, 1.52 and 1.57 s rather than 1.66 s, at the same peak. The runs cannot tell
-	/// 64 from 256. 64 is the smaller, so a module of trees between 64 and 255 scopes still generates them in parallel.
-	static let scopeCountOfLargeSubtree = 64
-
 	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
 	/// - Parameters:
 	///   - readsAnsweredAbove: `child.readsAnsweredAbove`.
@@ -1520,10 +1444,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			swap(&cycleClosingRedeclaredLabels, &child.cycleClosingRedeclaredLabels)
 		} else {
 			merge(childCycleClosingRedeclaredLabels: child.cycleClosingRedeclaredLabels)
-		}
-		subtreeScopeCount += child.subtreeScopeCount
-		if child.startsCodeBeneathALargeSubtree {
-			childGeneratorsStartingBeneathALargeSubtree.append(SmallSubtree(generator: childGenerator, scopeCount: child.subtreeScopeCount))
 		}
 		log.formUnion(readsAnsweredAbove)
 		if !isSettled {
@@ -1547,15 +1467,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// Adds the generator another place built, which `reuse` found, to this scope's children, as the child it builds
-	/// (see `ConstructionMemo`). The child is no fill and is in no fill, so it may start its code early exactly where a
-	/// child of this scope may.
+	/// (see `ConstructionMemo`).
 	mutating func add(reusing reuse: ConstructionMemo.Reuse) {
 		childGenerators.append(reuse.entry.generator)
 		merge(childCycleClosingRedeclaredLabels: reuse.entry.cycleClosingRedeclaredLabels)
-		subtreeScopeCount += reuse.entry.subtreeScopeCount
-		if mayStartCodeEarly, reuse.entry.subtreeScopeCount < Self.scopeCountOfLargeSubtree {
-			childGeneratorsStartingBeneathALargeSubtree.append(SmallSubtree(generator: reuse.entry.generator, scopeCount: reuse.entry.subtreeScopeCount))
-		}
 		log.formUnion(reuse.reads)
 		if !reuse.entry.isSettled {
 			childrenAreSettled = false
@@ -1587,23 +1502,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The key this scope's generator is stored under once it exists, or `nil` for a root, a fill, or a scope the memo does
 	/// not cover (see `memoKey(ofChildBuilding:as:id:erasedToConcreteExistential:)`).
 	var memoKey: ConstructionMemo.Key?
-
-	/// How many groups of generators the pass had started or collected when this scope's build began (see `createScopeGenerator`'s
-	/// `startLog`).
-	var startLogIndex = 0
-
-	/// Whether this scope's generator may start its code as soon as its tree exists, rather than when the scope above it
-	/// asks for it: a scope of a dependency tree that generates code (no mock's, no fill's, nor a tree built only to find a
-	/// seam's signature). It does when its subtree is large, or when the subtree of the scope above it is.
-	private var mayStartCodeEarly: Bool {
-		!forMockGeneration && startsCodeGeneration && fill == nil
-	}
-
-	/// Whether this scope's generator starts its code early only when the subtree of the scope above it is large: its own
-	/// subtree is small.
-	private var startsCodeBeneathALargeSubtree: Bool {
-		mayStartCodeEarly && subtreeScopeCount < Self.scopeCountOfLargeSubtree
-	}
 
 	/// The next of `propertiesToGenerate` to create a generator for, or `nil` once every one has its generator.
 	mutating func nextPropertyToGenerate() -> ConstructionScope.PropertyToGenerate? {
@@ -1727,7 +1625,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			enclosingLevelReentries: enclosingLevelReentriesOfThisCall,
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
-			startsCodeGeneration: startsCodeGeneration,
 			validatesForwardedProperties: validatesForwardedProperties,
 			fill: fill,
 			// A fill a mock declares builds the hole's tree as the mock's tree built inline would.
@@ -1791,7 +1688,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			enclosingLevelReentries: enclosingLevelReentries,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
-			startsCodeGeneration: startsCodeGeneration,
 			validatesForwardedProperties: validatesForwardedProperties,
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			declaredTypeNames: declaredTypeNames,
@@ -1828,7 +1724,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			property: propertyID,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
-			startsCodeGeneration: startsCodeGeneration,
 			validatesForwardedProperties: validatesForwardedProperties,
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			mayPassNil: nearestDeclarations(ofChildBuilding: property).mayPassNil,
@@ -2202,7 +2097,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			guard !reachedSites.isDisjoint(with: filledSites) else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
-					return .init(label: label, value: memberCall)
+					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
 				}
 				guard isPublicMockCall else {
 					return .init(label: label, value: "")
@@ -2304,12 +2199,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		return calls
 	}
 
-	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
-	/// its code, or adds it to `generatorsToStart`, in the groups that each start on one task, when that is not `nil`.
-	/// - Parameter startedGenerators: The generators whose code the pass started or collected, which grows by those this
-	///   scope starts or collects: a generator several places share starts once.
-	/// - Parameter startLog: Every group the pass started or collected, in order, which grows as `startedGenerators` does.
-	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [[ScopeGenerator]]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: ConstructionMemo.StartLog) -> ScopeGenerator {
+	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`.
+	mutating func scopeGenerator() -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		// Both read the caller's declarations, which they log.
@@ -2392,7 +2283,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
-		let scopeGenerator = if let fill {
+		return if let fill {
 			ScopeGenerator(
 				fill: fill.hole,
 				key: fill.key,
@@ -2412,89 +2303,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			)
 		} else {
 			builtGenerator
-		}
-		// A large subtree starts its own code and that of the small subtrees directly beneath it, in groups. The code of
-		// every other scope starts when the scope above it, or the caller of a small tree's root, asks for it.
-		if subtreeScopeCount >= Self.scopeCountOfLargeSubtree {
-			var groupsStartingNow = Self.groupsOfLargeSubtreeSize(childGeneratorsStartingBeneathALargeSubtree)
-			if mayStartCodeEarly {
-				groupsStartingNow.append([scopeGenerator])
-			}
-			for group in groupsStartingNow {
-				let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
-				guard !group.isEmpty else { continue }
-				startLog.append(group)
-				if generatorsToStart != nil {
-					generatorsToStart?.append(group)
-				} else {
-					Self.startCodeGeneration(of: group, spellsPlans: group.first !== scopeGenerator)
-				}
-			}
-		}
-		return scopeGenerator
-	}
-
-	/// `smallSubtrees` in order, split into consecutive groups that each hold at least `scopeCountOfLargeSubtree` scopes,
-	/// but for the last, which holds what is left. Each group's code starts on one task, which generates its subtrees one
-	/// after another, so a group runs as a large subtree does. A task holds its code's async frames while it runs, so a
-	/// scope with hundreds of small subtrees beneath it that started a task for each ran them all together: about 27 KB
-	/// of frames for each scope of the module's tree, most of `generate`'s peak memory on a wide tree.
-	private static func groupsOfLargeSubtreeSize(_ smallSubtrees: [SmallSubtree]) -> [[ScopeGenerator]] {
-		var groups = [[ScopeGenerator]]()
-		var group = [ScopeGenerator]()
-		var groupScopeCount = 0
-		for smallSubtree in smallSubtrees {
-			group.append(smallSubtree.generator)
-			groupScopeCount += smallSubtree.scopeCount
-			if groupScopeCount >= scopeCountOfLargeSubtree {
-				groups.append(group)
-				group = []
-				groupScopeCount = 0
-			}
-		}
-		if !group.isEmpty {
-			groups.append(group)
-		}
-		return groups
-	}
-
-	/// Kicks off the generation of the plan of each of `scopeGenerators`, one after another on one task, which a later
-	/// request for the code reads from its cache. Where `spellsPlans`, each plan is spelled too, while the rest of the tree
-	/// is still being generated, and the cache keeps it with its text (`ScopeGenerator.generateSpelledPlan()`): a large
-	/// subtree passes it for each group of small subtrees directly beneath it, whose text the root's spelling then copies,
-	/// and never for itself, since a large subtree can hold another, whose text it would copy again. A later pass of a
-	/// tree's construction starts its generators without spelling them: nearly every tree takes one pass.
-	static func startCodeGeneration(of scopeGenerators: [ScopeGenerator], spellsPlans: Bool = false) {
-		CodeTaskStart.record()
-		let generate: @Sendable () async throws -> Void = {
-			for scopeGenerator in scopeGenerators {
-				if spellsPlans {
-					try await scopeGenerator.generateSpelledPlan()
-				} else {
-					_ = try await scopeGenerator.generatePlan()
-				}
-			}
-		}
-		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
-		// code a later request reads from the cache then counts its work whichever task asks for it first.
-		if let ordering = CodeTaskStart.ordering {
-			// A test forces the order in which the early starts finish, to show the code does not depend on it.
-			ordering.registerStart()
-			_ = Task.detached {
-				let turn = await ordering.waitForTurn()
-				try? await generate()
-				await ordering.finish(turn)
-			}
-		} else if let observer = GenerationWork.observer {
-			_ = Task.detached {
-				try await GenerationWork.$observer.withValue(observer) {
-					try await generate()
-				}
-			}
-		} else {
-			_ = Task.detached {
-				try await generate()
-			}
 		}
 	}
 
@@ -2633,7 +2441,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The declaration this scope repeats when it closes a cycle (see `ScopeGenerator.closedOnDeclaration`), or `nil`.
 	private let closedOnDeclaration: ScopeGenerator.BuiltDeclaration?
 	private let forMockGeneration: Bool
-	private let startsCodeGeneration: Bool
 }
 
 extension Instantiable {
@@ -2795,7 +2602,7 @@ struct SeamHoles: Sendable {
 	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
-		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
+		let builderByEnum = Dictionary(builders.map { ($0.enumKey, $0) }, uniquingKeysWith: { first, _ in first })
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
 		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none. A call's
 		// case for a builder it fills carries the scope value the inner seam handed the fill, which the fill takes.
@@ -2805,21 +2612,22 @@ struct SeamHoles: Sendable {
 		// Where the enums declare builder structs, each case on a route is a member call on the struct the step before it
 		// returned, the root's builder's for the first, bound before the step's property, or at the top of its builder
 		// function (`RouteStep.Member`). A route's steps lead to one place, so each step's parent is a fact of its path.
-		func bindValues(of route: [SeamSignature.Hole.RouteStep], rootBuilderName: String) {
+		func bindValues(of route: [SeamSignature.Hole.RouteStep], onRouteTo sitePath: [Property], rootBuilderName: String) {
 			var parentName = rootBuilderName
 			for step in route {
 				// Each scope value the call hands, once: a seam's struct of the fill's own level per hole type and family whose places
 				// the fill holds, or a public mock's one inner scope.
-				if let innerScope = step.innerScope, !innerScopesByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: []].contains(where: { $0.name == innerScope.name }) {
-					innerScopesByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: []].append(innerScope)
+				let routeCall = step.innerScope.map { RouteCall(sitePath: $0.callPath(onRouteTo: sitePath), innerKey: $0.innerKey) }
+				if let innerScope = step.innerScope, let routeCall, !innerScopesByCall[routeCall, default: []].contains(where: { $0.name == innerScope.name }) {
+					innerScopesByCall[routeCall, default: []].append(innerScope)
 				}
 				if let member = step.member {
-					valuesBindingsByName[member.bindingPath, default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName)
+					valuesBindingsByName[member.bindingPath(onRouteTo: sitePath), default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName)
 					parentName = member.bindingName
 					// A call's case for a builder it fills returns the called seam's struct, which the call's level functions are
 					// handed; inside the fill, the struct of the fill's own level, which the fill is handed, leads on.
-					if let innerScope = step.innerScope {
-						carriedStructsByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: [:]][innerScope.name] = member.bindingName
+					if let innerScope = step.innerScope, let routeCall {
+						carriedStructsByCall[routeCall, default: [:]][innerScope.name] = member.bindingName
 						parentName = innerScope.name
 					}
 				}
@@ -2835,8 +2643,9 @@ struct SeamHoles: Sendable {
 			}
 		}
 		for callRoute in callRoutes {
-			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
-			bindValues(of: callRoute.route, rootBuilderName: builderName)
+			guard let builder = builderByEnum[callRoute.rootKey] else { continue }
+			let builderName = builder.internalName
+			bindValues(of: callRoute.route, onRouteTo: callRoute.sitePath, rootBuilderName: builderName)
 			// A call that re-enters an enclosing call's fill hands up nothing: it passes the enclosing call's level function the
 			// struct its last case's member returns (`carriedStruct(at:innerKey:carrying:)`).
 			guard !callRoute.reentersEnclosingFill else { continue }
@@ -2847,6 +2656,16 @@ struct SeamHoles: Sendable {
 			// the struct of the fill's own level, which the fill is handed, as `bindValues` leads on from it.
 			// A fulfilling call is handed the struct of the fill's own level: the inner scope its fill is handed, or, where its fill is
 			// built in a `@Sendable` function, whose case carries no inner scope, what the case's member returns.
+			// The struct the call's own member is called on, typed where the seam's tree binds it: the builder, or the level the
+			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
+			let parentStep = callRoute.route.last
+			let memberParent: ScopeGenerator.BuilderCallArgument.PassedUpStruct? = if parentStep?.innerScope != nil {
+				nil
+			} else if let member = parentStep?.member {
+				.init(name: member.bindingName, type: member.levelType)
+			} else {
+				.init(name: builderName, type: builder.parameterType)
+			}
 			let memberCall = if callRoute.handsFillLevelStruct {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
@@ -2863,7 +2682,10 @@ struct SeamHoles: Sendable {
 					}
 				}
 			}
-			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(memberCall: memberCall)
+			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
+				memberCall: memberCall,
+				passedUpStruct: callRoute.handsFillLevelStruct || memberCall == nil ? nil : memberParent,
+			)
 		}
 		self.routeCasesByCall = routeCasesByCall
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
@@ -2876,7 +2698,7 @@ struct SeamHoles: Sendable {
 			}
 			sitesByPath[hole.sitePath] = hole
 			if let enumPlace = hole.enumPlace {
-				bindValues(of: enumPlace.route, rootBuilderName: hole.internalName)
+				bindValues(of: enumPlace.route, onRouteTo: hole.sitePath, rootBuilderName: hole.internalName)
 			}
 		}
 		namesBoundForBuilders.formUnion(innerScopesByCall.values.flatMap { $0.map(\.name) })
@@ -3069,6 +2891,42 @@ struct SeamHoles: Sendable {
 			"let \(bindingName) = \(expression(readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))"
 		}
 
+		/// What `line(readingInstancesOf:)` reads, as the type key lists a text place's reads: the struct its member is called
+		/// on, the run struct a carrier's member takes or the run before this one, and each field it reads of the scope.
+		func reads(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>) -> [PlaceRead] {
+			var names = [String]()
+			if let formsRunAfter {
+				names.append(contentsOf: formsRunAfter.map { [$0] } ?? [])
+			} else {
+				names.append(memberCall.parentName)
+				if case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil, !isLetChild, let structBindingName = carrierUse?.structBindingName {
+					names.append(structBindingName)
+				}
+			}
+			// A name the seam's tree binds for a level or a payload is read as a value of its own, whatever its type.
+			var reads = names.map { name in
+				PlaceRead(argumentLabel: name, label: name, property: Property(label: name, typeDescription: .simple(name: name)), source: .binding(label: name))
+			}
+			let isLetChildOfCarrier = formsRunAfter == nil && isLetChild
+			guard !isLetChildOfCarrier else { return reads }
+			let readFields = if formsRunAfter == nil, case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+				Array(fields[carrierUse?.extras ?? 0..<fields.count])
+			} else {
+				fields
+			}
+			for field in readFields {
+				let label = field.property.label
+				let readsInstance = !field.isDeferredParameter && lazilyInstantiatedInstanceProperties.contains(field.property.asUnwrappedProperty)
+				reads.append(PlaceRead(
+					argumentLabel: label,
+					label: label,
+					property: field.property,
+					source: readsInstance ? .lazyInstance(label: label, throughOptional: false) : .binding(label: label),
+				))
+			}
+			return reads
+		}
+
 		/// The value `line(readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` binds.
 		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 			if let formsRunAfter {
@@ -3099,6 +2957,8 @@ struct SeamHoles: Sendable {
 	struct RouteCase {
 		/// The call of the call's own member, which returns the struct the inner seam is handed.
 		var memberCall: String?
+		/// The struct `memberCall` is called on, where the seam's tree binds it with a type: the type key's read of the call.
+		var passedUpStruct: ScopeGenerator.BuilderCallArgument.PassedUpStruct?
 	}
 
 	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
@@ -3617,7 +3477,6 @@ extension ScopeGenerator {
 	/// The tree rooted at `tree`, the tree the first signature pass of `seamType` built, made again for the seam's
 	/// emission from its final seam root, `seamRoot`: each generator is made again (`init(reseating:children:sitePath:seamRoot:seamHoles:namesBoundBySeam:)`)
 	/// once its children are, in index order, and a generator several places share is made again once and shared alike.
-	/// Its code starts as a tree built for emission would start it (`ScopeGeneratorUnderConstruction.scopeGenerator(collectingGeneratorsToStartInto:startedGenerators:startLog:)`).
 	/// Only a tree that `DependencyTreeGenerator.confirmingPassFindsNothingNew` let settle is made again: it holds no
 	/// call, fill or hole passed up, and its root's parameters are the final ones (see `seam-signature-passes.md`).
 	static func reseating(treeRootedAt tree: ScopeGenerator, of seamType: TypeDescription, seamRoot: SeamRoot) -> ScopeGenerator {
@@ -3634,24 +3493,10 @@ extension ScopeGeneratorUnderConstruction {
 			let generator: ScopeGenerator
 			let sitePath: [Property]
 			var children = [ScopeGenerator]()
-			/// As `ScopeGeneratorUnderConstruction.subtreeScopeCount` counts it.
-			var subtreeScopeCount = 1
-			var smallSubtrees = [SmallSubtree]()
-
-			/// Adds `child`, made again, with the scopes in its subtree, or `nil` for an alias or a hole, which counts none.
-			mutating func add(_ child: ScopeGenerator, subtreeScopeCount childScopeCount: Int?) {
-				children.append(child)
-				guard let childScopeCount else { return }
-				subtreeScopeCount += childScopeCount
-				if childScopeCount < ScopeGeneratorUnderConstruction.scopeCountOfLargeSubtree {
-					smallSubtrees.append(SmallSubtree(generator: child, scopeCount: childScopeCount))
-				}
-			}
 		}
 		// A tree can be as deep as the module has types, so it is walked on a stack of its own.
 		var stack = [Reseating(generator: tree, sitePath: [])]
-		var reseatedByGenerator = [ObjectIdentifier: (generator: ScopeGenerator, subtreeScopeCount: Int)]()
-		var startedGenerators = Set<ObjectIdentifier>()
+		var reseatedByGenerator = [ObjectIdentifier: ScopeGenerator]()
 		// Replaced by the root's new generator, made last.
 		var reseatedTree = tree
 		while !stack.isEmpty {
@@ -3660,7 +3505,7 @@ extension ScopeGeneratorUnderConstruction {
 			if stack[index].children.count < children.count {
 				let child = children[stack[index].children.count]
 				if let reseated = reseatedByGenerator[ObjectIdentifier(child)] {
-					stack[index].add(reseated.generator, subtreeScopeCount: child.builtInstantiable == nil ? nil : reseated.subtreeScopeCount)
+					stack[index].children.append(reseated)
 				} else {
 					stack.append(Reseating(generator: child, sitePath: stack[index].sitePath + (child.property.map { [$0] } ?? [])))
 				}
@@ -3675,23 +3520,11 @@ extension ScopeGeneratorUnderConstruction {
 				seamHoles: seamHoles,
 				namesBoundBySeam: namesBoundBySeam,
 			)
-			// A large subtree starts its own code and that of the small subtrees directly beneath it, in groups, as
-			// `scopeGenerator(collectingGeneratorsToStartInto:startedGenerators:startLog:)` starts a tree built for emission.
-			if reseating.subtreeScopeCount >= scopeCountOfLargeSubtree {
-				var groupsStartingNow = groupsOfLargeSubtreeSize(reseating.smallSubtrees)
-				groupsStartingNow.append([reseated])
-				for group in groupsStartingNow {
-					let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
-					guard !group.isEmpty else { continue }
-					startCodeGeneration(of: group, spellsPlans: group.first !== reseated)
-				}
-			}
 			if stack.isEmpty {
 				reseatedTree = reseated
 			} else {
-				reseatedByGenerator[ObjectIdentifier(reseating.generator)] = (reseated, reseating.subtreeScopeCount)
-				// An alias or a hole is no scope of the count.
-				stack[stack.count - 1].add(reseated, subtreeScopeCount: reseating.generator.builtInstantiable == nil ? nil : reseating.subtreeScopeCount)
+				reseatedByGenerator[ObjectIdentifier(reseating.generator)] = reseated
+				stack[stack.count - 1].children.append(reseated)
 			}
 		}
 		return reseatedTree

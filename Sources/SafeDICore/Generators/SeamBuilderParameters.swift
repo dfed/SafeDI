@@ -2381,7 +2381,8 @@ extension DependencyTreeGenerator {
 			while let (generator, callingType, pathDeclarations) = generatorsToVisit.popLast() {
 				guard !generator.closesPropertyCycle else { continue }
 				for (fillKey, calledHole) in generator.enclosingFillsPassed {
-					var hidden = hiddenByFillKey[fillKey, default: FillReentryHidings()]
+					// Taken out of the dictionary while it grows, so appending to its lists never copies them.
+					var hidden = hiddenByFillKey.removeValue(forKey: fillKey) ?? FillReentryHidings()
 					for declaration in calledHole.uncarriedDeclarations {
 						hidden.calledCopyDeclarations[declaration.property.label, default: []].append(declaration)
 					}

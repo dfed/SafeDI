@@ -74,6 +74,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() }, Protocol: { __safeDI_builder() })
 		        }
@@ -154,6 +155,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() })
 		        }
@@ -183,14 +185,14 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
+		            .init(Type: {
+		                let Type: any Api = LiveApi()
+		                return Type
+		            })
+		        }
 		        func __safeDI_f() -> F {
 		            _ = F.__safeDI_F_85E735945FC24B03.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
-		                .init(Type: {
-		                    let Type: any Api = LiveApi()
-		                    return Type
-		                })
-		            }
 		            return F(__safeDI_apiBuilder: __safeDI_apiBuilder_F())
 		        }
 		        let f: F = __safeDI_f()
@@ -215,6 +217,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -232,6 +235,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`my leaf` = `my leaf`
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Self: { __safeDI_builder() }, init: { _ in __safeDI_builder() }, `my leaf`: { _, _ in __safeDI_builder() })
 		        }
@@ -245,6 +249,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Protocol: { __safeDI_builder() })
 		        }
@@ -258,6 +263,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(Protocol: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -301,36 +307,36 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(Type: { values_default in __safeDI_apiBuilder_Home_Detail_Scope(default: values_default) })
+		        }
+		        func __safeDI_apiBuilder_Home_Detail_Scope(default: Name) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(
+		                Self: {
+		                    let `Self`: any Api = LiveApi(default: `default`)
+		                    return `Self`
+		                },
+		                init: { scope_Self in
+		                    let `init`: any Api = LiveApi(default: `default`)
+		                    return `init`
+		                },
+		                `my leaf`: { scope_Self, scope_init in
+		                    let `my leaf`: any Api = LiveApi(default: `default`)
+		                    return `my leaf`
+		                }
+		            )
+		        }
+		        @Sendable nonisolated func __safeDI_gizmoSendableBuilder_Home() -> Home.__safeDI_GizmoSendableCarrier<any Gizmo> {
+		            .init(Protocol: { __safeDI_gizmoBuilder_Home_Gadget_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_gizmoBuilder_Home_Gadget_Scope() -> Home.__safeDI_GizmoCarrier_Gadget<any Gizmo> {
+		            .init(Protocol: {
+		                let Protocol: any Gizmo = LiveGizmo()
+		                return Protocol
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_A5FBB8B80D68C88B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(Type: { values_default in __safeDI_apiBuilder_Home_Detail_Scope(default: values_default) })
-		            }
-		            func __safeDI_apiBuilder_Home_Detail_Scope(default: Name) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(
-		                    Self: {
-		                        let `Self`: any Api = LiveApi(default: `default`)
-		                        return `Self`
-		                    },
-		                    init: { scope_Self in
-		                        let `init`: any Api = LiveApi(default: `default`)
-		                        return `init`
-		                    },
-		                    `my leaf`: { scope_Self, scope_init in
-		                        let `my leaf`: any Api = LiveApi(default: `default`)
-		                        return `my leaf`
-		                    }
-		                )
-		            }
-		            @Sendable nonisolated func __safeDI_gizmoSendableBuilder_Home() -> Home.__safeDI_GizmoSendableCarrier<any Gizmo> {
-		                .init(Protocol: { __safeDI_gizmoBuilder_Home_Gadget_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_gizmoBuilder_Home_Gadget_Scope() -> Home.__safeDI_GizmoCarrier_Gadget<any Gizmo> {
-		                .init(Protocol: {
-		                    let Protocol: any Gizmo = LiveGizmo()
-		                    return Protocol
-		                })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_gizmoSendableBuilder: __safeDI_gizmoSendableBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -369,6 +375,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`default` = `default`
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() }, default: { _ in __safeDI_builder() })
 		        }
@@ -401,6 +408,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Protocol: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -432,23 +440,23 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+		            .init(Protocol: __safeDI_apiBuilder_Inner())
+		        }
+		        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		            .init(
+		                Type: {
+		                    let Type: any Api = LiveApi()
+		                    return Type
+		                },
+		                default: { scope_Type in
+		                    let `default`: any Api = LiveApi()
+		                    return `default`
+		                }
+		            )
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_450510F51ADD6E2D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
-		                .init(Protocol: __safeDI_apiBuilder_Inner())
-		            }
-		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
-		                .init(
-		                    Type: {
-		                        let Type: any Api = LiveApi()
-		                        return Type
-		                    },
-		                    default: { scope_Type in
-		                        let `default`: any Api = LiveApi()
-		                        return `default`
-		                    }
-		                )
-		            }
 		            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
