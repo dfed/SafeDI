@@ -484,6 +484,11 @@ extension MockLowering {
 		var pathsWithUnplannedLines = Set<[Int]>()
 		/// SPIKE: which kinds of unplanned statements each such place writes, for the fallback log.
 		var unplannedLineKinds = [[Int]: String]()
+		/// The places whose `@Sendable` builder functions read the overrides beneath them into locals before the function
+		/// (`SendableOverrideExtractor`). The type key lays such a place out where every place beneath it is recorded: its call
+		/// binds what it hands the function before it calls (`PassedArgument.bindsBeforeCall`), as the locals are bound
+		/// (`recordBuiltPlaces()`).
+		var pathsStartingExtraction = Set<[Int]>()
 		/// SPIKE: why each place has no record, for the switch's log.
 		var unrecordedReasons = [[Int]: String]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
@@ -1323,7 +1328,11 @@ extension MockLowering {
 			if !node.sendableAutoclosureBindings.isEmpty {
 				unplannedKinds.append("sendableAutoclosures")
 			}
-			if startsExtraction {
+			// A function that reads overrides into locals because its construction hands a configuration read to a `@Sendable`
+			// autoclosure keeps the walk's body: the record would read the configuration inside the autoclosure.
+			if startsForSendableFunction {
+				pathsStartingExtraction.insert(childIndexPath)
+			} else if startsExtraction {
 				unplannedKinds.append("overrideExtraction")
 			}
 			if !unplannedKinds.isEmpty {
