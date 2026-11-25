@@ -1,0 +1,68 @@
+no overrides: left: services (holder, widget, leaf): ["left", "left", "left"]
+no overrides: left: names (widget, leaf): ["mocked by hand", "built"]
+no overrides: left: holder, widget and leaf read the side's token: true
+no overrides: left: holder and leaf read the side's extra: true, which is an extra
+no overrides: left built: services (holder, widget, leaf): ["left", "left", "left"]
+no overrides: left built: names (widget, leaf): ["mocked by hand", "built"]
+no overrides: left built: holder, widget and leaf read the side's token: true
+no overrides: left built: holder and leaf read the side's extra: true, which is an extra
+no overrides: right: services (holder, widget, leaf): ["right", "right", "right"]
+no overrides: right: names (widget, leaf): ["mocked by hand", "built"]
+no overrides: right: holder, widget and leaf read the side's token: true
+no overrides: right: holder and leaf read the side's extra: true, which is nothing
+no overrides: right built: services (holder, widget, leaf): ["right", "right", "right"]
+no overrides: right built: names (widget, leaf): ["mocked by hand", "built"]
+no overrides: right built: holder, widget and leaf read the side's token: true
+no overrides: right built: holder and leaf read the side's extra: true, which is nothing
+an extra for whoever lacks one: left: services (holder, widget, leaf): ["left", "left", "left"]
+an extra for whoever lacks one: left: names (widget, leaf): ["mocked by hand", "built"]
+an extra for whoever lacks one: left: holder, widget and leaf read the side's token: true
+an extra for whoever lacks one: left: holder and leaf read the side's extra: true, which is an extra
+an extra for whoever lacks one: left built: services (holder, widget, leaf): ["left", "left", "left"]
+an extra for whoever lacks one: left built: names (widget, leaf): ["mocked by hand", "built"]
+an extra for whoever lacks one: left built: holder, widget and leaf read the side's token: true
+an extra for whoever lacks one: left built: holder and leaf read the side's extra: true, which is an extra
+an extra for whoever lacks one: right: services (holder, widget, leaf): ["right", "right", "right"]
+an extra for whoever lacks one: right: names (widget, leaf): ["mocked by hand", "built"]
+an extra for whoever lacks one: right: holder, widget and leaf read the side's token: true
+an extra for whoever lacks one: right: holder and leaf read the side's extra: true, which is an extra
+an extra for whoever lacks one: right built: services (holder, widget, leaf): ["right", "right", "right"]
+an extra for whoever lacks one: right built: names (widget, leaf): ["mocked by hand", "built"]
+an extra for whoever lacks one: right built: holder, widget and leaf read the side's token: true
+an extra for whoever lacks one: right built: holder and leaf read the side's extra: true, which is an extra
+names and values at each place: left: services (holder, widget, leaf): ["left", "left", "left"]
+names and values at each place: left: names (widget, leaf): ["left widget", "left leaf"]
+names and values at each place: left: holder, widget and leaf read the side's token: true
+names and values at each place: left: holder and leaf read the side's extra: true, which is an extra
+names and values at each place: left built: services (holder, widget, leaf): ["left", "left", "left"]
+names and values at each place: left built: names (widget, leaf): ["left built widget", "left built leaf"]
+names and values at each place: left built: holder, widget and leaf read the side's token: true
+names and values at each place: left built: holder and leaf read the side's extra: true, which is an extra
+names and values at each place: right: services (holder, widget, leaf): ["left", "left", "left"]
+names and values at each place: right: names (widget, leaf): ["right widget", "right leaf"]
+names and values at each place: right: holder, widget and leaf read the side's token: true
+names and values at each place: right: holder and leaf read the side's extra: true, which is an extra
+names and values at each place: right built: services (holder, widget, leaf): ["left", "left", "left"]
+names and values at each place: right built: names (widget, leaf): ["right built widget", "right built leaf"]
+names and values at each place: right built: holder, widget and leaf read the side's token: true
+names and values at each place: right built: holder and leaf read the side's extra: true, which is an extra
+builders at two places: left: services (holder, widget, leaf): ["left", "left", "left"]
+builders at two places: left: names (widget, leaf): ["mocked by hand", "built"]
+builders at two places: left: holder, widget and leaf read the side's token: true
+builders at two places: left: holder and leaf read the side's extra: true, which is an extra
+builders at two places: left built: services (holder, widget, leaf): ["left", "left", "left"]
+builders at two places: left built: names (widget, leaf): ["mocked by hand", "left built leaf from a builder"]
+builders at two places: left built: holder, widget and leaf read the side's token: true
+builders at two places: left built: holder and leaf read the side's extra: true, which is an extra
+builders at two places: right: services (holder, widget, leaf): ["right", "right", "right"]
+builders at two places: right: names (widget, leaf): ["right widget from a builder", "built"]
+builders at two places: right: holder, widget and leaf read the side's token: true
+builders at two places: right: holder and leaf read the side's extra: true, which is nothing
+builders at two places: right built: services (holder, widget, leaf): ["right", "right", "right"]
+builders at two places: right built: names (widget, leaf): ["mocked by hand", "built"]
+builders at two places: right built: holder, widget and leaf read the side's token: true
+builders at two places: right built: holder and leaf read the side's extra: true, which is nothing
+production: left: left built built true false
+production: left built: left built built true false
+production: right: right built built true true
+production: right built: right built built true true
