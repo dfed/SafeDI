@@ -1114,10 +1114,12 @@ extension Property: BinarySchemaMember {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		// The stored hash is not written: Swift seeds hashing differently in every process, so the
 		// initializer computes it again from the label and type description.
-		try self.init(
-			label: reader.read(),
-			typeDescription: reader.read(),
-		)
+		self = try reader.readSharingValuesOfOneStringAndSharedValue { reader throws(BinaryDecodingError) in
+			try Self(
+				label: reader.read(),
+				typeDescription: reader.read(),
+			)
+		}
 	}
 
 	func write(to writer: inout BinaryWriter) {
@@ -1199,7 +1201,7 @@ extension TypeDescription: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		if writer.sharesSignatureValues {
-			writer.writeSharedByBytes { writeUnshared(to: &$0) }
+			writer.writeSharedByBytes(self) { writeUnshared(to: &$0) }
 		} else {
 			writeUnshared(to: &writer)
 		}
