@@ -84,6 +84,8 @@ extension MockLowering.Walk {
 					: .success(nil)
 			}
 		}
+		// The first record made of each key, whose node every alike place takes (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`).
+		var sharedRecordsByKey = [MockLowering.SharedRecordKey: BuiltPlaceRecord]()
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
 			defer {
@@ -154,6 +156,7 @@ extension MockLowering.Walk {
 				if !call.inputs.hasFunction {
 					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
 				}
+				sharingNode(ofBuiltPlaceAt: path, nodesByKey: &sharedRecordsByKey)
 			} catch {
 				unrecordedReasons[path] = "threw"
 				unrecordedPlaceErrors[path] = error
