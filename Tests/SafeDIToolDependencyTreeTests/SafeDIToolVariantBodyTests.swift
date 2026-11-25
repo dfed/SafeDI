@@ -143,7 +143,76 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsOneBodyPerScreen_whenScreensOpenEachOtherAtTwoSizes() async throws {
+		// Each screen opens three others, so the paths through the screens grow with every screen added, and the type
+		// key's views with them: 133 at eight screens and 1,918 at twelve (`SafeDIToolTypeKeyViewTests`). Every call of a
+		// screen is answered alike, `service` and `context` by a declaration of the same property and its own builder
+		// being built, so the plan builds one body per screen, and every place of today's tree takes one of them. Run
+		// once by hand without the walk of today's places, sixteen screens gave 16 bodies and twenty gave 20; generating
+		// today's tree for those takes minutes, so they are not sizes of this test.
+		var counts = [Int]()
+		for screenCount in [8, 12] {
+			let roles = (0..<screenCount).map { ContextRole.allCases[$0 % ContextRole.allCases.count] }
+			let targets = (0..<screenCount).map { screen in [1, 3, 7].map { (screen + $0) % screenCount }.sorted() }
+			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks in
+				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
+			}) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.screensOpeningEachOther(roles: roles, targets: targets),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// The code is what the type key's tests compare; this one counts the bodies of the plan.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			for await plan in stream {
+				#expect(plan.todaysBodiesPlanLacks.isEmpty)
+				counts.append(plan.bodiesOfPlan.count)
+			}
+		}
+		#expect(counts == [8, 12])
+	}
+
 	// MARK: Private
+
+	/// How a screen of `screensOpeningEachOther(roles:targets:)` takes the root's `Context`.
+	private enum ContextRole: CaseIterable {
+		case declares
+		case receives
+		case receivesIfAvailable
+		case none
+	}
+
+	/// Screens that each forward an `id`, receive the root's `Service`, take a `Context` in `roles`' way and open the
+	/// screens `targets` names through an `Instantiator`, beneath a root that declares both and opens the first screen:
+	/// the fixture `SafeDIToolTypeKeyViewTests` counts the type key's views of.
+	private static func screensOpeningEachOther(roles: [ContextRole], targets: [[Int]]) -> [String] {
+		var files = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let context: Context", "@Instantiated let screen0Builder: Instantiator<Screen0>"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Context", isFinalClass: true, declarations: []),
+		]
+		for (screen, role) in roles.enumerated() {
+			var declarations = ["@Forwarded let id: String", "@Received let service: Service"]
+			switch role {
+			case .declares:
+				declarations.append("@Instantiated let context: Context")
+			case .receives:
+				declarations.append("@Received let context: Context")
+			case .receivesIfAvailable:
+				declarations.append("@Received(onlyIfAvailable: true) let context: Context?")
+			case .none:
+				break
+			}
+			declarations += targets[screen].map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }
+			files.append(seamFixtureType(named: "Screen\(screen)", isFinalClass: true, declarations: declarations))
+		}
+		return files
+	}
 
 	private struct Bodies: Equatable {
 		let place: String
