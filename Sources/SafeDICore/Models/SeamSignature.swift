@@ -234,7 +234,7 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Codable, Sendable {
 		/// A value holding each stored property as given, which a module info file reads back.
 		public init(storing ownerType: TypeDescription, declaringModuleNames: [String], property: Property, instantiatedType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, erasedToConcreteExistential: Bool, sitePath: [Property], declaredSitePath: [DeclaredProperty], fillPropertyStack: [Property], fillConcreteTypeStack: [TypeDescription], builderLabel: String, narrowerTierBuilderLabels: [AccessLevel: String], internalName: String, scopeSeamType: TypeDescription, scopeSeamModule: ModuleIdentity, typesToOwner: [PathType], scopeTypeName: String, enumPlace: EnumPlace?, wrapperFunctionName: String?, fields: [Field], tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, uncarriedDeclarations: [UncarriedDeclaration], cycleReentryDeclarations: [CycleReentryDeclaration], reenteringCallDeclarations: [ReenteringCallDeclaration], reenteringPlaceFields: [ReenteringPlaceField], declarationsHiddenByFields: [DeclarationHiddenByField], innerSeamType: TypeDescription?, passedUpRoute: [DeclaredProperty], isSendable: Bool) {
-			box = Box(Stored(storing: ownerType, declaringModuleNames: declaringModuleNames, property: property, instantiatedType: instantiatedType, declarationLocation: declarationLocation, erasedToConcreteExistential: erasedToConcreteExistential, sitePath: sitePath, declaredSitePath: declaredSitePath, fillPropertyStack: fillPropertyStack, fillConcreteTypeStack: fillConcreteTypeStack, builderLabel: builderLabel, narrowerTierBuilderLabels: narrowerTierBuilderLabels, internalName: internalName, scopeSeamType: scopeSeamType, scopeSeamModule: scopeSeamModule, typesToOwner: typesToOwner, scopeTypeName: scopeTypeName, enumPlace: enumPlace, wrapperFunctionName: wrapperFunctionName, fields: fields, tierAccess: tierAccess, accessCause: accessCause, uncarriedDeclarations: uncarriedDeclarations, cycleReentryDeclarations: cycleReentryDeclarations, reenteringCallDeclarations: reenteringCallDeclarations, reenteringPlaceFields: reenteringPlaceFields, declarationsHiddenByFields: declarationsHiddenByFields, innerSeamType: innerSeamType, passedUpRoute: passedUpRoute, isSendable: isSendable))
+			storage = Storage(Fields(storing: ownerType, declaringModuleNames: declaringModuleNames, property: property, instantiatedType: instantiatedType, declarationLocation: declarationLocation, erasedToConcreteExistential: erasedToConcreteExistential, sitePath: sitePath, declaredSitePath: declaredSitePath, fillPropertyStack: fillPropertyStack, fillConcreteTypeStack: fillConcreteTypeStack, builderLabel: builderLabel, narrowerTierBuilderLabels: narrowerTierBuilderLabels, internalName: internalName, scopeSeamType: scopeSeamType, scopeSeamModule: scopeSeamModule, typesToOwner: typesToOwner, scopeTypeName: scopeTypeName, enumPlace: enumPlace, wrapperFunctionName: wrapperFunctionName, fields: fields, tierAccess: tierAccess, accessCause: accessCause, uncarriedDeclarations: uncarriedDeclarations, cycleReentryDeclarations: cycleReentryDeclarations, reenteringCallDeclarations: reenteringCallDeclarations, reenteringPlaceFields: reenteringPlaceFields, declarationsHiddenByFields: declarationsHiddenByFields, innerSeamType: innerSeamType, passedUpRoute: passedUpRoute, isSendable: isSendable))
 		}
 
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
@@ -703,7 +703,7 @@ public struct SeamSignature: Sendable {
 			isSendable: Bool = false,
 			enumPlace: EnumPlace? = nil,
 		) {
-			box = Box(Stored(
+			storage = Storage(Fields(
 				ownerType: ownerType,
 				declaringModuleNames: declaringModuleNames,
 				property: property,
@@ -732,9 +732,9 @@ public struct SeamSignature: Sendable {
 			))
 		}
 
-		/// Every stored property of a hole, held once behind `Box`, so that a copy of a hole retains one reference rather than
+		/// Every stored property of a hole, held once behind `Storage`, so that a copy of a hole retains one reference rather than
 		/// each of its many fields: shaping, emitting and storing builders copies holes many times over.
-		fileprivate struct Stored: Codable, Sendable {
+		fileprivate struct Fields: Codable, Sendable {
 			init(storing ownerType: TypeDescription, declaringModuleNames: [String], property: Property, instantiatedType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, erasedToConcreteExistential: Bool, sitePath: [Property], declaredSitePath: [DeclaredProperty], fillPropertyStack: [Property], fillConcreteTypeStack: [TypeDescription], builderLabel: String, narrowerTierBuilderLabels: [AccessLevel: String], internalName: String, scopeSeamType: TypeDescription, scopeSeamModule: ModuleIdentity, typesToOwner: [PathType], scopeTypeName: String, enumPlace: EnumPlace?, wrapperFunctionName: String?, fields: [Field], tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, uncarriedDeclarations: [UncarriedDeclaration], cycleReentryDeclarations: [CycleReentryDeclaration], reenteringCallDeclarations: [ReenteringCallDeclaration], reenteringPlaceFields: [ReenteringPlaceField], declarationsHiddenByFields: [DeclarationHiddenByField], innerSeamType: TypeDescription?, passedUpRoute: [DeclaredProperty], isSendable: Bool) {
 				self.ownerType = ownerType
 				self.declaringModuleNames = declaringModuleNames
@@ -918,27 +918,27 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// The immutable holder of a hole's fields, which every copy of the hole shares until one of them sets a field.
-		private final class Box: Sendable {
-			init(_ stored: Stored) {
-				self.stored = stored
+		private final class Storage: Sendable {
+			init(_ fields: Fields) {
+				self.fields = fields
 			}
 
-			let stored: Stored
+			let fields: Fields
 		}
 
-		private var box: Box
+		private var storage: Storage
 
 		public init(from decoder: any Decoder) throws {
-			box = try Box(Stored(from: decoder))
+			storage = try Storage(Fields(from: decoder))
 		}
 
 		public func encode(to encoder: any Encoder) throws {
-			try box.stored.encode(to: encoder)
+			try storage.fields.encode(to: encoder)
 		}
 
 		/// The type whose `@Instantiated` property the site builds.
 		public var ownerType: TypeDescription {
-			box.stored.ownerType
+			storage.fields.ownerType
 		}
 
 		/// The module of the seam whose tree holds the site, when it also declares the owner and no seam passes the site up,
@@ -947,29 +947,29 @@ public struct SeamSignature: Sendable {
 		/// generates the fill, where a bare name may mean a type of that module, which its `.safedi` records only if a
 		/// declaration of that module mentions it.
 		public var declaringModuleNames: [String] {
-			box.stored.declaringModuleNames
+			storage.fields.declaringModuleNames
 		}
 
 		/// The property the site builds, as its owner declares it: the builder returns its type without its wrapper
 		/// (`builtType`).
 		public var property: Property {
-			box.stored.property
+			storage.fields.property
 		}
 
 		/// The type a declaration must fulfill to fill the builder: the property's instantiated type, or the type an
 		/// erased property names with `fulfilledByType:`.
 		public var instantiatedType: TypeDescription {
-			box.stored.instantiatedType
+			storage.fields.instantiatedType
 		}
 
 		/// Where the owner declares the property.
 		public var declarationLocation: Dependency.DeclarationLocation? {
-			box.stored.declarationLocation
+			storage.fields.declarationLocation
 		}
 
 		/// Whether the property is `erasedToConcreteExistential`, which a fill wraps the fulfilling type in.
 		public var erasedToConcreteExistential: Bool {
-			box.stored.erasedToConcreteExistential
+			storage.fields.erasedToConcreteExistential
 		}
 
 		/// The properties from the root of the tree that holds the site down to the owner's property, outermost first:
@@ -977,106 +977,106 @@ public struct SeamSignature: Sendable {
 		/// a stand-in for the seam that holds that hole (`pathBeforePropertyInItsFill`), no declaration, so a diagnostic
 		/// prints `declaredSitePath` instead.
 		public var sitePath: [Property] {
-			box.stored.sitePath
+			storage.fields.sitePath
 		}
 
 		/// The properties the code declares from the root of the tree that holds the site down to the owner's property,
 		/// outermost first, inside a fill of a passed-up hole through the calls that passed it up.
 		public var declaredSitePath: [DeclaredProperty] {
-			box.stored.declaredSitePath
+			storage.fields.declaredSitePath
 		}
 
 		/// The stack a fill builds the property's tree with: the properties from the root of the seam whose tree holds
 		/// the site to the owner's property, innermost first, each lazily instantiated one preceded by its instance, as
 		/// `Scope.createScopeGenerator` stacks them.
 		public var fillPropertyStack: [Property] {
-			box.stored.fillPropertyStack
+			storage.fields.fillPropertyStack
 		}
 
 		/// The concrete type each entry of `fillPropertyStack` is built for, beside it: a fill's scope closes a cycle only where it
 		/// repeats an entry of the same property built for the same concrete type, as inline's does.
 		public var fillConcreteTypeStack: [TypeDescription] {
-			box.stored.fillConcreteTypeStack
+			storage.fields.fillConcreteTypeStack
 		}
 
 		/// The label the generated initializer takes the place's builder under: for a place in a seam's plain scope enum, that
 		/// enum's builder's label.
 		public internal(set) var builderLabel: String {
-			get { box.stored.builderLabel }
+			get { storage.fields.builderLabel }
 			set {
-				var stored = box.stored
-				stored.builderLabel = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.builderLabel = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The label each narrower tier takes the place's builder under, where it differs from `builderLabel`
 		/// (`Builder.narrowerTierLabels`).
 		public internal(set) var narrowerTierBuilderLabels: [AccessLevel: String] {
-			get { box.stored.narrowerTierBuilderLabels }
+			get { storage.fields.narrowerTierBuilderLabels }
 			set {
-				var stored = box.stored
-				stored.narrowerTierBuilderLabels = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.narrowerTierBuilderLabels = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The name the generated initializer binds the builder to.
 		public internal(set) var internalName: String {
-			get { box.stored.internalName }
+			get { storage.fields.internalName }
 			set {
-				var stored = box.stored
-				stored.internalName = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.internalName = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
 		public var scopeSeamType: TypeDescription {
-			box.stored.scopeSeamType
+			storage.fields.scopeSeamType
 		}
 
 		/// The module that declares `scopeSeamType`, which a module the hole reaches through a view knows only from here.
 		public var scopeSeamModule: ModuleIdentity {
-			box.stored.scopeSeamModule
+			storage.fields.scopeSeamModule
 		}
 
 		/// The types from the seam that takes this builder, itself excluded, to the hole's owner, outermost first: for a
 		/// passed-up hole, every seam it passes through on the way to `scopeSeamType`. Empty when that seam owns the hole.
 		/// Each type's module is a fact of the hole, so no order among modules decides which one a diagnostic names.
 		public var typesToOwner: [PathType] {
-			box.stored.typesToOwner
+			storage.fields.typesToOwner
 		}
 
 		/// The name of the enum whose case the place is (`enumPlace`), or, before the builders are shaped, a name made from the
 		/// place's owner and property.
 		public internal(set) var scopeTypeName: String {
-			get { box.stored.scopeTypeName }
+			get { storage.fields.scopeTypeName }
 			set {
-				var stored = box.stored
-				stored.scopeTypeName = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.scopeTypeName = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// Where a scope enum of the seam or the public mock carries this place, once its builders are shaped.
 		public internal(set) var enumPlace: EnumPlace? {
-			get { box.stored.enumPlace }
+			get { storage.fields.enumPlace }
 			set {
-				var stored = box.stored
-				stored.enumPlace = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.enumPlace = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The name of the function that builds the wrapper this place is held in, or `nil` for one held by value and for a
 		/// public mock's, whose function the generator names (see `SeamBuilderNames`).
 		public internal(set) var wrapperFunctionName: String? {
-			get { box.stored.wrapperFunctionName }
+			get { storage.fields.wrapperFunctionName }
 			set {
-				var stored = box.stored
-				stored.wrapperFunctionName = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.wrapperFunctionName = newValue
+				storage = Storage(fields)
 			}
 		}
 
@@ -1085,97 +1085,97 @@ public struct SeamSignature: Sendable {
 		/// one does. The seam's parameters are no field of a place built in a `@Sendable` function: a fill reads them from the
 		/// caller's own scope.
 		public var fields: [Field] {
-			box.stored.fields
+			storage.fields.fields
 		}
 
 		/// The access each tier that takes the builder must have no more than: the builder's type is as visible as the
 		/// narrowest type it names – the scope struct at the access of the seam that declares it, and the property's type
 		/// as the declarations the signature is computed from prove it (`TypeAccessProof`) – capped at the seam's type.
 		public var tierAccess: AccessLevel {
-			box.stored.tierAccess
+			storage.fields.tierAccess
 		}
 
 		/// How the narrowest type the builder's type names is proven, which a diagnostic explains, or `nil` when every
 		/// type it names is `public`.
 		public var accessCause: TypeAccessProof.Cause? {
-			box.stored.accessCause
+			storage.fields.accessCause
 		}
 
 		/// The declarations on the site's path a fill cannot read from the scope struct.
 		public internal(set) var uncarriedDeclarations: [UncarriedDeclaration] {
-			get { box.stored.uncarriedDeclarations }
+			get { storage.fields.uncarriedDeclarations }
 			set {
-				var stored = box.stored
-				stored.uncarriedDeclarations = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.uncarriedDeclarations = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 		/// again, which a fill cannot read, the first of each label.
 		public var cycleReentryDeclarations: [CycleReentryDeclaration] {
-			box.stored.cycleReentryDeclarations
+			storage.fields.cycleReentryDeclarations
 		}
 
 		/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
 		/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
 		/// order of their declarations. A copy a seam passes up keeps them all.
 		public internal(set) var reenteringCallDeclarations: [ReenteringCallDeclaration] {
-			get { box.stored.reenteringCallDeclarations }
+			get { storage.fields.reenteringCallDeclarations }
 			set {
-				var stored = box.stored
-				stored.reenteringCallDeclarations = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.reenteringCallDeclarations = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The fields of places whose fills build the filled seam again that a fill of this place cannot read in their place
 		/// (see `ReenteringPlaceField`), every place's, in the order of their declarations. A copy a seam passes up keeps them all.
 		public internal(set) var reenteringPlaceFields: [ReenteringPlaceField] {
-			get { box.stored.reenteringPlaceFields }
+			get { storage.fields.reenteringPlaceFields }
 			set {
-				var stored = box.stored
-				stored.reenteringPlaceFields = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.reenteringPlaceFields = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The declarations on the site's path that a fill's field of their label hides (see `DeclarationHiddenByField`), each
 		/// label once, the declaration the field hides. A copy a seam passes up keeps them.
 		public internal(set) var declarationsHiddenByFields: [DeclarationHiddenByField] {
-			get { box.stored.declarationsHiddenByFields }
+			get { storage.fields.declarationsHiddenByFields }
 			set {
-				var stored = box.stored
-				stored.declarationsHiddenByFields = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.declarationsHiddenByFields = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
 		public var innerSeamType: TypeDescription? {
-			box.stored.innerSeamType
+			storage.fields.innerSeamType
 		}
 
 		/// When this seam passes the hole up, the properties from its root to the call of the seam whose tree holds the
 		/// site, through the calls of every seam between, outermost first; empty for a site of this seam's own tree.
 		public internal(set) var passedUpRoute: [DeclaredProperty] {
-			get { box.stored.passedUpRoute }
+			get { storage.fields.passedUpRoute }
 			set {
-				var stored = box.stored
-				stored.passedUpRoute = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.passedUpRoute = newValue
+				storage = Storage(fields)
 			}
 		}
 
 		/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` function, which
 		/// captures it.
 		public internal(set) var isSendable: Bool {
-			get { box.stored.isSendable }
+			get { storage.fields.isSendable }
 			set {
-				var stored = box.stored
-				stored.isSendable = newValue
-				box = Box(stored)
+				var fields = storage.fields
+				fields.isSendable = newValue
+				storage = Storage(fields)
 			}
 		}
 
@@ -2589,5 +2589,14 @@ public enum SeamCallComment: Hashable, Sendable {
 	/// `text(for:)` after a space, to end the line with, or an empty string for `noComment`.
 	func lineEnd(for type: TypeDescription) -> String {
 		text(for: type).map { " \($0)" } ?? ""
+	}
+}
+
+// MARK: - CustomReflectable
+
+/// Reflects each stored field of a hole under its own name, as when each was stored in the struct rather than in `Storage`.
+extension SeamSignature.Hole: CustomReflectable {
+	public var customMirror: Mirror {
+		Mirror(self, children: Mirror(reflecting: storage.fields).children, displayStyle: .struct)
 	}
 }
