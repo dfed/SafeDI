@@ -458,6 +458,12 @@ extension MockLowering {
 		var loopMembers = [Property: LoopMember]()
 		var loopUnit: LoopUnit?
 		var lastLoopMemberLineCounts: LoopMemberLineCounts?
+		/// The text place each loop of builders is written as, at its first member's path, and the paths its text covers: its
+		/// other members and every place beneath a member (`MockLowering+LoopPlaces.swift`).
+		var loopUnitRecords = [[Int]: PlaceRecord]()
+		var pathsCoveredByLoopUnits = Set<[Int]>()
+		/// The places the walk binds under a name apart from their labels, which keep the walk's body.
+		var pathsNamedApart = Set<[Int]>()
 		/// The receives only if available the node being lowered is passed `nil` for, given the siblings built before it.
 		var unavailableProperties = Set<Property>()
 		/// The properties built after the node being lowered, which its children are ordered by.
@@ -633,6 +639,11 @@ extension MockLowering {
 				}
 				if let node {
 					recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
+					// A node the level binds under a name apart from its label is read by that name, which a record spelled
+					// from its property does not bind.
+					if membership == nil, let bindingName, case let .property(_, property, _, _, _, _) = generator.scopeData, bindingName != property.label {
+						pathsNamedApart.insert(childIndexPath)
+					}
 					if builtPlaceCalls[childIndexPath] == nil, unrecordedReasons[childIndexPath] == nil {
 						unrecordedReasons[childIndexPath] = switch node {
 						case .built: "builtWithoutInputs"
@@ -653,6 +664,7 @@ extension MockLowering {
 				}
 				if let membership {
 					append(memberLines, ofMemberOf: membership, to: &lines)
+					noteLoopMember(generator, path: childIndexPath + [orderedChildren[index].index], bindingName: bindingName)
 				}
 			}
 			endLoopUnit(appendingTo: &lines)

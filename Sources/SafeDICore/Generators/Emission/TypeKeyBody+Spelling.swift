@@ -235,7 +235,7 @@ extension TypeKeyLayout {
 	/// `parameterType`: its nearest declaration, `nil`, or a wrapper made of a value where the parameter takes a wrapper.
 	func spelledArgument(_ label: String, passedTo parameterType: TypeDescription, inClass owner: Int, before index: Int) -> String? {
 		let declaration = typeLookUp(label, inClass: owner, before: index)
-		guard let declaredType = type(of: declaration) else {
+		guard let declaredType = type(of: declaration, label: label) else {
 			return parameterType.isOptional ? "nil" : nil
 		}
 		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
@@ -263,7 +263,7 @@ extension TypeKeyLayout {
 				value = "nil"
 			} else {
 				let declaration = typeLookUp(read.label, inClass: owner, before: index)
-				if let declaredType = type(of: declaration) {
+				if let declaredType = type(of: declaration, label: read.label) {
 					guard let spelled = Self.spelledRead(read, declaredAs: declaredType) else { return nil }
 					value = spelled
 				} else {

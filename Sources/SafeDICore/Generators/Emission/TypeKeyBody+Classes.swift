@@ -22,12 +22,12 @@ extension TypeKeyLayout {
 	// MARK: Classes
 
 	/// The type of a path declaration.
-	func type(of value: PathValue) -> TypeDescription? {
+	func type(of value: PathValue, label readLabel: String) -> TypeDescription? {
 		switch value {
 		case .none:
 			nil
 		case let .statement(body, index):
-			property(of: bodies[body].statements[index])?.typeDescription
+			property(of: bodies[body].statements[index], label: readLabel)?.typeDescription
 		case let .forwarded(body, label):
 			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
@@ -56,7 +56,7 @@ extension TypeKeyLayout {
 		var groupedClasses = [[Int]: Int]()
 		var classesWithForms = [Int](repeating: 0, count: count)
 		for body in bodies.indices.dropFirst() {
-			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body))?.unwrapped.asSource }
+			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body), label: label)?.unwrapped.asSource }
 			var groups = groupsByClass[refined[body], default: []]
 			var groupIndex = groups.firstIndex { group in
 				zip(group, forms).allSatisfy { $0 == nil || $1 == nil || $0 == $1 }
