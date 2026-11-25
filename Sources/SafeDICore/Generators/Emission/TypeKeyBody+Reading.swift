@@ -117,16 +117,19 @@ extension TypeKeyLayout {
 				statement = .closer(closer, target: target)
 				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .alias(alias):
-				// A place written as text whose reads are not listed, that binds labels besides its own, or that calls or
-				// refers to a function it does not declare, is never laid out by the type key: two such places of one text can
-				// name different functions, which no read tells apart.
-				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
+				// A place written as text whose reads are not listed is never laid out by the type key, nor one that calls or
+				// refers to a function it does not declare: two such places of one text can name different functions, which
+				// no read tells apart. The labels it binds besides its own are declarations of its position, as its own is.
+				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
 				label = alias.property.label
 				namesInScope.formUnion(alias.declaredFunctionNames)
 				for name in alias.declaredFunctionNames {
 					bodies[body].positionsByDeclaredFunction[name, default: []].append(position)
 				}
 				statement = .alias(alias)
+				for binding in alias.otherBindings {
+					bodies[body].positionsByLabel[binding.label, default: []].append(position)
+				}
 			}
 			bodies[body].statements.append(statement)
 			bodies[body].positionsByLabel[label, default: []].append(position)
@@ -197,6 +200,7 @@ extension TypeKeyLayout {
 					}
 					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
+					boundBefore.formUnion(alias.otherBindings.map(\.label))
 				}
 			}
 			current.constructionReads.forEach(lookUp)
@@ -224,7 +228,7 @@ extension TypeKeyLayout {
 		case .closer:
 			true
 		case let .alias(alias):
-			alias.listsItsReads && alias.otherBindings.isEmpty && alias.calledFunctionNames.isEmpty
+			alias.listsItsReads && alias.calledFunctionNames.isEmpty
 		}
 	}
 
@@ -281,8 +285,8 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// The property `statement` declares.
-	func property(of statement: Statement) -> Property? {
+	/// The property `statement` declares under `label`: its own, or, for a place written as text, one of the others it binds.
+	func property(of statement: Statement, label: String) -> Property? {
 		switch statement {
 		case let .built(body):
 			bodies[body].record?.property
@@ -291,7 +295,7 @@ extension TypeKeyLayout {
 		case let .closer(record, _):
 			record.property
 		case let .alias(record):
-			record.property
+			record.property.label == label ? record.property : record.otherBindings.first { $0.label == label }
 		}
 	}
 

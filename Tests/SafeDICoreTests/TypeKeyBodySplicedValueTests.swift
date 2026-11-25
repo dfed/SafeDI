@@ -134,7 +134,7 @@ struct TypeKeyBodySplicedValueTests {
 	}
 
 	@Test
-	func statements_keepsThePathKeysBody_whenACloserHandsASplicedValue() {
+	func statements_handsTheClosedOnFunctionASplicedValue_whenACloserHandsOne() throws {
 		var closer = ClosingPlaceRecord(
 			property: Property(label: "bBuilder", typeDescription: .simple(name: "Instantiator", generics: [.simple(name: "B")])),
 			isErased: false,
@@ -145,12 +145,22 @@ struct TypeKeyBodySplicedValueTests {
 		)
 		let argument = PassedArgument(parameterName: "cfg", type: .simple(name: "Builder"), value: .spliced([.text("Builder()")]), staysOutsideSendableFunctions: false)
 		closer.passedArguments = [argument]
-		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
 			arguments: [PlaceRead(argumentLabel: "bBuilder", label: "bBuilder", property: closer.property, source: .binding(label: "bBuilder"))],
 			children: [.place(PlacePlan(code: .text("let bBuilder = Instantiator<B> { __safeDI_b(cfg: Builder()) }"), record: .closer(closer)))],
 		) { built in
 			built.passedArguments = [argument]
-		}) == nil)
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Builder) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: Builder())
+		            }
+		            return B(builder: nil, bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Builder())
+		""")
 	}
 
 	private static let idRead = PlaceRead(

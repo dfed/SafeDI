@@ -217,23 +217,22 @@ extension PassedArgument {
 }
 
 extension PassedArgument {
-	/// The argument for a closer's structural key: its parameter, its type and the label it reads, never the declaration
-	/// that resolves to, which `checkEveryRead` proves alike at every member; a new value as itself; `nil` for any other
-	/// value, which keeps the root one per path.
-	var closerShape: String? {
+	/// The argument for a closer's structural key: a read as its parameter, its type and the label it reads, never the
+	/// declaration that resolves to, which `checkEveryRead` proves alike at every member; any other value as a built
+	/// place's call keys it (`shape`), so a closing call and a built call of one function that hand alike values share a
+	/// key. Each value is checked as a built call's is (`checkValuePaths`, `checkSendableMarks`).
+	var closerShape: String {
 		switch value {
 		case let .read(read):
 			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
-		case let .passedArgument(name):
-			"passed|\(parameterName)|\(type.asSource)|passed:\(name)|\(bindsBeforeCall)"
-		case .emptyInitialization:
-			shape
 		case .rootDeclaration,
+		     .passedArgument,
 		     .member,
 		     .optionalMember,
 		     .call,
+		     .emptyInitialization,
 		     .spliced:
-			nil
+			shape
 		}
 	}
 }
@@ -291,9 +290,6 @@ extension TypeKeyLayout {
 				}
 				for argument in passedArguments(ofStatementAt: index, inBody: body) {
 					guard check(argument.value, before: index) else { return false }
-				}
-				if case let .closer(record, _) = statements[index] {
-					guard record.passedArguments.allSatisfy({ $0.closerShape != nil }) else { return false }
 				}
 			}
 		}
@@ -378,7 +374,7 @@ extension TypeKeyLayout {
 
 	/// The value `read` passes where a statement before `index` of `owner`'s body makes it.
 	func spelledValue(of read: PlaceRead, inClass owner: Int, before index: Int) -> String? {
-		guard read.source != .nil, let declaredType = type(of: typeLookUp(read.label, inClass: owner, before: index)) else { return "nil" }
+		guard read.source != .nil, let declaredType = type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label) else { return "nil" }
 		return Self.spelledRead(read, declaredAs: declaredType)
 	}
 

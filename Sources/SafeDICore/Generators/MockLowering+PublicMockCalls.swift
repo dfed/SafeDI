@@ -390,9 +390,6 @@ extension MockLowering.Walk {
 		var extractionLines = [String]()
 		// A call beneath an edge in `cycleEdges`, or beneath a node that is, reads no override: its parent's configuration
 		// has no field for it, so the called mock builds with its own defaults.
-		if !cycleEdges.isEmpty {
-			builtConcreteTypesBesideCycleEdges.insert(instantiable.concreteInstantiable.asSource)
-		}
 		let readsOverride = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 		let overrideRead: String
 		if readsOverride, publicMockCall.takesOverrides || overrideBuilders != nil {
