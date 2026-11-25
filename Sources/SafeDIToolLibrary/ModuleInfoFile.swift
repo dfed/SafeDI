@@ -908,9 +908,14 @@ extension ModuleSeamSignatures: Codable {
 		try self.init(decoder.singleValueContainer().decode([StoredSeamSignature].self))
 	}
 
-	/// Encodes the signatures, as `SafeDITool dump` prints them.
+	/// Encodes the signatures, as `SafeDITool dump` prints them: with their places where the file's own records hold
+	/// them all, and without places where one was passed up from a seam of another module, whose file holds its record.
 	func encode(to encoder: any Encoder) throws {
 		var container = encoder.singleValueContainer()
-		try container.encode(decoded)
+		do {
+			try container.encode(decoded)
+		} catch is StoredPlaceError {
+			try container.encode(signaturesWithoutPlaces)
+		}
 	}
 }

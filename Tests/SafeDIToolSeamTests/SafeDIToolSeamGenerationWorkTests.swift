@@ -60,7 +60,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// `SafeDIToolConstructionMemoTests` counts them on a tree with cycles, and the reads it files entries under on a chain.
 		// The walk that collects the types a tree builds visits each generator once, and places of a seam's tree with
 		// holes share none: `SafeDIToolFulfillerImportTests` counts it on a production root whose places share generators.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree])
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .openingStoredPlaces, .resolvingStoredPlaces, .writingPassedUpPlaceInFull])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()

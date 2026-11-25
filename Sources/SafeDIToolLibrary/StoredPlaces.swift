@@ -142,6 +142,13 @@ struct StoredModulePlaces: Codable, Sendable {
 	let placesBySeam: [[StoredPlace]]
 }
 
+/// The check a run makes of each passed-up place it writes as a record (`ModulePlacesEncoder`).
+enum StoredPlaceWriteCheck {
+	/// Returns the place the check compares in place of `readBack`, what the record written reads back as, given the
+	/// `record` it copies: set by a test that makes the check fail, never by the tool.
+	@TaskLocal static var alteringPlaceReadBack: (@Sendable (_ readBack: SeamSignature.Hole, _ record: SeamSignature.Hole) -> SeamSignature.Hole)?
+}
+
 /// A module info file's places cannot be read: the caller computes every signature instead
 /// (`Generate.generate(buildLog:)`).
 enum StoredPlaceError: Error, CustomStringConvertible {
@@ -706,7 +713,7 @@ enum ModulePlacesEncoder {
 			)
 			// What a read will make of it, compared as the bytes a file holds, which differ wherever two places do.
 			guard let readBack = passedUp.place(record: ReadPlace(record), innerSeamType: innerSeamType, others: othersRead.map { ReadPlace(candidates[$0].place) })?.place,
-			      isWritten(readBack, as: place)
+			      isWritten(StoredPlaceWriteCheck.alteringPlaceReadBack?(readBack, record) ?? readBack, as: place)
 			else {
 				return nil
 			}

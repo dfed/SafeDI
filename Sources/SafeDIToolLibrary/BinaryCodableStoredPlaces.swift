@@ -202,7 +202,7 @@ extension StoredPlaceDeclaration: BinarySchemaMember {
 			case .kept: [.init("first", Int.self), .init("count", Int.self)]
 			case .taken: [.init("other", Int.self), .init("declaration", Int.self)]
 			case .boundOnPath: [.init("declaration", SeamSignature.Hole.UncarriedDeclaration.self), .init("placeOf", Int.self)]
-			case .written: [.init("_0", SeamSignature.Hole.UncarriedDeclaration.self)]
+			case .written: [.init(nil, SeamSignature.Hole.UncarriedDeclaration.self)]
 			}
 		}
 	}
@@ -257,8 +257,8 @@ extension StoredPlace: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.enumeration(writtenAs: Tag.self) { tag in
 			switch tag {
-			case .written: [.init("_0", SeamSignature.Hole.self)]
-			case .passedUp: [.init("_0", StoredPassedUpPlace.self)]
+			case .written: [.init(nil, SeamSignature.Hole.self)]
+			case .passedUp: [.init(nil, StoredPassedUpPlace.self)]
 			}
 		}
 	}
