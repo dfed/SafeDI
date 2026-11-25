@@ -136,21 +136,24 @@ extension MockLowering {
 		outerTypes[name] != nil || name.first.map { $0.isLowercase || $0 == "_" } == true
 	}
 
-	/// A read of the value `name`, of the type `outerTypes` holds for it, which cannot cross into a `@Sendable` function.
-	static func valueRead(_ name: String, outerTypes: [String: TypeDescription]) -> PlaceRead {
+	/// A read of the value `name`, of the type `outerTypes` holds for it, which cannot cross into a `@Sendable` function,
+	/// unless the place's own function binds it, typed `typeDeclaredInFunction`, which the function never captures.
+	static func valueRead(_ name: String, outerTypes: [String: TypeDescription], typeDeclaredInFunction: TypeDescription? = nil) -> PlaceRead {
 		PlaceRead(
 			argumentLabel: name,
 			label: name,
-			property: Property(label: name, typeDescription: outerTypes[name] ?? .simple(name: "Any")),
+			property: Property(label: name, typeDescription: typeDeclaredInFunction ?? outerTypes[name] ?? .simple(name: "Any")),
 			source: .binding(label: name),
-			staysOutsideSendableFunctions: true,
+			staysOutsideSendableFunctions: typeDeclaredInFunction == nil,
 		)
 	}
 
 	/// `text`, an argument's value, spliced into the values it reads, the functions of `declaredFunctionNames` it names,
 	/// and text; `nil` where it calls a function it does not declare, which keeps the root one per path. A name of
 	/// `rootNames`, a parameter of `mock()` no place binds, is read as a root declaration.
-	static func splicedValue(of text: String, declaredFunctionNames: Set<String>, rootNames: Set<String>, outerTypes: [String: TypeDescription]) -> ValuePath? {
+	/// A name of `passedArgumentNames` is a read of the parameter it maps to, which the call hands the place's function, and
+	/// a name of `typesDeclaredInFunction` a read of a value the place's function binds before its call, of the type it maps to.
+	static func splicedValue(of text: String, declaredFunctionNames: Set<String>, rootNames: Set<String>, outerTypes: [String: TypeDescription], passedArgumentNames: [String: String] = [:], typesDeclaredInFunction: [String: TypeDescription] = [:]) -> ValuePath? {
 		let tokens = codeTokens(in: text)
 		let localNames = declaredNames(in: text, tokens: tokens)
 		var segments = [ValueSegment]()
@@ -167,6 +170,10 @@ extension MockLowering {
 			if declaredFunctionNames.contains(token.name) {
 				appendText(upTo: token.range.lowerBound)
 				segments.append(.declaredFunction(token.name))
+				cursor = token.range.upperBound
+			} else if let parameterName = passedArgumentNames[token.name] {
+				appendText(upTo: token.range.lowerBound)
+				segments.append(.value(.passedArgument(parameterName)))
 				cursor = token.range.upperBound
 			} else if rootNames.contains(token.name) {
 				appendText(upTo: token.range.lowerBound)
@@ -192,7 +199,7 @@ extension MockLowering {
 					))))
 					cursor = text.index(token.range.upperBound, offsetBy: suffix.count)
 				} else {
-					segments.append(.value(.read(valueRead(token.name, outerTypes: outerTypes))))
+					segments.append(.value(.read(valueRead(token.name, outerTypes: outerTypes, typeDeclaredInFunction: typesDeclaredInFunction[token.name]))))
 					cursor = token.range.upperBound
 				}
 			}
@@ -236,6 +243,14 @@ extension MockLowering {
 }
 
 extension MockLowering {
+	/// The override a call of another module's public mock reads in its own `@Sendable` builder function, which the walk
+	/// reads into `localName` before the function, from `read`, of `type`.
+	struct BoundOverride {
+		let localName: String
+		let read: ValuePath
+		let type: TypeDescription
+	}
+
 	/// The plan node of a call of another module's public mock the mock switch lays out: one per generator and text, so
 	/// places that share a node are written alike.
 	struct PublicMockCallPlanNodeKey: Hashable {
@@ -289,6 +304,7 @@ extension MockLowering.Walk {
 		functionName: String,
 		calledFunctionName: String,
 		constructionText: String?,
+		boundOverride: MockLowering.BoundOverride?,
 		argumentTexts: [(argument: Initializer.Argument, value: String)],
 		overridesValue: String?,
 		bodyLines: [String],
@@ -300,6 +316,7 @@ extension MockLowering.Walk {
 		guard let guardIndex = bodyLines.lastIndex(of: guardLine) else { return "publicMockCall:noGuard" }
 		let outerTypes = publicMockCallOuterTypes(of: generator)
 		let rootNames = publicMockCallRootNames
+		let passedArgumentNames = boundOverride.map { [$0.localName: ReservedName.configurationBuilderPropertyName] } ?? [:]
 		func alias(_ text: String, label: String, type: TypeDescription, reads: [PlaceRead], declaredFunctionNames: [String] = []) -> GeneratedCode {
 			.place(PlacePlan(code: .text(text), record: .alias(AliasPlaceRecord(property: Property(label: label, typeDescription: type), fulfillingProperty: nil, text: text, reads: reads, declaredFunctionNames: declaredFunctionNames))))
 		}
@@ -312,6 +329,7 @@ extension MockLowering.Walk {
 			children.append(alias(fillText, label: "\(functionName)_fills", type: .simple(name: "Void"), reads: place.reads, declaredFunctionNames: place.declaredFunctionNames))
 		}
 		children.append(alias(guardLine, label: "\(functionName)_guard", type: .simple(name: "Void"), reads: []))
+		var typesDeclaredInFunction = [String: TypeDescription]()
 		for line in bodyLines[(guardIndex + 1)...] {
 			guard line.hasPrefix("let "),
 			      let colon = line.range(of: ": "),
@@ -319,13 +337,15 @@ extension MockLowering.Walk {
 			      let place = MockLowering.textPlace(String(line[equals.upperBound...]), outerTypes: outerTypes)
 			else { return "publicMockCall:rebinding" }
 			let label = String(line[line.index(line.startIndex, offsetBy: 4)..<colon.lowerBound])
-			children.append(alias(line, label: label, type: .simple(name: String(line[colon.upperBound..<equals.lowerBound])), reads: place.reads))
+			let type = TypeDescription.simple(name: String(line[colon.upperBound..<equals.lowerBound]))
+			children.append(alias(line, label: label, type: type, reads: place.reads))
+			typesDeclaredInFunction[label] = type
 		}
 		var arguments = [PlaceRead]()
 		var argumentValues = [Int: ValuePath]()
 		var constructionValue: ValuePath?
 		if let constructionText {
-			guard let spliced = MockLowering.splicedValue(of: constructionText, declaredFunctionNames: declaredFunctionNames, rootNames: rootNames, outerTypes: outerTypes) else { return "publicMockCall:constructionCallsFunction" }
+			guard let spliced = MockLowering.splicedValue(of: constructionText, declaredFunctionNames: declaredFunctionNames, rootNames: rootNames, outerTypes: outerTypes, passedArgumentNames: passedArgumentNames, typesDeclaredInFunction: typesDeclaredInFunction) else { return "publicMockCall:constructionCallsFunction" }
 			constructionValue = spliced
 		}
 		var values = argumentTexts.map { (label: $0.argument.label, innerLabel: $0.argument.innerLabel, type: $0.argument.typeDescription, value: $0.value) }
@@ -334,7 +354,7 @@ extension MockLowering.Walk {
 		}
 		for value in values where constructionValue == nil {
 			guard value.label != "_" else { return "publicMockCall:unlabeledArgument" }
-			guard let spliced = MockLowering.splicedValue(of: value.value, declaredFunctionNames: declaredFunctionNames, rootNames: rootNames, outerTypes: outerTypes) else { return "publicMockCall:argumentCallsFunction" }
+			guard let spliced = MockLowering.splicedValue(of: value.value, declaredFunctionNames: declaredFunctionNames, rootNames: rootNames, outerTypes: outerTypes, passedArgumentNames: passedArgumentNames, typesDeclaredInFunction: typesDeclaredInFunction) else { return "publicMockCall:argumentCallsFunction" }
 			argumentValues[arguments.count] = spliced
 			arguments.append(PlaceRead(argumentLabel: value.label, label: value.innerLabel, property: Property(label: value.innerLabel, typeDescription: value.type), source: .binding(label: value.innerLabel)))
 		}
@@ -361,6 +381,10 @@ extension MockLowering.Walk {
 		)
 		record.argumentValues = argumentValues
 		record.constructionValue = constructionValue.map { ConstructionValue(value: $0, resultWrapper: nil) }
+		if let boundOverride {
+			// `mock()`'s overrides stay outside `@Sendable` functions; the local bound from them holds a `@Sendable` closure.
+			record.passedArguments = [PassedArgument(parameterName: ReservedName.configurationBuilderPropertyName, type: boundOverride.type, value: boundOverride.read, staysOutsideSendableFunctions: true, bindsBeforeCall: true)]
+		}
 		builtRecords[childIndexPath] = .built(record)
 		return nil
 	}

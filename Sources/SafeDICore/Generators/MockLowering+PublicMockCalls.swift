@@ -440,6 +440,13 @@ extension MockLowering.Walk {
 		// A call held in an instantiator is made in the builder function the instantiator holds.
 		let isInstantiator = !property.propertyType.isConstant
 		var recordsAsPlace = false
+		// A call whose own `@Sendable` builder function reads its override into a local before the function hands the
+		// function that override, bound before the call, as the extraction binds it (`PassedArgument.bindsBeforeCall`).
+		let boundOverride: MockLowering.BoundOverride? = if extractionLines == ["\(indent)let \(overrideRead) = \(nodePath)"], let field = node.overridesField, let read = MockLowering.overrideReadPath(nodePath) {
+			MockLowering.BoundOverride(localName: overrideRead, read: read, type: .simple(name: field.typeSource))
+		} else {
+			nil
+		}
 		// Records the call as a built place, given its builder function's statements before its call.
 		func recordPlace(bodyLines: [String]) {
 			guard recordsAsPlace else { return }
@@ -453,6 +460,7 @@ extension MockLowering.Walk {
 				calledFunctionName: publicMockCall.functionName,
 				// A call an override closure configures is its `if`, copied as written.
 				constructionText: readsOverride && overrideBuilders != nil ? call : nil,
+				boundOverride: boundOverride,
 				argumentTexts: argumentTexts,
 				overridesValue: overridesValue,
 				bodyLines: bodyLines,
@@ -468,9 +476,9 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "publicMockCall:loop"
 		} else if isPromoted {
 			unrecordedReasons[childIndexPath] = "publicMockCall:promoted"
-		} else if !extractionLines.isEmpty {
+		} else if !extractionLines.isEmpty, boundOverride == nil {
 			unrecordedReasons[childIndexPath] = "publicMockCall:sendableExtraction"
-		} else if filledCall != nil || !passesOnlyReads || overrideBuilders != nil {
+		} else if filledCall != nil || !passesOnlyReads || overrideBuilders != nil || boundOverride != nil {
 			// A call that passes builders is a built place with a function of its own (`recordPublicMockCallPlace`).
 			recordsAsPlace = true
 		} else {
