@@ -506,8 +506,9 @@ extension ScopeRecord {
 		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
 		let root = ConstructionScope(table: table, record: self)
 		// The tree's plan by declaration, built only where a test reads it and read by nothing that generates code.
-		if let observer = PerTypePlanObservation.observer, let plan = PerTypePlan(root: root) {
-			observer(plan.projection)
+		if PerTypePlanObservation.observer != nil || PerTypePlanObservation.variantsObserver != nil, let plan = PerTypePlan(root: root) {
+			PerTypePlanObservation.observer?(plan.projection)
+			PerTypePlanObservation.variantsObserver?(PlanVariants(plan: plan).projection)
 		}
 		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
 		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees
