@@ -27,7 +27,7 @@ extension TypeKeyLayout {
 			.statement(owner: owner, index: position)
 		} else if owner == 0 {
 			.none
-		} else if representative(of: owner)?.parameterProperties.contains(where: { $0.label == label }) == true {
+		} else if parameterLabelsByClass[owner].contains(label) {
 			.forwarded(owner: owner, label: label)
 		} else if outcomes[owner][label] == .passed {
 			.read(owner: owner, label: label)
@@ -41,8 +41,21 @@ extension TypeKeyLayout {
 
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
-		let statements = statements(ofClass: owner)
-		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { self.label(of: statements[$0]) == label }
+		// The body `statements(ofClass:)` reads, whose positions of each label are indexed in order: a lookup in the root's
+		// long body stays logarithmic.
+		let body = owner == 0 ? 0 : membersByClass[owner][0]
+		guard let positions = bodies[body].positionsByLabel[label] else { return nil }
+		var low = 0
+		var high = positions.count
+		while low < high {
+			let middle = (low + high) / 2
+			if positions[middle] < index {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		return low == 0 ? nil : positions[low - 1]
 	}
 
 	/// The type key's declaration for a path declaration.
