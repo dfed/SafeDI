@@ -20,13 +20,12 @@
 
 import Foundation
 
-/// The type key's layout of an internal mock's body (`TypeKeyBody`), behind a switch tests turn on: the walk's places, each
-/// with the record production's record function makes of it, laid out as production's are. A root any place of which has
+/// The type key's layout of an internal mock's body (`TypeKeyBody`): the walk's places, each with the record production's
+/// record function makes of it, laid out as production's are. A root any place of which has
 /// no record, or reads a value the records cannot name, keeps the walk's body.
 extension MockLowering {
-	/// Whether internal mocks' bodies are laid out by the type key: set by a test, or by `SAFEDI_MOCK_TYPE_KEY=1` for a run
-	/// of the graph fuzzer's corpora.
-	@TaskLocal static var laysOutWithTypeKey = ProcessInfo.processInfo.environment["SAFEDI_MOCK_TYPE_KEY"] == "1"
+	/// Whether internal mocks' bodies are laid out by the type key. A test that compares the walk's body sets it off.
+	@TaskLocal static var laysOutWithTypeKey = true
 
 	/// Called with each internal mock root's layout outcome while the switch is on: `laidOut`, or why the root keeps the walk's
 	/// body, as `unrecorded:threw:<error case>` where production's record function threw at one of its places. Set by the

@@ -2232,7 +2232,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// Seeds 44 and 45 draw the first graphs that build `Dock` inline beside the builder a probe hands `mock()`
 	/// (`buildsDockInlineBesideBuilder`), with a plain place and a deferred one, each the first of its cell, so compared:
 	/// the place of `Dock`, a hole of `Dock`'s module, holds what that builder builds, as the called type's place does.
-	/// With the mock switch on (`SAFEDI_MOCK_TYPE_KEY=1`), each fails with the type key laying the inline-built place out
+	/// With the type key's layout on (`MockLowering.laysOutWithTypeKey`), each fails with the type key laying the inline-built place out
 	/// from its fill, which the place reads only where `mock()` is handed no builder (`HoleBuilder.inlinePlaceValue`), in
 	/// place of the root falling back (`unrecordedReasons`' `inlinePlaceBuilder`).
 	@Test(arguments: [UInt64(44), 45])
