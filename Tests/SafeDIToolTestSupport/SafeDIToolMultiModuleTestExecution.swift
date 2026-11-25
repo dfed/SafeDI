@@ -612,7 +612,7 @@ func executeSafeDIToolMultiModuleTest(
 							}
 						}
 					}
-				}
+					}
 				}
 			} catch {
 				// A run that read a stored seam signature and failed reports what a run computing every signature reports.

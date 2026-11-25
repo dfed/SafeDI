@@ -280,9 +280,15 @@ public enum SeamRouteQueryShadow {
 	static func describe(_ level: SeamPlaceLevels.Level) -> String {
 		let declarations = level.declarations.map { declaration in
 			var text = declaration.property.asSource
-			if !declaration.isBoundBeforeNextProperty { text += "(after)" }
-			if declaration.isCycleParameter { text += "(cycle)" }
-			if declaration.isReboundByBuilderFunction { text += "(rebound)" }
+			if !declaration.isBoundBeforeNextProperty {
+				text += "(after)"
+			}
+			if declaration.isCycleParameter {
+				text += "(cycle)"
+			}
+			if declaration.isReboundByBuilderFunction {
+				text += "(rebound)"
+			}
 			return text
 		}
 		return "[\(declarations.joined(separator: ", "))]\(level.opensSendableFunction ? " @Sendable" : "")"

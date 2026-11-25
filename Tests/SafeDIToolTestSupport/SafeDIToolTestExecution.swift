@@ -354,7 +354,7 @@ func executeSafeDIToolTest(
 						}
 					}
 				}
-			}
+				}
 			}
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
