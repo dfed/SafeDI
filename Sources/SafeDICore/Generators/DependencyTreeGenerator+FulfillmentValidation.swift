@@ -1258,9 +1258,10 @@ extension DependencyTreeGenerator {
 		/// since a key holds its root's context.
 		var cleanSubtrees = Set<CleanSubtreeKey>()
 		/// For each scope, how many times in a row a walk keyed it and no remembered walk had an equal key. At
-		/// `cleanSubtreeMissLimit` a scope that reaches a cycle of instantiators is keyed no more: where screens open each other
-		/// without layers, a scope is reached along thousands of paths whose keys all differ, so every key and every
-		/// comparison at a scope that closes a cycle on it was paid for nothing. Shared by every root, as `cleanSubtrees`
+		/// `cleanSubtreeMissLimit` a scope is keyed no more: where screens open each other without layers, a scope is reached
+		/// along thousands of paths whose keys all differ, so every key and every comparison at a scope that closes a cycle on
+		/// it was paid for nothing; and where erased screens are each reached along many paths with no cycle, every key
+		/// differs as well. Shared by every root, as `cleanSubtrees`
 		/// is; the walk visits roots and children in a fixed order, so the count is the same on every run, and it decides
 		/// only which subtrees are walked again, never what a walk reports.
 		var cleanSubtreeMissesInARowByScope = [Scope: Int]()
@@ -1742,14 +1743,12 @@ extension DependencyTreeGenerator {
 							// This skip consults a memo inside the walk. Its planned replacement walks each distinct subtree context
 							// once by construction, as a node of its own that every equal visit shares, once a measurement shows
 							// that node pays for itself; it then takes this memo's place and `skipsCleanSubtrees` goes with it.
-							// One that reaches a cycle and was keyed `cleanSubtreeMissLimit` times in a row for nothing is keyed no more:
-							// its walk is then remembered nowhere, and a cycle that closes on it blocks the memo above, as any
+							// One keyed `cleanSubtreeMissLimit` times in a row for nothing is keyed no more, whether or not it reaches a
+							// cycle: its walk is then remembered nowhere, and a cycle that closes on it blocks the memo above, as any
 							// scope without a key does.
 							let isReachedAgain = !validationWalkScopesReached.insert(childToValidate.scope).inserted
-							let reachesCycle = reachesInstantiationCycle(from: childToValidate.scope)
-							let isKeyed = reachesCycle
-								? cleanSubtreeMissesInARowByScope[childToValidate.scope, default: 0] < cleanSubtreeMissLimit
-								: isReachedAgain
+							let isKeyed = (isReachedAgain || reachesInstantiationCycle(from: childToValidate.scope))
+								&& cleanSubtreeMissesInARowByScope[childToValidate.scope, default: 0] < cleanSubtreeMissLimit
 							if skipsCleanSubtrees, isKeyed {
 								validationWalkObserver?(.keyedSubtree)
 								let childKey = cleanSubtreeKey(of: childToValidate, rootContextIndex: rootContextIndex)
