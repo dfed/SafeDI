@@ -281,6 +281,8 @@ extension MockLowering.Walk {
 		var overrideArguments = [String]()
 		var argumentByLabel = [String: String]()
 		var passedUpBuilderBindings = [String]()
+		// Whether every argument is a value the call reads by name, which the call's record lists (`publicMockCallRecord`).
+		var passesOnlyReads = true
 		func labeled(_ value: String, as argument: Initializer.Argument) -> String {
 			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}
@@ -299,7 +301,9 @@ extension MockLowering.Walk {
 					passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
 				}
 				arguments.append(labeled(".init(\(ReservedName.noScopeArgumentLabel): \(dependency.property.label))", as: argument))
+				passesOnlyReads = false
 			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
+				passesOnlyReads = false
 				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
 				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
 				if overrideBuilders != nil {
@@ -308,6 +312,7 @@ extension MockLowering.Walk {
 			} else if overrideBuilders == nil, let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
 				// A builder a `.public` caller's call passes up, as its own struct's member.
 				arguments.append(labeled(holeValue, as: argument))
+				passesOnlyReads = false
 			} else if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is, or
 				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`).
@@ -432,6 +437,22 @@ extension MockLowering.Walk {
 		// A call held in an instantiator is made in the builder function the instantiator holds.
 		let isInstantiator = !property.propertyType.isConstant
 		guard let filledCall else {
+			let firstLineIndex = lines.endIndex
+			defer {
+				// The type key copies a call that reads only values by name, outside a loop and a `@Sendable` function's
+				// extraction, as written (`publicMockCallRecord`).
+				if passesOnlyReads, loopMembership == nil, extractionLines.isEmpty, !isPromoted, overrideBuilders == nil {
+					recordPublicMockCall(
+						property: property,
+						lines: Array(lines[firstLineIndex...]),
+						indent: indent,
+						argumentValues: Dictionary(uniqueKeysWithValues: instantiable.dependencies.compactMap { dependency in argumentByLabel[dependency.property.label].map { (dependency.property, $0) } }),
+						overrideRead: readsOverride && publicMockCall.takesOverrides ? overrideRead : nil,
+						declaredFunctionName: isInstantiator ? functionName : nil,
+						forwardedProperties: forwarded,
+					)
+				}
+			}
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 			lines.append(contentsOf: extractionLines)
 			// A call on a loop of builders first rebinds the members its tree receives, and its level
@@ -671,5 +692,49 @@ extension MockLowering {
 			let value = builder.inlinePlaceValue(construction: construction, overrideExpression: overrideRead, wrappingBuilderIn: unwrappedType.spelledForConstruction)
 			return "\(bindingPrefix)\(value)".split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		}
+	}
+}
+
+extension MockLowering.Walk {
+	/// Records a call of another module's public mock, written as `lines` at `indent`, as a place the type key copies as
+	/// written (`AliasPlaceRecord`): it binds the call's property and declares its builder function where it has one, and
+	/// reads each value it passes by name and the override it reads. A call the record cannot list the reads of keeps the
+	/// walk's body.
+	mutating func recordPublicMockCall(
+		property: Property,
+		lines: [String],
+		indent: String,
+		argumentValues: [Property: String],
+		overrideRead: String?,
+		declaredFunctionName: String?,
+		forwardedProperties: [Property],
+	) {
+		let boundByFunction = Set(forwardedProperties.map(\.label))
+		var reads = [PlaceRead]()
+		var readLabels = Set<String>()
+		func read(_ label: String, property: Property, source: ArgumentSource) {
+			guard !boundByFunction.contains(label), readLabels.insert(label).inserted else { return }
+			reads.append(PlaceRead(argumentLabel: label, label: label, property: property, source: source, staysOutsideSendableFunctions: true))
+		}
+		let instanceSuffix = ".\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		for (dependencyProperty, value) in argumentValues.sorted(by: { $0.key < $1.key }) where value != "nil" {
+			if value.hasSuffix(instanceSuffix) {
+				let name = String(value.dropLast(instanceSuffix.count))
+				read(name, property: Property(label: name, typeDescription: dependencyProperty.typeDescription), source: .lazyInstance(label: name, throughOptional: false))
+			} else {
+				read(value, property: Property(label: value, typeDescription: dependencyProperty.typeDescription), source: .binding(label: value))
+			}
+		}
+		if let overrideRead, let root = overrideRead.split(separator: ".").first.map(String.init) {
+			read(root, property: Property(label: root, typeDescription: .simple(name: ReservedName.mockOverridesTypeName, generics: [])), source: .binding(label: root))
+		}
+		let text = lines.map { $0.hasPrefix(indent) ? String($0.dropFirst(indent.count)) : $0 }.joined(separator: "\n")
+		builtRecords[childIndexPath] = .alias(AliasPlaceRecord(
+			property: property,
+			fulfillingProperty: nil,
+			text: text,
+			reads: reads,
+			declaredFunctionNames: declaredFunctionName.map { [$0] } ?? [],
+		))
 	}
 }
