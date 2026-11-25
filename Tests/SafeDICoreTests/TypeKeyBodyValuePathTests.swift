@@ -291,8 +291,91 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
-	func statements_keepsThePathKeysBody_whenACloserHandsAPassedArgumentAMember() {
-		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))) == nil)
+	func statements_handsTheClosedOnFunctionAMember_whenACloserHandsAPassedArgumentAMember() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: overrides.cfg)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
+	}
+
+	@Test
+	func statements_sharesOneFunctionPerType_whenACloserAndABuiltCallHandTheSameSplicedValue() throws {
+		// `b` builds `c`, which closes on `b`; `c` at the root builds `b`, which closes on it. Each call of a type's function,
+		// built or closing, hands the nearest configuration of the type first, else its parent's field.
+		func arguments(ofCallTo type: String, from parent: String) -> [PassedArgument] {
+			let lower = type.lowercased()
+			return [
+				PassedArgument(parameterName: "cfg", type: .simple(name: "\(type)Cfg"), value: .spliced([.value(.passedArgument("\(lower)Nearest")), .text(" ?? "), .value(.member(lower, of: .passedArgument("cfg")))]), staysOutsideSendableFunctions: false),
+				PassedArgument(parameterName: "\(parent.lowercased())Nearest", type: .optional(.simple(name: "\(parent)Cfg")), value: .passedArgument("cfg"), staysOutsideSendableFunctions: false),
+			]
+		}
+		func rootArguments(ofCallTo type: String, other: String) -> [PassedArgument] {
+			[
+				PassedArgument(parameterName: "cfg", type: .simple(name: "\(type)Cfg"), value: .member(type.lowercased(), of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false),
+				PassedArgument(parameterName: "\(other.lowercased())Nearest", type: .optional(.simple(name: "\(other)Cfg")), value: .spliced([.text("nil")]), staysOutsideSendableFunctions: false),
+			]
+		}
+		func read(_ type: String) -> PlaceRead {
+			let label = type.lowercased()
+			return PlaceRead(argumentLabel: label, label: label, property: Property(label: label, typeDescription: .simple(name: type)), source: .binding(label: label))
+		}
+		func closer(on type: String, from parent: String) -> GeneratedCode {
+			var closer = ClosingPlaceRecord(
+				property: Property(label: type.lowercased(), typeDescription: .simple(name: type)),
+				isErased: false,
+				isExtension: false,
+				closedOnFunctionName: "__safeDI_\(type.lowercased())",
+				forwardedProperties: [],
+				cycleArguments: [],
+			)
+			closer.passedArguments = arguments(ofCallTo: type, from: parent)
+			return .place(PlacePlan(code: .text(""), record: .closer(closer)))
+		}
+		func built(_ type: String, passedArguments: [PassedArgument], child: String, childCode: GeneratedCode) -> GeneratedCode {
+			var record = BuiltPlaceRecord(
+				property: Property(label: type.lowercased(), typeDescription: .simple(name: type)),
+				isErased: false,
+				concreteType: .simple(name: type),
+				isExtension: false,
+				target: .initializer(.simple(name: type)),
+				arguments: [read(child)],
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: "__safeDI_\(type.lowercased())",
+				isSendable: false,
+				typesDeclaredEscaping: [],
+				lineEnd: "",
+				hasFunction: true,
+				children: [childCode],
+				node: PlanNode(),
+			)
+			record.passedArguments = passedArguments
+			return .place(PlacePlan(code: .text(""), record: .built(record)))
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [
+			built("B", passedArguments: rootArguments(ofCallTo: "B", other: "C"), child: "C", childCode: built("C", passedArguments: arguments(ofCallTo: "C", from: "B"), child: "B", childCode: closer(on: "B", from: "C"))),
+			built("C", passedArguments: rootArguments(ofCallTo: "C", other: "B"), child: "B", childCode: built("B", passedArguments: arguments(ofCallTo: "B", from: "C"), child: "C", childCode: closer(on: "C", from: "B"))),
+		], outerDeclarations: [Property(label: "overrides", typeDescription: .simple(name: "Overrides"))]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        func __safeDI_b(cfg: BCfg, cNearest: CCfg?) -> B {
+		            let c: C = __safeDI_c(cfg: cNearest ?? cfg.c, bNearest: cfg)
+		            return B(c: c)
+		        }
+		        func __safeDI_c(cfg: CCfg, bNearest: BCfg?) -> C {
+		            let b: B = __safeDI_b(cfg: bNearest ?? cfg.b, cNearest: cfg)
+		            return C(b: b)
+		        }
+		        let b: B = __safeDI_b(cfg: overrides.b, cNearest: nil)
+		        let c: C = __safeDI_c(cfg: overrides.c, bNearest: nil)
+		""")
 	}
 
 	@Test
