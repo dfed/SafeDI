@@ -267,7 +267,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 					modules: SafeDIToolSeamBuilderParameterTests.modules(
 						feature: [
 							"public protocol Api: Sendable {}",
-							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]) .replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
+							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]).replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
 							seamFixtureType(named: "First", declarations: ["@Instantiated let panel: Panel"]),
 							seamFixtureType(named: "Second", declarations: ["@Instantiated let panel: Panel"]),
 							seamFixtureType(named: "Third", declarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"]),
