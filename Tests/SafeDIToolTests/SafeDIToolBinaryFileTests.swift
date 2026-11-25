@@ -1701,6 +1701,16 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			#expect(hole.uncarriedDeclarations.map(\.builtAfter?.label) == [nil] + Array(repeating: labels[index], count: builderCount - index - 1), "declarations bound after \(labels[index])")
 			#expect(hole.uncarriedDeclarations.map(\.labelsHeldAboveSeam) == labels[index...].map { [$0] }, "declarations bound after \(labels[index])")
 		}
+		// A place's fields, its case's payload and its scope's are one list, written in one slot, so they are one storage
+		// once read: of the last place here, whose list is long enough to be written as a difference.
+		func storage(_ fields: [SeamSignature.Hole.Field]) -> UnsafeRawPointer? {
+			fields.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		let lastPlace = try #require(indicesInLabelOrder.firstIndex(of: builderCount - 1))
+		let lastHole = plan.holes[lastPlace]
+		#expect(lastHole.fields.count == builderCount - 1)
+		#expect(try storage(#require(lastHole.enumPlace).values) == storage(lastHole.fields))
+		#expect(try storage(#require(plan.scopeEnums[lastPlace].cases.first?.values).fields) == storage(lastHole.fields))
 		#expect(plan.scopeEnums.count == builderCount)
 		for (scopeEnum, index) in zip(plan.scopeEnums, indicesInLabelOrder) {
 			let values = try #require(scopeEnum.cases.first?.values)
@@ -1756,8 +1766,14 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			try declarations.append(read(writer.encoded))
 		}
 		#expect(Set(declarations.map(Self.encoded)).count == fields.count)
+		let declarationsBuiltAfterNoPlace = declarations.filter { $0.builtAfter == nil }
 		// Each list a place writes: every declaration, then the lists that drop one from either end, and the first again.
+		// The one declaration built after a place is written last too, and the lists are written reversed as well, so that
+		// each declaration is read both before a run of `builtAfter` ends and after the last run.
+		declarations += declarations.filter { $0.builtAfter != nil }
+		#expect(declarations.last?.builtAfter != nil)
 		var lists = [DeclarationsWrittenAsDifference(declarations: declarations)]
+		lists.append(DeclarationsWrittenAsDifference(declarations: declarations.reversed()))
 		lists += declarations.indices.map { DeclarationsWrittenAsDifference(declarations: Array(declarations[$0...])) }
 		lists += declarations.indices.map { DeclarationsWrittenAsDifference(declarations: Array(declarations[..<$0])) }
 		lists.append(DeclarationsWrittenAsDifference(declarations: declarations))
@@ -1772,15 +1788,36 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 
 		#expect(readLists.map { $0.declarations.map(Self.encoded) } == lists.map { $0.declarations.map(Self.encoded) })
+
+		// A list none of whose declarations is built after a place is the list read, so two places' equal lists are one
+		// storage, as two equal lists a signature held were before lists were written as differences.
+		let equalLists = [declarationsBuiltAfterNoPlace, Array(declarationsBuiltAfterNoPlace.dropLast()), declarationsBuiltAfterNoPlace].map(DeclarationsWrittenAsDifference.init)
+		var equalListsWriter = BinaryWriter()
+		equalListsWriter.write(BinarySharingSignatureValues(equalLists))
+		let readEqualLists = try equalListsWriter.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[DeclarationsWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+		func storage(_ index: Int) -> UnsafeRawPointer? {
+			readEqualLists[index].declarations.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		#expect(declarationsBuiltAfterNoPlace.count == fields.count - 1)
+		#expect(storage(2) == storage(0))
+		#expect(storage(1) != storage(0))
 	}
 
 	@Test
 	func binaryReader_handsBackOneStorage_whenListsOfSameElementsAreWrittenAsDifferences() throws {
-		// Each list comes again after lists that share its start and its end, in the same slot, and once more written
-		// whole inside another value: a signature holds one list of a scope's fields at every place of the scope.
+		// A signature holds one list of a scope's fields at every place of the scope. Each list comes again after lists
+		// that share its start and its end: `middle` when the last list shares nothing with it and a longer one starts as
+		// it does, so that only the first list of the same elements is the list it is; `short`, too short to be written
+		// as a difference, by the bytes it is written whole as.
 		let long = ListWrittenAsDifference(list: ["a", "b", "c", "d", "e", "f"])
+		let middle = ListWrittenAsDifference(list: ["a", "b", "c", "d"])
 		let short = ListWrittenAsDifference(list: ["a", "b"])
-		let lists = [long, ListWrittenAsDifference(list: ["a", "b", "c", "d"]), short, ListWrittenAsDifference(list: ["e", "f"]), long, short, short]
+		let lists = [long, middle, short, ListWrittenAsDifference(list: ["e", "f"]), long, short, short, ListWrittenAsDifference(list: ["x", "y", "z", "w"]), middle]
 		var writer = BinaryWriter()
 		writer.write(BinarySharingSignatureValues(lists))
 
@@ -1798,6 +1835,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		#expect(storage(4) == storage(0))
 		#expect(storage(5) == storage(2))
 		#expect(storage(6) == storage(2))
+		#expect(storage(8) == storage(1))
 	}
 
 	@Test
@@ -1859,6 +1897,20 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let bytes: [UInt8] = [1, 1, 0x61, 2, 2, 0, 1, 1, 2, 0]
 
 		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 6)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryReader_throws_whenListCountsMoreElementsOfItsOwnThanBytesRemain() {
+		// The string "a", then two lists: one of that string, and one that keeps its element and counts two hundred of
+		// its own after it, with no byte after the counts.
+		let bytes: [UInt8] = [1, 1, 0x61, 2, 2, 0, 0x91, 0x03, 1, 1, 0]
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 200, offset: 6)) {
 			try bytes.withUnsafeBytes { bytes in
 				var reader = try BinaryReader(bytes: bytes)
 				let _: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
@@ -2892,7 +2944,6 @@ extension TypeAccessProof.MemberKind: BinarySample {}
 extension ModuleIdentity: BinarySample {}
 extension AccessRequirement: BinarySample {}
 
-/// A list written as its difference from one written before it (`BinaryWriter.writeDifference(of:in:)`).
 /// A place's uncarried declarations, written as a seam signature writes them.
 private struct DeclarationsWrittenAsDifference: BinaryCodable {
 	init(declarations: [SeamSignature.Hole.UncarriedDeclaration]) {
@@ -2910,6 +2961,7 @@ private struct DeclarationsWrittenAsDifference: BinaryCodable {
 	}
 }
 
+/// A list written as its difference from one written before it (`BinaryWriter.writeDifference(of:in:)`).
 private struct ListWrittenAsDifference: BinaryCodable, Equatable {
 	init(list: [String]) {
 		self.list = list

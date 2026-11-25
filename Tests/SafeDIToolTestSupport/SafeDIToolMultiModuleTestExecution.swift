@@ -606,7 +606,7 @@ func executeSafeDIToolMultiModuleTest(
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
 											// Every stored block the run reads must decode (`StoredBlockDecodeChecks`).
-											try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver)) {
+											try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)) {
 												try await tool.generate()
 											}
 										}
@@ -635,7 +635,7 @@ func executeSafeDIToolMultiModuleTest(
 
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
-			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, sourceLocation: sourceLocation)
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
 		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.

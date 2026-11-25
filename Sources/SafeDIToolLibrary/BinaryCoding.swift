@@ -209,7 +209,7 @@ struct BinaryWriter {
 	}
 
 	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
-	fileprivate(set) var writesPositionsAsAbsent = false
+	private(set) var writesPositionsAsAbsent = false
 
 	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
 	/// optional, so `write` writes what it would write of a copy of the values with every position `nil`, without making
@@ -348,10 +348,12 @@ struct BinaryWriter {
 	/// N × N entries: a plan of 80 builders was 124 KB, and one of 160, 442 KB. A place's list is another place's plus
 	/// or minus a few declarations, so it is written as the list it differs from (how many lists back in the slot), how
 	/// many elements it keeps from that list's start and from its end, and the elements between, in full. The list it
-	/// differs from is the one that shares the most elements at its two ends among three written before: the last one,
-	/// the longest that starts with this list's first element, and the longest that ends with its last. The places are
-	/// written in the order of their labels, not of their declarations, so the nearest list is rarely the last one. A
-	/// list that shares no element with any of the three is written whole.
+	/// differs from is the first list written of the same elements, where there is one, so that the reader hands that
+	/// list back, storage and all; and otherwise the one that shares the most elements at its two ends among three
+	/// written before: the last one, the longest that starts with this list's first element, and the longest that ends
+	/// with its last. The places are written in the order of their labels, not of their declarations, so the nearest
+	/// list is rarely the last one. A list that shares no element with any of the three, or that a difference would
+	/// write no shorter, is written whole.
 	///
 	/// Two elements are the same when they are written as the same bytes here, so what is read back is what a list
 	/// written whole would read back, whatever the elements are. An element is written once, where the list would have
