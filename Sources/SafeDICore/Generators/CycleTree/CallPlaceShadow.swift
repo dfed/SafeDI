@@ -28,21 +28,7 @@ public enum CallPlaceOrderObservation {
 	@TaskLocal public static var observer: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?
 }
 
-/// Lets a test compare, for each place of a production root's tree, which of its type's receives today's build passes
-/// `nil` with which a body passes `nil` that is built from the scope's copy with call places beneath only the nearest
-/// declarations of the labels the scope's tree receives and of the label it is built as: the answers a body is keyed by.
-public enum VariantBodyObservation {
-	/// Called with what the place is and the two sets of properties passed `nil`, each sorted.
-	@TaskLocal public static var observer: (@Sendable (_ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void)?
-}
-
 extension DependencyTreeGenerator {
-	/// What the bodies compared with today's places are kept by: the scope built and the property it is built as.
-	struct VariantBodyKey: Hashable {
-		let scope: ObjectIdentifier
-		let property: Property
-	}
-
 	/// A place of today's tree that builds a scope as a property, with the declarations its path gives it, as the scopes
 	/// above it declare them: each scope's declarations hide those above of their labels, and the property a place is
 	/// built as is being built beneath it. A place inside a function a lazy cycle closes on is listed once for the call of
@@ -60,6 +46,10 @@ extension DependencyTreeGenerator {
 		/// generator passes the parameter on, so it does not list a receive of such a label as passed `nil`, and the value
 		/// is `nil` for every receive of the label.
 		let labelsPassedNil: Set<String>
+		/// Whether the place is walked for a call by a scope that closes the cycle as another property than the function
+		/// was built for, a constant on a `LazilyInstantiated` of its label or the reverse (`PerTypePlan.twins`): today the
+		/// call builds what the function's property builds, and a plan's call place builds the calling property.
+		let isCalledAsTwin: Bool
 	}
 
 	/// A scope of today's tree that declares a builder function, which a scope beneath that closes a cycle on its
@@ -76,16 +66,24 @@ extension DependencyTreeGenerator {
 	/// beneath the function such a call calls are walked only where `followCall()` is asked after `next()` returns it: a
 	/// tree of screens that open each other calls each function along a number of paths that grows with every cycle.
 	struct PlaceContextWalk {
-		/// - Parameter rootScope: The scope `todaysTree` was built from.
-		init(ofTodaysTree todaysTree: ScopeGenerator, builtFrom rootScope: Scope) {
+		/// - Parameters:
+		///   - rootScope: The scope `todaysTree` was built from.
+		///   - nearestDeclarations: The declarations `todaysTree` was built beneath, with their lazily instantiated instances.
+		init(
+			ofTodaysTree todaysTree: ScopeGenerator,
+			builtFrom rootScope: Scope,
+			beneath nearestDeclarations: NearestDeclarations = NearestDeclarations(),
+			lazilyInstantiatedInstanceProperties: Set<Property> = [],
+		) {
 			places = [Place(
 				generator: todaysTree,
 				scope: rootScope,
-				nearestDeclarations: NearestDeclarations(),
-				lazilyInstantiatedInstanceProperties: [],
+				nearestDeclarations: nearestDeclarations,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				labelsPassedNil: [],
 				functions: [:],
 				callDescription: nil,
+				isCalledAsTwin: false,
 			)]
 		}
 
@@ -120,6 +118,7 @@ extension DependencyTreeGenerator {
 			let labelsPassedNil: Set<String>
 			let functions: [ScopeGenerator.BuiltDeclaration: FunctionPlace]
 			let callDescription: String?
+			let isCalledAsTwin: Bool
 		}
 
 		private var places: [Place]
@@ -140,7 +139,7 @@ extension DependencyTreeGenerator {
 					// What the place of `function`, built by `child`'s call of it, is given: a member of a loop of builders
 					// makes each wrapper its tree receives inside the loop again at the top of its function, its own included,
 					// so that rebinding is the nearest declaration beneath it, and is not being built.
-					func context(of function: FunctionPlace, describedAs description: String) -> PlaceContext {
+					func context(of function: FunctionPlace, describedAs description: String, isCalledAsTwin: Bool) -> PlaceContext {
 						var placeNearestDeclarations = childNearestDeclarations
 						placeNearestDeclarations.build(function.property)
 						for reboundProperty in function.generator.reboundProperties {
@@ -154,11 +153,12 @@ extension DependencyTreeGenerator {
 							nearestDeclarations: placeNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 							labelsPassedNil: childLabelsPassedNil.union(child.generator.labelsOfCycleParametersPassedNil),
+							isCalledAsTwin: isCalledAsTwin,
 						)
 					}
 					if case .property(_, _, _, _, false, _) = child.generator.scopeData {
 						let function = FunctionPlace(generator: child.generator, scope: childScope, property: property)
-						let context = context(of: function, describedAs: callDescription.map { "\(child.generator.scopeData.asDOTNode) \($0)" } ?? child.generator.scopeData.asDOTNode)
+						let context = context(of: function, describedAs: callDescription.map { "\(child.generator.scopeData.asDOTNode) \($0)" } ?? child.generator.scopeData.asDOTNode, isCalledAsTwin: place.isCalledAsTwin)
 						var childFunctions = functions
 						if let declaration = child.generator.declaration {
 							childFunctions[declaration] = function
@@ -171,6 +171,7 @@ extension DependencyTreeGenerator {
 							labelsPassedNil: context.labelsPassedNil,
 							functions: childFunctions,
 							callDescription: callDescription,
+							isCalledAsTwin: place.isCalledAsTwin,
 						), false))
 					} else if callDescription == nil,
 					          let function = child.generator.closedOnDeclaration.flatMap({ functions[$0] })
@@ -178,7 +179,7 @@ extension DependencyTreeGenerator {
 						// A scope that closes a cycle builds nothing: it is a call of the function it closes on, whose places
 						// are walked again with what this call's path gives them.
 						let description = "called by \(child.generator.scopeData.asDOTNode) in \(generator.scopeData.asDOTNode)"
-						let context = context(of: function, describedAs: "\(function.generator.scopeData.asDOTNode) \(description)")
+						let context = context(of: function, describedAs: "\(function.generator.scopeData.asDOTNode) \(description)", isCalledAsTwin: property != function.property)
 						childPlaces.append((context, Place(
 							generator: function.generator,
 							scope: function.scope,
@@ -187,6 +188,7 @@ extension DependencyTreeGenerator {
 							labelsPassedNil: context.labelsPassedNil,
 							functions: functions,
 							callDescription: description,
+							isCalledAsTwin: property != function.property,
 						), true))
 					}
 				}
@@ -219,6 +221,7 @@ extension DependencyTreeGenerator {
 			guard graph.nodes.indices.contains(where: { graph.isOnCycle($0) }) else { return nil }
 			var copyByIdentifier = [ObjectIdentifier: Scope]()
 			var callPlaceByIdentifier = [ObjectIdentifier: Scope]()
+			var calledScopeByCallPlace = [ObjectIdentifier: Scope]()
 			for (index, identifier) in graph.nodes.enumerated() {
 				if let scope = scopeByIdentifier[identifier] {
 					copyByIdentifier[identifier] = Scope(
@@ -228,7 +231,9 @@ extension DependencyTreeGenerator {
 						isUnavailableDependency: scope.isUnavailableDependency,
 					)
 					if graph.isOnCycle(index) {
-						callPlaceByIdentifier[identifier] = Scope(instantiable: callPlaceInstantiable(of: scope, receiving: collectReceivedProperties(from: scope, cache: &cache)))
+						let callPlace = Scope(instantiable: callPlaceInstantiable(of: scope, receiving: collectReceivedProperties(from: scope, cache: &cache)))
+						callPlaceByIdentifier[identifier] = callPlace
+						calledScopeByCallPlace[ObjectIdentifier(callPlace)] = scope
 					}
 				}
 			}
@@ -247,6 +252,18 @@ extension DependencyTreeGenerator {
 				}
 			}
 			self.copyByIdentifier = copyByIdentifier
+			self.calledScopeByCallPlace = calledScopeByCallPlace
+			self.callPlaceByIdentifier = callPlaceByIdentifier
+		}
+
+		/// Whether a copy builds `scope` as a call place: the scope is on a cycle.
+		func isOnCycle(_ scope: Scope) -> Bool {
+			callPlaceByIdentifier[ObjectIdentifier(scope)] != nil
+		}
+
+		/// The scope on a cycle that `callPlace` stands for in a copy, or `nil` for any other scope.
+		func scope(calledAt callPlace: Scope) -> Scope? {
+			calledScopeByCallPlace[ObjectIdentifier(callPlace)]
 		}
 
 		/// The copy of `scope`: its own type, building each child on a cycle as a call place and every other child as its
@@ -256,6 +273,8 @@ extension DependencyTreeGenerator {
 		}
 
 		private let copyByIdentifier: [ObjectIdentifier: Scope]
+		private let calledScopeByCallPlace: [ObjectIdentifier: Scope]
+		private let callPlaceByIdentifier: [ObjectIdentifier: Scope]
 	}
 
 	/// The type of `scope` as a call place: its own type and construction, receiving `receivedProperties`, each only if

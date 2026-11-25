@@ -737,16 +737,19 @@ public actor DependencyTreeGenerator {
 					// gives the labels the scope's tree receives, built only where a test compares the two.
 					// A tree with a label no one parameter can pass is rejected (`validateCycleLabelsArePassable`), and is not
 					// compared: a body beneath a call's own answers passes a value there that today's parameter cannot carry.
-					if let observer = VariantBodyObservation.observer,
+					let variantBodyObserver = VariantBodyObservation.observer
+					let planBodiesObserver = PlanBodiesObservation.observer
+					if variantBodyObserver != nil || planBodiesObserver != nil,
 					   let todaysTree = roots.last?.scopeGenerator,
 					   todaysTree.unpassableCycleLabelsInTree.isEmpty,
 					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
 					{
-						// The bodies built so far of each scope and property, each with the declarations it was built beneath.
-						var bodiesByPlace = [VariantBodyKey: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, unavailableOptionalProperties: Set<Property>)]]()
+						var bodies = VariantBodies(frozenScopeMap: validatedWorld.frozenScopeMap, declaredTypeNames: declaredTypeNames)
 						// The calls of each function already compared, each by the answers its call's path gives the labels the
 						// function's tree receives: the places beneath a call answered alike are given the same declarations.
 						var callsCompared = [ObjectIdentifier: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, labelsPassedNil: Set<String>)]]()
+						// The bodies today's places of scopes on a cycle take, in the order the walk first meets each.
+						var todaysBodies = [Int]()
 						var walk = PlaceContextWalk(ofTodaysTree: todaysTree, builtFrom: scope)
 						while let (context, isCalledByCycleClosingScope) = walk.next() {
 							if let copy = shadow.copy(of: context.scope) {
@@ -754,53 +757,96 @@ public actor DependencyTreeGenerator {
 								labelSet.insert(context.property.label)
 								let labels = labelSet.sorted()
 								let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property)
-								// What the body built beneath the answers of `answeredLabels` alone passes `nil`.
-								func bodysUnavailableOptionalProperties(answering answeredLabels: [String]) throws -> Set<Property> {
-									let answers = labels.map { answeredLabels.contains($0) ? context.nearestDeclarations[$0] : nil }
-									let lazilyInstantiatedInstanceProperties = context.lazilyInstantiatedInstanceProperties.filter { answeredLabels.contains($0.label) }
-									if let body = bodiesByPlace[key]?.first(where: { $0.nearestDeclarations == answers && $0.lazilyInstantiatedInstanceProperties == lazilyInstantiatedInstanceProperties }) {
-										return body.unavailableOptionalProperties
-									} else {
-										let (bodyTable, bodyRecord) = validatedWorld.frozenScopeMap.freezing(rootScope: copy)
-										var bodyMemo = ConstructionMemo()
-										let unavailableOptionalProperties = try bodyRecord.createScopeGenerator(
-											in: bodyTable,
-											nearestDeclarations: context.nearestDeclarations.keeping(labels: answeredLabels),
-											lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-											erasedToConcreteExistential: false,
-											declaredTypeNames: declaredTypeNames,
-											constructionMemo: &bodyMemo,
-										).unavailableOptionalProperties
-										bodiesByPlace[key, default: []].append((answers, lazilyInstantiatedInstanceProperties, unavailableOptionalProperties))
-										return unavailableOptionalProperties
-									}
-								}
+								let body = try bodies.body(
+									of: copy,
+									as: key,
+									keyedBy: labels,
+									answering: labels,
+									beneath: context.nearestDeclarations,
+									lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+								)
 								// Today's place reads a parameter of a function it is built in where the call's path declares the
 								// label, and the parameter is `nil` where the call passes `nil`: every receive of that label is then
 								// `nil`, as in a body no declaration answers the label for.
 								var todaysUnavailableOptionalProperties = context.generator.unavailableOptionalProperties
 								if !context.labelsPassedNil.isDisjoint(with: labelSet) {
+									let bodyWithoutAnswers = try bodies.body(
+										of: copy,
+										as: key,
+										keyedBy: labels,
+										answering: labels.filter { !context.labelsPassedNil.contains($0) },
+										beneath: context.nearestDeclarations,
+										lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+									)
 									todaysUnavailableOptionalProperties = todaysUnavailableOptionalProperties
 										.filter { !context.labelsPassedNil.contains($0.label) }
-										.union(try bodysUnavailableOptionalProperties(answering: labels.filter { !context.labelsPassedNil.contains($0) })
-											.filter { context.labelsPassedNil.contains($0.label) })
+										.union(bodies.bodies[bodyWithoutAnswers].generator.unavailableOptionalProperties.filter { context.labelsPassedNil.contains($0.label) })
 								}
 								if isCalledByCycleClosingScope {
 									let call = (
-										nearestDeclarations: labels.map { context.nearestDeclarations[$0] },
-										lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties.filter { labelSet.contains($0.label) },
+										nearestDeclarations: bodies.bodies[body].answers,
+										lazilyInstantiatedInstanceProperties: bodies.bodies[body].lazilyInstantiatedInstanceProperties,
 										labelsPassedNil: context.labelsPassedNil.intersection(labelSet),
 									)
 									guard callsCompared[ObjectIdentifier(context.generator)]?.contains(where: { $0 == call }) != true else { continue }
 									callsCompared[ObjectIdentifier(context.generator), default: []].append(call)
 									walk.followCall()
 								}
-								try observer(
+								if shadow.isOnCycle(context.scope), !context.isCalledAsTwin, !todaysBodies.contains(body) {
+									todaysBodies.append(body)
+								}
+								variantBodyObserver?(
 									context.place,
 									todaysUnavailableOptionalProperties.map(\.asSource).sorted(),
-									bodysUnavailableOptionalProperties(answering: labels).map(\.asSource).sorted(),
+									bodies.bodies[body].generator.unavailableOptionalProperties.map(\.asSource).sorted(),
 								)
 							}
+						}
+						// The bodies the plan builds with no tree of today's: the root's, then the body of each call place a
+						// body holds, beneath the answers that body's path gives it.
+						if let planBodiesObserver, let rootCopy = shadow.copy(of: scope) {
+							var bodiesOfPlan = [Int]()
+							var bodiesToWalk = try [bodies.body(
+								of: rootCopy,
+								as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil),
+								keyedBy: [],
+								answering: [],
+								beneath: NearestDeclarations(),
+								lazilyInstantiatedInstanceProperties: [],
+							)]
+							while let bodyToWalk = bodiesToWalk.popLast() {
+								let body = bodies.bodies[bodyToWalk]
+								var bodyWalk = PlaceContextWalk(
+									ofTodaysTree: body.generator,
+									builtFrom: body.copy,
+									beneath: body.nearestDeclarations,
+									lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
+								)
+								while let (context, _) = bodyWalk.next() {
+									if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
+										var labelSet = Set(Self.collectReceivedProperties(from: calledScope, cache: &receivedPropertiesCache).received.map(\.label))
+										labelSet.insert(context.property.label)
+										let labels = labelSet.sorted()
+										let calledBody = try bodies.body(
+											of: calledCopy,
+											as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: context.property),
+											keyedBy: labels,
+											answering: labels,
+											beneath: context.nearestDeclarations,
+											lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+										)
+										if !bodiesOfPlan.contains(calledBody) {
+											bodiesOfPlan.append(calledBody)
+											bodiesToWalk.append(calledBody)
+										}
+									}
+								}
+							}
+							planBodiesObserver(
+								scope.instantiable.concreteInstantiable.asSource,
+								bodiesOfPlan.map { bodies.bodies[$0].description },
+								todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
+							)
 						}
 					}
 				}

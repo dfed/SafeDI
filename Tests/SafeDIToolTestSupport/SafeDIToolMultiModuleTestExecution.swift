@@ -609,7 +609,9 @@ func executeSafeDIToolMultiModuleTest(
 												try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
 													try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
 														try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
-															try await tool.generate()
+															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																try await tool.generate()
+															}
 														}
 													}
 												}
