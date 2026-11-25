@@ -112,6 +112,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(part: { _ in __safeDI_builder() })
 				        }
@@ -145,6 +146,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 				            self.init(part: { __safeDI_builder() })
 				        }
@@ -178,6 +180,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 				            self.init(part: { _ in __safeDI_builder })
 				        }
@@ -208,6 +211,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 				            self.init(part: { __safeDI_builder })
 				        }
@@ -238,6 +242,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 				            self.init(part: { _ in __safeDI_builder })
 				        }
@@ -268,6 +273,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				            self.part = part
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 				            self.init(part: { __safeDI_builder })
 				        }
@@ -507,6 +513,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -594,6 +601,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.erased = erased
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
 		            self.init(erased: { _ in __safeDI_builder })
 		        }
@@ -607,6 +615,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _, _ in __safeDI_builder })
 		        }
@@ -693,6 +702,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(part: { _ in { _ in __safeDI_builder() } })
 		        }
@@ -776,6 +786,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { _ in __safeDI_builder })
 		        }
@@ -969,6 +980,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -982,6 +994,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.ownerBuilder = ownerBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(ownerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1080,6 +1093,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.ownerBuilder_Sendable = ownerBuilder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(ownerBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1093,6 +1107,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.held = held
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(held: { __safeDI_builder })
 		        }
@@ -1201,6 +1216,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -1227,6 +1243,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.inner = inner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1329,8 +1346,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			                    self.gadget = gadget
 			                }
 
+			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1347,8 +1365,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			                self.inner_widgetSendableBuilder = inner_widgetSendableBuilder
 			            }
 
+			            @_alwaysEmitIntoClient
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.inner_widgetSendableBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(inner_widgetSendableBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -1463,6 +1482,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -1490,6 +1510,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -1627,6 +1648,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.again = again
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(again: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1640,6 +1662,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.again = again
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(again: { _ in __safeDI_builder() })
 		        }
@@ -1725,7 +1748,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.part = { _ in __safeDI_builder }
+			                self.init(part: { _ in __safeDI_builder })
 			            }
 			        }
 			    }
@@ -1844,7 +1867,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.again = { _ in __safeDI_builder() }
+		                    self.init(again: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1858,7 +1881,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.again = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(again: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1947,6 +1970,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -2020,6 +2044,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -2096,6 +2121,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -2170,6 +2196,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -2245,6 +2272,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
 		            self.init(part: { _ in __safeDI_builder })
 		        }
@@ -2320,6 +2348,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -2520,7 +2549,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.part = { _ in __safeDI_builder }
+			                self.init(part: { _ in __safeDI_builder })
 			            }
 			        }
 			    }
