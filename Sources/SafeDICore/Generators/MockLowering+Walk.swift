@@ -511,6 +511,10 @@ extension MockLowering {
 		/// The records of the sites of holes a public mock's walk lowered, by their paths of child indices
 		/// (`MockLowering+PublicRecords.swift`).
 		var publicHoleSiteRecords = [[Int]: PlaceRecord]()
+		/// The construction function each of a public mock's configured places calls instead, by its path of child indices
+		/// (`MockLowering+PublicRecords.swift`), kept apart from `builtPlaceInputs` so that an internal mock's places do not
+		/// carry room for it.
+		var publicConstructionInputs = [[Int]: MockLowering.PublicConstructionInputs]()
 		/// What a public mock's records hold, by kind.
 		var publicRecordCounts = PublicRecordCounts()
 		/// The paths of the places the walk lowered, in the order it started them.
