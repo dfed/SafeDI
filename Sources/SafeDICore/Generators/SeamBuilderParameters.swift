@@ -1575,7 +1575,7 @@ extension DependencyTreeGenerator {
 						case let .fill(_, fulfillingScope):
 							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], childRootDependency))
 						case .passUp:
-							guard reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
+							guard !hole.builtType.isOptional, reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
 							// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
 							// list stops the walk before it meets the hole's type, and a declaration of that type gets no scope.
 							let unlistedModuleNames = hole.typesToOwner

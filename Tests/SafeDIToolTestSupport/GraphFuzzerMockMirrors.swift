@@ -1173,7 +1173,9 @@ extension GraphFuzzerMockMirrorModel {
 		for dependency in mockedType.dependencies {
 			let argument: String? = switch dependency.source {
 			case .instantiated:
-				Self.argument(for: dependency.property, isRequired: true, from: declarations)
+				// An optional instantiated property is instantiated only if available, since the macro rejects every other
+				// one: where nothing the mock builds fulfills it, the mock binds `nil`, as production does.
+				Self.argument(for: dependency.property, isRequired: !dependency.property.isOptional, from: declarations)
 			case let .aliased(_, onlyIfAvailable):
 				Self.argument(for: dependency.property, isRequired: !onlyIfAvailable, from: declarations)
 			case let .received(onlyIfAvailable):
@@ -1439,6 +1441,37 @@ extension GraphFuzzerMockMirrorModel {
 			&& (!property.isOptional || (!receivedParameterProperties.contains(property.unwrapped) && !forwardedProperties.contains(property.unwrapped)))
 			&& !isProvidedByTreeByValue(property)
 			&& !requiredUnwrappedProperties.contains(classified(property).unwrapped)
+		{
+			overrideCount += 1
+		}
+		// As `mockRootParameters`: an override too for each property a type of the tree instantiates only if available that
+		// nothing fulfills, outside every `@Sendable` builder function, but one of the label and type of a value `mock()`
+		// already takes. An optional instantiated property is instantiated only if available, since the macro rejects every
+		// other one.
+		var unavailableProperties = Set<GraphFuzzerMirrorProperty>()
+		var visitedTypes = Set<String>()
+		var typesToVisit = [(typeName: mockedTypeName, children: mockRoot.children, isInsideSendableFunction: false)]
+		while let visit = typesToVisit.popLast() {
+			guard visitedTypes.insert("\(visit.typeName) \(visit.isInsideSendableFunction)").inserted else { continue }
+			if !visit.isInsideSendableFunction {
+				let builtProperties = propertiesToGenerate(ofTypeNamed: visit.typeName).map(\.property)
+				for dependency in types[visit.typeName]?.dependencies ?? [] {
+					guard case .instantiated = dependency.source, dependency.property.isOptional, !builtProperties.contains(dependency.property) else { continue }
+					unavailableProperties.insert(dependency.property)
+				}
+			}
+			for case let .instantiated(property, scopeTypeName, _) in visit.children {
+				typesToVisit.append((
+					typeName: scopeTypeName,
+					children: propertiesToGenerate(ofTypeNamed: scopeTypeName),
+					isInsideSendableFunction: visit.isInsideSendableFunction || property.unwrapped.type.hasPrefix("Sendable"),
+				))
+			}
+		}
+		for property in unavailableProperties
+			where !receivedParameterProperties.contains(property)
+			&& !receivedParameterProperties.contains(property.unwrapped)
+			&& !isFulfilledByForwardedProperty(property)
 		{
 			overrideCount += 1
 		}

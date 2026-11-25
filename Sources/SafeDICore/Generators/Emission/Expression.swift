@@ -37,7 +37,7 @@ indirect enum Expression: Hashable, Sendable {
 	var spelled: String {
 		switch self {
 		case let .construction(target, arguments):
-			"\(target.callee)(\(arguments))"
+			target.spelled(passing: arguments)
 		case let .call(function, arguments):
 			"\(function)(\(arguments))"
 		case let .erasure(expression, erasedType):

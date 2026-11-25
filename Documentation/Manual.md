@@ -347,7 +347,7 @@ Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
-An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
+An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it. A dependency that a parent may not have created is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies), and one whose type only some of your applications declare is instantiated with [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies).
 
 The type an `@Instantiated` SafeDI wrapper builds cannot itself be a SafeDI wrapper, as in `LazilyInstantiated<Instantiator<Screen>>`: SafeDI builds a wrapper’s value from an `@Instantiable` type, so declare the inner wrapper, `Instantiator<Screen>`, instead.
 
@@ -666,6 +666,39 @@ public struct Parent: Instantiable {
 An instantiator received only if available is `nil` only where no instantiator of that name is declared above the receiver, or where a property that is not an instantiator is waiting in the same circle. A type the instantiator builds, and an instantiator beside it that it receives and that receives it back, get the instantiator, as [Dependency cycles](#dependency-cycles) describes.
 
 A renamed dependency follows the same rules; see [Renaming and retyping dependencies](#renaming-and-retyping-dependencies).
+
+## Conditionally instantiating dependencies
+
+Use `@Instantiated(onlyIfAvailable: true)` to instantiate an optional dependency only when the code you build declares a type that fulfills it. This is useful for code shared between applications where only some of them implement a protocol — for example, a `CheckoutView` in a module that two applications use, only one of which detects fraud:
+
+```swift
+public protocol FraudDetector {}
+
+@Instantiable
+public struct CheckoutView: Instantiable {
+    public init(fraudDetector: (any FraudDetector)?) {
+        self.fraudDetector = fraudDetector
+    }
+
+    // Instantiated in an application that declares a type fulfilling `FraudDetector`; `nil` in one that declares none.
+    @Instantiated(onlyIfAvailable: true) private let fraudDetector: (any FraudDetector)?
+}
+```
+
+The first application declares the type, and the second declares nothing:
+
+```swift
+@Instantiable(fulfillingAdditionalTypes: [FraudDetector.self])
+public struct DefaultFraudDetector: FraudDetector, Instantiable {
+    public init() {}
+}
+```
+
+SafeDI instantiates the property wherever an `@Instantiable` declaration it reads fulfills the property’s type, or the type its `fulfilledByType:` names. Where none does, the property is `nil`, with no warning: the second application needs no do-nothing implementation. A declaration that is [`mockOnly`](#the-mockonly-parameter) fulfills the type only for mocks, so it does not make the property available.
+
+The property’s type must be optional, spelled with one `?`, and the macro checks it, with a fix-it. Whether or not SafeDI instantiates the property, it is the [nearest declaration](#received) of its label for the types beneath it, which receive it as the optional it is declared as: with `@Received`, or with `@Received(onlyIfAvailable: true)`. A type beneath it never receives the dependency as a non-optional type, since the same code must build in an application that does not declare the type.
+
+The module of a [seam](#generating-a-dependency-tree-per-module) cannot see what the applications that call it declare. When no declaration the seam’s module reads fulfills such a property in the seam’s tree, the seam’s generated initializer takes a builder that returns the optional type, as it does for [a protocol only the application implements](#generating-a-dependency-tree-per-module): an application that declares a fulfilling type builds it there, and one that declares none passes `nil`, with no error.
 
 ## Renaming and retyping dependencies
 
@@ -1093,6 +1126,8 @@ To give every type its own instance, as the app does, declare a [`mockOnly`](#th
 **Lazily instantiated dependencies.** A [lazily instantiated](#lazilyinstantiated) dependency is overridden like any other `@Instantiated` dependency: its entry is a closure that returns the instance, which the mock calls the first time the instance is read. A type’s generated mock therefore has the same parameters whether the dependencies it receives are lazily instantiated or not.
 
 **Dependencies received only if available.** A `@Received(onlyIfAvailable: true)` dependency gets an optional entry only when every type in the tree that receives it, renames included, receives it only if available. It has no entry of its own when the mock builds it anyway: when the mocked type instantiates it, or another type in the tree requires it. When nothing fulfills it and another type requires it, it is a required flat parameter. Where production passes a receiver `nil`, such as one built inside the instance it receives, the mock passes `nil` too, and offers no entry that only that receiver would read. Production passes `nil`, and so does the mock, to a receiver of `token: Token?` above or below a type that requires `token: Instantiator<Token>` from the same declaration, or on that type through a rename, since that declaration can only be the instantiator. The entry defaults to `nil` also where production passes an instantiator declared above the mocked type, since the mock does not build what is above that type. Where the mock builds the instantiator, a type that receives it gets it, as in production.
+
+**Dependencies instantiated only if available.** An [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies) dependency whose type nothing fulfills, not even a [`mockOnly`](#the-mockonly-parameter) declaration, gets an optional entry too, which defaults to `nil`, the value production gives it: one entry for its label and type, wherever in the tree it is declared. Pass a value to test the code that runs when an application declares the type. Only the types that declare the dependency, and the types beneath them that receive it, get the value. The dependency has no entry, and stays `nil`, where the mock already takes another value of its label and type, and in a type built by a `SendableInstantiator`, a `SendableErasedInstantiator` or a `SendableLazilyInstantiated`. A [public mock](#public-mocks) takes a builder for such a dependency instead of an entry, as it does for any type its module cannot build: `mock(analyticsOptionalBuilder:)` for an `analytics: (any Analytics)?`, a function that returns the optional value and defaults to one that returns `nil`. A mock in another module whose tree calls that public mock builds, at each place, a type its own module sees that fulfills the dependency, as production does there, and takes an optional builder, `analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil`, which replaces that type where a test passes it. Where its module sees no such type either, it takes the builder, defaulting to one that returns `nil`, and passes it to the public mock.
 
 **Renames.** A mock resolves each `@Received` dependency from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` builds `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`, and otherwise takes it as a required parameter. An entry for a composition such as `(EventTracker & CrashReporter).self` does not cover its members. So a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each; pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
