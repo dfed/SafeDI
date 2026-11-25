@@ -42,7 +42,6 @@ extension Instantiable {
 			enclosingExtensionAccess: enclosingExtensionAccess?.withoutPositions(),
 			generatedInitializerAttributes: generatedInitializerAttributes,
 			mockAttributes: mockAttributes,
-			declarationIsolation: declarationIsolation,
 			generateMock: generateMock,
 			mockGenerationArgumentRange: nil,
 			mockOnly: mockOnly,
@@ -86,7 +85,7 @@ extension Initializer {
 			hasGenericParameter: hasGenericParameter,
 			hasGenericWhereClause: hasGenericWhereClause,
 			arguments: arguments,
-			spelledIsolation: spelledIsolation,
+			spelledAttributes: spelledAttributes,
 		)
 	}
 }

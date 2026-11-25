@@ -11110,7 +11110,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderTypesDeclaredEscaping: Set<TypeDescription>
 		let isExtensionBased: Bool
 		let defaultParameters: [DefaultParameter]
-		let constructionIsolation: String?
+		let constructionAttributes: String?
 		let dependencies: [Dependency]
 		let constructionReturnType: TypeDescription
 		let customMockName: String?
@@ -11145,7 +11145,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					dependencies: instantiable.dependencies,
 				)
 			} ?? []
-			constructionIsolation = constructionInitializer?.spelledIsolation
+			constructionAttributes = constructionInitializer?.spelledAttributes
 			isExtensionBased = instantiable.declarationType.isExtension
 			dependencies = instantiable.dependencies
 			constructionReturnType = (useMockInitializer ? instantiable.mockCallReturnType : nil) ?? instantiable.concreteInstantiable
