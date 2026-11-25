@@ -59,6 +59,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		closedOnDeclaration: BuiltDeclaration? = nil,
 		closedOnFillPathDeclarationsBeneath: Int? = nil,
 		builtInlineSeamComment: String?,
+		isUnavailableDependency: Bool = false,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
 		seamRoot: SeamRoot? = nil,
@@ -93,6 +94,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seamAndFillFields = SeamAndFillFields()
 		self.placeHoldingProperties = placeHoldingProperties
 		seamAndFillFields.builtInlineSeamComment = builtInlineSeamComment
+		seamAndFillFields.isUnavailableDependency = isUnavailableDependency
 		seamAndFillFields.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
@@ -1324,6 +1326,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeProperty: Property,
 		erasedToConcreteExistential: Bool,
 		site: SeamSignature.Hole?,
+		holdsPlace: Bool = true,
 		ownerPropertyStack: [Property],
 		ownerConcreteTypeStack: [TypeDescription],
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
@@ -1385,7 +1388,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
-		containsBuildSite = true
+		containsBuildSite = holdsPlace
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
@@ -1634,6 +1637,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"boxedLoops": .recomputed,
 			"loopLevelsTypesInTree": .recomputed,
 			"builtInlineSeamComment": .copied,
+			"isUnavailableDependency": .copied,
 			"publicMockOverrideBuilders": .copied,
 			"fillFieldSelection": .copied,
 			"siteCarrierUse": .recomputed,
@@ -1679,7 +1683,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			),
 			property: nil,
 			propertiesToGenerate: [child],
-			propertiesToDeclare: Self.fieldForms(of: fields, boundLabels: boundLabels),
+			propertiesToDeclare: Self.fieldForms(of: fields, boundLabels: boundLabels).union(Self.propertiesBeingBuilt(byFillOf: hole)),
 			// A fill builds only `child`, so no dependency of its own is one a mock is passed instead.
 			instantiatedDependenciesNotGenerated: [],
 			unavailableOptionalProperties: callerReads.unavailableProperties,
@@ -1798,6 +1802,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// labeled in `boundLabels` – and, for a lazily instantiated field, the instance a receive reads by value.
 	static func fieldForms(of hole: SeamSignature.Hole, boundLabels: Set<String>) -> Set<Property> {
 		fieldForms(of: hole.fields, boundLabels: boundLabels)
+	}
+
+	/// The property a fill of `hole` builds, with its instance, where it is no instantiator: the type that owns the place
+	/// declares it, so a receive of it in the fill's tree is not received from the scopes enclosing the call. The fill's
+	/// tree finds it still being built and passes a receive only if available `nil`, as the same types built inline do,
+	/// and a required one is the cycle validation reports; a tree that received it from the caller's scope would hand a
+	/// seam a parameter, and a mock an override, that nothing reads. An instantiator is left out: a receive of one is
+	/// `receivesInstantiatorBuildingSite`.
+	static func propertiesBeingBuilt(byFillOf hole: SeamSignature.Hole) -> Set<Property> {
+		guard !isBuilder(hole.property) else { return [] }
+		var properties: Set<Property> = [hole.property]
+		if let instanceProperty = hole.property.asLazilyInstantiatedInstanceProperty {
+			properties.insert(instanceProperty)
+		}
+		return properties
 	}
 
 	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels` (see `fieldForms(of:boundLabels:)`).
@@ -4764,6 +4783,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var boxedLoops: [Int: String] = [:]
 		var loopLevelsTypesInTree: [String: String] = [:]
 		var builtInlineSeamComment: String?
+		var isUnavailableDependency = false
 		var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
 		var fillFieldSelection: FillFieldSelection?
 		var siteCarrierUse: SeamCarrierValues.Use?
@@ -4803,6 +4823,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				|| !boxedLoops.isEmpty
 				|| !loopLevelsTypesInTree.isEmpty
 				|| builtInlineSeamComment != nil
+				|| isUnavailableDependency
 				|| publicMockOverrideBuilders != nil
 				|| fillFieldSelection != nil
 				|| siteCarrierUse != nil
@@ -5495,6 +5516,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The comment that ends each line that constructs this scope's type (`Scope.builtInlineSeamComment`).
 	nonisolated private var builtInlineSeamComment: String? {
 		seamAndFillFieldsStorage?.fields.builtInlineSeamComment
+	}
+
+	/// Whether this scope stands for an `@Instantiated(onlyIfAvailable: true)` property no production declaration fulfills,
+	/// which it binds to `nil` (`Scope.isUnavailableDependency`).
+	nonisolated var isUnavailableDependency: Bool {
+		seamAndFillFieldsStorage?.fields.isUnavailableDependency ?? false
 	}
 
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
@@ -8042,8 +8069,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 		case let .hole(property, _, site):
-			// A tree built only to compute the seam's signature has no site, and generates nothing.
-			guard let site else { return .empty }
+			// A tree built only to compute the seam's signature has no site, and generates nothing. Nor has a root's tree,
+			// where only a property instantiated only if available is a hole, since validation reports any other: no builder
+			// reaches a root, so the property is `nil` there, as in a module that generates no seam.
+			guard let site else {
+				return property.typeDescription.isOptional ? Self.textPlace("let \(property.asSource) = nil") : .empty
+			}
 			// The seam side of hosting seam code as text, a hole's site here and a seam's root in
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
@@ -8432,7 +8463,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		separatesValuesBindings: Bool,
 	) throws(Initializer.GenerationError) -> PlacePlan {
 		let concreteTypeName = instantiable.concreteInstantiable.asSource
-		let constructionTarget: ConstructionTarget = if let publicMockCall {
+		let constructionTarget: ConstructionTarget = if isUnavailableDependency {
+			.unavailable
+		} else if let publicMockCall {
 			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
 		} else if constructsWithHandWrittenMock {
 			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
@@ -8725,9 +8758,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)).spelled
 			}
 			let value = if !hasGeneratedContent {
-				construction.erased(to: property.typeDescription, where: erasedToConcreteExistential)
+				construction.erased(to: property.typeDescription.unwrapped, where: erasedToConcreteExistential)
 			} else {
-				Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential)
+				Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription.unwrapped, where: erasedToConcreteExistential)
 			}
 			let binding = Statement.binding(
 				propertyDeclaration,
@@ -9464,12 +9497,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let body: String
 			if index == signature.tiers.count - 1 {
 				// The narrowest tier builds the tree, which reads each builder by its internal name, its parameter's name.
-				let generatedProperties = try await generateProperties(
-					propertiesGeneratedLater: propertiesGeneratedLater,
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: bodyIndent,
-					fillPlaceBindings: fillPlaceBindings,
-				)
+				// A seam's root body plans its children at once, as a root of the dependency tree does, where its module plans
+				// few trees (`ConcurrentChildCode`).
+				let generatedProperties = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(ConcurrentChildCode.seamRootsPlanChildrenAtOnce) {
+					try await generateProperties(
+						propertiesGeneratedLater: propertiesGeneratedLater,
+						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+						leadingMemberWhitespace: bodyIndent,
+						fillPlaceBindings: fillPlaceBindings,
+					)
+				}
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
@@ -9730,8 +9767,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatReceivedProperties: [Property]
 		/// The hand-written mock each of `flatReceivedProperties` whose type has one defaults to.
 		let flatReceivedParameterMockDefaults: [Property: FlatParameterMockDefault]
-		/// The received properties every receiver receives only if available and nothing in the mock provides.
+		/// The received properties every receiver receives only if available and nothing in the mock provides, and
+		/// `unavailableDependencyOverrideProperties`.
 		let onlyIfAvailableReceivedProperties: [Property]
+		/// The properties instantiated only if available that nothing fulfills (`MockTreeNames.unavailableDependencyProperties`)
+		/// that `mock()` takes an override of, which the type that declares one binds it from: each but one of the label and
+		/// type of a value `mock()` already takes, which stays `nil`, since that value is another declaration's.
+		let unavailableDependencyOverrideProperties: Set<Property>
 		/// For an internal mock, those of `onlyIfAvailableReceivedProperties` that only the calls of other modules' public mocks
 		/// in its tree receive, whose overrides are named apart from the builders and the flat received parameters. Empty for a
 		/// public mock, which takes them as parameters that the others are named apart from.
@@ -10434,6 +10476,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let namesDeclaredInBuilderFunctions: Set<String>
 		/// The names of the builder functions of every node of the tree.
 		let builderFunctionNames: Set<String>
+		/// The properties the mocked type and the types of its tree instantiate only if available that nothing fulfills, each
+		/// once, in the order a walk of the tree in generation order first meets them. One a type built inside a `@Sendable`
+		/// builder function declares is left out: it is bound to `nil` there, since the function could not capture an override.
+		var unavailableDependencyProperties = [Property]()
 		/// The places inside the fills of the tree's calls of other modules' public mocks (`FillPlace`), in the order the calls
 		/// are generated, each a place of a builder `mock()` takes. The query and a public mock's promotion read a tree that
 		/// holds no internal mock's call, so their names leave these four empty (`treeNames(of:readsFills:)`).
@@ -10676,6 +10722,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				flatReceivedProperties.append(receivedProperty)
 			}
 		}
+		// A property instantiated only if available that nothing fulfills takes an override too, which defaults to `nil`, the
+		// value production binds. The type that declares it binds it from the override, so it reads no declaration above it.
+		// A public mock takes a builder for it instead, as a seam does, which a module that calls the mock and sees a
+		// declaration that fulfills the type fills at each place; one spelled as no hole can be stays `nil` there.
+		var unavailableDependencyOverrideProperties = Set<Property>()
+		for property in treeNames.unavailableDependencyProperties
+			where instantiable.generateMock != .public
+			&& !receivedParameterProperties.contains(property)
+			&& !receivedParameterProperties.contains(property.asUnwrappedProperty)
+			&& !isFulfilledByForwardedProperty(property)
+		{
+			unavailableDependencyOverrideProperties.insert(property)
+			onlyIfAvailableReceivedProperties.append(property)
+		}
+		if !unavailableDependencyOverrideProperties.isEmpty {
+			onlyIfAvailableReceivedProperties.sort(by: { $0.precedesInMockOrder($1) })
+		}
 		// A received dependency the mock cannot build defaults to the hand-written mock its type has, as a forwarded one does.
 		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
 		for property in flatReceivedProperties {
@@ -10802,6 +10865,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			flatReceivedProperties: flatReceivedProperties,
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			onlyIfAvailableReceivedProperties: onlyIfAvailableReceivedProperties,
+			unavailableDependencyOverrideProperties: unavailableDependencyOverrideProperties,
 			onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive: onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive,
 			flatUncoveredParameters: flatUncoveredParameters,
 			uncoveredParameters: uncoveredParameters,

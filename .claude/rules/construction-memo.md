@@ -54,7 +54,7 @@ Construction reads the scopes through `ConstructionScope`, a record of a frozen 
 | `constructsWithHandWrittenMock` | Key (flag, scope, property). |
 | `cycleParameters`, `builtCycleParameters`, `cycleParameterUnavailableProperties`, `callSiteLazilyInstantiatedInstanceProperties` | From the key and logged reads (cycle context, bindings). |
 | `unavailableOptionalProperties`, `lazilyInstantiatedInstanceProperties`, `receivesPassedNil` | From the key's sets and logged `binding` and `passesNil` reads. |
-| `instantiable`, `propertiesToDeclare`, `instantiatedDependenciesNotGenerated`, `forwardedLazilyInstantiatedInstanceProperties`, `fillLabelsReadOnlyIfAvailable`, `builtInlineSeamComment`, `seamCall`, `publicMockCall` | Read from `scope`, in the key. |
+| `instantiable`, `propertiesToDeclare`, `instantiatedDependenciesNotGenerated`, `forwardedLazilyInstantiatedInstanceProperties`, `fillLabelsReadOnlyIfAvailable`, `builtInlineSeamComment`, `isUnavailableDependency`, `seamCall`, `publicMockCall` | Read from `scope`, in the key. |
 | `placeHoldingProperties` | From `placeHoldingPropertiesByType`, above. |
 | Children and everything aggregated from them | Built from the same inputs, or reused under the same rule at the child's own place. |
 

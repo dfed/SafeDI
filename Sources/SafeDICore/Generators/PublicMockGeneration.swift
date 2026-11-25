@@ -279,6 +279,9 @@ struct PublicMockParameter: Sendable {
 		case expression
 		/// A provider's value: the declaration's default, evaluated where the declaration resolves it.
 		case provider
+		/// A builder that returns `nil`, for a builder of places instantiated only if available, whose type is optional: the
+		/// value production gives a place nothing fulfills.
+		case nilBuilder
 	}
 
 	/// The parameter's name, which is also its argument label: the widest tier's that takes it.
@@ -608,13 +611,16 @@ extension ScopeGenerator {
 			// The type of the builder a person writes, without `@escaping`, which a caller's leaf receives it as: an internal caller
 			// that passes the builder's places up takes it so, and hands the call its struct (`.init(__safeDI_noScope:)`).
 			let functionType = builder.readableParameterType.strippingEscaping
+			// A builder of places instantiated only if available defaults to one that returns `nil`, as production binds a
+			// place nothing fulfills, so only a test of the code that runs when an application declares the type passes one.
+			let buildsOptional = builder.enumKey.holeType.builtType.isOptional
 			leadingParameters.append(PublicMockParameter(
 				name: builder.label,
 				type: functionType,
 				typeSource: builder.parameterType.asSource,
 				typeWithoutAny: builder.parameterTypeWithoutAny,
-				defaultSource: nil,
-				defaultKind: .none,
+				defaultSource: buildsOptional ? ReservedName.nilBuilderSource : nil,
+				defaultKind: buildsOptional ? .nilBuilder : .none,
 				access: builder.tierAccess,
 				accessCause: builder.accessCause,
 				role: .received(Property(label: builder.label, typeDescription: functionType), isRequired: true),
@@ -881,7 +887,7 @@ extension ScopeGenerator {
 			// such builder as a closure that takes nothing and wraps it in the struct.
 			let takesBuilderStruct = parameters.contains { $0.builder?.takesBuilderStruct == true }
 			/// The lines that declare the tier's function named `functionName`, each parameter spelled by `spelling`.
-			func appendSignature(functionName: String, omittingJoinedBuilders: Bool = false, spelling: (PublicMockParameter) -> String) {
+			func appendSignature(functionName: String, omittingJoinedBuilders: Bool = false, takesBuilderStructs: Bool = false, spelling: (PublicMockParameter) -> String) {
 				let declarationPrefix = "\(accessPrefix)static func \(functionName)("
 				// `mock()` takes no parameter of its own for an optional builder joined to a required one, which it passes on.
 				let parameters = omittingJoinedBuilders ? parameters.filter { $0.joinedBuilder == nil } : parameters
@@ -892,7 +898,12 @@ extension ScopeGenerator {
 				} else {
 					lines.append(declarationPrefix)
 					lines.append(parameters.map { parameter in
-						"\(bodyIndent)\(spelling(parameter))\(parameter.defaultSource.map { " = \($0)" } ?? "")"
+						// The function only generated code calls takes a builder's struct, so its default is the struct of the builder
+						// `mock()` defaults to.
+						let defaultSource = takesBuilderStructs && parameter.defaultKind == .nilBuilder
+							? ".init(\(ReservedName.noScopeArgumentLabel): \(ReservedName.nilBuilderSource))"
+							: parameter.defaultSource
+						return "\(bodyIndent)\(spelling(parameter))\(defaultSource.map { " = \($0)" } ?? "")"
 					}.joined(separator: ",\n"))
 					lines.append("\(indent)) -> \(returnType) {")
 				}
@@ -918,7 +929,7 @@ extension ScopeGenerator {
 			lines.append("\(indent)}")
 			lines.append("")
 			lines.append("\(indent)/// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.")
-			appendSignature(functionName: ReservedName.publicMockFunctionName) { parameter in
+			appendSignature(functionName: ReservedName.publicMockFunctionName, takesBuilderStructs: true) { parameter in
 				if let builder = parameter.builder, builder.takesBuilderStruct {
 					"\(parameter.name.spelledAsArgumentLabel) \(builder.internalName): \(parameter.typeSource)"
 				} else if let internalName = parameter.internalName {

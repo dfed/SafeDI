@@ -1063,7 +1063,8 @@ extension DependencyTreeGenerator {
 					// from a deferred parameter of the caller's scope too (`fillUnderConstruction`).
 					let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
 					let boundLabels = Set(hole.fields.filter { scope.publicMockCall != nil || !$0.isDeferredParameter }.map(\.property.label))
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks))))
+					// The fill declares the property it builds too (`ScopeGenerator.propertiesBeingBuilt(byFillOf:)`).
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(ScopeGenerator.propertiesBeingBuilt(byFillOf: hole))))
 				}
 			}
 			self.fills = fills

@@ -345,7 +345,7 @@ Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
-An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
+An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it. A dependency that a parent may not have created is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies), and one whose type only some of your applications declare is instantiated with [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies).
 
 In a SwiftUI `View`, `@Instantiated` objects are re-initialized each time SwiftUI recreates the view; see this [deep dive on SwiftUI view lifecycles](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
@@ -662,6 +662,39 @@ public struct Parent: Instantiable {
 An instantiator received only if available is `nil` only where no instantiator of that name is declared above the receiver, or where a property that is not an instantiator is waiting in the same circle. A type the instantiator builds, and an instantiator beside it that it receives and that receives it back, get the instantiator, as [Dependency cycles](#dependency-cycles) describes.
 
 A renamed dependency follows the same rules; see [Renaming and retyping dependencies](#renaming-and-retyping-dependencies).
+
+## Conditionally instantiating dependencies
+
+Use `@Instantiated(onlyIfAvailable: true)` to instantiate an optional dependency only when the code you build declares a type that fulfills it. This is useful for code shared between applications where only some of them implement a protocol — for example, a `CheckoutView` in a module that two applications use, only one of which detects fraud:
+
+```swift
+public protocol FraudDetector {}
+
+@Instantiable
+public struct CheckoutView: Instantiable {
+    public init(fraudDetector: (any FraudDetector)?) {
+        self.fraudDetector = fraudDetector
+    }
+
+    // Instantiated in an application that declares a type fulfilling `FraudDetector`; `nil` in one that declares none.
+    @Instantiated(onlyIfAvailable: true) private let fraudDetector: (any FraudDetector)?
+}
+```
+
+The first application declares the type, and the second declares nothing:
+
+```swift
+@Instantiable(fulfillingAdditionalTypes: [FraudDetector.self])
+public struct DefaultFraudDetector: FraudDetector, Instantiable {
+    public init() {}
+}
+```
+
+SafeDI instantiates the property wherever an `@Instantiable` declaration it reads fulfills the property’s type, or the type its `fulfilledByType:` names. Where none does, the property is `nil`, with no warning: the second application needs no do-nothing implementation. A declaration that is [`mockOnly`](#the-mockonly-parameter) fulfills the type only for mocks, so it does not make the property available.
+
+The property’s type must be optional, spelled with one `?`, and the macro checks it, with a fix-it. Whether or not SafeDI instantiates the property, it is the [nearest declaration](#received) of its label for the types beneath it, which receive it as the optional it is declared as: with `@Received`, or with `@Received(onlyIfAvailable: true)`. A type beneath it never receives the dependency as a non-optional type, since the same code must build in an application that does not declare the type.
+
+The module of a [seam](#generating-a-dependency-tree-per-module) cannot see what the applications that call it declare. When no declaration the seam’s module reads fulfills such a property in the seam’s tree, the seam’s generated initializer takes a builder that returns the optional type, as it does for [a protocol only the application implements](#generating-a-dependency-tree-per-module): an application that declares a fulfilling type builds it there, and one that declares none passes `nil`, with no error.
 
 ## Renaming and retyping dependencies
 
@@ -1092,6 +1125,8 @@ To give every type its own instance, as the app does, declare a [`mockOnly`](#th
 
 **Dependencies received only if available.** A `@Received(onlyIfAvailable: true)` dependency gets an optional entry only when every type in the tree that receives it, renames included, receives it only if available. It has no entry of its own when the mock builds it anyway: when the mocked type instantiates it, or another type in the tree requires it. When nothing fulfills it and another type requires it, it is a required flat parameter. Where production passes a receiver `nil`, such as one built inside the instance it receives, the mock passes `nil` too, and offers no entry that only that receiver would read. Production passes `nil`, and so does the mock, to a receiver of `token: Token?` above or below a type that requires `token: Instantiator<Token>` from the same declaration, or on that type through a rename, since that declaration can only be the instantiator. The entry defaults to `nil` also where production passes an instantiator declared above the mocked type, since the mock does not build what is above that type. Where the mock builds the instantiator, a type that receives it gets it, as in production.
 
+**Dependencies instantiated only if available.** An [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies) dependency whose type nothing fulfills, not even a [`mockOnly`](#the-mockonly-parameter) declaration, gets an optional entry too, which defaults to `nil`, the value production gives it: one entry for its label and type, wherever in the tree it is declared. Pass a value to test the code that runs when an application declares the type. Only the types that declare the dependency, and the types beneath them that receive it, get the value. The dependency has no entry, and stays `nil`, where the mock already takes another value of its label and type, and in a type built by a `SendableInstantiator`, a `SendableErasedInstantiator` or a `SendableLazilyInstantiated`. A [public mock](#public-mocks) takes a builder for such a dependency instead of an entry, as it does for any type its module cannot build: `mock(analyticsOptionalBuilder:)` for an `analytics: (any Analytics)?`, a function that returns the optional value and defaults to one that returns `nil`. A mock in another module whose tree calls that public mock builds, at each place, a type its own module sees that fulfills the dependency, as production does there, and takes an optional builder, `analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil`, which replaces that type where a test passes it. Where its module sees no such type either, it takes the builder, defaulting to one that returns `nil`, and passes it to the public mock.
+
 **Renames.** A mock resolves each `@Received` dependency from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` builds `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`, and otherwise takes it as a required parameter. An entry for a composition such as `(EventTracker & CrashReporter).self` does not cover its members. So a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each; pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
 The mocked type’s own renames are the exception. When the mocked type declares a rename, a dependency the mock builds beside it that receives the rename’s label, as the rename’s type or its optional form, has no entry for that label: it gets the rename, as types beneath the mocked type do.
@@ -1323,6 +1358,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 **Holes.**
 
 - A [hole](#generating-a-dependency-tree-per-module) – here, a type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – takes a required builder under the seam’s label, which takes what the hole’s places forward and nothing else: where no place forwards a value, it takes nothing, as `feedServiceBuilder` [below](#calling-a-public-mock-from-another-module) does. Places built in a `Sendable` function take a `@Sendable` builder of their own, labeled `…SendableBuilder`. A `mockOnly` stub that fulfills the hole’s type, in the module or one it depends on, removes the builder: the mock builds the stub, and production still fills the hole. As for a seam, one builder fills every place of its type, so those places must forward the same values, or SafeDI reports an error.
+- A type the tree instantiates [only if available](#dependency-kinds-in-the-generated-mock) that nothing the module sees fulfills is a hole too. Its builder returns the optional value, is labeled after the type with `Optional` before `Builder`, as `analyticsOptionalBuilder` is for an `(any Analytics)?`, and defaults to one that returns `nil`, the value production gives the property.
 
 Beside each tier’s `mock()`, a public mock has a `__safeDI_mock(…)`, which that `mock()` calls, and which takes each builder as a struct. Only generated code calls it: a mock another module generates calls it, never `mock()`. Its shape can change in any release, as the seam’s initializer for generated code can. Each generated call of a public mock names an empty enum that encodes the mock’s signature, so a call generated against an older signature fails to compile at the call.
 
@@ -1361,7 +1397,7 @@ Also:
   - a place whose implementation calls a public mock that passes a place up for one of these reasons.
 
   SafeDI decides this once for your module, for each public mock and type of place: every mock in the module that calls that public mock takes the builder, a `.public` mock included, even where the same module fills places of that type that other public mocks hold.
-- An internal mock takes one builder for each hole type its calls pass up, as a required parameter of its own for the test to supply, labeled as a seam labels a builder: `serviceBuilder`, with a trailing `_`, as in `serviceBuilder_`, when another parameter has its name. The places it passes up to one builder must forward the same values, or SafeDI reports an error. A public mock takes a builder of its own for the place, which its callers supply, as a seam passes an inner seam’s places up.
+- An internal mock takes one builder for each hole type its calls pass up, as a required parameter of its own for the test to supply (one for a type instantiated only if available defaults to one that returns `nil`), labeled as a seam labels a builder: `serviceBuilder`, with a trailing `_`, as in `serviceBuilder_`, when another parameter has its name. The places it passes up to one builder must forward the same values, or SafeDI reports an error. A public mock takes a builder of its own for the place, which its callers supply, as a seam passes an inner seam’s places up.
 - The calling mock takes an optional builder for each hole type whose places its calls fill, such as `apiBuilder: (() -> any Api)? = nil`, under the label it would take a required builder of that type under. Passed, it replaces every fill of that type in every call the mock makes, and an override of a called type is handed it in place of the fill; left `nil`, the fills build the places. A place built inside a `@Sendable` function, as a `SendableInstantiator` builds one, takes the `@Sendable` builder of its type, such as `apiSendableBuilder`, so pass both to replace every place of the type. Where the mock also passes up a place of the type, it takes the one required builder, which then builds the places its calls fill too. An override or a builder replaces everything beneath what it builds. Where your module builds another module’s public type inline instead of calling its mock, as it does when it can call the type’s initializer and build its whole tree, the builder also replaces each place of that tree that the type’s own module cannot fill, including one held in an instantiator or `LazilyInstantiated` and one inside a fill, unless your overrides replace that place. A public mock takes these builders as well; generated code that calls it never passes them, so its own fills build those places.
 - A place a public mock fills itself never reaches a builder that generated code calling it passes. Generated code that calls that mock fills such a place too where it can, and otherwise passes it up with the rest, so an internal mock can take a builder that is never called.
 - A mock tree that reaches a type whose declaring module SafeDI does not know builds it inline where it can, and otherwise fails as [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) describes.

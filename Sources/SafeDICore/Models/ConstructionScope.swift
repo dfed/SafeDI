@@ -50,6 +50,10 @@ struct ConstructionScope: Sendable {
 		record.builtInlineSeamComment
 	}
 
+	var isUnavailableDependency: Bool {
+		record.isUnavailableDependency
+	}
+
 	var seamCall: SeamCall? {
 		record.seamCall
 	}
