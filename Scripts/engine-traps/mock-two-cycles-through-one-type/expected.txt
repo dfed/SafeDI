@@ -1,0 +1,60 @@
+no overrides: left: stamps (A1, A2): ["built", "built"]
+no overrides: left: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+no overrides: left: everything beneath A1 reads A1's stamp: true
+no overrides: left: everything beneath A2 reads A2's stamp, a new one: true
+no overrides: left: every leaf reads the entry's token: true
+no overrides: right: stamps (A1, A2): ["built", "built"]
+no overrides: right: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+no overrides: right: everything beneath A1 reads A1's stamp: true
+no overrides: right: everything beneath A2 reads A2's stamp, a new one: true
+no overrides: right: every leaf reads the entry's token: true
+no overrides: top: stamps (A1, A2): ["built", "built"]
+no overrides: top: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+no overrides: top: everything beneath A1 reads A1's stamp: true
+no overrides: top: everything beneath A2 reads A2's stamp, a new one: true
+no overrides: top: every leaf reads the entry's token: true
+names per entry: left: stamps (A1, A2): ["left stamp", "left stamp"]
+names per entry: left: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["left A leaf", "left B leaf", "left C leaf", "left B leaf", "left C leaf", "left B leaf", "left A leaf", "left B leaf", "left C leaf", "left B leaf"]
+names per entry: left: everything beneath A1 reads A1's stamp: true
+names per entry: left: everything beneath A2 reads A2's stamp, a new one: true
+names per entry: left: every leaf reads the entry's token: true
+names per entry: right: stamps (A1, A2): ["built", "built"]
+names per entry: right: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "right C leaf", "built", "right C leaf", "built", "built", "built", "right C leaf", "built"]
+names per entry: right: everything beneath A1 reads A1's stamp: true
+names per entry: right: everything beneath A2 reads A2's stamp, a new one: true
+names per entry: right: every leaf reads the entry's token: true
+names per entry: top: stamps (A1, A2): ["top stamp", "top stamp"]
+names per entry: top: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "top B leaf", "built", "top B leaf", "built", "top B leaf", "built", "top B leaf", "built", "top B leaf"]
+names per entry: top: everything beneath A1 reads A1's stamp: true
+names per entry: top: everything beneath A2 reads A2's stamp, a new one: true
+names per entry: top: every leaf reads the entry's token: true
+builders: left: stamps (A1, A2): ["built", "built"]
+builders: left: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "left C from a builder", "built", "left C from a builder", "built", "built", "built", "left C from a builder", "built"]
+builders: left: everything beneath A1 reads A1's stamp: true
+builders: left: everything beneath A2 reads A2's stamp, a new one: true
+builders: left: every leaf reads the entry's token: true
+builders: right: stamps (A1, A2): ["built", "built"]
+builders: right: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "right B from a builder", "built", "right B from a builder", "built", "right B from a builder", "built", "right B from a builder", "built", "right B from a builder"]
+builders: right: everything beneath A1 reads A1's stamp: true
+builders: right: everything beneath A2 reads A2's stamp, a new one: true
+builders: right: every leaf reads the entry's token: true
+builders: top: stamps (A1, A2): ["built", "built"]
+builders: top: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+builders: top: everything beneath A1 reads A1's stamp: true
+builders: top: everything beneath A2 reads A2's stamp, a new one: true
+builders: top: every leaf reads the entry's token: true
+production: left: stamps (A1, A2): ["built", "built"]
+production: left: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+production: left: everything beneath A1 reads A1's stamp: true
+production: left: everything beneath A2 reads A2's stamp, a new one: true
+production: left: every leaf reads the entry's token: true
+production: right: stamps (A1, A2): ["built", "built"]
+production: right: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+production: right: everything beneath A1 reads A1's stamp: true
+production: right: everything beneath A2 reads A2's stamp, a new one: true
+production: right: every leaf reads the entry's token: true
+production: top: stamps (A1, A2): ["built", "built"]
+production: top: leaves (A1, B1, C1, B2, C2, B3, A2, B4, C3, B5): ["built", "built", "built", "built", "built", "built", "built", "built", "built", "built"]
+production: top: everything beneath A1 reads A1's stamp: true
+production: top: everything beneath A2 reads A2's stamp, a new one: true
+production: top: every leaf reads the entry's token: true
