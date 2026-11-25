@@ -1969,6 +1969,8 @@ To pick a level, SafeDI must know which module declares each type a generated de
 
 The same holds for the standard library’s and Foundation’s types, such as `String` or `URL`: SafeDI never decides which module declares a type from its name, since any module may declare its own `Calendar` or `Result`.
 
+So when a module spells import levels, every module whose types its seams and public mocks name must spell them too. If a dependency’s file writes `import Foundation` and its `public init(url: URL)` reaches a seam’s initializer, the generated file imports Foundation too narrowly, and the compiler reports that the initializer “cannot be declared public because its parameter uses an internal type”. Write `public import Foundation` in that dependency’s file.
+
 This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name (“public import of 'Combine' was not used in public declarations or inlinable code”). To silence the warning, spell the type with its module’s name where your declaration names it (`public init(url: Foundation.URL)`), which tells SafeDI the one module that declares it. For a module only your own files import `public`, you can instead import it below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
