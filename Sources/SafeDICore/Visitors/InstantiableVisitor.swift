@@ -669,7 +669,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					enclosingExtensionAccess: enclosingExtensionAccess,
 					generatedInitializerAttributes: generatedInitializerAttributes,
 					mockAttributes: mockAttributes,
-					declarationIsolation: declarationIsolation,
 					generateMock: generateMock,
 					mockGenerationArgumentRange: mockGenerationArgumentRange,
 					mockOnly: mockOnly,
@@ -756,8 +755,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The access the decorated type declaration or extension spells, recorded when it is visited, before any
 	/// instantiable or mock method is found in it.
 	private var instantiableAccess = AccessDeclaration(level: .internal)
-	/// See `Instantiable.declarationIsolation`.
-	private var declarationIsolation: String?
 	/// See `Instantiable.conformanceListNamesSendable`.
 	private var conformanceListNamesSendable = false
 	/// See `Instantiable.conformanceListNamesOtherTypes`.
@@ -917,7 +914,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processAttributes(node.attributes, on: macro)
 		processModifiers(on: node)
 		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
-		declarationIsolation = Initializer.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
 		for inheritedType in node.inheritanceClause?.inheritedTypes ?? [] {
 			let conformance = inheritedType.type.typeDescription
 			if Self.isSendable(conformance) {
