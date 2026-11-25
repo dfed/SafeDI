@@ -78,6 +78,13 @@ extension MockLowering {
 		let hasFunction: Bool
 		let readNames: [Property: String]
 		let alternatives: [ConstructionAlternative]
+		/// The argument labels of the construction the walk passes `nil`, which a record must pass `nil` too.
+		var labelsPassedNil = Set<String>()
+		/// The argument labels of the construction the walk passes a value.
+		var labelsPassedValue = Set<String>()
+		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
+		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
+		var configuredConstruction: ConfiguredConstruction?
 		/// The construction function a public mock's configured place calls instead (`MockLowering+PublicRecords.swift`).
 		var publicConstruction: PublicConstructionInputs?
 	}
@@ -157,13 +164,24 @@ extension MockLowering.Walk {
 		dependencyArguments: [(label: String, value: String)],
 		usesMockInitializer: Bool,
 	) {
-		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, is one the record
-		// cannot spell yet: its target is the initializer, and its arguments are reads alone.
-		guard !usesMockInitializer, !constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return }
+		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
+		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
+		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, readsOverride: overrideRead != nil, usesMockInitializer: usesMockInitializer)
+		guard configuredConstruction != .unrecorded else {
+			unrecordedReasons[childIndexPath] = "configuredUnrecorded"
+			return
+		}
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
-			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
-			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper) else { return }
+			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded,
+			// except in an internal mock, whose record reads the override of the configuration its call hands it
+			// (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the read its path names.
+			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper)
+				?? internalMockOverrideAlternative(of: node)
+			else {
+				unrecordedReasons[childIndexPath] = "overrideLocal"
+				return
+			}
 			alternatives.append(alternative)
 		}
 		builtPlaceInputs[childIndexPath] = MockLowering.BuiltPlaceInputs(
@@ -171,6 +189,9 @@ extension MockLowering.Walk {
 			hasFunction: hasFunction,
 			readNames: MockLowering.readNames(of: initializer, given: instantiable.dependencies, argumentValues: dependencyArguments),
 			alternatives: alternatives,
+			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
+			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
+			configuredConstruction: configuredConstruction.recorded,
 		)
 	}
 
@@ -183,26 +204,19 @@ extension MockLowering.Walk {
 		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties)
 		let planNode = planNodes[key] ?? PlanNode()
 		planNodes[key] = planNode
-		// A construction whose reads the record function cannot name (`Initializer.GenerationError`) leaves the place
-		// unrecorded: the walk's own statement is what the mock writes.
-		do {
-			let record = try generator.builtPlaceRecord(
-				of: property,
-				instantiable: instantiable,
-				forwardedProperties: forwardedProperties,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				unavailableProperties: unavailableProperties,
-				functionName: inputs.functionName,
-				hasFunction: inputs.hasFunction,
-				children: [],
-				node: planNode,
-				isPlannedAtPlace: seamCall == nil && !isLoopMember,
-				readNames: inputs.readNames,
-				alternatives: inputs.alternatives,
-			)
-			builtRecords[childIndexPath] = record.flatMap { publicRecord(of: $0, inputs: inputs) }
-		} catch {
-			unrecordedPlaceErrors[childIndexPath] = error
-		}
+		// The record is made once the walk is done (`recordBuiltPlaces()`), when the records of the places in its builder
+		// function are known.
+		builtPlaceCalls[childIndexPath] = MockLowering.BuiltPlaceCall(
+			generator: generator,
+			property: property,
+			instantiable: instantiable,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			unavailableProperties: unavailableProperties,
+			inputs: inputs,
+			node: planNode,
+			treeNode: node,
+			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
+		)
 	}
 }

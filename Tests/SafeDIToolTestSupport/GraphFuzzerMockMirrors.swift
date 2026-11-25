@@ -2065,13 +2065,14 @@ extension GraphFuzzerMockOverrides {
 	/// `contents`, a generated mock file, as the corpus run and the value-oracle run of one graph both generate it: without
 	/// its configuration blocks (`removingConfigurations(from:)`), and reading a configuration's default-valued field as a
 	/// value where a configuration that is `@Sendable`-typed calls its `@Sendable` autoclosure
-	/// (`safeDIOverrides.ext.retryCount()`). A root's mock that builds a type inside a `Sendable` builder makes the type's
+	/// (`safeDIOverrides.ext.retryCount()`, or `__safeDI_Ext_configuration.retryCount()` where a function the mock
+	/// shares by type reads its configuration parameter). A root's mock that builds a type inside a `Sendable` builder makes the type's
 	/// configuration `@Sendable`-typed for every mock, so a drawn mock reads the same default through the autoclosure, and a
 	/// drawn mock's `SafeDIOverrides` that holds that configuration keeps its fields in storage that is `Sendable`
 	/// (`ConfigurationStorage`), so the storage is read without its conformance.
 	static func comparableWithAnotherRunsMocks(_ contents: String) -> String {
 		removingConfigurations(from: contents)
-			.replacingOccurrences(of: #"(safeDIOverrides(\.[A-Za-z0-9_]+)+)\(\)"#, with: "$1", options: .regularExpression)
+			.replacingOccurrences(of: #"((?:safeDIOverrides|__safeDI_[A-Za-z0-9_]+_configuration)(\.[A-Za-z0-9_]+)+)\(\)"#, with: "$1", options: .regularExpression)
 			.replacingOccurrences(of: "private final class __safeDI_Storage: Sendable {", with: "private final class __safeDI_Storage {")
 	}
 }

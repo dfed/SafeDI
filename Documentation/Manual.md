@@ -488,7 +488,7 @@ A type can also receive an instantiator declared above it, of any of the four ki
 
 A received property that is not an instantiator cannot close a cycle, a `LazilyInstantiated` one included. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. So does a router built as a value that receives `screenBuilder`, when the `Screen` it builds receives that router. Receive an instantiator of the property instead, or declare `@Received(onlyIfAvailable: true) let parent: Parent?`, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
 
-In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry, and neither does anything built through it. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
+In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry of its own. A type the cycle builds again is built with the entry of the nearest place above it that builds the same type the same way (both with the type’s hand-written mock method, or both with its initializer), and so is everything built through it, so a mock’s overrides hold however many times a test goes around the loop. A type built through that dependency that nothing above it builds that way has no entry. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
 
 ### ErasedInstantiator
 

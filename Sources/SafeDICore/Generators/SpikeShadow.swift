@@ -224,7 +224,15 @@ extension ScopeGenerator {
 			differ("count", "prod=\(production.count) walk=\(walkRecords.count) walkOnly=\(walkOnly.prefix(3)) prodOnly=\(productionOnly.prefix(3))")
 			SpikeShadow.append("WALKONLY\t\(root)\t" + walkOnly.joined(separator: "\t"))
 		}
-		for (p, m) in zip(production, walkRecords) {
+		let walkPaths = walk.placePathsInWalkOrder.filter {
+			if case .built = walk.builtRecords[$0] {
+				true
+			} else {
+				false
+			}
+		}
+		let configurationReads = walk.absoluteConfigurationReads()
+		for ((p, m), walkPath) in zip(zip(production, walkRecords), walkPaths) {
 			guard p.property == m.property, p.concreteType == m.concreteType else {
 				differ("place", "\(p.property.asSource) vs \(m.property.asSource)")
 				continue
@@ -259,8 +267,10 @@ extension ScopeGenerator {
 			if p.hasFunction != m.hasFunction {
 				differ("hasFunction", "\(p.property.asSource) prod=\(p.hasFunction) walk=\(m.hasFunction)")
 			}
-			if alternativeKey(p.alternatives) != alternativeKey(m.alternatives) {
-				differ("alternatives", "\(alternativeKey(p.alternatives)) vs \(alternativeKey(m.alternatives))")
+			// The walk records the type key's relative reads, which must resolve to the path key's absolute ones.
+			let walkAlternatives = walk.alternativesReadAbsolutely(at: walkPath, configurationReads: configurationReads)
+			if alternativeKey(p.alternatives) != alternativeKey(walkAlternatives) {
+				differ("alternatives", "\(alternativeKey(p.alternatives)) vs \(alternativeKey(walkAlternatives))")
 			}
 		}
 		let differenceText = differences.keys.sorted().map { "\($0)=\(differences[$0, default: 0])" }.joined(separator: ",")
