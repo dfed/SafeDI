@@ -1623,6 +1623,45 @@ extension MockLowering {
 		}
 	}
 
+	/// What of a `ConstantNode` says how it is configured: the type of its configuration, and what its override's result is
+	/// wrapped in. It is what the walk keeps of each built place's node until the place's record is made
+	/// (`BuiltPlaceCall`), in place of the node, which also holds the construction's arguments and its function's bindings:
+	/// a few words for each place, released with the place's call.
+	struct NodeConfiguration {
+		let property: Property
+		/// The concrete type the node builds.
+		let instantiable: Instantiable
+		/// Whether the node is built with its type's hand-written mock rather than its initializer.
+		let usesMockInitializer: Bool
+		/// Whether the node is built in or as a `@Sendable` builder function, so its override closure is `@Sendable`.
+		let requiresSendable: Bool
+		/// Whether the node's children are configured in a configuration of its own, which holds its builder too.
+		let hasConfiguration: Bool
+		/// Whether the node wraps what it builds in its property's type (`erasedToConcreteExistential: true`).
+		let isErased: Bool
+		/// Whether the node builds its type in a wrapper.
+		let isWrapped: Bool
+
+		/// The type of the closure that overrides how the node is built, `@Sendable` where `isSendable`, as
+		/// `ConstantNode.builderClosureType` spells it.
+		func builderClosureTypeDescription(isSendable: Bool) -> TypeDescription {
+			let closure = TypeDescription.closure(
+				arguments: MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesMockInitializer).types,
+				isAsync: false,
+				doesThrow: false,
+				returnType: property.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			)
+			return isSendable ? .attributed(closure, specifiers: [], attributes: ["Sendable"]) : closure
+		}
+
+		/// The type the node's override's result is wrapped in: where it is erased and its configuration's builder builds
+		/// what it wraps.
+		var overrideResultWrapper: TypeDescription? {
+			guard isErased, hasConfiguration else { return nil }
+			return isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
+		}
+	}
+
 	/// A node of a mock's tree that builds its type with its initializer, from the values its children, the nodes built
 	/// before it in scope and, for an `Instantiator`, the values it forwards bind: as a constant, or in an `Instantiator`.
 	struct ConstantNode {
@@ -1706,18 +1745,6 @@ extension MockLowering {
 			"(\(builderParameterTypes)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
 		}
 
-		/// The type of the closure that overrides how the node is built, `@Sendable` where `isSendable`, as `builderClosureType`
-		/// spells it.
-		func builderClosureTypeDescription(isSendable: Bool) -> TypeDescription {
-			let closure = TypeDescription.closure(
-				arguments: MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesMockInitializer).types,
-				isAsync: false,
-				doesThrow: false,
-				returnType: property.typeDescription.asInstantiatedTypeSpelledAsDeclared,
-			)
-			return isSendable ? .attributed(closure, specifiers: [], attributes: ["Sendable"]) : closure
-		}
-
 		/// The types of the values the node's override is handed, joined: one per argument its construction is passed, which
 		/// leaves out a parameter left to its default (`ScopeGenerator.MockConstruction.callSiteArguments`).
 		private var builderParameterTypes: String {
@@ -1752,8 +1779,20 @@ extension MockLowering {
 		/// The type the node's override's result is wrapped in: where it is erased and its configuration's builder builds
 		/// what it wraps.
 		var overrideResultWrapper: TypeDescription? {
-			guard isErased, hasConfiguration else { return nil }
-			return isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
+			configuration.overrideResultWrapper
+		}
+
+		/// What configures the node (`NodeConfiguration`).
+		var configuration: NodeConfiguration {
+			NodeConfiguration(
+				property: property,
+				instantiable: instantiable,
+				usesMockInitializer: usesMockInitializer,
+				requiresSendable: requiresSendable,
+				hasConfiguration: hasConfiguration,
+				isErased: isErased,
+				isWrapped: isWrapped,
+			)
 		}
 
 		/// The type an erased node wraps what it builds in: its property's, or the type a wrapper builds.

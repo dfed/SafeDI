@@ -66,7 +66,7 @@ extension MockLowering.Walk {
 	/// configuration, which its own records hand.
 	mutating func leaveClosedOnPlace(of node: MockLowering.ConstantNode, readsOverride: Bool) {
 		guard let place = closedOnPlacesByLabel[node.property.label]?.popLast(), !place.closers.isEmpty, !buildsPublicMock else { return }
-		let configurationType = MockLowering.configurationType(of: node)
+		let configurationType = MockLowering.configurationType(of: node.configuration)
 		let staysOutsideSendableFunctions = if node.hasConfiguration {
 			!sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
 		} else {
@@ -118,7 +118,7 @@ extension MockLowering.Walk {
 extension MockLowering {
 	/// The type of what configures `node` in its parent's configuration: its configuration struct, or the optional closure
 	/// that overrides how it is built (`ConstantNode.overridesField`), as a type.
-	static func configurationType(of node: ConstantNode) -> TypeDescription {
+	static func configurationType(of node: NodeConfiguration) -> TypeDescription {
 		if node.hasConfiguration {
 			.nested(name: "SafeDIMockConfiguration", parentType: node.instantiable.concreteInstantiable, generics: [])
 		} else {
@@ -227,7 +227,7 @@ extension MockLowering.Walk {
 			configurationParameter: MockLowering.ConfigurationParameter(
 				concreteType: instantiable.concreteInstantiable,
 				builtWithHandWrittenMock: usesMockInitializer,
-				configurationType: MockLowering.configurationType(of: node),
+				configurationType: MockLowering.configurationType(of: node.configuration),
 			),
 		))
 	}

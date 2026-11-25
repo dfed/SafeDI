@@ -192,7 +192,7 @@ extension MockLowering {
 	/// closure). So alike places of one type that read their configurations at different paths record alike, and a place a
 	/// cycle builds again reads the configuration of the nearest place of its type built the same way, as the path key reads it.
 	static func relativeConfiguration(
-		of node: ConstantNode,
+		of node: NodeConfiguration,
 		context: BuiltPlaceConfigurationContext,
 		alternatives: [ConstructionAlternative],
 		hasFunction: Bool,
@@ -246,13 +246,12 @@ extension MockLowering {
 extension MockLowering.Walk {
 	/// Puts the built place recorded at the walk's place in the type key's form of its configuration
 	/// (`MockLowering.relativeConfiguration(of:…)`). A public mock's places take another configuration, which its own records hand.
-	mutating func relateConfiguration(ofBuiltPlaceAt path: [Int], of node: MockLowering.TreeNode) {
+	mutating func relateConfiguration(ofBuiltPlaceAt path: [Int], of node: MockLowering.NodeConfiguration) {
 		guard !buildsPublicMock,
-		      case let .built(constantNode) = node,
 		      case var .built(record) = builtRecords[path],
 		      let context = builtPlaceConfigurationContexts[path]
 		else { return }
-		let relative = MockLowering.relativeConfiguration(of: constantNode, context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
+		let relative = MockLowering.relativeConfiguration(of: node, context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
 		record.passedArguments = relative.passedArguments
 		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
 		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the

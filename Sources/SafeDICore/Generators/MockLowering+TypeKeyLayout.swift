@@ -49,7 +49,7 @@ extension MockLowering {
 			unavailableProperties: Set<Property>,
 			inputs: BuiltPlaceInputs,
 			node: PlanNode,
-			treeNode: TreeNode,
+			nodeConfiguration: NodeConfiguration,
 			isPlannedAtPlace: Bool,
 		) {
 			self.generator = generator
@@ -60,7 +60,7 @@ extension MockLowering {
 			self.unavailableProperties = unavailableProperties
 			self.inputs = inputs
 			self.node = node
-			self.treeNode = treeNode
+			self.nodeConfiguration = nodeConfiguration
 			self.isPlannedAtPlace = isPlannedAtPlace
 		}
 
@@ -72,8 +72,8 @@ extension MockLowering {
 		let unavailableProperties: Set<Property>
 		let inputs: BuiltPlaceInputs
 		let node: PlanNode
-		/// The node the walk lowered the place to, whose configuration the record reads (`relateConfiguration(ofBuiltPlaceAt:…)`).
-		let treeNode: TreeNode
+		/// How the node the walk lowered the place to is configured, which the record reads (`relateConfiguration(ofBuiltPlaceAt:…)`).
+		let nodeConfiguration: NodeConfiguration
 		let isPlannedAtPlace: Bool
 
 		/// This call with the plan node of a place alike in everything a node is made once for (`Walk.PlanNodeKey`).
@@ -87,7 +87,7 @@ extension MockLowering {
 				unavailableProperties: unavailableProperties,
 				inputs: inputs,
 				node: node,
-				treeNode: treeNode,
+				nodeConfiguration: nodeConfiguration,
 				isPlannedAtPlace: isPlannedAtPlace,
 			)
 		}
@@ -256,7 +256,7 @@ extension MockLowering.Walk {
 					unrecordedReasons[path] = "noRecord"
 				}
 				builtRecords[path] = record
-				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
+				relateConfiguration(ofBuiltPlaceAt: path, of: call.nodeConfiguration)
 				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
 					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
 					builtRecords[path] = .built(built)
