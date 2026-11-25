@@ -83,7 +83,9 @@ enum BinaryFile {
 	/// The version of the layout of the header and of the primitives in ``BinaryCodable``. Changes to how a
 	/// stored type is laid out change ``schemaFingerprint`` instead. Version 2 shares repeated values inside seam signatures,
 	/// and writes the optional and Boolean fields of most other structs as one integer of flags (``BinaryFieldFlags``).
-	static let formatVersion: UInt16 = 2
+	/// Version 3 writes each module's seam signatures as an encoding of their own, with its own string table, behind its
+	/// length (``BinaryWriter/writeEncoding(_:)``), so a run decodes only those of the seams it reaches.
+	static let formatVersion: UInt16 = 3
 
 	/// Every struct and enum a file holds.
 	static var schemaMembers: [any BinarySchemaMember.Type] {

@@ -201,6 +201,13 @@ struct BinaryWriter {
 		value.write(to: &self)
 	}
 
+	/// Writes what another writer encoded (``encoded``), its length first, so that a reader can keep the bytes without
+	/// reading what they hold (``BinaryReader/readEncoding()``) and decode them later with a reader of their own.
+	mutating func writeEncoding(_ encoding: [UInt8]) {
+		writeUnsigned(UInt64(encoding.count))
+		bytes.append(contentsOf: encoding)
+	}
+
 	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
 	private(set) var writesPositionsAsAbsent = false
 
@@ -698,6 +705,14 @@ struct BinaryReader {
 
 	mutating func read<Value: BinaryCodable>() throws(BinaryDecodingError) -> Value {
 		try Value(readingFrom: &self)
+	}
+
+	/// Reads the bytes ``BinaryWriter/writeEncoding(_:)`` wrote, without reading what they hold.
+	mutating func readEncoding() throws(BinaryDecodingError) -> [UInt8] {
+		let count = try readCount()
+		let encoding = Array(UnsafeRawBufferPointer(rebasing: bytes[offset..<offset + count]))
+		offset += count
+		return encoding
 	}
 
 	/// Reads the flags a struct writes before its fields (``BinaryWriter/finishFields(_:startingAt:)``).
