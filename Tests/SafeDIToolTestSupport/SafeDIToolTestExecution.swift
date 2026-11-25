@@ -196,6 +196,8 @@ func executeSafeDIToolTest(
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
 	// A module info file names the module it describes, so the run writes one only when the test names its module.
+	// The module the run generates, which an issue of its stored blocks names.
+	let moduleName = moduleMembershipArguments.firstIndex(of: "--module-name").flatMap { moduleMembershipArguments.indices.contains($0 + 1) ? moduleMembershipArguments[$0 + 1] : nil }
 	let moduleInfoOutput: URL? = moduleMembershipArguments.contains("--module-name") ? URL.temporaryFile.appendingPathExtension("safedi") : nil
 	let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
@@ -347,7 +349,10 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+										// Every stored block the run reads must decode (`StoredBlockDecodeChecks`).
+										try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)) {
+											try await tool.generate()
+										}
 									}
 								}
 							}
@@ -414,6 +419,9 @@ func executeSafeDIToolTest(
 		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: moduleInfoFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if let recordDirectory {
 			// Recorded before compiling, so a compile that fails still leaves the outputs it was given.
 			var outputs = (generatedFiles ?? [:]).sorted { $0.key < $1.key }.map {

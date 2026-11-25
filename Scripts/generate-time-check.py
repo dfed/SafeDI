@@ -129,11 +129,12 @@ SIZE_NOISE_FLOOR_BYTES = 4096
 # Sizes accepted for one change, by shape and module: a listed module passes while the head's file is at most this many
 # bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds.
 #
-# M80x80-calling-mocks: the module info now stores each public mock's plan, and a plan lists, for each of its builders,
-# the declarations of the builder's siblings, so the list grows with the square of the builders. That is what takes
-# `Feat` and `App` past twice the size of a base that stores no plan. Once the change that stores the plans is on
-# main, main's own tool is the base and writes files of this size, so the entry is unnecessary: remove it then.
-ACCEPTED_MODULE_INFO_BYTES = {"M80x80-calling-mocks": {"Feat": 130_000, "App": 142_000}}
+# M80x80-calling-mocks: the module info now stores each public mock's plan, which lists, for each of its builders, the
+# builder's siblings. Each list is written as a difference from an earlier one, so the file grows with the builders,
+# but a plan of 80 builders is still several times the size of a base file that stores no plan. Once the change that
+# stores the plans is on main, main's own tool is the base and writes files of this size, so the entry is
+# unnecessary: remove it then.
+ACCEPTED_MODULE_INFO_BYTES = {"M80x80-calling-mocks": {"Feat": 36_000, "App": 48_000}}
 
 
 # MARK: Shapes

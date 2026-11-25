@@ -7324,6 +7324,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.configuration: 2_316,
 		],
 		pinnedPlacePairCount: 105,
+		nestedCyclePairCount: 0,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.

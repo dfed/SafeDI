@@ -72,6 +72,105 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases, [true, false])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_importsModuleOfFulfiller_whenTreeAlsoBuildsFulfillerForPropertyThatNamesIt(integration: MultiModuleIntegration, declaresErasedPropertyFirst: Bool) async throws {
+		// `Holder`, in a module that imports the fulfiller's, builds `DefaultThing` for a property that names it, which asks
+		// for no import; the root builds the same type for a property that does not name it, which does. The walk that
+		// collects a tree's fulfillers visits each generator once, and the two builds are two generators whichever it meets
+		// first, so the root's file imports the fulfiller's module in either order of the declarations.
+		let holder = ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+			"import Impl\n\n" + seamFixtureType(named: "Holder", declarations: ["@Instantiated let thing: DefaultThing"]),
+		], dependencies: ["Contracts", "Impl"])
+		let declarations = ["@Instantiated let holder: Holder", Self.erasedThing]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.contracts,
+				Self.impl,
+				holder,
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+					"import Contracts\nimport Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: declaresErasedPropertyFirst ? declarations.reversed() : declarations),
+				], dependencies: ["Contracts", "Feature", "Impl"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let imports = """
+		#if canImport(Contracts)
+		import Contracts
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Impl)
+		import Impl
+		#endif
+		"""
+		let body = if declaresErasedPropertyFirst {
+			"""
+			extension Root {
+			    public init() {
+			        let thing = AnyThing(DefaultThing())
+			        func __safeDI_holder() -> Holder {
+			            let thing = DefaultThing()
+			            return Holder(thing: thing)
+			        }
+			        let holder: Holder = __safeDI_holder()
+			        self.init(thing: thing, holder: holder)
+			    }
+			}
+			"""
+		} else {
+			"""
+			extension Root {
+			    public init() {
+			        func __safeDI_holder() -> Holder {
+			            let thing = DefaultThing()
+			            return Holder(thing: thing)
+			        }
+			        let holder: Holder = __safeDI_holder()
+			        let thing = AnyThing(DefaultThing())
+			        self.init(holder: holder, thing: thing)
+			    }
+			}
+			"""
+		}
+		#expect(output.modules["App"]?.generatedFiles == [
+			integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + imports + "\n\n" + body,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_visitsEachGeneratorOnceCollectingFulfillers_whenEveryScreenBuildsEveryScreenOfNextLayer() async throws {
+		// Three screens a layer, each building every screen of the next layer through an `Instantiator`: the places of a
+		// screen share one generator, and the paths to the last layer triple with each layer. The walk that collects the
+		// types a root's tree builds entered a generator again at every place, so it visited 121 generators at four layers
+		// and 9,841 at eight, and 16 layers of four screens took 35 seconds; it visits the root and each screen once.
+		var generatorsVisited = [Int]()
+		for layerCount in [4, 8] {
+			var fixture = [seamFixtureType(named: "Root", isRoot: true, declarations: (0..<3).map { "@Instantiated let screen0x\($0)Builder: Instantiator<Screen0x\($0)>" })]
+			for layer in 0..<layerCount {
+				for screen in 0..<3 {
+					fixture.append(seamFixtureType(named: "Screen\(layer)x\(screen)", isFinalClass: true, declarations: layer + 1 < layerCount
+							? (0..<3).map { "@Instantiated let screen\(layer + 1)x\($0)Builder: Instantiator<Screen\(layer + 1)x\($0)>" }
+							: []))
+				}
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			continuation.finish()
+			var visited = 0
+			for await work in stream where work.step == .collectingTypesOfATree {
+				visited += work.elementCount
+			}
+			generatorsVisited.append(visited)
+		}
+		#expect(generatorsVisited == [13, 25])
+	}
+
 	@Test(arguments: MultiModuleIntegration.allCases, FulfilledProperty.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_importsModuleOfFulfiller_whateverPropertyTheStringFulfills(integration: MultiModuleIntegration, property: FulfilledProperty) async throws {
