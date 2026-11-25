@@ -218,15 +218,15 @@ extension PassedArgument {
 
 extension PassedArgument {
 	/// The argument for a closer's structural key: its parameter, its type and the label it reads, never the declaration
-	/// that resolves to, which `checkEveryRead` proves alike at every member; a new value as itself; `nil` for any other
+	/// that resolves to, which `checkEveryRead` proves alike at every member; a parameter or a new value as itself, as a
+	/// built place's call hands it, so a closing call and a built call of one function share a key; `nil` for any other
 	/// value, which keeps the root one per path.
 	var closerShape: String? {
 		switch value {
 		case let .read(read):
 			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
-		case let .passedArgument(name):
-			"passed|\(parameterName)|\(type.asSource)|passed:\(name)|\(bindsBeforeCall)"
-		case .emptyInitialization,
+		case .passedArgument,
+		     .emptyInitialization,
 		     // The nearest configuration of a closed-on place, or `nil` (`MockLowering.NearestConfigurations`).
 		     .spliced:
 			shape

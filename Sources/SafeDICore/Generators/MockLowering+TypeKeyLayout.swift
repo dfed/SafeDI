@@ -70,11 +70,25 @@ extension MockLowering.Walk {
 		// Every function of a type takes the nearest configurations of the places closers beneath it close on, one list
 		// for the type, so no function's parameters follow the path that reaches it.
 		let nearest: MockLowering.NearestConfigurations? = buildsPublicMock ? nil : nearestConfigurations(childPathsByParent: childPathsByParent)
+		var parentFieldsReadByBuiltPlaces = Set<ParentFieldRead>()
+		for context in builtPlaceConfigurationContexts.values {
+			if let parentConfiguration = context.parentConfiguration {
+				parentFieldsReadByBuiltPlaces.insert(ParentFieldRead(parentConfiguration: parentConfiguration, fieldName: context.fieldName))
+			}
+		}
 		if let nearest {
 			for path in placePathsInWalkOrder {
 				guard case var .closer(record)? = closerAndDefaultRecords[path], let argument = record.passedArguments.first else { continue }
 				let closedOn = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
-				let value = nearest.closedOnValue(of: closedOn, at: path) ?? argument.value
+				// Where a built place of the closed-on type and the closer's label reads its parent's field, the closer hands
+				// the same expression that place hands, `nearest ?? parent.field`: the nearest is set exactly where a place
+				// of its type is above, so both read what they read before, and both are one call of the type's function.
+				let parentField = closerParentFieldReads[path].flatMap { read in
+					parentFieldsReadByBuiltPlaces.contains(ParentFieldRead(parentConfiguration: read.parentConfiguration, fieldName: read.fieldName))
+						? ValuePath.member(read.fieldName, of: read.parentConfiguration)
+						: nil
+				}
+				let value = nearest.closedOnValue(of: closedOn, at: path, parentField: parentField) ?? argument.value
 				record.passedArguments = [PassedArgument(parameterName: argument.parameterName, type: argument.type, value: value, staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)]
 					+ nearest.nearestArguments(ofCallTo: closedOn, at: path)
 				closerAndDefaultRecords[path] = .closer(record)
@@ -149,6 +163,17 @@ extension MockLowering.Walk {
 					builtRecords[path] = .built(built)
 				}
 				if let nearest, let own = nearest.ownParameterByPath[path], case var .built(built)? = builtRecords[path] {
+					// A place that reads its parent's field of it, or a configuration of its own, reads the nearest place of
+					// its type's configuration first, as a closer of its type hands it, where its parent's function takes
+					// that nearest one: it is set exactly where a place of its type is above, which no built place has.
+					if let first = built.passedArguments.first, first.parameterName == own.name,
+					   let nearestRead = nearest.nearestRead(of: own, calledFrom: Array(path.dropLast())),
+					   let value = Self.nearestFirst(nearestRead, orElse: first.value, context: builtPlaceConfigurationContexts[path])
+					{
+						var handed = PassedArgument(parameterName: first.parameterName, type: first.type, value: value, staysOutsideSendableFunctions: first.staysOutsideSendableFunctions)
+						handed.bindsBeforeCall = first.bindsBeforeCall
+						built.passedArguments[0] = handed
+					}
 					built.passedArguments += nearest.nearestArguments(ofCallTo: own, at: path)
 					builtRecords[path] = .built(built)
 				}
@@ -159,6 +184,24 @@ extension MockLowering.Walk {
 				unrecordedReasons[path] = "threw"
 				unrecordedPlaceErrors[path] = error
 			}
+		}
+	}
+
+	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
+	/// its type, `nearestRead`: that, else what it hands now, a field of its parent's or a configuration built afresh, or
+	/// that alone where it hands `nil`; `nil` where it hands anything else, which it keeps.
+	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, context: MockLowering.BuiltPlaceConfigurationContext?) -> ValuePath? {
+		switch value {
+		case .emptyInitialization:
+			return .spliced([.value(nearestRead), .text(" ?? "), .value(value)])
+		case .member:
+			guard let context, let parentConfiguration = context.parentConfiguration, value == .member(context.fieldName, of: parentConfiguration) else { return nil }
+			return .spliced([.value(nearestRead), .text(" ?? "), .value(value)])
+		case let .read(read):
+			guard case .nil = read.source else { return nil }
+			return nearestRead
+		case .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
+			return nil
 		}
 	}
 
@@ -320,4 +363,10 @@ extension MockLowering.RootSignature {
 		}
 		return declarations
 	}
+}
+
+/// A field of a parent's configuration a place reads, by the parent's configuration read and the field's name.
+struct ParentFieldRead: Hashable {
+	let parentConfiguration: ValuePath
+	let fieldName: String
 }

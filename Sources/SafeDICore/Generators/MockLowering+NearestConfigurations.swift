@@ -58,6 +58,14 @@ extension MockLowering {
 			}
 		}
 
+		/// The nearest configuration of `parameter` a function of the place at `callerPath` was handed, where it takes one.
+		func nearestRead(of parameter: ConfigurationParameter, calledFrom callerPath: [Int]) -> ValuePath? {
+			guard let callerParameter = ownParameterByPath[callerPath], callerParameter != parameter,
+			      parametersByKey[callerParameter.name, default: []].contains(parameter)
+			else { return nil }
+			return .passedArgument(Self.nearestName(of: parameter))
+		}
+
 		/// The passed arguments a call made at `path` hands the nearest configurations the function of `calleeParameter`
 		/// takes.
 		func nearestArguments(ofCallTo calleeParameter: ConfigurationParameter, at path: [Int]) -> [PassedArgument] {
@@ -74,11 +82,13 @@ extension MockLowering {
 
 		/// What a closer at `path` hands the configuration of the place it closes on, `closedOn`: the nearest place of its
 		/// type's, which its function was handed, or a fresh one where none is above.
-		func closedOnValue(of closedOn: ConfigurationParameter, at path: [Int]) -> ValuePath? {
+		func closedOnValue(of closedOn: ConfigurationParameter, at path: [Int], parentField: ValuePath?) -> ValuePath? {
 			let callerPath = Array(path.dropLast())
 			guard let callerParameter = ownParameterByPath[callerPath] else { return nil }
 			if callerParameter == closedOn {
 				return .passedArgument(closedOn.name)
+			} else if let parentField {
+				return .spliced([.value(.passedArgument(Self.nearestName(of: closedOn))), .text(" ?? "), .value(parentField)])
 			} else if closedOn.readsConfigurationStruct {
 				return .spliced([.value(.passedArgument(Self.nearestName(of: closedOn))), .text(" ?? "), .value(.emptyInitialization(closedOn.type))])
 			} else {
@@ -117,7 +127,9 @@ extension MockLowering.Walk {
 		var changed = true
 		while changed {
 			changed = false
-			for path in placePathsInWalkOrder {
+			// A function's list joins its children's, so the places beneath are visited first: the reverse of walk order
+			// settles every list but those a closer's target feeds back in in one pass.
+			for path in placePathsInWalkOrder.reversed() {
 				guard let own = ownParameterByPath[path] else { continue }
 				var parameters = parametersByName[own.name, default: []]
 				let countBefore = parameters.count
