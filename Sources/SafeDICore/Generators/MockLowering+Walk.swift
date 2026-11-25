@@ -520,6 +520,10 @@ extension MockLowering {
 		/// What the walk hands production's record function at each built place, which `recordBuiltPlaces()` calls once the
 		/// walk is done, by its path of child indices.
 		var builtPlaceCalls = [[Int]: MockLowering.BuiltPlaceCall]()
+		/// The first place in walk order that `recordBuiltPlaces()` left with no record, which keeps the walk's body for the
+		/// root: the records of the places beneath the root's own are released as their parents take them, so no later pass
+		/// can look for it.
+		var firstUnrecordedPath: [Int]?
 		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
 		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
 		var pathsWithUnplannedLines = Set<[Int]>()
