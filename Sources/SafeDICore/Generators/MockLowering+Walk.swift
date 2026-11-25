@@ -852,6 +852,12 @@ extension MockLowering {
 			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteType.asSource))
 		}
 
+		/// `isPruned(_:beneath:)` for a type already spelled as `cycleEdges` spells it.
+		func isPruned(spelled concreteTypeSource: String, beneath parentConcreteType: String?) -> Bool {
+			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
+			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteTypeSource))
+		}
+
 		/// The node of `generator`, which closes a cycle on a node around it of `property`, built as `instantiable`, whose
 		/// statement is appended to `lines`: it calls that node's builder function, or hands it to its wrapper, and reads no
 		/// override, since the function reads the node's.
@@ -1091,7 +1097,9 @@ extension MockLowering {
 			// A node that repeats a node around it reads no override of its own, and one beneath an edge in `cycleEdges`
 			// reads none of its own or beneath it: its parent's configuration has no field for it.
 			let isCycleNode = ancestorTypes.contains(cycleNodeKey)
-			let ownFieldReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
+			// Spelling the type is most of what the questions below cost, so it is spelled once.
+			let concreteTypeSource = instantiable.concreteInstantiable.asSource
+			let ownFieldReachable = overridePathReachable && !isPruned(spelled: concreteTypeSource, beneath: parentConcreteType)
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
 			// Every wrapper kind builds its type in a builder function, as an `Instantiator` does,
@@ -1159,14 +1167,14 @@ extension MockLowering {
 				hasConfiguration: hasConfiguration,
 				builtWithHandWrittenMock: usesMockInitializer,
 				isReachable: !isCycleNode && ownFieldReachable,
-				nearest: overridePathsByType[instantiable.concreteInstantiable.asSource]?.last,
+				nearest: overridePathsByType[concreteTypeSource]?.last,
 			)
 			let nodePath = ownOverridePath?.path ?? "\(path).\(bindingName)"
 			let nodePathValue = ownOverridePath?.value ?? .member(bindingName, of: pathValue)
 			let overrideReachable = ownOverridePath != nil
 			let ownFieldIsRead = !isCycleNode && ownFieldReachable
 			let ownRelativeConfiguration = MockLowering.RelativeConfiguration(hasConfiguration: hasConfiguration, builtWithHandWrittenMock: usesMockInitializer)
-			let nearestRelativeConfiguration = relativeConfigurationsByType[instantiable.concreteInstantiable.asSource]?.last
+			let nearestRelativeConfiguration = relativeConfigurationsByType[concreteTypeSource]?.last
 			// The nearest place of its type around it built the same way, which a node its parent's configuration has no
 			// field for reads, as `AncestorOverridePath.own(…)` reads it where an override reaches the nodes.
 			let nearestConfigurationIsDeclared = nearestRelativeConfiguration == ownRelativeConfiguration
@@ -1175,7 +1183,7 @@ extension MockLowering {
 			// reads its configuration of its parent's, as where an override reaches it: that parent is handed a configuration
 			// built afresh (`MockLowering.relativeConfiguration(of:…)`), so the node's record is the same whichever edge the
 			// order of type names leaves out.
-			let readsParentConfiguration = !isCycleNode && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
+			let readsParentConfiguration = !isCycleNode && !isPruned(spelled: concreteTypeSource, beneath: parentConcreteType)
 			builtPlaceConfigurationContexts[childIndexPath] = MockLowering.BuiltPlaceConfigurationContext(
 				fieldName: bindingName,
 				parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
@@ -1388,13 +1396,13 @@ extension MockLowering {
 			lazilyInstantiatedNames = functionLazilyInstantiatedNames
 			let bindingNamesPassedByNameAround = enclosingBindingNamesPassedByName
 			enclosingBindingNamesPassedByName = bindingNamesPassedByName
-			parentConcreteType = instantiable.concreteInstantiable.asSource
+			parentConcreteType = concreteTypeSource
 			overridePathReachable = overrideReachable
 			if let ownOverridePath {
-				overridePathsByType[instantiable.concreteInstantiable.asSource, default: []].append(ownOverridePath)
+				overridePathsByType[concreteTypeSource, default: []].append(ownOverridePath)
 			}
 			if let relativeConfiguration {
-				relativeConfigurationsByType[instantiable.concreteInstantiable.asSource, default: []].append(relativeConfiguration)
+				relativeConfigurationsByType[concreteTypeSource, default: []].append(relativeConfiguration)
 			}
 			pushedRelativeConfigurations.append(relativeConfiguration != nil)
 			configurationReads.append(hasConfiguration ? .passedArgument(MockLowering.ConfigurationParameter(
@@ -1478,11 +1486,16 @@ extension MockLowering {
 			let configurationEntry = descending.configurationEntry
 			var node = descending.node
 			let finishedChildren = leavingConfiguredNode(configurationEntry)
-			if overrideReachable {
-				overridePathsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
-			}
-			if pushedRelativeConfigurations.removeLast() {
-				relativeConfigurationsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
+			let pushedRelativeConfiguration = pushedRelativeConfigurations.removeLast()
+			if overrideReachable || pushedRelativeConfiguration {
+				// Spelling the type is most of the cost here, so it is spelled once.
+				let concreteTypeSource = instantiable.concreteInstantiable.asSource
+				if overrideReachable {
+					overridePathsByType[concreteTypeSource]?.removeLast()
+				}
+				if pushedRelativeConfiguration {
+					relativeConfigurationsByType[concreteTypeSource]?.removeLast()
+				}
 			}
 			configurationReads.removeLast()
 			parentConcreteType = enclosingParentConcreteType
