@@ -666,6 +666,7 @@ extension DependencyTreeGenerator {
 	///     reports what a type needs, not what keeps one module from compiling its mock, so it checks no access. This is
 	///     the one check of a single mock root that the two callers do not share; the access that decides which flat
 	///     parameters default is asked of `mockScopes` instead, by both.
+	///   - checksConstructions: See `createMockRootScopeGenerator`.
 	///   - promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
 	///   - scopesWithValidatedDeclarations: See `createMockRootScopeGenerator`.
 	func createMockRoot(
@@ -675,6 +676,7 @@ extension DependencyTreeGenerator {
 		mockScopes: MockScopes,
 		publicMockContext: PublicMockContext?,
 		emittingModule: EmittingModule?,
+		checksConstructions: Bool = true,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
@@ -709,6 +711,7 @@ extension DependencyTreeGenerator {
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			publicMockContext: publicMockContext,
 			emittingModule: emittingModule,
+			checksConstructions: checksConstructions,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,

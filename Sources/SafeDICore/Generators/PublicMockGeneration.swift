@@ -645,10 +645,36 @@ extension ScopeGenerator {
 			promotedParameterNames[property] = parameterName
 			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: property.label), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: property.propertyType.isLazilyInstantiated ? property : nil))
 		}
+		// A dependency the mock passes on to a call of another module's public mock that builds it when passed `nil`, which
+		// this module cannot construct and so does not promote, is built when this mock is passed `nil` too: by each such
+		// call. A module that calls this mock and can construct the dependency then builds it once, as it does for a
+		// dependency this mock builds itself (M8.8b).
+		var wrapperBuiltByCallsWhenNil = [Property: Property?]()
+		for node in treePropertyNodes {
+			var publicMockCalls = [PublicMockCall]()
+			if let publicMockCall = node.generator.publicMockCall {
+				publicMockCalls.append(publicMockCall)
+			}
+			if node.generator.fillsABuilder {
+				publicMockCalls += ScopeGenerator.publicMockCallsInFills(of: node.generator)
+			}
+			for publicMockCall in publicMockCalls {
+				for parameter in publicMockCall.passedParameters where parameter.isBuiltWhenNil && parameter.dependency.source == .received(onlyIfAvailable: true) {
+					// A call that builds the wrapper decides the wrapper, whichever call the tree reaches first.
+					let property = parameter.dependency.property.asUnwrappedProperty
+					if let builtWrapper = parameter.builtWrapper {
+						wrapperBuiltByCallsWhenNil[property] = .some(builtWrapper)
+					} else if wrapperBuiltByCallsWhenNil[property] == nil {
+						wrapperBuiltByCallsWhenNil[property] = .some(nil)
+					}
+				}
+			}
+		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			// A value the tree receives lazily is taken as the wrapper it receives (`ScopeGenerator.publicMockWrapperParameters`).
 			let type = wrapperParameterByInstance[onlyIfAvailableOverride.receivedProperty].map { TypeDescription.optional($0.typeDescription.unwrapped) } ?? onlyIfAvailableOverride.typeDescription
-			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: type, typeSource: type.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: type, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: type, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: type), isRequired: false)))
+			let builtWrapper = wrapperBuiltByCallsWhenNil[onlyIfAvailableOverride.receivedProperty.asUnwrappedProperty]
+			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: type, typeSource: type.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: type, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: type, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: type), isRequired: false), isBuiltWhenNil: builtWrapper != nil, builtWrapper: builtWrapper ?? nil))
 		}
 		optionalReceivedParameters.sort { ($0.name, $0.typeSource) < ($1.name, $1.typeSource) }
 
@@ -1308,10 +1334,16 @@ extension StoredPublicMockPlan {
 			guard case let .received(property, _) = parameter.role, parameter.access < .public || parameter.nestedOmission != nil else { continue }
 			omittableLabels.insert(property.label)
 		}
+		// A tree has a node per path, each of which lists its type's dependencies again, and a diagnostic names each
+		// declaration once, so each declaration's receive is kept once: a plan's size never follows the number of paths.
 		var receivers = [Receiver]()
 		if !omittableLabels.isEmpty {
+			var receives = Set<Receive>()
 			for label in ownPlan.receiversByLabel.keys.sorted() where omittableLabels.contains(label) {
-				for receiver in ownPlan.receiversByLabel[label, default: []] where receiver.dependency.source.isReceived {
+				for receiver in ownPlan.receiversByLabel[label, default: []]
+					where receiver.dependency.source.isReceived
+					&& receives.insert(Receive(declaringType: receiver.declaringType, property: receiver.dependency.property, source: receiver.dependency.source)).inserted
+				{
 					receivers.append(Receiver(declaringType: receiver.declaringType, dependency: receiver.dependency))
 				}
 			}
@@ -1329,6 +1361,15 @@ extension StoredPublicMockPlan {
 			receivers: receivers,
 			typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.filter(parameterTypes.contains).sorted(),
 		)
+	}
+}
+
+extension StoredPublicMockPlan {
+	/// What tells one declaration's receive of a dependency from another's, without where it is declared.
+	private struct Receive: Hashable {
+		let declaringType: TypeDescription
+		let property: Property
+		let source: Dependency.Source
 	}
 }
 

@@ -447,8 +447,10 @@ extension DependencyTreeGenerator {
 			generatedMockReason: .generateMock,
 			mockScopes: rootMockScopes,
 			publicMockContext: publicMockContext,
-			// The declaring module's own run checked its constructions.
-			emittingModule: nil,
+			// The mock promotes what the declaring module can construct, as that module's own run decided it, so the plan
+			// is of the mock that run generates. That run checked its constructions.
+			emittingModule: emittingModuleToCheck,
+			checksConstructions: false,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,

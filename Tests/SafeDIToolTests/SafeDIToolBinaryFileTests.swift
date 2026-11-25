@@ -1593,6 +1593,88 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSamePublicMockPlanEncoding_whenBlankLineIsAddedAboveDeclarationThatReceivesOmittableParameter() async throws {
+		/// The module's plan encoding and the path of its source file, which the encoding names: each run's fixture is in a
+		/// directory of its own, where a build's file stays where it is.
+		func planEncoding(ofSource source: String) async throws -> (encoding: [UInt8], sourceFilePath: String) {
+			let output = try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Home.swift": source],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+			)
+			let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+			// The plan holds the receive of `theme`, whose declaration the blank line moves.
+			#expect(try file.publicMockPlans.decoded.map { $0.receivers.map(\.declaringType.asSource) } == [["Home"]])
+			return try (file.publicMockPlans.encoding(writingPositionsAsAbsent: true), #require(file.plainTypeDeclarations.first?.sourceFilePath))
+		}
+
+		let original = try await planEncoding(ofSource: Self.publicMockReceivingPackageTypeSource)
+		let moved = try await planEncoding(ofSource: "\n" + Self.publicMockReceivingPackageTypeSource)
+
+		#expect(original.sourceFilePath.utf8.count == moved.sourceFilePath.utf8.count)
+		let movedEncodingAtOriginalPath = Array(Data(moved.encoding).replacing(Data(moved.sourceFilePath.utf8), with: Data(original.sourceFilePath.utf8)))
+		#expect(original.encoding == movedEncodingAtOriginalPath)
+	}
+
+	@Test(arguments: [4, 6, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesEachReceiverOfOmittableParameterOnce_whenTreeReachesItOnEveryPathOfLayeredDiamond(layerCount: Int) async throws {
+		// `Home` instantiates `A1` and `B1`, each of which instantiates `A2` and `B2`, down to the last layer, whose two
+		// types receive `theme`: two declarations on two to the power of `layerCount` paths.
+		var source = """
+		package struct Theme {}
+
+		@Instantiable(generateMock: .public)
+		public struct Home: Instantiable {
+		    package init(a1: A1, b1: B1) {}
+
+		    @Instantiated let a1: A1
+		    @Instantiated let b1: B1
+		}
+		"""
+		for layer in 1...layerCount {
+			for name in ["A", "B"] {
+				if layer == layerCount {
+					source += """
+
+
+					@Instantiable
+					package struct \(name)\(layer): Instantiable {
+					    package init(theme: Theme?) {}
+
+					    @Received(onlyIfAvailable: true) let theme: Theme?
+					}
+					"""
+				} else {
+					source += """
+
+
+					@Instantiable
+					package struct \(name)\(layer): Instantiable {
+					    package init(a\(layer + 1): A\(layer + 1), b\(layer + 1): B\(layer + 1)) {}
+
+					    @Instantiated let a\(layer + 1): A\(layer + 1)
+					    @Instantiated let b\(layer + 1): B\(layer + 1)
+					}
+					"""
+				}
+			}
+		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [source],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+
+		#expect(try file.publicMockPlans.decoded.map { $0.receivers.map(\.declaringType.asSource) } == [["A\(layerCount)", "B\(layerCount)"]])
+	}
+
+	@Test
 	func binaryReader_throws_whenEncodingCountsMoreBytesThanRemain() throws {
 		var writer = BinaryWriter()
 		writer.write(BinaryEncoding(bytes: [1, 2, 3]))
@@ -1657,6 +1739,17 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	    }
 
 	    @Instantiated let upstreamService: UpstreamService
+	}
+	"""
+
+	private static let publicMockReceivingPackageTypeSource = """
+	package struct Theme {}
+
+	@Instantiable(generateMock: .public)
+	public struct Home: Instantiable {
+	    package init(theme: Theme?) {}
+
+	    @Received(onlyIfAvailable: true) let theme: Theme?
 	}
 	"""
 
