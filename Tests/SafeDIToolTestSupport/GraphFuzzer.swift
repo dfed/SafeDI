@@ -9933,9 +9933,9 @@ enum GraphFuzzerGenerator {
 		///   `StoodForC`; each builds `StoodForPanel`, the holder of a place of `StoodForApi`, one of them, by roll, through
 		///   `StoodForMid`. `StoodForLive` fills the place and instantiates `stoodForShellBuilder` again, which closes a
 		///   cycle on the seam's own at each place, whose note names the seam's declaration whatever the place's depth.
-		/// - In a graph of both kinds of wrapper, each parent declares `stoodForRowBuilder`, an `Instantiator` of
-		///   `StoodForRow`, before its panel, and `StoodForLive` builds `StoodForWorker`, which receives it, in a
-		///   `SendableInstantiator`: a capture the error reports once per parent, each naming every parent.
+		/// - In a graph not of all-`Sendable` wrappers, three times in four, each parent declares `stoodForRowBuilder`, an
+		///   `Instantiator` of `StoodForRow`, before its panel, and `StoodForLive` builds `StoodForWorker`, which receives
+		///   it, in a `SendableInstantiator`: a capture the error reports once per parent, each naming every parent.
 		/// - One parent, by roll, declares `stoodForToken`, whose type receives `stoodForPanel` and so is built after it,
 		///   and `StoodForLive` reads it only if available: only that place binds the value after it.
 		///
@@ -9968,7 +9968,7 @@ enum GraphFuzzerGenerator {
 			var homeProperties = [PropertyDeclaration]()
 			var liveProperties = [PropertyDeclaration]()
 			var callerDeclarations = [TypeDeclaration]()
-			if sendability == .mixed, capturesWrapperRoll {
+			if sendability != .sendable, capturesWrapperRoll {
 				let row = instantiable("StoodForRow")
 				added.append(row)
 				let rowBuilderType = "Instantiator<\(row.name)>"

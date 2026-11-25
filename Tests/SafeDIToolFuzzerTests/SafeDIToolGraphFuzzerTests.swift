@@ -3162,6 +3162,34 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
+	@Test(arguments: [
+		(UInt64(384), GraphFuzzerSeamDrawFeature.placesOfOneCaseFillCapturesWrapperOfEveryPlace),
+		(1_880, .placesOfOneCaseFillCapturesWrapperOfEveryPlace),
+		(319, .placesOfOneCaseFillClosesCycleAtTwoDepths),
+		(756, .placesOfOneCaseFillClosesCycleAtTwoDepths),
+		(772, .placesOfOneCaseValueBoundAfterOnePlace),
+		(835, .placesOfOneCaseValueBoundAfterOnePlace),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectSharedAndUnsharedFillsWithSameDiagnostics_whenOnePlacesFillStandsForAnother(seed: UInt64, feature: GraphFuzzerSeamDrawFeature) async throws {
+		// `StoodForLive` fills the place beneath each of `StoodForA` to `StoodForC`, and the fill of one stands for the
+		// others'. Each shape is rejected by design, at every place: a `@Sendable` function in the fill captures the
+		// `Instantiator` each parent declares, the fill closes a cycle on a declaration of the seam's tree that the places
+		// reach at two depths, or it reads a value only one place binds after it. The run that shares fills and the run that
+		// builds a fill of every place (`SeamFillSharing.buildsFillOfEveryPlace`) must print the same diagnostics, which
+		// name every place. With the capture walk not walking the places a fill stands for, seeds 384 and 1880 differ; with
+		// a closer's depth read from the path of the place the fill was built for, seeds 319 and 756 do.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(feature))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		guard case let .rejected(diagnostics) = runs.firstOutcome else {
+			Issue.record("Seed \(seed)’s build that shares fills is not rejected")
+			return
+		}
+		#expect(diagnostics.split(separator: "\n").contains { $0.contains(": error: ") && $0.contains("\(fixture.typeNamePrefix)StoodFor") }, "Seed \(seed):\n\(diagnostics)")
+		#expect(runs.firstOutcome == runs.secondOutcome, "Seed \(seed)’s build of a fill of every place:\n\(runs.secondOutcome)")
+	}
+
 	@Test(arguments: [UInt64(654), 10_921])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper(seed: UInt64) async throws {
@@ -7402,7 +7430,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x73DB6B30F8B623A5
+	static let seamCorpusFixtureHash: UInt64 = 0x46366FE53C7197ED
 	static let seamCorpusAcceptedSeedCount = 623
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x48072926F71AC583
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7665,7 +7693,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x8B63A2DCF8904E02
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xAB06460EF3A2C5CA
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -8024,9 +8052,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.placesOfOneCase: 556,
 		.placesOfOneCaseHandFillsOtherValues: 447,
 		.placesOfOneCaseFillReadsOnlyIfAvailable: 165,
-		.placesOfOneCaseFillClosesCycleAtTwoDepths: 35,
-		.placesOfOneCaseFillCapturesWrapperOfEveryPlace: 13,
-		.placesOfOneCaseValueBoundAfterOnePlace: 27,
+		.placesOfOneCaseFillClosesCycleAtTwoDepths: 21,
+		.placesOfOneCaseFillCapturesWrapperOfEveryPlace: 43,
+		.placesOfOneCaseValueBoundAfterOnePlace: 11,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,
@@ -8080,7 +8108,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: [
-				15, 38, 69, 93, 94, 98, 121, 151, 164, 227, 273, 277, 283, 298, 309, 341, 347, 348, 384, 407, 478, 481,
+				15, 38, 69, 93, 94, 98, 121, 151, 164, 227, 273, 277, 283, 298, 309, 341, 347, 348, 407, 478, 481,
 				494, 500, 527, 556, 562, 564, 594, 605, 618, 663, 669, 670, 699, 701, 710, 752, 769, 787, 838, 850, 876,
 				883, 892, 905, 930, 931, 976, 1_020, 1_048, 1_050, 1_094, 1_096, 1_142, 1_156, 1_269, 1_317, 1_320,
 				1_336, 1_340, 1_355, 1_393, 1_454, 1_463, 1_471, 1_475, 1_511, 1_528, 1_536, 1_541, 1_569, 1_581, 1_599,
@@ -8151,11 +8179,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [21],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(labelSortedPassThroughReason); and \(mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [772],
 		),
 		// Seed 848's seam's own mock and its configuration change with its builders' order, and its other mocks' parameters
 		// with their labels, so it shows four shapes at once.

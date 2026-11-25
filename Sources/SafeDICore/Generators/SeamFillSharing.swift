@@ -19,8 +19,10 @@
 // SOFTWARE.
 
 /// Whether a seam call builds a fill for every place it fills, rather than one fill for the places of a case whose fills
-/// would be built alike (`ScopeGenerator.FillStoodFor`). Which of the two a call does reaches no output: only a test
-/// sets this, to compare a run that shares fills with a run that builds every one.
+/// would be built alike (`ScopeGenerator.FillStoodFor`). Which of the two a call does must reach no output, generated
+/// code or diagnostic: a judgment that reads more of a place than its fill's fields (a capture, a closer's depth) reads
+/// it for each place the fill stands for. Only a test sets this, to compare a run that shares fills with a run that
+/// builds every one, as the seam corpus does for every graph.
 public enum SeamFillSharing {
 	@TaskLocal public static var buildsFillOfEveryPlace = false
 
