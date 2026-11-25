@@ -150,6 +150,7 @@ extension TypeKeyLayout {
 
 	func isNilAtEveryMember(owner: Int, read: (BuiltPlaceRecord) -> PlaceRead) -> Bool {
 		guard owner != 0 else { return false }
+		GenerationWork.record(membersByClass[owner].count, by: .checkingReadsAtEveryMember)
 		return membersByClass[owner].allSatisfy { member in
 			bodies[member].record.map { read($0).source == .nil } ?? false
 		}
@@ -176,7 +177,9 @@ extension TypeKeyLayout {
 
 	/// The statement at `index` of each member of `owner`'s class, or of the root's body.
 	func statements(at index: Int, ofEveryMemberOf owner: Int) -> LazyMapSequence<[Int], Statement> {
-		(owner == 0 ? [0] : membersByClass[owner]).lazy.map { bodies[$0].statements[index] }
+		let members = owner == 0 ? [0] : membersByClass[owner]
+		GenerationWork.record(members.count, by: .checkingReadsAtEveryMember)
+		return members.lazy.map { bodies[$0].statements[index] }
 	}
 
 	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {
