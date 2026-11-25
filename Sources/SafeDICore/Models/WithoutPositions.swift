@@ -85,7 +85,7 @@ extension Initializer {
 			hasGenericParameter: hasGenericParameter,
 			hasGenericWhereClause: hasGenericWhereClause,
 			arguments: arguments,
-			spelledIsolation: spelledIsolation,
+			spelledAttributes: spelledAttributes,
 		)
 	}
 }
