@@ -872,7 +872,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 				BinaryLayoutField("valuesType", \.valuesType),
 				BinaryLayoutField("fields", \.fields),
 				BinaryLayoutField("levelType", \.levelType),
-				BinaryLayoutField("bindingPath", \.bindingPath),
+				BinaryLayoutField("bindingPathLength", \.bindingPathLength),
 				BinaryLayoutField("isCalledInsideFunction", \.isCalledInsideFunction),
 				BinaryLayoutField("isLetChild", \.isLetChild),
 			],
@@ -886,7 +886,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 			valuesType: reader.read(),
 			fields: reader.read(),
 			levelType: reader.read(),
-			bindingPath: reader.read(),
+			bindingPathLength: reader.read(),
 			isCalledInsideFunction: reader.read(),
 			isLetChild: reader.read(),
 		)
@@ -897,7 +897,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 		writer.write(valuesType)
 		writer.write(fields)
 		writer.write(levelType)
-		writer.write(bindingPath)
+		writer.write(bindingPathLength)
 		writer.write(isCalledInsideFunction)
 		writer.write(isLetChild)
 	}
@@ -910,7 +910,6 @@ extension SeamSignature.Hole.RouteStep.Values: BinarySchemaMember {
 				BinaryLayoutField("bindingName", \.bindingName),
 				BinaryLayoutField("type", \.type),
 				BinaryLayoutField("fields", \.fields),
-				BinaryLayoutField("bindingPath", \.bindingPath),
 			],
 			unwrittenProperties: [],
 		)
@@ -921,7 +920,6 @@ extension SeamSignature.Hole.RouteStep.Values: BinarySchemaMember {
 			bindingName: reader.read(),
 			type: reader.read(),
 			fields: reader.read(),
-			bindingPath: reader.read(),
 		)
 	}
 
@@ -929,7 +927,6 @@ extension SeamSignature.Hole.RouteStep.Values: BinarySchemaMember {
 		writer.write(bindingName)
 		writer.write(type)
 		writer.write(fields)
-		writer.write(bindingPath)
 	}
 }
 
@@ -937,7 +934,7 @@ extension SeamSignature.Hole.RouteStep.InnerScope: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
-				BinaryLayoutField("callPath", \.callPath),
+				BinaryLayoutField("callPathLength", \.callPathLength),
 				BinaryLayoutField("innerKey", \.innerKey),
 				BinaryLayoutField("enumType", \.enumType),
 				BinaryLayoutField("builderLabel", \.builderLabel),
@@ -949,7 +946,7 @@ extension SeamSignature.Hole.RouteStep.InnerScope: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
-			callPath: reader.read(),
+			callPathLength: reader.read(),
 			innerKey: reader.read(),
 			enumType: reader.read(),
 			builderLabel: reader.read(),
@@ -958,7 +955,7 @@ extension SeamSignature.Hole.RouteStep.InnerScope: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(callPath)
+		writer.write(callPathLength)
 		writer.write(innerKey)
 		writer.write(enumType)
 		writer.write(builderLabel)
