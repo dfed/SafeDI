@@ -6,11 +6,7 @@ paths:
   - "Sources/SafeDICore/Generators/Emission/{ArgumentSource,BindingDeclaration,BuilderBody,BuilderFunctionGraph,ConstructionTarget,Expression,FillInlining,GeneratedCode,LoopMemberNames}.swift"
   - "Sources/SafeDICore/Models/{Scope,Property,Dependency,CycleParameter}.swift"
   - "Sources/SafeDICore/Utilities/DeferredRelease.swift"
-  - "Tests/**/*Cycle*.swift"
-  - "Tests/**/*DeepTree*.swift"
-  - "Tests/**/*SendableBuilder*.swift"
-  - "Tests/**/*DiagnosticOrder*.swift"
-  - "Tests/**/*OnlyIfAvailable*.swift"
+  - "Tests/**/*{Cycle,DeepTree,SendableBuilder,DiagnosticOrder,OnlyIfAvailable}*.swift"
 ---
 
 # Cycle mechanisms: validation
