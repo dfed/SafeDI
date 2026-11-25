@@ -143,16 +143,16 @@ extension TypeKeyLayout {
 				required.insert(read.label)
 			}
 		}
-		bodies[body].record?.arguments.forEach(note)
+		bodies[body].record?.constructionReads.forEach(note)
 		for statement in bodies[body].statements {
 			switch statement {
 			case let .built(child):
 				required.formUnion(requiredReads[child])
-				bodies[child].record?.callCycleArguments.forEach(note)
+				bodies[child].record?.callSiteReads.forEach(note)
 			case let .inline(record):
-				record.arguments.forEach(note)
+				record.constructionReads.forEach(note)
 			case let .closer(record, target):
-				record.cycleArguments.forEach(note)
+				record.callSiteReads.forEach(note)
 				required.formUnion(requiredReads[target])
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional {
@@ -171,20 +171,20 @@ extension TypeKeyLayout {
 				list.append(label)
 			}
 		}
-		for argument in bodies[body].record?.arguments ?? [] {
+		for argument in bodies[body].record?.constructionReads ?? [] {
 			add(argument.label)
 		}
 		for statement in bodies[body].statements {
 			switch statement {
 			case let .built(child):
 				reads[child].forEach(add)
-				for argument in bodies[child].record?.callCycleArguments ?? [] {
+				for argument in bodies[child].record?.callSiteReads ?? [] {
 					add(argument.label)
 				}
 			case let .inline(record):
-				record.arguments.forEach { add($0.label) }
+				record.constructionReads.forEach { add($0.label) }
 			case let .closer(record, target):
-				record.cycleArguments.forEach { add($0.label) }
+				record.callSiteReads.forEach { add($0.label) }
 				reads[target].forEach(add)
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
@@ -212,7 +212,7 @@ extension TypeKeyLayout {
 			}
 		}
 		let statements = bodies[body].statements
-		for argument in bodies[body].record?.arguments ?? [] {
+		for argument in bodies[body].record?.constructionReads ?? [] {
 			note(argument.label, pathValue(of: argument, inBody: body, before: statements.count))
 		}
 		for (index, statement) in statements.enumerated() {
@@ -221,15 +221,15 @@ extension TypeKeyLayout {
 				for (label, value) in escapingReads[child].sorted(by: { $0.key < $1.key }) {
 					note(label, value)
 				}
-				for argument in bodies[child].record?.callCycleArguments ?? [] {
+				for argument in bodies[child].record?.callSiteReads ?? [] {
 					note(argument.label, pathValue(of: argument, inBody: body, before: index))
 				}
 			case let .inline(record):
-				for argument in record.arguments {
+				for argument in record.constructionReads {
 					note(argument.label, pathValue(of: argument, inBody: body, before: index))
 				}
 			case let .closer(record, _):
-				for argument in record.cycleArguments {
+				for argument in record.callSiteReads {
 					note(argument.label, pathValue(of: argument, inBody: body, before: index))
 				}
 			case let .alias(record):
