@@ -219,6 +219,100 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoOtherModulesMockScopes_whenModuleInfosCarryPublicMockPlans() async throws {
+		// `Feature` declares the public mocks `Alpha` and `Beta`, `Flow` a public mock `Step` whose tree calls both, and
+		// `App` a mock whose tree calls `Step`. Each module's run builds its own mock scopes once, writes the plan of each
+		// of its public mocks into its module info, and reads the plans of the public mocks it calls from the module infos
+		// it is given, so no run builds another module's mock scopes, however many modules lie beneath it.
+		var output: MultiModuleTestOutput?
+		let layers = try await Self.countLayers {
+			output = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.publicMockChainModules(),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(layers == [
+			"Feature: mock scopes of Feature": 1,
+			"Feature: access proof of Feature": 1,
+			"Flow: mock scopes of Flow": 1,
+			"Flow: access proof of Flow": 1,
+			"App: mock scopes of App": 1,
+			"App: access proof of App": 1,
+		])
+		#expect(try output?.modules["Feature"]?.moduleInfoFile?.publicMockPlans.decoded.map(\.mockedType.asSource) == ["Alpha", "Beta"])
+		#expect(try output?.modules["Flow"]?.moduleInfoFile?.publicMockPlans.decoded.map(\.mockedType.asSource) == ["Step"])
+		#expect(output?.modules["App"]?.moduleInfoFile?.publicMockPlans.isEmpty == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesSameCode_whenModuleInfosCarryNoPublicMockPlans() async throws {
+		// The same modules, whose module infos are rewritten without the plans and signatures they carry: each run
+		// computes the plan of every public mock it calls, building the mock scopes of each module beneath it, and
+		// generates the code the runs that read stored plans generate.
+		let stored = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.publicMockChainModules(),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		var computed: MultiModuleTestOutput?
+		let layers = try await Self.countLayers {
+			computed = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.publicMockChainModules(),
+				integration: .moduleInfo,
+				discardsStoredSeamSignatures: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(layers == [
+			"Feature: mock scopes of Feature": 1,
+			"Feature: access proof of Feature": 1,
+			"Flow: mock scopes of Flow": 1,
+			"Flow: mock scopes of Feature": 1,
+			"Flow: access proof of Flow": 1,
+			"Flow: access proof of Feature": 1,
+			"App: mock scopes of App": 1,
+			"App: mock scopes of Flow": 1,
+			"App: mock scopes of Feature": 1,
+			"App: access proof of App": 1,
+			"App: access proof of Flow": 1,
+			"App: access proof of Feature": 1,
+		])
+		for moduleName in stored.moduleNames {
+			#expect(computed?.modules[moduleName]?.generatedFiles == stored.modules[moduleName]?.generatedFiles, "\(moduleName) generates other code from stored plans")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_computesPublicMockPlans_whenRunCompilesNoMocksAndDeclaringModulesRunCompiledThem() async throws {
+		// A plan depends on whether its run compiles the mocks it generates. `Feature`'s and `Flow`'s runs do, since their
+		// builds report `DEBUG`, and `App`'s, which does not, compiles none: it reads neither module's plans and computes
+		// them. `Flow`, built as `Feature` is, reads `Feature`'s.
+		let layers = try await Self.countLayers {
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.publicMockChainModules(conditionsOfModulesBeneathApp: ["DEBUG"]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(layers == [
+			"Feature: mock scopes of Feature": 1,
+			"Feature: access proof of Feature": 1,
+			"Flow: mock scopes of Flow": 1,
+			"Flow: access proof of Flow": 1,
+			"App: mock scopes of App": 1,
+			"App: mock scopes of Flow": 1,
+			"App: mock scopes of Feature": 1,
+			"App: access proof of App": 1,
+			"App: access proof of Flow": 1,
+			"App: access proof of Feature": 1,
+		])
+	}
+
 	// MARK: Private
 
 	/// A type named `name` with a public mock, whose tree builds `Feature`'s internal `Store`.
@@ -227,6 +321,25 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	}
 
 	private var filesToDelete: [URL]
+
+	/// `Feature` (package `shop`), which declares the public mocks `Alpha` and `Beta`; `Flow` (package `flow`), whose public
+	/// mock `Step` builds both; and `App` (package `app`), whose mock of `Screen` builds `Step`.
+	private static func publicMockChainModules(conditionsOfModulesBeneathApp: [String] = []) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "shop", swiftFileContent: [
+				publicMockType(named: "Alpha"),
+				publicMockType(named: "Beta"),
+				"@Instantiable\nstruct Store: Instantiable {\n    init() {}\n}",
+			], activeCompilationConditions: conditionsOfModulesBeneathApp),
+			ModuleFixture(name: "Flow", packageName: "flow", swiftFileContent: [
+				"import Feature\n\n@Instantiable(generateMock: .public)\npublic struct Step: Instantiable {\n    init(alpha: Alpha, beta: Beta, log: Log) {\n        self.alpha = alpha\n        self.beta = beta\n        self.log = log\n    }\n\n    @Instantiated let alpha: Alpha\n    @Instantiated let beta: Beta\n    @Instantiated let log: Log\n}",
+				"@Instantiable\nstruct Log: Instantiable {\n    init() {}\n}",
+			], dependencies: ["Feature"], activeCompilationConditions: conditionsOfModulesBeneathApp),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+				"import Flow\n\n@Instantiable(generateMock: true)\npublic struct Screen: Instantiable {\n    public init(step: Step) {\n        self.step = step\n    }\n\n    @Instantiated let step: Step\n}",
+			], dependencies: ["Flow"]),
+		]
+	}
 
 	/// `Feature` (package `Shop`), which declares the seam `Service`, and `App` (package `Other`), whose root builds
 	/// `Service` and the seam `Screen` that `App` declares, with a mock of `Model`.
@@ -254,6 +367,8 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 				"access proof of \(moduleName ?? "nil")\(inCallersView ? " in its callers’ view" : "")"
 			case let .dependencyTree(type):
 				"tree of \(type.asSource)"
+			case let .inlineTreeOfForeignSeam(type):
+				"inline tree of seam \(type.asSource)"
 			case let .mockScopes(moduleName):
 				"mock scopes of \(moduleName ?? "nil")"
 			}

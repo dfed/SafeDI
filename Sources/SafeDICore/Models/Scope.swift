@@ -31,13 +31,17 @@ final class Scope: Hashable {
 	///   - seamCall: How a tree that reaches this scope calls it, when the scope stands for a seam whose generated
 	///     initializer another tree calls: `instantiable` then declares the initializer's parameters as its
 	///     dependencies and builds nothing. `nil` for every other scope.
+	///   - isUnavailableDependency: Whether the scope stands for an `@Instantiated(onlyIfAvailable: true)` property that
+	///     no production declaration fulfills: it builds nothing, and generated code binds its property to `nil`.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
 		builtInlineSeamComment: String? = nil,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
+		isUnavailableDependency: Bool = false,
 	) {
+		self.isUnavailableDependency = isUnavailableDependency
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.builtInlineSeamComment = builtInlineSeamComment
@@ -76,6 +80,12 @@ final class Scope: Hashable {
 
 	/// The comment that ends each line of a production tree that constructs the type, or `nil` for none.
 	let builtInlineSeamComment: String?
+
+	/// Whether this scope stands for an `@Instantiated(onlyIfAvailable: true)` property that no production declaration
+	/// fulfills (`DependencyTreeGenerator.instantiates(_:)`). Its `instantiable` names the type a declaration would
+	/// fulfill and declares no dependency, and generated code binds the property to `nil`, a declaration of its label like
+	/// the one a fulfilled property gets, so every receive, rename and argument beneath reads it as it reads that one.
+	let isUnavailableDependency: Bool
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
@@ -1821,6 +1831,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
+			// A tree that takes no builder, a root's, holds no place: the only hole validation leaves there is a property
+			// instantiated only if available that nothing fulfills, which is `nil`, and orders its siblings as it does in a
+			// module that generates no seam. A mock's tree keeps the place, a deliberate gap until mocks pass `nil`.
+			holdsPlace: seamHoles.takesBuilders || forMockGeneration || !property.typeDescription.isOptional,
 			ownerPropertyStack: childContextStack.propertiesInnermostFirst,
 			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
@@ -2267,6 +2281,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
 				}
 				guard isPublicMockCall else {
+					if enumKey.holeType.builtType.isOptional {
+						return .init(label: label, value: ".init(\(ReservedName.noScopeArgumentLabel): \(ReservedName.nilBuilderSource))")
+					}
 					return .init(label: label, value: "")
 				}
 				// A public mock's caller that fills no place of the builder passes up the struct it is handed: the member of its own
@@ -2392,6 +2409,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			closedOnDeclaration: closedOnDeclaration,
 			closedOnFillPathDeclarationsBeneath: closedOnFillPathDeclarationsBeneath,
 			builtInlineSeamComment: scope.builtInlineSeamComment,
+			isUnavailableDependency: scope.isUnavailableDependency,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
 			seamRoot: seamRoot,
@@ -2784,21 +2802,22 @@ struct SeamHoles: Sendable {
 		// Where the enums declare builder structs, each case on a route is a member call on the struct the step before it
 		// returned, the root's builder's for the first, bound before the step's property, or at the top of its builder
 		// function (`RouteStep.Member`). A route's steps lead to one place, so each step's parent is a fact of its path.
-		func bindValues(of route: [SeamSignature.Hole.RouteStep], rootBuilderName: String) {
+		func bindValues(of route: [SeamSignature.Hole.RouteStep], onRouteTo sitePath: [Property], rootBuilderName: String) {
 			var parentName = rootBuilderName
 			for step in route {
 				// Each scope value the call hands, once: a seam's struct of the fill's own level per hole type and family whose places
 				// the fill holds, or a public mock's one inner scope.
-				if let innerScope = step.innerScope, !innerScopesByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: []].contains(where: { $0.name == innerScope.name }) {
-					innerScopesByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: []].append(innerScope)
+				let routeCall = step.innerScope.map { RouteCall(sitePath: $0.callPath(onRouteTo: sitePath), innerKey: $0.innerKey) }
+				if let innerScope = step.innerScope, let routeCall, !innerScopesByCall[routeCall, default: []].contains(where: { $0.name == innerScope.name }) {
+					innerScopesByCall[routeCall, default: []].append(innerScope)
 				}
 				if let member = step.member {
-					valuesBindingsByName[member.bindingPath, default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName)
+					valuesBindingsByName[member.bindingPath(onRouteTo: sitePath), default: [:]][member.bindingName] = ValuesBinding(member: member, parentName: parentName, caseName: step.caseName)
 					parentName = member.bindingName
 					// A call's case for a builder it fills returns the called seam's struct, which the call's level functions are
 					// handed; inside the fill, the struct of the fill's own level, which the fill is handed, leads on.
-					if let innerScope = step.innerScope {
-						carriedStructsByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey), default: [:]][innerScope.name] = member.bindingName
+					if let innerScope = step.innerScope, let routeCall {
+						carriedStructsByCall[routeCall, default: [:]][innerScope.name] = member.bindingName
 						parentName = innerScope.name
 					}
 				}
@@ -2816,7 +2835,7 @@ struct SeamHoles: Sendable {
 		for callRoute in callRoutes {
 			guard let builder = builderByEnum[callRoute.rootKey] else { continue }
 			let builderName = builder.internalName
-			bindValues(of: callRoute.route, rootBuilderName: builderName)
+			bindValues(of: callRoute.route, onRouteTo: callRoute.sitePath, rootBuilderName: builderName)
 			// A call that re-enters an enclosing call's fill hands up nothing: it passes the enclosing call's level function the
 			// struct its last case's member returns (`carriedStruct(at:innerKey:carrying:)`).
 			guard !callRoute.reentersEnclosingFill else { continue }
@@ -2869,7 +2888,7 @@ struct SeamHoles: Sendable {
 			}
 			sitesByPath[hole.sitePath] = hole
 			if let enumPlace = hole.enumPlace {
-				bindValues(of: enumPlace.route, rootBuilderName: hole.internalName)
+				bindValues(of: enumPlace.route, onRouteTo: hole.sitePath, rootBuilderName: hole.internalName)
 			}
 		}
 		namesBoundForBuilders.formUnion(innerScopesByCall.values.flatMap { $0.map(\.name) })
@@ -3231,6 +3250,13 @@ struct SeamHoles: Sendable {
 
 	/// The seam whose tree is generated, or `nil` for a tree that is no seam's.
 	private let seamType: TypeDescription?
+
+	/// Whether the tree takes builders for its holes: a seam's or a public mock's, never a root's, which has no caller to
+	/// take one from.
+	var takesBuilders: Bool {
+		seamType != nil
+	}
+
 	private let routeCasesByCall: [RouteCall: RouteCase]
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
