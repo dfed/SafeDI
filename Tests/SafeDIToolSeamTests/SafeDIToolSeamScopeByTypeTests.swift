@@ -70,108 +70,108 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		            .init(screen0Builder: { values_service in __safeDI_apiBuilder_Home_Screen0_Scope() }, screen1Builder: { values_service, values_screen0Builder in __safeDI_apiBuilder_Home_Screen1_Scope() }, screen2Builder: { values_service, values_screen0Builder, values_screen1Builder in __safeDI_apiBuilder_Home_Screen2_Scope() }, screen3Builder: { values_service, values_screen0Builder, values_screen1Builder, values_screen2Builder in __safeDI_apiBuilder_Home_Screen3_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen0_Scope() -> Home.__safeDI_ApiCarrier_Screen0<any Api> {
-		            .init(screen5Builder: { values_id, values_model0 in __safeDI_apiBuilder_Home_Screen5_Scope() }, screen6Builder: { values_id, values_model0, values_screen5Builder in __safeDI_apiBuilder_Home_Screen6_Scope() }, screen7Builder: { values_id, values_model0, values_screen5Builder, values_screen6Builder in __safeDI_apiBuilder_Home_Screen7_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen5_Scope() -> Home.__safeDI_ApiCarrier_Screen5<any Api> {
-		            .init(screen8Builder: { values_id, values_model5 in __safeDI_apiBuilder_Home_Screen8_Scope() }, screen10Builder: { values_id, values_model5, values_screen8Builder in __safeDI_apiBuilder_Home_Screen10_Scope() }, screen11Builder: { values_id, values_model5, values_screen8Builder, values_screen10Builder in __safeDI_apiBuilder_Home_Screen11_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen8_Scope() -> Home.__safeDI_ApiCarrier_Screen8<any Api> {
-		            .init(screen13Builder: { values_id, values_model8 in __safeDI_apiBuilder_Home_Screen13_Scope() }, screen14Builder: { values_id, values_model8, values_screen13Builder in __safeDI_apiBuilder_Home_Screen14_Scope() }, screen15Builder: { values_id, values_model8, values_screen13Builder, values_screen14Builder in __safeDI_apiBuilder_Home_Screen15_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen13_Scope() -> Home.__safeDI_ApiCarrier_Screen13<any Api> {
-		            .init(screen16Builder: { values_id, values_model13 in __safeDI_apiBuilder_Home_Screen16_Scope() }, screen18Builder: { values_id, values_model13, values_screen16Builder in __safeDI_apiBuilder_Home_Screen18_Scope() }, screen19Builder: { values_id, values_model13, values_screen16Builder, values_screen18Builder in __safeDI_apiBuilder_Home_Screen19_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen16_Scope() -> Home.__safeDI_ApiCarrier_Screen16<any Api> {
-		            .init(screen21Builder: { values_id, values_model16 in __safeDI_apiBuilder_Home_Screen21_Scope() }, screen22Builder: { values_id, values_model16, values_screen21Builder in __safeDI_apiBuilder_Home_Screen22_Scope() }, screen23Builder: { values_id, values_model16, values_screen21Builder, values_screen22Builder in __safeDI_apiBuilder_Home_Screen23_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen21_Scope() -> Home.__safeDI_ApiCarrier_Screen21<any Api> {
-		            .init(model21: { values_id in __safeDI_apiBuilder_Home_Model21_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_Model21_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model21<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen22_Scope() -> Home.__safeDI_ApiCarrier_Screen22<any Api> {
-		            .init(model22: { values_id in __safeDI_apiBuilder_Home_Model22_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_Model22_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model22<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen23_Scope() -> Home.__safeDI_ApiCarrier_Screen23<any Api> {
-		            .init(model23: { values_id in __safeDI_apiBuilder_Home_Model23_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_Model23_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model23<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen18_Scope() -> Home.__safeDI_ApiCarrier_Screen18<any Api> {
-		            .init(screen20Builder: { values_id, values_model18 in __safeDI_apiBuilder_Home_Screen20_Scope() }, screen21Builder: { values_id, values_model18, values_screen20Builder in __safeDI_apiBuilder_Home_Screen21_Scope() }, screen23Builder: { values_id, values_model18, values_screen20Builder, values_screen21Builder in __safeDI_apiBuilder_Home_Screen23_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen20_Scope() -> Home.__safeDI_ApiCarrier_Screen20<any Api> {
-		            .init(model20: { values_id in __safeDI_apiBuilder_Home_Model20_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_Model20_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model20<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen19_Scope() -> Home.__safeDI_ApiCarrier_Screen19<any Api> {
-		            .init(screen20Builder: { values_id, values_model19 in __safeDI_apiBuilder_Home_Screen20_Scope() }, screen21Builder: { values_id, values_model19, values_screen20Builder in __safeDI_apiBuilder_Home_Screen21_Scope() }, screen22Builder: { values_id, values_model19, values_screen20Builder, values_screen21Builder in __safeDI_apiBuilder_Home_Screen22_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen14_Scope() -> Home.__safeDI_ApiCarrier_Screen14<any Api> {
-		            .init(screen16Builder: { values_id, values_model14 in __safeDI_apiBuilder_Home_Screen16_Scope() }, screen17Builder: { values_id, values_model14, values_screen16Builder in __safeDI_apiBuilder_Home_Screen17_Scope() }, screen19Builder: { values_id, values_model14, values_screen16Builder, values_screen17Builder in __safeDI_apiBuilder_Home_Screen19_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen17_Scope() -> Home.__safeDI_ApiCarrier_Screen17<any Api> {
-		            .init(screen20Builder: { values_id, values_model17 in __safeDI_apiBuilder_Home_Screen20_Scope() }, screen22Builder: { values_id, values_model17, values_screen20Builder in __safeDI_apiBuilder_Home_Screen22_Scope() }, screen23Builder: { values_id, values_model17, values_screen20Builder, values_screen22Builder in __safeDI_apiBuilder_Home_Screen23_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen15_Scope() -> Home.__safeDI_ApiCarrier_Screen15<any Api> {
-		            .init(screen16Builder: { values_id, values_model15 in __safeDI_apiBuilder_Home_Screen16_Scope() }, screen17Builder: { values_id, values_model15, values_screen16Builder in __safeDI_apiBuilder_Home_Screen17_Scope() }, screen18Builder: { values_id, values_model15, values_screen16Builder, values_screen17Builder in __safeDI_apiBuilder_Home_Screen18_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen10_Scope() -> Home.__safeDI_ApiCarrier_Screen10<any Api> {
-		            .init(screen12Builder: { values_id, values_model10 in __safeDI_apiBuilder_Home_Screen12_Scope() }, screen13Builder: { values_id, values_model10, values_screen12Builder in __safeDI_apiBuilder_Home_Screen13_Scope() }, screen15Builder: { values_id, values_model10, values_screen12Builder, values_screen13Builder in __safeDI_apiBuilder_Home_Screen15_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen12_Scope() -> Home.__safeDI_ApiCarrier_Screen12<any Api> {
-		            .init(screen17Builder: { values_id, values_model12 in __safeDI_apiBuilder_Home_Screen17_Scope() }, screen18Builder: { values_id, values_model12, values_screen17Builder in __safeDI_apiBuilder_Home_Screen18_Scope() }, screen19Builder: { values_id, values_model12, values_screen17Builder, values_screen18Builder in __safeDI_apiBuilder_Home_Screen19_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen11_Scope() -> Home.__safeDI_ApiCarrier_Screen11<any Api> {
-		            .init(screen12Builder: { values_id, values_model11 in __safeDI_apiBuilder_Home_Screen12_Scope() }, screen13Builder: { values_id, values_model11, values_screen12Builder in __safeDI_apiBuilder_Home_Screen13_Scope() }, screen14Builder: { values_id, values_model11, values_screen12Builder, values_screen13Builder in __safeDI_apiBuilder_Home_Screen14_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen6_Scope() -> Home.__safeDI_ApiCarrier_Screen6<any Api> {
-		            .init(screen8Builder: { values_id, values_model6 in __safeDI_apiBuilder_Home_Screen8_Scope() }, screen9Builder: { values_id, values_model6, values_screen8Builder in __safeDI_apiBuilder_Home_Screen9_Scope() }, screen11Builder: { values_id, values_model6, values_screen8Builder, values_screen9Builder in __safeDI_apiBuilder_Home_Screen11_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen9_Scope() -> Home.__safeDI_ApiCarrier_Screen9<any Api> {
-		            .init(screen12Builder: { values_id, values_model9 in __safeDI_apiBuilder_Home_Screen12_Scope() }, screen14Builder: { values_id, values_model9, values_screen12Builder in __safeDI_apiBuilder_Home_Screen14_Scope() }, screen15Builder: { values_id, values_model9, values_screen12Builder, values_screen14Builder in __safeDI_apiBuilder_Home_Screen15_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen7_Scope() -> Home.__safeDI_ApiCarrier_Screen7<any Api> {
-		            .init(screen8Builder: { values_id, values_model7 in __safeDI_apiBuilder_Home_Screen8_Scope() }, screen9Builder: { values_id, values_model7, values_screen8Builder in __safeDI_apiBuilder_Home_Screen9_Scope() }, screen10Builder: { values_id, values_model7, values_screen8Builder, values_screen9Builder in __safeDI_apiBuilder_Home_Screen10_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen1_Scope() -> Home.__safeDI_ApiCarrier_Screen1<any Api> {
-		            .init(screen4Builder: { values_id, values_model1 in __safeDI_apiBuilder_Home_Screen4_Scope() }, screen6Builder: { values_id, values_model1, values_screen4Builder in __safeDI_apiBuilder_Home_Screen6_Scope() }, screen7Builder: { values_id, values_model1, values_screen4Builder, values_screen6Builder in __safeDI_apiBuilder_Home_Screen7_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen4_Scope() -> Home.__safeDI_ApiCarrier_Screen4<any Api> {
-		            .init(screen9Builder: { values_id, values_model4 in __safeDI_apiBuilder_Home_Screen9_Scope() }, screen10Builder: { values_id, values_model4, values_screen9Builder in __safeDI_apiBuilder_Home_Screen10_Scope() }, screen11Builder: { values_id, values_model4, values_screen9Builder, values_screen10Builder in __safeDI_apiBuilder_Home_Screen11_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen2_Scope() -> Home.__safeDI_ApiCarrier_Screen2<any Api> {
-		            .init(screen4Builder: { values_id, values_model2 in __safeDI_apiBuilder_Home_Screen4_Scope() }, screen5Builder: { values_id, values_model2, values_screen4Builder in __safeDI_apiBuilder_Home_Screen5_Scope() }, screen7Builder: { values_id, values_model2, values_screen4Builder, values_screen5Builder in __safeDI_apiBuilder_Home_Screen7_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Screen3_Scope() -> Home.__safeDI_ApiCarrier_Screen3<any Api> {
-		            .init(screen4Builder: { values_id, values_model3 in __safeDI_apiBuilder_Home_Screen4_Scope() }, screen5Builder: { values_id, values_model3, values_screen4Builder in __safeDI_apiBuilder_Home_Screen5_Scope() }, screen6Builder: { values_id, values_model3, values_screen4Builder, values_screen5Builder in __safeDI_apiBuilder_Home_Screen6_Scope() })
-		        }
 		        let service = Service()
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_B7F0BEA9B2D49F3A.self // \(Self.moduleInfoComment)
+		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		                .init(screen0Builder: { values_service in __safeDI_apiBuilder_Home_Screen0_Scope() }, screen1Builder: { values_service, values_screen0Builder in __safeDI_apiBuilder_Home_Screen1_Scope() }, screen2Builder: { values_service, values_screen0Builder, values_screen1Builder in __safeDI_apiBuilder_Home_Screen2_Scope() }, screen3Builder: { values_service, values_screen0Builder, values_screen1Builder, values_screen2Builder in __safeDI_apiBuilder_Home_Screen3_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen0_Scope() -> Home.__safeDI_ApiCarrier_Screen0<any Api> {
+		                .init(screen5Builder: { values_id, values_model0 in __safeDI_apiBuilder_Home_Screen5_Scope() }, screen6Builder: { values_id, values_model0, values_screen5Builder in __safeDI_apiBuilder_Home_Screen6_Scope() }, screen7Builder: { values_id, values_model0, values_screen5Builder, values_screen6Builder in __safeDI_apiBuilder_Home_Screen7_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen5_Scope() -> Home.__safeDI_ApiCarrier_Screen5<any Api> {
+		                .init(screen8Builder: { values_id, values_model5 in __safeDI_apiBuilder_Home_Screen8_Scope() }, screen10Builder: { values_id, values_model5, values_screen8Builder in __safeDI_apiBuilder_Home_Screen10_Scope() }, screen11Builder: { values_id, values_model5, values_screen8Builder, values_screen10Builder in __safeDI_apiBuilder_Home_Screen11_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen8_Scope() -> Home.__safeDI_ApiCarrier_Screen8<any Api> {
+		                .init(screen13Builder: { values_id, values_model8 in __safeDI_apiBuilder_Home_Screen13_Scope() }, screen14Builder: { values_id, values_model8, values_screen13Builder in __safeDI_apiBuilder_Home_Screen14_Scope() }, screen15Builder: { values_id, values_model8, values_screen13Builder, values_screen14Builder in __safeDI_apiBuilder_Home_Screen15_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen13_Scope() -> Home.__safeDI_ApiCarrier_Screen13<any Api> {
+		                .init(screen16Builder: { values_id, values_model13 in __safeDI_apiBuilder_Home_Screen16_Scope() }, screen18Builder: { values_id, values_model13, values_screen16Builder in __safeDI_apiBuilder_Home_Screen18_Scope() }, screen19Builder: { values_id, values_model13, values_screen16Builder, values_screen18Builder in __safeDI_apiBuilder_Home_Screen19_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen16_Scope() -> Home.__safeDI_ApiCarrier_Screen16<any Api> {
+		                .init(screen21Builder: { values_id, values_model16 in __safeDI_apiBuilder_Home_Screen21_Scope() }, screen22Builder: { values_id, values_model16, values_screen21Builder in __safeDI_apiBuilder_Home_Screen22_Scope() }, screen23Builder: { values_id, values_model16, values_screen21Builder, values_screen22Builder in __safeDI_apiBuilder_Home_Screen23_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen21_Scope() -> Home.__safeDI_ApiCarrier_Screen21<any Api> {
+		                .init(model21: { values_id in __safeDI_apiBuilder_Home_Model21_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_Model21_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model21<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen22_Scope() -> Home.__safeDI_ApiCarrier_Screen22<any Api> {
+		                .init(model22: { values_id in __safeDI_apiBuilder_Home_Model22_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_Model22_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model22<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen23_Scope() -> Home.__safeDI_ApiCarrier_Screen23<any Api> {
+		                .init(model23: { values_id in __safeDI_apiBuilder_Home_Model23_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_Model23_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model23<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen18_Scope() -> Home.__safeDI_ApiCarrier_Screen18<any Api> {
+		                .init(screen20Builder: { values_id, values_model18 in __safeDI_apiBuilder_Home_Screen20_Scope() }, screen21Builder: { values_id, values_model18, values_screen20Builder in __safeDI_apiBuilder_Home_Screen21_Scope() }, screen23Builder: { values_id, values_model18, values_screen20Builder, values_screen21Builder in __safeDI_apiBuilder_Home_Screen23_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen20_Scope() -> Home.__safeDI_ApiCarrier_Screen20<any Api> {
+		                .init(model20: { values_id in __safeDI_apiBuilder_Home_Model20_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_Model20_Scope(id: Int) -> Home.__safeDI_ApiCarrier_Model20<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen19_Scope() -> Home.__safeDI_ApiCarrier_Screen19<any Api> {
+		                .init(screen20Builder: { values_id, values_model19 in __safeDI_apiBuilder_Home_Screen20_Scope() }, screen21Builder: { values_id, values_model19, values_screen20Builder in __safeDI_apiBuilder_Home_Screen21_Scope() }, screen22Builder: { values_id, values_model19, values_screen20Builder, values_screen21Builder in __safeDI_apiBuilder_Home_Screen22_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen14_Scope() -> Home.__safeDI_ApiCarrier_Screen14<any Api> {
+		                .init(screen16Builder: { values_id, values_model14 in __safeDI_apiBuilder_Home_Screen16_Scope() }, screen17Builder: { values_id, values_model14, values_screen16Builder in __safeDI_apiBuilder_Home_Screen17_Scope() }, screen19Builder: { values_id, values_model14, values_screen16Builder, values_screen17Builder in __safeDI_apiBuilder_Home_Screen19_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen17_Scope() -> Home.__safeDI_ApiCarrier_Screen17<any Api> {
+		                .init(screen20Builder: { values_id, values_model17 in __safeDI_apiBuilder_Home_Screen20_Scope() }, screen22Builder: { values_id, values_model17, values_screen20Builder in __safeDI_apiBuilder_Home_Screen22_Scope() }, screen23Builder: { values_id, values_model17, values_screen20Builder, values_screen22Builder in __safeDI_apiBuilder_Home_Screen23_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen15_Scope() -> Home.__safeDI_ApiCarrier_Screen15<any Api> {
+		                .init(screen16Builder: { values_id, values_model15 in __safeDI_apiBuilder_Home_Screen16_Scope() }, screen17Builder: { values_id, values_model15, values_screen16Builder in __safeDI_apiBuilder_Home_Screen17_Scope() }, screen18Builder: { values_id, values_model15, values_screen16Builder, values_screen17Builder in __safeDI_apiBuilder_Home_Screen18_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen10_Scope() -> Home.__safeDI_ApiCarrier_Screen10<any Api> {
+		                .init(screen12Builder: { values_id, values_model10 in __safeDI_apiBuilder_Home_Screen12_Scope() }, screen13Builder: { values_id, values_model10, values_screen12Builder in __safeDI_apiBuilder_Home_Screen13_Scope() }, screen15Builder: { values_id, values_model10, values_screen12Builder, values_screen13Builder in __safeDI_apiBuilder_Home_Screen15_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen12_Scope() -> Home.__safeDI_ApiCarrier_Screen12<any Api> {
+		                .init(screen17Builder: { values_id, values_model12 in __safeDI_apiBuilder_Home_Screen17_Scope() }, screen18Builder: { values_id, values_model12, values_screen17Builder in __safeDI_apiBuilder_Home_Screen18_Scope() }, screen19Builder: { values_id, values_model12, values_screen17Builder, values_screen18Builder in __safeDI_apiBuilder_Home_Screen19_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen11_Scope() -> Home.__safeDI_ApiCarrier_Screen11<any Api> {
+		                .init(screen12Builder: { values_id, values_model11 in __safeDI_apiBuilder_Home_Screen12_Scope() }, screen13Builder: { values_id, values_model11, values_screen12Builder in __safeDI_apiBuilder_Home_Screen13_Scope() }, screen14Builder: { values_id, values_model11, values_screen12Builder, values_screen13Builder in __safeDI_apiBuilder_Home_Screen14_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen6_Scope() -> Home.__safeDI_ApiCarrier_Screen6<any Api> {
+		                .init(screen8Builder: { values_id, values_model6 in __safeDI_apiBuilder_Home_Screen8_Scope() }, screen9Builder: { values_id, values_model6, values_screen8Builder in __safeDI_apiBuilder_Home_Screen9_Scope() }, screen11Builder: { values_id, values_model6, values_screen8Builder, values_screen9Builder in __safeDI_apiBuilder_Home_Screen11_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen9_Scope() -> Home.__safeDI_ApiCarrier_Screen9<any Api> {
+		                .init(screen12Builder: { values_id, values_model9 in __safeDI_apiBuilder_Home_Screen12_Scope() }, screen14Builder: { values_id, values_model9, values_screen12Builder in __safeDI_apiBuilder_Home_Screen14_Scope() }, screen15Builder: { values_id, values_model9, values_screen12Builder, values_screen14Builder in __safeDI_apiBuilder_Home_Screen15_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen7_Scope() -> Home.__safeDI_ApiCarrier_Screen7<any Api> {
+		                .init(screen8Builder: { values_id, values_model7 in __safeDI_apiBuilder_Home_Screen8_Scope() }, screen9Builder: { values_id, values_model7, values_screen8Builder in __safeDI_apiBuilder_Home_Screen9_Scope() }, screen10Builder: { values_id, values_model7, values_screen8Builder, values_screen9Builder in __safeDI_apiBuilder_Home_Screen10_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen1_Scope() -> Home.__safeDI_ApiCarrier_Screen1<any Api> {
+		                .init(screen4Builder: { values_id, values_model1 in __safeDI_apiBuilder_Home_Screen4_Scope() }, screen6Builder: { values_id, values_model1, values_screen4Builder in __safeDI_apiBuilder_Home_Screen6_Scope() }, screen7Builder: { values_id, values_model1, values_screen4Builder, values_screen6Builder in __safeDI_apiBuilder_Home_Screen7_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen4_Scope() -> Home.__safeDI_ApiCarrier_Screen4<any Api> {
+		                .init(screen9Builder: { values_id, values_model4 in __safeDI_apiBuilder_Home_Screen9_Scope() }, screen10Builder: { values_id, values_model4, values_screen9Builder in __safeDI_apiBuilder_Home_Screen10_Scope() }, screen11Builder: { values_id, values_model4, values_screen9Builder, values_screen10Builder in __safeDI_apiBuilder_Home_Screen11_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen2_Scope() -> Home.__safeDI_ApiCarrier_Screen2<any Api> {
+		                .init(screen4Builder: { values_id, values_model2 in __safeDI_apiBuilder_Home_Screen4_Scope() }, screen5Builder: { values_id, values_model2, values_screen4Builder in __safeDI_apiBuilder_Home_Screen5_Scope() }, screen7Builder: { values_id, values_model2, values_screen4Builder, values_screen5Builder in __safeDI_apiBuilder_Home_Screen7_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Screen3_Scope() -> Home.__safeDI_ApiCarrier_Screen3<any Api> {
+		                .init(screen4Builder: { values_id, values_model3 in __safeDI_apiBuilder_Home_Screen4_Scope() }, screen5Builder: { values_id, values_model3, values_screen4Builder in __safeDI_apiBuilder_Home_Screen5_Scope() }, screen6Builder: { values_id, values_model3, values_screen4Builder, values_screen5Builder in __safeDI_apiBuilder_Home_Screen6_Scope() })
+		            }
 		            return Home(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -519,60 +519,60 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		            .init(kiloBuilder: { values_service in __safeDI_apiBuilder_Home_Kilo_Scope() }, echoBuilder: { values_service, values_kiloBuilder in __safeDI_apiBuilder_Home_Echo_Scope() }, zuluBuilder: { values_service, values_kiloBuilder, values_echoBuilder in __safeDI_apiBuilder_Home_Zulu_Scope() }, alphaBuilder: { values_service, values_kiloBuilder, values_echoBuilder, values_zuluBuilder in __safeDI_apiBuilder_Home_Alpha_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Kilo_Scope() -> Home.__safeDI_ApiCarrier_Kilo<any Api> {
-		            .init(bravoBuilder: { values_id, values_kiloModel in __safeDI_apiBuilder_Home_Bravo_Scope() }, yankeeBuilder: { values_id, values_kiloModel, values_bravoBuilder in __safeDI_apiBuilder_Home_Yankee_Scope() }, deltaBuilder: { values_id, values_kiloModel, values_bravoBuilder, values_yankeeBuilder in __safeDI_apiBuilder_Home_Delta_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Bravo_Scope() -> Home.__safeDI_ApiCarrier_Bravo<any Api> {
-		            .init(bravoModel: { values_id in __safeDI_apiBuilder_Home_BravoModel_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_BravoModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_BravoModel<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Yankee_Scope() -> Home.__safeDI_ApiCarrier_Yankee<any Api> {
-		            .init(yankeeModel: { values_id in __safeDI_apiBuilder_Home_YankeeModel_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_YankeeModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_YankeeModel<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Delta_Scope() -> Home.__safeDI_ApiCarrier_Delta<any Api> {
-		            .init(deltaModel: { values_id in __safeDI_apiBuilder_Home_DeltaModel_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_DeltaModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_DeltaModel<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Echo_Scope() -> Home.__safeDI_ApiCarrier_Echo<any Api> {
-		            .init(mikeBuilder: { values_id, values_echoModel in __safeDI_apiBuilder_Home_Mike_Scope() }, yankeeBuilder: { values_id, values_echoModel, values_mikeBuilder in __safeDI_apiBuilder_Home_Yankee_Scope() }, deltaBuilder: { values_id, values_echoModel, values_mikeBuilder, values_yankeeBuilder in __safeDI_apiBuilder_Home_Delta_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Mike_Scope() -> Home.__safeDI_ApiCarrier_Mike<any Api> {
-		            .init(mikeModel: { values_id in __safeDI_apiBuilder_Home_MikeModel_Scope(id: values_id) })
-		        }
-		        func __safeDI_apiBuilder_Home_MikeModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_MikeModel<any Api> {
-		            .init(api: {
-		                let api: any Api = LiveApi(id: id, service: service)
-		                return api
-		            })
-		        }
-		        func __safeDI_apiBuilder_Home_Zulu_Scope() -> Home.__safeDI_ApiCarrier_Zulu<any Api> {
-		            .init(mikeBuilder: { values_id, values_zuluModel in __safeDI_apiBuilder_Home_Mike_Scope() }, bravoBuilder: { values_id, values_zuluModel, values_mikeBuilder in __safeDI_apiBuilder_Home_Bravo_Scope() }, deltaBuilder: { values_id, values_zuluModel, values_mikeBuilder, values_bravoBuilder in __safeDI_apiBuilder_Home_Delta_Scope() })
-		        }
-		        func __safeDI_apiBuilder_Home_Alpha_Scope() -> Home.__safeDI_ApiCarrier_Alpha<any Api> {
-		            .init(mikeBuilder: { values_id, values_alphaModel in __safeDI_apiBuilder_Home_Mike_Scope() }, bravoBuilder: { values_id, values_alphaModel, values_mikeBuilder in __safeDI_apiBuilder_Home_Bravo_Scope() }, yankeeBuilder: { values_id, values_alphaModel, values_mikeBuilder, values_bravoBuilder in __safeDI_apiBuilder_Home_Yankee_Scope() })
-		        }
 		        let service = Service()
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_1315FAA515AD6ABA.self // \(Self.moduleInfoComment)
+		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		                .init(kiloBuilder: { values_service in __safeDI_apiBuilder_Home_Kilo_Scope() }, echoBuilder: { values_service, values_kiloBuilder in __safeDI_apiBuilder_Home_Echo_Scope() }, zuluBuilder: { values_service, values_kiloBuilder, values_echoBuilder in __safeDI_apiBuilder_Home_Zulu_Scope() }, alphaBuilder: { values_service, values_kiloBuilder, values_echoBuilder, values_zuluBuilder in __safeDI_apiBuilder_Home_Alpha_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Kilo_Scope() -> Home.__safeDI_ApiCarrier_Kilo<any Api> {
+		                .init(bravoBuilder: { values_id, values_kiloModel in __safeDI_apiBuilder_Home_Bravo_Scope() }, yankeeBuilder: { values_id, values_kiloModel, values_bravoBuilder in __safeDI_apiBuilder_Home_Yankee_Scope() }, deltaBuilder: { values_id, values_kiloModel, values_bravoBuilder, values_yankeeBuilder in __safeDI_apiBuilder_Home_Delta_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Bravo_Scope() -> Home.__safeDI_ApiCarrier_Bravo<any Api> {
+		                .init(bravoModel: { values_id in __safeDI_apiBuilder_Home_BravoModel_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_BravoModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_BravoModel<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Yankee_Scope() -> Home.__safeDI_ApiCarrier_Yankee<any Api> {
+		                .init(yankeeModel: { values_id in __safeDI_apiBuilder_Home_YankeeModel_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_YankeeModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_YankeeModel<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Delta_Scope() -> Home.__safeDI_ApiCarrier_Delta<any Api> {
+		                .init(deltaModel: { values_id in __safeDI_apiBuilder_Home_DeltaModel_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_DeltaModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_DeltaModel<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Echo_Scope() -> Home.__safeDI_ApiCarrier_Echo<any Api> {
+		                .init(mikeBuilder: { values_id, values_echoModel in __safeDI_apiBuilder_Home_Mike_Scope() }, yankeeBuilder: { values_id, values_echoModel, values_mikeBuilder in __safeDI_apiBuilder_Home_Yankee_Scope() }, deltaBuilder: { values_id, values_echoModel, values_mikeBuilder, values_yankeeBuilder in __safeDI_apiBuilder_Home_Delta_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Mike_Scope() -> Home.__safeDI_ApiCarrier_Mike<any Api> {
+		                .init(mikeModel: { values_id in __safeDI_apiBuilder_Home_MikeModel_Scope(id: values_id) })
+		            }
+		            func __safeDI_apiBuilder_Home_MikeModel_Scope(id: Int) -> Home.__safeDI_ApiCarrier_MikeModel<any Api> {
+		                .init(api: {
+		                    let api: any Api = LiveApi(id: id, service: service)
+		                    return api
+		                })
+		            }
+		            func __safeDI_apiBuilder_Home_Zulu_Scope() -> Home.__safeDI_ApiCarrier_Zulu<any Api> {
+		                .init(mikeBuilder: { values_id, values_zuluModel in __safeDI_apiBuilder_Home_Mike_Scope() }, bravoBuilder: { values_id, values_zuluModel, values_mikeBuilder in __safeDI_apiBuilder_Home_Bravo_Scope() }, deltaBuilder: { values_id, values_zuluModel, values_mikeBuilder, values_bravoBuilder in __safeDI_apiBuilder_Home_Delta_Scope() })
+		            }
+		            func __safeDI_apiBuilder_Home_Alpha_Scope() -> Home.__safeDI_ApiCarrier_Alpha<any Api> {
+		                .init(mikeBuilder: { values_id, values_alphaModel in __safeDI_apiBuilder_Home_Mike_Scope() }, bravoBuilder: { values_id, values_alphaModel, values_mikeBuilder in __safeDI_apiBuilder_Home_Bravo_Scope() }, yankeeBuilder: { values_id, values_alphaModel, values_mikeBuilder, values_bravoBuilder in __safeDI_apiBuilder_Home_Yankee_Scope() })
+		            }
 		            return Home(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()

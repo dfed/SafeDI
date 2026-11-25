@@ -1591,7 +1591,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"fulfillingExpression": .copied,
 			"property": .copied,
 			"constructsWithHandWrittenMock": .copied,
-			"fillCodeByKey": .startsEmpty,
 			"unavailablePropertiesToGenerateCodeTask": .startsEmpty,
 			"unavailablePropertiesToGeneratedCode": .startsEmpty,
 			"orderedPropertyToGenerateIndices": .copied,
@@ -1826,9 +1825,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none) {
+		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passedUpStruct: PassedUpStruct? = nil) {
 			self.label = label
 			self.value = value
+			self.passedUpStruct = passedUpStruct
 			self.enclosingFill = enclosingFill
 			self.isSendable = isSendable
 			self.builderStruct = builderStruct
@@ -1879,6 +1879,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderStruct: PublicMockBuilderStruct?
 		/// For a builder of another module's public mock, what an override closure of the call can be handed for it.
 		let overrideHanding: OverrideHanding
+		/// Where a seam's call passes the builder's places up, the struct `value` calls a member of, which the type key records
+		/// as the call's read; `nil` for every other argument.
+		let passedUpStruct: PassedUpStruct?
+
+		/// The builder or level struct a seam's call passing places up calls its member on, by the name the caller's tree binds
+		/// it under and its type there.
+		struct PassedUpStruct: Sendable {
+			let name: String
+			let type: TypeDescription
+		}
 	}
 
 	/// A level of a seam's or a public mock's tree a caller generates a function for, which returns the level's builder
@@ -3873,7 +3883,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 				// The call's fills are its children, declared in the builder function that makes the call and generated with
-				// that function's body's `propertiesGeneratedLater`, as `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates
+				// that function's body's `propertiesGeneratedLater`, as `mockLoweringFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates
 				// them. A call a fill makes is led to by the dependency that leads to the call the fill is passed to.
 				let callReferenceLocation = fillReferenceLocation ?? .some(declarationLocationByProperty[childProperty].flatMap(\.self) ?? scopeDeclarationLocation)
 				let fillsPropertiesGeneratedLater = child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater)
@@ -5616,14 +5626,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// For a scope that calls another module's public mock and fills its builders, the code of the fills, which a mock
-	/// declares before the call, by the `propertiesGeneratedLater` and `FillPlaceBindings` the fills are generated with: each
-	/// builds the hole's property as the module that declares the fulfilling type builds it. Empty until
-	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` returns.
-	private var fillCodeByKey = [FillCodeKey: [String]]()
-
-	// D1 lane hook (lane C): the mock lowering reads a call's fills as the emitter generates them, storing nothing.
-	/// The code of the fills with `propertiesGeneratedLater` and `fillPlaceBindings`, as
-	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates it, without keeping it in `fillCodeByKey`.
+	/// declares before the call, generated with `propertiesGeneratedLater` and `fillPlaceBindings`, the names the mock root
+	/// hands the call: each builds the hole's property as the module that declares the fulfilling type builds it. Stored
+	/// nowhere, since mock roots that share the call each hand it their own names (`construction-memo-calls.md`).
 	func mockLoweringFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws -> [String] {
 		try await generateProperties(
 			propertiesGeneratedLater: propertiesGeneratedLater,
@@ -5631,13 +5636,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			leadingMemberWhitespace: "",
 			fillPlaceBindings: fillPlaceBindings,
 		).map { $0.spelled() }
-	}
-
-	/// What a call's fills are generated with: the code differs by both, since a mock root hands each call the names of its
-	/// own builders (`FillPlaceBindings`).
-	private struct FillCodeKey: Hashable {
-		let propertiesGeneratedLater: Set<Property>
-		let fillPlaceBindings: FillPlaceBindings
 	}
 
 	/// Every argument of `generatePropertyCode` but `codeGeneration`, which is `.dependencyTree` wherever the key is made,
@@ -6831,7 +6829,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// constructed with anything but its initializer's arguments. It throws what the path key's construction
 	/// (`constructionArgumentList(of:unavailableProperties:holeBuilders:)`), which makes the same call first, throws.
 	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
-		guard publicMockCall == nil, !constructsWithHandWrittenMock, builderCallArguments.isEmpty, let initializer = instantiable.initializer else { return nil }
+		guard builderCallArguments.isEmpty else { return nil }
+		return try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
+	}
+
+	/// What the construction of `instantiable` reads through its initializer's arguments, whatever builders the call passes
+	/// after them, or `nil` where it is constructed with anything but its initializer.
+	nonisolated private func initializerArgumentReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
+		guard publicMockCall == nil, !constructsWithHandWrittenMock, let initializer = instantiable.initializer else { return nil }
 		let arguments = try initializer.createInitializerArguments(
 			given: instantiable.dependencies,
 			unavailableProperties: bodyUnavailableProperties(unavailableProperties),
@@ -6858,8 +6863,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
 		      inlinePlaceBuilder == nil,
 		      cycleParameters.isEmpty,
-		      let reads = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
+		      var reads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
+		// A call that passes places up hands the seam a member of the builder or level the caller's tree holds for each: a read
+		// of that struct, typed as the caller's tree binds it. A call that fills a place, or passes a struct no binding of the
+		// tree types, such as one a fill is handed, is not planned.
+		for builderCallArgument in builderCallArguments {
+			guard let passedUpStruct = builderCallArgument.passedUpStruct else { return nil }
+			guard !reads.contains(where: { $0.label == passedUpStruct.name }) else { continue }
+			reads.append(PlaceRead(
+				argumentLabel: passedUpStruct.name,
+				label: passedUpStruct.name,
+				property: Property(label: passedUpStruct.name, typeDescription: passedUpStruct.type),
+				source: .binding(label: passedUpStruct.name),
+				// SafeDI cannot tell the struct is `Sendable`, as for a hole site's read of it.
+				staysOutsideSendableFunctions: true,
+			))
+		}
 		// The root declares the root functions the call reaches, which its text leaves out.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
@@ -7320,7 +7340,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		   !body.fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
 		{
 			body.inlinedFills[key] = inlinedFill
-			let handedLabels = Set((child.generator.fillFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
+			// A fill reads a field bound from a deferred parameter from the caller's scope, not from what it is handed
+			// (`fillBoundFields`), so such a read captures the caller's declaration.
+			let handedLabels = Set((child.generator.fillBoundFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
 			if !child.generator.receivedProperties.allSatisfy({ handedLabels.contains($0.label) }) {
 				body.inlinedFillKeysReadingCallersDeclarations.insert(key)
 			}
@@ -10264,7 +10286,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lazilyInstantiatedBindingNameMap[receivedProperty.label, default: [:]][receivedProperty.typeDescription] = lazilyInstantiatedBindingNameByProperty[receivedProperty.asUnwrappedProperty]
 		}
 		// A call of another module's public mock that takes the wrapper only if available is passed the wrapper a required
-		// receive of the label makes the mock bind, as it reads that declaration (`NearestDeclarations.binding(of:)`): the
+		// receive of the label makes the mock bind, as it reads that declaration (`NearestDeclarations.resolvingBinding(of:)`): the
 		// call receives the optional form, which no parameter of this mock stands for.
 		for receivedProperty in parameters.lazilyInstantiatedReceivedProperties where !receivedProperty.typeDescription.isOptional {
 			let optionalType = TypeDescription.optional(receivedProperty.typeDescription)
@@ -11627,18 +11649,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// enclosing that one needs no reservation: it builds a property on the
 	/// override's path, whose label every local of the function spells after
 	/// the function's own.
+	///
+	/// Where the function builds a node whose configuration is `Sendable` (`configurationPath`), the function reads the
+	/// whole configuration from one local instead, `<function>__overrides`, and every read beneath it is that local's
+	/// member: a configuration of the `Sendable` form whose every field is proven `Sendable` is itself `Sendable`
+	/// (`ConfigurationRecord.configurationStruct`), and it holds its fields behind one immutable reference, so the read
+	/// gives each field the value the read of the field would.
 	final class SendableOverrideExtractor {
-		init(functionName: String, names: GeneratedNameAllocator) {
+		/// - Parameter configurationPath: The path of the configuration of the node whose builder function starts the
+		///   extraction, where that configuration is `Sendable`, which the function then reads through one local.
+		init(functionName: String, names: GeneratedNameAllocator, configurationPath: String? = nil) {
 			self.functionName = functionName
 			self.names = names
+			self.configurationPath = configurationPath
 		}
 
 		/// Records that `expression` is read into a local named after the
-		/// outermost `@Sendable` function, and returns that local's name.
+		/// outermost `@Sendable` function, and returns that local's name, or the member of the configuration's local
+		/// that `expression` reads.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
-			let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
-			extractions.append((localName: localName, expression: expression))
-			return localName
+			if let configurationPath, expression.hasPrefix("\(configurationPath).") {
+				let localName: String
+				if let configurationLocalName {
+					localName = configurationLocalName
+				} else {
+					localName = names.claim("\(functionName)__\(Self.configurationLocalNameSuffix)".spelledAsJoinedIdentifier)
+					configurationLocalName = localName
+					extractions.append((localName: localName, expression: configurationPath))
+				}
+				return localName + expression.dropFirst(configurationPath.count)
+			} else {
+				let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
+				extractions.append((localName: localName, expression: expression))
+				return localName
+			}
 		}
 
 		/// Keeps every later local apart from `names`, which a scope inside the function declares: a local named as one
@@ -11655,6 +11699,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var names: GeneratedNameAllocator
 
 		private let functionName: String
+		private let configurationPath: String?
+		/// The local the configuration at `configurationPath` is read into, once something reads it.
+		private var configurationLocalName: String?
+
+		/// The suffix of the name of the local a whole configuration is read into.
+		private static let configurationLocalNameSuffix = "overrides"
 	}
 }
 

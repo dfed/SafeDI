@@ -89,13 +89,11 @@ public enum RootFunctionHoisting {
 		let keyByName = Dictionary(records.map { ($0.name, $0.key) }, uniquingKeysWith: { first, _ in first })
 		// A function that calls one kept in place is kept in place too, until none is left to keep.
 		var keptNames = conflictingNames
-		var changed = !keptNames.isEmpty
-		while changed {
-			changed = false
-			for record in records where !keptNames.contains(record.name) && record.calls.contains(where: { keptNames.contains($0) || keyByName[$0] == nil }) {
-				keptNames.insert(record.name)
-				changed = true
-			}
+		var keptCount: Int?
+		while keptCount != keptNames.count {
+			keptCount = keptNames.count
+			let callersOfKept = records.filter { $0.calls.contains { keptNames.contains($0) || keyByName[$0] == nil } }.map(\.name)
+			keptNames.formUnion(callersOfKept)
 		}
 		let declared = records.filter { !keptNames.contains($0.name) }
 		guard !declared.isEmpty else { return statements }
@@ -126,14 +124,13 @@ public enum RootFunctionHoisting {
 				break
 			case let .sequence(pieces), let .lines(pieces):
 				work.append(contentsOf: pieces.reversed().map { ($0, isInsideSendableFunction) })
-			case let .indented(inner, _):
+			case let .indented(inner, _),
+			     let .omittingRootFunctions(inner, _):
 				work.append((inner, isInsideSendableFunction))
 			case let .place(plan):
 				work.append((plan.code, isInsideSendableFunction))
 			case let .sendableFunction(inner):
 				work.append((inner, true))
-			case let .omittingRootFunctions(inner, _):
-				work.append((inner, isInsideSendableFunction))
 			case let .rootFunction(record, _):
 				let key = RootFunctionKey(
 					calledSeam: record.key.calledSeam,
