@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 /// A model of the scoped dependencies required for an `@Instantiable` in the reachable dependency tree.
 final class Scope: Hashable {
 	// MARK: Initialization
@@ -531,6 +533,7 @@ extension ScopeRecord {
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 				)
 			}
+			let spikeT0 = ContinuousClock.now
 			scopeGenerator = try createScopeGenerator(
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -548,6 +551,7 @@ extension ScopeRecord {
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 			)
+			let spikeT1 = ContinuousClock.now
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
 					ofFirstPassTree: scopeGenerator,
@@ -558,6 +562,10 @@ extension ScopeRecord {
 				)
 			} else {
 				cycleParameterSeed = nil
+			}
+			let spikeT2 = ContinuousClock.now
+			if ProcessInfo.processInfo.environment["SPIKE_TIMING"] != nil {
+				FileHandle.standardError.write(Data("SPIKE pass=\(previousPassGenerator == nil ? 1 : 2) seeded=\(cycleParameterSeed != nil) passPlusSeed=\(spikeT2 - spikeT0) seedOnly=\(spikeT2 - spikeT1)\n".utf8))
 			}
 			if sharesMemo {
 				passMemo.keepAlive(passTree: scopeGenerator, seed: cycleParameterSeed)
