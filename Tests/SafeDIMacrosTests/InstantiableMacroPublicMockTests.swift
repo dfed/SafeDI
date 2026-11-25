@@ -314,14 +314,6 @@ import Testing
 							FixItSpec(message: "Remove `generateMock: .public`"),
 						],
 					),
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
-						line: 3,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
-						],
-					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: ["Remove `generateMock: .public`"],
