@@ -2945,10 +2945,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    // SafeDI counts `Palette` and `Window` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
+		    @usableFromInline static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
 
 		    public static func mock(
 		        tint: Palette? = Screen.__safeDI_publicMockDefault_tint(),
@@ -6080,7 +6077,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesBuilderTypeQualifiedBySafeDIOnPublicTierWithoutComment_whenSeamReceivesIt() async throws {
-		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too.
+		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too, read as the bare `Instantiator<Badge>.Builder`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(
 				receives: ["@Received let badgeBuilder: SafeDI.Instantiator<Badge>.Builder"],
@@ -6103,14 +6100,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping SafeDI.Instantiator<Badge>.Builder) {
+			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder) {
 			        let cache = Cache()
 			        self.init(badgeBuilder: badgeBuilder, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C97EBD6D04347108 {}
+			    public enum __safeDI_Screen_879C7A483E974080 {}
 			}
 			""",
 		])
