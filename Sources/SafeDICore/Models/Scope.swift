@@ -751,7 +751,9 @@ extension ScopeRecord {
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
-					if key != nil { spikeLookups += 1 }
+					if key != nil {
+						spikeLookups += 1
+					}
 					if key != nil, let keyedPlaceObserver {
 						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
 					}

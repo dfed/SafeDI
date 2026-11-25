@@ -492,7 +492,9 @@ struct ConstructionLog {
 		for asksCycleReads in [true, false] {
 			let isAnsweredAlike = forEachRead(where: { $0.isCycleRead == asksCycleReads }) { recorded in
 				ConstructionMemo.SpikeCounters.readsAnswered += 1
-				if asksCycleReads { ConstructionMemo.SpikeCounters.cycleReadsAnswered += 1 }
+				if asksCycleReads {
+					ConstructionMemo.SpikeCounters.cycleReadsAnswered += 1
+				}
 				let (answer, depth) = context.answer(recorded.read.read)
 				guard answer.isAlike(recorded.answer) else { return false }
 				// An alike answer at the same depth keeps the recorded read, which a fresh read would equal for every later
