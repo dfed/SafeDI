@@ -178,7 +178,9 @@ extension MockLowering.Walk {
 		while let frame = frames.last {
 			guard frame.next < frame.children.count else {
 				// A function's construction reads what its body binds.
-				if let label = resolves(frame.functionReads, in: frame.visible) { return label }
+				if let label = resolves(frame.functionReads, in: frame.visible) {
+					return label
+				}
 				frames.removeLast()
 				continue
 			}
@@ -187,7 +189,9 @@ extension MockLowering.Walk {
 			let visible = frame.visible
 			switch record {
 			case let .built(built):
-				if let label = resolves(built.callSiteReads, in: visible) { return label }
+				if let label = resolves(built.callSiteReads, in: visible) {
+					return label
+				}
 				if built.hasFunction {
 					var inner = visible
 					inner.formUnion(built.parameterProperties.map(\.label))
@@ -195,11 +199,15 @@ extension MockLowering.Walk {
 					frames[frames.count - 1].visible.insert(built.property.label)
 					frames.append((built.children, 0, inner, built.constructionReads))
 				} else {
-					if let label = resolves(built.constructionReads, in: visible) { return label }
+					if let label = resolves(built.constructionReads, in: visible) {
+						return label
+					}
 					frames[frames.count - 1].visible.insert(built.property.label)
 				}
 			case let .closer(closer):
-				if let label = resolves(closer.callSiteReads, in: visible) { return label }
+				if let label = resolves(closer.callSiteReads, in: visible) {
+					return label
+				}
 				frames[frames.count - 1].visible.insert(closer.property.label)
 			case let .alias(alias):
 				frames[frames.count - 1].visible.insert(alias.property.label)
