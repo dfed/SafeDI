@@ -309,7 +309,7 @@ extension Root {
 }
 ```
 
-Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`:
+Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`, and do the same for any other global actor, spelled as you spell it:
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor", generateMock: true)
@@ -317,6 +317,8 @@ public final class MyPresenter: Instantiable {
     @MainActor public init() { … }
 }
 ```
+
+A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 

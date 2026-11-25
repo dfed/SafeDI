@@ -860,7 +860,7 @@ extension Initializer: BinarySchemaMember {
 				BinaryLayoutField("hasGenericParameter", \.hasGenericParameter),
 				BinaryLayoutField("hasGenericWhereClause", \.hasGenericWhereClause),
 				BinaryLayoutField("arguments", \.arguments),
-				BinaryLayoutField("spelledIsolation", \.spelledIsolation),
+				BinaryLayoutField("spelledAttributes", \.spelledAttributes),
 			],
 			unwrittenProperties: [],
 		)
@@ -876,7 +876,7 @@ extension Initializer: BinarySchemaMember {
 			hasGenericParameter: fieldFlags.next(),
 			hasGenericWhereClause: fieldFlags.next(),
 			arguments: reader.read(),
-			spelledIsolation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			spelledAttributes: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
 		try fieldFlags.finish()
 	}
@@ -891,7 +891,7 @@ extension Initializer: BinarySchemaMember {
 		fieldFlags.append(hasGenericParameter)
 		fieldFlags.append(hasGenericWhereClause)
 		writer.write(arguments)
-		writer.writeOptional(spelledIsolation, flaggedIn: &fieldFlags)
+		writer.writeOptional(spelledAttributes, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
