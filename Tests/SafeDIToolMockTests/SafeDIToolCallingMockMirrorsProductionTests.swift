@@ -2008,7 +2008,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.page = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(page: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -2390,7 +2390,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gizmo = { _ in __safeDI_builder() }
+			                    self.init(gizmo: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2404,7 +2404,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.panel_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(panel_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3342,7 +3342,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				section += "                self.\(builder.member(of: call)) = \(builder.member(of: call))\n"
 				section += "            }\n\n"
 				section += "            public init(__safeDI_noScope __safeDI_builder: @escaping \(builder.noScopeClosureType)) {\n"
-				section += "                self.\(builder.member(of: call)) = { _ in .init(__safeDI_noScope: __safeDI_builder) }\n"
+				section += "                self.init(\(builder.member(of: call)): { _ in .init(__safeDI_noScope: __safeDI_builder) })\n"
 				section += "            }\n"
 				section += "        }\n"
 				section += "    }\n\n"
@@ -7896,7 +7896,7 @@ enum MockConditionCaller: CustomTestStringConvertible {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(panel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }

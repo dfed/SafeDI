@@ -7005,7 +7005,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD224CA9AB2DCC36A
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x953DA76ED58A3D60
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7015,7 +7015,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC313EDAB229128B6
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC6B732D2AA53AC05
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -8967,6 +8967,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.promotedHolePublicMockPassedUp: 17,
 		.promotedHolePublicMockPublicConsumer: 40,
 		.promotedHolePublicMockSendableLazily: 12,
+		.optionalPlacePublicMock: 165,
+		.optionalPlacePublicMockOnLeaf: 73,
+		.optionalPlacePublicMockSendably: 27,
+		.optionalPlacePublicMockReceived: 84,
+		.optionalPlacePublicMockPassedUp: 67,
+		.optionalPlacePublicMockPublicConsumer: 45,
 		.unbuildableValuePublicMockCall: 174,
 		.unbuildableValuePublicMockCallPublicTier: 174,
 		.carrierBeforeSiblingBeneathInternallyConfiguredChild: 26,
@@ -9020,7 +9026,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x52879FD791F2736D
+	static let publicMockCorpusFixtureHash: UInt64 = 0x61CCC49786C55235
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9082,7 +9088,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x83B3A47D52108C53
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xA16ED3BEF7F33D2E
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9350,6 +9356,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.promotedHolePublicMockSendableLazily: 13,
 		.promotedHolePublicMockPassedUp: 18,
 		.promotedHolePublicMockPublicConsumer: 40,
+		.optionalPlacePublicMock: 178,
+		.optionalPlacePublicMockOnLeaf: 81,
+		.optionalPlacePublicMockSendably: 30,
+		.optionalPlacePublicMockReceived: 94,
+		.optionalPlacePublicMockPassedUp: 70,
+		.optionalPlacePublicMockPublicConsumer: 48,
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,

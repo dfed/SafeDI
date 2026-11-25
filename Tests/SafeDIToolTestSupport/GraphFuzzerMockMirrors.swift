@@ -859,6 +859,10 @@ enum GraphFuzzerMirrorSkip: String, CaseIterable, Comparable {
 	/// its chain, nothing builds: a mock binds every property its tree receives only if available, to an override, so
 	/// it creates the alias, which production does not create, and rejects the receive.
 	case requiredReceiveOfUncreatedAlias
+	/// The mocked type is an actor, whose initializer a mirror cannot hand the values it stores: a value it was handed is
+	/// in the mirror's region, which Swift 6 does not let it send to the actor. The compile of the drawn graph judges the
+	/// mock.
+	case mockedActor
 
 	static func < (lhs: GraphFuzzerMirrorSkip, rhs: GraphFuzzerMirrorSkip) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -1668,6 +1672,7 @@ struct GraphFuzzerValueOraclePlan {
 		var modelFailures = [String]()
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
 		let samples = GraphFuzzerSampleValues(fixture: fixture, model: model)
+		actorTypeNames = GraphFuzzerSourceLine.actorTypeNames(in: fixture.swiftFileContent)
 		// The tool creates mock roots in type order, sharing what it collects of each scope's received properties.
 		for typeName in model.typeOrder.sorted() where model.types[typeName]?.generatesMock == true && model.types[typeName]?.isRoot == false {
 			guard let mockFile = generatedFiles[typeName + mockFileSuffix] else {
@@ -1678,6 +1683,10 @@ struct GraphFuzzerValueOraclePlan {
 			let mockRoot = model.mockRoot(ofTypeNamed: typeName, cache: &cache)
 			if let disagreement = GraphFuzzerMockOverrides.disagreement(between: model.expectation(of: mockRoot, mockedTypeName: typeName), andMockFile: mockFile, typeNamePrefix: fixture.typeNamePrefix) {
 				modelFailures.append(disagreement)
+				continue
+			}
+			guard !actorTypeNames.contains(typeName) else {
+				skips.append((typeName, .mockedActor))
 				continue
 			}
 			// The mock's required parameters are handed sample values, which the mirror forwards.
@@ -1762,6 +1771,8 @@ struct GraphFuzzerValueOraclePlan {
 	let storingFixture: GraphFuzzerFixture
 	/// The graph's roots, in declaration order.
 	let rootTypeNames: [String]
+	/// The graph's `actor` types, which no mirror or override sentinel builds (`GraphFuzzerMirrorSkip.mockedActor`).
+	let actorTypeNames: Set<String>
 	/// The mock files the tool generated for the graph as drawn, by name, which the value-oracle run must generate alike
 	/// (R6).
 	let drawnMockFiles: [String: String]

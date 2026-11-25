@@ -354,7 +354,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.gizmo = { _ in __safeDI_builder() }
+			                self.init(gizmo: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -570,7 +570,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.screenGizmo = { _ in __safeDI_builder() }
+		                self.init(screenGizmo: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }

@@ -880,7 +880,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.analytics = { _ in __safeDI_builder() }
+		                    self.init(analytics: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -898,7 +898,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.childBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(childBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1027,7 +1027,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.analytics = { _ in __safeDI_builder() }
+		                    self.init(analytics: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1041,7 +1041,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.left = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(left: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1063,7 +1063,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.analytics = { _ in __safeDI_builder() }
+		                    self.init(analytics: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1077,7 +1077,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.right = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(right: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1225,7 +1225,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.child = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(child: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -1242,7 +1242,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.analytics = { _ in __safeDI_builder() }
+		                    self.init(analytics: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1256,7 +1256,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.middle = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(middle: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1439,7 +1439,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.analytics = { _ in __safeDI_builder() }
+		                self.init(analytics: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }

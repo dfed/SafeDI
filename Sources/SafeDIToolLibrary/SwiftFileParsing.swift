@@ -1268,9 +1268,10 @@ extension UInt8 {
 /// The byte of a backtick, which encloses a name: 0x60.
 private let backtickByte: UInt8 = 0x60
 
-/// The text that every file declaring SafeDI content contains.
+/// The text that every file declaring SafeDI content contains. The macro's name alone, not `@Instantiable`, so that its
+/// spelling qualified by SafeDI's module name (`@SafeDI.Instantiable`) is found with no further search.
 private let safeDIMarkers = [
-	"@\(InstantiableVisitor.macroName)",
+	InstantiableVisitor.macroName,
 	"#\(SafeDIConfigurationVisitor.macroName)",
 ].map { Array($0.utf8) }
 
