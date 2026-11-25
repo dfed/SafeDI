@@ -161,7 +161,7 @@ extension ScopeGenerator {
 		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
 		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
 		// A root that enters a mocked lazy cycle keeps the walk's body (`entersCycleWithEdge`), so its places are not recorded.
-		if (laysOutWithTypeKey && !walk.entersCycleWithEdge) || SpikeShadow.logPath != nil {
+		if laysOutWithTypeKey, !walk.entersCycleWithEdge {
 			walk.recordBuiltPlaces()
 		}
 		if laysOutWithTypeKey {
@@ -170,9 +170,6 @@ extension ScopeGenerator {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
 			}
 			MockLowering.logTypeKeyLayout(of: instantiable, outcome: layout.fallback)
-		}
-		if SpikeShadow.logPath != nil {
-			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty, walk: walk)
 		}
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
@@ -474,8 +471,6 @@ extension MockLowering {
 		// The path of child indices (`OrderedChild.index`) from the root to the node being lowered,
 		// which keys what the walk reads per place.
 		var childIndexPath = [Int]()
-		// SPIKE: the hook each place's construction would be replaced by, keyed by its path of child indices.
-		var placeHooks = [[Int]: ConstructionHook]()
 		/// The records of the closers and defaults the walk lowered (`MockLowering+ClosersAndDefaults.swift`), by their paths of
 		/// child indices, which the plan reads where it writes their places.
 		var closerAndDefaultRecords = [[Int]: PlaceRecord]()
@@ -1297,9 +1292,6 @@ extension MockLowering {
 			// function.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead?.text, indent: indent))
-				if let overrideRead {
-					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead.text, call: node.spikeHookCall, construction: node.spikeConstruction)
-				}
 				recordInputs(of: node, hasFunction: false, overrideRead: overrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 				return .finished(node)
 			}
@@ -1500,9 +1492,6 @@ extension MockLowering {
 				node.arguments = readingDefaultsInsideFunction()
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
-			if let functionOverrideRead {
-				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead.text, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
-			}
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
@@ -1729,17 +1718,6 @@ extension MockLowering {
 		/// The name of the node's builder function.
 		var functionName: String {
 			renamedFunctionName ?? MockLowering.builderFunctionName(boundAs: bindingName)
-		}
-
-		/// SPIKE: the node's construction without an override.
-		var spikeConstruction: String {
-			construction
-		}
-
-		/// SPIKE: the call of the node's override builder, as its construction's replacement.
-		var spikeHookCall: String {
-			let builder = ReservedName.configurationBuilderPropertyName
-			return isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 		}
 
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
