@@ -805,14 +805,20 @@ extension DependencyTreeGenerator {
 		/// two is smaller is walked and the other looked up in, so a scope of many carriers whose children each require a
 		/// few properties compares only those few for each child.
 		func firstCarrier(otherThan pathProperty: Property, among requiredProperties: Set<Property>) -> Property? {
-			GenerationWork.record(min(requiredProperties.count, carrierProperties.count), by: .findingCarrierASiblingRequires)
 			if requiredProperties.count < carrierProperties.count {
+				// A set has no order of its own: the carrier at the lowest position is the one a scan in child order stops at.
+				GenerationWork.record(requiredProperties.count, by: .findingCarrierASiblingRequires)
 				return requiredProperties.lazy
 					.compactMap { firstCarrierByProperty[$0] }
 					.filter { $0.carrier != pathProperty }
 					.min { $0.position < $1.position }?.carrier
 			} else {
-				return carrierProperties.first { $0 != pathProperty && requiredProperties.contains($0) }
+				for (position, carrier) in carrierProperties.enumerated() where carrier != pathProperty && requiredProperties.contains(carrier) {
+					GenerationWork.record(position + 1, by: .findingCarrierASiblingRequires)
+					return carrier
+				}
+				GenerationWork.record(carrierProperties.count, by: .findingCarrierASiblingRequires)
+				return nil
 			}
 		}
 	}
