@@ -264,8 +264,8 @@ extension MockLowering.Walk {
 		switch value {
 		case .rootDeclaration:
 			return value
-		case let .member(member, of: base):
-			return resolve(base, at: path).map { .member(member, of: $0) }
+		case let .memberRead(member, of: base):
+			return resolve(base.value, at: path).map { .member(member, of: $0) }
 		case let .read(read):
 			guard case .binding = read.source else { return nil }
 			return nearestConfiguration(takingParameterNamed: read.label, around: path)
@@ -295,7 +295,7 @@ extension MockLowering.Walk {
 		guard case let .built(record) = builtRecords[path] else { return [] }
 		guard let configuration = configurationReads[path] else { return record.passedArguments.isEmpty ? record.alternatives : [] }
 		return record.alternatives.map { alternative in
-			let closure: ValuePath = if case let .member(member, of: _) = alternative.closure {
+			let closure: ValuePath = if case let .memberRead(member, of: _) = alternative.closure {
 				.member(member, of: configuration)
 			} else {
 				configuration
