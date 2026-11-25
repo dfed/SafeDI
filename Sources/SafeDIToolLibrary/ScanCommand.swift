@@ -44,9 +44,11 @@ struct Scan: AsyncParsableCommand {
 		// A build tool plugin runs `scan` whenever SwiftPM or Xcode plans a build, so a run that would write what the last
 		// one wrote parses nothing and writes nothing (`ScanInputsRecord`).
 		let recordURL = ScanInputsRecord.url(besideManifestFile: manifestFile)
+		let projectFilePaths = ProjectFilePaths(projectRoot: projectRoot)
 		let arguments = try ScanInputsRecord.Arguments(
 			inputSourcesFileContent: String(contentsOfFile: inputSourcesFile, encoding: .utf8),
 			projectRoot: projectRoot,
+			resolvedProjectRoot: projectFilePaths.normalizedProjectRoot.path,
 			outputDirectory: outputDirectory,
 			mockScopedFiles: mockScopedFiles,
 			activeCompilationConditions: Set(activeCompilationConditions).sorted(),
@@ -54,7 +56,6 @@ struct Scan: AsyncParsableCommand {
 			toolPath: ScanInputsRecord.toolPath ?? "",
 			toolStamp: FileModificationStamp(ofFileAtPath: ScanInputsRecord.toolPath ?? ""),
 		)
-		let projectFilePaths = ProjectFilePaths(projectRoot: projectRoot)
 		if let record = ScanInputsRecord.read(besideManifestFile: manifestFile, holding: arguments),
 		   await record.inputsAreUnchanged(manifestFile: manifestFile, projectFilePaths: projectFilePaths)
 		{

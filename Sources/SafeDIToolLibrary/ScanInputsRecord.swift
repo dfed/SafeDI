@@ -40,6 +40,8 @@ struct ScanInputsRecord: Codable {
 		/// The text of the input CSV, which lists every file `scan` parses, in order.
 		let inputSourcesFileContent: String
 		let projectRoot: String
+		/// The project root with its symbolic links resolved, so that a root pointed at another directory scans again.
+		let resolvedProjectRoot: String
 		let outputDirectory: String
 		let mockScopedFiles: [String]
 		/// Sorted: `scan` treats the conditions as a set.
