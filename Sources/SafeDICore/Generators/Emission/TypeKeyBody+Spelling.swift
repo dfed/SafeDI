@@ -52,6 +52,24 @@ extension TypeKeyLayout {
 			guard let representative = representative(of: owner) else { return "" }
 			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
 		}
+		// Each call names its locals after the function it calls and the parameter, apart from every other call's.
+		for owner in membersByClass.indices {
+			for (index, statement) in statements(ofClass: owner).enumerated() {
+				let callee: Int
+				switch statement {
+				case let .built(child):
+					callee = classByBody[child]
+				case let .closer(_, target):
+					callee = classByBody[target]
+				case .inline,
+				     .alias:
+					continue
+				}
+				for argument in passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) where argument.bindsBeforeCall {
+					boundArgumentNames[CallSite(owner: owner, index: index), default: [:]][argument.parameterName] = allocator.claim("\(functionNames[callee])__\(argument.parameterName)".spelledAsJoinedIdentifier)
+				}
+			}
+		}
 	}
 
 	// MARK: Spelling
@@ -158,10 +176,21 @@ extension TypeKeyLayout {
 		}
 		// The members of `owner` hand their calls passed arguments of one shape (`structuralKey`), so its first member's
 		// spell every member's.
+		var bindings = ""
 		for argument in passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) {
 			guard let value = spelledValuePath(argument.value, inClass: owner, before: index) else { return nil }
-			arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
+			if let local = boundArgumentNames[CallSite(owner: owner, index: index)]?[argument.parameterName] {
+				bindings += "let \(local): \(argument.type.asSource) = \(value)\n"
+				arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(local)")
+			} else {
+				arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
+			}
 		}
+		return bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative)
+	}
+
+	/// The binding of `property` to a call of `callee`'s function that hands it `arguments`.
+	private func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], representative: BuiltPlaceRecord) -> String {
 		let functionName = functionNames[callee]
 		switch property.propertyType {
 		case .instantiator,
