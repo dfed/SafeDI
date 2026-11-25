@@ -516,6 +516,14 @@ def self_test(directory):
         status = check(["--commit", commit, f"linux={directory}/missing", f"macos={macos}"], checkout, annotate=True)
     if status != 2 or not output.getvalue().startswith("::error::linux: "):
         failures.append(f"check of a missing report exited {status}, expected 2, and printed:\n{output.getvalue()}")
+    # One report of the two, as when the Xcode 26 job fails and uploads none: only the absent one is reported missing.
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        status = check(["--commit", commit, f"linux={linux}", f"macos={directory}/missing"], checkout, annotate=True)
+    errors = [line for line in output.getvalue().split("\n") if line.startswith("::error::")]
+    if status != 2 or len(errors) != 1 or not errors[0].startswith("::error::macos: "):
+        failures.append(f"check of the linux report alone exited {status}, expected 2 and one error, for macos, and"
+                        f" printed:\n{output.getvalue()}")
 
     expect_refusal("only linux", [("linux", linux)], "exactly the platforms linux and macos")
     expect_refusal("another platform", both + [("windows", linux)], "exactly the platforms linux and macos")
