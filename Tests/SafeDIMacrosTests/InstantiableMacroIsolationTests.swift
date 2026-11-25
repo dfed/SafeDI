@@ -307,7 +307,7 @@ import Testing
 			assertMacroExpansion(
 				"""
 				typealias UI = MainActor
-				
+
 				@Instantiable(isRoot: true, generateMock: true) @UI
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
@@ -319,7 +319,7 @@ import Testing
 				""",
 				expandedSource: """
 				typealias UI = MainActor
-				
+
 				@UI
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
