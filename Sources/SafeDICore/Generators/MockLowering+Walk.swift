@@ -1174,16 +1174,16 @@ extension MockLowering {
 			let ownFieldIsRead = !isCycleNode && ownFieldReachable
 			if recordsPlaces {
 				builtPlaceConfigurationContexts[childIndexPath] = MockLowering.BuiltPlaceConfigurationContext(
-				fieldName: bindingName,
-				parentConfiguration: ownFieldIsRead ? configurationReads.last ?? nil : nil,
-				nearestIsProvided: !ownFieldIsRead && overrideReachable,
-				ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
-					concreteType: instantiable.concreteInstantiable,
-					builtWithHandWrittenMock: usesMockInitializer,
-					configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
-				).name : nil,
-				pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
-			)
+					fieldName: bindingName,
+					parentConfiguration: ownFieldIsRead ? configurationReads.last ?? nil : nil,
+					nearestIsProvided: !ownFieldIsRead && overrideReachable,
+					ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
+						concreteType: instantiable.concreteInstantiable,
+						builtWithHandWrittenMock: usesMockInitializer,
+						configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
+					).name : nil,
+					pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
+				)
 			}
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
