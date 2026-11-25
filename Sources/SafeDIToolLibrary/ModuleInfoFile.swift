@@ -573,7 +573,9 @@ struct ModuleSeamSignatures: Sendable {
 		}
 	}
 
-	/// The signatures as a run that reaches one of the module's seams reads them.
+	/// The signatures as a run that reaches one of the module's seams reads them. The file's body checksum covers the
+	/// encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws after
+	/// reading a stored signature runs again computing every signature (`Generate.generate(buildLog:)`).
 	var stored: StoredSeamSignatures {
 		StoredSeamSignatures { try decoded }
 	}
