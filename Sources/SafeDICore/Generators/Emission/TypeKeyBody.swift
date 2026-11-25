@@ -125,6 +125,10 @@ struct TypeKeyLayout {
 		/// The labels the body looks up outside it: its plan node's `Domain`, and the domains of the functions its closers
 		/// call.
 		let domainLabels: Set<String>
+		/// What each label of `domainLabels` resolves to where the walk first reached the view: the nearest declaration
+		/// outside the body (`lookUp(_:inBody:before:)` from `parent` before `position`), which the view's key holds, so
+		/// that a look-up climbing out of the body stops here rather than walking every body above it.
+		let outerView: [String: PathValue]
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
 		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
