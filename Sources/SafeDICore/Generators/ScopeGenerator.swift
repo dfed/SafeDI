@@ -4912,6 +4912,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated var labelsOfCycleParametersPassedNil: Set<String> {
 		Set(cycleParameters.lazy.filter { self.cycleParameterUnavailableProperties.contains($0.property) }.map(\.property.label))
 	}
+
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property where this scope passes
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
