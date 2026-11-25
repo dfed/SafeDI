@@ -378,6 +378,123 @@ extension SeamSignature.Hole.UncarriedDeclaration: BinarySchemaMember {
 	}
 }
 
+// A place's list of the declarations bound after it is a sibling place's list less the declarations between the two,
+// but for `builtAfter`, which names the place itself: so the declarations are written without it, as a difference from
+// another place's (`BinaryWriter.writeDifference(of:in:)`), and `builtAfter` after them as runs of equal values: none
+// for the place itself, and the place for every declaration after it.
+extension SeamSignature.Hole.UncarriedDeclaration {
+	fileprivate struct WithoutBuiltAfter: BinaryCodable {
+		let declaration: SeamSignature.Hole.UncarriedDeclaration
+
+		init(_ declaration: SeamSignature.Hole.UncarriedDeclaration) {
+			self.declaration = declaration
+		}
+
+		init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+			declaration = try SeamSignature.Hole.UncarriedDeclaration(
+				storing: reader.read(),
+				declaringType: reader.read(),
+				declarationLocation: reader.read() as Dependency.DeclarationLocation?,
+				parameterTakingType: reader.read() as TypeDescription?,
+				builtAfter: nil,
+				reason: reader.read(),
+				isBoundFromCallersArgument: reader.read(),
+				isBuildableAboveSeam: reader.read(),
+				labelsHeldAboveSeam: reader.read(),
+				placesInTree: (reader.read() as BinaryShared<[SeamSignature.Hole.Site]>).value,
+				holdsPlaceFilledElsewhere: reader.read(),
+			)
+		}
+
+		func write(to writer: inout BinaryWriter) {
+			writer.write(declaration.property)
+			writer.write(declaration.declaringType)
+			writer.write(declaration.declarationLocation)
+			writer.write(declaration.parameterTakingType)
+			writer.write(declaration.reason)
+			writer.write(declaration.isBoundFromCallersArgument)
+			writer.write(declaration.isBuildableAboveSeam)
+			writer.write(declaration.labelsHeldAboveSeam)
+			writer.write(BinaryShared(declaration.placesInTree))
+			writer.write(declaration.holdsPlaceFilledElsewhere)
+		}
+
+		func with(builtAfter: Property?) -> SeamSignature.Hole.UncarriedDeclaration {
+			SeamSignature.Hole.UncarriedDeclaration(
+				storing: declaration.property,
+				declaringType: declaration.declaringType,
+				declarationLocation: declaration.declarationLocation,
+				parameterTakingType: declaration.parameterTakingType,
+				builtAfter: builtAfter,
+				reason: declaration.reason,
+				isBoundFromCallersArgument: declaration.isBoundFromCallersArgument,
+				isBuildableAboveSeam: declaration.isBuildableAboveSeam,
+				labelsHeldAboveSeam: declaration.labelsHeldAboveSeam,
+				placesInTree: declaration.placesInTree,
+				holdsPlaceFilledElsewhere: declaration.holdsPlaceFilledElsewhere,
+			)
+		}
+	}
+
+	/// Writes `declarations` as ``listReadAsDifference(from:)`` reads them.
+	static func writeAsDifference(_ declarations: [Self], to writer: inout BinaryWriter) {
+		guard writer.sharesSignatureValues else {
+			writer.write(declarations)
+			return
+		}
+		writer.writeDifference(of: declarations.map(WithoutBuiltAfter.init), in: .placeUncarriedDeclarations)
+		// Two values are the same when they are written as the same bytes: a property's `==` ignores `any`.
+		var runs = [(length: UInt64, encoding: [UInt8], builtAfter: Property?)]()
+		for declaration in declarations {
+			var valueWriter = BinaryWriter.writingStringsInline()
+			valueWriter.write(declaration.builtAfter)
+			if let last = runs.last, last.encoding == valueWriter.bytes {
+				runs[runs.count - 1].length += 1
+			} else {
+				runs.append((1, valueWriter.bytes, declaration.builtAfter))
+			}
+		}
+		// The declarations after the last run written hold none, as every declaration of a seam with one place.
+		if let last = runs.last, last.builtAfter == nil {
+			runs.removeLast()
+		}
+		writer.writeUnsigned(UInt64(runs.count))
+		for run in runs {
+			writer.writeUnsigned(run.length)
+			writer.write(run.builtAfter)
+		}
+	}
+
+	/// Reads a place's declarations: the declarations without `builtAfter`, as a difference from another place's
+	/// (``BinaryWriter/writeDifference(of:in:)``), and then `builtAfter` as runs, each a count of declarations and the
+	/// value they hold, the declarations after the last run holding none. Outside a signature's shared values, the
+	/// declarations as any list.
+	static func listReadAsDifference(from reader: inout BinaryReader) throws(BinaryDecodingError) -> [Self] {
+		guard reader.sharesSignatureValues else {
+			return try reader.read()
+		}
+		let bodies: [WithoutBuiltAfter] = try reader.readDifference(in: .placeUncarriedDeclarations)
+		var declarations = [Self]()
+		declarations.reserveCapacity(bodies.count)
+		let runCount = try reader.readCount()
+		for _ in 0..<runCount {
+			let lengthOffset = reader.offset
+			let length = try reader.readUnsigned()
+			let builtAfter = try reader.read() as Property?
+			guard length <= UInt64(bodies.count - declarations.count) else {
+				throw .countExceedsRemainingBytes(count: length, offset: lengthOffset)
+			}
+			for body in bodies[declarations.count..<declarations.count + Int(length)] {
+				declarations.append(body.with(builtAfter: builtAfter))
+			}
+		}
+		for body in bodies[declarations.count...] {
+			declarations.append(body.declaration)
+		}
+		return declarations
+	}
+}
+
 extension SeamSignature.Hole.UncarriedDeclaration.AliasOrigin: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
@@ -741,10 +858,10 @@ extension SeamSignature.Hole: BinarySchemaMember {
 			scopeTypeName: reader.read(),
 			enumPlace: reader.read() as SeamSignature.Hole.EnumPlace?,
 			wrapperFunctionName: reader.read() as String?,
-			fields: reader.read(),
+			fields: reader.readDifference(in: .placeFields),
 			tierAccess: reader.read(),
 			accessCause: reader.read() as TypeAccessProof.Cause?,
-			uncarriedDeclarations: reader.read(),
+			uncarriedDeclarations: SeamSignature.Hole.UncarriedDeclaration.listReadAsDifference(from: &reader),
 			cycleReentryDeclarations: reader.read(),
 			reenteringCallDeclarations: reader.read(),
 			reenteringPlaceFields: reader.read(),
@@ -775,10 +892,10 @@ extension SeamSignature.Hole: BinarySchemaMember {
 		writer.write(scopeTypeName)
 		writer.write(enumPlace)
 		writer.write(wrapperFunctionName)
-		writer.write(fields)
+		writer.writeDifference(of: fields, in: .placeFields)
 		writer.write(tierAccess)
 		writer.write(accessCause)
-		writer.write(uncarriedDeclarations)
+		SeamSignature.Hole.UncarriedDeclaration.writeAsDifference(uncarriedDeclarations, to: &writer)
 		writer.write(cycleReentryDeclarations)
 		writer.write(reenteringCallDeclarations)
 		writer.write(reenteringPlaceFields)
@@ -815,7 +932,7 @@ extension SeamSignature.Hole.EnumPlace: BinarySchemaMember {
 			memberValuesTypeName: reader.read() as String?,
 			isBuiltBySendableBuilder: reader.read(),
 			route: reader.read(),
-			values: reader.read(),
+			values: reader.readDifference(in: .placeValues),
 		)
 	}
 
@@ -827,7 +944,7 @@ extension SeamSignature.Hole.EnumPlace: BinarySchemaMember {
 		writer.write(memberValuesTypeName)
 		writer.write(isBuiltBySendableBuilder)
 		writer.write(route)
-		writer.write(values)
+		writer.writeDifference(of: values, in: .placeValues)
 	}
 }
 
@@ -1161,15 +1278,15 @@ extension SeamSignature.ScopeEnum.Values: BinarySchemaMember {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			typeName: reader.read(),
-			fields: reader.read(),
-			labelsBoundLater: reader.read(),
+			fields: reader.readDifference(in: .caseValuesFields),
+			labelsBoundLater: Set(reader.readDifference(in: .caseLabelsBoundLater) as [String]),
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(typeName)
-		writer.write(fields)
-		writer.write(labelsBoundLater)
+		writer.writeDifference(of: fields, in: .caseValuesFields)
+		writer.writeDifference(of: labelsBoundLater.sorted(), in: .caseLabelsBoundLater)
 	}
 }
 

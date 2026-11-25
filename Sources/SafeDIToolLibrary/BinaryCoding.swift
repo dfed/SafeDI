@@ -209,7 +209,7 @@ struct BinaryWriter {
 	}
 
 	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
-	private(set) var writesPositionsAsAbsent = false
+	fileprivate(set) var writesPositionsAsAbsent = false
 
 	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
 	/// optional, so `write` writes what it would write of a copy of the values with every position `nil`, without making
@@ -339,6 +339,154 @@ struct BinaryWriter {
 			sharedValueIndicesByStorage[storage] = (index, value)
 		}
 	}
+
+	/// Writes `list`, one of the lists a seam signature or a public mock plan holds for each of its places, as its
+	/// difference from a list written before in the same `slot`, wherever a signature's repeated values are written once
+	/// (``sharesSignatureValues``), and as any list is written elsewhere.
+	///
+	/// The places of one type each list the declarations bound before them and those bound after them, so N places wrote
+	/// N × N entries: a plan of 80 builders was 124 KB, and one of 160, 442 KB. A place's list is another place's plus
+	/// or minus a few declarations, so it is written as the list it differs from (how many lists back in the slot), how
+	/// many elements it keeps from that list's start and from its end, and the elements between, in full. The list it
+	/// differs from is the one that shares the most elements at its two ends among three written before: the last one,
+	/// the longest that starts with this list's first element, and the longest that ends with its last. The places are
+	/// written in the order of their labels, not of their declarations, so the nearest list is rarely the last one. A
+	/// list that shares no element with any of the three is written whole.
+	///
+	/// Two elements are the same when they are written as the same bytes here, so what is read back is what a list
+	/// written whole would read back, whatever the elements are. An element is written once, where the list would have
+	/// written it, and only its bytes are compared and moved: nothing is written twice to compare, since a signature's
+	/// lists hold millions of elements. An empty list is never one a later list differs from.
+	mutating func writeDifference<Element: BinaryCodable>(of list: [Element], in slot: BinaryDifferenceSlot) {
+		guard sharesSignatureValues else {
+			write(list)
+			return
+		}
+		guard !list.isEmpty else {
+			writeUnsigned(0)
+			return
+		}
+		var history = listHistoriesBySlot[slot] ?? ListHistory()
+		// Taken out while it changes, so that it is changed in place.
+		listHistoriesBySlot[slot] = nil
+		let listStart = bytes.count
+		var elements = [Int]()
+		elements.reserveCapacity(list.count)
+		var elementEnds = [Int]()
+		elementEnds.reserveCapacity(list.count)
+		for element in list {
+			let elementStart = bytes.count
+			write(element)
+			elements.append(bytes.withUnsafeBytes { history.identifier(ofElementWrittenAs: UnsafeRawBufferPointer(rebasing: $0[elementStart...])) })
+			elementEnds.append(bytes.count)
+		}
+		var wholeHeader = BinaryWriter()
+		wholeHeader.writeUnsigned(UInt64(list.count) << 1)
+		var isWrittenWhole = true
+		if let difference = history.difference(of: elements) {
+			let unsharedStart = difference.sharedAtStart == 0 ? listStart : elementEnds[difference.sharedAtStart - 1]
+			let unsharedEnd = difference.sharedAtEnd == elements.count ? listStart : elementEnds[elements.count - difference.sharedAtEnd - 1]
+			var header = BinaryWriter()
+			header.writeUnsigned(UInt64(elements.count - difference.sharedAtStart - difference.sharedAtEnd) << 1 | 1)
+			header.writeUnsigned(UInt64(history.lists.count - difference.list))
+			header.writeUnsigned(UInt64(difference.sharedAtStart))
+			header.writeUnsigned(UInt64(difference.sharedAtEnd))
+			// Only where it is shorter: a list of one reference is no longer than the four numbers that say where it is.
+			if header.bytes.count < wholeHeader.bytes.count + (unsharedStart - listStart) + (bytes.count - unsharedEnd) {
+				// The elements kept from the list's two ends were each written before as the same bytes, so none of them wrote a
+				// shared value or a string for the first time, and removing their bytes leaves every table as it was. The elements
+				// between stay as they were written, in their order, so each shared value they wrote keeps its index.
+				bytes.removeSubrange(unsharedEnd...)
+				bytes.replaceSubrange(listStart..<unsharedStart, with: header.bytes)
+				isWrittenWhole = false
+			}
+		}
+		if isWrittenWhole {
+			bytes.insert(contentsOf: wholeHeader.bytes, at: listStart)
+		}
+		history.append(elements)
+		listHistoriesBySlot[slot] = history
+	}
+
+	/// The lists ``writeDifference(of:in:)`` wrote in one slot, each element as a number that two elements share exactly
+	/// when they were written as the same bytes. Held until the writer is released: one number per element written, and
+	/// a copy of each distinct element's bytes, where the lists themselves held a value each.
+	private struct ListHistory {
+		private(set) var lists = [[Int]]()
+
+		mutating func identifier(ofElementWrittenAs bytes: UnsafeRawBufferPointer) -> Int {
+			if bytes.count <= 8 {
+				// Most elements are a reference of a byte or two to a value written before.
+				var word: UInt64 = 0
+				withUnsafeMutableBytes(of: &word) { $0.copyMemory(from: bytes) }
+				let key = ShortElement(word: word, count: bytes.count)
+				if let identifier = identifiersByShortBytes[key] {
+					return identifier
+				} else {
+					let identifier = identifiersByShortBytes.count + identifiersByLongBytes.count
+					identifiersByShortBytes[key] = identifier
+					return identifier
+				}
+			} else {
+				let key = [UInt8](bytes)
+				if let identifier = identifiersByLongBytes[key] {
+					return identifier
+				} else {
+					let identifier = identifiersByShortBytes.count + identifiersByLongBytes.count
+					identifiersByLongBytes[key] = identifier
+					return identifier
+				}
+			}
+		}
+
+		/// The list written before that `elements` differs least from, with how many elements the two share at their start
+		/// and, after those, at their end: of the last list written, the longest that starts with `elements`' first element
+		/// and the longest that ends with its last, the one that shares the most, the earliest named here on a tie. `nil`
+		/// when none shares an element at either end.
+		func difference(of elements: [Int]) -> (list: Int, sharedAtStart: Int, sharedAtEnd: Int)? {
+			var best: (list: Int, sharedAtStart: Int, sharedAtEnd: Int)?
+			let candidates = [lists.isEmpty ? nil : lists.count - 1, elements.first.flatMap { longestListByFirstElement[$0] }, elements.last.flatMap { longestListByLastElement[$0] }]
+			for case let candidate? in candidates {
+				let other = lists[candidate]
+				let limit = Swift.min(elements.count, other.count)
+				var sharedAtStart = 0
+				while sharedAtStart < limit, elements[sharedAtStart] == other[sharedAtStart] {
+					sharedAtStart += 1
+				}
+				var sharedAtEnd = 0
+				while sharedAtStart + sharedAtEnd < limit, elements[elements.count - 1 - sharedAtEnd] == other[other.count - 1 - sharedAtEnd] {
+					sharedAtEnd += 1
+				}
+				if sharedAtStart + sharedAtEnd > (best.map { $0.sharedAtStart + $0.sharedAtEnd } ?? 0) {
+					best = (candidate, sharedAtStart, sharedAtEnd)
+				}
+			}
+			return best
+		}
+
+		mutating func append(_ elements: [Int]) {
+			if let first = elements.first, longestListByFirstElement[first].map({ lists[$0].count < elements.count }) ?? true {
+				longestListByFirstElement[first] = lists.count
+			}
+			if let last = elements.last, longestListByLastElement[last].map({ lists[$0].count < elements.count }) ?? true {
+				longestListByLastElement[last] = lists.count
+			}
+			lists.append(elements)
+		}
+
+		private struct ShortElement: Hashable {
+			let word: UInt64
+			let count: Int
+		}
+
+		private var identifiersByShortBytes = [ShortElement: Int]()
+		private var identifiersByLongBytes = [[UInt8]: Int]()
+		/// The first of the longest lists written that start with each element, and that end with each.
+		private var longestListByFirstElement = [Int: Int]()
+		private var longestListByLastElement = [Int: Int]()
+	}
+
+	private var listHistoriesBySlot = [BinaryDifferenceSlot: ListHistory]()
 
 	/// Whether a value a seam signature repeats is written through ``writeSharedByBytes(_:)``, as it is inside
 	/// ``writeSharingSignatureValues(_:)``.
@@ -801,6 +949,59 @@ struct BinaryReader {
 	/// ``readSharingSignatureValues(_:)``.
 	private(set) var sharesSignatureValues = false
 
+	/// Reads a list ``BinaryWriter/writeDifference(of:in:)`` wrote. A list that is the whole of the one it differs from
+	/// is that list, storage and all.
+	mutating func readDifference<Element: BinaryCodable>(in slot: BinaryDifferenceSlot) throws(BinaryDecodingError) -> [Element] {
+		guard sharesSignatureValues else {
+			return try read()
+		}
+		listDifferencesRead += 1
+		let headerOffset = offset
+		let header = try readUnsigned()
+		guard header > 0 else {
+			return []
+		}
+		let unsharedCount = header >> 1
+		var list = [Element]()
+		if header & 1 == 0 {
+			try appendElements(count: unsharedCount, countOffset: headerOffset, to: &list)
+		} else {
+			let history = listsReadBySlot[slot] ?? []
+			let distance = try readUnsigned()
+			let sharedAtStart = try readUnsigned()
+			let sharedAtEnd = try readUnsigned()
+			guard distance >= 1, distance <= UInt64(history.count), let other = history[history.count - Int(distance)] as? [Element], sharedAtStart <= UInt64(other.count), sharedAtEnd <= UInt64(other.count) - sharedAtStart else {
+				throw .sharedValueReferenceOutOfRange(reference: distance, offset: headerOffset)
+			}
+			if unsharedCount == 0, sharedAtStart + sharedAtEnd == UInt64(other.count) {
+				list = other
+			} else {
+				list.append(contentsOf: other[..<Int(sharedAtStart)])
+				try appendElements(count: unsharedCount, countOffset: headerOffset, to: &list)
+				list.append(contentsOf: other[(other.count - Int(sharedAtEnd))...])
+			}
+		}
+		// As the writer keeps them: every list but an empty one.
+		listsReadBySlot[slot, default: []].append(list)
+		return list
+	}
+
+	private mutating func appendElements<Element: BinaryCodable>(count: UInt64, countOffset: Int, to list: inout [Element]) throws(BinaryDecodingError) {
+		guard count <= UInt64(bytes.count - offset) else {
+			throw .countExceedsRemainingBytes(count: count, offset: countOffset)
+		}
+		for _ in 0..<count {
+			try list.append(Element(readingFrom: &self))
+		}
+	}
+
+	/// Every list ``readDifference(in:)`` read that is not empty, by slot, for as long as the reader lives: the signatures
+	/// read hold the same storage, so this holds one reference per list.
+	private var listsReadBySlot = [BinaryDifferenceSlot: [Any]]()
+	/// How many lists ``readDifference(in:)`` read: a value that holds one is not one ``readSharingStorageOfRepeats(_:)``
+	/// hands back for the same bytes, since what those bytes say depends on the lists read before.
+	private var listDifferencesRead = 0
+
 	/// Reads what ``BinaryWriter/writeSharingSignatureValues(_:)`` wrote.
 	mutating func readSharingSignatureValues<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
 		let wasSharing = sharesSignatureValues
@@ -861,9 +1062,10 @@ struct BinaryReader {
 			shorterLength -= 1
 		}
 		let sharedValueCount = sharedValues.count
+		let listDifferencesReadBefore = listDifferencesRead
 		let value = try read(&self)
 		let length = offset - start
-		guard sharedValues.count == sharedValueCount, length >= 2 else {
+		guard sharedValues.count == sharedValueCount, listDifferencesRead == listDifferencesReadBefore, length >= 2 else {
 			return value
 		}
 		// Found now only when too many lengths of values begin with its first bytes for it to be found before it was read.
@@ -940,7 +1142,7 @@ struct BinaryReader {
 	// MARK: Private
 
 	private let bytes: UnsafeRawBufferPointer
-	private var offset = 0
+	private(set) var offset = 0
 	private var strings = [String]()
 	/// Where each string of the table lies, for a reader that decodes a string only when a value names it.
 	private var stringRanges = [Range<Int>]()
@@ -1159,6 +1361,21 @@ struct BinarySharingSignatureValues<Value: BinaryCodable>: BinaryCodable {
 	func write(to writer: inout BinaryWriter) {
 		writer.writeSharingSignatureValues { $0.write(value) }
 	}
+}
+
+/// The lists a seam signature or a public mock plan writes as differences (``BinaryWriter/writeDifference(of:in:)``):
+/// a list differs from one written before in its own slot.
+enum BinaryDifferenceSlot: Hashable {
+	/// `SeamSignature.Hole.fields`.
+	case placeFields
+	/// `SeamSignature.Hole.EnumPlace.values`.
+	case placeValues
+	/// `SeamSignature.Hole.uncarriedDeclarations`.
+	case placeUncarriedDeclarations
+	/// `SeamSignature.ScopeEnum.Values.fields`.
+	case caseValuesFields
+	/// `SeamSignature.ScopeEnum.Values.labelsBoundLater`, sorted.
+	case caseLabelsBoundLater
 }
 
 /// A value written once however often a file holds it (``BinaryWriter/writeShared(_:)``).
