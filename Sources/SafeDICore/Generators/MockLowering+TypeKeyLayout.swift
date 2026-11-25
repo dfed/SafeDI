@@ -117,6 +117,9 @@ extension MockLowering.Walk {
 				}
 				builtRecords[path] = record
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
+				if !call.inputs.hasFunction {
+					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
+				}
 			} catch {
 				unrecordedReasons[path] = "threw"
 				unrecordedPlaceErrors[path] = error
@@ -125,6 +128,35 @@ extension MockLowering.Walk {
 	}
 
 	/// The code of the place at `path` as the type key reads it: its record, or text, which keeps the root's walk body.
+	/// Puts the configuration a built place with no function of its own would be handed into the reads of its alternatives:
+	/// such a place is built in its parent's body, where no parameter takes what `relateConfiguration(ofBuiltPlaceAt:of:)`
+	/// passes it, so it reads that value where it is built.
+	mutating func readPassedConfigurationInPlace(ofBuiltPlaceAt path: [Int]) {
+		guard case var .built(record) = builtRecords[path], !record.passedArguments.isEmpty else { return }
+		let valueByName = Dictionary(record.passedArguments.map { ($0.parameterName, $0.value) }, uniquingKeysWith: { first, _ in first })
+		func substituting(_ value: ValuePath) -> ValuePath {
+			switch value {
+			case let .passedArgument(name):
+				valueByName[name] ?? value
+			case let .member(member, of: base):
+				.member(member, of: substituting(base))
+			case let .optionalMember(member, of: base):
+				.optionalMember(member, of: substituting(base))
+			case let .call(member, of: base, arguments: arguments, argumentsWrapper: wrapper):
+				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
+			case .rootDeclaration, .read, .emptyInitialization:
+				value
+			}
+		}
+		record.alternatives = record.alternatives.map { alternative in
+			ConstructionAlternative(closure: substituting(alternative.closure), bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent.map(substituting), use: alternative.use, resultWrapper: alternative.resultWrapper)
+		}
+		record.argumentValues = record.argumentValues.mapValues(substituting)
+		record.constructionValue = record.constructionValue.map { ConstructionValue(value: substituting($0.value), resultWrapper: $0.resultWrapper) }
+		record.passedArguments = []
+		builtRecords[path] = .built(record)
+	}
+
 	func placeCode(at path: [Int]) -> GeneratedCode {
 		let record: PlaceRecord? = if let built = builtRecords[path] {
 			built
