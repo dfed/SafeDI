@@ -2133,6 +2133,7 @@ extension BinaryEncoding: BinarySample {
 		BinaryEncoding(bytes: isDistinct ? [1] : [])
 	}
 }
+
 extension SeamSignature: BinarySample {}
 extension SeamSignature.Receiver: BinarySample {}
 extension SeamSignature.NestedSeamCall: BinarySample {}
