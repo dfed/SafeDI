@@ -311,7 +311,7 @@ extension Root {
 }
 ```
 
-Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`:
+Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`, and do the same for any other global actor, spelled as you spell it:
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor", generateMock: true)
@@ -319,6 +319,8 @@ public final class MyPresenter: Instantiable {
     @MainActor public init() { … }
 }
 ```
+
+A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation. It leaves out `@_spi`, `@backDeployed` and `@objc`, which that function cannot take. An attached macro there expands on that function too; if the macro cannot, give the type a hand-written `mock()` without it, which the public mock then builds the type with.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
@@ -1308,8 +1310,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 
 - A non-optional default-valued parameter is `T? = nil`, where `nil` means the declaration’s default. A magic literal such as `#fileID` keeps its default.
 - An `@autoclosure` one, `retries: @autoclosure () -> Int = 3`, becomes `retries: (() -> Int)? = nil`: pass a closure, which the mock calls each time it builds the type. A field of a type’s configuration takes it the same way.
-- An optional-typed default-valued parameter, `note: String? = "x"`, is a parameter of `mock()` with the declaration’s default, as in an internal mock: `Banner.mock(note: "Ends Friday")`. A mock bound to a global actor evaluates the default in its isolation.
-- If a type is on the main actor only through a conformance or superclass, such as a SwiftUI `View` or a `UIViewController` subclass, give it `mockAttributes: "@MainActor"`. SafeDI sees only a global actor the declaration or `mockAttributes` spells. Without it, the type’s optional-typed defaults are evaluated outside the actor, and one that reads the actor’s state does not compile; the comment SafeDI writes there says so. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile either, as in an internal mock.
+- An optional-typed default-valued parameter, `note: String? = "x"`, is a parameter of `mock()` with the declaration’s default, as in an internal mock: `Banner.mock(note: "Ends Friday")`. The default is evaluated in `mock()`’s isolation: the type’s, whether its declaration spells it or it comes from a conformance or a superclass, such as a SwiftUI `View`, or the one `mockAttributes` states. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile, as in an internal mock.
 
 **Received dependencies.**
 

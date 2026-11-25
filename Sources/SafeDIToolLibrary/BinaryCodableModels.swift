@@ -480,7 +480,6 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
 				BinaryLayoutField("generatedInitializerAttributes", \.generatedInitializerAttributes),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
-				BinaryLayoutField("declarationIsolation", \.declarationIsolation),
 				BinaryLayoutField("generateMock", \.generateMock),
 				BinaryLayoutField("mockGenerationArgumentRange", \.mockGenerationArgumentRange),
 				BinaryLayoutField("mockOnly", \.mockOnly),
@@ -524,7 +523,6 @@ extension Instantiable: BinarySchemaMember {
 			enclosingExtensionAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
 			generatedInitializerAttributes: reader.read(),
 			mockAttributes: reader.read(),
-			declarationIsolation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			generateMock: reader.read(),
 			mockGenerationArgumentRange: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.SourceRange?,
 			mockOnly: fieldFlags.next(),
@@ -566,7 +564,6 @@ extension Instantiable: BinarySchemaMember {
 			writer.writeOptional(enclosingExtensionAccess, flaggedIn: &fieldFlags)
 			writer.write(generatedInitializerAttributes)
 			writer.write(mockAttributes)
-			writer.writeOptional(declarationIsolation, flaggedIn: &fieldFlags)
 			writer.write(generateMock)
 			writer.writeOptional(mockGenerationArgumentRange, flaggedIn: &fieldFlags)
 			fieldFlags.append(mockOnly)
@@ -863,7 +860,7 @@ extension Initializer: BinarySchemaMember {
 				BinaryLayoutField("hasGenericParameter", \.hasGenericParameter),
 				BinaryLayoutField("hasGenericWhereClause", \.hasGenericWhereClause),
 				BinaryLayoutField("arguments", \.arguments),
-				BinaryLayoutField("spelledIsolation", \.spelledIsolation),
+				BinaryLayoutField("spelledAttributes", \.spelledAttributes),
 			],
 			unwrittenProperties: [],
 		)
@@ -879,7 +876,7 @@ extension Initializer: BinarySchemaMember {
 			hasGenericParameter: fieldFlags.next(),
 			hasGenericWhereClause: fieldFlags.next(),
 			arguments: reader.read(),
-			spelledIsolation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			spelledAttributes: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
 		try fieldFlags.finish()
 	}
@@ -894,7 +891,7 @@ extension Initializer: BinarySchemaMember {
 		fieldFlags.append(hasGenericParameter)
 		fieldFlags.append(hasGenericWhereClause)
 		writer.write(arguments)
-		writer.writeOptional(spelledIsolation, flaggedIn: &fieldFlags)
+		writer.writeOptional(spelledAttributes, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
