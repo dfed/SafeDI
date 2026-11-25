@@ -2414,7 +2414,6 @@ extension Initializer.GenerationError {
 	}
 }
 
-
 // MARK: - DependencyTypeSyntax
 
 /// A dependency's name and the syntax that spells its type.
