@@ -234,6 +234,7 @@ extension MockLowering.Walk {
 		unrecordedReasons = [:]
 		closedOnPlacesByLabel = [:]
 		builtPlaceConfigurationContexts = [:]
+		closerParentFieldReads = [:]
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
