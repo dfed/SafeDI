@@ -1,0 +1,13 @@
+direct: apis: ["direct left inner client", "direct left inner built client", "direct left built inner client", "direct left built inner built client", "direct right inner client", "direct right inner built client", "direct right built inner client", "direct right built inner built client"]
+direct: wrong values: []
+near middle: apis: ["near middle left inner client", "near middle left inner built client", "near middle left built inner client", "near middle left built inner built client", "near middle right inner client", "near middle right inner built client", "near middle right built inner client", "near middle right built inner built client"]
+near middle: wrong values: []
+near built middle: apis: ["near built middle left inner client", "near built middle left inner built client", "near built middle left built inner client", "near built middle left built inner built client", "near built middle right inner client", "near built middle right inner built client", "near built middle right built inner client", "near built middle right built inner built client"]
+near built middle: wrong values: []
+far middle: apis: ["far middle left inner client", "far middle left inner built client", "far middle left built inner client", "far middle left built inner built client", "far middle right inner client", "far middle right inner built client", "far middle right built inner client", "far middle right built inner built client"]
+far middle: wrong values: []
+far built middle: apis: ["far built middle left inner client", "far built middle left inner built client", "far built middle left built inner client", "far built middle left built inner built client", "far built middle right inner client", "far built middle right inner built client", "far built middle right built inner client", "far built middle right built inner built client"]
+far built middle: wrong values: []
+the halves' tokens differ: true
+distinct marks among the ten sides: 10
+api places built: 40
