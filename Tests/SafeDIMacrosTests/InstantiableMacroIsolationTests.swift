@@ -26,7 +26,8 @@ import Testing
 	@testable import SafeDIMacros
 
 	/// A declaration SafeDI generates – a root’s `init()`, a seam’s initializers, a `mock()` – has the type’s isolation or
-	/// the one its attributes spell, so one that calls a declaration bound to another global actor needs the attribute.
+	/// the one its attributes spell, so one that calls a `@MainActor` declaration needs the attribute when nothing states
+	/// an isolation. The macro matches no actor by name: it reports only a callee spelled exactly `@MainActor`.
 	/// The error must never fire on code that compiles: compiled with and without `-default-isolation MainActor`, in
 	/// Swift 5 and 6, the generated code of each shape these tests report fails, while a type that conforms to another
 	/// protocol or subclasses another class can take a global actor from it (in a module whose declarations default to
@@ -207,6 +208,85 @@ import Testing
 		}
 
 		@Test
+		func declaration_expandsWithoutIssue_whenGeneratedInitializerAttributesSpellAnotherAttributeWithoutArguments() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@DatabaseActor")
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRootTypeSpellsAnotherAttributeWithoutArguments() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateMock: true) @DatabaseActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				@DatabaseActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRootInitializerIsBoundToAnotherGlobalActor() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Root: Instantiable {
+				    @DatabaseActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				public final class Root: Instantiable {
+				    @DatabaseActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_expandsWithoutIssue_whenRootInitializerIsPreconcurrencyMainActor() {
 			assertMacroExpansion(
 				"""
@@ -310,10 +390,10 @@ import Testing
 		// MARK: Seams
 
 		@Test
-		func declaration_producesErrorAddingGeneratedInitializerAttributes_whenSeamInitializerIsBoundToAnotherGlobalActorThanItsType() {
+		func declaration_producesErrorAddingGeneratedInitializerAttributes_whenSeamInitializerIsMainActor() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(generateDependencyTree: true, generateMock: true) @DatabaseActor
+				@Instantiable(generateDependencyTree: true, generateMock: true)
 				public final class Feature: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -323,7 +403,6 @@ import Testing
 				}
 				""",
 				expandedSource: """
-				@DatabaseActor
 				public final class Feature: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -353,7 +432,7 @@ import Testing
 				macros: instantiableTestMacros,
 				applyFixIts: ["Add `@MainActor` to `generatedInitializerAttributes`"],
 				fixedSource: """
-				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor", generateMock: true) @DatabaseActor
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor", generateMock: true)
 				public final class Feature: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter

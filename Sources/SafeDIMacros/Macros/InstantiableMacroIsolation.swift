@@ -24,14 +24,18 @@ import SwiftSyntaxMacros
 
 extension InstantiableMacro {
 	/// Reports each declaration SafeDI generates for `concreteDeclaration` – a root’s `init()`, a seam’s initializers,
-	/// a `mock()` – that calls a declaration bound to a global actor while nothing states the generated declaration’s
-	/// isolation, with a fix-it that adds the global actor to the attribute argument the generated declaration reads.
+	/// a `mock()` – that calls a declaration spelling `@MainActor` while nothing states an isolation for the generated
+	/// declaration, with a fix-it that adds `@MainActor` to the attribute argument the generated declaration reads.
 	///
 	/// SafeDI infers no isolation: a generated declaration has the type’s isolation, or the one its attributes spell, so
-	/// a callee bound to another global actor than the type’s makes generated code that does not compile, with the
-	/// compiler’s error in a generated file. A generated declaration whose attributes spell any isolation (a global
-	/// actor or `nonisolated`) is stated, and is left to the compiler. A callee that spells `@preconcurrency` adds no
-	/// isolation to what calls it (the generator does not mirror it either), so it is not reported.
+	/// a `@MainActor` callee of a type that states no isolation makes generated code that does not compile, with the
+	/// compiler’s error in a generated file. The macro reads spellings only, and matches no actor by its name: it fires
+	/// only where the callee spells exactly `@MainActor`, and stays quiet wherever anything else could state an
+	/// isolation. The type, or the attribute argument the generated declaration reads, states one when it spells
+	/// `nonisolated` or any attribute without arguments, which may be a global actor. A callee that spells
+	/// `nonisolated` or `@preconcurrency` adds no isolation to what calls it (the generator does not mirror
+	/// `@preconcurrency` either), so it is not reported; nor is a callee bound to another global actor, or to
+	/// `@MainActor` spelled any other way.
 	///
 	/// A deliberate gap: a type whose conformance list names a type other than `Instantiable` or `Sendable` (a
 	/// superclass, or a protocol bound to a global actor, such as `UIViewController` or SwiftUI’s `View`) can take its
@@ -45,8 +49,9 @@ extension InstantiableMacro {
 		on declaration: some SyntaxProtocol,
 		context: some MacroExpansionContext,
 	) {
-		guard !visitor.conformanceListNamesOtherTypes else { return }
-		let typeIsolation = Initializer.spelledIsolation(modifiers: concreteDeclaration.modifiers, attributes: concreteDeclaration.attributes)
+		guard !visitor.conformanceListNamesOtherTypes,
+		      !statesIsolation(modifiers: concreteDeclaration.modifiers, attributes: concreteDeclaration.attributes, besides: instantiableMacro)
+		else { return }
 		let typeName = concreteDeclaration.name.text
 		let constructionInitializer = zip(visitor.initializers, visitor.initializerSyntaxes).first { initializer, _ in
 			initializer.isValid(forFulfilling: visitor.dependencies)
@@ -71,13 +76,11 @@ extension InstantiableMacro {
 			nil
 		}
 		if let generatedInitializers,
-		   let (initializer, initializerSyntax) = constructionInitializer,
-		   let globalActor = boundGlobalActor(of: initializer, attributes: initializerSyntax.attributes),
-		   globalActor != typeIsolation,
+		   let (_, initializerSyntax) = constructionInitializer,
+		   spellsExactlyMainActor(modifiers: initializerSyntax.modifiers, attributes: initializerSyntax.attributes),
 		   !statesIsolation(visitor.generatedInitializerAttributes)
 		{
 			diagnoseUnstatedGlobalActorIsolation(
-				globalActor: globalActor,
 				callee: .initializer(typeName: typeName),
 				generatedDeclaration: generatedInitializers,
 				instantiableMacro: instantiableMacro,
@@ -90,20 +93,18 @@ extension InstantiableMacro {
 		guard instantiableMacro.generateMockValue, !visitor.mockOnly else { return }
 		// A generated `mock()` calls the hand-written mock `customMockName` names, when there is one, and the
 		// construction initializer otherwise.
-		let mockCallee: (callee: FixableInstantiableError.IsolatedCallee, initializer: Initializer, attributes: AttributeListSyntax)? = if let mockFunctionSyntax = visitor.mockFunctionSyntax, let mockInitializer = visitor.mockInitializer {
-			(.handWrittenMock(methodName: mockFunctionSyntax.name.text), mockInitializer, mockFunctionSyntax.attributes)
+		let mockCallee: (callee: FixableInstantiableError.IsolatedCallee, modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax)? = if let mockFunctionSyntax = visitor.mockFunctionSyntax, visitor.mockInitializer != nil {
+			(.handWrittenMock(methodName: mockFunctionSyntax.name.text), mockFunctionSyntax.modifiers, mockFunctionSyntax.attributes)
 		} else {
-			constructionInitializer.map { initializer, initializerSyntax in
-				(.initializer(typeName: typeName), initializer, initializerSyntax.attributes)
+			constructionInitializer.map { _, initializerSyntax in
+				(.initializer(typeName: typeName), initializerSyntax.modifiers, initializerSyntax.attributes)
 			}
 		}
 		if let mockCallee,
-		   let globalActor = boundGlobalActor(of: mockCallee.initializer, attributes: mockCallee.attributes),
-		   globalActor != typeIsolation,
+		   spellsExactlyMainActor(modifiers: mockCallee.modifiers, attributes: mockCallee.attributes),
 		   !statesIsolation(visitor.mockAttributes)
 		{
 			diagnoseUnstatedGlobalActorIsolation(
-				globalActor: globalActor,
 				callee: mockCallee.callee,
 				generatedDeclaration: .mock,
 				instantiableMacro: instantiableMacro,
@@ -114,25 +115,41 @@ extension InstantiableMacro {
 		}
 	}
 
-	/// The global actor `initializer` is bound to, as its declaration spells it (`"@MainActor"`): `nil` when it spells
-	/// none, spells `nonisolated`, or spells `@preconcurrency`, which adds no isolation to what calls it.
-	private static func boundGlobalActor(of initializer: Initializer, attributes: AttributeListSyntax) -> String? {
-		guard let isolation = initializer.spelledIsolation,
-		      isolation != "nonisolated",
-		      !attributes.contains(where: { $0.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "preconcurrency" })
-		else {
-			return nil
+	/// Whether a callee spells exactly `@MainActor`, and neither `nonisolated` nor `@preconcurrency`, which leave what
+	/// calls it unisolated.
+	private static func spellsExactlyMainActor(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> Bool {
+		var spellsMainActor = false
+		for case let .attribute(attribute) in attributes {
+			switch attribute.attributeName.trimmedDescription {
+			case "MainActor" where attribute.arguments == nil:
+				spellsMainActor = true
+			case "preconcurrency":
+				return false
+			default:
+				break
+			}
 		}
-		return isolation
+		return spellsMainActor && !modifiers.contains { $0.name.tokenKind == .keyword(.nonisolated) }
 	}
 
-	/// Whether `attributes`, the text of an attribute argument, states an isolation: a global actor, or `nonisolated`.
+	/// Whether a type states an isolation: it spells `nonisolated`, or an attribute without arguments other than
+	/// `instantiableMacro`, which may be a global actor whatever its name.
+	private static func statesIsolation(
+		modifiers: DeclModifierListSyntax,
+		attributes: AttributeListSyntax,
+		besides instantiableMacro: AttributeSyntax,
+	) -> Bool {
+		modifiers.contains { $0.name.tokenKind == .keyword(.nonisolated) }
+			|| attributes.compactMap { $0.as(AttributeSyntax.self) }.contains { $0.id != instantiableMacro.id && $0.arguments == nil }
+	}
+
+	/// Whether `attributes`, the text of an attribute argument, states an isolation: it spells `nonisolated`, or an
+	/// attribute without arguments, which may be a global actor whatever its name.
 	private static func statesIsolation(_ attributes: String) -> Bool {
-		Initializer.globalActorAttribute(in: attributes) != nil || attributes.split(separator: " ").contains("nonisolated")
+		attributes.split(separator: " ").contains { $0 == "nonisolated" || ($0.hasPrefix("@") && !$0.contains("(")) }
 	}
 
 	private static func diagnoseUnstatedGlobalActorIsolation(
-		globalActor: String,
 		callee: FixableInstantiableError.IsolatedCallee,
 		generatedDeclaration: FixableInstantiableError.GeneratedIsolatedDeclaration,
 		instantiableMacro: AttributeSyntax,
@@ -142,6 +159,7 @@ extension InstantiableMacro {
 	) {
 		// `generatedAttributes` stands for both arguments, so the generated declaration reads it when it is given.
 		let argumentLabel = instantiableMacro.generatedAttributes == nil ? generatedDeclaration.argumentLabel : "generatedAttributes"
+		let globalActor = "@MainActor"
 		let error = FixableInstantiableError.unstatedGlobalActorIsolation(
 			globalActor: globalActor,
 			callee: callee,
