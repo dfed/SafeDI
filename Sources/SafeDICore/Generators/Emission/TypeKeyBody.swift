@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// The production type key (R1): a root's body laid out so that the places that build one type alike share one builder
 /// function. Places are alike when they build one type in one way, in one family (plain or `@Sendable`), read the same
 /// labels they do not bind, write bodies of the same shape whose calls reach alike places, and resolve each read to a
@@ -54,47 +52,18 @@ enum TypeKeyBody {
 			layout.rootFunctionNames = rootFunctionNames
 			layout.namesInScope.formUnion(rootFunctionNames)
 		}
-		// MEASUREMENT ONLY, never merged: one line per root, saying whether the layout laid it out or where it gave up, to
-		// the file `SAFEDI_TYPE_KEY_SHADOW` names (appended in one write, so runs in several processes share a file).
-		func shadow(_ cause: String) -> [GeneratedCode]? {
-			if let path = ProcessInfo.processInfo.environment["SAFEDI_TYPE_KEY_SHADOW"], !path.isEmpty {
-				let closers = layout.closersByTarget.values.reduce(0) { $0 + $1.count }
-				var textStatements = 0
-				if let rootStatements = layout.bodies.first?.statements {
-					for case let .alias(alias) in rootStatements where !alias.text.isEmpty && alias.reads?.isEmpty == true {
-						textStatements += 1
-					}
-				}
-				// Where the layout gave up, the first line of each of the root's first three statements, which a test's expected
-				// output holds, so that the root's test can be found by searching for them.
-				var firstLines = [String]()
-				if cause != "laidOut" {
-					for statement in rootBody.prefix(3) {
-						firstLines.append(String(statement.spelled().split(separator: "\n", omittingEmptySubsequences: true).first ?? "").trimmingCharacters(in: .whitespaces))
-					}
-				}
-				let line = "TYPE_KEY_SHADOW \(cause) cyclic=\(closers > 0) outer=\(!outerDeclarations.isEmpty) views=\(layout.bodies.count) closers=\(closers) rootTextStatements=\(textStatements) rootStatements=\(rootBody.count) first=\(firstLines.joined(separator: " | "))\n"
-				let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
-				if descriptor >= 0 {
-					_ = line.withCString { write(descriptor, $0, strlen($0)) }
-					close(descriptor)
-				}
-			}
-			return nil
-		}
-		guard layout.read(rootBody) else { return shadow("read") }
+		guard layout.read(rootBody) else { return nil }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
-		guard layout.computeReads() else { return shadow("computeReads") }
+		guard layout.computeReads() else { return nil }
 		layout.computeClasses()
-		guard layout.computePlacement() else { return shadow("computePlacement") }
+		guard layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
-		guard layout.computeParameterTypes() else { return shadow("computeParameterTypes") }
-		guard layout.checkEveryRead() else { return shadow("checkEveryRead") }
-		guard layout.checkValuePaths() else { return shadow("checkValuePaths") }
+		guard layout.computeParameterTypes(),
+		      layout.checkEveryRead(),
+		      layout.checkValuePaths()
+		else { return nil }
 		layout.computeDecoratorsAndNames()
-		guard layout.checkSendableMarks() else { return shadow("checkSendableMarks") }
-		guard let statements = layout.spelledRootStatements() else { return shadow("spelling") }
-		_ = shadow("laidOut")
+		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements() else { return nil }
 		return rootFunctionDeclarations + statements
 	}
 
