@@ -193,10 +193,10 @@ extension MockLowering.Walk {
 			switch value {
 			case let .passedArgument(name):
 				valueByName[name] ?? value
-			case let .member(member, of: base):
-				.member(member, of: substituting(base))
-			case let .optionalMember(member, of: base):
-				.optionalMember(member, of: substituting(base))
+			case let .memberRead(member, of: base):
+				.member(member, of: substituting(base.value))
+			case let .optionalMemberRead(member, of: base):
+				.optionalMember(member, of: substituting(base.value))
 			case let .call(member, of: base, arguments: arguments, argumentsWrapper: wrapper):
 				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
 			case let .spliced(segments):
