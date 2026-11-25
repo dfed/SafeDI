@@ -137,10 +137,14 @@ public enum MockLowering {
 		let isExtensionBased: Bool
 		/// The name of the hand-written mock method, where it is not `mock`.
 		let customMockName: String?
-		/// The isolation the initializer or hand-written mock spells, which the construction function mirrors.
-		let constructionIsolation: String?
+		/// The attributes the initializer or hand-written mock spells, as written, which the construction function repeats.
+		let constructionAttributes: String?
 		/// What the construction returns: the concrete type, or what a hand-written mock returns.
 		let constructionReturnType: TypeDescription
+		/// Whether the construction is an actor's initializer, which takes each argument into the actor's isolation: the
+		/// construction function takes each `sending`, and so does the builder that overrides it
+		/// (`MockLowering.BuilderParameters`).
+		let sendsArguments: Bool
 		// A node beneath a repeated configured ancestor records only the construction it builds
 		// with, which declares a construction function (`ScopeGenerator.collectPublicConstructionNodes`).
 		/// Whether the record describes the type's module-level configuration too, as the node that records the
