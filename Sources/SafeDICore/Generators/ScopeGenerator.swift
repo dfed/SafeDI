@@ -3969,13 +3969,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The concrete type of every scope the tree rooted at this scope builds, this one's excepted.
 	func concreteTypesOfTree() async -> Set<TypeDescription> {
 		var concreteTypes = Set<TypeDescription>()
-		// A stack of its own, since a tree can be as deep as the module has types.
-		var generatorsToVisit = [self]
-		while let generator = generatorsToVisit.popLast() {
+		forEachGeneratorOfTree { generator in
 			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
 				concreteTypes.insert(instantiable.concreteInstantiable)
 			}
-			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
 		}
 		return concreteTypes
 	}
@@ -3987,9 +3984,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		// A stack of its own, since a tree can be as deep as the module has types.
-		var generatorsToVisit = [self]
-		while let generator = generatorsToVisit.popLast() {
+		forEachGeneratorOfTree { generator in
 			if case let .property(instantiable, property, _, _, _, _) = generator.scopeData {
 				let propertyType = property.typeDescription.asInstantiatedType
 				fulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
@@ -3998,9 +3993,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callingHandWrittenMock: buildingMock && instantiable.mockReturnTypeIsCompatible(withPropertyType: propertyType),
 				))
 			}
-			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
 		}
 		return fulfillers
+	}
+
+	/// Hands `visit` each generator of the tree rooted at this scope, this one first, once each, however many places of
+	/// the tree hold it: places share a generator (`ConstructionMemo`), whose subtree is the same at each of them, so a
+	/// walk that entered it again at every place visited a tree of layered screens once per path to each screen. The set
+	/// of generators visited is the one kind a walk may keep (`generator-design.md`, "Share work by construction"): it
+	/// holds an identifier per generator of the tree and dies with the walk. It keys a generator by identity, never by
+	/// the type it builds, so one type built for two properties, or two ways, is visited as each.
+	private func forEachGeneratorOfTree(_ visit: (ScopeGenerator) -> Void) {
+		var visitedGenerators = Set<ObjectIdentifier>()
+		// A stack of its own, since a tree can be as deep as the module has types.
+		var generatorsToVisit = [self]
+		var visitCount = 0
+		while let generator = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(ObjectIdentifier(generator)).inserted else { continue }
+			visitCount += 1
+			visit(generator)
+			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
+		}
+		GenerationWork.record(visitCount, by: .collectingTypesOfATree)
 	}
 
 	/// The types a mock rooted at this scope names that its declarations do not: those its tree builds, those a flat
