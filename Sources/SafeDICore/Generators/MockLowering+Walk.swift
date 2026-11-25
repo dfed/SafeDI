@@ -512,6 +512,9 @@ extension MockLowering {
 		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
 		/// SPIKE: why each place has no record, for the switch's log.
 		var unrecordedReasons = [[Int]: String]()
+		/// The reads of the call of another module's public mock the walk is lowering, or `nil` where the call keeps the walk's
+		/// body (`recordPublicMockCall`).
+		var pendingPublicMockCallReads: [PlaceRead]?
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
 		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
@@ -754,8 +757,14 @@ extension MockLowering {
 				if let publicMockCall = generator.publicMockCall {
 					// A public mock binds the payload of a case of a place inside the call's fills before the
 					// call's builder function, as before any node's.
+					let firstLineIndex = lines.endIndex
 					lines.append(contentsOf: generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
-					return try await publicMockCallNode(of: generator, publicMockCall: publicMockCall, building: (instantiable, property, forwardedProperties, erasedToConcreteExistential), inScope: scope, path: path, indent: indent, lines: &lines)
+					let node = try await publicMockCallNode(of: generator, publicMockCall: publicMockCall, building: (instantiable, property, forwardedProperties, erasedToConcreteExistential), inScope: scope, path: path, indent: indent, lines: &lines)
+					if let reads = pendingPublicMockCallReads {
+						recordPublicMockCall(property: property, lines: lines[firstLineIndex...], indent: indent, reads: reads)
+						pendingPublicMockCallReads = nil
+					}
+					return node
 				} else if isPropertyCycle {
 					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, inScope: scope, indent: indent, lines: &lines)
 				}
