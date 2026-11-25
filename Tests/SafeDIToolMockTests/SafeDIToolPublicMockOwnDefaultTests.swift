@@ -58,10 +58,7 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 
 			#if DEBUG
 			extension Banner {
-			    // These providers evaluate `Banner`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Banner` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_note() -> String? { "x" }
+			    @usableFromInline static func __safeDI_publicMockDefault_note() -> String? { "x" }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -115,10 +112,7 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 
 			#if DEBUG
 			extension BannerModel {
-			    // These providers evaluate `BannerModel`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `BannerModel` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_note() -> String? { "x" }
+			    @usableFromInline static func __safeDI_publicMockDefault_note() -> String? { "x" }
 
 			    public static func mock(
 			        title: String? = nil,
@@ -144,7 +138,7 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 
 			#if DEBUG
 			extension BannerView {
-			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_note() -> String? { "x" }
+			    @usableFromInline static func __safeDI_publicMockDefault_note() -> String? { "x" }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -258,6 +252,110 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 			DifferentialValueProbe("Banner.mock(note: nil)"),
 			DifferentialValueProbe("BannerModel.mock(title: \"Sale\", note: \"Ends Friday\")"),
 			DifferentialValueProbe("Shelf.mock()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_evaluatesOwnOptionalDefaultInMocksIsolation_whenTypeTakesItFromConformanceOrFromGlobalActorNotNamedActor() async throws {
+		// `Poster` is on the main actor only through `Screen`, and `Crate` is bound to `Storage`, a global actor whose name
+		// does not end in `Actor`. Each default reads its actor's state, so it compiles only in that actor's isolation,
+		// which each provider takes from the extension it shares with `mock()`: SafeDI reads no isolation.
+		let modules = [
+			ModuleFixture(name: "Store", packageName: "store", swiftFileContentByFilePath: ["Store.swift": """
+			import SafeDI
+
+			@MainActor
+			public protocol Screen {}
+
+			@MainActor
+			public enum Theme {
+			    public static var accent: String? = "blue"
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Poster: Screen, Instantiable {
+			    public init(accent: String? = Theme.accent) {
+			        self.accent = accent
+			    }
+
+			    public let accent: String?
+			}
+
+			@globalActor
+			public actor Storage {
+			    public static let shared = Storage()
+			}
+
+			@Storage
+			public enum Shelf {
+			    public static var label: String? = "top"
+			}
+
+			@Storage
+			@Instantiable(generateMock: .public)
+			public final class Crate: Instantiable {
+			    public init(label: String? = Shelf.label) {
+			        self.label = label
+			    }
+
+			    public let label: String?
+			}
+			"""]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Store"]?.generatedFiles == [
+			"Store.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Crate {
+			    @usableFromInline static func __safeDI_publicMockDefault_label() -> String? { Shelf.label }
+
+			    public static func mock(
+			        label: String? = Crate.__safeDI_publicMockDefault_label()
+			    ) -> Crate {
+			        Crate.__safeDI_mock(label: label)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        label: String? = Crate.__safeDI_publicMockDefault_label()
+			    ) -> Crate {
+			        return Crate(label: label)
+			    }
+			}
+
+			extension Crate {
+			    public enum __safeDI_Crate_mock_60427B5233F1F2E1 {}
+			}
+			#endif
+
+			#if DEBUG
+			extension Poster {
+			    @usableFromInline static func __safeDI_publicMockDefault_accent() -> String? { Theme.accent }
+
+			    public static func mock(
+			        accent: String? = Poster.__safeDI_publicMockDefault_accent()
+			    ) -> Poster {
+			        Poster.__safeDI_mock(accent: accent)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        accent: String? = Poster.__safeDI_publicMockDefault_accent()
+			    ) -> Poster {
+			        return Poster(accent: accent)
+			    }
+			}
+
+			extension Poster {
+			    public enum __safeDI_Poster_mock_E4DF61718BCCF443 {}
+			}
+			#endif
+			""",
 		])
 	}
 

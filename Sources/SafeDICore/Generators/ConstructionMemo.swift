@@ -53,9 +53,7 @@
 /// can name, by holding each pass's tree and seed (`keepAlive(passTree:seed:)`), so no key names an object whose address
 /// another object can take while the memo lives. A root's own place is never stored. A tree built with a seam root or a
 /// mock root's builders reads its own `SeamHoles`, constant within the tree but not across trees, so it neither reads nor
-/// keeps a shared memo. A first pass starts each generator's code as it creates it, and a tree's last pass collects and
-/// starts its generators, so a generator a later tree reuses from a pass that was neither has not started: its code
-/// starts when the scope above it asks for it, as any generator's does that starts nothing early. What is constant in a
+/// keeps a shared memo. What is constant in a
 /// pass of one tree and not across trees is either in the key (the flags) or kept to the tree (its `SeamHoles`, and the
 /// start order of a tree with holes). The list of every input and stored value and why each is covered is
 /// `.claude/rules/construction-memo.md`.
@@ -126,7 +124,6 @@ struct ConstructionMemo {
 		let property: PropertyID
 		let erasedToConcreteExistential: Bool
 		let forMockGeneration: Bool
-		let startsCodeGeneration: Bool
 		let validatesForwardedProperties: Bool
 		let buildsWithHandWrittenMocks: Bool
 		/// Whether a declaration enclosing the tree holds a receive a mock passes `nil`
@@ -153,7 +150,6 @@ struct ConstructionMemo {
 				property: property,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: startsCodeGeneration,
 				validatesForwardedProperties: validatesForwardedProperties,
 				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 				mayPassNil: mayPassNil,
@@ -166,15 +162,10 @@ struct ConstructionMemo {
 		}
 	}
 
-	/// A finished place's generator, with the reads of the context above it its subtree made and its scope count, which
-	/// the place's parent counts as its own child's.
+	/// A finished place's generator, with the reads of the context above it its subtree made.
 	struct Entry {
 		let reads: ConstructionLog
 		let generator: ScopeGenerator
-		let subtreeScopeCount: Int
-		/// The generators the build started or collected to start, in order, which a later pass that reuses the generator
-		/// collects again.
-		let startedBeneath: StartedGenerators
 		/// Whether the build found, everywhere in its subtree, what it read from the pass before: the same cycle parameters,
 		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
 		/// read from the pass before, so it builds this generator again (see `settledReuse`).
@@ -187,28 +178,6 @@ struct ConstructionMemo {
 		/// lowering keys a call's fills and builders by its generator (`MockLowering.FilledCallBuilders`), so a call generator at
 		/// two places of one root would bind each of its fill places twice, and read one place's builder family at the other.
 		let callGenerators: Set<ObjectIdentifier>
-	}
-
-	/// Every group of generators one pass started or collected to start, each group on one task, in order
-	/// (`ScopeRecord.createScopeGenerator`), which the pass's entries share: each names its own part, so no entry copies
-	/// the generators beneath its place, which made a deep chain's entries hold a number of generators that grows with the
-	/// square of its depth.
-	final class StartLog {
-		private(set) var groups = [[ScopeGenerator]]()
-
-		func append(_ group: [ScopeGenerator]) {
-			groups.append(group)
-		}
-	}
-
-	/// The part of a pass's start log one place's build started or collected.
-	struct StartedGenerators {
-		let log: StartLog
-		let positions: Range<Int>
-
-		var groups: ArraySlice<[ScopeGenerator]> {
-			log.groups[positions]
-		}
 	}
 
 	/// A reuse of an entry by another place: the entry, with the depths its reads are answered at in the place's context.
@@ -230,14 +199,32 @@ struct ConstructionMemo {
 			return entry.reads.answeredAlike(in: context).map { Reuse(entry: entry, reads: $0) }
 		}
 		guard let draw else {
-			for entry in candidates {
-				if let reuse = reuse(of: entry) {
+			// The places of one key differ mostly in what a cycle closes on or passes, the reads `answeredAlike(in:)` asks first,
+			// which `context` answers the same for every candidate: so each is answered once per lookup, and the candidates
+			// are found by following those answers (`Candidates.indices(answeredAlikeBy:)`) rather than by asking each one. A
+			// candidate whose recorded answer to one differs is never asked, as `answeredAlike(in:)` would set it aside at that
+			// read. The first candidate in the order they were stored that `context` answers alike is reused, as before.
+			var contextAnswers = [ConstructionLog.Read: ConstructionLog.Answer]()
+			func contextAnswer(_ read: ConstructionLog.Read) -> ConstructionLog.Answer {
+				if let answer = contextAnswers[read] {
+					return answer
+				} else {
+					let answer = context.answer(read).answer
+					contextAnswers[read] = answer
+					return answer
+				}
+			}
+			let indices = candidates.indices(answeredAlikeBy: contextAnswer)
+			GenerationWork.record(indices.count, by: .askingMemoCandidates)
+			for index in indices {
+				let candidate = candidates.all[index]
+				if candidate.cycleParameterReads.allSatisfy({ contextAnswer($0.read) == $0.answer }), let reuse = reuse(of: candidate.entry) {
 					return reuse
 				}
 			}
 			return nil
 		}
-		return draw.reuse(among: candidates, reuse)
+		return draw.reuse(among: candidates.all.map(\.entry), reuse)
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -277,7 +264,7 @@ struct ConstructionMemo {
 
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ScopeRecord) {
-		entriesByKey[key, default: []].append(entry)
+		entriesByKey[key, default: Candidates()].append(entry)
 		let generator = ObjectIdentifier(entry.generator)
 		if entriesByGenerator[generator] == nil {
 			entriesByGenerator[generator] = (key, entry)
@@ -285,7 +272,70 @@ struct ConstructionMemo {
 		keyedScopes.append(scope)
 	}
 
-	private var entriesByKey = [Key: [Entry]]()
+	/// An entry of a key, with the reads of what a cycle passes that a lookup asks of it before its log
+	/// (`ConstructionLog.cycleReads`).
+	private struct Candidate {
+		let entry: Entry
+		let cycleParameterReads: [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
+	}
+
+	/// The entries of one key in the order they were stored, each also filed under what its reads of the declaration a
+	/// cycle closes on were answered, in the order its log asks them: most candidates of one key differ in those answers
+	/// alone, and a tree with cycles stores a candidate for each set of declarations its place is built inside, so asking
+	/// each candidate in turn made a lookup's work grow with the number stored.
+	private struct Candidates {
+		/// A set of candidates whose first reads were answered alike: the candidates with no further read, and for each
+		/// read a candidate asks next, the node of each answer recorded for it.
+		private struct Node {
+			var candidates = [Int]()
+			var nodeByAnswerByRead = [ConstructionLog.Read: [PropertyID?: Int]]()
+		}
+
+		private(set) var all = [Candidate]()
+		/// The first node holds every candidate before any read.
+		private var nodes = [Node()]
+
+		mutating func append(_ entry: Entry) {
+			var cycleParameterReads = [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]()
+			var node = 0
+			for (read, answer) in entry.reads.cycleReads {
+				switch answer {
+				case let .declarationClosedOn(closedOn):
+					if let next = nodes[node].nodeByAnswerByRead[read]?[closedOn] {
+						node = next
+					} else {
+						nodes[node].nodeByAnswerByRead[read, default: [:]][closedOn] = nodes.count
+						node = nodes.count
+						nodes.append(Node())
+					}
+				case .cycleParameterContext, .nearestDeclaration, .binding, .passesNil:
+					cycleParameterReads.append((read, answer))
+				}
+			}
+			nodes[node].candidates.append(all.count)
+			all.append(Candidate(entry: entry, cycleParameterReads: cycleParameterReads))
+		}
+
+		/// The indices in `all`, in order, of the candidates whose every read of the declaration a cycle closes on
+		/// `contextAnswer` answers as recorded.
+		func indices(answeredAlikeBy contextAnswer: (ConstructionLog.Read) -> ConstructionLog.Answer) -> [Int] {
+			var indices = [Int]()
+			// Candidates can ask their reads in different orders, so a node can hold several next reads, each followed: the
+			// indices found are sorted, so the order the reads are followed in reaches nothing.
+			var nodesToVisit = [0]
+			while let node = nodesToVisit.popLast() {
+				indices.append(contentsOf: nodes[node].candidates)
+				for (read, nodeByAnswer) in nodes[node].nodeByAnswerByRead {
+					if case let .declarationClosedOn(closedOn) = contextAnswer(read), let next = nodeByAnswer[closedOn] {
+						nodesToVisit.append(next)
+					}
+				}
+			}
+			return indices.sorted()
+		}
+	}
+
+	private var entriesByKey = [Key: Candidates]()
 	/// Each stored generator with the key and entry it was first stored under.
 	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
@@ -316,7 +366,7 @@ struct ConstructionMemo {
 		}
 	}
 
-	private var oracleEntriesByKey = [Key: [Entry]]()
+	private var oracleEntriesByKey = [Key: Candidates]()
 	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [ScopeRecord]()
 	private var oraclePassTrees = [ScopeGenerator]()
@@ -519,6 +569,18 @@ struct ConstructionLog {
 		var readsKept = Set<AnsweredRead>()
 		readsKept.reserveCapacity(answers.count)
 		return Self(reads: answers.filter { readsKept.insert($0.read).inserted })
+	}
+
+	/// The reads of what a cycle closes on or passes that `answeredAlike(in:)` asks first, in the order it asks them, each
+	/// with its recorded answer. A context whose answer to one is not `==` the recorded one answers the log otherwise
+	/// (`Answer.isAlike` requires `==`).
+	var cycleReads: [(read: Read, answer: Answer)] {
+		var cycleReads = [(read: Read, answer: Answer)]()
+		_ = forEachRead(where: \.isCycleRead) { recorded in
+			cycleReads.append((recorded.read.read, recorded.answer))
+			return true
+		}
+		return cycleReads
 	}
 
 	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read

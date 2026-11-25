@@ -7005,7 +7005,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x3B932EAFF8DF5E1F
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD224CA9AB2DCC36A
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7015,15 +7015,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x92B26BD3FE048921
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC313EDAB229128B6
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xE4EFEC5D4A4B5A94
+	static let corpusFixtureHash: UInt64 = 0x1FF29AEFB259C2C7
 
-	static let corpusPartitionHash: UInt64 = 0xCE2ED71E61228691
+	static let corpusPartitionHash: UInt64 = 0x5D933B50BDB4FF45
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7382,7 +7382,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
 	/// derived on CI.
-	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 260, judgedWithNamed: 220, named: 2_142, conversions: 0, fills: 439)
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 260, judgedWithNamed: 220, named: 2_140, conversions: 0, fills: 439)
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
@@ -7392,7 +7392,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x47F14B403A57189F
+	static let seamCorpusFixtureHash: UInt64 = 0x3595E52A4D6009B6
 	static let seamCorpusAcceptedSeedCount = 623
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x48072926F71AC583
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7643,7 +7643,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xAF919F25B7CBE451
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xAE7744A45A48A0EC
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -9001,7 +9001,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x879556EAB9AFFCD7
+	static let publicMockCorpusFixtureHash: UInt64 = 0x52879FD791F2736D
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9063,7 +9063,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4D1CB3AB50E6ADEC
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x83B3A47D52108C53
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9630,7 +9630,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [2_279, 2_787, 4_622],
+			seeds: [2_787, 4_622],
 		),
 	]
 
@@ -9691,11 +9691,28 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S\(seed)_CycleSeam+SafeDI.swift") })
 		let seamFile = try #require(files[seamFileName])
-		// The site calls its carrier's member with the level's values positionally, `cycle6Tag` first.
-		let siteArguments = ".cycle0Service(cycle6Tag, "
-		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)’s seam no longer hands its one site `CycleB`’s `cycle6Tag`")
+		// The type key declares `CycleB`'s function once at the seam's root, so the level above's `cycle6Tag`, which
+		// `CycleA`'s function binds and its reader holds, is not in scope at the site. The edit hands it in: the function
+		// takes it as one more parameter, `CycleA`'s function passes its own `cycle6Tag`, and the site, which calls its
+		// carrier's member with the level's values positionally, `cycle6Tag` first, reads it in place of `CycleB`'s.
+		let edits = [
+			(
+				"func __safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_S\(seed)_CycleServiceCarrier_S\(seed)_CycleB<any S\(seed)_CycleService>)",
+				"func __safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_S\(seed)_CycleServiceCarrier_S\(seed)_CycleB<any S\(seed)_CycleService>, levelAboveCycle6Tag: S\(seed)_CycleTag)",
+			),
+			(
+				"__safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder)",
+				"__safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder, levelAboveCycle6Tag: cycle6Tag)",
+			),
+			(".cycle0Service(cycle6Tag, ", ".cycle0Service(levelAboveCycle6Tag, "),
+		]
+		var perturbedFile = seamFile
+		for (text, replacement) in edits {
+			try #require(perturbedFile.components(separatedBy: text).count == 2, "Seed \(seed)’s seam no longer holds `\(text)` once")
+			perturbedFile = perturbedFile.replacingOccurrences(of: text, with: replacement)
+		}
 		var perturbedFiles = files
-		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: ".cycle0Service(cycle4Reader.cycle6Tag, ")
+		perturbedFiles[seamFileName] = perturbedFile
 		return (runs, perturbedFiles, warnings)
 	}
 

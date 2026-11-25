@@ -1324,14 +1324,8 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		            User()
 		        }
 		        let `default` = LazilyInstantiated<User>(__safeDI_default)
-		        func __safeDI_inout() -> User {
-		            User()
-		        }
-		        let `inout` = LazilyInstantiated<User>(__safeDI_inout)
-		        func `__safeDI_my label`() -> User {
-		            User()
-		        }
-		        let `my label` = LazilyInstantiated<User>(`__safeDI_my label`)
+		        let `inout` = LazilyInstantiated<User>(__safeDI_default)
+		        let `my label` = LazilyInstantiated<User>(__safeDI_default)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_A5328BC32DDA9F57.self
 		            return Seam(__safeDI_default: `default`.instance, __safeDI_inout: `inout`.instance, `__safeDI_my label`: `my label`.instance)
