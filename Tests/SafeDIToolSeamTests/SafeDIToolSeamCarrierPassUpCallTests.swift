@@ -71,6 +71,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.secondScreenBuilder = secondScreenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, secondScreenBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -84,6 +85,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -97,6 +99,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -110,6 +113,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -123,6 +127,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -136,6 +141,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -210,6 +216,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.feature0Builder = feature0Builder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, secondScreenBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, feature0Builder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -223,6 +230,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -236,6 +244,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -249,6 +258,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -262,6 +272,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -275,6 +286,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -423,6 +435,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -436,6 +449,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -449,6 +463,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -464,6 +479,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.secondScreenBuilder_Sendable = secondScreenBuilder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), secondScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -477,6 +493,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -490,6 +507,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -499,56 +517,43 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_network network: Network, __safeDI_analyticsClientSendableBuilder: __safeDI_AnalyticsClientSendableCarrier<any AnalyticsClient>) {
+		        @Sendable nonisolated func __safeDI_detailBuilder(id: Int, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_FirstScreen0<any AnalyticsClient>) -> Detail0 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel0 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail0(id: id, viewModel: viewModel)
+		        }
+		        @Sendable nonisolated func __safeDI_viewModel(id: Int, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_AnalyticsClientCarrier_ViewModel0<any AnalyticsClient>) -> ViewModel0 {
+		            let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
+		            let repository: Repository0 = __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_analyticsClientSendableBuilder_repository)
+		            return ViewModel0(id: id, repository: repository)
+		        }
+		        @Sendable nonisolated func __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_AnalyticsClientCarrier_Repository0<any AnalyticsClient>) -> Repository0 {
+		            let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
+		            let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
+		            return Repository0(network: network, formatter: formatter, analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_formatter() -> Formatter {
+		            Formatter()
+		        }
 		        @Sendable nonisolated func __safeDI_firstScreenBuilder() -> FirstScreen0 {
 		            let __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.firstScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail0 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel0 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository0 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository0(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository0 = __safeDI_repository()
-		                    return ViewModel0(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel0 = __safeDI_viewModel()
-		                return Detail0(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail0> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder(id: $0, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable)
 		            }
 		            return FirstScreen0(detailBuilder: detailBuilder)
 		        }
 		        let firstScreenBuilder = SendableInstantiator<FirstScreen0>(__safeDI_firstScreenBuilder)
+		        @Sendable nonisolated func __safeDI_detailBuilder_(id: Int, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_SecondScreen0<any AnalyticsClient>) -> Detail0 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel0 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail0(id: id, viewModel: viewModel)
+		        }
 		        @Sendable nonisolated func __safeDI_secondScreenBuilder() -> SecondScreen0 {
 		            let __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.secondScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail0 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel0 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository0 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository0(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository0 = __safeDI_repository()
-		                    return ViewModel0(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel0 = __safeDI_viewModel()
-		                return Detail0(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail0> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder_(id: $0, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable)
 		            }
 		            return SecondScreen0(detailBuilder: detailBuilder)
 		        }
@@ -578,6 +583,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -591,6 +597,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -604,6 +611,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -621,6 +629,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.feature0Builder_Sendable = feature0Builder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), secondScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), feature0Builder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -634,6 +643,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -647,6 +657,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -661,56 +672,43 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            return Feature0Entry(__safeDI_network: network, __safeDI_analyticsClientSendableBuilder: __safeDI_analyticsClientSendableBuilder.feature0Builder_Sendable)
 		        }
 		        let feature0Builder = SendableInstantiator<Feature0Entry>(__safeDI_feature0Builder)
+		        @Sendable nonisolated func __safeDI_detailBuilder(id: Int, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_FirstScreen1<any AnalyticsClient>) -> Detail1 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel1 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail1(id: id, viewModel: viewModel)
+		        }
+		        @Sendable nonisolated func __safeDI_viewModel(id: Int, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_AnalyticsClientCarrier_ViewModel1<any AnalyticsClient>) -> ViewModel1 {
+		            let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
+		            let repository: Repository1 = __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_analyticsClientSendableBuilder_repository)
+		            return ViewModel1(id: id, repository: repository)
+		        }
+		        @Sendable nonisolated func __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_AnalyticsClientCarrier_Repository1<any AnalyticsClient>) -> Repository1 {
+		            let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
+		            let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
+		            return Repository1(network: network, formatter: formatter, analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_formatter() -> Formatter {
+		            Formatter()
+		        }
 		        @Sendable nonisolated func __safeDI_firstScreenBuilder() -> FirstScreen1 {
 		            let __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.firstScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail1 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel1 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository1 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository1(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository1 = __safeDI_repository()
-		                    return ViewModel1(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel1 = __safeDI_viewModel()
-		                return Detail1(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail1> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder(id: $0, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable)
 		            }
 		            return FirstScreen1(detailBuilder: detailBuilder)
 		        }
 		        let firstScreenBuilder = SendableInstantiator<FirstScreen1>(__safeDI_firstScreenBuilder)
+		        @Sendable nonisolated func __safeDI_detailBuilder_(id: Int, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_SecondScreen1<any AnalyticsClient>) -> Detail1 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel1 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail1(id: id, viewModel: viewModel)
+		        }
 		        @Sendable nonisolated func __safeDI_secondScreenBuilder() -> SecondScreen1 {
 		            let __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.secondScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail1 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel1 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository1 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository1(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository1 = __safeDI_repository()
-		                    return ViewModel1(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel1 = __safeDI_viewModel()
-		                return Detail1(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail1> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder_(id: $0, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable)
 		            }
 		            return SecondScreen1(detailBuilder: detailBuilder)
 		        }
@@ -817,6 +815,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.secondScreenBuilder = secondScreenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, secondScreenBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -830,6 +829,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -843,6 +843,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -856,6 +857,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -869,6 +871,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -882,6 +885,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -956,6 +960,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.feature0Builder = feature0Builder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, secondScreenBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, feature0Builder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -969,6 +974,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -982,6 +988,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -995,6 +1002,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1008,6 +1016,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1021,6 +1030,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -1103,6 +1113,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.feature1Builder = feature1Builder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, secondScreenBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) }, feature1Builder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1116,6 +1127,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1129,6 +1141,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1142,6 +1155,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1155,6 +1169,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1168,6 +1183,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -1340,6 +1356,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1353,6 +1370,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1366,6 +1384,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -1381,6 +1400,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.secondScreenBuilder_Sendable = secondScreenBuilder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), secondScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1394,6 +1414,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1407,6 +1428,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1416,56 +1438,43 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_network network: Network, __safeDI_analyticsClientSendableBuilder: __safeDI_AnalyticsClientSendableCarrier<any AnalyticsClient>) {
+		        @Sendable nonisolated func __safeDI_detailBuilder(id: Int, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_FirstScreen0<any AnalyticsClient>) -> Detail0 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel0 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail0(id: id, viewModel: viewModel)
+		        }
+		        @Sendable nonisolated func __safeDI_viewModel(id: Int, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_AnalyticsClientCarrier_ViewModel0<any AnalyticsClient>) -> ViewModel0 {
+		            let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
+		            let repository: Repository0 = __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_analyticsClientSendableBuilder_repository)
+		            return ViewModel0(id: id, repository: repository)
+		        }
+		        @Sendable nonisolated func __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_AnalyticsClientCarrier_Repository0<any AnalyticsClient>) -> Repository0 {
+		            let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
+		            let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
+		            return Repository0(network: network, formatter: formatter, analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_formatter() -> Formatter {
+		            Formatter()
+		        }
 		        @Sendable nonisolated func __safeDI_firstScreenBuilder() -> FirstScreen0 {
 		            let __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.firstScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail0 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel0 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository0 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository0(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository0 = __safeDI_repository()
-		                    return ViewModel0(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel0 = __safeDI_viewModel()
-		                return Detail0(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail0> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder(id: $0, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable)
 		            }
 		            return FirstScreen0(detailBuilder: detailBuilder)
 		        }
 		        let firstScreenBuilder = SendableInstantiator<FirstScreen0>(__safeDI_firstScreenBuilder)
+		        @Sendable nonisolated func __safeDI_detailBuilder_(id: Int, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_SecondScreen0<any AnalyticsClient>) -> Detail0 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel0 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail0(id: id, viewModel: viewModel)
+		        }
 		        @Sendable nonisolated func __safeDI_secondScreenBuilder() -> SecondScreen0 {
 		            let __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.secondScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail0 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel0 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository0 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository0(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository0 = __safeDI_repository()
-		                    return ViewModel0(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel0 = __safeDI_viewModel()
-		                return Detail0(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail0> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder_(id: $0, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable)
 		            }
 		            return SecondScreen0(detailBuilder: detailBuilder)
 		        }
@@ -1495,6 +1504,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1508,6 +1518,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1521,6 +1532,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -1538,6 +1550,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.feature0Builder_Sendable = feature0Builder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), secondScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), feature0Builder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1551,6 +1564,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1564,6 +1578,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1578,56 +1593,43 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            return Feature0Entry(__safeDI_network: network, __safeDI_analyticsClientSendableBuilder: __safeDI_analyticsClientSendableBuilder.feature0Builder_Sendable)
 		        }
 		        let feature0Builder = SendableInstantiator<Feature0Entry>(__safeDI_feature0Builder)
+		        @Sendable nonisolated func __safeDI_detailBuilder(id: Int, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_FirstScreen1<any AnalyticsClient>) -> Detail1 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel1 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail1(id: id, viewModel: viewModel)
+		        }
+		        @Sendable nonisolated func __safeDI_viewModel(id: Int, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_AnalyticsClientCarrier_ViewModel1<any AnalyticsClient>) -> ViewModel1 {
+		            let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
+		            let repository: Repository1 = __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_analyticsClientSendableBuilder_repository)
+		            return ViewModel1(id: id, repository: repository)
+		        }
+		        @Sendable nonisolated func __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_AnalyticsClientCarrier_Repository1<any AnalyticsClient>) -> Repository1 {
+		            let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
+		            let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
+		            return Repository1(network: network, formatter: formatter, analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_formatter() -> Formatter {
+		            Formatter()
+		        }
 		        @Sendable nonisolated func __safeDI_firstScreenBuilder() -> FirstScreen1 {
 		            let __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.firstScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail1 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel1 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository1 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository1(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository1 = __safeDI_repository()
-		                    return ViewModel1(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel1 = __safeDI_viewModel()
-		                return Detail1(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail1> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder(id: $0, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable)
 		            }
 		            return FirstScreen1(detailBuilder: detailBuilder)
 		        }
 		        let firstScreenBuilder = SendableInstantiator<FirstScreen1>(__safeDI_firstScreenBuilder)
+		        @Sendable nonisolated func __safeDI_detailBuilder_(id: Int, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_SecondScreen1<any AnalyticsClient>) -> Detail1 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel1 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail1(id: id, viewModel: viewModel)
+		        }
 		        @Sendable nonisolated func __safeDI_secondScreenBuilder() -> SecondScreen1 {
 		            let __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.secondScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail1 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel1 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository1 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository1(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository1 = __safeDI_repository()
-		                    return ViewModel1(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel1 = __safeDI_viewModel()
-		                return Detail1(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail1> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder_(id: $0, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable)
 		            }
 		            return SecondScreen1(detailBuilder: detailBuilder)
 		        }
@@ -1660,6 +1662,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.viewModel = viewModel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(viewModel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1673,6 +1676,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.repository = repository
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(repository: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1686,6 +1690,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(analytics: { _ in __safeDI_builder() })
 		        }
@@ -1703,6 +1708,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.feature1Builder_Sendable = feature1Builder_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(firstScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), secondScreenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder), feature1Builder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1716,6 +1722,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1729,6 +1736,7 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1743,56 +1751,43 @@ struct SafeDIToolSeamCarrierPassUpCallTests: ~Copyable {
 		            return Feature1Entry(__safeDI_network: network, __safeDI_analyticsClientSendableBuilder: __safeDI_analyticsClientSendableBuilder.feature1Builder_Sendable)
 		        }
 		        let feature1Builder = SendableInstantiator<Feature1Entry>(__safeDI_feature1Builder)
+		        @Sendable nonisolated func __safeDI_detailBuilder(id: Int, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_FirstScreen2<any AnalyticsClient>) -> Detail2 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel2 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail2(id: id, viewModel: viewModel)
+		        }
+		        @Sendable nonisolated func __safeDI_viewModel(id: Int, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_AnalyticsClientCarrier_ViewModel2<any AnalyticsClient>) -> ViewModel2 {
+		            let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
+		            let repository: Repository2 = __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_analyticsClientSendableBuilder_repository)
+		            return ViewModel2(id: id, repository: repository)
+		        }
+		        @Sendable nonisolated func __safeDI_repository(__safeDI_analyticsClientSendableBuilder_repository: __safeDI_AnalyticsClientCarrier_Repository2<any AnalyticsClient>) -> Repository2 {
+		            let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
+		            let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
+		            return Repository2(network: network, formatter: formatter, analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_formatter() -> Formatter {
+		            Formatter()
+		        }
 		        @Sendable nonisolated func __safeDI_firstScreenBuilder() -> FirstScreen2 {
 		            let __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.firstScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail2 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel2 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository2 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository2(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository2 = __safeDI_repository()
-		                    return ViewModel2(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel2 = __safeDI_viewModel()
-		                return Detail2(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail2> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder(id: $0, __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_firstScreenBuilder_Sendable)
 		            }
 		            return FirstScreen2(detailBuilder: detailBuilder)
 		        }
 		        let firstScreenBuilder = SendableInstantiator<FirstScreen2>(__safeDI_firstScreenBuilder)
+		        @Sendable nonisolated func __safeDI_detailBuilder_(id: Int, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_AnalyticsClientSendableCarrier_SecondScreen2<any AnalyticsClient>) -> Detail2 {
+		            let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
+		            let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
+		            let viewModel: ViewModel2 = __safeDI_viewModel(id: id, __safeDI_analyticsClientSendableBuilder_viewModel: __safeDI_analyticsClientSendableBuilder_viewModel)
+		            return Detail2(id: id, viewModel: viewModel)
+		        }
 		        @Sendable nonisolated func __safeDI_secondScreenBuilder() -> SecondScreen2 {
 		            let __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable = __safeDI_analyticsClientSendableBuilder.secondScreenBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_detailBuilder(id: Int) -> Detail2 {
-		                let __safeDI_analyticsClientSendableBuilder_detailBuilder = __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable.detailBuilder()
-		                let __safeDI_analyticsClientSendableBuilder_viewModel = __safeDI_analyticsClientSendableBuilder_detailBuilder.viewModel(id)
-		                func __safeDI_viewModel() -> ViewModel2 {
-		                    let __safeDI_analyticsClientSendableBuilder_repository = __safeDI_analyticsClientSendableBuilder_viewModel.repository
-		                    func __safeDI_repository() -> Repository2 {
-		                        func __safeDI_formatter() -> Formatter {
-		                            Formatter()
-		                        }
-		                        let formatter = LazilyInstantiated<Formatter>(__safeDI_formatter)
-		                        let analytics: any AnalyticsClient = __safeDI_analyticsClientSendableBuilder_repository.analytics(formatter)
-		                        return Repository2(network: network, formatter: formatter, analytics: analytics)
-		                    }
-		                    let repository: Repository2 = __safeDI_repository()
-		                    return ViewModel2(id: id, repository: repository)
-		                }
-		                let viewModel: ViewModel2 = __safeDI_viewModel()
-		                return Detail2(id: id, viewModel: viewModel)
-		            }
 		            let detailBuilder = SendableInstantiator<Detail2> {
-		                __safeDI_detailBuilder(id: $0)
+		                __safeDI_detailBuilder_(id: $0, __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable: __safeDI_analyticsClientSendableBuilder_secondScreenBuilder_Sendable)
 		            }
 		            return SecondScreen2(detailBuilder: detailBuilder)
 		        }

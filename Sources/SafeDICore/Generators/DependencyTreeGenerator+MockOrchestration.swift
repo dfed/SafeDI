@@ -204,8 +204,8 @@ extension DependencyTreeGenerator {
 		// across every root that references the type, so the annotation has to agree, and each root's lowering reads the
 		// union. They are read from the generator trees.
 		let sendableConfigurationTypeNames = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
-			let (_, mockRoot) = instantiableAndMockRoot
-			return mockRoot.sendableConfigurationTypeNames()
+			let (instantiable, mockRoot) = instantiableAndMockRoot
+			return mockRoot.sendableConfigurationTypeNames(ofMockRootOf: instantiable)
 		}.reduce(into: Set<String>()) { union, names in
 			union.formUnion(names)
 		}

@@ -2588,7 +2588,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.thing = { _ in __safeDI_builder() }
+			                self.init(thing: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -3746,7 +3746,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.thing = { _ in __safeDI_builder() }
+			                    self.init(thing: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3764,7 +3764,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.childBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(childBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -3895,8 +3895,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -3915,7 +3914,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -3933,9 +3932,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.t = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -4262,7 +4259,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -4283,7 +4280,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4297,7 +4294,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(a_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -4547,7 +4544,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -4568,7 +4565,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.c_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(c_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4585,7 +4582,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4599,7 +4596,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(a_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -4887,7 +4884,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -4908,7 +4905,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4922,7 +4919,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(a_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -7006,7 +7003,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.userService = { _ in __safeDI_builder() }
+			                self.init(userService: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -7318,7 +7315,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.userService = { _ in __safeDI_builder() }
+		                self.init(userService: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -7447,7 +7444,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.held = { _ in __safeDI_builder() }
+			                self.init(held: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -7529,7 +7526,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<UserService.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.userServiceBuilder = { _ in __safeDI_builder }
+			                self.init(userServiceBuilder: { _ in __safeDI_builder })
 			            }
 			        }
 			    }
@@ -7628,7 +7625,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.clock = { _ in __safeDI_builder() }
+			                    self.init(clock: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -7642,7 +7639,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.settings = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(settings: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -7662,7 +7659,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.userService = { _ in __safeDI_builder() }
+			                    self.init(userService: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -7676,7 +7673,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.profileBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -7808,7 +7805,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.scores = { _ in __safeDI_builder() }
+			                self.init(scores: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -7825,7 +7822,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.userService = { _ in __safeDI_builder() }
+			                self.init(userService: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -8168,7 +8165,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.userService = { _ in __safeDI_builder() }
+		                self.init(userService: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -11095,7 +11092,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(service: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -11211,12 +11208,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service0 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service1 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service2 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service3 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service4 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service5 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(service0: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service1: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service2: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service3: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service4: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service5: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -15382,6 +15374,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15418,7 +15411,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
@@ -15515,6 +15508,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15556,7 +15550,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
@@ -15662,6 +15656,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15698,7 +15693,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
@@ -15795,6 +15790,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15836,7 +15832,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }

@@ -61,6 +61,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.detail = detail
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -74,6 +75,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -87,6 +89,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.detail = detail
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detail: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -100,6 +103,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -114,14 +118,14 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            return Detail(api: api)
 		        }
 		        let detail: Detail = __safeDI_detail()
+		        @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
-		            func __safeDI_detail() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                return Detail(api: api)
-		            }
-		            let detail: Detail = __safeDI_detail()
+		            let detail: Detail = __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Screen(id: id, detail: detail)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
@@ -187,6 +191,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.detail = detail
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -200,6 +205,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -213,6 +219,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.detail = detail
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detail: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -226,6 +233,7 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -240,14 +248,14 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            return Detail(api: api)
 		        }
 		        let detail: Detail = __safeDI_detail()
+		        @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
-		            func __safeDI_detail() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                return Detail(api: api)
-		            }
-		            let detail: Detail = __safeDI_detail()
+		            let detail: Detail = __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Screen(id: id, detail: detail)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
