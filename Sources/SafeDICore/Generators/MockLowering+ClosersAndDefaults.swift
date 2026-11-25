@@ -284,3 +284,21 @@ extension MockLowering.Walk {
 		return .built(configured)
 	}
 }
+
+extension MockLowering.Walk {
+	/// The override alternative of `node`, at the walk's place in an internal mock, read at the path of the configuration
+	/// its path key reads (`BuiltPlaceConfigurationContext.pathKeyConfiguration`) rather than at the local a `@Sendable`
+	/// builder function's extractor reads it into: the record's form, which `relativeConfiguration(of:…)` reads of the
+	/// configuration the place's call hands its function. `nil` in a public mock, whose configurations are never
+	/// `Sendable` and whose places in a `@Sendable` function keep their text.
+	func internalMockOverrideAlternative(of node: MockLowering.ConstantNode) -> ConstructionAlternative? {
+		guard !buildsPublicMock, let configuration = builtPlaceConfigurationContexts[childIndexPath]?.pathKeyConfiguration else { return nil }
+		return ConstructionAlternative(
+			closure: node.hasConfiguration ? .member(ReservedName.configurationBuilderPropertyName, of: configuration) : configuration,
+			bindingName: ReservedName.configurationBuilderPropertyName,
+			requiresAbsent: [],
+			use: .calledWithConstructionArguments,
+			resultWrapper: node.overrideResultWrapper,
+		)
+	}
+}

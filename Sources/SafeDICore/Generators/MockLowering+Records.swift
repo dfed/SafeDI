@@ -164,8 +164,12 @@ extension MockLowering.Walk {
 		guard configuredConstruction != .unrecorded else { return }
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
-			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
-			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper) else { return }
+			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded,
+			// except in an internal mock, whose record reads the override of the configuration its call hands it
+			// (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the read its path names.
+			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper)
+				?? internalMockOverrideAlternative(of: node)
+			else { return }
 			alternatives.append(alternative)
 		}
 		builtPlaceInputs[childIndexPath] = MockLowering.BuiltPlaceInputs(
