@@ -169,6 +169,12 @@ struct AliasPlaceRecord: Sendable {
 	/// The names of the functions the text calls, compared as text: where sharing would name a callee apart, the engine
 	/// rewrites the name in the text or keeps the place one per path, never assuming the name stays.
 	var calledFunctionNames = [String]()
+	/// The names of the functions the text declares in the body that holds it, which no function the engine declares in
+	/// that body or around it takes. A call of one of them is not among `calledFunctionNames`.
+	var declaredFunctionNames = [String]()
+	/// The names of the root functions the text calls (`RootFunctionRecord`), which the text does not declare: the root
+	/// declares them, from the place's plan, and nothing renames them, so none is among `calledFunctionNames`.
+	var calledRootFunctionNames = [String]()
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction

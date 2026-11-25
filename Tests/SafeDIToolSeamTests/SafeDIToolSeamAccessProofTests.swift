@@ -3650,16 +3650,16 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_feedServiceBuilder_FeedScreen() -> FeedScreen.__safeDI_FeedServiceCarrier<FeedService> {
+			            .init(service: { scope in
+			                let shared = scope.shared
+			                let service: FeedService = AppFeedService(shared: shared)
+			                return service
+			            })
+			        }
 			        let shared = SharedThing()
 			        func __safeDI_feed() -> FeedScreen {
 			            _ = FeedScreen.__safeDI_FeedScreen_85043BBDC9C9C9BD.self\(integration.seamCallComment(type: "FeedScreen", declaringModule: "FeedModule"))
-			            func __safeDI_feedServiceBuilder_FeedScreen() -> FeedScreen.__safeDI_FeedServiceCarrier<FeedService> {
-			                .init(service: { scope in
-			                    let shared = scope.shared
-			                    let service: FeedService = AppFeedService(shared: shared)
-			                    return service
-			                })
-			            }
 			            return FeedScreen(__safeDI_shared: shared, __safeDI_feedServiceBuilder: __safeDI_feedServiceBuilder_FeedScreen())
 			        }
 			        let feed: FeedScreen = __safeDI_feed()

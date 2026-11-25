@@ -9691,11 +9691,28 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S\(seed)_CycleSeam+SafeDI.swift") })
 		let seamFile = try #require(files[seamFileName])
-		// The site calls its carrier's member with the level's values positionally, `cycle6Tag` first.
-		let siteArguments = ".cycle0Service(cycle6Tag, "
-		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)’s seam no longer hands its one site `CycleB`’s `cycle6Tag`")
+		// The type key declares `CycleB`'s function once at the seam's root, so the level above's `cycle6Tag`, which
+		// `CycleA`'s function binds and its reader holds, is not in scope at the site. The edit hands it in: the function
+		// takes it as one more parameter, `CycleA`'s function passes its own `cycle6Tag`, and the site, which calls its
+		// carrier's member with the level's values positionally, `cycle6Tag` first, reads it in place of `CycleB`'s.
+		let edits = [
+			(
+				"func __safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_S\(seed)_CycleServiceCarrier_S\(seed)_CycleB<any S\(seed)_CycleService>)",
+				"func __safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_S\(seed)_CycleServiceCarrier_S\(seed)_CycleB<any S\(seed)_CycleService>, levelAboveCycle6Tag: S\(seed)_CycleTag)",
+			),
+			(
+				"__safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder)",
+				"__safeDI_cycle2BBuilder(__safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder: __safeDI_s\(seed)_CycleServiceBuilder_cycle2BBuilder, levelAboveCycle6Tag: cycle6Tag)",
+			),
+			(".cycle0Service(cycle6Tag, ", ".cycle0Service(levelAboveCycle6Tag, "),
+		]
+		var perturbedFile = seamFile
+		for (text, replacement) in edits {
+			try #require(perturbedFile.components(separatedBy: text).count == 2, "Seed \(seed)’s seam no longer holds `\(text)` once")
+			perturbedFile = perturbedFile.replacingOccurrences(of: text, with: replacement)
+		}
 		var perturbedFiles = files
-		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: ".cycle0Service(cycle4Reader.cycle6Tag, ")
+		perturbedFiles[seamFileName] = perturbedFile
 		return (runs, perturbedFiles, warnings)
 	}
 
