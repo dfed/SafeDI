@@ -1918,7 +1918,7 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The findings of the fill of `hole` whose tree `child` roots, in the order the tree declares them. A closer is judged
-	/// by what generation found (`ScopeGenerator.closedOnFillPathDeclarationsBeneath`), so only against the stack it was built
+	/// by what generation found (`ScopeGenerator.closesCycleOnFillPath`), so only against the stack it was built
 	/// with: the walk goes on into a fill nested in this one, whose receives fall through to this fill's fields, but a closer
 	/// beneath it is that fill's, which `validateFills` reaches itself. This generator tree holds a seam the fill calls as a
 	/// leaf, so a property re-entered through such a call is never judged here; the cycle walk of
@@ -2279,7 +2279,11 @@ extension DependencyTreeGenerator {
 			if generator.closesPropertyCycle {
 				// A scope in the fill that closes a cycle on a property of the seam's path refers to a builder function
 				// the seam's initializer declares, which code generated outside the seam's module cannot refer to.
-				if judgesClosers, let property = generator.property, let declarationsBeneath = generator.closedOnFillPathDeclarationsBeneath {
+				// Where the declaration lies on the path is read from the place judged, whose own fill another place's can stand
+				// for (`ScopeGenerator.FillStoodFor`): the two reach the declaration at depths of their own.
+				if judgesClosers, generator.closesCycleOnFillPath, let property = generator.property, let closedOnDeclaration = generator.closedOnDeclaration,
+				   let declarationsBeneath = hole.fillPathDeclarationsBeneath(closedOnDeclaration)
+				{
 					findings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
 						closingProperty: property,
 						closingType: parent.concreteInstantiable,

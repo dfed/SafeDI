@@ -837,12 +837,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let isPropertyCycle = closedOnDeclaration != nil
 		self.fillPathStackCount = fillPathStackCount
 		self.fillCallDepth = fillCallDepth
-		// How many declarations of the fill's path lie beneath the one this scope closes on, when it closes on one: generation's
-		// own finding, which the check of a fill reads instead of working the membership out again. A lazily instantiated
-		// declaration's instance is its own entry of the stack, and no declaration.
-		closedOnFillPathDeclarationsBeneath = closedOn.flatMap { closedOn in
-			closedOn.index < fillPathStackCount ? contextStack.entries[(closedOn.index + 1)..<fillPathStackCount].count(where: { !$0.isInstanceOfEntryOutside }) : nil
-		}
+		// Whether the declaration this scope closes on, when it closes on one, is of the fill's path: generation's own finding,
+		// which the check of a fill reads instead of working the membership out again.
+		closesCycleOnFillPath = closedOn.map { $0.index < fillPathStackCount } ?? false
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
 		let ownCycleParameters = if !isPropertyCycle, property != nil {
@@ -2407,7 +2404,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 			closedOnDeclaration: closedOnDeclaration,
-			closedOnFillPathDeclarationsBeneath: closedOnFillPathDeclarationsBeneath,
+			closesCycleOnFillPath: closesCycleOnFillPath,
 			builtInlineSeamComment: scope.builtInlineSeamComment,
 			isUnavailableDependency: scope.isUnavailableDependency,
 			seamCall: scope.seamCall,
@@ -2529,8 +2526,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		max(answerDepth ?? -1, fillCallDepth ?? -1)
 	}
 
-	/// See `ScopeGenerator.closedOnFillPathDeclarationsBeneath`.
-	private let closedOnFillPathDeclarationsBeneath: Int?
+	/// See `ScopeGenerator.closesCycleOnFillPath`.
+	private let closesCycleOnFillPath: Bool
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property, where this scope's type
 	/// is constructed: inside its builder function, whose parameters a lazy cycle closes on hide every other declaration
 	/// of their labels.

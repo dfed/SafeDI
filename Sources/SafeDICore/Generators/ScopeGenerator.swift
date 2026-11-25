@@ -57,7 +57,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
 		closedOnDeclaration: BuiltDeclaration? = nil,
-		closedOnFillPathDeclarationsBeneath: Int? = nil,
+		closesCycleOnFillPath: Bool = false,
 		builtInlineSeamComment: String?,
 		isUnavailableDependency: Bool = false,
 		seamCall: SeamCall? = nil,
@@ -101,7 +101,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFields.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
-		self.closedOnFillPathDeclarationsBeneath = closedOnFillPathDeclarationsBeneath
+		self.closesCycleOnFillPath = closesCycleOnFillPath
 		self.cycleParameters = cycleParameters
 		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
 		self.callSiteLazilyInstantiatedInstanceProperties = callSiteLazilyInstantiatedInstanceProperties ?? lazilyInstantiatedInstanceProperties
@@ -1321,7 +1321,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
-		closedOnFillPathDeclarationsBeneath = nil
+		closesCycleOnFillPath = false
 		fillBindsDeferredFieldsFromStruct = false
 		fillEmitsCode = true
 		fillStructBoundLabelsChangedInTree = false
@@ -1361,7 +1361,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleClosedOnDeclarations = []
 		isReferencedByCycleClosingScope = false
 		closedOnDeclaration = nil
-		closedOnFillPathDeclarationsBeneath = nil
+		closesCycleOnFillPath = false
 		// A site that builds a wrapper declares a builder function, which a cycle-closing scope beneath a sibling must not
 		// resolve to. No cycle closes on it: a site has no tree beneath it.
 		declaration = holeProperty.propertyType.isConstant ? nil : BuiltDeclaration(property: holeProperty, concreteType: holeProperty.typeDescription.asInstantiatedType)
@@ -1480,7 +1480,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passedByPublicMockCalls = generator.passedByPublicMockCalls
 		ownerPropertyStack = generator.ownerPropertyStack
 		ownerConcreteTypeStack = generator.ownerConcreteTypeStack
-		closedOnFillPathDeclarationsBeneath = generator.closedOnFillPathDeclarationsBeneath
+		closesCycleOnFillPath = generator.closesCycleOnFillPath
 		requiredReceivedProperties = generator.requiredReceivedProperties
 		unwrappedOptionalRequiredReceivedProperties = generator.unwrappedOptionalRequiredReceivedProperties
 		onlyIfAvailableUnwrappedReceivedProperties = generator.onlyIfAvailableUnwrappedReceivedProperties
@@ -1552,7 +1552,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"passedByPublicMockCalls": .copied,
 			"ownerPropertyStack": .copied,
 			"ownerConcreteTypeStack": .copied,
-			"closedOnFillPathDeclarationsBeneath": .copied,
+			"closesCycleOnFillPath": .copied,
 			"scopeData": .recomputed,
 			"seamAndFillFieldsStorage": .recomputed,
 			"requiredReceivedProperties": .copied,
@@ -3066,11 +3066,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The concrete type each entry of `ownerPropertyStack` is built for, beside it. Empty for every generator that is no
 	/// hole's.
 	let ownerConcreteTypeStack: [TypeDescription]
-	/// For a scope in a fill's tree that closes a cycle on a declaration of the filled seam's path, how many declarations of
-	/// that path lie beneath the one it closes on: `0` when it closes on the property whose type declares the hole. `nil` for
-	/// every other scope, a closer on a declaration inside the fill's own tree among them, and for a closer inside a fill
-	/// nested in that fill, whose stack is its own.
-	let closedOnFillPathDeclarationsBeneath: Int?
+	/// Whether this scope, in a fill's tree, closes a cycle on a declaration of the filled seam's path (`closedOnDeclaration`).
+	/// `false` for every other scope, a closer on a declaration inside the fill's own tree among them, and for a closer
+	/// inside a fill nested in that fill, whose stack is its own. Where on the path the declaration lies is the place's to
+	/// say (`SeamSignature.Hole.fillPathDeclarationsBeneath(_:)`): places of one case can share this fill
+	/// (`FillStoodFor`), and each has the declaration at its own depth.
+	let closesCycleOnFillPath: Bool
 
 	/// Whether this generator's tree reads `field`, a field of a scope struct, as its fill binds it: it receives the
 	/// field, its optional form, or its instance.
@@ -4551,6 +4552,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					enclosingSendableBuilders: enclosingSendableBuilders,
 					chain: chain,
 				))
+				// A place this fill stands for (`FillStoodFor`) hands its fill fields equal to this one's that other types can
+				// declare, and each capture names the declaration it reads, so the fill's tree is walked once more for each
+				// such place, with the place's own hole, as `DependencyTreeGenerator.validateFills` judges it.
+				for placeStoodFor in fillsStoodFor where placeStoodFor.standInKey == child.generator.fillKey {
+					await captures.append(contentsOf: fillCaptures(
+						of: placeStoodFor.hole,
+						fill: child.generator,
+						propertiesGeneratedLater: child.propertiesGeneratedLater,
+						isSendable: buildsInSendableFunction(ofFill: child.generator),
+						declarationsByLabel: childDeclarationsByLabel,
+						enclosingSendableBuilders: enclosingSendableBuilders,
+						chain: chain,
+					))
+				}
 			} else if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle: false, _) = child.generator.scopeData {
 				let childSendableBuilders = child.generator.buildsInSendableFunction
 					? enclosingSendableBuilders + [SendableBuilder(property: childProperty, declaringType: declaringType)]

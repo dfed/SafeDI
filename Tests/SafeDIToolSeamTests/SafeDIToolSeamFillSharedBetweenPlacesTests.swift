@@ -96,6 +96,92 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [4, 2])
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureOfEveryPlacesDeclaration_whenAnotherPlacesFillStandsForPlaceWhoseFillCapturesWrapper(buildsFillOfEveryPlace: Bool) async {
+		// `First`, `Second` and `Third` each build `rowBuilder` and then `Panel`, so `Panel`'s `api` is three places of one
+		// case whose fields are equal but declared by three types. `LiveApi` builds `Worker` in a `@Sendable` function, and
+		// `Worker` receives `rowBuilder`, which that function cannot capture, at every one of the three.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: Self.modules(
+						parentDeclarations: Array(repeating: ["@Instantiated let rowBuilder: Instantiator<Row>", "@Instantiated let panel: Panel"], count: 3),
+						panelDeclarations: ["@Instantiated let api: any Api"],
+						liveApiDeclarations: ["@Instantiated let workerBuilder: SendableInstantiator<Worker>"],
+						appDeclarations: [seamFixtureType(named: "Worker", declarations: ["@Received let rowBuilder: Instantiator<Row>"])],
+						rowDeclarations: [],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Worker.swift"]):9:5: error: @Received property `rowBuilder: Instantiator<Row>` cannot be received inside a `@Sendable` function in chain: Root -> Home -> LiveApi -> Worker. SafeDI builds `workerBuilder: SendableInstantiator<Worker>` on `LiveApi` in a `@Sendable` function, which cannot capture `rowBuilder: Instantiator<Row>` on `First`, because `Instantiator<Row>` is not `Sendable`. Declare `rowBuilder` on `First`, `Second`, and `Third`, and this property, as `SendableInstantiator<Row>` to fix. `SendableInstantiator<Row>` builds `Row` in a `@Sendable` function, so what the tree of `Row` receives from outside that function must be `Sendable` too.
+			\(fixtures["Feature"]!["First.swift"]):8:5: note: `rowBuilder: Instantiator<Row>` is declared here
+			\(fixtures["App"]!["Worker.swift"]):9:5: error: @Received property `rowBuilder: Instantiator<Row>` cannot be received inside a `@Sendable` function in chain: Root -> Home -> LiveApi -> Worker. SafeDI builds `workerBuilder: SendableInstantiator<Worker>` on `LiveApi` in a `@Sendable` function, which cannot capture `rowBuilder: Instantiator<Row>` on `Second`, because `Instantiator<Row>` is not `Sendable`. Declare `rowBuilder` on `First`, `Second`, and `Third`, and this property, as `SendableInstantiator<Row>` to fix. `SendableInstantiator<Row>` builds `Row` in a `@Sendable` function, so what the tree of `Row` receives from outside that function must be `Sendable` too.
+			\(fixtures["Feature"]!["Second.swift"]):8:5: note: `rowBuilder: Instantiator<Row>` is declared here
+			\(fixtures["App"]!["Worker.swift"]):9:5: error: @Received property `rowBuilder: Instantiator<Row>` cannot be received inside a `@Sendable` function in chain: Root -> Home -> LiveApi -> Worker. SafeDI builds `workerBuilder: SendableInstantiator<Worker>` on `LiveApi` in a `@Sendable` function, which cannot capture `rowBuilder: Instantiator<Row>` on `Third`, because `Instantiator<Row>` is not `Sendable`. Declare `rowBuilder` on `First`, `Second`, and `Third`, and this property, as `SendableInstantiator<Row>` to fix. `SendableInstantiator<Row>` builds `Row` in a `@Sendable` function, so what the tree of `Row` receives from outside that function must be `Sendable` too.
+			\(fixtures["Feature"]!["Third.swift"]):8:5: note: `rowBuilder: Instantiator<Row>` is declared here
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+		// The third place is judged against the second's fill unless every place gets its own.
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == (buildsFillOfEveryPlace ? [3, 0] : [2, 1]))
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesDeclarationClosedOn_whenAnotherPlacesFillStandsForPlaceThatReachesItAtAnotherDepth(buildsFillOfEveryPlace: Bool) async {
+		// `Shell` builds `Panel` beneath `A` and `B`, and one level deeper beneath `C`'s `Mid`, so `Panel`'s `api` is three
+		// places of one case, the third of which has `shellBuilder` one declaration farther up its path. `LiveApi` builds
+		// `shellBuilder` again, which closes a cycle on `Home`'s at every one of them.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: SafeDIToolSeamBuilderParameterTests.modules(
+						feature: [
+							"public protocol Api {}",
+							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+							seamFixtureType(named: "A", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "B", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Mid", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "C", declarations: ["@Instantiated let mid: Mid"]),
+							seamFixtureType(named: "Shell", declarations: ["@Instantiated let a: A", "@Instantiated let b: B", "@Instantiated let c: C"]),
+							seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+						],
+						app: [
+							SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+							seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+						],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> a -> A -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> b -> B -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> c -> C -> mid -> Mid -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == (buildsFillOfEveryPlace ? [3, 0] : [2, 1]))
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsFillOfItsOwnForPlace_whenPlacesOfOneCaseHandTheirFillsOtherValues() async {
@@ -160,13 +246,14 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		homeDeclarations: [String] = [],
 		appDeclarations: [String] = [],
 		rootDeclarations: [String] = [],
+		rowDeclarations: [String] = ["@Instantiated let api: any Api"],
 	) -> [ModuleFixture] {
 		let parentNames = ["First", "Second", "Third", "Fourth"]
 		var feature = [
 			"public protocol Api {}",
 			"public protocol Gadget {}",
 			seamFixtureType(named: "Token", declarations: []),
-			seamFixtureType(named: "Row", declarations: ["@Instantiated let api: any Api"]),
+			seamFixtureType(named: "Row", declarations: rowDeclarations),
 			seamFixtureType(named: "Panel", declarations: panelDeclarations),
 		]
 		for (name, declarations) in zip(parentNames, parentDeclarations) {
