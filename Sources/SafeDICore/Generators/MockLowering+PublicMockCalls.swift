@@ -451,6 +451,8 @@ extension MockLowering.Walk {
 				forwardedProperties: forwarded,
 				functionName: functionName,
 				calledFunctionName: publicMockCall.functionName,
+				// A call an override closure configures is its `if`, copied as written.
+				constructionText: readsOverride && overrideBuilders != nil ? call : nil,
 				argumentTexts: argumentTexts,
 				overridesValue: overridesValue,
 				bodyLines: bodyLines,
@@ -466,11 +468,9 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "publicMockCall:loop"
 		} else if isPromoted {
 			unrecordedReasons[childIndexPath] = "publicMockCall:promoted"
-		} else if overrideBuilders != nil {
-			unrecordedReasons[childIndexPath] = "publicMockCall:overrideBuilders"
 		} else if !extractionLines.isEmpty {
 			unrecordedReasons[childIndexPath] = "publicMockCall:sendableExtraction"
-		} else if filledCall != nil || !passesOnlyReads {
+		} else if filledCall != nil || !passesOnlyReads || overrideBuilders != nil {
 			// A call that passes builders is a built place with a function of its own (`recordPublicMockCallPlace`).
 			recordsAsPlace = true
 		} else {

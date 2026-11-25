@@ -276,7 +276,8 @@ extension MockLowering.Walk {
 	/// Records the call of another module's public mock the walk lowered at the current path as a built place with a
 	/// function of its own: `bodyLines`, the function's statements before its call, unindented, are its fills, then
 	/// `guardLine`, then the values it binds again (`let <label>: <type> = <name>`), each written as text; the call hands
-	/// each argument the value `argumentTexts` writes, spliced. Returns why the call keeps the walk's body instead, or `nil`.
+	/// each argument the value `argumentTexts` writes, spliced, or is `constructionText`, spliced, where set. Returns why the
+	/// call keeps the walk's body instead, or `nil`.
 	mutating func recordPublicMockCallPlace(
 		of generator: ScopeGenerator,
 		property: Property,
@@ -285,12 +286,15 @@ extension MockLowering.Walk {
 		forwardedProperties: [Property],
 		functionName: String,
 		calledFunctionName: String,
+		constructionText: String?,
 		argumentTexts: [(argument: Initializer.Argument, value: String)],
 		overridesValue: String?,
 		bodyLines: [String],
 		guardLine: String,
 	) -> String? {
 		guard generator.cycleParameters.isEmpty else { return "publicMockCall:cycleParameters" }
+		// An erased call's text erases it, where the type key would erase it again.
+		guard constructionText == nil || !erasedToConcreteExistential else { return "publicMockCall:erasedOverrideBuilders" }
 		guard let guardIndex = bodyLines.lastIndex(of: guardLine) else { return "publicMockCall:noGuard" }
 		let outerTypes = publicMockCallOuterTypes(of: generator)
 		let rootNames = publicMockCallRootNames
@@ -317,17 +321,22 @@ extension MockLowering.Walk {
 		}
 		var arguments = [PlaceRead]()
 		var argumentValues = [Int: ValuePath]()
+		var constructionValue: ValuePath?
+		if let constructionText {
+			guard let spliced = MockLowering.splicedValue(of: constructionText, declaredFunctionNames: declaredFunctionNames, rootNames: rootNames, outerTypes: outerTypes) else { return "publicMockCall:constructionCallsFunction" }
+			constructionValue = spliced
+		}
 		var values = argumentTexts.map { (label: $0.argument.label, innerLabel: $0.argument.innerLabel, type: $0.argument.typeDescription, value: $0.value) }
 		if let overridesValue {
 			values.append((label: ReservedName.mockOverridesParameterName, innerLabel: ReservedName.mockOverridesParameterName, type: .simple(name: "Any"), value: overridesValue))
 		}
-		for value in values {
+		for value in values where constructionValue == nil {
 			guard value.label != "_" else { return "publicMockCall:unlabeledArgument" }
 			guard let spliced = MockLowering.splicedValue(of: value.value, declaredFunctionNames: declaredFunctionNames, rootNames: rootNames, outerTypes: outerTypes) else { return "publicMockCall:argumentCallsFunction" }
 			argumentValues[arguments.count] = spliced
 			arguments.append(PlaceRead(argumentLabel: value.label, label: value.innerLabel, property: Property(label: value.innerLabel, typeDescription: value.type), source: .binding(label: value.innerLabel)))
 		}
-		let nodeKey = MockLowering.PublicMockCallPlanNodeKey(generator: ObjectIdentifier(generator), text: (bodyLines + values.map { "\($0.label): \($0.value)" }).joined(separator: "\n"))
+		let nodeKey = MockLowering.PublicMockCallPlanNodeKey(generator: ObjectIdentifier(generator), text: (bodyLines + values.map { "\($0.label): \($0.value)" } + [constructionText ?? ""]).joined(separator: "\n"))
 		let node = publicMockCallPlanNodes[nodeKey] ?? PlanNode()
 		publicMockCallPlanNodes[nodeKey] = node
 		var record = BuiltPlaceRecord(
@@ -349,6 +358,7 @@ extension MockLowering.Walk {
 			node: node,
 		)
 		record.argumentValues = argumentValues
+		record.constructionValue = constructionValue.map { ConstructionValue(value: $0, resultWrapper: nil) }
 		builtRecords[childIndexPath] = .built(record)
 		return nil
 	}
