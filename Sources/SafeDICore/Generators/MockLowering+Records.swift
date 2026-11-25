@@ -118,6 +118,8 @@ extension MockLowering {
 			let configuredConstruction: ConfiguredConstruction?
 			let overrideReadText: String?
 		}
+		/// The construction function a public mock's configured place calls instead (`MockLowering+PublicRecords.swift`).
+		var publicConstruction: PublicConstructionInputs?
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels

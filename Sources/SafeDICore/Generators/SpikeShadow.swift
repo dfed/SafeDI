@@ -98,6 +98,9 @@ extension ScopeGenerator {
 			)
 			detail += "\t" + Self.recordCounts(of: code)
 			SpikeShadow.append(Self.compareRecords(production: Self.builtRecordsInDocumentOrder(of: code), walk: walk, root: instantiable.concreteInstantiable.asSource))
+			if walk.buildsPublicMock {
+				SpikeShadow.append("PUBLICRECORDS\t\(instantiable.concreteInstantiable.asSource)\t\(walk.publicRecordCounts.reportField)")
+			}
 			let productionBody = GeneratedCode.lines(code).spelled().split(separator: "\n", omittingEmptySubsequences: false).map(String.init).filter { !$0.allSatisfy(\.isWhitespace) }
 			if productionBody == mockBody {
 				outcome = "SAME"

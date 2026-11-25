@@ -482,6 +482,11 @@ extension MockLowering {
 		var builtPlaceInputs = [[Int]: BuiltPlaceInputs]()
 		/// The records production's record function makes of the built places, by their paths of child indices.
 		var builtRecords = [[Int]: PlaceRecord]()
+		/// The records of the sites of holes a public mock's walk lowered, by their paths of child indices
+		/// (`MockLowering+PublicRecords.swift`).
+		var publicHoleSiteRecords = [[Int]: PlaceRecord]()
+		/// What a public mock's records hold, by kind.
+		var publicRecordCounts = PublicRecordCounts()
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
 		/// The error production's record function threw at a built place, which leaves it unrecorded.
@@ -1503,6 +1508,7 @@ extension MockLowering {
 				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead.text, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
 			}
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
+			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			leaveClosedOnPlace(of: configuredNode, readsOverride: overrideRead != nil)

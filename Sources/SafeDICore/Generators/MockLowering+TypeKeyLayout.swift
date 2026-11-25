@@ -131,7 +131,8 @@ extension MockLowering.Walk {
 				if record == nil, unrecordedReasons[path] == nil {
 					unrecordedReasons[path] = "noRecord"
 				}
-				builtRecords[path] = record
+				// A public mock's configured place calls its type's construction function (`MockLowering+PublicRecords.swift`).
+				builtRecords[path] = record.flatMap { publicRecord(of: $0, inputs: call.inputs) }
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
 				if !call.inputs.hasFunction {
 					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
