@@ -22,10 +22,20 @@ extension TypeKeyLayout {
 	// MARK: Reading the path key's plan
 
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
-	mutating func read(_ rootBody: [GeneratedCode]) -> Bool {
+	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
+	mutating func declareOuter(_ properties: [Property]) {
 		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameterLabels: []))
+		for property in properties {
+			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
+			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
+		}
+		outerDeclarationCount = properties.count
+	}
+
+	/// Reads the root's body, after `declareOuter(_:)` declared it.
+	mutating func read(_ rootBody: [GeneratedCode]) -> Bool {
 		var viewsByKey = [ViewKey: Int]()
-		var frames = [(body: 0, children: rootBody, next: 0)]
+		var frames = [(body: 0, children: Self.statementCodes(of: rootBody), next: 0)]
 		while let frame = frames.last {
 			guard frame.next < frame.children.count else {
 				frames.removeLast()
@@ -34,6 +44,16 @@ extension TypeKeyLayout {
 			frames[frames.count - 1].next += 1
 			let body = frame.body
 			guard let record = Self.record(of: frame.children[frame.next]) else { return false }
+			// A statement of the root's body whose tree holds a place the type key cannot lay out keeps the path key's code,
+			// which reads only the root's declarations before it, as the type key's code declares them: functions are all
+			// declared in the root's body, so no function beneath it could keep reads it does not list.
+			if body == 0, !Self.laysOut(frame.children[frame.next]) {
+				guard case let .built(built) = record, let text = Self.unindentedText(of: frame.children[frame.next], omittingRootFunctionsNamed: rootFunctionNames) else { return false }
+				namesInScope.insert(built.functionName)
+				bodies[0].positionsByLabel[built.property.label, default: []].append(bodies[0].statements.count)
+				bodies[0].statements.append(.alias(AliasPlaceRecord(property: built.property, fulfillingProperty: nil, text: text, reads: [])))
+				continue
+			}
 			let position = bodies[body].statements.count
 			let statement: Statement
 			let label: String
@@ -63,6 +83,7 @@ extension TypeKeyLayout {
 						outerView: outerView,
 						cycleArguments: built.callCycleArguments.map { pathValue(of: $0, inBody: body, before: position) },
 					)
+					passedArgumentsByCall[[body, position]] = built.passedArguments
 					if let view = viewsByKey[key] {
 						bodies[view].otherEdges.append((parent: body, position: position))
 						statement = .built(body: view)
@@ -74,12 +95,12 @@ extension TypeKeyLayout {
 							record: built,
 							isInSendableFamily: isInSendableFamily,
 							domainLabels: labels,
-							forwardedLabels: Set(built.forwardedProperties.map(\.label)),
+							forwardedLabels: Set(built.parameterProperties.map(\.label)),
 							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
 						))
 						viewsByKey[key] = newBody
 						statement = .built(body: newBody)
-						frames.append((body: newBody, children: built.children, next: 0))
+						frames.append((body: newBody, children: Self.statementCodes(of: built.children), next: 0))
 					}
 				} else {
 					guard built.children.isEmpty, built.cycleParameters.isEmpty else { return false }
@@ -96,7 +117,12 @@ extension TypeKeyLayout {
 				statement = .closer(closer, target: target)
 				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .alias(alias):
+				// A place written as text whose reads are not listed, that binds labels besides its own, or that calls or
+				// refers to a function it does not declare, is never laid out by the type key: two such places of one text can
+				// name different functions, which no read tells apart.
+				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
 				label = alias.property.label
+				namesInScope.formUnion(alias.declaredFunctionNames)
 				statement = .alias(alias)
 			}
 			bodies[body].statements.append(statement)
@@ -118,7 +144,7 @@ extension TypeKeyLayout {
 				continue
 			}
 			var children = [PlaceRecord]()
-			for code in current.children {
+			for code in Self.statementCodes(of: current.children) {
 				guard let record = Self.record(of: code) else { return nil }
 				children.append(record)
 			}
@@ -131,7 +157,7 @@ extension TypeKeyLayout {
 				continue
 			}
 			stack.removeLast()
-			let bound = Set(current.forwardedProperties.map(\.label)).union(current.cycleParameters.map(\.label))
+			let bound = Set(current.parameterProperties.map(\.label)).union(current.cycleParameters.map(\.label))
 			var boundBefore = Set<String>()
 			var domain = Domain()
 			// A read of `nil` is in the domain too: the checks look up every label a function reads, whatever its places read.
@@ -148,31 +174,85 @@ extension TypeKeyLayout {
 			for child in children {
 				switch child {
 				case let .built(childBuilt):
-					childBuilt.callCycleArguments.forEach(lookUp)
+					childBuilt.callSiteReads.forEach(lookUp)
 					if childBuilt.hasFunction, let childDomain = domainsByNode[childBuilt.node] {
 						for label in childDomain.labels where !bound.contains(label) && !boundBefore.contains(label) {
 							domain.labels.insert(label)
 						}
 						childDomain.closedOnFunctionNames.forEach(close)
 					} else {
-						childBuilt.arguments.forEach(lookUp)
+						childBuilt.constructionReads.forEach(lookUp)
 					}
 					boundBefore.insert(childBuilt.property.label)
 				case let .closer(closer):
-					closer.cycleArguments.forEach(lookUp)
+					closer.callSiteReads.forEach(lookUp)
 					close(closer.closedOnFunctionName)
 					boundBefore.insert(closer.property.label)
 				case let .alias(alias):
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
 						domain.labels.insert(fulfillingProperty.label)
 					}
+					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
 				}
 			}
-			current.arguments.forEach(lookUp)
+			current.constructionReads.forEach(lookUp)
 			domainsByNode[current.node] = domain
 		}
 		return domainsByNode[built.node]
+	}
+
+	/// Whether the type key can lay out every place of `code`'s tree: each records what it builds, and each written as text
+	/// lists its reads, binds no other label and names no function. Each place records it as it is built
+	/// (`laysOut(placeRecordedAs:)`), so asking it reads no level beneath: a scope's code is shared by every place that
+	/// holds it, so a walk of the tree read each level once per path to it.
+	static func laysOut(_ code: GeneratedCode) -> Bool {
+		code.isPlaceTheTypeKeyLaysOut
+	}
+
+	/// Whether the type key can lay out a place recorded as `record` and every place beneath it, from what each statement
+	/// of its function's body recorded when it was built.
+	static func laysOut(placeRecordedAs record: PlaceRecord?) -> Bool {
+		switch record {
+		case nil:
+			false
+		case let .built(built):
+			statementCodes(of: built.children).allSatisfy(laysOut)
+		case .closer:
+			true
+		case let .alias(alias):
+			alias.listsItsReads && alias.otherBindings.isEmpty && alias.calledFunctionNames.isEmpty
+		}
+	}
+
+	/// The text of a statement of the root's body without the indentation the root gives it, which the type key's spelling
+	/// gives it again.
+	static func unindentedText(of code: GeneratedCode, omittingRootFunctionsNamed names: Set<String>) -> String? {
+		guard case let .indented(inner, _) = code.node else { return nil }
+		return GeneratedCode.omittingRootFunctions(inner, named: names).spelled()
+	}
+
+	/// The statements of a body whose children are `codes`: each child, or each place of a child that is places one after
+	/// another, as a scope's payload bindings precede its place (`ScopeGenerator.valuesBindingPlaces`), each indented as
+	/// the child is.
+	static func statementCodes(of codes: [GeneratedCode]) -> [GeneratedCode] {
+		var statements = [GeneratedCode]()
+		for code in codes {
+			var indentations = [String]()
+			var inner = code
+			while case let .indented(wrapped, indentation) = inner.node {
+				indentations.append(indentation)
+				inner = wrapped
+			}
+			guard case let .sequence(pieces) = inner.node, pieces.allSatisfy({ record(of: $0) != nil }) else {
+				statements.append(code)
+				continue
+			}
+			for piece in pieces {
+				statements.append(indentations.reversed().reduce(piece) { code, indentation in .indented(code, by: indentation) })
+			}
+		}
+		return statements
 	}
 
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.

@@ -67,6 +67,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		.nested(name: name, parentType: parentType, generics: [])
 	}
 
+	/// The type that the member type named `name`, with `generics`, of `parentType` spells: a wrapper of SafeDI's spelled
+	/// with its module's name (`SafeDI.Instantiator<T>`) is that wrapper, `.simple`, as every bare spelling of it is and
+	/// as generated code spells it; any other member type is `.nested`. The parse decides it from the syntax's structure,
+	/// a parent spelled `SafeDI` alone, so every other member type costs one comparison of the parent's case.
+	static func member(named name: String, of parentType: TypeDescription, generics: [TypeDescription]) -> TypeDescription {
+		if case let .simple(parentName, parentGenerics) = parentType, parentGenerics.isEmpty, parentName == Dependency.safeDIModuleName, Dependency.isWrapperTypeName(name) {
+			.simple(name: name, generics: generics)
+		} else {
+			.nested(name: name, parentType: parentType, generics: generics)
+		}
+	}
+
 	/// A shortcut for creating possible `nested` cases given both a property's type description and the type description of the property's parent type.
 	public static func nestedOptions(referencedType: TypeDescription, within parentType: TypeDescription) -> [TypeDescription] {
 		func zip(outer: TypeDescription, inner: TypeDescription) -> TypeDescription {
@@ -1589,9 +1601,9 @@ extension TypeSyntax {
 			if let genericArgumentClause = typeIdentifier.genericArgumentClause {
 				genericTypeVisitor.walk(genericArgumentClause)
 			}
-			return .nested(
-				name: typeIdentifier.name.text,
-				parentType: typeIdentifier.baseType.typeDescription,
+			return .member(
+				named: typeIdentifier.name.text,
+				of: typeIdentifier.baseType.typeDescription,
 				generics: genericTypeVisitor.genericArguments,
 			)
 
@@ -1700,11 +1712,7 @@ extension ExprSyntax {
 			} else if declName == "Protocol" {
 				.metatype(base.typeDescription, isType: false)
 			} else {
-				.nested(
-					name: declName,
-					parentType: base.typeDescription,
-					generics: [],
-				)
+				.member(named: declName, of: base.typeDescription, generics: [])
 			}
 		} else if let genericExpr = GenericSpecializationExprSyntax(self) {
 			let genericTypeVisitor = GenericArgumentVisitor(viewMode: .sourceAccurate)
@@ -1717,9 +1725,9 @@ extension ExprSyntax {
 			} else if let memberAccessExpr = MemberAccessExprSyntax(genericExpr.expression),
 			          let base = memberAccessExpr.base
 			{
-				return .nested(
-					name: memberAccessExpr.declName.baseName.text,
-					parentType: base.typeDescription,
+				return .member(
+					named: memberAccessExpr.declName.baseName.text,
+					of: base.typeDescription,
 					generics: genericTypeVisitor.genericArguments,
 				)
 			}

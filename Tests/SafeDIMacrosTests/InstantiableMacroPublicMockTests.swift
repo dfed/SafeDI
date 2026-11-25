@@ -62,7 +62,7 @@ import Testing
 			)
 		}
 
-		@Test(arguments: ["true", "false", ".none", ".internal", ".public", "MockGeneration.none", "MockGeneration.internal", "MockGeneration.public"])
+		@Test(arguments: ["true", "false", ".none", ".internal", ".public", "MockGeneration.none", "MockGeneration.internal", "MockGeneration.public", "SafeDI.MockGeneration.none", "SafeDI.MockGeneration.internal", "SafeDI.MockGeneration.public"])
 		func declaration_expandsWithoutIssue_whenGenerateMockSpellsMockGenerationCase(spelling: String) {
 			assertMacroExpansion(
 				"""
@@ -82,7 +82,7 @@ import Testing
 
 		// MARK: Errors
 
-		@Test(arguments: ["someVariable", ".init(booleanLiteral: true)", "Other.public", ".public(x:)", "MockGeneration(x:).public", ".unknown"])
+		@Test(arguments: ["someVariable", ".init(booleanLiteral: true)", "Other.public", ".public(x:)", "MockGeneration(x:).public", ".unknown", "Other.MockGeneration.public", "SafeDI.Other.public", "SafeDI(x:).MockGeneration.public", "SafeDI.MockGeneration(x:).public", ".MockGeneration.public", "SafeDI.MockGeneration<Int>.public"])
 		func declaration_throwsError_whenGenerateMockSpellsNoMockGenerationCase(spelling: String) {
 			assertMacroExpansion(
 				"""
@@ -312,14 +312,6 @@ import Testing
 						column: 1,
 						fixIts: [
 							FixItSpec(message: "Remove `generateMock: .public`"),
-						],
-					),
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
-						line: 3,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
 						],
 					),
 				],

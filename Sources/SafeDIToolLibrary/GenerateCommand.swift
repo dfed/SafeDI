@@ -1236,10 +1236,16 @@ public struct Generate: AsyncParsableCommand {
 		var generatedSeams = Set<TypeDescription>()
 		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
 		var foreignPublicMocks = [TypeDescription: SeamResolution.ForeignPublicMock]()
-		/// The signature the module info of the module named `moduleName` carries of `seam`, as that module's run named it.
-		func storedSignature(of seam: TypeDescription, inModuleNamed moduleName: String) -> StoredSeamSignature? {
-			guard readsStoredSeamSignatures else { return nil }
-			return moduleInfoView.storedSeamSignaturesByModuleName[moduleName]?[seam]
+		// Each module's seams, gathered once rather than searched per seam.
+		let storedSeamTypesByModuleName = moduleInfoView.storedSeamSignaturesByModuleName.mapValues { Set($0.seamTypes) }
+		/// The signatures the module info of the module named `moduleName` carries of its seams, when they include `seam`,
+		/// as that module's run named it.
+		func storedSignatures(of seam: TypeDescription, inModuleNamed moduleName: String) -> StoredSeamSignatures? {
+			guard readsStoredSeamSignatures,
+			      storedSeamTypesByModuleName[moduleName]?.contains(seam) == true,
+			      let signatures = moduleInfoView.storedSeamSignaturesByModuleName[moduleName]
+			else { return nil }
+			return signatures.stored
 		}
 		/// The seam `seam` of the module named `moduleName`, whose visible declarations are resolved only when the
 		/// generator computes its signature: a module whose seams no tree reaches, or whose module info carries their
@@ -1252,7 +1258,7 @@ public struct Generate: AsyncParsableCommand {
 				callComment: readFromModuleInfo ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 				// A module info holds the module's declarations as the module read them.
 				declaringModuleMockCondition: readFromModuleInfo ? nil : resolver.mockCondition(ofModuleNamed: moduleName),
-				storedSignature: readFromModuleInfo ? storedSignature(of: seam.concreteInstantiable, inModuleNamed: moduleName) : nil,
+				storedSignatures: readFromModuleInfo ? storedSignatures(of: seam.concreteInstantiable, inModuleNamed: moduleName) : nil,
 			)
 		}
 		/// The public mock of `publicMock`, of the module named `moduleName`, whose visible declarations are resolved only

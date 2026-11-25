@@ -562,25 +562,14 @@ extension ScopeGenerator {
 			let optionalType = TypeDescription.optional(type)
 			return PublicMockParameter(name: name, type: optionalType, typeSource: optionalType.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: type, receivedAs: nil), role: role)
 		}
-		// A `mock()` isolated to a global actor evaluates the type's own defaults as an internal mock does, in its own
-		// isolation, where a default may read the actor's state: its providers share the isolation.
-		let mockIsolation: String? = if instantiable.generatedMockIsGlobalActorIsolated {
-			instantiable.declarationIsolation.flatMap { $0 == "nonisolated" ? nil : $0 } ?? Initializer.globalActorAttribute(in: instantiable.mockAttributes)
-		} else {
-			nil
-		}
+		// A provider is evaluated as a default of `mock()`, and is declared in the extension `mock()` is declared in, spelled
+		// with exactly `mock()`'s attributes, so it has `mock()`'s isolation: the type's, whether spelled or taken from a
+		// conformance or a superclass, unless `mockAttributes` states another. SafeDI reads no isolation itself.
+		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		/// The provider of an optional-typed default, and how a declaration names it.
 		func provider(named label: String, type: TypeDescription, access: AccessLevel, expression: String) -> String {
 			let isPublic = access == .public
-			if providerDeclarations.isEmpty, mockIsolation == nil, instantiable.declarationIsolation == nil {
-				// SafeDI cannot see isolation a type takes from a conformance or a superclass (a SwiftUI `View`, a
-				// `UIViewController` subclass), which is the user's to opt into through `mockAttributes`; the comment says so
-				// where the compiler reports a default that reads the actor's state.
-				providerDeclarations.append("\(standardIndent)// These providers evaluate `\(typeName)`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one")
-				providerDeclarations.append("\(standardIndent)// reads the state of an actor `\(typeName)` takes from a conformance or a superclass and does not compile, give its")
-				providerDeclarations.append("\(standardIndent)// `@\(InstantiableVisitor.macroName)` `mockAttributes: \"@MainActor\"` (or that actor).")
-			}
-			providerDeclarations.append("\(standardIndent)\(isPublic ? "@usableFromInline " : "")\(mockIsolation ?? "nonisolated") static func \(PublicMockContext.rootProviderName(label: label))() -> \(type.asSource) { \(expression) }")
+			providerDeclarations.append("\(standardIndent)\(isPublic ? "@usableFromInline " : "")\(mockAttributesPrefix)static func \(PublicMockContext.rootProviderName(label: label))() -> \(type.asSource) { \(expression) }")
 			return "\(typeName).\(PublicMockContext.rootProviderName(label: label))()"
 		}
 
@@ -608,7 +597,7 @@ extension ScopeGenerator {
 				// that evaluates the default in this module, and the construction calls it (`generateReturnArgumentList`).
 				leadingParameters.append(optionalParameter(
 					named: rootDefault.label,
-					type: .closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType),
+					type: MockLowering.closureTaken(forAutoclosureReturning: valueType, isSendable: MockLowering.isSendableAutoclosure(type)),
 					resolvedTo: "{ \(rootDefault.defaultExpression) }",
 					role: .constructionDefault,
 				))

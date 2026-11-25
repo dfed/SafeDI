@@ -170,6 +170,20 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
+			            .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			            .init(widget: { scope_name, scope_part in
+			                let name = scope_name
+			                let part = scope_part
+			                let widget: any Widget = DefaultWidget(part: part, name: name)
+			                return widget
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_1054A2F0CEAA6AB2.self // \(Self.moduleInfoComment)
 			            func __safeDI_widgetBuilder_Host() -> Host.__safeDI_WidgetCarrier<any Widget> {
@@ -179,20 +193,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			                .init(widget: { scope_part, scope_panelBuilder in
 			                    let part = scope_part
 			                    let widget: any Widget = DefaultWidget(part: part, name: nil)
-			                    return widget
-			                })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
-			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
-			                .init(widget: { scope_name, scope_part in
-			                    let name = scope_name
-			                    let part = scope_part
-			                    let widget: any Widget = DefaultWidget(part: part, name: name)
 			                    return widget
 			                })
 			            }
@@ -429,27 +429,27 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_widgetBuilder_Host() -> Host.__safeDI_WidgetCarrier<any Widget> {
+			            .init(shell: __safeDI_widgetBuilder_Host_Shell_Scope())
+			        }
+			        func __safeDI_widgetBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetCarrier_Shell<any Widget> {
+			            .init(plainPanelBuilder: { values_panelBuilder in __safeDI_widgetBuilder_Host_Panel_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			            .init(widget: { scope_name in
+			                let name = scope_name
+			                let widget: any Widget = DefaultWidget(name: name)
+			                return widget
+			            })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
+			            .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_8DD5BD7AB71038C2.self // \(Self.moduleInfoComment)
-			            func __safeDI_widgetBuilder_Host() -> Host.__safeDI_WidgetCarrier<any Widget> {
-			                .init(shell: __safeDI_widgetBuilder_Host_Shell_Scope())
-			            }
-			            func __safeDI_widgetBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetCarrier_Shell<any Widget> {
-			                .init(plainPanelBuilder: { values_panelBuilder in __safeDI_widgetBuilder_Host_Panel_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
-			                .init(widget: { scope_name in
-			                    let name = scope_name
-			                    let widget: any Widget = DefaultWidget(name: name)
-			                    return widget
-			                })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
-			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
-			            }
 			            return Host(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Host(), __safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -678,24 +678,24 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
+			            .init(screen_Sendable_: __safeDI_widgetSendableBuilder_Host_Screen_Scope(), screen_Sendable: { __safeDI_widgetBuilder_Host_Panel_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Screen_Scope() -> Host.__safeDI_WidgetSendableCarrier_Screen<any Widget> {
+			            .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
+			            .init(widget: { scope_name in
+			                let name = scope_name
+			                let widget: any Widget = DefaultWidget(name: name)
+			                return widget
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_46E182016EE13C1D.self // \(Self.moduleInfoComment)
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host() -> Host.__safeDI_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_widgetSendableBuilder_Host_Shell_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_WidgetSendableCarrier_Shell<any Widget> {
-			                .init(screen_Sendable_: __safeDI_widgetSendableBuilder_Host_Screen_Scope(), screen_Sendable: { __safeDI_widgetBuilder_Host_Panel_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Host_Screen_Scope() -> Host.__safeDI_WidgetSendableCarrier_Screen<any Widget> {
-			                .init(panelBuilder: { __safeDI_widgetBuilder_Host_Panel_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Host_Panel_Scope() -> Host.__safeDI_WidgetCarrier_Panel<any Widget> {
-			                .init(widget: { scope_name in
-			                    let name = scope_name
-			                    let widget: any Widget = DefaultWidget(name: name)
-			                    return widget
-			                })
-			            }
 			            return Host(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1056,22 +1056,22 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
+			            .init(aBuilder_Sendable: __safeDI_apiSendableBuilder_Hub_A_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiSendableCarrier_A<any Api> {
+			            .init(cBuilder: { __safeDI_apiBuilder_Hub_C_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+			            .init(api: { scope_tag in
+			                let tag = scope_tag
+			                let api: any Api = LiveApi(tag: tag)
+			                return api
+			            })
+			        }
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
 			            _ = Hub.__safeDI_Hub_A09E0102113C11C1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
-			                .init(aBuilder_Sendable: __safeDI_apiSendableBuilder_Hub_A_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiSendableCarrier_A<any Api> {
-			                .init(cBuilder: { __safeDI_apiBuilder_Hub_C_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
-			                .init(api: { scope_tag in
-			                    let tag = scope_tag
-			                    let api: any Api = LiveApi(tag: tag)
-			                    return api
-			                })
-			            }
 			            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Hub())
 			        }
 			        let hub: Hub = __safeDI_hub()
