@@ -11098,7 +11098,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// function: a lazy wrapper there reads its overrides as a `@Sendable` builder function does (`isInsideActorArgument`
 		// in `MockLowering+Walk.swift`). A mock root that is an actor takes its level so. A public mock's tree, whose
 		// configurations are never `Sendable`, is a deliberate gap, as the walk states.
-		let rootInstantiable: Instantiable? = if case let .root(instantiable, _) = scopeData { instantiable } else { nil }
+		let rootInstantiable: Instantiable? = if case let .root(instantiable, _) = scopeData {
+			instantiable
+		} else {
+			nil
+		}
 		let tracksActorArguments = rootInstantiable?.generateMock != .public
 		var generatorsToVisit = [(generator: self, insideSendableScope: false, insideActorArgument: tracksActorArguments && rootInstantiable?.declarationType == .actorType)]
 		while let (generator, insideSendableScope, insideActorArgument) = generatorsToVisit.popLast() {
