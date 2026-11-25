@@ -249,10 +249,12 @@ struct GraphFuzzerMockMirrorModel {
 					for parameter in GraphFuzzerOracle.topLevelParameters(parameters) where !parameter.contains(" = ") {
 						guard let colon = parameter.firstIndex(of: ":") else { continue }
 						let names = parameter[..<colon].split(separator: " ")
-						let property = GraphFuzzerMirrorProperty(
-							label: String(names.last ?? ""),
-							type: parameter[parameter.index(after: colon)...].trimmingCharacters(in: .whitespaces),
-						)
+						// SafeDI reads an opaque parameter, `some P`, as the existential it stands for, `any P`.
+						var type = parameter[parameter.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+						if type.hasPrefix("some ") {
+							type = "any " + type.dropFirst("some ".count)
+						}
+						let property = GraphFuzzerMirrorProperty(label: String(names.last ?? ""), type: type)
 						types[currentTypeName]?.dependencies.append(Dependency(property: property, attribute: "@Received", source: .received(onlyIfAvailable: false)))
 					}
 				case let .property(attribute, label, type):
@@ -277,6 +279,22 @@ struct GraphFuzzerMockMirrorModel {
 		for name in typeOrder {
 			let mockName = types[name]?.customMockName ?? "mock"
 			types[name]?.handWrittenMock = handWrittenMocks.first { $0.name == mockName && $0.returnTypeName == name }
+		}
+		// An extension's `instantiate(…)` is written at file scope, where an unqualified name names one of the extended
+		// type's own nested types, as SafeDI qualifies it: the base corpus nests only protocols other types fulfill.
+		let additionalTypeNames = Set(typeOrder.flatMap { types[$0]?.additionalTypes ?? [] })
+		for name in typeOrder where types[name]?.isExtension == true {
+			for index in types[name]?.dependencies.indices ?? 0..<0 {
+				guard let dependency = types[name]?.dependencies[index], dependency.property.type.hasPrefix("any "), !dependency.property.type.contains(".") else { continue }
+				let nestedName = "\(name).\(dependency.property.type.dropFirst("any ".count))"
+				if additionalTypeNames.contains(nestedName) {
+					types[name]?.dependencies[index] = Dependency(
+						property: GraphFuzzerMirrorProperty(label: dependency.property.label, type: "any \(nestedName)"),
+						attribute: dependency.attribute,
+						source: dependency.source,
+					)
+				}
+			}
 		}
 		self.types = types
 		self.typeOrder = typeOrder
@@ -403,6 +421,9 @@ struct GraphFuzzerMockMirrorModel {
 	/// The concrete type whose scope builds `type`, or `nil` when no declaration fulfills it.
 	func scopeTypeName(of type: String) -> String? {
 		if let scopeTypeName = scopeTypeNameByType[type] {
+			scopeTypeName
+		} else if type.hasPrefix("any "), let scopeTypeName = scopeTypeNameByType[String(type.dropFirst("any ".count))] {
+			// The existential an extension's opaque parameter stands for, the base corpus's one `any` spelling.
 			scopeTypeName
 		} else if readsExistentialAndQualifiedSpellings {
 			scopeTypeNameByType[Self.unqualifiedName(of: type)]
@@ -1027,8 +1048,10 @@ extension GraphFuzzerMockMirrorModel {
 		GraphFuzzerMockRootExpectation(
 			mockedTypeName: mockedTypeName,
 			builtTypeNames: mockRoot.children.compactMap { child -> String? in
-				guard case let .instantiated(_, scopeTypeName, _) = child else { return nil }
-				return scopeTypeName
+				guard case let .instantiated(property, scopeTypeName, _) = child else { return nil }
+				// A promoted existential, the existential an extension's opaque parameter stands for, is built by a
+				// builder closure that returns the existential, which is what the mock's field names.
+				return property.type.hasPrefix("any ") ? property.type : scopeTypeName
 			}.sorted(),
 			onlyIfAvailableOverrideCount: onlyIfAvailableOverrideCount(of: mockRoot, mockedTypeName: mockedTypeName),
 		)

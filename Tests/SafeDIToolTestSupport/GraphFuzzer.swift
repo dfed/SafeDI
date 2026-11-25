@@ -2854,6 +2854,7 @@ enum GraphFuzzerGenerator {
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			sharedPlacesRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedPlacesRandomSeedMask)
+			opaqueReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.opaqueReceiverRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2936,6 +2937,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAtSeveralPlacesOfOneMock(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingOpaqueReceiverOfExtension(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3005,6 +3008,7 @@ enum GraphFuzzerGenerator {
 				: modulesOmittingPackageName
 			let drawnSources = finalDeclarations.map(source(of:))
 				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller), presentModules: presentModules) + $0 : $0 }].compactMap(\.self)
+				+ [opaqueConsumerSource].compactMap(\.self)
 				+ markerFreeSources
 			let declaresNothingPackage = { (source: String) in GraphFuzzerModule(declaredIn: source).map(modulesDeclaringNothingPackage.contains) == true }
 			raisingPackageTypeAccess(declaredIn: drawnSources.filter(declaresNothingPackage), notIn: drawnSources.filter { !declaresNothingPackage($0) })
@@ -3384,6 +3388,12 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAtSeveralPlacesOfOneMock`' choices: whether a graph gains `ShareHost`'s tree, and
 		/// every shape of that tree.
 		private var sharedPlacesRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingOpaqueReceiverOfExtension`'s choices: whether a graph gains `OpaqueConsumer`'s tree, and every
+		/// shape of that tree.
+		private var opaqueReceiverRandom: GraphFuzzerRandomNumberGenerator
+		/// The file of `addingOpaqueReceiverOfExtension`'s `OpaqueConsumer`, or `nil` where the graph does not draw it. A file of
+		/// its own, so that its mock is generated into a file named after it.
+		private var opaqueConsumerSource: String?
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8201,6 +8211,83 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let sharedPlacesRandomSeedMask: UInt64 = 0x7368617265506C63
+
+		// MARK: An opaque receiver of an extension
+
+		/// The base corpus's draw, in one graph of ten, of an `@Instantiable` extension whose `instantiate(…)` receives an
+		/// opaque type, `opaqueService: some P`, which a mock promotes and must declare as an existential: `OpaqueConsumer`
+		/// extends a plain class, and `P` is `OpaqueApi`, a protocol of its own, or `Api`, a protocol nested in
+		/// `OpaqueConsumer` that `instantiate(…)` spells unqualified half the time. `OpaqueService` fulfills `P` through
+		/// `fulfillingAdditionalTypes`, so a mock builds it. `OpaqueConsumer` generates its own mock, `OpaqueHost`, whose mock
+		/// is generated and which no root reaches, instantiates it, or both; now and then `OpaqueHost` builds it through an
+		/// instantiator. `opaqueReceiverRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingOpaqueReceiverOfExtension(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, opaqueReceiverRandom.percentChance(10) else { return declarations }
+			var declarations = declarations
+			let consumerName = "\(prefix)OpaqueConsumer"
+			let isNested = opaqueReceiverRandom.percentChance(50)
+			let spellsNestedUnqualified = isNested && opaqueReceiverRandom.percentChance(50)
+			let protocolDeclarationName = isNested ? "Api" : "\(prefix)OpaqueApi"
+			let protocolName = isNested ? "\(consumerName).Api" : protocolDeclarationName
+			let receivedProtocolSpelling = spellsNestedUnqualified ? "Api" : protocolName
+			let consumerGeneratesMock = opaqueReceiverRandom.percentChance(50)
+			let hostBuildsConsumer = !consumerGeneratesMock || opaqueReceiverRandom.percentChance(50)
+			let hostUsesInstantiator = hostBuildsConsumer && opaqueReceiverRandom.percentChance(30)
+			let sendableConformance = helperTypesAreSendable ? ": Sendable" : ""
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			var consumerLines = [
+				consumerGeneratesMock ? "@Instantiable(generateMock: true)" : "@Instantiable",
+				"extension \(consumerName): Instantiable {",
+				"\tpublic static func instantiate(opaqueService: some \(receivedProtocolSpelling)) -> \(consumerName) {",
+				storesEveryParameter ? "\t\t\(consumerName)(opaqueService: opaqueService)" : "\t\t\(consumerName)()",
+				"\t}",
+				"}",
+				"",
+				"public final class \(consumerName)\(helperTypesAreSendable ? ": Sendable" : (sendability == .mixed ? ": @unchecked Sendable" : "")) {",
+			]
+			if isNested {
+				consumerLines += ["\tpublic protocol Api\(sendableConformance) {}", ""]
+			}
+			if storesEveryParameter {
+				consumerLines += [
+					"\tpublic init(opaqueService: any \(isNested ? "Api" : protocolName)) {",
+					"\t\tself.opaqueService = opaqueService",
+					"\t}",
+					"",
+					"\tpublic let opaqueService: any \(isNested ? "Api" : protocolName)",
+				]
+			} else {
+				consumerLines.append("\tpublic init() {}")
+			}
+			consumerLines.append("}")
+			var service = TypeDeclaration(
+				name: "\(prefix)OpaqueService",
+				instantiableArguments: ["fulfillingAdditionalTypes: [\(protocolName).self]"],
+				properties: [],
+				declaresHelperTypes: false,
+				additionalConformances: [protocolName] + conformances,
+			)
+			if !isNested {
+				service.additionalDeclarations.append("public protocol \(protocolDeclarationName)\(sendableConformance) {}")
+			}
+			opaqueConsumerSource = consumerLines.joined(separator: "\n") + "\n"
+			declarations.append(service)
+			if hostBuildsConsumer {
+				let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)OpaqueHost",
+					instantiableArguments: ["generateMock: true"],
+					properties: [hostUsesInstantiator
+						? PropertyDeclaration(attribute: "@Instantiated", label: "opaqueConsumerBuilder", type: "\(instantiator)<\(consumerName)>")
+						: PropertyDeclaration(attribute: "@Instantiated", label: "opaqueConsumer", type: consumerName)],
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			return declarations
+		}
+
+		private static let opaqueReceiverRandomSeedMask: UInt64 = 0x6F70617175655276
 
 		// MARK: Cycle parameters
 

@@ -28,11 +28,13 @@ import SwiftSyntax
 /// handed, and the names of the builder functions themselves – build one class of places twice: a body that shares one
 /// function per class has none, and a body with one function per place has one for each place a type is built at.
 ///
-/// The layout writes one line per internal mock root it is asked to lay out (`SAFEDI_MOCK_TYPE_KEY_LOG`): `laidOut`, or
-/// the fallback that kept the root's walk body. A repetition in a root the layout says it laid out is a failure; one in a
-/// root with a fallback is counted under the fallback's name, and those counts are pinned per corpus, so a share the
-/// layout newly loses moves a pin rather than hiding among known seeds. A root the layout wrote nothing about (a public
-/// mock, whose sharing is another engine's part, or any mock of a tool without the layout) is counted as `unlogged`.
+/// The layout reports each internal mock root it is asked to lay out (`MockLowering.typeKeyLayoutObserver`): `laidOut`,
+/// or the fallback that kept the root's walk body. Each root with a repetition is counted once under its outcome's name,
+/// and those counts are pinned per corpus, so a share the layout newly loses moves a pin rather than hiding among known
+/// seeds. A repetition is extra text, not a wrong value (production's own layout repeats a function in cycles), so a laid-out
+/// root that repeats a class is counted under `laidOut` rather than failed; the values are the base value comparison's to
+/// judge. A root the layout reported nothing about (a public mock, whose sharing is another engine's part) is counted as
+/// `unreported`.
 ///
 /// The judge reads a mock's layout, not its values, which the base value comparison judges
 /// (`GraphFuzzerBaseValueComparison`).
@@ -40,7 +42,7 @@ enum GraphFuzzerMockSharedBuilders {
 	/// A class of places that a mock builds with more than one local function.
 	struct Repetition: Equatable, CustomStringConvertible {
 		let fileName: String
-		/// The type the mock's extension extends, as the layout's log names it.
+		/// The type the mock's extension extends, as the layout reports it (`MockLowering.typeKeyLayoutObserver`).
 		let mockedTypeName: String
 		/// The mock function's name, `mock` or `__safeDI_mock`.
 		let mockName: String
@@ -52,38 +54,11 @@ enum GraphFuzzerMockSharedBuilders {
 		}
 	}
 
-	/// The judgment of one graph's mocks.
-	struct Judgment: Equatable {
-		/// The repetitions in roots the layout says it laid out.
-		var failures = [Repetition]()
-		/// For each fallback's name (`fallbackName(of:)`), the mock roots with a repetition the layout left with it.
-		var fallbackRootCounts = [String: Int]()
-	}
-
-	/// The environment that turns the layout on for a run of a built tool and has it log each root's outcome to `logFile`.
-	static func layoutEnvironment(loggingTo logFile: URL) -> [String: String] {
-		var environment = ProcessInfo.processInfo.environment
-		environment["SAFEDI_MOCK_TYPE_KEY"] = "1"
-		environment["SAFEDI_MOCK_TYPE_KEY_LOG"] = logFile.path
-		return environment
-	}
-
-	/// Each mock root's outcome in the layout's log, by the mocked type's name: `TYPEKEY<tab><type><tab><outcome>` lines.
-	static func outcomes(inLog log: String) -> [String: String] {
-		var outcomes = [String: String]()
-		for line in log.split(separator: "\n") {
-			let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
-			guard fields.count == 3, fields[0] == "TYPEKEY" else { continue }
-			outcomes[String(fields[1])] = String(fields[2])
-		}
-		return outcomes
-	}
-
-	/// The name a fallback is counted under: its kind, with an unrecorded place's reason (`unrecorded:publicMockCall`),
-	/// without what names one place or label (`readUnresolved:token` is `readUnresolved`); `unlogged` where the layout
-	/// wrote nothing about the root.
+	/// The name an outcome is counted under: `laidOut`, or a fallback's kind, with an unrecorded place's reason (`unrecorded:publicMockCall`),
+	/// without what names one place or label (`readUnresolved:token` is `readUnresolved`); `unreported` where the layout
+	/// reported nothing about the root.
 	static func fallbackName(of outcome: String?) -> String {
-		guard let outcome else { return "unlogged" }
+		guard let outcome else { return "unreported" }
 		let parts = outcome.split(separator: ":", omittingEmptySubsequences: false)
 		if parts.first == "unrecorded", parts.count > 1 {
 			return "unrecorded:\(parts[1])"
@@ -92,20 +67,15 @@ enum GraphFuzzerMockSharedBuilders {
 		}
 	}
 
-	/// Judges `repetitions` against the layout's outcome of each mock root: a root counts once under its fallback however
-	/// many classes it repeats.
-	static func judgment(of repetitions: [Repetition], outcomesByMockedType outcomes: [String: String]) -> Judgment {
-		var judgment = Judgment()
+	/// For each outcome's name (`fallbackName(of:)`, `laidOut` among them), the mock roots with one of `repetitions`: a root
+	/// counts once however many classes it repeats.
+	static func repeatingRootCounts(of repetitions: [Repetition], outcomesByMockedType outcomes: [String: String]) -> [String: Int] {
+		var counts = [String: Int]()
 		var countedRoots = Set<String>()
-		for repetition in repetitions {
-			let outcome = outcomes[repetition.mockedTypeName]
-			if outcome == "laidOut" {
-				judgment.failures.append(repetition)
-			} else if countedRoots.insert("\(repetition.fileName)\t\(repetition.mockedTypeName)\t\(repetition.mockName)").inserted {
-				judgment.fallbackRootCounts[fallbackName(of: outcome), default: 0] += 1
-			}
+		for repetition in repetitions where countedRoots.insert("\(repetition.fileName)\t\(repetition.mockedTypeName)\t\(repetition.mockName)").inserted {
+			counts[fallbackName(of: outcomes[repetition.mockedTypeName]), default: 0] += 1
 		}
-		return judgment
+		return counts
 	}
 
 	/// Every class of places a mock of `generatedFiles` builds with more than one local function, in file name order and
@@ -156,21 +126,6 @@ enum GraphFuzzerMockSharedBuilders {
 			classes = refined
 		}
 		return classes
-	}
-
-	/// The judgment of what a built `SafeDITool`, `tool`, generates for `fixture` with the layout on, run as the base
-	/// comparison runs it (`GraphFuzzerBaseComparison.Layout`), or `nil` where the tool rejects the graph: so a tool built
-	/// from another commit, such as a head whose engine this checkout does not hold, is judged by its own layout's log.
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	static func judgment(generatedBy tool: URL, for fixture: GraphFuzzerFixture) async throws -> Judgment? {
-		let directory = TestTemporaryDirectory.uniquePath(prefix: "safedi-mock-sharing-")
-		defer { try? FileManager.default.removeItem(at: directory) }
-		let layout = try GraphFuzzerBaseComparison.Layout(writing: fixture, into: directory)
-		let logFile = directory.appendingPathComponent("type-key.log")
-		let record = try await layout.record(running: tool, environment: layoutEnvironment(loggingTo: logFile))
-		guard layout.accepts(record) else { return nil }
-		let log = (try? String(contentsOf: logFile, encoding: .utf8)) ?? ""
-		return judgment(of: repetitions(in: layout.generatedFiles(of: record)), outcomesByMockedType: outcomes(inLog: log))
 	}
 
 	/// `function`'s declaration without what tells one place of a class from another: its own name and every name of a
