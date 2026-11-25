@@ -161,10 +161,12 @@ extension AccessLevel {
 	@inline(never)
 	public static func required(toConstructFrom emitter: ModuleIdentity, declaredIn declarer: ModuleIdentity, isOwnFile: Bool) -> AccessRequirement {
 		// Never inlined, for Swift 6.3.3: inlined into `DependencyTreeGenerator.createSeamScopeMapping`, this function
-		// crashes the compiler with `-Osize` (signal 11, a SIL verification error on a `borrowed from` instruction
-		// before ownership is lowered), because the copy-to-borrow optimization mishandles the borrow of
-		// `emitter.moduleName` that the comparison below makes. Binding `declarer.moduleName` too does not avoid it.
-		// Remove the attribute once SafeDI's minimum Swift is past 6.3.3.
+		// crashed the compiler with `-Osize` while 2.3.0-alpha-1 was published (signal 11, a SIL verification error on
+		// a `borrowed from` instruction before ownership is lowered), because the copy-to-borrow optimization
+		// mishandled the borrow of `emitter.moduleName` that the comparison below makes. Binding
+		// `declarer.moduleName` too did not avoid it. The crash was last seen then: Swift 6.3.3 now compiles this
+		// file without the attribute under `-O`, which published builds pass, and under `-Osize`. Removing the
+		// attribute changes what is inlined in shipped code, so it is a change of its own.
 		if isOwnFile {
 			.internal
 		} else if let emitterModuleName = emitter.moduleName, emitterModuleName == declarer.moduleName {
