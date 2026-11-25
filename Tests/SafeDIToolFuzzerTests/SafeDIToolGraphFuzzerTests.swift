@@ -7265,7 +7265,6 @@ struct SafeDIToolGraphFuzzerTests {
 			.twoFormsOfOneLabel: 182,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 49,
 			.requiredReceiveOfUncreatedAlias: 40,
-			.mockedActor: 233,
 		],
 		shapeCounts: [
 			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_784,
