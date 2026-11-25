@@ -109,6 +109,29 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesEachEmptyValueInFull_whenEmptyValuesOfTwoTypesShareStorage() throws {
+		// Every empty array can share one storage, so a value of another type found there is no repeat.
+		var writer = BinaryWriter()
+		writer.write([BinaryShared([String]())])
+		writer.write([BinaryShared([SeamSignature.Hole.Site]())])
+		let encoded = writer.encoded
+
+		let (strings, places) = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let strings: [BinaryShared<[String]>] = try reader.read()
+			let places: [BinaryShared<[SeamSignature.Hole.Site]>] = try reader.read()
+			try reader.finish()
+			return (strings, places)
+		}
+
+		// No strings, then each list's one element written in full: no value, and no reference to the other.
+		let expected: [UInt8] = [0, 1, 0, 0, 1, 0, 0]
+		#expect(encoded == expected)
+		#expect(strings.map(\.value) == [[]])
+		#expect(places.map(\.value) == [[]])
+	}
+
+	@Test
 	func binaryWriter_writesEachSpellingOfPlaces_whenPlacesDifferOnlyInAny() throws {
 		// `==` calls `any Service` and `Service` equal, but each list of places reads back as written.
 		let places = [TypeDescription.any(.simple(name: "Service")), .simple(name: "Service"), .any(.simple(name: "Service"))].map { type in
