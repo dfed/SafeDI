@@ -239,6 +239,7 @@ extension DependencyTreeGenerator {
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
 			))
+			GenerationLayerObservation.record(.inlineTreeOfForeignSeam(of: scope.instantiable.concreteInstantiable), inRunOf: seams.currentModule.moduleName)
 		}
 		return generators
 	}

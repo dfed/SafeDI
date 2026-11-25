@@ -28,8 +28,8 @@ extension DependencyTreeGenerator {
 	/// forms: one form is always the parameter's, or the form the parameter was made optional from. Both the declaring
 	/// scope and every receiver are scopes of the tree, so a tree none of whose declared labels its scopes receive in
 	/// two forms holds no such label, and its generators, which a tree with a dense lazy cycle builds once per path,
-	/// need not be built to learn that. An alias receives the property it is fulfilled by, and one only if available
-	/// reads that property's optional form too. The answer may be `true` for a tree that holds none: where no cycle
+	/// need not be built to learn that. An alias receives the property it is fulfilled by, as `ScopeGenerator.receives`
+	/// counts it. The answer may be `true` for a tree that holds none: where no cycle
 	/// closes around the declaration, or the forms are received on different branches.
 	static func canHoldUnpassableCycleLabel(inTreeRootedAt rootScope: Scope) -> Bool {
 		var declaredLabels = Set<String>()
@@ -42,11 +42,8 @@ extension DependencyTreeGenerator {
 				switch dependency.source {
 				case .received:
 					receivedFormsByLabel[dependency.property.label, default: []].insert(dependency.property)
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				case let .aliased(fulfillingProperty, _, _):
 					receivedFormsByLabel[fulfillingProperty.label, default: []].insert(fulfillingProperty)
-					if onlyIfAvailable {
-						receivedFormsByLabel[fulfillingProperty.label, default: []].insert(fulfillingProperty.asOptionalProperty)
-					}
 				case .instantiated,
 				     .forwarded:
 					break
