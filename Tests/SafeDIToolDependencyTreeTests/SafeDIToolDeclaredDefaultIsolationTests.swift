@@ -254,6 +254,52 @@ struct SafeDIToolDeclaredDefaultIsolationTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [nil, "MainActor"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsMainActorOnRootInitializer_whenModuleDeclaresMainActorAndRootSpellsOnlyMockAttributes(buildSettingDefaultIsolation: String?) async throws {
+		// Each attribute field takes the module's default on its own: text written for the mock leaves the initializer's
+		// default in place.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@MainActor
+				public protocol Presentable: AnyObject {}
+				""",
+				"""
+				@Instantiable(isRoot: true, mockAttributes: "nonisolated")
+				public final class Root: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Screen: Instantiable, Presentable {
+				    public init() {}
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": Self.declaringMainActor],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: buildSettingDefaultIsolation),
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    @MainActor public convenience init() {
+			        let screen = Screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_spellsNoAttributeOnRootInitializer_whenModuleDeclaresNilDefaultIsolation() async throws {
