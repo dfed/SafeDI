@@ -55,8 +55,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// The type key lays out production roots, not seams: `SafeDIToolTypeKeyViewTests` counts its views. The search for
 		// root functions runs while code is emitted, where a seam whose signature takes more than one pass starts code it
 		// then discards, which records or not as tasks are scheduled; `SafeDIToolTypeKeyViewTests` counts it on production
-		// roots, which take one pass.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions])
+		// roots, which take one pass, as it does the type key's checks of reads at every member.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
