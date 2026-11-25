@@ -4442,7 +4442,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A lazy cycle of two mocked types erased where they are instantiated, the second of which also instantiates an erased leaf.
 	private static var lazyCycleOfErasedTypesFixture: GraphFuzzerFixture {
-		let prefix = mockDifferencePrefix
+		let prefix = Self.mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable {\n\tpublic init(anyT8Builder: ErasedInstantiator<(), \(prefix)AnyT8>) {\n\t\tself.anyT8Builder = anyT8Builder\n\t}\n\t@Instantiated(fulfilledByType: \"\(prefix)T8\", erasedToConcreteExistential: true) let anyT8Builder: ErasedInstantiator<(), \(prefix)AnyT8>\n}\n",
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T8: Instantiable {\n\tpublic init(anyT7Builder: ErasedInstantiator<(), \(prefix)AnyT7>, anyT4: \(prefix)AnyT4) {\n\t\tself.anyT7Builder = anyT7Builder\n\t\tself.anyT4 = anyT4\n\t}\n\t@Instantiated(fulfilledByType: \"\(prefix)T7\", erasedToConcreteExistential: true) let anyT7Builder: ErasedInstantiator<(), \(prefix)AnyT7>\n\t@Instantiated(fulfilledByType: \"\(prefix)T4\", erasedToConcreteExistential: true) let anyT4: \(prefix)AnyT4\n}\n",
@@ -4743,6 +4743,71 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADroppedOverrideDoesNotCallItsBuilder() async throws {
 		#expect(try await Self.aspectsOfT7sMockWithDroppedOverride(editedTo: "{ fatalError() }") == [.mockCode])
+	}
+
+	/// The aspects of the difference in `T7`'s mock between the graph of `lazyCycleWithTwoLabelsFixture` and its reversal of
+	/// type names, with the reversal's `text` replaced by `replacement`. With the type-key layout, `T7`'s mock hoists the
+	/// builder of each type into a function that takes the type's configuration, and the cycle's back-edge is the field the
+	/// graph's `T8` configuration drops: the graph passes `T7.SafeDIMockConfiguration()` where the reversal reads
+	/// `__safeDI_<prefix>T8_configuration.t7Builder`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func aspectsOfT7sLaidOutMock(replacing text: String, with replacement: String) async throws -> [GraphFuzzerOutcomeDifference.Aspect] {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: lazyCycleWithTwoLabelsFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+		guard case let .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return []
+		}
+		let fileName = "\(mockDifferencePrefix)T7+SafeDIMock.swift"
+		var editedFiles = renamedFiles
+		#expect(renamedFiles[fileName]?.components(separatedBy: text).count == 2, "The reversal's mock holds `\(text)` once.")
+		editedFiles[fileName] = renamedFiles[fileName]?.replacingOccurrences(of: text, with: replacement)
+		return GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: renamedWarnings), comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming)
+			.filter { $0.fileName == fileName }
+			.map(\.aspect)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockPassesADefaultConfigurationWhereBothOutcomesHaveTheField() async throws {
+		// The root's `t8Builder` field is in both outcomes, so a default in its place is no dropped field.
+		let prefix = Self.mockDifferencePrefix
+		#expect(try await Self.aspectsOfT7sLaidOutMock(
+			replacing: "__safeDI_\(prefix)T8_configuration: safeDIOverrides.t8Builder)",
+			with: "__safeDI_\(prefix)T8_configuration: \(prefix)T8.SafeDIMockConfiguration())",
+		) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockReadsTheDroppedFieldThroughAnotherConfiguration() async throws {
+		// The field the other outcome drops, read through the root's configuration rather than its owner's at that place.
+		let prefix = Self.mockDifferencePrefix
+		#expect(try await Self.aspectsOfT7sLaidOutMock(
+			replacing: "__safeDI_\(prefix)T7_configuration: __safeDI_\(prefix)T8_configuration.t7Builder,",
+			with: "__safeDI_\(prefix)T7_configuration: safeDIOverrides.t8Builder.t7Builder,",
+		) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockPassesTheDefaultOfAnotherTypeForTheDroppedField() async throws {
+		let prefix = Self.mockDifferencePrefix
+		#expect(try await Self.aspectsOfT7sLaidOutMock(
+			replacing: "__safeDI_\(prefix)T7_configuration: __safeDI_\(prefix)T8_configuration.t7Builder,",
+			with: "__safeDI_\(prefix)T7_configuration: \(prefix)T8.SafeDIMockConfiguration(),",
+		) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockDropsTheNearestConfigurationItIsHanded() async throws {
+		// The cycle's closing call passes its nearest configuration in both outcomes; passing only the default is no drop.
+		let prefix = Self.mockDifferencePrefix
+		#expect(try await Self.aspectsOfT7sLaidOutMock(
+			replacing: "__safeDI_\(prefix)T8_configuration_nearest ?? \(prefix)T8.SafeDIMockConfiguration()",
+			with: "\(prefix)T8.SafeDIMockConfiguration()",
+		) == [.mockCode])
 	}
 
 	@Test
@@ -5116,7 +5181,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A chain of three mocked types closed into a cycle, with a chord from the first to the third.
 	private static var lazyCycleWithChordFixture: GraphFuzzerFixture {
-		let prefix = mockDifferencePrefix
+		let prefix = Self.mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			mockedType("T7", instantiating: [("t8Builder", "Instantiator<\(prefix)T8>"), ("t9Builder", "Instantiator<\(prefix)T9>")]),
 			mockedType("T8", instantiating: [("t9Builder", "Instantiator<\(prefix)T9>")]),
@@ -5234,7 +5299,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A lazy cycle whose first mocked type also instantiates two values of one type, and has two default-valued parameters.
 	private static var lazyCycleWithTwoLeavesAndDefaultsFixture: GraphFuzzerFixture {
-		let prefix = mockDifferencePrefix
+		let prefix = Self.mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable {\n\tpublic init(t8Builder: Instantiator<\(prefix)T8>, t4: \(prefix)T3, t5: \(prefix)T3, theme: Int = 1, size: Int = 2) {\n\t\tself.t8Builder = t8Builder\n\t\tself.t4 = t4\n\t\tself.t5 = t5\n\t}\n\t@Instantiated let t8Builder: Instantiator<\(prefix)T8>\n\t@Instantiated let t4: \(prefix)T3\n\t@Instantiated let t5: \(prefix)T3\n}\n",
 			mockedType("T8", instantiating: [("t7Builder", "Instantiator<\(prefix)T7>")]),
@@ -5332,7 +5397,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A lazy cycle through `@Sendable` builders whose types each have default-valued parameters.
 	private static var lazyCycleOfSendableBuildersWithDefaultsFixture: GraphFuzzerFixture {
-		let prefix = mockDifferencePrefix
+		let prefix = Self.mockDifferencePrefix
 		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable, Sendable {\n\tpublic init(t8Builder: SendableInstantiator<\(prefix)T8>, theme: Int = 1) {\n\t\tself.t8Builder = t8Builder\n\t}\n\t@Instantiated let t8Builder: SendableInstantiator<\(prefix)T8>\n}\n",
 			"@Instantiable(generateMock: true)\npublic final class \(prefix)T8: Instantiable, Sendable {\n\tpublic init(t7Builder: SendableInstantiator<\(prefix)T7>, count: Int = 2, size: Int = 3) {\n\t\tself.t7Builder = t7Builder\n\t}\n\t@Instantiated let t7Builder: SendableInstantiator<\(prefix)T7>\n}\n",
