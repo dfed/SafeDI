@@ -237,9 +237,11 @@ struct GraphFuzzerBuilderStructReaderTests {
 
 	// MARK: seamCorpusFixture
 
+	// Seed 2 leaves these modules' default isolation as it is (`declaringMainActorDefaultIsolation(seed:in:)`).
+
 	@Test
 	func seamCorpusFixture_declaresConfigurationBesideFirstSeam_whenModuleDeclaresNone() {
-		let fixture = GraphFuzzerFixture.seamCorpusFixture(seed: 1, swiftFileContent: [
+		let fixture = GraphFuzzerFixture.seamCorpusFixture(seed: 2, swiftFileContent: [
 			"// module: FuzzFeature\n@Instantiable(generateDependencyTree: true)\npublic struct S1_Home: Instantiable {}",
 			"// module: FuzzApp\n@Instantiable(isRoot: true)\npublic struct S1_Root: Instantiable {}",
 		])
@@ -252,7 +254,7 @@ struct GraphFuzzerBuilderStructReaderTests {
 
 	@Test
 	func seamCorpusFixture_mergesArgumentIntoConfiguration_whenModuleDeclaresOne() {
-		let fixture = GraphFuzzerFixture.seamCorpusFixture(seed: 1, swiftFileContent: [
+		let fixture = GraphFuzzerFixture.seamCorpusFixture(seed: 2, swiftFileContent: [
 			"// module: FuzzFeature\n@Instantiable(generateDependencyTree: true)\npublic struct S1_Home: Instantiable {}",
 			"// module: FuzzFeature\n// file: SafeDIConfiguration.swift\n#SafeDIConfiguration(additionalDirectoriesToInclude: [])",
 		])
@@ -270,7 +272,7 @@ struct GraphFuzzerBuilderStructReaderTests {
 			"// module: FuzzFeature\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)",
 		]
 
-		#expect(GraphFuzzerFixture.seamCorpusFixture(seed: 1, swiftFileContent: contents).swiftFileContent == contents)
+		#expect(GraphFuzzerFixture.seamCorpusFixture(seed: 2, swiftFileContent: contents).swiftFileContent == contents)
 	}
 
 	@Test
@@ -280,7 +282,7 @@ struct GraphFuzzerBuilderStructReaderTests {
 			"// module: FuzzApp\n@Instantiable(isRoot: true)\npublic struct S1_Root: Instantiable {}",
 		]
 
-		#expect(GraphFuzzerFixture.seamCorpusFixture(seed: 1, swiftFileContent: contents).swiftFileContent == contents)
+		#expect(GraphFuzzerFixture.seamCorpusFixture(seed: 2, swiftFileContent: contents).swiftFileContent == contents)
 	}
 
 	// MARK: Fixtures

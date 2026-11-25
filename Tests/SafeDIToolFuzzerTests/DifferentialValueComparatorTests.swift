@@ -2627,7 +2627,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		public enum S35_CreationStamp {
 			nonisolated(unsafe) private static var lastStamp = 0
 
-			public static func next() -> Int {
+			nonisolated public static func next() -> Int {
 				lastStamp += 1
 				return lastStamp
 			}

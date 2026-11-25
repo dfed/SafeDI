@@ -1272,6 +1272,14 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func corpusAcceptedFeatureCounts_holdAtLeastTenGraphs_forMainActorDefaultIsolation() {
+		// A module that declares the main actor its default isolation, compiled under the matching flag
+		// (`declaringMainActorDefaultIsolation(seed:in:)`), stands in for compile checks of declared modules' generated
+		// code while it lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		#expect(Self.corpusAcceptedFeatureCounts[.mainActorDefaultIsolation, default: 0] >= Self.gatingDrawJudgedGraphFloor)
+	}
+
+	@Test
 	func corpusAcceptedFeatureCounts_holdAtLeastTenGraphs_forMockPassedLabelAboveAlias() {
 		// A mock passed a label that a scope its tree builds declares again, above an `onlyIfAvailable` alias of it
 		// (`addingMockPassedLabelAboveAliasCycle`), stands in for unit tests of where that alias binds only while it lands
@@ -3508,18 +3516,18 @@ struct SafeDIToolGraphFuzzerTests {
 		#if DEBUG
 		extension S2420_T0 {
 		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
+		    @MainActor struct SafeDIOverrides {
 		        init(
 		            t6: (() -> S2420_T6)? = nil,
 		            service: (() -> S2420_Service)? = nil,
-		            t2: S2420_T2.SafeDIMockConfiguration = .init(),
+		            t2: S2420_T2.SafeDIMockConfiguration? = nil,
 		            anyT1: ((S2420_Service) -> S2420_AnyT1)? = nil,
 		            t1Builder: ((S2420_Service) -> S2420_T1)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                t6: t6,
 		                service: service,
-		                t2: t2,
+		                t2: t2 ?? .init(),
 		                anyT1: anyT1,
 		                t1Builder: t1Builder
 		            )
@@ -3556,9 +3564,10 @@ struct SafeDIToolGraphFuzzerTests {
 		        }
 		    }
 
-		    static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		    @MainActor static func mock(
+		        safeDIOverrides: SafeDIOverrides? = nil
 		    ) -> S2420_T0 {
+		        let safeDIOverrides = safeDIOverrides ?? .init()
 		        let t6 = if let safeDIBuilder = safeDIOverrides.t6 { safeDIBuilder() } else { S2420_T6() }
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { S2420_Service.preview() }
 		        func __safeDI_t2() -> S2420_T2 {
@@ -7005,7 +7014,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD224CA9AB2DCC36A
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x40983235DF086FC3
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7015,15 +7024,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC313EDAB229128B6
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x7043CADE0C3F3AE6
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x1FF29AEFB259C2C7
+	static let corpusFixtureHash: UInt64 = 0x2093E4917CF5279E
 
-	static let corpusPartitionHash: UInt64 = 0x5D933B50BDB4FF45
+	static let corpusPartitionHash: UInt64 = 0xA82B026EF8CA73B2
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7111,6 +7120,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.mockOnlyExtensionOfReceivedType: 1_095,
 		.instantiableStruct: 544,
 		.additionalMockToGenerate: 653,
+		.mainActorDefaultIsolation: 169,
 		.generateDependencyTree: 0,
 	]
 
@@ -7279,11 +7289,11 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 786,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 5_808,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x94535DAD56C1113E),
+		overridePairCount: 5_774,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x5023467BE2A67605),
 		overrideFieldKindCounts: [
-			.builder: 4_094,
-			.configuration: 1_714,
+			.builder: 4_147,
+			.configuration: 1_627,
 		],
 		pinnedPlacePairCount: 105,
 	)
@@ -7392,7 +7402,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x3595E52A4D6009B6
+	static let seamCorpusFixtureHash: UInt64 = 0x19B35F335C4E293B
 	static let seamCorpusAcceptedSeedCount = 623
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x48072926F71AC583
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7643,7 +7653,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xAE7744A45A48A0EC
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9A46FCA59CA7445B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
