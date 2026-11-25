@@ -200,9 +200,10 @@ struct ConstructionMemo {
 		}
 		guard let draw else {
 			// The places of one key differ mostly in what a cycle closes on or passes, the reads `answeredAlike(in:)` asks first,
-			// which `context` answers the same for every candidate: so each is answered once per lookup, and a candidate whose
-			// recorded answer to one differs is set aside without asking its log, as `answeredAlike(in:)` would set it aside at
-			// that read. The first candidate in the order they were stored that `context` answers alike is reused, as before.
+			// which `context` answers the same for every candidate: so each is answered once per lookup, and the candidates
+			// are found by following those answers (`Candidates.indices(answeredAlikeBy:)`) rather than by asking each one. A
+			// candidate whose recorded answer to one differs is never asked, as `answeredAlike(in:)` would set it aside at that
+			// read. The first candidate in the order they were stored that `context` answers alike is reused, as before.
 			var contextAnswers = [ConstructionLog.Read: ConstructionLog.Answer]()
 			func contextAnswer(_ read: ConstructionLog.Read) -> ConstructionLog.Answer {
 				if let answer = contextAnswers[read] {
@@ -213,14 +214,15 @@ struct ConstructionMemo {
 					return answer
 				}
 			}
-			for candidate in candidates where candidate.cycleReads.allSatisfy({ contextAnswer($0.read) == $0.answer }) {
-				if let reuse = reuse(of: candidate.entry) {
+			for index in candidates.indices(answeredAlikeBy: contextAnswer) {
+				let candidate = candidates.all[index]
+				if candidate.cycleParameterReads.allSatisfy({ contextAnswer($0.read) == $0.answer }), let reuse = reuse(of: candidate.entry) {
 					return reuse
 				}
 			}
 			return nil
 		}
-		return draw.reuse(among: candidates.map(\.entry), reuse)
+		return draw.reuse(among: candidates.all.map(\.entry), reuse)
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -260,7 +262,7 @@ struct ConstructionMemo {
 
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ScopeRecord) {
-		entriesByKey[key, default: []].append(Candidate(entry: entry, cycleReads: entry.reads.cycleReads))
+		entriesByKey[key, default: Candidates()].append(entry)
 		let generator = ObjectIdentifier(entry.generator)
 		if entriesByGenerator[generator] == nil {
 			entriesByGenerator[generator] = (key, entry)
@@ -268,14 +270,70 @@ struct ConstructionMemo {
 		keyedScopes.append(scope)
 	}
 
-	/// An entry of a key, with the reads of what a cycle closes on or passes that a lookup asks of it first
-	/// (`ConstructionLog.cycleReads`), which most candidates of one key differ in.
+	/// An entry of a key, with the reads of what a cycle passes that a lookup asks of it before its log
+	/// (`ConstructionLog.cycleReads`).
 	private struct Candidate {
 		let entry: Entry
-		let cycleReads: [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
+		let cycleParameterReads: [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
 	}
 
-	private var entriesByKey = [Key: [Candidate]]()
+	/// The entries of one key in the order they were stored, each also filed under what its reads of the declaration a
+	/// cycle closes on were answered, in the order its log asks them: most candidates of one key differ in those answers
+	/// alone, and a tree with cycles stores a candidate for each set of declarations its place is built inside, so asking
+	/// each candidate in turn made a lookup's work grow with the number stored.
+	private struct Candidates {
+		/// A set of candidates whose first reads were answered alike: the candidates with no further read, and for each
+		/// read a candidate asks next, the node of each answer recorded for it.
+		private struct Node {
+			var candidates = [Int]()
+			var nodeByAnswerByRead = [ConstructionLog.Read: [PropertyID?: Int]]()
+		}
+
+		private(set) var all = [Candidate]()
+		/// The first node holds every candidate before any read.
+		private var nodes = [Node()]
+
+		mutating func append(_ entry: Entry) {
+			var cycleParameterReads = [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]()
+			var node = 0
+			for (read, answer) in entry.reads.cycleReads {
+				switch answer {
+				case let .declarationClosedOn(closedOn):
+					if let next = nodes[node].nodeByAnswerByRead[read]?[closedOn] {
+						node = next
+					} else {
+						nodes[node].nodeByAnswerByRead[read, default: [:]][closedOn] = nodes.count
+						node = nodes.count
+						nodes.append(Node())
+					}
+				case .cycleParameterContext, .nearestDeclaration, .binding, .passesNil:
+					cycleParameterReads.append((read, answer))
+				}
+			}
+			nodes[node].candidates.append(all.count)
+			all.append(Candidate(entry: entry, cycleParameterReads: cycleParameterReads))
+		}
+
+		/// The indices in `all`, in order, of the candidates whose every read of the declaration a cycle closes on
+		/// `contextAnswer` answers as recorded.
+		func indices(answeredAlikeBy contextAnswer: (ConstructionLog.Read) -> ConstructionLog.Answer) -> [Int] {
+			var indices = [Int]()
+			// Candidates can ask their reads in different orders, so a node can hold several next reads, each followed: the
+			// indices found are sorted, so the order the reads are followed in reaches nothing.
+			var nodesToVisit = [0]
+			while let node = nodesToVisit.popLast() {
+				indices.append(contentsOf: nodes[node].candidates)
+				for (read, nodeByAnswer) in nodes[node].nodeByAnswerByRead {
+					if case let .declarationClosedOn(closedOn) = contextAnswer(read), let next = nodeByAnswer[closedOn] {
+						nodesToVisit.append(next)
+					}
+				}
+			}
+			return indices.sorted()
+		}
+	}
+
+	private var entriesByKey = [Key: Candidates]()
 	/// Each stored generator with the key and entry it was first stored under.
 	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
@@ -306,7 +364,7 @@ struct ConstructionMemo {
 		}
 	}
 
-	private var oracleEntriesByKey = [Key: [Candidate]]()
+	private var oracleEntriesByKey = [Key: Candidates]()
 	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [ScopeRecord]()
 	private var oraclePassTrees = [ScopeGenerator]()
