@@ -73,7 +73,7 @@ extension MockLowering.Walk {
 		for call in builtPlaceCalls.values where call.isPlannedAtPlace {
 			let context = ConstructionContext(generator: ObjectIdentifier(call.generator), unavailableProperties: call.unavailableProperties)
 			if constructionReadsByContext[context] == nil {
-				constructionReadsByContext[context] = call.generator.isPlannedByGenerator
+				constructionReadsByContext[context] = call.generator.isPlannedByGenerator()
 					? Result { () throws(Initializer.GenerationError) in try call.generator.constructionReads(of: call.instantiable, unavailableProperties: call.unavailableProperties) }
 					: .success(nil)
 			}

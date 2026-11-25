@@ -23,7 +23,7 @@
 extension MockLowering.Walk {
 	/// The record of the closer of `generator`, bound as `bindingName`, which calls the function named
 	/// `closedOnFunctionName`, or `nil` where the type key does not plan it: a member of a loop of builders, or a place the
-	/// generator writes with anything the type key does not plan (`ScopeGenerator.isPlannedByGenerator`).
+	/// generator writes with anything the type key does not plan (`ScopeGenerator.isPlannedByGenerator(separatesValuesBindings:)`).
 	func closerRecord(
 		of generator: ScopeGenerator,
 		instantiable: Instantiable,

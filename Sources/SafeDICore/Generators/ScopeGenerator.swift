@@ -6969,7 +6969,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isPlannedAtPlace: Bool,
 		readNames: [Property: String] = [:],
 	) -> PlaceRecord? {
-		guard isPlannedAtPlace, isPlannedByGenerator else { return nil }
+		guard isPlannedAtPlace, isPlannedByGenerator() else { return nil }
 		return .closer(ClosingPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
@@ -7004,8 +7004,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		constructionReads computedConstructionReads: Result<[PlaceRead]?, Initializer.GenerationError>? = nil,
 		separatesValuesBindings: Bool = false,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
-		// A seam's place whose payload bindings are places of their own (`separatesValuesBindings`) is planned beside them.
-		guard isPlannedAtPlace, valuesBindingLines.isEmpty || separatesValuesBindings, isPlannedBesideValuesBindings else { return nil }
+		guard isPlannedAtPlace, isPlannedByGenerator(separatesValuesBindings: separatesValuesBindings) else { return nil }
 		// A caller that writes many places of one generator in one context hands the construction's reads it computed once for
 		// them (`constructionReads(of:unavailableProperties:)`).
 		let constructionReads = if let computedConstructionReads {
@@ -7058,15 +7057,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call.
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false) -> Bool {
-		(valuesBindingLines.isEmpty || separatesValuesBindings)
-			&& isPlannedBesideValuesBindings
+		isPlannedByGenerator(separatesValuesBindings: separatesValuesBindings)
 			&& isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
 	}
 
 	/// The half of `isPlannedByTypeKey(builderFunctionNames:fillPlaceBindings:)` the generator decides alone, whichever walk
-	/// writes its place: no payload binding, no wrapper made again, no member call, and no fill's own place.
-	nonisolated var isPlannedByGenerator: Bool {
-		valuesBindingLines.isEmpty && isPlannedBesideValuesBindings
+	/// writes its place: no payload binding, unless a seam's payload bindings are places of their own
+	/// (`separatesValuesBindings`), beside which the place is planned; no wrapper made again, no member call, and no fill's
+	/// own place. The one predicate both the planned flag and a built place's record read, so the two never disagree.
+	nonisolated func isPlannedByGenerator(separatesValuesBindings: Bool = false) -> Bool {
+		(valuesBindingLines.isEmpty || separatesValuesBindings) && isPlannedBesideValuesBindings
 	}
 
 	/// What the generator decides alone of whether the type key plans its place, beside its payload bindings: no wrapper
