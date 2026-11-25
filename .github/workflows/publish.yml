@@ -206,6 +206,8 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: write
+    outputs:
+      release-sha: ${{ steps.push.outputs.release-sha }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -351,11 +353,18 @@ jobs:
           cp artifacts/SafeDITool-linux-x86_64/SafeDITool SafeDITool-linux-x86_64
           cp artifacts/SafeDITool-linux-arm64/SafeDITool SafeDITool-linux-arm64
 
-      - name: Tag and push
+      # Pushes only the release commit. The tag is created by "Tag and
+      # Release" with the release app's token: the repository's tag ruleset
+      # lets only that app create, move or delete a tag, and only a job in
+      # the protected `release` environment can mint its token. The local
+      # tag names the commit for "Create source tarball".
+      - name: Push release commit
+        id: push
         if: ${{ !inputs.dry-run }}
         run: |
           git tag "${{ inputs.version }}"
-          git push origin "${{ github.ref_name }}" --tags
+          git push origin "${{ github.ref_name }}"
+          echo "release-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # Produce a source tarball for the BCR entry: `git archive` of the
       # just-created tag, rooted at `SafeDI-<version>/` — matching
@@ -380,12 +389,66 @@ jobs:
           name: source-tarball
           path: SafeDI-${{ inputs.version }}.tar.gz
 
-      - name: Create GitHub Release
+      - name: Gather release assets
         if: ${{ !inputs.dry-run }}
+        run: |
+          mkdir release-assets
+          mv \
+            SafeDITool.artifactbundle.zip \
+            SafeDITool-macos-arm64 \
+            SafeDITool-macos-x86_64 \
+            SafeDITool-linux-x86_64 \
+            SafeDITool-linux-arm64 \
+            "SafeDI-${{ inputs.version }}.tar.gz" \
+            release-assets/
+      - name: Upload release assets
+        if: ${{ !inputs.dry-run }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release-assets/
+
+  # The only job that creates a tag or a release. It runs in the `release`
+  # environment, which only `main` may deploy to and which holds the release
+  # app's private key; the tag ruleset's only bypass actor is that app. A
+  # dry run never reaches this job, so it needs no environment approval.
+  # `gh release create` makes a draft, uploads every asset, then publishes,
+  # so the assets are in place before an immutable release locks them.
+  tag-and-release:
+    name: Tag and Release
+    needs: assemble-and-publish
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions: {}
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Mint the release app's token
+        id: release-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Create tag
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_UPLOADER }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          RELEASE_SHA: ${{ needs.assemble-and-publish.outputs.release-sha }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/${{ inputs.version }}" \
+            -f sha="$RELEASE_SHA"
+      - name: Create GitHub Release
+        working-directory: release-assets
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
         run: |
           gh release create "${{ inputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
             --title "${{ inputs.version }}" \
             --generate-notes \
             ${{ inputs.prerelease && '--prerelease' || '' }} \
