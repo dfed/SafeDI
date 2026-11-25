@@ -7296,6 +7296,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.configuration: 2_091,
 		],
 		pinnedPlacePairCount: 105,
+		nestedCyclePairCount: 0,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
@@ -7542,6 +7543,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeScreenValueReceivedBySeam: 19,
 		.holeScreenValueRequiredLostOnReentry: 0,
 		.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule: 14,
+		.nestedCycleHole: 59,
+		.nestedCycleHoleLabelDeclaredAfterCloser: 31,
+		.nestedCycleHoleLabelReceivedByTypeBuiltAgain: 59,
+		.nestedCycleHolePlaceOnScreen: 28,
 		.wrapperMix: 92,
 		.wrapperMixValueAndSendableWrapper: 82,
 		.wrapperMixWrapperReadInSendableFunction: 44,
@@ -8013,6 +8018,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeScreenValueReadWithoutReentry: 116,
 		.reenteredFillCallThroughSeamPassingPlaceUpInSendableFill: 64,
 		.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule: 62,
+		.nestedCycleHole: 263,
+		.nestedCycleHoleLabelDeclaredAfterCloser: 132,
+		.nestedCycleHoleLabelNoFunctionTakes: 16,
+		.nestedCycleHoleLabelReceivedByTypeBuiltAgain: 247,
+		.nestedCycleHolePlaceOnScreen: 126,
 		.wrapperMix: 378,
 		.wrapperMixValueAndSendableWrapper: 372,
 		.wrapperMixSendableWrapperBesidePlainMemo: 40,

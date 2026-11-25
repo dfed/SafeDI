@@ -26,6 +26,9 @@ public enum ValidationWalkObservation: Sendable {
 	/// The walk skipped a scope's subtree, since a walk of it along a path that gives it an equal context completed and found
 	/// nothing (see `cycle-validation.md`, "Clean subtrees").
 	case skippedCleanSubtree
+	/// The walk built the key of a scope's subtree, to skip it or to remember its walk. A scope that reaches a cycle of
+	/// instantiators stops being keyed after a run of keys no remembered walk equals.
+	case keyedSubtree
 
 	/// Called with what the walk did, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (ValidationWalkObservation) -> Void)?
