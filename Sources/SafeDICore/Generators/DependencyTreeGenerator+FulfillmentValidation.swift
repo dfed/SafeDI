@@ -233,7 +233,6 @@ extension DependencyTreeGenerator {
 				in: table,
 				lazilyInstantiatedInstanceProperties: [],
 				erasedToConcreteExistential: false,
-				startsCodeGeneration: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
