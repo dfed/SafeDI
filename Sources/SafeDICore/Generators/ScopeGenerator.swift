@@ -7033,10 +7033,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		readNames: [Property: String] = [:],
 		alternatives: [ConstructionAlternative] = [],
 		constructionReads computedConstructionReads: Result<[PlaceRead]?, Initializer.GenerationError>? = nil,
+		separatesValuesBindings: Bool = false,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		// A seam's place whose payload bindings are places of their own (`separatesValuesBindings`) is planned beside them.
+		guard isPlannedAtPlace, valuesBindingLines.isEmpty || separatesValuesBindings, isPlannedBesideValuesBindings else { return nil }
 		// A caller that writes many places of one generator in one context hands the construction's reads it computed once for
 		// them (`constructionReads(of:unavailableProperties:)`).
-		guard isPlannedAtPlace, isPlannedByGenerator else { return nil }
 		let constructionReads = if let computedConstructionReads {
 			try computedConstructionReads.get()
 		} else {
@@ -8664,6 +8666,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				node: planNode,
 				isPlannedAtPlace: seamCall == nil && isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
 				alternatives: alternatives,
+				separatesValuesBindings: separatesValuesBindings,
 			)
 		}
 
