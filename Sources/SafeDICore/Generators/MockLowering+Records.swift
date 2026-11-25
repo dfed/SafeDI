@@ -78,6 +78,9 @@ extension MockLowering {
 		let hasFunction: Bool
 		let readNames: [Property: String]
 		let alternatives: [ConstructionAlternative]
+		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
+		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
+		var configuredConstruction: ConfiguredConstruction?
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
@@ -155,9 +158,10 @@ extension MockLowering.Walk {
 		dependencyArguments: [(label: String, value: String)],
 		usesMockInitializer: Bool,
 	) {
-		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, is one the record
-		// cannot spell yet: its target is the initializer, and its arguments are reads alone.
-		guard !usesMockInitializer, !constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return }
+		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
+		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
+		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, readsOverride: overrideRead != nil, usesMockInitializer: usesMockInitializer)
+		guard configuredConstruction != .unrecorded else { return }
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
 			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
@@ -169,6 +173,7 @@ extension MockLowering.Walk {
 			hasFunction: hasFunction,
 			readNames: MockLowering.readNames(of: initializer, given: instantiable.dependencies, argumentValues: dependencyArguments),
 			alternatives: alternatives,
+			configuredConstruction: configuredConstruction.recorded,
 		)
 	}
 
@@ -184,7 +189,7 @@ extension MockLowering.Walk {
 		// A construction whose reads the record function cannot name (`Initializer.GenerationError`) leaves the place
 		// unrecorded: the walk's own statement is what the mock writes.
 		do {
-			builtRecords[childIndexPath] = try generator.builtPlaceRecord(
+			let record = try generator.builtPlaceRecord(
 				of: property,
 				instantiable: instantiable,
 				forwardedProperties: forwardedProperties,
@@ -198,6 +203,11 @@ extension MockLowering.Walk {
 				readNames: inputs.readNames,
 				alternatives: inputs.alternatives,
 			)
+			builtRecords[childIndexPath] = if let configuredConstruction = inputs.configuredConstruction {
+				record.flatMap { configuring($0, with: configuredConstruction, instantiable: instantiable) }
+			} else {
+				record
+			}
 		} catch {
 			unrecordedPlaceErrors[childIndexPath] = error
 		}
