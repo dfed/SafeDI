@@ -156,6 +156,195 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [nil, "MainActor"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsMainActor_whenModuleDeclaresMainActorAndTypeSpellsOnlyGeneratedInitializerAttributes(buildSettingDefaultIsolation: String?) async throws {
+		// Each attribute field takes the module's default on its own: text written for the initializers leaves the mock's
+		// default in place.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@MainActor
+				public protocol Presentable: AnyObject {}
+				""",
+				"""
+				@Instantiable(generatedInitializerAttributes: "@MainActor", generateMock: true)
+				public final class Screen: Instantiable, Presentable {
+				    public init(limit: Int = 10) {
+				        self.limit = limit
+				    }
+
+				    let limit: Int
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": Self.declaringMainActor],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: buildSettingDefaultIsolation),
+		)
+
+		#expect(output.generatedFiles == [
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Screen {
+			    @MainActor static func mock(
+			        limit: Int = 10
+			    ) -> Screen {
+			        return Screen(limit: limit)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader,
+		])
+	}
+
+	@Test(arguments: [nil, "MainActor"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_REVIEWCELL_typeBoundToAnotherGlobalActorThroughProtocol(buildSettingDefaultIsolation: String?) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@globalActor public actor DatabaseActor {
+				    public static let shared = DatabaseActor()
+				}
+
+				@DatabaseActor public protocol DatabaseBound {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Ledger: Instantiable, DatabaseBound {
+				    public init(store: Store) {
+				        self.store = store
+				    }
+
+				    @Instantiated let store: Store
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				nonisolated public final class Store: Instantiable, Sendable {
+				    public init() {}
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": Self.declaringMainActor],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: buildSettingDefaultIsolation),
+		)
+		#expect(output.generatedFiles != nil)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsMainActorOnAdditionalMock_whenOnlyDeclaringModuleDeclaresMainActor(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.additionalMockModules(featureDeclares: true, testsDeclare: false),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let expectedMock = generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            client: (() -> Client)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                client: client
+			            )
+			        }
+
+			        var client: (() -> Client)? { __safeDI_storage.client }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                client: (() -> Client)?
+			            ) {
+			                self.client = client
+			            }
+
+			            let client: (() -> Client)?
+			        }
+			    }
+
+			    @MainActor static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
+			        return Root(client: client)
+			    }
+			}
+			#endif
+			"""
+		#expect(try #require(output.modules["Tests"]).generatedFiles == (integration == .moduleInfo
+				? ["Tests.swift": expectedMock]
+				: ["Root+SafeDIMock.swift": expectedMock, "SafeDIMockConfiguration.swift": generatedFileHeader]))
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsMainActorOnAdditionalMock_whenOnlyGeneratingModuleDeclaresMainActor(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.additionalMockModules(featureDeclares: false, testsDeclare: true),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let expectedMock = generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            client: (() -> Client)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                client: client
+			            )
+			        }
+
+			        var client: (() -> Client)? { __safeDI_storage.client }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                client: (() -> Client)?
+			            ) {
+			                self.client = client
+			            }
+
+			            let client: (() -> Client)?
+			        }
+			    }
+
+			    @MainActor static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
+			        return Root(client: client)
+			    }
+			}
+			#endif
+			"""
+		#expect(try #require(output.modules["Tests"]).generatedFiles == (integration == .moduleInfo
+				? ["Tests.swift": expectedMock]
+				: ["Root+SafeDIMock.swift": expectedMock, "SafeDIMockConfiguration.swift": generatedFileHeader]))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -165,4 +354,46 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 	    defaultIsolation: MainActor.self
 	)
 	"""
+
+	/// `Feature`, which declares `Root`, and `Tests`, which generates `Root`'s mock through `additionalMocksToGenerate`.
+	/// A module that declares the main actor as its default isolation is compiled with `-default-isolation MainActor`.
+	private static func additionalMockModules(featureDeclares: Bool, testsDeclare: Bool) -> [ModuleFixture] {
+		[
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public final class Root: Instantiable {
+					    public init(client: Client) {
+					        self.client = client
+					    }
+
+					    @Instantiated let client: Client
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Client: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				swiftFileContentByFilePath: featureDeclares ? ["SafeDIConfiguration.swift": declaringMainActor] : [:],
+				compilerSettings: VerificationCompilerSettings(defaultIsolation: featureDeclares ? "MainActor" : nil),
+			),
+			ModuleFixture(
+				name: "Tests",
+				packageName: "Shop",
+				swiftFileContentByFilePath: ["SafeDIConfiguration.swift": """
+				#SafeDIConfiguration(
+				    additionalMocksToGenerate: ["Root"]\(testsDeclare ? ",\n    defaultIsolation: MainActor.self" : "")
+				)
+				"""],
+				dependencies: ["Feature"],
+				compilerSettings: VerificationCompilerSettings(defaultIsolation: testsDeclare ? "MainActor" : nil),
+			),
+		]
+	}
 }

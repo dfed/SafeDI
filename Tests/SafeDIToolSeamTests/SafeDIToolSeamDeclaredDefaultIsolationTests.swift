@@ -89,6 +89,31 @@ struct SafeDIToolSeamDeclaredDefaultIsolationTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtRoot_whenRootStatesNoIsolationAndCallsSeamItsModuleGeneratesMainActor(integration: MultiModuleIntegration) async throws {
+		// `App` declares no default isolation, so its root's generated `init()` is nonisolated, and cannot call the
+		// `@MainActor` initializer `Feature` generated for its seam.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let rootPath = switch integration {
+			case .moduleInfo:
+				fixtures["App"]!["Root.swift"]
+			case .swiftPackagePlugin:
+				NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path
+			}
+			return """
+			\(rootPath):3:1: error: The initializer SafeDI generates for `Root` calls the initializer module `Feature` generates for `Screen`, which is `@MainActor` because `Feature` declares `defaultIsolation: MainActor.self` in its `#SafeDIConfiguration`, but the initializer SafeDI generates for `Root` states no isolation. Declare `defaultIsolation: MainActor.self` in this module’s `#SafeDIConfiguration`, or write `generatedAttributes: "@MainActor"` on `Root`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(buildSettingDefaultIsolation: nil, appConfiguration: [:]),
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesModuleInfoFileHoldingSuppliedAttributes_whenModuleDeclaresMainActor() async throws {
@@ -114,8 +139,9 @@ struct SafeDIToolSeamDeclaredDefaultIsolationTests: ~Copyable {
 	private static let declaringMainActor = ["SafeDIConfiguration.swift": "#SafeDIConfiguration(defaultIsolation: MainActor.self)\n"]
 
 	/// `Feature`, which declares the seam `Screen`, whose tree builds `Detail`, main-actor through `Feature`'s
-	/// `Presentable`, and `App`, whose root builds `Screen`. Each declares the main actor as its default isolation.
-	private static func modules(buildSettingDefaultIsolation: String?) -> [ModuleFixture] {
+	/// `Presentable`, and `App`, whose root builds `Screen`. `Feature` declares the main actor as its default isolation, and `App` declares
+	/// `appConfiguration`.
+	private static func modules(buildSettingDefaultIsolation: String?, appConfiguration: [String: String] = declaringMainActor) -> [ModuleFixture] {
 		[
 			ModuleFixture(
 				name: "Feature",
@@ -174,7 +200,7 @@ struct SafeDIToolSeamDeclaredDefaultIsolationTests: ~Copyable {
 					}
 					""",
 				],
-				swiftFileContentByFilePath: declaringMainActor,
+				swiftFileContentByFilePath: appConfiguration,
 				dependencies: ["Feature"],
 				compilerSettings: VerificationCompilerSettings(defaultIsolation: buildSettingDefaultIsolation),
 			),
