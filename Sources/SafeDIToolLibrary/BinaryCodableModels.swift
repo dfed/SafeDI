@@ -1389,8 +1389,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
-				// A signature names the same few types at many places.
-				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingValues),
+				BinaryLayoutField("seamSignatures", \.seamSignatures),
 				BinaryLayoutField("view", \.view),
 			],
 			unwrittenProperties: [],
@@ -1433,7 +1432,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			seamSignatures: (reader.read() as BinarySharingSignatureValues<[StoredSeamSignature]>).value,
+			seamSignatures: reader.read() as ModuleSeamSignatures,
 			view: .empty,
 		)
 	}
@@ -1442,8 +1441,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		write(to: &writer) { writer in writer.write(seamSignatures) }
 	}
 
-	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures`, which it writes as their array
-	/// does, each type description at the outermost level of each written once.
+	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures`.
 	func write(to writer: inout BinaryWriter, writingSeamSignatures writeSeamSignatures: (inout BinaryWriter) -> Void) {
 		writer.write(moduleName)
 		writer.write(ownEntryChecksum)
@@ -1457,13 +1455,37 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
-		// As `seamSignaturesSharingValues` writes them.
-		writer.writeSharingSignatureValues(writeSeamSignatures)
+		writeSeamSignatures(&writer)
 		writer.write(view)
 	}
+}
 
-	private var seamSignaturesSharingValues: BinarySharingSignatureValues<[StoredSeamSignature]> {
-		BinarySharingSignatureValues(seamSignatures)
+extension ModuleSeamSignatures: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("seamTypes", \.seamTypes),
+				BinaryLayoutField("encoding", \.encodingWithPositions),
+			],
+			// Written as `encoding`.
+			unwrittenProperties: ["storage"],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(seamTypes: reader.read(), encoding: (reader.read() as BinaryEncoding).bytes)
+	}
+
+	/// Writes the seams, then the encoding of their signatures (``encoding(writingPositionsAsAbsent:)``), which shares the
+	/// values a signature repeats among the module's signatures alone: a run that reads one module's decodes no other's.
+	func write(to writer: inout BinaryWriter) {
+		writer.write(seamTypes)
+		writer.write(BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: writer.writesPositionsAsAbsent)))
+	}
+
+	/// The encoding as a writer that writes positions writes it.
+	private var encodingWithPositions: BinaryEncoding {
+		BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: false))
 	}
 }
 
@@ -1557,7 +1579,7 @@ extension ViewedModule: BinarySchemaMember {
 				BinaryLayoutField("mockImports", \.mockImports),
 				BinaryLayoutField("instantiables", \.instantiables),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
-				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingValues),
+				BinaryLayoutField("seamSignatures", \.seamSignatures),
 			],
 			unwrittenProperties: [],
 		)
@@ -1570,7 +1592,7 @@ extension ViewedModule: BinarySchemaMember {
 			mockImports: reader.read(),
 			instantiables: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			seamSignatures: (reader.read() as BinarySharingSignatureValues<[StoredSeamSignature]>).value,
+			seamSignatures: reader.read() as ModuleSeamSignatures,
 		)
 	}
 
@@ -1580,10 +1602,6 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(mockImports)
 		writer.write(instantiables)
 		writer.write(plainTypeDeclarations)
-		writer.write(seamSignaturesSharingValues)
-	}
-
-	private var seamSignaturesSharingValues: BinarySharingSignatureValues<[StoredSeamSignature]> {
-		BinarySharingSignatureValues(seamSignatures)
+		writer.write(seamSignatures)
 	}
 }
