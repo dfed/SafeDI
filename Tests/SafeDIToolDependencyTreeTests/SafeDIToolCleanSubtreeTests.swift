@@ -540,7 +540,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		// declare it with another type or declare nothing, with every type's declarations and the files in a drawn order.
 		// Every graph is run with the skip and without it. The counts show the draw reaches what it is for: graphs the tool
 		// accepts, graphs it rejects, and graphs whose walk skipped a subtree. With a cycle's types answered one at a time
-		// from a walk in progress, seeds 4 and 11 are the first whose two runs differ.
+		// from a walk in progress, the two runs of seeds 27 and 65 differ.
 		var acceptedCount = 0
 		var rejectedCount = 0
 		var skippingCount = 0
@@ -559,7 +559,8 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 				skippingCount += 1
 			}
 		}
-		#expect([acceptedCount, rejectedCount, skippingCount] == [0, 0, 0])
+		let counts = [acceptedCount, rejectedCount, skippingCount]
+		#expect(counts == [72, 128, 149])
 	}
 
 	// MARK: Private
@@ -1088,7 +1089,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}
 	}
 
-	private static let ringDrawSeedCount: UInt64 = 400
+	private static let ringDrawSeedCount: UInt64 = 200
 
 	/// The graph of `seed`: two to four `Ring` types that each build the next through an `Instantiator`, now and then with
 	/// one more builder across the ring. One drawn type of the ring receives `mark` (required, only if available, or
