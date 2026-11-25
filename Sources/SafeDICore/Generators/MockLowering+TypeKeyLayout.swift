@@ -236,6 +236,7 @@ extension MockLowering.Walk {
 		closedOnPlacesByLabel = [:]
 		builtPlaceConfigurationContexts = [:]
 		closerParentFieldReads = [:]
+		publicMockCallPlanNodes = [:]
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
