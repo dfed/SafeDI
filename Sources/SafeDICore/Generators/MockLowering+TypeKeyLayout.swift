@@ -188,9 +188,10 @@ extension MockLowering.Walk {
 	}
 
 	/// The root's statements in the type key's layout, each line indented as the root's are, or `nil` where the root keeps
-	/// the walk's: a place records nothing, a read names a value no record or root declaration binds, or the type key cannot
-	/// lay the body out.
+	/// the walk's: the walk entered a cycle with a cycle edge, a place records nothing, a read names a value no record or
+	/// root declaration binds, or the type key cannot lay the body out.
 	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> (lines: [String]?, fallback: String) {
+		guard !entersCycleWithEdge else { return (nil, "entersCycleWithEdge") }
 		var rootBody = [GeneratedCode]()
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
 		for property in rootDeclarations {

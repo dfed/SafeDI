@@ -176,6 +176,22 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsWalksBody_whenRootEntersMockedLazyCycle() async throws {
+		// Which edge of the cycle `computeCycleEdges` prunes follows the types' names, and so does whether a root's walk
+		// crosses it or only closes the cycle on it: every root that builds both types of the edge keeps the walk's body.
+		let mocks = try await generatedMocks(of: Self.mockedLazyCycleFixture)
+		for file in ["Alpha+SafeDIMock.swift", "Bravo+SafeDIMock.swift", "Root+SafeDIMock.swift"] {
+			#expect(mocks.laidOut.mockFiles[file] == mocks.walk.mockFiles[file], "\(file)")
+		}
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: Self.mockedLazyCycleFixture, probes: [
+			DifferentialValueProbe("Root.mock().alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
+			DifferentialValueProbe("Bravo.mock(safeDIOverrides: .init(badge: .init(title: \"bravo\"))).alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
+			DifferentialValueProbe("Alpha.mock(safeDIOverrides: .init(bravoBuilder: .init(badge: .init(title: \"alpha\")))).bravoBuilder.instantiate().badge.title"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_evaluatesDefaultOncePerConstruction_whenSendableBuilderIsLaidOut() async throws {
 		let mocks = try await generatedMocks(of: Self.sideEffectingDefaultFixture)
 		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
@@ -408,6 +424,51 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 		    }
 
 		    @Instantiated public let screenBuilder: SendableInstantiator<Screen>
+		}
+		""",
+	]
+
+	private static let mockedLazyCycleFixture = [
+		"Alpha.swift": """
+		@Instantiable(generateMock: true)
+		public final class Alpha: Instantiable {
+		    public init(bravoBuilder: Instantiator<Bravo>) {
+		        self.bravoBuilder = bravoBuilder
+		    }
+
+		    @Instantiated public let bravoBuilder: Instantiator<Bravo>
+		}
+		""",
+		"Badge.swift": """
+		@Instantiable
+		public final class Badge: Instantiable {
+		    public init(title: String = "default") {
+		        self.title = title
+		    }
+
+		    public let title: String
+		}
+		""",
+		"Bravo.swift": """
+		@Instantiable(generateMock: true)
+		public final class Bravo: Instantiable {
+		    public init(alphaBuilder: Instantiator<Alpha>, badge: Badge) {
+		        self.alphaBuilder = alphaBuilder
+		        self.badge = badge
+		    }
+
+		    @Instantiated public let alphaBuilder: Instantiator<Alpha>
+		    @Instantiated public let badge: Badge
+		}
+		""",
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(alphaBuilder: Instantiator<Alpha>) {
+		        self.alphaBuilder = alphaBuilder
+		    }
+
+		    @Instantiated public let alphaBuilder: Instantiator<Alpha>
 		}
 		""",
 	]
