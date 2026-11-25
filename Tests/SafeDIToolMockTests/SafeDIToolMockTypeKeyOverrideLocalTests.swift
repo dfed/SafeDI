@@ -656,6 +656,171 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutRootReadingTheOverridesTheWalkReads_whenTypeBeneathLeftOutEdgesOfTwoLazyCyclesInstantiatesALabelAgain() async throws {
+		// `W` and `U` instantiate one another, and so do `U` and `P`, and a mock's configurations leave one edge of each
+		// cycle out: `W`'s has no `uBuilder` and `U`'s no `pBuilder`. `P`, built beneath both, has no `P` above it, so it is
+		// handed a configuration built afresh, and the `l` it instantiates again reads no override, as in the walk's body.
+		let fixture = [
+			"L.swift": """
+			@Instantiable
+			public final class L: Instantiable {
+			    public init(title: String = "default") {
+			        self.title = title
+			    }
+
+			    public let title: String
+			}
+			""",
+			"P.swift": """
+			@Instantiable
+			public final class P: Instantiable {
+			    public init(l: L, uBuilder: Instantiator<U>) {
+			        self.l = l
+			        self.uBuilder = uBuilder
+			    }
+
+			    @Instantiated public let l: L
+			    @Instantiated public let uBuilder: Instantiator<U>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(l: L, wBuilder: Instantiator<W>) {
+			        self.l = l
+			        self.wBuilder = wBuilder
+			    }
+
+			    @Instantiated public let l: L
+			    @Instantiated public let wBuilder: Instantiator<W>
+			}
+			""",
+			"U.swift": """
+			@Instantiable
+			public final class U: Instantiable {
+			    public init(pBuilder: Instantiator<P>, wBuilder: Instantiator<W>) {
+			        self.pBuilder = pBuilder
+			        self.wBuilder = wBuilder
+			    }
+
+			    @Instantiated public let pBuilder: Instantiator<P>
+			    @Instantiated public let wBuilder: Instantiator<W>
+			}
+			""",
+			"V.swift": """
+			@Instantiable
+			public final class V: Instantiable {
+			    public init(l: L) {
+			        self.l = l
+			    }
+
+			    @Received public let l: L
+			}
+			""",
+			"W.swift": """
+			@Instantiable
+			public final class W: Instantiable {
+			    public init(uBuilder: Instantiator<U>, vBuilder: Instantiator<V>) {
+			        self.uBuilder = uBuilder
+			        self.vBuilder = vBuilder
+			    }
+
+			    @Instantiated public let uBuilder: Instantiator<U>
+			    @Instantiated public let vBuilder: Instantiator<V>
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixture)
+		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
+
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            l: L.SafeDIMockConfiguration = .init(),
+		            wBuilder: W.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                l: l,
+		                wBuilder: wBuilder
+		            )
+		        }
+
+		        var l: L.SafeDIMockConfiguration { __safeDI_storage.l }
+		        var wBuilder: W.SafeDIMockConfiguration { __safeDI_storage.wBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                l: L.SafeDIMockConfiguration,
+		                wBuilder: W.SafeDIMockConfiguration
+		            ) {
+		                self.l = l
+		                self.wBuilder = wBuilder
+		            }
+
+		            let l: L.SafeDIMockConfiguration
+		            let wBuilder: W.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_l(__safeDI_L_configuration: L.SafeDIMockConfiguration) -> L {
+		            if let safeDIBuilder = __safeDI_L_configuration.safeDIBuilder { safeDIBuilder(__safeDI_L_configuration.title) } else { L(title: __safeDI_L_configuration.title) }
+		        }
+		        let l: L = __safeDI_l(__safeDI_L_configuration: safeDIOverrides.l)
+		        func __safeDI_wBuilder(__safeDI_W_configuration: W.SafeDIMockConfiguration) -> W {
+		            let uBuilder = Instantiator<U> {
+		                __safeDI_uBuilder(__safeDI_U_configuration: U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration)
+		            }
+		            let vBuilder = Instantiator<V> {
+		                __safeDI_vBuilder(__safeDI_V_configuration: __safeDI_W_configuration.vBuilder)
+		            }
+		            return if let safeDIBuilder = __safeDI_W_configuration.safeDIBuilder { safeDIBuilder(uBuilder, vBuilder) } else { W(uBuilder: uBuilder, vBuilder: vBuilder) }
+		        }
+		        func __safeDI_uBuilder(__safeDI_U_configuration: U.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?) -> U {
+		            let pBuilder = Instantiator<P> {
+		                __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest, __safeDI_U_configuration_nearest: __safeDI_U_configuration)
+		            }
+		            let wBuilder = Instantiator<W> {
+		                __safeDI_wBuilder(__safeDI_W_configuration: __safeDI_W_configuration_nearest ?? W.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_U_configuration.safeDIBuilder { safeDIBuilder(pBuilder, wBuilder) } else { U(pBuilder: pBuilder, wBuilder: wBuilder) }
+		        }
+		        func __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?, __safeDI_U_configuration_nearest: U.SafeDIMockConfiguration?) -> P {
+		            let l: L = __safeDI_l(__safeDI_L_configuration: __safeDI_P_configuration.l)
+		            let uBuilder = Instantiator<U> {
+		                __safeDI_uBuilder(__safeDI_U_configuration: __safeDI_U_configuration_nearest ?? U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest)
+		            }
+		            return if let safeDIBuilder = __safeDI_P_configuration.safeDIBuilder { safeDIBuilder(l, uBuilder) } else { P(l: l, uBuilder: uBuilder) }
+		        }
+		        func __safeDI_vBuilder(__safeDI_V_configuration: ((L) -> V)?) -> V {
+		            if let safeDIBuilder = __safeDI_V_configuration { safeDIBuilder(l) } else { V(l: l) }
+		        }
+		        let wBuilder = Instantiator<W> {
+		            __safeDI_wBuilder(__safeDI_W_configuration: safeDIOverrides.wBuilder)
+		        }
+		        return Root(l: l, wBuilder: wBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
+		#expect(laidOut != mocks.walk.mockFiles["Root+SafeDIMock.swift"])
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(l: .init(title: \"root\"))).wBuilder.instantiate().vBuilder.instantiate().l.title"),
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(l: .init(title: \"root\"))).wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().l.title"),
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(l: .init(title: \"root\"))).wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate().vBuilder.instantiate().l.title"),
+			DifferentialValueProbe(name: "the override of the root's W builds every W the cycles build again", expression: "{ () -> Int in var count = 0; let root = Root.mock(safeDIOverrides: .init(wBuilder: .init(vBuilder: nil, { uBuilder, vBuilder in count += 1; return W(uBuilder: uBuilder, vBuilder: vBuilder) }))); _ = root.wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate(); return count }()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_evaluatesDefaultOncePerConstruction_whenSendableBuilderIsLaidOut() async throws {
 		let mocks = try await generatedMocks(of: Self.sideEffectingDefaultFixture)
 		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
