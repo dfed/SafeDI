@@ -68,8 +68,7 @@ struct KnownRightProductionComparison: Sendable {
 }
 
 /// Generates each shape, then compares all of them in one batch: one compile and one link.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private let knownRightProductionComparisons = SharedTestWork { () async throws -> [KnownRightProductionComparison]? in
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let knownRightProductionComparisons = SharedTestWork { () async throws -> [KnownRightProductionComparison]? in
 	var filesToDelete = [URL]()
 	defer {
 		for fileToDelete in filesToDelete {
