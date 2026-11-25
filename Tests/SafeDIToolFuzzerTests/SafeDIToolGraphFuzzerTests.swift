@@ -377,7 +377,7 @@ struct SafeDIToolGraphFuzzerTests {
 			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 42, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
 			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 39, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 62, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
-			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 166, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
+			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 149, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
 			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
 			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 49, namedMemberClosureCount: 12, conversionFunctionCount: 0, fillFunctionCount: 2),
 			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 73, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
