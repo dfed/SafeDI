@@ -70,6 +70,9 @@ extension BuiltPlaceRecord {
 		if let constructionValue {
 			shape.append("value|\(constructionValue.value.shape)|\(constructionValue.resultWrapper?.asSource ?? "")")
 		}
+		if let functionReturnType {
+			shape.append("returns|\(functionReturnType.asSource)")
+		}
 		return shape
 	}
 }
@@ -147,7 +150,7 @@ extension PlaceRead {
 extension PassedArgument {
 	/// The argument for a caller's structural key: its parameter, its type and the shape of its value.
 	var shape: String {
-		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)"
+		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)"
 	}
 }
 
@@ -158,9 +161,9 @@ extension PassedArgument {
 	var closerShape: String? {
 		switch value {
 		case let .read(read):
-			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)"
+			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
 		case let .passedArgument(name):
-			"passed|\(parameterName)|\(type.asSource)|passed:\(name)"
+			"passed|\(parameterName)|\(type.asSource)|passed:\(name)|\(bindsBeforeCall)"
 		case .emptyInitialization:
 			shape
 		case .rootDeclaration,
@@ -238,7 +241,8 @@ extension TypeKeyLayout {
 			for member in membersByClass[owner] {
 				guard let record = bodies[member].record,
 				      !record.constructionReads.contains(where: \.staysOutsideSendableFunctions),
-				      !record.passedArguments.contains(where: \.staysOutsideSendableFunctions)
+				      // A value bound before the call is read where the call is made, outside this function.
+				      !record.passedArguments.contains(where: { $0.staysOutsideSendableFunctions && !$0.bindsBeforeCall })
 				else { return false }
 				for (index, statement) in bodies[member].statements.enumerated() {
 					let reads: [PlaceRead] = switch statement {
