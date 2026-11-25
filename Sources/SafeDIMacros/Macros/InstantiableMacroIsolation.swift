@@ -24,27 +24,27 @@ import SwiftSyntaxMacros
 
 extension InstantiableMacro {
 	/// Reports each declaration SafeDI generates for `concreteDeclaration` – a root’s `init()`, a seam’s initializers,
-	/// a `mock()` – that calls a declaration spelling `@MainActor` while nothing states that the generated declaration is
+	/// a `mock()` – that calls a declaration spelling `@MainActor` while nothing could make the generated declaration
 	/// `@MainActor` too, with a fix-it that adds `@MainActor` to the attribute argument the generated declaration reads.
 	///
 	/// SafeDI infers no isolation: a generated declaration has the type’s isolation, or the one its attributes spell, so
-	/// a `@MainActor` callee of a type that is not stated to be `@MainActor` makes generated code that does not compile,
-	/// with the compiler’s error in a generated file. The macro reads spellings only, and matches no actor by its name:
-	/// it fires only where the callee spells exactly `@MainActor`, and only a stated `@MainActor` keeps it quiet, on the
-	/// type or in the attribute argument the generated declaration reads. Any other isolation stated there –
-	/// `nonisolated`, or another global actor – makes the generated declaration unable to call the callee too, and an
-	/// attribute that states no isolation, such as `@Observable`, changes nothing, so neither keeps it quiet. A callee
-	/// that spells `nonisolated` or `@preconcurrency` adds no isolation to what calls it (the generator does not mirror
-	/// `@preconcurrency` either), so it is not reported; nor is a callee bound to another global actor, or to
-	/// `@MainActor` spelled any other way.
+	/// a `@MainActor` callee of a type that is not `@MainActor` makes generated code that does not compile, with the
+	/// compiler’s error in a generated file. The macro reads spellings only, and matches no actor by its name: it knows
+	/// the main actor by its two literal spellings, `@MainActor` and `@_Concurrency.MainActor`, and fires only where the
+	/// callee spells one of them. It never reports code that compiles, so it stays quiet wherever the type, or the
+	/// attribute argument the generated declaration reads, spells an attribute without arguments other than
+	/// `@preconcurrency` (or, on the type, SafeDI’s own `@Instantiable`): such an attribute may be the main actor under
+	/// another name, a type alias of it, or a macro that adds it. A `nonisolated` there or a `@preconcurrency` on the
+	/// type states an isolation the callee cannot be called from, so it does not keep it quiet. A callee that spells
+	/// `nonisolated` or `@preconcurrency` adds no isolation to what calls it (the generator does not mirror
+	/// `@preconcurrency` either), so it is not reported; nor is a callee bound to any other global actor.
 	///
 	/// A deliberate gap: a type whose conformance list names a type other than `Instantiable` or `Sendable` (a
 	/// superclass, or a protocol bound to a global actor, such as `UIViewController` or SwiftUI’s `View`) can take its
 	/// global actor from there, which the macro cannot see, so it is not reported. Neither is an `@Instantiable`
 	/// extension, whose extended type’s isolation the macro cannot see, nor the mock of a type whose hand-written mock
-	/// is in a separate `mockOnly` declaration, nor a type whose attribute list holds an `#if` clause, which may state
-	/// its isolation. A type that spells `@MainActor` another way (`@_Concurrency.MainActor`, or a type alias of it) is
-	/// reported though its generated code compiles, and the fix-it’s `@MainActor` keeps it compiling.
+	/// is in a separate `mockOnly` declaration, nor a type whose attribute list holds an `#if` clause, which may hold an
+	/// isolation.
 	///
 	/// When the root’s or seam’s initializers and the `mock()` are both reported, the first diagnostic’s fix-it adds
 	/// `@MainActor` to every argument either reads, and the second has none, so that no two fix-its edit the attribute.
@@ -57,7 +57,7 @@ extension InstantiableMacro {
 		context: some MacroExpansionContext,
 	) {
 		guard !visitor.conformanceListNamesOtherTypes,
-		      !statesMainActor(attributes: concreteDeclaration.attributes)
+		      !mayStateMainActor(attributes: concreteDeclaration.attributes, besides: instantiableMacro)
 		else { return }
 		let typeName = concreteDeclaration.name.text
 		let constructionInitializer = zip(visitor.initializers, visitor.initializerSyntaxes).first { initializer, _ in
@@ -85,8 +85,8 @@ extension InstantiableMacro {
 		}
 		if let generatedInitializers,
 		   let (_, initializerSyntax) = constructionInitializer,
-		   spellsExactlyMainActor(modifiers: initializerSyntax.modifiers, attributes: initializerSyntax.attributes),
-		   !statesMainActor(visitor.generatedInitializerAttributes)
+		   spellsMainActor(modifiers: initializerSyntax.modifiers, attributes: initializerSyntax.attributes),
+		   !mayStateMainActor(visitor.generatedInitializerAttributes)
 		{
 			findings.append(UnstatedIsolation(
 				callee: .initializer(typeName: typeName),
@@ -106,8 +106,8 @@ extension InstantiableMacro {
 				}
 			}
 			if let mockCallee,
-			   spellsExactlyMainActor(modifiers: mockCallee.modifiers, attributes: mockCallee.attributes),
-			   !statesMainActor(visitor.mockAttributes)
+			   spellsMainActor(modifiers: mockCallee.modifiers, attributes: mockCallee.attributes),
+			   !mayStateMainActor(visitor.mockAttributes)
 			{
 				findings.append(UnstatedIsolation(
 					callee: mockCallee.callee,
@@ -160,13 +160,15 @@ extension InstantiableMacro {
 		let generatedAttributesText: String
 	}
 
-	/// Whether a callee spells exactly `@MainActor`, and neither `nonisolated` nor `@preconcurrency`, which leave what
-	/// calls it unisolated.
-	private static func spellsExactlyMainActor(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> Bool {
+	/// Whether a callee spells `@MainActor` or `@_Concurrency.MainActor`, and neither `nonisolated` nor
+	/// `@preconcurrency`, which leave what calls it unisolated.
+	private static func spellsMainActor(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> Bool {
 		var spellsMainActor = false
 		for case let .attribute(attribute) in attributes {
+			// The main actor’s two literal spellings.
 			switch attribute.attributeName.trimmedDescription {
-			case "MainActor" where attribute.arguments == nil:
+			case "MainActor" where attribute.arguments == nil,
+			     "_Concurrency.MainActor" where attribute.arguments == nil:
 				spellsMainActor = true
 			case "preconcurrency":
 				return false
@@ -177,21 +179,26 @@ extension InstantiableMacro {
 		return spellsMainActor && !modifiers.contains { $0.name.tokenKind == .keyword(.nonisolated) }
 	}
 
-	/// Whether a type states that it is `@MainActor`: it spells exactly `@MainActor`, or an `#if` clause, which may.
-	private static func statesMainActor(attributes: AttributeListSyntax) -> Bool {
+	/// Whether a type’s attributes may make it `@MainActor`: an attribute without arguments other than
+	/// `instantiableMacro` and `@preconcurrency`, which may be the main actor under any name, or an `#if` clause, which
+	/// may hold one.
+	private static func mayStateMainActor(attributes: AttributeListSyntax, besides instantiableMacro: AttributeSyntax) -> Bool {
 		attributes.contains {
 			switch $0 {
 			case let .attribute(attribute):
-				attribute.attributeName.trimmedDescription == "MainActor" && attribute.arguments == nil
+				attribute.id != instantiableMacro.id
+					&& attribute.arguments == nil
+					&& attribute.attributeName.trimmedDescription != "preconcurrency"
 			case .ifConfigDecl:
 				true
 			}
 		}
 	}
 
-	/// Whether `attributes`, the text of an attribute argument, spells exactly `@MainActor`.
-	private static func statesMainActor(_ attributes: String) -> Bool {
-		attributes.split(separator: " ").contains("@MainActor")
+	/// Whether `attributes`, the text of an attribute argument, may make the generated declaration `@MainActor`: it
+	/// spells an attribute without arguments, which may be the main actor under any name.
+	private static func mayStateMainActor(_ attributes: String) -> Bool {
+		attributes.split(separator: " ").contains { $0.hasPrefix("@") && !$0.contains("(") }
 	}
 
 	/// Returns `instantiableMacro` with `attribute` added before the text of its argument `label`, `text`, less any

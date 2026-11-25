@@ -224,10 +224,10 @@ import Testing
 		}
 
 		@Test
-		func declaration_producesError_whenGeneratedInitializerAttributesSpellAnAttributeThatStatesNoIsolation() {
+		func declaration_expandsWithoutIssue_whenGeneratedInitializerAttributesSpellAnotherAttributeWithoutArguments() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(isRoot: true, generatedInitializerAttributes: "@inlinable")
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@DatabaseActor")
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -245,36 +245,15 @@ import Testing
 				    private let presenter: Presenter
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
-						line: 1,
-						column: 1,
-						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
-						],
-					),
-				],
 				macros: instantiableTestMacros,
-				fixedSource: """
-				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor @inlinable")
-				public final class Root: Instantiable {
-				    @MainActor public init(presenter: Presenter) {
-				        self.presenter = presenter
-				    }
-
-				    @Instantiated private let presenter: Presenter
-				}
-				""",
 			)
 		}
 
 		@Test
-		func declaration_producesError_whenRootTypeIsBoundToAnotherGlobalActor() {
+		func declaration_expandsWithoutIssue_whenGeneratedInitializerAttributesSpellModuleQualifiedMainActor() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(isRoot: true, generateMock: true)
-				@DatabaseActor
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@_Concurrency.MainActor")
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -284,7 +263,6 @@ import Testing
 				}
 				""",
 				expandedSource: """
-				@DatabaseActor
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -293,42 +271,100 @@ import Testing
 				    private let presenter: Presenter
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
-						line: 1,
-						column: 1,
-						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes` and `mockAttributes`"),
-						],
-					),
-					DiagnosticSpec(
-						message: "`Root`’s initializer is `@MainActor`, and the `mock()` SafeDI generates calls it, so that `mock()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `mockAttributes`.",
-						line: 1,
-						column: 1,
-					),
-				],
 				macros: instantiableTestMacros,
-				fixedSource: """
-				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor", mockAttributes: "@MainActor", generateMock: true)
-				@DatabaseActor
-				public final class Root: Instantiable {
-				    @MainActor public init(presenter: Presenter) {
-				        self.presenter = presenter
-				    }
-
-				    @Instantiated private let presenter: Presenter
-				}
-				""",
 			)
 		}
 
 		@Test
-		func declaration_producesError_whenRootTypeSpellsAnAttributeThatStatesNoIsolation() {
+		func declaration_expandsWithoutIssue_whenRootTypeSpellsAnotherAttributeWithoutArguments() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(isRoot: true)
-				@Observable
+				@Instantiable(isRoot: true, generateMock: true) @DatabaseActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				@DatabaseActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRootTypeSpellsTypeAliasOfMainActor() {
+			assertMacroExpansion(
+				"""
+				typealias UI = MainActor
+				
+				@Instantiable(isRoot: true, generateMock: true) @UI
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				typealias UI = MainActor
+				
+				@UI
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRootTypeSpellsModuleQualifiedMainActor() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateMock: true) @_Concurrency.MainActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				@_Concurrency.MainActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenRootTypeSpellsMacroAttribute() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateMock: true) @Observable
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -347,28 +383,7 @@ import Testing
 				    private let presenter: Presenter
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
-						line: 1,
-						column: 1,
-						fixIts: [
-							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
-						],
-					),
-				],
 				macros: instantiableTestMacros,
-				fixedSource: """
-				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
-				@Observable
-				public final class Root: Instantiable {
-				    @MainActor public init(presenter: Presenter) {
-				        self.presenter = presenter
-				    }
-
-				    @Instantiated private let presenter: Presenter
-				}
-				""",
 			)
 		}
 
@@ -409,6 +424,98 @@ import Testing
 				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
 				nonisolated public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesError_whenRootTypeIsPreconcurrency() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				@preconcurrency public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				@preconcurrency public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				@preconcurrency public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesError_whenRootInitializerSpellsModuleQualifiedMainActor() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    @_Concurrency.MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				public final class Root: Instantiable {
+				    @_Concurrency.MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				public final class Root: Instantiable {
+				    @_Concurrency.MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
 				    }
 
