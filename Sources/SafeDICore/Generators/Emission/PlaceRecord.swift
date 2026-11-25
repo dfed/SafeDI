@@ -179,6 +179,9 @@ struct AliasPlaceRecord: Sendable {
 	/// The names of the functions the text calls, compared as text: where sharing would name a callee apart, the engine
 	/// rewrites the name in the text or keeps the place one per path, never assuming the name stays.
 	var calledFunctionNames = [String]()
+	/// The names of the functions the text declares in the body that holds it, which no function the engine declares in
+	/// that body or around it takes. A call of one of them is not among `calledFunctionNames`.
+	var declaredFunctionNames = [String]()
 }
 
 /// A value reached from a declaration by members and calls: what a passed argument, an alternative or a construction
@@ -201,6 +204,22 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)
+	/// Values, text and functions spelled one after another, as an argument written as an expression the engine does not
+	/// otherwise model: each value a read the engine checks, each text as written, and each function one a statement
+	/// before the value's in the same body declares (`ValueSegment.declaredFunction`).
+	case spliced([ValueSegment])
+}
+
+/// A segment of a spliced value (`ValuePath.spliced`).
+enum ValueSegment: Hashable, Sendable {
+	/// Text spelled as written, which reads no declaration.
+	case text(String)
+	/// A value, spelled and checked as any value path is.
+	case value(ValuePath)
+	/// The name of a function an earlier statement of the body that holds the reading statement declares
+	/// (`AliasPlaceRecord.declaredFunctionNames`). A name no such statement declares keeps the root one per path: a
+	/// function declared in another body is never in scope where the engine declares the reading statement's function.
+	case declaredFunction(String)
 }
 
 /// A value a call hands the function it calls on every call, which the function never captures: places that share one

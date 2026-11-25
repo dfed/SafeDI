@@ -98,6 +98,9 @@ extension TypeKeyLayout {
 				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .alias(alias):
 				label = alias.property.label
+				for name in alias.declaredFunctionNames {
+					bodies[body].positionsByDeclaredFunction[name, default: []].append(position)
+				}
 				statement = .alias(alias)
 			}
 			bodies[body].statements.append(statement)
