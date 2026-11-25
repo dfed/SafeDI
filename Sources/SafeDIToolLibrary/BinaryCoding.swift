@@ -999,6 +999,65 @@ struct BinaryReader {
 	///
 	/// Called only where ``sharesSignatureValues`` holds.
 	mutating func readDifference<Element>(in slot: BinaryDifferenceSlot, readingElement readElement: (inout BinaryReader) throws(BinaryDecodingError) -> Element) throws(BinaryDecodingError) -> [Element] {
+		let list = try readDifferenceNotYetKept(in: slot, sharingStorageOfRepeats: true, readingElement: readElement)
+		keepDifference(list, in: slot)
+		return list
+	}
+
+	/// Reads a list ``BinaryWriter/writeDifference(of:in:writingElement:)`` wrote without a part of each element, and
+	/// then what `readSuffix` reads of that part, given the list's count, which `apply` sets in every element of the
+	/// list: a list's elements come from the list it differs from, so each holds that list's part until then.
+	///
+	/// The list read is changed in place where nothing else holds it, so its elements are held once, and the list made
+	/// before of the same storage and the same bytes of the part is handed back, so that lists that hold the same values
+	/// are one storage. The elements of a list written in this way are longer than a difference's four numbers, so
+	/// the same list is never written whole twice, and a list read whole is kept by nothing else.
+	///
+	/// Called only where ``sharesSignatureValues`` holds.
+	mutating func readDifference<Element, Suffix>(
+		in slot: BinaryDifferenceSlot,
+		readingElement readElement: (inout BinaryReader) throws(BinaryDecodingError) -> Element,
+		readingSuffix readSuffix: (inout BinaryReader, Int) throws(BinaryDecodingError) -> Suffix,
+		applying apply: (Suffix, inout [Element]) -> Void,
+	) throws(BinaryDecodingError) -> [Element] {
+		var list = try readDifferenceNotYetKept(in: slot, sharingStorageOfRepeats: false, readingElement: readElement)
+		let suffixOffset = offset
+		let suffix = try readSuffix(&self, list.count)
+		// The lists read as differences are held as long as the reader, so an address names one list.
+		let suffixBytes = [UInt8](UnsafeRawBufferPointer(rebasing: bytes[suffixOffset..<offset]))
+		let key = ListWithSuffixKey(storage: list.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }, suffixBytes: suffixBytes)
+		if let listReadBefore = listsWithSuffix[key] as? [Element] {
+			list = listReadBefore
+		} else {
+			apply(suffix, &list)
+			listsWithSuffix[key] = list
+			// Where setting the part copied the list, the copy is the list a later one is the whole of.
+			listsWithSuffix[ListWithSuffixKey(storage: list.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }, suffixBytes: suffixBytes)] = list
+		}
+		keepDifference(list, in: slot)
+		return list
+	}
+
+	private struct ListWithSuffixKey: Hashable {
+		let storage: UInt
+		let suffixBytes: [UInt8]
+	}
+
+	/// Each list ``readDifference(in:readingElement:readingSuffix:applying:)`` read, by the storage it was made of or is
+	/// held in and the bytes of the part read after it, for as long as the reader lives: a reference and those few
+	/// bytes per list.
+	private var listsWithSuffix = [ListWithSuffixKey: Any]()
+
+	/// Keeps `list` as one a later list of `slot` may differ from, as the writer keeps every list but an empty one.
+	private mutating func keepDifference(_ list: [some Any], in slot: BinaryDifferenceSlot) {
+		guard !list.isEmpty else {
+			return
+		}
+		listDifferencesRead += 1
+		listsReadBySlot[slot, default: []].append(list)
+	}
+
+	private mutating func readDifferenceNotYetKept<Element>(in slot: BinaryDifferenceSlot, sharingStorageOfRepeats: Bool, readingElement readElement: (inout BinaryReader) throws(BinaryDecodingError) -> Element) throws(BinaryDecodingError) -> [Element] {
 		let headerOffset = offset
 		let header = try readUnsigned()
 		// An empty list is no list a later one differs from, so a value that holds only empty lists reads the same
@@ -1006,21 +1065,26 @@ struct BinaryReader {
 		guard header > 0 else {
 			return []
 		}
-		let list: [Element]
 		if header & 1 == 0 {
-			// Its bytes say all of it, so the same bytes are the same list, as any list a signature repeats.
-			offset = headerOffset
-			list = try readSharingStorageOfRepeats { reader throws(BinaryDecodingError) in
+			func readWhole(_ reader: inout BinaryReader) throws(BinaryDecodingError) -> ListWrittenWhole<Element> {
 				let count = try reader.readUnsigned() >> 1
 				guard count <= UInt64(reader.bytes.count - reader.offset) else {
 					throw .countExceedsRemainingBytes(count: count, offset: headerOffset)
 				}
 				var elements = [Element]()
+				elements.reserveCapacity(Int(count))
 				for _ in 0..<count {
 					try elements.append(readElement(&reader))
 				}
 				return ListWrittenWhole(elements: elements)
-			}.elements
+			}
+			offset = headerOffset
+			if sharingStorageOfRepeats {
+				// Its bytes say all of it, so the same bytes are the same list, as any list a signature repeats.
+				return try readSharingStorageOfRepeats(readWhole).elements
+			} else {
+				return try readWhole(&self).elements
+			}
 		} else {
 			let unsharedCount = header >> 1
 			let history = listsReadBySlot[slot] ?? []
@@ -1031,24 +1095,22 @@ struct BinaryReader {
 				throw .sharedValueReferenceOutOfRange(reference: distance, offset: headerOffset)
 			}
 			if unsharedCount == 0, sharedAtStart + sharedAtEnd == UInt64(other.count) {
-				list = other
+				return other
 			} else {
 				guard unsharedCount <= UInt64(bytes.count - offset) else {
 					throw .countExceedsRemainingBytes(count: unsharedCount, offset: headerOffset)
 				}
+				// Exactly as long as the list: a list grown as it is read holds up to twice its elements.
 				var elements = [Element]()
+				elements.reserveCapacity(Int(sharedAtStart) + Int(unsharedCount) + Int(sharedAtEnd))
 				elements.append(contentsOf: other[..<Int(sharedAtStart)])
 				for _ in 0..<unsharedCount {
 					try elements.append(readElement(&self))
 				}
 				elements.append(contentsOf: other[(other.count - Int(sharedAtEnd))...])
-				list = elements
+				return elements
 			}
 		}
-		listDifferencesRead += 1
-		// As the writer keeps them: every list but an empty one.
-		listsReadBySlot[slot, default: []].append(list)
-		return list
 	}
 
 	/// A list ``readDifference(in:readingElement:)`` read whole, which ``readSharingStorageOfRepeats(_:)`` keeps apart
@@ -1059,9 +1121,7 @@ struct BinaryReader {
 
 	/// Every list ``readDifference(in:)`` read that is not empty, by slot, for as long as the reader lives, which is one
 	/// module's signatures or plans. The signatures read hold the same storage, so this holds one reference per list,
-	/// but for two kinds of list, which it holds a second copy of: the labels a case binds later, which the signature
-	/// keeps as a set, and a place's uncarried declarations where some are built after a place, which the signature
-	/// holds with those places set (`SeamSignature.Hole.UncarriedDeclaration.listReadAsDifference(from:)`).
+	/// but for the labels a case binds later, which the signature keeps as a set, and which it so holds a second copy of.
 	private var listsReadBySlot = [BinaryDifferenceSlot: [Any]]()
 	/// How many lists ``readDifference(in:)`` read that are not empty: a value that holds one is not one
 	/// ``readSharingStorageOfRepeats(_:)`` hands back for the same bytes, since what those bytes say depends on the

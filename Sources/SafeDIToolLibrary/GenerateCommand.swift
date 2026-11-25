@@ -166,6 +166,10 @@ public struct Generate: AsyncParsableCommand {
 		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
 		/// being released when the process ends with the run.
 		let builtValues: [any Sendable]
+		/// What the run that read stored seam signatures and public mock plans threw, when the run that computed
+		/// everything after it did not: the stored blocks then made a run fail that computing them does not, which no
+		/// generated file and no error shows. The tests read it, never the tool.
+		public var errorOfDiscardedRunThatReadStoredBlocks: (any Error)?
 	}
 
 	/// An output `run()` keeps until the process ends.
@@ -192,7 +196,9 @@ public struct Generate: AsyncParsableCommand {
 		do {
 			return try await generate(buildLog: buildLog, readsStoredSeamSignatures: true, readStoredSeamSignatures: &readStoredSeamSignatures)
 		} catch where readStoredSeamSignatures {
-			return try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures)
+			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures)
+			output.errorOfDiscardedRunThatReadStoredBlocks = error
+			return output
 		}
 	}
 

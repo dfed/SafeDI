@@ -1832,6 +1832,60 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func uncarriedDeclarations_areOneStorage_whenPlacesHoldSameDeclarationsBuiltAfterSamePlaces() throws {
+		// A seam's places come again in every signature that reaches them, each with the same declarations built after
+		// the same place, and a declaration is some 460 bytes: such lists are one storage once read, as they were when
+		// each was written whole and the same bytes came again. The same declarations built after no place are another
+		// list, which is read from the first one's, whose declarations hold a place.
+		typealias Declaration = SeamSignature.Hole.UncarriedDeclaration
+		guard case let .structure(fields, _) = Declaration.binaryLayout else {
+			Issue.record("An uncarried declaration's layout lists cases")
+			return
+		}
+		var sampleWriter = BinaryWriter()
+		try writeFieldSamples(of: Declaration.self, fields: fields, to: &sampleWriter) { $0.name == "builtAfter" }
+		let builtAfterPlace: Declaration = try read(sampleWriter.encoded)
+		let builtAfterNoPlace = Declaration(
+			storing: builtAfterPlace.property,
+			declaringType: builtAfterPlace.declaringType,
+			declarationLocation: builtAfterPlace.declarationLocation,
+			parameterTakingType: builtAfterPlace.parameterTakingType,
+			builtAfter: nil,
+			reason: builtAfterPlace.reason,
+			isBoundFromCallersArgument: builtAfterPlace.isBoundFromCallersArgument,
+			isBuildableAboveSeam: builtAfterPlace.isBuildableAboveSeam,
+			labelsHeldAboveSeam: builtAfterPlace.labelsHeldAboveSeam,
+			placesInTree: builtAfterPlace.placesInTree,
+			holdsPlaceFilledElsewhere: builtAfterPlace.holdsPlaceFilledElsewhere,
+		)
+		#expect(builtAfterPlace.builtAfter != nil)
+		let afterPlace = DeclarationsWrittenAsDifference(declarations: [builtAfterPlace, builtAfterPlace, builtAfterNoPlace])
+		let afterNoPlace = DeclarationsWrittenAsDifference(declarations: [builtAfterNoPlace, builtAfterNoPlace, builtAfterNoPlace])
+		// The place a declaration is built after names its type for the first time in the first list, in full, and by a
+		// reference afterwards, so the second list built after it is the one every later list is.
+		let lists = [afterPlace, afterNoPlace, afterPlace, afterNoPlace, afterPlace, afterNoPlace]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[DeclarationsWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+
+		#expect(readLists.map { $0.declarations.map(Self.encoded) } == lists.map { $0.declarations.map(Self.encoded) })
+		func storage(_ index: Int) -> UnsafeRawPointer? {
+			readLists[index].declarations.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		#expect(storage(4) == storage(2))
+		#expect(storage(3) == storage(1))
+		#expect(storage(5) == storage(1))
+		#expect(storage(1) != storage(0))
+		#expect(storage(1) != storage(2))
+	}
+
+	@Test
 	func binaryReader_handsBackOneStorage_whenListsOfSameElementsAreWrittenAsDifferences() throws {
 		// A signature holds one list of a scope's fields at every place of the scope. Each list comes again after lists
 		// that share its start and its end: `middle` when the last list shares nothing with it and a longer one starts as

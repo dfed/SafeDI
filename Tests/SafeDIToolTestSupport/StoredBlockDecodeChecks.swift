@@ -29,16 +29,16 @@ enum StoredBlockDecodeChecks {
 	/// graph fuzzer sets it to a graph's seed, since one test of its runs thousands of graphs.
 	@TaskLocal static var runDescription: String?
 
-	/// An observer that hands a stored block whose decoding threw to `enclosingObserver`, the test that expects it, or
-	/// records an issue when no test does, naming the module whose run decoded the block.
-	static func recordingFailures(handingOn enclosingObserver: (@Sendable (StoredBlockDecodeObservation.Block) -> Void)?, inRunOfModuleNamed moduleName: String?, sourceLocation: SourceLocation) -> @Sendable (StoredBlockDecodeObservation.Block) -> Void {
-		let run = Self.run(ofModuleNamed: moduleName)
-		return { block in
-			if let enclosingObserver {
-				enclosingObserver(block)
-			} else {
-				Issue.record("A stored block threw while \(run) decoded it, so the run computed everything again: \(block)", sourceLocation: sourceLocation)
-			}
+	/// Records an issue when a run first threw `discardedRunError` with the stored blocks it read
+	/// (`Generate.Output.errorOfDiscardedRunThatReadStoredBlocks`) and then computed
+	/// everything again without throwing, unless the test expects a block to fail and so observes it
+	/// (`StoredBlockDecodeObservation.failureObserver`). Read from the run's output once it returns, never observed
+	/// through a task-local value of this harness's own: one more `TaskLocal.withValue` around `generate()` in the
+	/// harness made the release build of the tests abort on Linux with Swift 6.2 ("freed pointer was not the last
+	/// allocation", in `swift_task_dealloc_specific`).
+	static func expectNoDiscardedRun(throwing discardedRunError: (any Error)?, inRunOfModuleNamed moduleName: String?, sourceLocation: SourceLocation) {
+		if let error = discardedRunError, StoredBlockDecodeObservation.failureObserver == nil {
+			Issue.record("With the stored blocks it read, \(run(ofModuleNamed: moduleName)) threw, and computing everything again did not: \(error)", sourceLocation: sourceLocation)
 		}
 	}
 

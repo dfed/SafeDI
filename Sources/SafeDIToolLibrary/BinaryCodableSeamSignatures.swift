@@ -452,30 +452,36 @@ extension SeamSignature.Hole.UncarriedDeclaration {
 		guard reader.sharesSignatureValues else {
 			return try reader.read()
 		}
-		let bodies = try reader.readDifference(in: .uncarriedDeclarations) { reader throws(BinaryDecodingError) in
+		return try reader.readDifference(in: .uncarriedDeclarations) { reader throws(BinaryDecodingError) in
 			try Self(readingFrom: &reader, readsBuiltAfter: false)
-		}
-		let runCount = try reader.readCount()
-		// No declaration is built after a place, so the list is the one read, storage and all, as a list equal to
-		// another place's then is.
-		guard runCount > 0 else {
-			return bodies
-		}
-		var declarations = [Self]()
-		declarations.reserveCapacity(bodies.count)
-		for _ in 0..<runCount {
-			let lengthOffset = reader.offset
-			let length = try reader.readUnsigned()
-			let builtAfter = try reader.read() as Property?
-			guard length <= UInt64(bodies.count - declarations.count) else {
-				throw .countExceedsRemainingBytes(count: length, offset: lengthOffset)
+		} readingSuffix: { reader, count throws(BinaryDecodingError) in
+			var runs = [(length: Int, builtAfter: Property?)]()
+			var declarationsInRuns = 0
+			for _ in try 0..<reader.readCount() {
+				let lengthOffset = reader.offset
+				let length = try reader.readUnsigned()
+				let builtAfter = try reader.read() as Property?
+				guard length <= UInt64(count - declarationsInRuns) else {
+					throw .countExceedsRemainingBytes(count: length, offset: lengthOffset)
+				}
+				runs.append((Int(length), builtAfter))
+				declarationsInRuns += Int(length)
 			}
-			for body in bodies[declarations.count..<declarations.count + Int(length)] {
-				declarations.append(body.with(builtAfter: builtAfter))
+			return runs
+		} applying: { runs, declarations in
+			// Every declaration is set, since each came from another place's list, but one that holds none and is to
+			// hold none: a list none of whose declarations is built after a place stays the storage it was read as.
+			var index = 0
+			for run in runs {
+				for _ in 0..<run.length {
+					declarations[index] = declarations[index].with(builtAfter: run.builtAfter)
+					index += 1
+				}
+			}
+			for laterIndex in index..<declarations.count where declarations[laterIndex].builtAfter != nil {
+				declarations[laterIndex] = declarations[laterIndex].with(builtAfter: nil)
 			}
 		}
-		declarations.append(contentsOf: bodies[declarations.count...])
-		return declarations
 	}
 }
 

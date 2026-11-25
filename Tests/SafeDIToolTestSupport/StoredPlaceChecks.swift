@@ -23,17 +23,18 @@ import Testing
 
 /// What every run of the multi-module harness checks of the places a module info file holds.
 enum StoredPlaceChecks {
-	/// Records an issue when `output`, the output of the run of the module named `moduleName`, counts a place a seam
-	/// passes up that the run wrote in full, where it would write the record of the seam the place came from
-	/// (`Generate.Output.passedUpPlacesWrittenInFull`). A place written in full is read correctly; the issue says that
+	/// Records an issue when `count`, which the output of the run of the module named `moduleName` holds
+	/// (`Generate.Output.passedUpPlacesWrittenInFull`; the count and not the output, since `Generate` is available
+	/// from macOS 13, which this declaration does not state), counts a place a seam passes up that the run wrote in
+	/// full, where it would write the record of the seam the place came from. A place written in full is read correctly; the issue says that
 	/// the form that keeps a module info file from growing with the modules beneath it did not hold the place.
 	///
 	/// Read from the run's output after the run, never observed through one more `TaskLocal.withValue` in the harness's
 	/// nest of them: with one more written there, a release build of the tests by Swift 6.2 aborts with "freed pointer
 	/// was not the last allocation".
 	/// - Parameter isExpected: Whether the run may write such a place, which then records no issue.
-	static func expectNoPlaceWrittenInFull(in output: Generate.Output?, unless isExpected: Bool, byRunOfModuleNamed moduleName: String, sourceLocation: SourceLocation) {
-		if let count = output?.passedUpPlacesWrittenInFull, count > 0, !isExpected {
+	static func expectNoPlaceWrittenInFull(counted count: Int?, unless isExpected: Bool, byRunOfModuleNamed moduleName: String, sourceLocation: SourceLocation) {
+		if let count, count > 0, !isExpected {
 			Issue.record("The run of module `\(moduleName)` wrote \(count) passed-up place in full, not as the record it copies", sourceLocation: sourceLocation)
 		}
 	}

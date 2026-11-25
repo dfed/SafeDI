@@ -93,8 +93,9 @@ public struct GenerationWork: Sendable {
 		/// record a read resolves, each once however many places name it.
 		case resolvingStoredPlaces
 		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
-		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the smaller of the properties the
-		/// child requires and the scope's carriers. Scanned for, every carrier of the scope was compared for every later
+		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
+		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
+		/// until one is found. Scanned for in every case, every carrier of the scope was compared for every later
 		/// child of every site, so a seam whose own type builds n children that each hold a place compared n carriers n²
 		/// times.
 		case findingCarrierASiblingRequires
