@@ -160,7 +160,8 @@ extension ScopeGenerator {
 		)
 		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
 		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
-		if laysOutWithTypeKey || SpikeShadow.logPath != nil {
+		// A root that enters a mocked lazy cycle keeps the walk's body (`entersCycleWithEdge`), so its places are not recorded.
+		if (laysOutWithTypeKey && !walk.entersCycleWithEdge) || SpikeShadow.logPath != nil {
 			walk.recordBuiltPlaces()
 		}
 		if laysOutWithTypeKey {
