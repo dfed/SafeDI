@@ -39,7 +39,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.parameterClause
 			.parameters
 			.map(Argument.init)
-		spelledIsolation = Self.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
+		spelledAttributes = Self.spelledAttributes(modifiers: node.modifiers, attributes: node.attributes)
 	}
 
 	/// - Parameter sourceLocationConverter: A converter for the tree that holds `node`. When provided, the initializer
@@ -56,7 +56,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.parameterClause
 			.parameters
 			.map(Argument.init)
-		spelledIsolation = Self.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
+		spelledAttributes = Self.spelledAttributes(modifiers: node.modifiers, attributes: node.attributes)
 	}
 
 	public init(
@@ -67,7 +67,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		hasGenericParameter: Bool = false,
 		hasGenericWhereClause: Bool = false,
 		arguments: [Initializer.Argument],
-		spelledIsolation: String? = nil,
+		spelledAttributes: String? = nil,
 	) {
 		self.access = access
 		self.isOptional = isOptional
@@ -76,7 +76,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		self.hasGenericParameter = hasGenericParameter
 		self.hasGenericWhereClause = hasGenericWhereClause
 		self.arguments = arguments
-		self.spelledIsolation = spelledIsolation
+		self.spelledAttributes = spelledAttributes
 	}
 
 	// MARK: Public
@@ -91,45 +91,38 @@ public struct Initializer: Codable, Hashable, Sendable {
 	public let hasGenericParameter: Bool
 	public let hasGenericWhereClause: Bool
 	public let arguments: [Argument]
-	/// The isolation the declaration spells, which code that calls it from another declaration mirrors: `nonisolated`
-	/// for the modifier, or a global actor attribute (an attribute whose name ends in `Actor`, such as `@MainActor`),
-	/// or `nil` when it spells neither and takes its type's isolation.
-	public let spelledIsolation: String?
+	/// The attributes the declaration spells, each as written, followed by its `nonisolated` modifier, which code that calls
+	/// it from another declaration repeats so that it has the declaration's isolation, or `nil` when it spells neither.
+	/// SafeDI reads no attribute's name to tell which one states an isolation: a global actor of any name, or one spelled
+	/// qualified, is copied like any other attribute. It leaves out only the attributes the compiler rejects on that code
+	/// (`attributeNamesLeftOut`). An attribute inside an `#if` clause is not read.
+	public let spelledAttributes: String?
 
-	/// See `spelledIsolation`.
-	/// The global actor attribute among `attributes`, a space-separated list of attributes as `mockAttributes` spells
-	/// them (`"@MainActor"`), found as `spelledIsolation(modifiers:attributes:)` finds one: an attribute without
-	/// arguments whose name ends in `Actor`.
-	public static func globalActorAttribute(in attributes: String) -> String? {
-		attributes.split(separator: " ").first { $0.hasPrefix("@") && !$0.contains("(") && $0.hasSuffix("Actor") }.map(String.init)
-	}
+	/// The compiler's own attributes that code calling a declaration cannot repeat, matched by the whole name: a public mock's
+	/// construction function is `internal`, which `@_spi` and `@backDeployed` reject, and its builder parameter is a Swift
+	/// closure, which `@objc` rejects where Objective-C cannot represent it. No declaration can take these names, so no
+	/// global actor is left out.
+	static let attributeNamesLeftOut: Set<String> = ["_spi", "backDeployed", "objc"]
 
-	static func spelledIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
-		if modifiers.contains(where: { $0.name.tokenKind == .keyword(.nonisolated) }) {
-			return "nonisolated"
-		}
+	static func spelledAttributes(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
+		var spellings = [String]()
 		// A loop rather than a lazy sequence, whose generic iterators cost more than reading the attributes: nearly every
 		// declaration SafeDI reads has attributes and an initializer.
-		for case let .attribute(attribute) in attributes where attribute.arguments == nil && spelledName(of: attribute.attributeName).hasSuffix("Actor") {
-			return "@\(spelledName(of: attribute.attributeName))"
+		for case let .attribute(attribute) in attributes where !isLeftOut(attribute) {
+			spellings.append(attribute.trimmedDescription)
 		}
-		return nil
+		for modifier in modifiers where modifier.name.tokenKind == .keyword(.nonisolated) {
+			spellings.append(modifier.trimmedDescription)
+		}
+		return spellings.isEmpty ? nil : spellings.joined(separator: " ")
 	}
 
-	/// The text of `attributeName` without its leading and trailing trivia. A plain name, which nearly every attribute's
-	/// is, is its token's text: building the trimmed text of any other name copies its syntax tree, which costs a scan
-	/// more than the rest of reading the declaration does.
-	private static func spelledName(of attributeName: TypeSyntax) -> String {
-		if let identifierType = IdentifierTypeSyntax(attributeName),
-		   identifierType.genericArgumentClause == nil,
-		   identifierType.unexpectedBeforeName == nil,
-		   identifierType.unexpectedBetweenNameAndGenericArgumentClause == nil,
-		   identifierType.unexpectedAfterGenericArgumentClause == nil
-		{
-			identifierType.name.text
-		} else {
-			attributeName.trimmedDescription
+	/// Whether `attribute` is one of `attributeNamesLeftOut`, spelled as a plain name, which a built-in attribute always is.
+	private static func isLeftOut(_ attribute: AttributeSyntax) -> Bool {
+		guard let name = IdentifierTypeSyntax(attribute.attributeName), name.genericArgumentClause == nil else {
+			return false
 		}
+		return attributeNamesLeftOut.contains(name.name.text)
 	}
 
 	public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {
@@ -186,7 +179,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			hasGenericParameter: hasGenericParameter,
 			hasGenericWhereClause: hasGenericWhereClause,
 			arguments: arguments.map(transform),
-			spelledIsolation: spelledIsolation,
+			spelledAttributes: spelledAttributes,
 		)
 	}
 

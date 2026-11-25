@@ -35,7 +35,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		enclosingExtensionAccess: AccessDeclaration? = nil,
 		generatedInitializerAttributes: String = "",
 		mockAttributes: String = "",
-		declarationIsolation: String? = nil,
 		generateMock: MockGeneration = .none,
 		mockGenerationArgumentRange: Dependency.SourceRange? = nil,
 		mockOnly: Bool = false,
@@ -77,7 +76,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 			enclosingTypeAccess: enclosingTypeAccess,
 			generatedInitializerAttributes: generatedInitializerAttributes,
 			mockAttributes: mockAttributes,
-			declarationIsolation: declarationIsolation,
 			generateMock: generateMock,
 			mockOnly: mockOnly,
 			moduleName: moduleName,
@@ -182,19 +180,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// whose hand-written mock the generated `mock()` calls, contributes none.
 	public var mockAttributes: String {
 		storage.fields.mockAttributes
-	}
-
-	/// The isolation spelled on the type declaration this Instantiable was found on, which a member generated in an
-	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), `"nonisolated"`, or `nil` when it
-	/// spells neither. Always `nil` for an extension-based Instantiable, whose extension a generated member is not in.
-	public var declarationIsolation: String? {
-		storage.fields.declarationIsolation
-	}
-
-	/// Whether the `mock()` generated for this type is isolated to a global actor: the type declaration spells one, or
-	/// `mockAttributes` does.
-	public var generatedMockIsGlobalActorIsolated: Bool {
-		(declarationIsolation.map { $0 != "nonisolated" } ?? false) || Initializer.globalActorAttribute(in: mockAttributes) != nil
 	}
 
 	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.
@@ -580,7 +565,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		var enclosingTypeAccess: [AccessDeclaration]
 		var generatedInitializerAttributes: String
 		var mockAttributes: String
-		var declarationIsolation: String?
 		var generateMock: MockGeneration
 		var mockOnly: Bool
 		var moduleName: String?
@@ -693,7 +677,6 @@ extension Instantiable {
 		case enclosingExtensionAccess
 		case generatedInitializerAttributes
 		case mockAttributes
-		case declarationIsolation
 		case generateMock
 		case mockGenerationArgumentRange
 		case mockOnly
@@ -744,7 +727,6 @@ extension Instantiable {
 			enclosingTypeAccess: container.decode([AccessDeclaration].self, forKey: .enclosingTypeAccess),
 			generatedInitializerAttributes: container.decode(String.self, forKey: .generatedInitializerAttributes),
 			mockAttributes: container.decode(String.self, forKey: .mockAttributes),
-			declarationIsolation: container.decodeIfPresent(String.self, forKey: .declarationIsolation),
 			generateMock: container.decode(MockGeneration.self, forKey: .generateMock),
 			mockOnly: container.decode(Bool.self, forKey: .mockOnly),
 			moduleName: container.decodeIfPresent(String.self, forKey: .moduleName),
@@ -771,7 +753,6 @@ extension Instantiable {
 		try container.encodeIfPresent(enclosingExtensionAccess, forKey: .enclosingExtensionAccess)
 		try container.encode(generatedInitializerAttributes, forKey: .generatedInitializerAttributes)
 		try container.encode(mockAttributes, forKey: .mockAttributes)
-		try container.encodeIfPresent(declarationIsolation, forKey: .declarationIsolation)
 		try container.encode(generateMock, forKey: .generateMock)
 		try container.encodeIfPresent(mockGenerationArgumentRange, forKey: .mockGenerationArgumentRange)
 		try container.encode(mockOnly, forKey: .mockOnly)
