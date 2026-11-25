@@ -57,33 +57,21 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(corpus: .base, seed: 210, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 295, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 296, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 565, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 711, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 1_180, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 1_269, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 1_401, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 2_254, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_270, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_298, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_388, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_413, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_637, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 2_674, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 3_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 3_302, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 3_405, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 3_608, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_227, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_420, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_522, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_664, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .base, seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(corpus: .seam, seed: 391, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
-			ListedSeed(corpus: .seam, seed: 1_311, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
 		],
 	]
 
@@ -91,7 +79,8 @@ struct SafeDIToolReleaseAcceptanceTests {
 	/// kind beside a required wrapper of the same instance, where 2.3.0's mock handed it a wrapper it made.
 	/// Seam seeds 391 and 1311, whose `Root0()` spends even a graph's own traversals through chains of hole draws that
 	/// re-enter `HoleSeam` (`HoleLoop`, `HoleDeep`, and `HoleInner2` or `HoleRelay` and `HolePing`) on both releases, as the
-	/// seam corpus's known issue of them says.
+	/// seam corpus's known issue of them says. Neither is listed while the corpus draws `@Instantiated(onlyIfAvailable:
+	/// true)` in their graphs, which 2.3.0 rejects.
 	static let beyondComparatorReason = "the comparator cannot describe the graph's values within its isolated traversal budget"
 
 	static let mockPassesNilAsProductionDoesReason = "#892, a 2.3.0 mock defect fixed and release-noted"

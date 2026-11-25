@@ -377,7 +377,7 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 			fulfilledByType = fulfillingTypeDescription == nil ? nil : dependency.asInstantiatedType.plainType.asSource
 			self.fulfilledBy = fulfilledBy
 			isErased = erasedToConcreteExistential
-			isOnlyIfAvailable = false
+			isOnlyIfAvailable = dependency.isInstantiatedOnlyIfAvailable
 			aliasOf = nil
 			self.provenance = nil
 		case let .received(onlyIfAvailable):

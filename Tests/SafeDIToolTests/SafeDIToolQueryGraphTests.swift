@@ -977,6 +977,64 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_marksInstantiatedDependencyOnlyIfAvailable_whetherOrNotADeclarationFulfillsItsType() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(cache: Cache?, missing: Missing?, reader: Reader, service: Service) {
+			        self.cache = cache
+			        self.missing = missing
+			        self.reader = reader
+			        self.service = service
+			    }
+
+			    @Instantiated(onlyIfAvailable: true) let cache: Cache?
+			    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+			    @Instantiated let reader: Reader
+			    @Instantiated let service: Service
+			}
+			""",
+			"Cache.swift": """
+			@Instantiable
+			public final class Cache: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Missing.swift": """
+			public protocol Missing {}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(cache: Cache?, missing: Missing?) {
+			        self.cache = cache
+			        self.missing = missing
+			    }
+
+			    @Received(onlyIfAvailable: true) let cache: Cache?
+			    @Received(onlyIfAvailable: true) let missing: Missing?
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		let rootDependencies = try #require(report.declarations.first { $0.typeName == "Root" }).dependencies
+		#expect(report.completeness == .trees)
+		#expect(report.errors.isEmpty)
+		#expect(rootDependencies.map(\.label) == ["cache", "missing", "reader", "service"])
+		#expect(rootDependencies.map(\.isOnlyIfAvailable) == [true, true, false, false])
+		#expect(rootDependencies.map(\.fulfilledBy) == ["App.Cache", nil, "App.Reader", "App.Service"])
+		#expect(Self.supplies(in: report) == ["App.Reader.cache": "App.Root.cache", "App.Reader.missing": "App.Root.missing"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_reportsTreeErrorWithoutProvenance_whenTreeInstantiatesTypeNoDeclarationFulfills() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
