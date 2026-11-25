@@ -16,7 +16,8 @@ It also compares the size of each module's `.safedi` file, which every build sys
 stores, uploads to its cache and reads back for each module above it, and exits 1 when a module's file from HEAD_TOOL
 is RATIO (`--size-limit`, default 2) times the size of BASE_TOOL's, or larger, and also more than 4 KB larger, since a
 few bytes more of a small file are not what the check is for. Storing seam signatures in the module info once made
-E24-fill's `Feature.safedi` 400 times the size it had been, and no check saw it.
+E24-fill's `Feature.safedi` 400 times the size it had been, and no check saw it. A module listed with an accepted size
+(`ACCEPTED_MODULE_INFO_BYTES`) passes while HEAD_TOOL's file is at most that many bytes, whatever the ratio.
 
 DIRECTORY, which must not exist, receives the shapes' sources and each run's output; keep it out of the system
 temporary directory. Each shape is generated as Bazel and Tuist generate: `generate --combined-output
@@ -125,6 +126,14 @@ MEMORY_NOISE_FLOOR_BYTES = 8 * 1024 * 1024
 # `ru_maxrss` is in kilobytes on Linux and in bytes on macOS.
 MAXRSS_BYTES = 1 if sys.platform == "darwin" else 1024
 SIZE_NOISE_FLOOR_BYTES = 4096
+# Sizes accepted for one change, by shape and module: a listed module passes while the head's file is at most this many
+# bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds.
+#
+# M80x80-calling-mocks: the module info now stores each public mock's plan, and a plan lists, for each of its builders,
+# the declarations of the builder's siblings, so the list grows with the square of the builders. That is what takes
+# `Feat` and `App` past twice the size of a base that stores no plan. Once the change that stores the plans is on
+# main, main's own tool is the base and writes files of this size, so the entry is unnecessary: remove it then.
+ACCEPTED_MODULE_INFO_BYTES = {"M80x80-calling-mocks": {"Feat": 130_000, "App": 142_000}}
 
 
 # MARK: Shapes
@@ -376,7 +385,7 @@ def generated_code(modules, output):
 # MARK: Comparing
 
 
-def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS):
+def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS, accepted_sizes=ACCEPTED_MODULE_INFO_BYTES):
     """Returns (the time and memory table's rows, the size table's rows, the failures)."""
     rows = []
     size_rows = []
@@ -410,10 +419,12 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
             continue
         for (name, _, _), base_size, head_size in zip(modules, sizes["base"], sizes["head"]):
             size_ratio = head_size / base_size if base_size else float("inf") if head_size else 1.0
-            size_over = size_ratio >= size_limit and head_size - base_size > SIZE_NOISE_FLOOR_BYTES
+            accepted_size = accepted_sizes.get(shape, {}).get(name)
+            size_accepted = accepted_size is not None and head_size <= accepted_size
+            size_over = not size_accepted and size_ratio >= size_limit and head_size - base_size > SIZE_NOISE_FLOOR_BYTES
             if size_over:
                 failures.append(f"{shape}: module {name}'s `.safedi` file is {size_ratio:.2f} times the base tool's ({head_size} bytes against {base_size}); the limit is {size_limit:g}")
-            size_rows.append(f"| {shape} | {name} | {base_size} | {head_size} | {size_ratio:.2f} | {'**over the limit**' if size_over else 'within the limit'} |")
+            size_rows.append(f"| {shape} | {name} | {base_size} | {head_size} | {size_ratio:.2f} | {'**over the limit**' if size_over else f'within the accepted {accepted_size} bytes' if size_accepted else 'within the limit'} |")
             print(f"{shape}: module {name}'s `.safedi` file, base {base_size} bytes, head {head_size} bytes, ratio {size_ratio:.2f}", flush=True)
         for run in range(runs):
             for label in ("base", "head"):
@@ -497,8 +508,8 @@ def self_test(directory):
         os.chmod(path, 0o755)
         return path
 
-    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3):
-        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs)
+    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3, accepted_sizes={}):
+        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs, accepted_sizes=accepted_sizes)
         if len(found) != expected_failures or expected_row not in rows[0] or (expected_size_row and expected_size_row not in size_rows[0]):
             failures.append(f"{name}: expected {expected_failures} failure(s), a row with {expected_row!r} and a size row with {expected_size_row!r}, got {found}, {rows} and {size_rows}")
 
@@ -540,6 +551,14 @@ def self_test(directory):
     expect("smaller-module-info", fast, tool("smaller-module-info", 0.0, module_info_size=100), 0, "within the limit", "within the limit")
     # Twice the size but only 3 KB larger is under the floor.
     expect("module-info-under-the-floor", tool("small-module-info", 0.0, module_info_size=3000), tool("small-module-info-doubled", 0.0, module_info_size=6000), 0, "within the limit", "within the limit")
+    # Both modules write a file three times the base's. `Feature` is listed with an accepted size: at most that size
+    # it passes whatever the ratio, and over it the ratio limit fails it. `App` is not listed, and fails either way.
+    tripled = tool("tripled-module-info", 0.0, module_info_size=30000)
+    expect("module-info-within-its-accepted-size", fast, tripled, 1, "within the limits", "within the accepted 30000 bytes", accepted_sizes={"E16-seam": {"Feature": 30000}})
+    expect("module-info-over-its-accepted-size", fast, tripled, 2, "within the limits", "**over the limit**", accepted_sizes={"E16-seam": {"Feature": 29999}})
+    for shape, accepted in ACCEPTED_MODULE_INFO_BYTES.items():
+        if shape not in SHAPES or not set(accepted) <= {name for name, _, _ in SHAPES[shape]()}:
+            failures.append(f"the accepted sizes name {shape} {sorted(accepted)}, which are not a shape and its modules")
     if not LARGE_MEMORY_SHAPES <= set(SHAPES):
         failures.append(f"the large shapes name {sorted(LARGE_MEMORY_SHAPES - set(SHAPES))}, which are not shapes")
     if SHAPES["S12-mocks"]() != SHAPES["S12-mocks"]():

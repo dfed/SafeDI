@@ -1271,6 +1271,39 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dump_printsEveryPublicMockPlanModuleInfoFileHoldsAsJSON() async throws {
+		// `Host`'s public mock takes a builder for `service`, which its module does not fulfill, so its plan holds a hole.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Host: Instantiable {
+				    init(service: any Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: any Service
+				}
+				""",
+			])],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		let mockModule = try #require(output.modules["Feature"])
+
+		let json = try Dump.parse([#require(mockModule.moduleInfoOutputPath)]).json()
+
+		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
+		let written = try #require(mockModule.moduleInfoFile)
+		#expect(dumped.publicMockPlans.mockedTypes.map(\.asSource) == ["Host"])
+		#expect(dumped.publicMockPlans.compilesGeneratedMocks == written.publicMockPlans.compilesGeneratedMocks)
+		#expect(try dumped.publicMockPlans.decoded.map { $0.holes.map(\.builderLabel) } == [["serviceBuilder"]])
+		#expect(try reflectedDescription(of: dumped.publicMockPlans.decoded) == reflectedDescription(of: written.publicMockPlans.decoded))
+	}
+
+	@Test
 	func encode_writesLabelsInSortedOrder_whenValuesBindLabelsLater() throws {
 		let labels = (0..<24).map { "label\($0)" }
 		let values = SeamSignature.ScopeEnum.Values(typeName: "Values", fields: [], labelsBoundLater: Set(labels))
