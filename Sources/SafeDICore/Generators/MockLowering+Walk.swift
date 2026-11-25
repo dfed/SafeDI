@@ -1273,12 +1273,24 @@ extension MockLowering {
 				lines.append(contentsOf: valuesBindingLines)
 			}
 			var unplannedKinds = [String]()
-			if !valuesBindingLines.isEmpty { unplannedKinds.append("payloadBindings") }
-			if !generator.memberCallsInsideBuilderFunction.isEmpty { unplannedKinds.append("memberCalls") }
-			if !rebindingLines.isEmpty { unplannedKinds.append("rebindings") }
-			if !receiverBindings.isEmpty { unplannedKinds.append("receiverBindings") }
-			if !node.sendableAutoclosureBindings.isEmpty { unplannedKinds.append("sendableAutoclosures") }
-			if startsExtraction { unplannedKinds.append("overrideExtraction") }
+			if !valuesBindingLines.isEmpty {
+				unplannedKinds.append("payloadBindings")
+			}
+			if !generator.memberCallsInsideBuilderFunction.isEmpty {
+				unplannedKinds.append("memberCalls")
+			}
+			if !rebindingLines.isEmpty {
+				unplannedKinds.append("rebindings")
+			}
+			if !receiverBindings.isEmpty {
+				unplannedKinds.append("receiverBindings")
+			}
+			if !node.sendableAutoclosureBindings.isEmpty {
+				unplannedKinds.append("sendableAutoclosures")
+			}
+			if startsExtraction {
+				unplannedKinds.append("overrideExtraction")
+			}
 			if !unplannedKinds.isEmpty {
 				unplannedLineKinds[childIndexPath] = unplannedKinds.joined(separator: "+")
 				pathsWithUnplannedLines.insert(childIndexPath)
