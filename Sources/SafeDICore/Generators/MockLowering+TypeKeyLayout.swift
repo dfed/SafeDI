@@ -100,6 +100,15 @@ extension MockLowering.Walk {
 				closerAndDefaultRecords[path] = .closer(record)
 			}
 		}
+		// What each plan node's construction reads, which reads only its generator and unavailable properties, computed once
+		// for the places that share the node, many thousands in a wide mock, and kept only while the records are made.
+		// A node's places hold one generator in one context (`PlanNodeKey`), whose construction reads alike.
+		var constructionReadsByNode = [PlanNode: Result<[PlaceRead]?, Initializer.GenerationError>]()
+		for call in builtPlaceCalls.values where call.isPlannedAtPlace && constructionReadsByNode[call.node] == nil {
+			constructionReadsByNode[call.node] = call.generator.isPlannedByGenerator
+				? Result { () throws(Initializer.GenerationError) in try call.generator.constructionReads(of: call.instantiable, unavailableProperties: call.unavailableProperties) }
+				: .success(nil)
+		}
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
 			defer {
@@ -128,7 +137,7 @@ extension MockLowering.Walk {
 			} else if !call.isPlannedAtPlace {
 				unrecordedReasons[path] = "notPlannedAtPlace"
 			}
-			do {
+			do throws(Initializer.GenerationError) {
 				let productionRecord = try call.generator.builtPlaceRecord(
 					of: call.property,
 					instantiable: call.instantiable,
@@ -142,6 +151,7 @@ extension MockLowering.Walk {
 					isPlannedAtPlace: isPlanned,
 					readNames: call.inputs.readNames,
 					alternatives: call.inputs.alternatives,
+					constructionReads: constructionReadsByNode[call.node],
 				)
 				// A construction that reads defaults or calls a hand-written mock records it in place of production's call
 				// (`MockLowering+ClosersAndDefaults.swift`).
