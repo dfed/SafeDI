@@ -515,6 +515,9 @@ extension MockLowering {
 		/// The reads of the call of another module's public mock the walk is lowering, or `nil` where the call keeps the walk's
 		/// body (`recordPublicMockCall`).
 		var pendingPublicMockCallReads: [PlaceRead]?
+		/// The plan nodes of the calls of other modules' public mocks the walk records as built places
+		/// (`recordPublicMockCallPlace`).
+		var publicMockCallPlanNodes = [MockLowering.PublicMockCallPlanNodeKey: PlanNode]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
 		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
