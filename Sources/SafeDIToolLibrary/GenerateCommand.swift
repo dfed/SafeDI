@@ -156,6 +156,11 @@ public struct Generate: AsyncParsableCommand {
 		public let warnings: [SourceDiagnostic]
 		/// The module this run generated code for, with the module that declares each of its declarations.
 		public let module: ModuleInfo
+		/// The places a seam passes up that the run wrote whole into its module info because the record of the seam the
+		/// place came from, with what the call adds, did not read back as the place (`ModulePlacesEncoder`). Such a place
+		/// is read correctly; the form that keeps a module info file from growing with the modules beneath it did not
+		/// hold it. No graph the tests or the fuzzer build writes one, which the multi-module harness checks.
+		public let passedUpPlacesWrittenInFull: Int
 		/// The modules whose info this run read, in the order it combined their declarations.
 		let dependentModuleNames: [String?]
 		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
@@ -966,9 +971,11 @@ public struct Generate: AsyncParsableCommand {
 		// Written last, once every validation passed, so a run that fails publishes no module info for its dependents to
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
+		var passedUpPlacesWrittenInFull = 0
 		if let moduleInfoDestination {
 			// A place a seam passes up is written as the record of the seam it came from, which the run read from the files it was given.
 			let seamSignatures = ModuleSeamSignatures(storedSeamSignatures, signaturesRead: seamSignaturesRead, lower: moduleInfoView.storedSeamSignaturesByModuleName)
+			passedUpPlacesWrittenInFull = seamSignatures.passedUpPlacesWrittenInFull
 			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: seamSignatures, publicMockPlans: storedPublicMockPlans, compilesGeneratedMocks: evaluator.compilesGeneratedMocks, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
 				.moduleInfoDataWritingSeamSignaturesWithoutPositions
 				.writeIfChanged(toPath: moduleInfoDestination.path)
@@ -988,6 +995,7 @@ public struct Generate: AsyncParsableCommand {
 		return Output(
 			warnings: warnings,
 			module: module,
+			passedUpPlacesWrittenInFull: passedUpPlacesWrittenInFull,
 			dependentModuleNames: dependentModuleNames,
 			// Only what the run reads until its end: holding a value it is done with sooner would raise its peak memory.
 			builtValues: [generator, moduleInfoViewToWrite],

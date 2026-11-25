@@ -1474,8 +1474,8 @@ extension ModuleSeamSignatures: BinarySchemaMember {
 				BinaryLayoutField("encoding", \.encodingWithPositions),
 				BinaryLayoutField("placesEncoding", \.placesEncodingWithPositions),
 			],
-			// Written as `encoding` and `placesEncoding`.
-			unwrittenProperties: ["storage"],
+			// `storage` is written as `encoding` and `placesEncoding`; the count is of one run's write, which no file holds.
+			unwrittenProperties: ["storage", "passedUpPlacesWrittenInFull"],
 		)
 	}
 

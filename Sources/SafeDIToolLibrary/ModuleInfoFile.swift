@@ -663,13 +663,20 @@ struct ModuleSeamSignatures: Sendable {
 	///   - lower: What the files the run was given hold of each module's seams, by module name.
 	init(_ signatures: [StoredSeamSignature], signaturesRead: [TypeDescription: DependencyTreeGenerator.SeamSignatureRead] = [:], lower: [String: ModuleSeamSignatures] = [:]) {
 		seamTypes = signatures.map(\.seamType)
-		storage = .decoded(signatures, places: ModulePlacesEncoder.places(of: signatures, signaturesRead: signaturesRead, lower: lower))
+		let (places, passedUpPlacesWrittenInFull) = ModulePlacesEncoder.places(of: signatures, signaturesRead: signaturesRead, lower: lower)
+		storage = .decoded(signatures, places: places)
+		self.passedUpPlacesWrittenInFull = passedUpPlacesWrittenInFull
 	}
 
 	init(seamTypes: [TypeDescription], encoding: [UInt8], placesEncoding: [UInt8]) {
 		self.seamTypes = seamTypes
 		storage = .encoded(encoding, places: placesEncoding)
+		passedUpPlacesWrittenInFull = 0
 	}
+
+	/// The passed-up places this value, made of a run's signatures, holds whole because their records did not read back
+	/// as them (`ModulePlacesEncoder`); none for what a file held.
+	let passedUpPlacesWrittenInFull: Int
 
 	static let empty = ModuleSeamSignatures([])
 

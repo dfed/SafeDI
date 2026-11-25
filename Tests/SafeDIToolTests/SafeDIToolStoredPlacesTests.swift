@@ -171,7 +171,7 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		// The run of layer n opens the n modules beneath it and resolves one record in each but the bottom one.
 		#expect(workByStep[.openingStoredPlaces] == (0...layerCount).reduce(0, +))
 		#expect(workByStep[.resolvingStoredPlaces] == (0...layerCount).map { max($0 - 1, 0) }.reduce(0, +))
-		#expect(workByStep[.writingPassedUpPlaceInFull] == nil)
+		#expect(output.modules.values.compactMap(\.generateOutput?.passedUpPlacesWrittenInFull).reduce(0, +) == 0)
 	}
 
 	// MARK: Tests – Files that do not match
@@ -316,18 +316,11 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesPlaceInFull_whenRecordDoesNotReadBackAsThePlace() async throws {
-		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
 		let modules = Self.chainModules(layerCount: 3)
-		let output = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
-			try await StoredPlaceWriteCheck.$alteringPlaceReadBack.withValue({ _, record in record }) {
-				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, expectsPassedUpPlacesWrittenInFull: true, filesToDelete: &filesToDelete)
-			}
+		let output = try await StoredPlaceWriteCheck.$alteringPlaceReadBack.withValue({ _, record in record }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, expectsPassedUpPlacesWrittenInFull: true, filesToDelete: &filesToDelete)
 		}
-		continuation.finish()
-		var placesWrittenInFull = 0
-		for await work in stream where work.step == .writingPassedUpPlaceInFull {
-			placesWrittenInFull += work.elementCount
-		}
+		let placesWrittenInFull = output.modules.values.compactMap(\.generateOutput?.passedUpPlacesWrittenInFull).reduce(0, +)
 		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
 		// Layer1 passes up one place and Layer2 two, and the record handed back in place of each differs from it.
 		#expect(placesWrittenInFull == 3)

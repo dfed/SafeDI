@@ -558,12 +558,16 @@ enum ModulePlacesEncoder {
 	/// The places of `signatures`, the signatures of a module's seams, each passed-up place as the record it copies,
 	/// wherever that reads back as the place itself: a record of the module's own seams, or of `signaturesRead`, the
 	/// signatures the run read of the seams the module calls, whose modules' files hold `lower`.
-	static func places(of signatures: [StoredSeamSignature], signaturesRead: [TypeDescription: DependencyTreeGenerator.SeamSignatureRead], lower: [String: ModuleSeamSignatures]) -> StoredModulePlaces {
+	///
+	/// `passedUpPlacesWrittenInFull` counts the places written whole because their record, with what the call adds, did
+	/// not read back as the place: no graph the tests or the fuzzer build writes one, and such a place is written whole
+	/// so that a difference this form does not cover is never read wrong.
+	static func places(of signatures: [StoredSeamSignature], signaturesRead: [TypeDescription: DependencyTreeGenerator.SeamSignatureRead], lower: [String: ModuleSeamSignatures]) -> (places: StoredModulePlaces, passedUpPlacesWrittenInFull: Int) {
 		var encoder = Encoder(signatures: signatures, signaturesRead: signaturesRead, lower: lower)
 		let placesBySeam = signatures.map { stored in
 			encoder.places(of: stored.signature?.holes ?? [])
 		}
-		return StoredModulePlaces(lowerSeams: encoder.lowerSeams, placesBySeam: placesBySeam)
+		return (StoredModulePlaces(lowerSeams: encoder.lowerSeams, placesBySeam: placesBySeam), encoder.passedUpPlacesWrittenInFull)
 	}
 
 	// MARK: Private
@@ -591,6 +595,7 @@ enum ModulePlacesEncoder {
 		}
 
 		private(set) var lowerSeams = [StoredLowerSeam]()
+		private(set) var passedUpPlacesWrittenInFull = 0
 
 		mutating func places(of places: [SeamSignature.Hole]) -> [StoredPlace] {
 			// The seams the places were passed up from, in the order of the places.
@@ -605,7 +610,7 @@ enum ModulePlacesEncoder {
 					return .written(place)
 				}
 				guard let stored = storedPlace(place, passedUpFrom: innerSeamType, amongPlacesOf: innerSeamTypes) else {
-					GenerationWork.recordStoredPlaces(1, by: .writingPassedUpPlaceInFull)
+					passedUpPlacesWrittenInFull += 1
 					return .written(place)
 				}
 				return stored

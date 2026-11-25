@@ -610,17 +610,9 @@ func executeSafeDIToolMultiModuleTest(
 								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											// Every place a seam passes up must be written as the record it copies (`StoredPlaceChecks`).
-											try await GenerationWork.$observer.withValue(StoredPlaceChecks.recordingPlacesWrittenInFull(
-												unless: expectsPassedUpPlacesWrittenInFull || discardsStoredSeamSignatures || !moduleInfoOverrides.isEmpty,
-												inModuleNamed: moduleName,
-												handingOn: GenerationWork.observer,
-												sourceLocation: sourceLocation,
-											)) {
-												// Every stored block the run reads must decode (`StoredBlockDecodeChecks`).
-												try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)) {
-													try await tool.generate()
-												}
+											// Every stored block the run reads must decode (`StoredBlockDecodeChecks`).
+											try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)) {
+												try await tool.generate()
 											}
 										}
 									}
@@ -646,6 +638,13 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		// Every place a seam passes up must be written as the record it copies (`StoredPlaceChecks`).
+		StoredPlaceChecks.expectNoPlaceWrittenInFull(
+			in: generateOutput,
+			unless: expectsPassedUpPlacesWrittenInFull || discardsStoredSeamSignatures || !moduleInfoOverrides.isEmpty,
+			byRunOfModuleNamed: moduleName,
+			sourceLocation: sourceLocation,
+		)
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
 			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)

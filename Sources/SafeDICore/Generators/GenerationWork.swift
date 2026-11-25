@@ -92,10 +92,6 @@ public struct GenerationWork: Sendable {
 		/// Reading one passed-up place from the record of the seam it was passed up from (`PlaceResolver`): one for each
 		/// record a read resolves, each once however many places name it.
 		case resolvingStoredPlaces
-		/// Writing a passed-up place in full where the record of the seam it was passed up from, with what the call adds,
-		/// does not read back as the place (`ModulePlacesEncoder`): one for each such place. No graph the tests or the fuzzer
-		/// build writes one; the place is written whole so that a difference this form does not cover is never read wrong.
-		case writingPassedUpPlaceInFull
 		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
 		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the smaller of the properties the
 		/// child requires and the scope's carriers. Scanned for, every carrier of the scope was compared for every later

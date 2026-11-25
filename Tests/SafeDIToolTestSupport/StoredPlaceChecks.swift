@@ -18,28 +18,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import SafeDICore
+import SafeDIToolLibrary
 import Testing
 
 /// What every run of the multi-module harness checks of the places a module info file holds.
 enum StoredPlaceChecks {
-	/// An observer that records an issue for each place a seam passes up that a run writes in full, where it would
-	/// write the record of the seam the place came from (`GenerationWork.Step.writingPassedUpPlaceInFull`), then hands
-	/// the work to `enclosingObserver`, the observer the caller set, if any. A place written in full is read correctly;
-	/// the issue says that the form that keeps a module info file from growing with the modules beneath it did not hold
-	/// the place.
+	/// Records an issue when `output`, the output of the run of the module named `moduleName`, counts a place a seam
+	/// passes up that the run wrote in full, where it would write the record of the seam the place came from
+	/// (`Generate.Output.passedUpPlacesWrittenInFull`). A place written in full is read correctly; the issue says that
+	/// the form that keeps a module info file from growing with the modules beneath it did not hold the place.
+	///
+	/// Read from the run's output after the run, never observed through one more `TaskLocal.withValue` in the harness's
+	/// nest of them: with one more written there, a release build of the tests by Swift 6.2 aborts with "freed pointer
+	/// was not the last allocation".
 	/// - Parameter isExpected: Whether the run may write such a place, which then records no issue.
-	static func recordingPlacesWrittenInFull(
-		unless isExpected: Bool,
-		inModuleNamed moduleName: String,
-		handingOn enclosingObserver: (@Sendable (GenerationWork) -> Void)?,
-		sourceLocation: SourceLocation,
-	) -> @Sendable (GenerationWork) -> Void {
-		{ work in
-			if work.step == .writingPassedUpPlaceInFull, !isExpected {
-				Issue.record("The run of module `\(moduleName)` wrote \(work.elementCount) passed-up place in full, not as the record it copies", sourceLocation: sourceLocation)
-			}
-			enclosingObserver?(work)
+	static func expectNoPlaceWrittenInFull(in output: Generate.Output?, unless isExpected: Bool, byRunOfModuleNamed moduleName: String, sourceLocation: SourceLocation) {
+		if let count = output?.passedUpPlacesWrittenInFull, count > 0, !isExpected {
+			Issue.record("The run of module `\(moduleName)` wrote \(count) passed-up place in full, not as the record it copies", sourceLocation: sourceLocation)
 		}
 	}
 }
