@@ -482,7 +482,7 @@ extension MockLowering {
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
-		var planNodes = [PlanNodeKey: PlanNode]()
+		var planNodes = Set<PlanNodeKey>()
 		/// What the walk hands production's record function at each built place, which `recordBuiltPlaces()` calls once the
 		/// walk is done, by its path of child indices.
 		var builtPlaceCalls = [[Int]: MockLowering.BuiltPlaceCall]()
