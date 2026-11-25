@@ -502,9 +502,10 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_readsNoOverrideOfPublicMockCall_whenCallIsBeneathCycleEdge() async throws {
+	mutating func mock_readsNearestHoldersOverrideOfPublicMockCall_whenCallIsBeneathCycleEdge() async throws {
 		// `Holder` builds itself again through `holderBuilder`, an edge `cycleEdges` prunes, so the `Holder` built there has no
-		// member in its parent’s configuration, and its call of `Cache`’s public mock reads no override.
+		// member in its parent’s configuration; it reads the overrides of the nearest `Holder` above it, and so does its call
+		// of `Cache`’s public mock.
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
 			import SafeDI
@@ -588,9 +589,9 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		            let cache = if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
 		            func __safeDI_holderBuilder() -> Holder {
 		                _ = Cache.__safeDI_Cache_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                let cache = Cache.__safeDI_mock()
+		                let cache = if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
 		                let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
-		                return Holder(cache: cache, holderBuilder: holderBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
 		            }
 		            let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
