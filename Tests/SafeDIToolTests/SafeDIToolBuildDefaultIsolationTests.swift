@@ -48,7 +48,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.mainActorConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-DXcode -default-isolation MainActor -g"),
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings == [])
@@ -60,7 +59,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.undeclaredConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-DXcode -default-isolation MainActor -g"),
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -74,7 +72,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: nil,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-default-isolation MainActor"),
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -88,7 +85,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.mainActorConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-default-isolation nonisolated"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -102,7 +98,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.undeclaredConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-default-isolation nonisolated"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings == [])
@@ -114,7 +109,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: nil,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-default-isolation nonisolated"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings == [])
@@ -127,7 +121,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.mainActorConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-DXcode -g"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings == [])
@@ -143,7 +136,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 				"--build-setting-active-compilation-conditions=[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]",
 				"--build-setting-other-swift-flags=[-default-isolation MainActor ${OTHER_SWIFT_FLAGS}]",
 			],
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings == [])
@@ -155,7 +147,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.mainActorConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-default-isolation MainActor -default-isolation=nonisolated"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -169,7 +160,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.undeclaredConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-default-isolation MainActor -default-isolation=mainactor"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings == [])
@@ -181,7 +171,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.undeclaredConfiguration,
 			buildSettingArguments: Self.buildSettingArguments(otherSwiftFlags: "-Xllvm -default-isolation -Xllvm MainActor"),
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings == [])
@@ -195,7 +184,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.undeclaredConfiguration,
 			buildSettingArguments: ["--build-default-isolation", "MainActor"],
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -209,7 +197,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.mainActorConfiguration,
 			buildSettingArguments: ["--build-default-isolation=nonisolated"],
-			verificationDefaultIsolation: nil,
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -219,12 +206,10 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_doesNotWarn_whenOptionIsEmpty() async throws {
-		// The Tuist script passes `SWIFT_DEFAULT_ACTOR_ISOLATION`, which an Xcode older than 26 leaves unset.
+	mutating func generate_doesNotWarn_whenOptionNamesNeitherIsolationTheCompilerAccepts() async throws {
 		let output = try await generate(
-			configuration: Self.mainActorConfiguration,
-			buildSettingArguments: ["--build-default-isolation="],
-			verificationDefaultIsolation: nil,
+			configuration: Self.undeclaredConfiguration,
+			buildSettingArguments: ["--build-default-isolation=CustomActor"],
 		)
 
 		#expect(output.warnings == [])
@@ -237,7 +222,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.mainActorConfiguration,
 			buildSettingArguments: ["--build-default-isolation=nonisolated"] + Self.buildSettingArguments(otherSwiftFlags: "-default-isolation MainActor"),
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings == [])
@@ -249,7 +233,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 		let output = try await generate(
 			configuration: Self.undeclaredConfiguration,
 			buildSettingArguments: ["--build-default-isolation=MainActor"] + Self.buildSettingArguments(otherSwiftFlags: "-g"),
-			verificationDefaultIsolation: "MainActor",
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
@@ -266,13 +249,11 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 			let unreported = try await generate(
 				configuration: configuration,
 				buildSettingArguments: [],
-				verificationDefaultIsolation: nil,
 			)
 			for reportedIsolation in ["MainActor", "nonisolated"] {
 				let reported = try await generate(
 					configuration: configuration,
 					buildSettingArguments: ["--build-default-isolation", reportedIsolation],
-					verificationDefaultIsolation: reportedIsolation == "MainActor" ? "MainActor" : nil,
 				)
 
 				#expect(reported.dependencyTreeFiles == unreported.dependencyTreeFiles)
@@ -289,7 +270,6 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 	private mutating func generate(
 		configuration: String?,
 		buildSettingArguments: [String],
-		verificationDefaultIsolation: String?,
 	) async throws -> TestOutput {
 		try await executeSafeDIToolTest(
 			swiftFileContent: [Self.rootContent],
@@ -297,7 +277,8 @@ struct SafeDIToolBuildDefaultIsolationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			buildSettingArguments: buildSettingArguments,
-			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: verificationDefaultIsolation),
+			// Compiled under the isolation the configuration declares, which the generated code follows whatever the build reports.
+			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: configuration == Self.mainActorConfiguration ? "MainActor" : nil),
 		)
 	}
 

@@ -312,9 +312,13 @@ private func scriptBody(module: String, dependencies: [String], isDependedUpon: 
 	# (its "Default Actor Isolation" build setting), so SafeDITool can warn
 	# when the target’s `#SafeDIConfiguration` declares another. A
 	# `-default-isolation` flag in `OTHER_SWIFT_FLAGS`, passed above, wins.
+	# An Xcode older than 26 leaves the setting unset, and the option
+	# takes no empty value.
 	case "$generate_help" in
 		*--build-default-isolation*)
-			set -- "$@" "--build-default-isolation=${SWIFT_DEFAULT_ACTOR_ISOLATION:-}"
+			if [ -n "${SWIFT_DEFAULT_ACTOR_ISOLATION:-}" ]; then
+				set -- "$@" --build-default-isolation "$SWIFT_DEFAULT_ACTOR_ISOLATION"
+			fi
 			;;
 	esac
 
