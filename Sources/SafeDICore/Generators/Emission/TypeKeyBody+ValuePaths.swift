@@ -99,6 +99,35 @@ extension ValuePath {
 			value.reads
 		case let .call(_, value, arguments, _):
 			value.reads + arguments
+		case let .spliced(segments):
+			segments.flatMap(\.reads)
+		}
+	}
+
+	/// The functions the path names that a statement before it declares (`ValueSegment.declaredFunction`), in the order
+	/// it is spelled.
+	var declaredFunctionNames: [String] {
+		switch self {
+		case .rootDeclaration,
+		     .read,
+		     .passedArgument,
+		     .emptyInitialization:
+			[]
+		case let .member(_, value),
+		     let .optionalMember(_, value),
+		     let .call(_, value, _, _):
+			value.declaredFunctionNames
+		case let .spliced(segments):
+			segments.flatMap { segment -> [String] in
+				switch segment {
+				case .text:
+					[]
+				case let .value(value):
+					value.declaredFunctionNames
+				case let .declaredFunction(name):
+					[name]
+				}
+			}
 		}
 	}
 
@@ -116,6 +145,11 @@ extension ValuePath {
 			value.passedArgumentNames
 		case let .call(_, value, _, _):
 			value.passedArgumentNames
+		case let .spliced(segments):
+			segments.flatMap { segment -> [String] in
+				guard case let .value(value) = segment else { return [] }
+				return value.passedArgumentNames
+			}
 		}
 	}
 
@@ -136,6 +170,34 @@ extension ValuePath {
 			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
 		case let .emptyInitialization(type):
 			"new:\(type.asSource)"
+		case let .spliced(segments):
+			"spliced[\(segments.map(\.shape).joined(separator: ","))]"
+		}
+	}
+}
+
+extension ValueSegment {
+	/// The reads the segment makes, in the order it is spelled.
+	var reads: [PlaceRead] {
+		switch self {
+		case .text,
+		     .declaredFunction:
+			[]
+		case let .value(value):
+			value.reads
+		}
+	}
+
+	/// The segment for a structural key: its text, its value's shape, or the function's name, each marked apart so no
+	/// two kinds of segment share a key.
+	var shape: String {
+		switch self {
+		case let .text(text):
+			"text:\(text.count):\(text)"
+		case let .value(value):
+			"value:\(value.shape)"
+		case let .declaredFunction(name):
+			"function:\(name)"
 		}
 	}
 }
@@ -169,7 +231,8 @@ extension PassedArgument {
 		case .rootDeclaration,
 		     .member,
 		     .optionalMember,
-		     .call:
+		     .call,
+		     .spliced:
 			nil
 		}
 	}
@@ -199,7 +262,10 @@ extension TypeKeyLayout {
 			let takenNames = Set(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
 			let statements = bodies[body].statements
 			func check(_ path: ValuePath, before index: Int) -> Bool {
-				guard path.passedArgumentNames.allSatisfy(takenNames.contains) else { return false }
+				guard path.passedArgumentNames.allSatisfy(takenNames.contains),
+				      // A function is in scope only where a statement before the value's in its own body declares it.
+				      path.declaredFunctionNames.allSatisfy({ bodies[body].positionsByDeclaredFunction[$0]?.contains(where: { $0 < index }) == true })
+				else { return false }
 				return path.reads.allSatisfy { read in
 					checkRead(read, inBody: body, before: index, owner: owner, isNilAtEveryMember: read.source == .nil)
 				}
@@ -293,6 +359,20 @@ extension TypeKeyLayout {
 			} else {
 				return "\(receiver).\(name)(\(joined))"
 			}
+		case let .spliced(segments):
+			var spelled = ""
+			for segment in segments {
+				switch segment {
+				case let .text(text):
+					spelled += text
+				case let .value(value):
+					guard let value = spelledValuePath(value, inClass: owner, before: index) else { return nil }
+					spelled += value
+				case let .declaredFunction(name):
+					spelled += name
+				}
+			}
+			return spelled
 		}
 	}
 

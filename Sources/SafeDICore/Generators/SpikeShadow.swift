@@ -124,11 +124,14 @@ extension ScopeGenerator {
 		var stack = code
 		while let next = stack.popLast() {
 			switch next.node {
-			case .text, .spelled:
+			case .text:
 				break
 			case let .sequence(codes), let .lines(codes):
 				stack += codes
-			case let .indented(inner, _):
+			case let .indented(inner, _),
+			     let .rootFunction(_, inPlace: inner),
+			     let .sendableFunction(inner),
+			     let .omittingRootFunctions(inner, _):
 				stack.append(inner)
 			case let .place(plan):
 				places += 1
@@ -159,11 +162,14 @@ extension ScopeGenerator {
 		var stack = Array(code.reversed())
 		while let next = stack.popLast() {
 			switch next.node {
-			case .text, .spelled:
+			case .text:
 				break
 			case let .sequence(codes), let .lines(codes):
 				stack += codes.reversed()
-			case let .indented(inner, _):
+			case let .indented(inner, _),
+			     let .rootFunction(_, inPlace: inner),
+			     let .sendableFunction(inner),
+			     let .omittingRootFunctions(inner, _):
 				stack.append(inner)
 			case let .place(plan):
 				if case let .built(record) = plan.record {
