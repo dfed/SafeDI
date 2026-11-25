@@ -362,6 +362,16 @@ struct BinaryWriter {
 			write(list)
 			return
 		}
+		writeDifference(of: list, in: slot) { element, writer in
+			writer.write(element)
+		}
+	}
+
+	/// Writes `list` as ``writeDifference(of:in:)`` does, each element as `writeElement` writes it, which
+	/// ``BinaryReader/readDifference(in:readingElement:)`` reads back with the function that reads what it wrote.
+	///
+	/// Called only where ``sharesSignatureValues`` holds.
+	mutating func writeDifference<Element>(of list: [Element], in slot: BinaryDifferenceSlot, writingElement writeElement: (Element, inout BinaryWriter) -> Void) {
 		guard !list.isEmpty else {
 			writeUnsigned(0)
 			return
@@ -376,7 +386,7 @@ struct BinaryWriter {
 		elementEnds.reserveCapacity(list.count)
 		for element in list {
 			let elementStart = bytes.count
-			write(element)
+			writeElement(element, &self)
 			elements.append(bytes.withUnsafeBytes { history.identifier(ofElementWrittenAs: UnsafeRawBufferPointer(rebasing: $0[elementStart...])) })
 			elementEnds.append(bytes.count)
 		}
@@ -440,10 +450,14 @@ struct BinaryWriter {
 		}
 
 		/// The list written before that `elements` differs least from, with how many elements the two share at their start
-		/// and, after those, at their end: of the last list written, the longest that starts with `elements`' first element
-		/// and the longest that ends with its last, the one that shares the most, the earliest named here on a tie. `nil`
-		/// when none shares an element at either end.
+		/// and, after those, at their end: the first list written of the same elements, which the reader then hands back,
+		/// storage and all; or else, of the last list written, the longest that starts with `elements`' first element and
+		/// the longest that ends with its last, the one that shares the most, the earliest named here on a tie. `nil` when
+		/// none shares an element at either end.
 		func difference(of elements: [Int]) -> (list: Int, sharedAtStart: Int, sharedAtEnd: Int)? {
+			if let sameList = firstListByElements[elements] {
+				return (sameList, elements.count, 0)
+			}
 			var best: (list: Int, sharedAtStart: Int, sharedAtEnd: Int)?
 			let candidates = [lists.isEmpty ? nil : lists.count - 1, elements.first.flatMap { longestListByFirstElement[$0] }, elements.last.flatMap { longestListByLastElement[$0] }]
 			for case let candidate? in candidates {
@@ -471,6 +485,9 @@ struct BinaryWriter {
 			if let last = elements.last, longestListByLastElement[last].map({ lists[$0].count < elements.count }) ?? true {
 				longestListByLastElement[last] = lists.count
 			}
+			if firstListByElements[elements] == nil {
+				firstListByElements[elements] = lists.count
+			}
 			lists.append(elements)
 		}
 
@@ -484,6 +501,8 @@ struct BinaryWriter {
 		/// The first of the longest lists written that start with each element, and that end with each.
 		private var longestListByFirstElement = [Int: Int]()
 		private var longestListByLastElement = [Int: Int]()
+		/// The first list written of each run of elements, whose storage in `lists` each key shares.
+		private var firstListByElements = [[Int]: Int]()
 	}
 
 	private var listHistoriesBySlot = [BinaryDifferenceSlot: ListHistory]()
@@ -950,22 +969,45 @@ struct BinaryReader {
 	private(set) var sharesSignatureValues = false
 
 	/// Reads a list ``BinaryWriter/writeDifference(of:in:)`` wrote. A list that is the whole of the one it differs from
-	/// is that list, storage and all.
+	/// is that list, storage and all, and so is a list written whole that the same bytes wrote before, in any slot.
 	mutating func readDifference<Element: BinaryCodable>(in slot: BinaryDifferenceSlot) throws(BinaryDecodingError) -> [Element] {
 		guard sharesSignatureValues else {
 			return try read()
 		}
-		listDifferencesRead += 1
+		return try readDifference(in: slot) { reader throws(BinaryDecodingError) in
+			try Element(readingFrom: &reader)
+		}
+	}
+
+	/// Reads a list ``BinaryWriter/writeDifference(of:in:writingElement:)`` wrote, each element as `readElement` reads
+	/// it, which must be the one function that reads lists of `Element` written as differences.
+	///
+	/// Called only where ``sharesSignatureValues`` holds.
+	mutating func readDifference<Element>(in slot: BinaryDifferenceSlot, readingElement readElement: (inout BinaryReader) throws(BinaryDecodingError) -> Element) throws(BinaryDecodingError) -> [Element] {
 		let headerOffset = offset
 		let header = try readUnsigned()
+		// An empty list is no list a later one differs from, so a value that holds only empty lists reads the same
+		// wherever its bytes come again.
 		guard header > 0 else {
 			return []
 		}
-		let unsharedCount = header >> 1
-		var list = [Element]()
+		let list: [Element]
 		if header & 1 == 0 {
-			try appendElements(count: unsharedCount, countOffset: headerOffset, to: &list)
+			// Its bytes say all of it, so the same bytes are the same list, as any list a signature repeats.
+			offset = headerOffset
+			list = try readSharingStorageOfRepeats { reader throws(BinaryDecodingError) in
+				let count = try reader.readUnsigned() >> 1
+				guard count <= UInt64(reader.bytes.count - reader.offset) else {
+					throw .countExceedsRemainingBytes(count: count, offset: headerOffset)
+				}
+				var elements = [Element]()
+				for _ in 0..<count {
+					try elements.append(readElement(&reader))
+				}
+				return ListWrittenWhole(elements: elements)
+			}.elements
 		} else {
+			let unsharedCount = header >> 1
 			let history = listsReadBySlot[slot] ?? []
 			let distance = try readUnsigned()
 			let sharedAtStart = try readUnsigned()
@@ -976,30 +1018,39 @@ struct BinaryReader {
 			if unsharedCount == 0, sharedAtStart + sharedAtEnd == UInt64(other.count) {
 				list = other
 			} else {
-				list.append(contentsOf: other[..<Int(sharedAtStart)])
-				try appendElements(count: unsharedCount, countOffset: headerOffset, to: &list)
-				list.append(contentsOf: other[(other.count - Int(sharedAtEnd))...])
+				guard unsharedCount <= UInt64(bytes.count - offset) else {
+					throw .countExceedsRemainingBytes(count: unsharedCount, offset: headerOffset)
+				}
+				var elements = [Element]()
+				elements.append(contentsOf: other[..<Int(sharedAtStart)])
+				for _ in 0..<unsharedCount {
+					try elements.append(readElement(&self))
+				}
+				elements.append(contentsOf: other[(other.count - Int(sharedAtEnd))...])
+				list = elements
 			}
 		}
+		listDifferencesRead += 1
 		// As the writer keeps them: every list but an empty one.
 		listsReadBySlot[slot, default: []].append(list)
 		return list
 	}
 
-	private mutating func appendElements<Element: BinaryCodable>(count: UInt64, countOffset: Int, to list: inout [Element]) throws(BinaryDecodingError) {
-		guard count <= UInt64(bytes.count - offset) else {
-			throw .countExceedsRemainingBytes(count: count, offset: countOffset)
-		}
-		for _ in 0..<count {
-			try list.append(Element(readingFrom: &self))
-		}
+	/// A list ``readDifference(in:readingElement:)`` read whole, which ``readSharingStorageOfRepeats(_:)`` keeps apart
+	/// from a plain list of the same elements, whose bytes say something else.
+	private struct ListWrittenWhole<Element> {
+		let elements: [Element]
 	}
 
-	/// Every list ``readDifference(in:)`` read that is not empty, by slot, for as long as the reader lives: the signatures
-	/// read hold the same storage, so this holds one reference per list.
+	/// Every list ``readDifference(in:)`` read that is not empty, by slot, for as long as the reader lives, which is one
+	/// module's signatures or plans. The signatures read hold the same storage, so this holds one reference per list,
+	/// but for two kinds of list, which it holds a second copy of: the labels a case binds later, which the signature
+	/// keeps as a set, and a place's uncarried declarations where some are built after a place, which the signature
+	/// holds with those places set (`SeamSignature.Hole.UncarriedDeclaration.listReadAsDifference(from:)`).
 	private var listsReadBySlot = [BinaryDifferenceSlot: [Any]]()
-	/// How many lists ``readDifference(in:)`` read: a value that holds one is not one ``readSharingStorageOfRepeats(_:)``
-	/// hands back for the same bytes, since what those bytes say depends on the lists read before.
+	/// How many lists ``readDifference(in:)`` read that are not empty: a value that holds one is not one
+	/// ``readSharingStorageOfRepeats(_:)`` hands back for the same bytes, since what those bytes say depends on the
+	/// lists read before, and the lists read after depend on its being read.
 	private var listDifferencesRead = 0
 
 	/// Reads what ``BinaryWriter/writeSharingSignatureValues(_:)`` wrote.
@@ -1366,16 +1417,13 @@ struct BinarySharingSignatureValues<Value: BinaryCodable>: BinaryCodable {
 /// The lists a seam signature or a public mock plan writes as differences (``BinaryWriter/writeDifference(of:in:)``):
 /// a list differs from one written before in its own slot.
 enum BinaryDifferenceSlot: Hashable {
-	/// `SeamSignature.Hole.fields`.
-	case placeFields
-	/// `SeamSignature.Hole.EnumPlace.values`.
-	case placeValues
-	/// `SeamSignature.Hole.uncarriedDeclarations`.
-	case placeUncarriedDeclarations
-	/// `SeamSignature.ScopeEnum.Values.fields`.
-	case caseValuesFields
+	/// The fields bound before a place: `SeamSignature.Hole.fields`, `SeamSignature.Hole.EnumPlace.values` and
+	/// `SeamSignature.ScopeEnum.Values.fields`, which hold the same list for one place.
+	case fields
+	/// `SeamSignature.Hole.uncarriedDeclarations`, each without `builtAfter`.
+	case uncarriedDeclarations
 	/// `SeamSignature.ScopeEnum.Values.labelsBoundLater`, sorted.
-	case caseLabelsBoundLater
+	case labelsBoundLater
 }
 
 /// A value written once however often a file holds it (``BinaryWriter/writeShared(_:)``).

@@ -347,7 +347,10 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+										// Every stored block the run reads must decode (`StoredBlockDecodeChecks`).
+										try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver)) {
+											try await tool.generate()
+										}
 									}
 								}
 							}
@@ -414,6 +417,9 @@ func executeSafeDIToolTest(
 		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: moduleInfoFile, sourceLocation: sourceLocation)
+		}
 		if let recordDirectory {
 			// Recorded before compiling, so a compile that fails still leaves the outputs it was given.
 			var outputs = (generatedFiles ?? [:]).sorted { $0.key < $1.key }.map {
