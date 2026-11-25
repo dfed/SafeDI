@@ -269,6 +269,14 @@ extension TypeKeyLayout {
 		return plan.record
 	}
 
+	/// Whether `statement` declares `label`: its own, or, for a place written as text, one of the others it binds.
+	func declares(_ statement: Statement, _ label: String) -> Bool {
+		if case let .alias(record) = statement, record.otherBindings.contains(where: { $0.label == label }) {
+			return true
+		}
+		return self.label(of: statement) == label
+	}
+
 	func label(of statement: Statement) -> String {
 		switch statement {
 		case let .built(body):

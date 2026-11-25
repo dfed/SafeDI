@@ -42,7 +42,7 @@ extension TypeKeyLayout {
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
 		let statements = statements(ofClass: owner)
-		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { self.label(of: statements[$0]) == label }
+		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { declares(statements[$0], label) }
 	}
 
 	/// The type key's declaration for a path declaration.
