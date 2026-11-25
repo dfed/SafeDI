@@ -50,6 +50,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		packageName: String? = nil,
 		conformanceListNamesSendable: Bool = false,
 		conformanceListNamesOtherTypes: Bool = false,
+		usesModuleDefaultIsolation: Bool = false,
 	) {
 		storage = Storage(Fields(
 			instantiableTypes: [instantiableType] + (additionalInstantiables ?? []),
@@ -82,6 +83,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 			packageName: packageName,
 			conformanceListNamesSendable: conformanceListNamesSendable,
 			conformanceListNamesOtherTypes: conformanceListNamesOtherTypes,
+			usesModuleDefaultIsolation: usesModuleDefaultIsolation,
 		))
 	}
 
@@ -180,6 +182,28 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// whose hand-written mock the generated `mock()` calls, contributes none.
 	public var mockAttributes: String {
 		storage.fields.mockAttributes
+	}
+
+	/// Whether SafeDI supplied `generatedInitializerAttributes` and `mockAttributes`: the declaration spells neither
+	/// them nor `generatedAttributes`, and the module that declares it declares a `defaultIsolation` in its
+	/// `#SafeDIConfiguration`, whose attribute both then hold. Text the declaration spells is never read, and always
+	/// wins: this is `false` wherever it spells any.
+	public var usesModuleDefaultIsolation: Bool {
+		storage.fields.usesModuleDefaultIsolation
+	}
+
+	/// This declaration with `defaultIsolation`'s attribute as both `generatedInitializerAttributes` and
+	/// `mockAttributes`, when it spells neither, which `usesModuleDefaultIsolation` then records; else the declaration
+	/// unchanged. Only its attribute text being empty is read, never what any text says.
+	public func adoptingModuleDefaultIsolation(_ defaultIsolation: SafeDIConfiguration.DefaultIsolation) -> Instantiable {
+		guard generatedInitializerAttributes.isEmpty, mockAttributes.isEmpty else { return self }
+		var instantiable = self
+		instantiable.updateFields {
+			$0.generatedInitializerAttributes = defaultIsolation.suppliedAttributes
+			$0.mockAttributes = defaultIsolation.suppliedAttributes
+			$0.usesModuleDefaultIsolation = true
+		}
+		return instantiable
 	}
 
 	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.
@@ -572,6 +596,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		var isInsideCompilerDecidedBlock = false
 		var conformanceListNamesSendable: Bool
 		var conformanceListNamesOtherTypes: Bool
+		var usesModuleDefaultIsolation: Bool
 		var dependencyLabelsInUnselectedClauses = [DependencyLabelInUnselectedClause]()
 		var dependencyLabelsInsideConditionalBlocks = [String]()
 	}
@@ -692,6 +717,7 @@ extension Instantiable {
 		case isInsideCompilerDecidedBlock
 		case conformanceListNamesSendable
 		case conformanceListNamesOtherTypes
+		case usesModuleDefaultIsolation
 		case dependencyLabelsInUnselectedClauses
 		case dependencyLabelsInsideConditionalBlocks
 		case declaredName
@@ -734,6 +760,7 @@ extension Instantiable {
 			isInsideCompilerDecidedBlock: container.decode(Bool.self, forKey: .isInsideCompilerDecidedBlock),
 			conformanceListNamesSendable: container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesSendable) ?? false,
 			conformanceListNamesOtherTypes: container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesOtherTypes) ?? false,
+			usesModuleDefaultIsolation: container.decodeIfPresent(Bool.self, forKey: .usesModuleDefaultIsolation) ?? false,
 			dependencyLabelsInUnselectedClauses: container.decode([DependencyLabelInUnselectedClause].self, forKey: .dependencyLabelsInUnselectedClauses),
 			dependencyLabelsInsideConditionalBlocks: container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks),
 		))
@@ -772,6 +799,10 @@ extension Instantiable {
 		}
 		if conformanceListNamesOtherTypes {
 			try container.encode(conformanceListNamesOtherTypes, forKey: .conformanceListNamesOtherTypes)
+		}
+		// Written only when set, as in a module that declares no default isolation.
+		if usesModuleDefaultIsolation {
+			try container.encode(usesModuleDefaultIsolation, forKey: .usesModuleDefaultIsolation)
 		}
 		try container.encode(dependencyLabelsInUnselectedClauses, forKey: .dependencyLabelsInUnselectedClauses)
 		try container.encode(dependencyLabelsInsideConditionalBlocks, forKey: .dependencyLabelsInsideConditionalBlocks)

@@ -714,6 +714,62 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_findsSafeDIConfigurationWithDefaultIsolation_whenDefaultIsolationIsMainActorType() {
+		let syntaxTree = Parser.parse(source: """
+		#SafeDIConfiguration(
+		    defaultIsolation: MainActor.self
+		)
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: [],
+				additionalDirectoriesToInclude: [],
+				defaultIsolation: .mainActor,
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+			),
+		])
+	}
+
+	@Test
+	func walk_findsSafeDIConfigurationWithoutDefaultIsolation_whenDefaultIsolationIsNil() {
+		let syntaxTree = Parser.parse(source: """
+		#SafeDIConfiguration(
+		    defaultIsolation: nil
+		)
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: [],
+				additionalDirectoriesToInclude: [],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+			),
+		])
+	}
+
+	@Test
+	func walk_findsSafeDIConfigurationWithoutDefaultIsolation_whenDefaultIsolationIsAnotherActor() {
+		// The macro rejects any other value, so the tool reads it as the setting's default.
+		let syntaxTree = Parser.parse(source: """
+		#SafeDIConfiguration(
+		    defaultIsolation: DatabaseActor.self
+		)
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.configurations == [
+			SafeDIConfiguration(
+				additionalImportedModules: [],
+				additionalDirectoriesToInclude: [],
+				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+			),
+		])
+	}
+
+	@Test
 	func walk_findsSafeDIConfigurationWithNoArguments() {
 		let syntaxTree = Parser.parse(source: """
 		#SafeDIConfiguration()

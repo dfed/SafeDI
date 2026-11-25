@@ -57,7 +57,8 @@ import Testing
 				    additionalDirectoriesToInclude: ["DirA"],
 				    additionalMocksToGenerate: ["SomeService"],
 				    mockConditionalCompilation: "DEBUG",
-				    generatePlainDependencyTreeInitializers: true
+				    generatePlainDependencyTreeInitializers: true,
+				    defaultIsolation: MainActor.self
 				)
 				""",
 				expandedSource: "",
@@ -134,6 +135,152 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: "The `generatePlainDependencyTreeInitializers` argument must be `true` or `false`.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenDefaultIsolationIsMainActorType() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: MainActor.self
+				)
+				""",
+				expandedSource: "",
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenDefaultIsolationIsNil() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: nil
+				)
+				""",
+				expandedSource: "",
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenDefaultIsolationIsCustomGlobalActorType() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: DatabaseActor.self
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    defaultIsolation: DatabaseActor.self
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`defaultIsolation` must be `MainActor.self` or `nil`, the values Swift’s default isolation setting takes.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenDefaultIsolationIsStringLiteral() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: "MainActor"
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    defaultIsolation: "MainActor"
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`defaultIsolation` must be `MainActor.self` or `nil`, the values Swift’s default isolation setting takes.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenDefaultIsolationIsNonLiteralValue() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: someIsolation
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    defaultIsolation: someIsolation
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`defaultIsolation` must be `MainActor.self` or `nil`, the values Swift’s default isolation setting takes.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenDefaultIsolationIsQualifiedMainActorType() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: Swift.MainActor.self
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    defaultIsolation: Swift.MainActor.self
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`defaultIsolation` must be `MainActor.self` or `nil`, the values Swift’s default isolation setting takes.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenDefaultIsolationIsMainActorTypeMember() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    defaultIsolation: MainActor.shared
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    defaultIsolation: MainActor.shared
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`defaultIsolation` must be `MainActor.self` or `nil`, the values Swift’s default isolation setting takes.",
 						line: 1,
 						column: 1,
 					),
@@ -330,7 +477,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, or `generatePlainDependencyTreeInitializers`.",
+						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, `generatePlainDependencyTreeInitializers`, or `defaultIsolation`.",
 						line: 1,
 						column: 1,
 					),
@@ -354,7 +501,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, and `generatePlainDependencyTreeInitializers`.",
+						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, `generatePlainDependencyTreeInitializers`, and `defaultIsolation`.",
 						line: 1,
 						column: 1,
 					),

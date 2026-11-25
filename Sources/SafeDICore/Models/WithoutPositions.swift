@@ -55,6 +55,7 @@ extension Instantiable {
 			declarationLocation: nil,
 			moduleName: moduleName,
 			packageName: packageName,
+			usesModuleDefaultIsolation: usesModuleDefaultIsolation,
 		)
 		instantiable.sourceFilePath = sourceFilePath
 		instantiable.conformanceListNamesSendable = conformanceListNamesSendable

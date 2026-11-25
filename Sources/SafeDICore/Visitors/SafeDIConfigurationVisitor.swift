@@ -30,6 +30,7 @@ public enum SafeDIConfigurationVisitor {
 	public static let additionalMocksToGenerateArgumentLabel = "additionalMocksToGenerate"
 	public static let mockConditionalCompilationArgumentLabel = "mockConditionalCompilation"
 	public static let generatePlainDependencyTreeInitializersArgumentLabel = "generatePlainDependencyTreeInitializers"
+	public static let defaultIsolationArgumentLabel = "defaultIsolation"
 
 	/// Extracts a `SafeDIConfiguration` from a `MacroExpansionDeclSyntax` node
 	/// representing a `#SafeDIConfiguration(...)` invocation.
@@ -39,6 +40,7 @@ public enum SafeDIConfigurationVisitor {
 		var additionalMocksToGenerate = [String]()
 		var mockConditionalCompilation: String? = "DEBUG"
 		var generatePlainDependencyTreeInitializers = false
+		var defaultIsolation: SafeDIConfiguration.DefaultIsolation?
 
 		for argument in node.arguments {
 			guard let label = argument.label?.text else {
@@ -65,6 +67,10 @@ public enum SafeDIConfigurationVisitor {
 				if let value = BooleanLiteralExprSyntax(argument.expression) {
 					generatePlainDependencyTreeInitializers = value.literal.tokenKind == .keyword(.true)
 				}
+			case defaultIsolationArgumentLabel:
+				if let value = extractDefaultIsolation(from: argument.expression) {
+					defaultIsolation = value
+				}
 			default:
 				continue
 			}
@@ -76,7 +82,26 @@ public enum SafeDIConfigurationVisitor {
 			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockConditionalCompilation: mockConditionalCompilation,
 			generatePlainDependencyTreeInitializers: generatePlainDependencyTreeInitializers,
+			defaultIsolation: defaultIsolation,
 		)
+	}
+
+	/// The isolation a `defaultIsolation` argument's value states: `.some(.mainActor)` for exactly `MainActor.self`,
+	/// `.some(nil)` for `nil`, and `nil` for any other expression, which the macro rejects.
+	public static func extractDefaultIsolation(from expression: ExprSyntax) -> SafeDIConfiguration.DefaultIsolation?? {
+		if NilLiteralExprSyntax(expression) != nil {
+			.some(nil)
+		} else if let memberAccess = MemberAccessExprSyntax(expression),
+		          memberAccess.declName.baseName.tokenKind == .keyword(.self),
+		          memberAccess.declName.argumentNames == nil,
+		          let base = memberAccess.base.flatMap(DeclReferenceExprSyntax.init),
+		          base.argumentNames == nil,
+		          base.baseName.text == SafeDIConfiguration.DefaultIsolation.mainActor.rawValue
+		{
+			.some(.mainActor)
+		} else {
+			nil
+		}
 	}
 
 	// MARK: Private

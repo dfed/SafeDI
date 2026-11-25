@@ -382,6 +382,7 @@ public struct Generate: AsyncParsableCommand {
 			by: membership,
 			dependingOn: dependentModuleInfoFiles.map(\.file.moduleName),
 		)
+		.adoptingDeclaredDefaultIsolation(ownConfiguration: sourceConfiguration, membership: membership)
 		// The modules the given module info files describe, and the modules their views carry, each once.
 		let moduleInfoView = try MergedModuleInfoView(
 			directModules: dependentModuleInfoFiles,
