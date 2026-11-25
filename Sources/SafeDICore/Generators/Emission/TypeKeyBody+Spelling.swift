@@ -62,8 +62,9 @@ extension TypeKeyLayout {
 		for owner in classesByDepth {
 			guard let representative = representative(of: owner),
 			      let body = spelledStatements(ofClass: owner, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
-			      let arguments = spelledArguments(representative.arguments, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
+			      let argumentValues = spelledArgumentValues(representative.arguments, replacedAt: representative.argumentValues, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
 			else { return nil }
+			let arguments = Self.labeled(argumentValues, of: representative.arguments)
 			var parameters = representative.forwardedProperties
 			var typesDeclaredEscaping = representative.typesDeclaredEscaping
 			for label in reads[membersByClass[owner][0]] where outcomes[owner][label] == .passed {
@@ -73,6 +74,17 @@ extension TypeKeyLayout {
 					typesDeclaredEscaping.insert(parameterType)
 				}
 			}
+			for argument in representative.passedArguments {
+				parameters.append(Property(label: argument.parameterName, typeDescription: argument.type))
+				if argument.type.isClosure {
+					typesDeclaredEscaping.insert(argument.type)
+				}
+			}
+			var value = Expression.construction(representative.target, arguments: arguments)
+			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
+				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
+				value = .spelledConstruction(construction)
+			}
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
 				isSendable: isDecorated[owner],
@@ -80,7 +92,7 @@ extension TypeKeyLayout {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				returnType: representative.concreteType,
 				body: BuilderBody(statements: body),
-				value: .construction(representative.target, arguments: arguments),
+				value: value,
 				lineEnd: representative.lineEnd,
 			).spelled()
 		}
@@ -107,10 +119,11 @@ extension TypeKeyLayout {
 	func spelledStatement(_ statement: Statement, inClass owner: Int, at index: Int) -> String? {
 		switch statement {
 		case let .inline(record):
-			guard let arguments = spelledArguments(record.arguments, inClass: owner, before: index, sourceAtMember: { member, position in
+			guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
 				guard case let .inline(memberRecord) = bodies[member].statements[index] else { return nil }
 				return memberRecord.arguments[position].source
 			}) else { return nil }
+			let arguments = Self.labeled(argumentValues, of: record.arguments)
 			let declaration = BindingDeclaration(
 				property: record.property,
 				rule: .constant(
@@ -120,8 +133,9 @@ extension TypeKeyLayout {
 					isExtension: record.isExtension,
 				),
 			)
-			let value = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription, where: record.isErased)
-			return "\(declaration.spelled) = \(value.spelled)\(record.lineEnd)"
+			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription, where: record.isErased).spelled
+			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
+			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
 			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
@@ -141,6 +155,12 @@ extension TypeKeyLayout {
 			      let value = spelledArgument(label, passedTo: parameterType, inClass: owner, before: index)
 			else { return nil }
 			arguments.append("\(label.spelledAsArgumentLabel): \(value)")
+		}
+		// The members of `owner` hand their calls passed arguments of one shape (`structuralKey`), so its first member's
+		// spell every member's.
+		for argument in passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) {
+			guard let value = spelledValuePath(argument.value, inClass: owner, before: index) else { return nil }
+			arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
 		}
 		let functionName = functionNames[callee]
 		switch property.propertyType {
@@ -196,12 +216,15 @@ extension TypeKeyLayout {
 
 	/// The arguments of a construction made before the statement at `index` of `owner`'s body, each read as the receiver
 	/// declares it.
-	func spelledArguments(_ reads: [PlaceRead], inClass owner: Int, before index: Int, sourceAtMember: (Int, Int) -> ArgumentSource?) -> String? {
-		var arguments = [String]()
+	func spelledArgumentValues(_ reads: [PlaceRead], replacedAt replacements: [Int: ValuePath], inClass owner: Int, before index: Int, sourceAtMember: (Int, Int) -> ArgumentSource?) -> [String]? {
+		var values = [String]()
 		let members = owner == 0 ? [0] : membersByClass[owner]
 		for (position, read) in reads.enumerated() {
 			let value: String
-			if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
+			if let path = replacements[position] {
+				guard let spelled = spelledValuePath(path, inClass: owner, before: index) else { return nil }
+				value = spelled
+			} else if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
 				value = "nil"
 			} else {
 				let declaration = typeLookUp(read.label, inClass: owner, before: index)
@@ -212,9 +235,14 @@ extension TypeKeyLayout {
 					value = "nil"
 				}
 			}
-			arguments.append("\(read.argumentLabel.spelledAsArgumentLabel): \(value)")
+			values.append(value)
 		}
-		return arguments.joined(separator: ", ")
+		return values
+	}
+
+	/// `values`, each after the argument label of its read, as a call's argument list.
+	static func labeled(_ values: [String], of reads: [PlaceRead]) -> String {
+		zip(reads, values).map { "\($0.argumentLabel.spelledAsArgumentLabel): \($1)" }.joined(separator: ", ")
 	}
 
 	/// How `read` reads a declaration of its label typed `declaredType`: the declaration itself, or its lazy wrapper's

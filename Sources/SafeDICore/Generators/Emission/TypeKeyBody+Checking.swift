@@ -85,14 +85,14 @@ extension TypeKeyLayout {
 			let owner = classByBody[body]
 			let statements = bodies[body].statements
 			if let record = bodies[body].record {
-				for (position, argument) in record.arguments.enumerated() {
+				for (position, argument) in record.arguments.enumerated() where record.argumentValues[position] == nil {
 					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNilAtEveryMember(owner: owner) { $0.arguments[position] }) else { return false }
 				}
 			}
 			for (index, statement) in statements.enumerated() {
 				switch statement {
 				case let .inline(record):
-					for position in record.arguments.indices {
+					for position in record.arguments.indices where record.argumentValues[position] == nil {
 						let isNil = isNilAtEveryMember(owner: owner, statement: index, argument: position)
 						guard checkRead(record.arguments[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
 					}
