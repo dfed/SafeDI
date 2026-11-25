@@ -44,6 +44,12 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 		/// The declarations on the path the scope struct carries no field of, which hide the farther declarations of their
 		/// labels, in the order they are bound.
 		public let uncarriedProperties: [Property]
+		/// Shadow only: the fields the hole carries today, a `@Sendable` function on the path included.
+		public var carriedFields: [Property] = []
+		/// Shadow only: the declarations the hole carries no field of today, a `@Sendable` function on the path included.
+		public var carriedUncarriedProperties: [Property] = []
+		/// Shadow only: whether the place is held in a `Sendable` wrapper, built in a `@Sendable` function of its own.
+		public var siteOpensSendableFunction = false
 	}
 
 	/// What one scope on a place's path declares, in the order it binds the declarations, each marked by whether it is
@@ -61,6 +67,8 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 		/// any other type, its forwarded properties, then its children; for a fill, the declarations the filled seam's
 		/// struct does not carry, then the fields it binds.
 		public let declarations: [Declaration]
+		/// Shadow only: whether the scope's builder function, or the fill, is `@Sendable`, enclosing what the level binds.
+		public var opensSendableFunction = false
 
 		/// The values the level holds: the declarations bound before the next property.
 		public var fields: [Property] {
@@ -87,10 +95,15 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 			/// Whether the scope's builder function wraps it again as a member of a loop of builders
 			/// (`ScopeGenerator.reboundProperties`).
 			public var isReboundByBuilderFunction = false
+			/// Shadow only: whether it is a parameter of the seam, which a fill reads from its caller's scope.
+			public var isSeamParameter = false
 		}
 	}
 
 	/// Called with the levels of every computation of a seam's holes, when set: by the tests and the graph fuzzer, never by
 	/// the tool.
 	@TaskLocal public static var observer: (@Sendable (SeamPlaceLevels) -> Void)?
+
+	/// Shadow only: how long the per-site walk of this computation took (`buildSites`, `holesPassedUp`, `fields(of:)`).
+	public var perSiteWalkDuration: Duration = .zero
 }

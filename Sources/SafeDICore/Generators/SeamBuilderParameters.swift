@@ -50,6 +50,7 @@ extension DependencyTreeGenerator {
 		instantiables: [TypeDescription: Instantiable],
 	) -> [SeamSignature.Hole] {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
+		let shadowWalkStart = ContinuousClock.now
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let sites = buildSites(in: generator)
 		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
@@ -109,18 +110,26 @@ extension DependencyTreeGenerator {
 			)
 		}
 		// The levels of each place, beside its fields, for the tests and the graph fuzzer: generated code reads none yet.
-		if let observer = SeamPlaceLevels.observer {
-			observer(SeamPlaceLevels(
+		let shadowWalkDuration = ContinuousClock.now - shadowWalkStart
+		if SeamPlaceLevels.observer != nil || SeamRouteQueryShadow.isEnabled {
+			var placeLevels = SeamPlaceLevels(
 				seamType: seam.concreteInstantiable,
 				places: siteContents.map { content in
-					SeamPlaceLevels.Place(
+					var place = SeamPlaceLevels.Place(
 						sitePath: content.site.sitePath,
 						levels: content.levels,
 						fields: content.pathFields,
 						uncarriedProperties: content.pathUncarriedProperties,
 					)
+					place.carriedFields = content.fields.map(\.property)
+					place.carriedUncarriedProperties = content.uncarriedDeclarations.map(\.property)
+					place.siteOpensSendableFunction = content.site.property.propertyType.isSendable
+					return place
 				},
-			))
+			)
+			placeLevels.perSiteWalkDuration = shadowWalkDuration
+			SeamPlaceLevels.observer?(placeLevels)
+			SeamRouteQueryShadow.record(placeLevels)
 		}
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
@@ -950,6 +959,7 @@ extension DependencyTreeGenerator {
 			}
 			labelsInBindingOrder.append(label)
 			var levelDeclaration = SeamPlaceLevels.Level.Declaration(property: declaration.property, isBoundBeforeNextProperty: declaration.isBoundBeforeSite)
+			levelDeclaration.isSeamParameter = declaration.frameLevel < 0
 			levelDeclaration.isCycleParameter = declaration.isCycleParameter
 			levelDeclaration.isReboundByBuilderFunction = declaration.isReboundByBuilderFunction
 			levelDeclarations.append(levelDeclaration)
@@ -957,9 +967,13 @@ extension DependencyTreeGenerator {
 		var isInFill = false
 		// Each declaration a fill's field hides, by label, with the level of the fill that binds the field.
 		var hiddenByFillFields = [String: (declaration: SeamSignature.Hole.DeclarationHiddenByField, fieldLevel: Int)]()
+		var levelOpensSendableFunction = false
 		func endLevel(builtType: TypeDescription?, nextProperty: Property?) {
-			levels.append(SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations))
+			var level = SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations)
+			level.opensSendableFunction = levelOpensSendableFunction
+			levels.append(level)
 			levelDeclarations = []
+			levelOpensSendableFunction = false
 		}
 		// The labels the seam receives from its caller: its parameters but the ones it forwards, which its caller hands only
 		// to the seam itself. A label is matched by name only: a tree that receives a label a nearer declaration in the seam's
@@ -1069,6 +1083,7 @@ extension DependencyTreeGenerator {
 				// is next on the path.
 				if frame.fillIsSendable {
 					sendableDepth += 1
+					levelOpensSendableFunction = true
 					sendableFunctions.append((filledHole.property, .other))
 				}
 				for boundField in frame.generator.fillFields where frame.generator.fillStructBoundLabels.contains(boundField.property.label) && !uncarriedLabels.contains(boundField.property.label) {
@@ -1125,6 +1140,7 @@ extension DependencyTreeGenerator {
 			// A `@Sendable` builder function on the path encloses what it binds: what binds it before is outside.
 			if level > 0, let property = frame.generator.property, frame.generator.buildsInSendableFunction {
 				sendableDepth += 1
+				levelOpensSendableFunction = true
 				let function: SeamSignature.Hole.UncarriedDeclaration.SendableFunction = if ScopeGenerator.isBuilder(property) {
 					.instantiator(builtType: instantiable.concreteInstantiable)
 				} else if case .sendableLazilyInstantiated = property.propertyType {

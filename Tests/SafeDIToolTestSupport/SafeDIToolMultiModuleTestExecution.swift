@@ -597,7 +597,7 @@ func executeSafeDIToolMultiModuleTest(
 				// Every seam settled without its confirming signature pass must have the signature that pass finds (`SkippedConfirmingPassChecks`).
 				// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
 				generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
-					try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
+					try await SeamRouteQueryShadow.$context.withValue(Test.current.map { "\($0.id)" }) { try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
 						try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
 							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
 								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
@@ -612,6 +612,7 @@ func executeSafeDIToolMultiModuleTest(
 							}
 						}
 					}
+				}
 				}
 			} catch {
 				// A run that read a stored seam signature and failed reports what a run computing every signature reports.
