@@ -18,20 +18,28 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Overrides around a cycle: a node a cycle builds again, whose parent's configuration has no field for it, reads the
-/// overrides of the nearest node of its type around it, so a mock's overrides hold on every lap of the cycle, as a lazy
-/// cycle's always did.
+/// How a mock place that a cycle builds again finds its overrides: through the nearest place above it that builds the same
+/// type (decision MOCK-CYCLE-LAP-OVERRIDES, option B), so a mock's overrides hold however many times a test goes around a
+/// loop. A place a cycle builds again has no field of its own in its parent's configuration, since `cycleEdges` are chosen
+/// per type; the nearest place of its type reads a configuration of the same type, which has the fields of every place
+/// beneath it.
+///
+/// Two forms share one rule. In the path key, where each place's code reads a fixed override path, a place reads the path
+/// of the nearest place of its type (`AncestorOverridePath.own`). In the type key, where places of one type share a
+/// function, the function takes its type's configuration as a passed argument (`configurationParameter`): each place that
+/// calls it hands its own configuration, and a closer hands the configuration of the place it closes on, so one function
+/// reads lap 1's overrides on every lap, whichever call reached it.
 extension MockLowering {
-	/// The override path a configured node read, with whether it read its configuration rather than a closure.
+	/// The override path a place reads, and whether it reads a configuration rather than a closure.
 	struct AncestorOverridePath: Equatable {
 		let path: String
 		let hasConfiguration: Bool
-		/// Whether the place is built with its type's hand-written mock, whose configuration has another shape than one
-		/// built with its initializer: `validateConfigurationsAreBuiltOneWay` leaves out a place beneath a cycle edge.
+		/// Whether the place is built with its type's hand-written mock, whose configuration has another shape.
 		let builtWithHandWrittenMock: Bool
 
-		/// The path a node reads its overrides at: its own field's, `path`, where `isReachable`, else the path the nearest
-		/// node of its type around it read, `nearest`, where that node read the same kind of override, else none.
+		/// The override path the place reads: `path` where its parent's configuration has a field for it
+		/// (`isReachable`), else the path of the nearest place of its type above it where both read a configuration or
+		/// both a closure and both are built the same way, else `nil`, and the place reads no override.
 		static func own(path: String, hasConfiguration: Bool, builtWithHandWrittenMock: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
 			if isReachable {
 				AncestorOverridePath(path: path, hasConfiguration: hasConfiguration, builtWithHandWrittenMock: builtWithHandWrittenMock)
