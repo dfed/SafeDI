@@ -68,6 +68,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.detail = detail
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -81,6 +82,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -224,6 +226,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -305,6 +308,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.screenBuilder = screenBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -471,6 +475,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analyticsOptional = analyticsOptional
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analyticsOptional: { _ in __safeDI_builder() })
 			        }
@@ -484,6 +489,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -545,6 +551,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.detail = detail
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -558,6 +565,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -660,6 +668,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(analytics: { __safeDI_builder() })
 			        }
@@ -673,6 +682,7 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			            self.detailBuilder = detailBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }

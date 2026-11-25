@@ -9497,12 +9497,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let body: String
 			if index == signature.tiers.count - 1 {
 				// The narrowest tier builds the tree, which reads each builder by its internal name, its parameter's name.
-				let generatedProperties = try await generateProperties(
-					propertiesGeneratedLater: propertiesGeneratedLater,
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: bodyIndent,
-					fillPlaceBindings: fillPlaceBindings,
-				)
+				// A seam's root body plans its children at once, as a root of the dependency tree does, where its module plans
+				// few trees (`ConcurrentChildCode`).
+				let generatedProperties = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(ConcurrentChildCode.seamRootsPlanChildrenAtOnce) {
+					try await generateProperties(
+						propertiesGeneratedLater: propertiesGeneratedLater,
+						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+						leadingMemberWhitespace: bodyIndent,
+						fillPlaceBindings: fillPlaceBindings,
+					)
+				}
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
