@@ -318,6 +318,8 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
+The `@Instantiable` macro checks a type’s own initializer, or the hand-written mock its `mock()` calls: when it is bound to a global actor the type is not, and the argument the generated declaration reads spells no isolation, the macro reports an error with a fix-it that adds the actor. It cannot see the initializers of the types a tree builds, nor an actor a type takes from its superclass or a protocol, so add those attributes yourself.
+
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
 ```swift
@@ -488,7 +490,7 @@ A type can also receive an instantiator declared above it, of any of the four ki
 
 A received property that is not an instantiator cannot close a cycle, a `LazilyInstantiated` one included. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. So does a router built as a value that receives `screenBuilder`, when the `Screen` it builds receives that router. Receive an instantiator of the property instead, or declare `@Received(onlyIfAvailable: true) let parent: Parent?`, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
 
-In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry, and neither does anything built through it. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
+In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry of its own. A type the cycle builds again is built with the entry of the nearest place above it that builds the same type the same way (both with the type’s hand-written mock method, or both with its initializer), and so is everything built through it, so a mock’s overrides hold however many times a test goes around the loop. A type built through that dependency that nothing above it builds that way has no entry. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
 
 ### ErasedInstantiator
 
@@ -952,6 +954,8 @@ public final class DefaultUserService: UserService, Instantiable {
 ```
 
 By default, `generateMock` is `false` and no mock is generated. A mock generated with `generateMock: true` is `internal`; to call it from other modules, see [Cross-module mock generation](#cross-module-mock-generation). Generated mocks are wrapped in `#if DEBUG`, or in the condition your module’s [`#SafeDIConfiguration`](#safediconfiguration) sets as `mockConditionalCompilation`. To bind a generated mock to a global actor, or give it other attributes, see [Attributes for generated declarations](#attributes-for-generated-declarations).
+
+Generated mocks compile in every build where their condition is set. Under the default, `DEBUG`, that is every debug build of the module, including app builds that never run a test or a preview, so the mocks add to those builds’ compile time. To keep them out of debug app builds, set `mockConditionalCompilation` to a condition only your test and preview builds define, such as `"SAFEDI_MOCKS"`, and add it to those builds’ active compilation conditions. Put your [hand-written mocks and `mockOnly` declarations](#declarations-that-only-feed-mock-generation) under the same condition, and use [one condition across modules](#calling-a-public-mock-from-another-module) whose mocks call each other.
 
 ### Using generated mocks
 
