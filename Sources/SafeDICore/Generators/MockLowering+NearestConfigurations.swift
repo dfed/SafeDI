@@ -114,32 +114,43 @@ extension MockLowering.Walk {
 				closedOnParameterByPath[path] = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
 			}
 		}
+		// What a function's list joins is the same at every place of its type, so the places are read once, into what each
+		// type's functions take of their own places and which types' functions they call, and the fixed point runs over the
+		// types: a mock that enters a lazy cycle has thousands of places of a dozen types.
+		var ownParameterByName = [String: MockLowering.ConfigurationParameter]()
+		var directParametersByName = [String: Set<MockLowering.ConfigurationParameter>]()
+		var calledNamesByName = [String: Set<String>]()
+		for path in placePathsInWalkOrder {
+			guard let own = ownParameterByPath[path] else { continue }
+			ownParameterByName[own.name] = own
+			for child in childPathsByParent[path] ?? [] {
+				if let childParameter = ownParameterByPath[child] {
+					calledNamesByName[own.name, default: []].insert(childParameter.name)
+					// A place a cycle builds again, with no field in its parent's configuration, reads the nearest
+					// place of its type's configuration, as a closer on that place would hand it.
+					if builtPlaceConfigurationContexts[child]?.nearestIsProvided == true {
+						directParametersByName[own.name, default: []].insert(childParameter)
+					}
+				} else if let closedOn = closedOnParameterByPath[child] {
+					directParametersByName[own.name, default: []].insert(closedOn)
+					calledNamesByName[own.name, default: []].insert(closedOn.name)
+				}
+			}
+		}
 		var parametersByName = [String: Set<MockLowering.ConfigurationParameter>]()
 		var changed = true
 		while changed {
 			changed = false
-			// A function's list joins its children's, so the places beneath are visited first: the reverse of walk order
-			// settles every list but those a closer's target feeds back in in one pass.
-			for path in placePathsInWalkOrder.reversed() {
-				guard let own = ownParameterByPath[path] else { continue }
-				var parameters = parametersByName[own.name, default: []]
+			for (name, own) in ownParameterByName {
+				var parameters = parametersByName[name, default: []]
 				let countBefore = parameters.count
-				for child in childPathsByParent[path] ?? [] {
-					if let childParameter = ownParameterByPath[child] {
-						parameters.formUnion(parametersByName[childParameter.name, default: []])
-						// A place a cycle builds again, with no field in its parent's configuration, reads the nearest
-						// place of its type's configuration, as a closer on that place would hand it.
-						if builtPlaceConfigurationContexts[child]?.nearestIsProvided == true {
-							parameters.insert(childParameter)
-						}
-					} else if let closedOn = closedOnParameterByPath[child] {
-						parameters.insert(closedOn)
-						parameters.formUnion(parametersByName[closedOn.name, default: []])
-					}
+				parameters.formUnion(directParametersByName[name, default: []])
+				for calledName in calledNamesByName[name, default: []] {
+					parameters.formUnion(parametersByName[calledName, default: []])
 				}
 				parameters.remove(own)
 				if parameters.count != countBefore {
-					parametersByName[own.name] = parameters
+					parametersByName[name] = parameters
 					changed = true
 				}
 			}

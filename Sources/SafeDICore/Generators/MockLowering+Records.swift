@@ -147,10 +147,23 @@ extension MockLowering.Walk {
 	/// Mock roots share one construction memo, so whether two places hold one generator follows the order the roots are
 	/// built in. The key therefore also holds what the place's record reads beyond the generator (`BuiltPlaceInputs.RecordedKey`):
 	/// two places of one generator share a node only where their records agree, as places of two generators never do.
+	///
+	/// It reads them of the first place's call rather than holding a copy: a mock none of whose places share a node, tens
+	/// of thousands of them, held a key as large as the call beside every call.
 	struct PlanNodeKey: Hashable {
-		let generator: ObjectIdentifier
-		let unavailableProperties: Set<Property>
-		let inputs: MockLowering.BuiltPlaceInputs.RecordedKey
+		let call: MockLowering.BuiltPlaceCall
+
+		static func == (lhs: PlanNodeKey, rhs: PlanNodeKey) -> Bool {
+			ObjectIdentifier(lhs.call.generator) == ObjectIdentifier(rhs.call.generator)
+				&& lhs.call.unavailableProperties == rhs.call.unavailableProperties
+				&& lhs.call.inputs.recordedKey == rhs.call.inputs.recordedKey
+		}
+
+		func hash(into hasher: inout Hasher) {
+			hasher.combine(ObjectIdentifier(call.generator))
+			hasher.combine(call.unavailableProperties)
+			hasher.combine(call.inputs.recordedKey)
+		}
 	}
 
 	/// Keeps what the walk hands production's record function at the built place it is lowering.
@@ -205,15 +218,12 @@ extension MockLowering.Walk {
 	/// Records, through production's record function, the built place the walk lowered `node` at.
 	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) {
 		guard case .built = node,
-		      let inputs = builtPlaceInputs[childIndexPath],
+		      let inputs = builtPlaceInputs.removeValue(forKey: childIndexPath),
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
 		else { return }
-		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties, inputs: inputs.recordedKey)
-		let planNode = planNodes[key] ?? PlanNode()
-		planNodes[key] = planNode
 		// The record is made once the walk is done (`recordBuiltPlaces()`), when the records of the places in its builder
 		// function are known.
-		builtPlaceCalls[childIndexPath] = MockLowering.BuiltPlaceCall(
+		let call = MockLowering.BuiltPlaceCall(
 			generator: generator,
 			property: property,
 			instantiable: instantiable,
@@ -221,9 +231,11 @@ extension MockLowering.Walk {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			unavailableProperties: unavailableProperties,
 			inputs: inputs,
-			node: planNode,
+			node: PlanNode(),
 			treeNode: node,
 			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
 		)
+		let (isFirstOfNode, first) = planNodes.insert(PlanNodeKey(call: call))
+		builtPlaceCalls[childIndexPath] = isFirstOfNode ? call : call.sharing(first.call.node)
 	}
 }
