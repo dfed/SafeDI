@@ -40,7 +40,7 @@ struct SafeDIToolGraphFuzzerNestedCycleTests {
 		}
 	}
 
-	@Test(arguments: [UInt64(222), 1501])
+	@Test(arguments: [UInt64(222), 1_501])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectFillWithDeclarationBoundOnCycleReentry_whenNoTypeOfNestedCyclesReceivesLabel(seed: UInt64) async throws {
 		// The seam corpus's `addingNestedCycleHoleShapes`, unremedied: `NestHoleRedeclarer` declares `nestHoleTag` again
@@ -56,7 +56,7 @@ struct SafeDIToolGraphFuzzerNestedCycleTests {
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
 		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
 		#expect(drawFeatures.contains(.nestedCycleHoleLabelNoFunctionTakes))
-		#expect(drawFeatures.contains(.nestedCycleHolePlaceOnScreen) == (seed == 1501))
+		#expect(drawFeatures.contains(.nestedCycleHolePlaceOnScreen) == (seed == 1_501))
 		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
 		let prefix = fixture.typeNamePrefix
 		guard case let .rejected(diagnostics) = runs.firstOutcome else {
