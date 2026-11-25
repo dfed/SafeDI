@@ -168,7 +168,7 @@ extension MockLowering.Walk {
 					// that nearest one: it is set exactly where a place of its type is above, which no built place has.
 					if let first = built.passedArguments.first, first.parameterName == own.name,
 					   let nearestRead = nearest.nearestRead(of: own, calledFrom: Array(path.dropLast())),
-					   let value = Self.nearestFirst(nearestRead, orElse: first.value, context: builtPlaceConfigurationContexts[path])
+					   let value = Self.nearestFirst(nearestRead, orElse: first.value, own: own, context: builtPlaceConfigurationContexts[path])
 					{
 						var handed = PassedArgument(parameterName: first.parameterName, type: first.type, value: value, staysOutsideSendableFunctions: first.staysOutsideSendableFunctions)
 						handed.bindsBeforeCall = first.bindsBeforeCall
@@ -190,7 +190,7 @@ extension MockLowering.Walk {
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
 	/// its type, `nearestRead`: that, else what it hands now, a field of its parent's or a configuration built afresh, or
 	/// that alone where it hands `nil`; `nil` where it hands anything else, which it keeps.
-	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, context: MockLowering.BuiltPlaceConfigurationContext?) -> ValuePath? {
+	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, own: MockLowering.ConfigurationParameter, context: MockLowering.BuiltPlaceConfigurationContext?) -> ValuePath? {
 		switch value {
 		case .emptyInitialization:
 			return .spliced([.value(nearestRead), .text(" ?? "), .value(value)])
@@ -198,8 +198,17 @@ extension MockLowering.Walk {
 			guard let context, let parentConfiguration = context.parentConfiguration, value == .member(context.fieldName, of: parentConfiguration) else { return nil }
 			return .spliced([.value(nearestRead), .text(" ?? "), .value(value)])
 		case let .read(read):
-			guard case .nil = read.source else { return nil }
-			return nearestRead
+			switch read.source {
+			case .nil:
+				return nearestRead
+			case .lazyInstance, .forwardedSpread, .wrapper, .optionalWrapper, .builderArgument, .spelledArgument:
+				return nil
+			case let .binding(label):
+				guard label == own.name else { return nil }
+				// A read of the nearest place of its type above, which the function it is called in was handed. A
+				// configuration struct is taken non-optional, and the nearest is set wherever this read resolved.
+				return own.readsConfigurationStruct ? .spliced([.value(nearestRead), .text(" ?? "), .value(.emptyInitialization(own.type))]) : nearestRead
+			}
 		case .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
 			return nil
 		}
@@ -259,10 +268,9 @@ extension MockLowering.Walk {
 	}
 
 	/// The root's statements in the type key's layout, each line indented as the root's are, or `nil` where the root keeps
-	/// the walk's: the walk entered a cycle with a cycle edge, a place records nothing, a read names a value no record or
-	/// root declaration binds, or the type key cannot lay the body out.
+	/// the walk's: a place records nothing, a read names a value no record or root declaration binds, or the type key
+	/// cannot lay the body out.
 	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> (lines: [String]?, fallback: String) {
-		guard ProcessInfo.processInfo.environment["SCRATCH_NO_GUARD"] == "1" || !entersCycleWithEdge else { return (nil, "entersCycleWithEdge") }
 		var rootBody = [GeneratedCode]()
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
 		for property in rootDeclarations {

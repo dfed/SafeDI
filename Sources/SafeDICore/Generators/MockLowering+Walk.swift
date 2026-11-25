@@ -333,18 +333,6 @@ extension MockLowering {
 		var parentConcreteType: String?
 		/// Whether the overrides of the node whose children the walk is at are reachable: no edge above it is in `cycleEdges`.
 		var overridePathReachable = true
-		/// The concrete types the walk built, spelled as `cycleEdges` spells them, kept only where the module has a cycle
-		/// edge. Which edge of a mocked lazy cycle is in `cycleEdges` follows the types' names (`computeCycleEdges`), and so
-		/// does whether a root's walk crosses it or only closes the cycle on it, so the type key keeps the walk's body for
-		/// every root that builds both types of an edge (`entersCycleWithEdge`), whichever edge the cycle's is.
-		var builtConcreteTypesBesideCycleEdges = Set<String>()
-
-		/// Whether the walk built both types of an edge in `cycleEdges`: it entered a mocked lazy cycle, one of whose edges
-		/// its parent's configuration has no field for.
-		var entersCycleWithEdge: Bool {
-			cycleEdges.contains { builtConcreteTypesBesideCycleEdges.contains($0.parent) && builtConcreteTypesBesideCycleEdges.contains($0.child) }
-		}
-
 		/// The override path each configured type around the node the walk is at read, nearest last, with whether its
 		/// node read its configuration rather than a closure: a node a cycle builds again, which its parent's configuration
 		/// has no field for, reads the nearest one of its type (`MockLowering+CycleOverrides.swift`).
@@ -1103,9 +1091,6 @@ extension MockLowering {
 			// A node that repeats a node around it reads no override of its own, and one beneath an edge in `cycleEdges`
 			// reads none of its own or beneath it: its parent's configuration has no field for it.
 			let isCycleNode = ancestorTypes.contains(cycleNodeKey)
-			if !cycleEdges.isEmpty {
-				builtConcreteTypesBesideCycleEdges.insert(instantiable.concreteInstantiable.asSource)
-			}
 			let ownFieldReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable

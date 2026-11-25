@@ -100,7 +100,8 @@ extension MockLowering {
 
 extension MockLowering.Walk {
 	/// The nearest configurations every function of the walk's places hands on, found as a fixed point over the places:
-	/// a function takes each one a closer among its places closes on, and each one a function it calls takes, but its own.
+	/// a function takes each one a closer among its places closes on, each one a place among them built again by a cycle
+	/// reads, and each one a function it calls takes, but its own.
 	func nearestConfigurations(childPathsByParent: [[Int]: [[Int]]]) -> MockLowering.NearestConfigurations {
 		var ownParameterByPath = [[Int]: MockLowering.ConfigurationParameter]()
 		var staysOutsideSendableFunctionsByName = [String: Bool]()
@@ -136,6 +137,11 @@ extension MockLowering.Walk {
 				for child in childPathsByParent[path] ?? [] {
 					if let childParameter = ownParameterByPath[child] {
 						parameters.formUnion(parametersByName[childParameter.name, default: []])
+						// A place a cycle builds again, with no field in its parent's configuration, reads the nearest
+						// place of its type's configuration, as a closer on that place would hand it.
+						if builtPlaceConfigurationContexts[child]?.nearestIsProvided == true {
+							parameters.insert(childParameter)
+						}
 					} else if let closedOn = closedOnParameterByPath[child] {
 						parameters.insert(closedOn)
 						parameters.formUnion(parametersByName[closedOn.name, default: []])
