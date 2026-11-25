@@ -1947,10 +1947,11 @@ enum GraphFuzzerMockOverrides {
 		return Array(signature.dropFirst().prefix { !$0.hasPrefix(")") })
 	}
 
-	/// The parameters of the `SafeDIOverrides` initializer in `contents`, as `(label, type)`.
+	/// The parameters of the `SafeDIOverrides` initializer in `contents`, as `(label, type)`. The struct is spelled
+	/// `@MainActor struct SafeDIOverrides {` in a module that declares the main actor its default isolation.
 	static func overrideFields(_ contents: String) -> [(label: String, type: String)] {
 		let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-		guard let structStart = lines.firstIndex(of: "struct SafeDIOverrides {"),
+		guard let structStart = lines.firstIndex(where: { $0 == "struct SafeDIOverrides {" || $0 == "@MainActor struct SafeDIOverrides {" }),
 		      let initializerStart = lines[structStart...].firstIndex(of: "init(")
 		else { return [] }
 		return lines[(initializerStart + 1)...].prefix { !$0.hasPrefix(")") }.compactMap { line in
@@ -1971,6 +1972,9 @@ enum GraphFuzzerMockOverrides {
 			let builtType: String
 			if field.type.hasSuffix(".SafeDIMockConfiguration") {
 				builtType = String(field.type.dropLast(".SafeDIMockConfiguration".count))
+			} else if field.type.hasSuffix(".SafeDIMockConfiguration?") {
+				// A configuration field defaults to `nil` in a module that declares the main actor its default isolation.
+				builtType = String(field.type.dropLast(".SafeDIMockConfiguration?".count))
 			} else if field.type.hasPrefix("("), field.type.hasSuffix(")?"), let arrow = field.type.range(of: " -> ", options: .backwards) {
 				builtType = String(field.type[arrow.upperBound...].dropLast(")?".count))
 			} else {
@@ -1981,10 +1985,12 @@ enum GraphFuzzerMockOverrides {
 	}
 
 	/// How many of `fields` are `onlyIfAvailable` overrides: an optional value that is neither a builder closure nor a
-	/// configuration.
+	/// configuration, which is optional where its field defaults to `nil`.
 	static func onlyIfAvailableOverrideCount(of fields: [(label: String, type: String)]) -> Int {
 		fields.count { field in
-			field.type.hasSuffix("?") && !(field.type.hasPrefix("(") && field.type.contains(" -> "))
+			field.type.hasSuffix("?")
+				&& !(field.type.hasPrefix("(") && field.type.contains(" -> "))
+				&& !field.type.hasSuffix(".SafeDIMockConfiguration?")
 		}
 	}
 

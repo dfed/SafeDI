@@ -211,13 +211,15 @@ struct GraphFuzzerFixture: Equatable {
 
 	/// `contents` with its module declaring the main actor its default isolation, for one graph in eight of the base
 	/// corpus: added to the graph's `#SafeDIConfiguration` where it declares one, since a second is an error, and declared
-	/// in the first file otherwise. A graph that spells `Sendable` is left as drawn: under a main-actor default its types
-	/// are main-actor, which a `@Sendable` builder or a `Sendable` conformance cannot hold, so the compile would reject the
-	/// fixture itself (the design's first group of failures, which SafeDI cannot change).
+	/// in the first file otherwise. Two kinds of graph are left as drawn, since under a main-actor default the compile
+	/// rejects their fixture itself (the design's first group of failures, which SafeDI cannot change): one that spells
+	/// `Sendable`, since its types are then main-actor, which a `@Sendable` builder or a `Sendable` conformance cannot
+	/// hold; and one whose hand-written code passes a closure to a wrapper (`Instantiator { … }`), since the wrapper’s
+	/// closure is nonisolated and cannot call the main-actor initializers it builds with (seed 243).
 	static func declaringMainActorDefaultIsolation(seed: UInt64, in contents: [String]) -> [String] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ mainActorDefaultIsolationRandomSeedMask)
 		guard random.percentChance(12),
-		      !contents.contains(where: { $0.contains("Sendable") }),
+		      !contents.contains(where: { $0.contains("Sendable") || $0.contains("Instantiator {") || $0.contains("Instantiated {") }),
 		      !contents.isEmpty
 		else { return contents }
 		var result = contents
