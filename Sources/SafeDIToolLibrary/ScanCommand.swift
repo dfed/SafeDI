@@ -41,14 +41,45 @@ struct Scan: AsyncParsableCommand {
 	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler’s -D flags. SafeDI declarations in `#if` blocks are scanned only when the block’s condition evaluates to true. Conditions are recorded in the manifest so `generate` applies them too.") var activeCompilationConditions: [String] = []
 
 	func run() async throws {
-		try await performScan(
+		// A build tool plugin runs `scan` whenever SwiftPM or Xcode plans a build, so a run that would write what the last
+		// one wrote parses nothing and writes nothing (`ScanInputsRecord`).
+		let recordURL = ScanInputsRecord.url(besideManifestFile: manifestFile)
+		let arguments = try ScanInputsRecord.Arguments(
+			inputSourcesFileContent: String(contentsOfFile: inputSourcesFile, encoding: .utf8),
+			projectRoot: projectRoot,
+			outputDirectory: outputDirectory,
+			mockScopedFiles: mockScopedFiles,
+			activeCompilationConditions: Set(activeCompilationConditions).sorted(),
+			workingDirectory: FileManager.default.currentDirectoryPath,
+			toolPath: ScanInputsRecord.toolPath ?? "",
+			toolStamp: FileModificationStamp(ofFileAtPath: ScanInputsRecord.toolPath ?? ""),
+		)
+		let projectFilePaths = ProjectFilePaths(projectRoot: projectRoot)
+		if let record = ScanInputsRecord.read(besideManifestFile: manifestFile, holding: arguments),
+		   await record.inputsAreUnchanged(manifestFile: manifestFile, projectFilePaths: projectFilePaths)
+		{
+			return
+		}
+		// A run that fails leaves no record, so the next run scans again.
+		try? FileManager.default.removeItem(at: recordURL)
+		let scan = try await performScanReportingSearch(
 			inputSourcesFile: inputSourcesFile,
-			projectFilePaths: ProjectFilePaths(projectRoot: projectRoot),
+			projectFilePaths: projectFilePaths,
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
 			mockScopedFiles: mockScopedFiles,
 			activeCompilationConditions: Set(activeCompilationConditions),
 		)
+		let record = ScanInputsRecord(
+			arguments: arguments,
+			scannedInputs: scan.cached.scannedInputs,
+			searchedDirectories: scan.searchedDirectories,
+			foundFiles: scan.foundFiles,
+			manifestStamp: FileModificationStamp(ofFileAtPath: manifestFile),
+			scanCacheStamp: FileModificationStamp(ofFileAtPath: scannedModuleInfoURL(forManifestPath: manifestFile).path),
+		)
+		// Writing the record is best-effort, as writing the cache is: without it the next run scans again.
+		try? JSONEncoder().encode(record).write(to: recordURL, options: .atomic)
 	}
 }
 
@@ -67,6 +98,30 @@ public func performScan(
 	activeCompilationConditions: Set<String> = [],
 	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
 ) async throws -> CachedScannedModuleInfo {
+	try await performScanReportingSearch(
+		inputSourcesFile: inputSourcesFile,
+		projectFilePaths: projectFilePaths,
+		outputDirectory: outputDirectory,
+		manifestFile: manifestFile,
+		mockScopedFiles: mockScopedFiles,
+		activeCompilationConditions: activeCompilationConditions,
+		keepsTypeDeclarationsOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+	).cached
+}
+
+/// Performs the scan as `performScan` does, and also returns every `additionalDirectoriesToInclude` entry of every
+/// configuration in the module's files, as the scan searched them, and the files it found there, as
+/// `ProjectFilePaths.projectFilePath(of:)` spells them, sorted.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func performScanReportingSearch(
+	inputSourcesFile: String,
+	projectFilePaths: ProjectFilePaths,
+	outputDirectory: String,
+	manifestFile: String,
+	mockScopedFiles: [String] = [],
+	activeCompilationConditions: Set<String> = [],
+	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
+) async throws -> (cached: CachedScannedModuleInfo, searchedDirectories: [String], foundFiles: [String]) {
 	let outputDirectoryURL = outputDirectory.asFileURL
 
 	// Read CSV and resolve file paths relative to project root.
@@ -128,6 +183,7 @@ public func performScan(
 	var configuredAdditionalInputFiles = [String]()
 	var additionalFileScans = [CachedFileScan]()
 	var plannedOnlyAdditionalFileScans = [FileScan]()
+	var foundAdditionalFiles = [String]()
 	if !moduleOutputFileDeclarations.additionalDirectoriesToInclude.isEmpty {
 		// The directories the active configuration lists, which `generate` reads too. Files found relative to
 		// the working directory compare with the inputs only once spelled as the project spells them.
@@ -143,6 +199,7 @@ public func performScan(
 		// spells the project's other files.
 		additionalInputFiles = configuredAdditionalFiles.union(plannedOnlyAdditionalFiles).sorted().map(projectFilePaths.buildSystemPath(of:))
 		configuredAdditionalInputFiles = configuredAdditionalFiles.sorted().map(\.path)
+		foundAdditionalFiles = configuredAdditionalFiles.union(plannedOnlyAdditionalFiles).map(\.path).sorted()
 		for filePath in configuredAdditionalFiles.union(plannedOnlyAdditionalFiles) where scannedInputStamps[filePath] == nil {
 			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath.path)
 		}
@@ -300,7 +357,7 @@ public func performScan(
 	// is missing, can't be read, or predates a source's modification. The
 	// write is atomic, so a `generate` never reads a partly written cache.
 	try? cached.scanCacheData.write(to: scannedModuleInfoURL(forManifestPath: manifestFile), options: .atomic)
-	return cached
+	return (cached, moduleOutputFileDeclarations.additionalDirectoriesToInclude, foundAdditionalFiles)
 }
 
 /// What the Swift files found in a module's `#SafeDIConfiguration(additionalDirectoriesToInclude:)` directories and
