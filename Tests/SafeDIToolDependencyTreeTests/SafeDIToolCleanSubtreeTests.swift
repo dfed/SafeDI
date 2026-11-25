@@ -391,25 +391,75 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_stopsKeyingScope_whenErasedScreensInLayersWithoutCyclesReachItAlongPathsWhoseKeysDiffer() async throws {
-		// Layers of four seams, each in a module of its own and opening three screens of the next layer through erased
-		// instantiators, with no cycle: the app's walk reaches a screen of a deep layer along every path through the layers
-		// above, and each path's keys differ. A scope keyed eight times in a row with no remembered walk of an equal key is
-		// keyed no more, whether or not it reaches a cycle, so fewer keys are built for the same scopes walked; the walk
-		// reports what it reports without the skip. Keyed wherever they were reached again, the same walks built 351 and
-		// 1,011 keys.
+	mutating func generate_stopsKeyingScope_whenScreensInLayersWithoutCyclesReceiveWhatOnlyTheirPathDeclares() async throws {
+		// Layers of four screens, each opening three screens of the next layer, with no cycle: every screen declares a mark
+		// of its own, and receives, only if available, the mark of every screen of the layers above. Which marks are
+		// available differs on every path, so every key of a screen differs. A scope keyed eight times in a row with no
+		// remembered walk of an equal key is keyed no more, whether or not it reaches a cycle, so fewer keys are built for
+		// the same scopes walked; the walk reports what it reports without the skip. Keyed wherever they were reached again,
+		// the same walks built 303 and 947 keys.
 		var keyedCounts = [Int]()
 		var validatedCounts = [Int]()
 		for layerCount in [4, 5] {
-			let modules = Self.layeredErasedSeamModules(layerCount: layerCount)
-			let skipping = try await run(modules, skippingCleanSubtrees: true)
-			let walking = try await run(modules, skippingCleanSubtrees: false)
+			let fixture = Self.layeredScreensReceivingMarksOfTheirPath(layerCount: layerCount)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
 			#expect(skipping.outcome == walking.outcome)
 			keyedCounts.append(skipping.keyedSubtreeCount)
 			validatedCounts.append(skipping.validatedScopeCount)
 		}
-		#expect(keyedCounts == [279, 651])
-		#expect(validatedCounts == [324, 696])
+		#expect(keyedCounts == [231, 587])
+		#expect(validatedCounts == [177, 505])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenErasedScreensEachDeclareOneLabelWithModelOfTheirOwn() async throws {
+		// Layers of four seams, each in a module of its own and opening three screens of the next layer through erased
+		// instantiators, with no cycle: every screen declares `model` with a model type of its own, which only that model's
+		// tree is built for and nothing receives. The app's walk reaches a screen of a deep layer along every path through
+		// the layers above, each with other `model`s receivable; no walk of the screen's subtree looks one up, so its key
+		// holds none and all but one walk of each screen are skipped.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [3, 4, 5, 6] {
+			let modules = Self.layeredErasedSeamModules(layerCount: layerCount)
+			let skipping = try await run(modules, skippingCleanSubtrees: true)
+			let walking = try await run(modules, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		for (smaller, larger) in zip(walkingCounts, walkingCounts.dropFirst()) {
+			#expect(Double(larger) / Double(smaller) > 2, "Without the skip the walk validates \(walkingCounts) scopes")
+		}
+		// Each layer adds four screens, each walked once with its model and its session, and skipped where it is reached again.
+		#expect(skippingCounts == [136, 192, 248, 304])
+	}
+
+	// MARK: Tests – A label declared with different types
+
+	@Test(arguments: LabelAbove.allCases, LabelBeneath.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenPathsToSharedSubtreeDeclareOneLabelWithDifferentTypes(above: LabelAbove, beneath: LabelBeneath) async throws {
+		// `Shared` is built beneath `A`, `B`, `C` and `D`, whose paths differ only in the type they declare `x` with, or in
+		// whether they declare it. Where no scope beneath `Shared` reads what is receivable under `x`, the key of `Shared`
+		// holds none of it, and the walks beneath `C` and `D` are skipped; where one does, each walk is skipped only after a
+		// walk the same `x` was receivable in, and the errors of the paths that hide it or lack it are reported as the walk
+		// without the skip reports them.
+		let fixture = Self.sharedSubtree(above: above, beneath: beneath)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(walking.skippedSubtreeCount == 0)
+		let expected = Self.expectedOutcome(above: above, beneath: beneath)
+		#expect(skipping.skippedSubtreeCount == expected.skippedSubtreeCount)
+		switch skipping.outcome {
+		case .generated:
+			#expect(expected.error == nil)
+		case let .error(description):
+			#expect(description.split(separator: "\n").first.map(String.init) == expected.error)
+		}
 	}
 
 	// MARK: Private
@@ -433,7 +483,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	private mutating func run(_ fixture: [String], skippingCleanSubtrees: Bool) async throws -> Run {
 		try await Self.observingValidationWalk(skippingCleanSubtrees: skippingCleanSubtrees) {
 			do {
-				return try await .generated(executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete).generatedFiles ?? [:])
+				return try await .generated((executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete).generatedFiles ?? [:]).mapValues(Self.withFixtureNames))
 			} catch let error as SafeDIToolTestError {
 				return .error(Self.withFixtureNames(error.description))
 			}
@@ -479,11 +529,17 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		return Run(outcome: outcome, validatedScopeCount: validatedScopeCount, skippedSubtreeCount: skippedSubtreeCount, keyedSubtreeCount: keyedSubtreeCount)
 	}
 
-	/// `description` with each fixture's directory left out, so two runs' diagnostics compare equal.
+	/// `description` with each fixture's directory left out of a diagnostic's location and of a `#sourceLocation`, so two
+	/// runs' diagnostics, or generated files, compare equal.
 	private static func withFixtureNames(_ description: String) -> String {
 		description.split(separator: "\n", omittingEmptySubsequences: false).map { line in
-			guard let swiftRange = line.range(of: ".swift:"), let slash = line[..<swiftRange.lowerBound].lastIndex(of: "/") else { return String(line) }
-			return String(line[line.index(after: slash)...])
+			if let swiftRange = line.range(of: ".swift:"), let slash = line[..<swiftRange.lowerBound].lastIndex(of: "/") {
+				return String(line[line.index(after: slash)...])
+			} else if let fileRange = line.range(of: "#sourceLocation(file: \""), let slash = line.lastIndex(of: "/") {
+				return String(line[..<fileRange.upperBound]) + line[line.index(after: slash)...]
+			} else {
+				return String(line)
+			}
 		}.joined(separator: "\n")
 	}
 
@@ -528,6 +584,28 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "Service", isFinalClass: true, declarations: []))
 		fixture.append(seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }))
 		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let home: Home"]))
+		return fixture
+	}
+
+	/// `layerCount` layers of four screens beneath a root: each declares a mark of its own, receives only if available the
+	/// mark of every screen of the layers above, and opens the three screens of the next layer but the one at its own
+	/// position through an `Instantiator`.
+	private static func layeredScreensReceivingMarksOfTheirPath(layerCount: Int) -> [String] {
+		var fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }),
+			seamFixtureType(named: "Mark", isFinalClass: true, declarations: []),
+		]
+		for index in 0..<(layerCount * 4) {
+			let layer = index / 4
+			let opened = layer < layerCount - 1 ? (0..<4).filter { $0 != index % 4 }.map { (layer + 1) * 4 + $0 } : []
+			fixture.append(seamFixtureType(
+				named: "Screen\(index)",
+				isFinalClass: true,
+				declarations: ["@Instantiated let mark\(index): Mark"]
+					+ (0..<(layer * 4)).map { "@Received(onlyIfAvailable: true) let mark\($0): Mark?" }
+					+ opened.map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" },
+			))
+		}
 		return fixture
 	}
 
@@ -603,6 +681,116 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 				"@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>"
 			})
 		}
+	}
+
+	/// What the paths to `Shared` declare `x` as: `Root` first, then each of `A` to `F`, which `Root` builds in that order.
+	enum LabelAbove: CaseIterable {
+		case parentsAlternateTypes
+		case parentsDeclareOneTypeOrOtherOrNothing
+		case rootDeclaresAndEveryOtherParentDeclaresAnotherType
+		case rootDeclaresAnotherTypeThanEveryOtherParent
+
+		var typesDeclared: (root: String?, parents: [String?]) {
+			switch self {
+			case .parentsAlternateTypes:
+				(nil, ["X", "Y", "X", "Y", "X", "Y"])
+			case .parentsDeclareOneTypeOrOtherOrNothing:
+				(nil, [nil, "X", "Y", nil, "X", "Y"])
+			case .rootDeclaresAndEveryOtherParentDeclaresAnotherType:
+				("X", [nil, "Y", nil, "Y", nil, "Y"])
+			case .rootDeclaresAnotherTypeThanEveryOtherParent:
+				("Y", ["X", nil, "X", nil, "X", nil])
+			}
+		}
+	}
+
+	/// What `Shared`, and `Leaf` beneath it, do with `x`.
+	enum LabelBeneath: CaseIterable {
+		case sharedDeclaresAgain
+		case leafReceives
+		case leafReceivesOnlyIfAvailable
+		case leafRenames
+		case leafRenamesOnlyIfAvailable
+		case sharedForwardsAndLeafReceives
+		case sharedForwardsAndLeafReceivesOnlyIfAvailable
+		case sharedDeclaresAgainAndLeafReceives
+
+		var declarations: (shared: [String], leaf: [String]) {
+			switch self {
+			case .sharedDeclaresAgain:
+				(["@Instantiated let x: X"], [])
+			case .leafReceives:
+				([], ["@Received let x: X"])
+			case .leafReceivesOnlyIfAvailable:
+				([], ["@Received(onlyIfAvailable: true) let x: X?"])
+			case .leafRenames:
+				([], ["@Received(fulfilledByDependencyNamed: \"x\", ofType: X.self) let renamed: X"])
+			case .leafRenamesOnlyIfAvailable:
+				([], ["@Received(fulfilledByDependencyNamed: \"x\", ofType: X.self, onlyIfAvailable: true) let renamed: X?"])
+			case .sharedForwardsAndLeafReceives:
+				(["@Forwarded let x: X"], ["@Received let x: X"])
+			case .sharedForwardsAndLeafReceivesOnlyIfAvailable:
+				(["@Forwarded let x: X"], ["@Received(onlyIfAvailable: true) let x: X?"])
+			case .sharedDeclaresAgainAndLeafReceives:
+				(["@Instantiated let x: X"], ["@Received let x: X"])
+			}
+		}
+	}
+
+	/// `Shared`, which builds `Leaf`, beneath `A` to `F`, which `Root` builds in that order.
+	private static func sharedSubtree(above: LabelAbove, beneath: LabelBeneath) -> [String] {
+		let parentNames = ["A", "B", "C", "D", "E", "F"]
+		let (rootType, parentTypes) = above.typesDeclared
+		let (sharedDeclarations, leafDeclarations) = beneath.declarations
+		return [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (rootType.map { ["@Instantiated let x: \($0)"] } ?? []) + parentNames.map { "@Instantiated let \($0.lowercased())Builder: Instantiator<\($0)>" }),
+		] + zip(parentNames, parentTypes).map { name, type in
+			seamFixtureType(named: name, isFinalClass: true, declarations: (type.map { ["@Instantiated let x: \($0)"] } ?? []) + ["@Instantiated let sharedBuilder: Instantiator<Shared>"])
+		} + [
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: sharedDeclarations + ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: leafDeclarations),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+	}
+
+	/// The subtrees the walk skips, and the first line of what it reports, for each graph of `sharedSubtree(above:beneath:)`.
+	/// The counts are of every scope skipped: `Shared` and `Leaf` after a walk of an equal key that found nothing, and the
+	/// constants `X` and `Y`, built on several paths. Where `Shared` only declares `x`, or forwards it to a `Leaf` that
+	/// requires it, `Shared` is skipped beneath every parent after `B`, whatever the parent declares `x` as. Where `Leaf`
+	/// reads `x` from above, the paths that lack `x: X` or hide it are never remembered, and the first of them is reported.
+	private static func expectedOutcome(above: LabelAbove, beneath: LabelBeneath) -> (skippedSubtreeCount: Int, error: String?) {
+		let skippedSubtreeCounts: [Int] = switch above {
+		case .parentsAlternateTypes:
+			[8, 3, 5, 3, 5, 6, 5, 8]
+		case .parentsDeclareOneTypeOrOtherOrNothing:
+			[6, 1, 2, 1, 2, 4, 3, 7]
+		case .rootDeclaresAndEveryOtherParentDeclaresAnotherType:
+			[6, 2, 2, 2, 2, 5, 4, 6]
+		case .rootDeclaresAnotherTypeThanEveryOtherParent:
+			[7, 2, 4, 2, 4, 5, 5, 8]
+		}
+		let readsFromAbove: (required: Bool, received: String)? = switch beneath {
+		case .leafReceives, .leafRenames:
+			(true, "x: X")
+		case .leafReceivesOnlyIfAvailable:
+			(false, "x: X?")
+		case .leafRenamesOnlyIfAvailable:
+			(false, "x: X")
+		case .sharedDeclaresAgain, .sharedForwardsAndLeafReceives, .sharedForwardsAndLeafReceivesOnlyIfAvailable, .sharedDeclaresAgainAndLeafReceives:
+			nil
+		}
+		let error: String? = readsFromAbove.flatMap { required, received in
+			switch above {
+			case .parentsAlternateTypes, .rootDeclaresAnotherTypeThanEveryOtherParent:
+				required ? "Leaf.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<B> -> Instantiator<Shared> -> Leaf. Did you mean `x: Y`?" : nil
+			case .parentsDeclareOneTypeOrOtherOrNothing:
+				required ? "Leaf.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<A> -> Instantiator<Shared> -> Leaf. Declare `@Instantiated let x: X` on `Root` or on another type in the chain to fix." : nil
+			case .rootDeclaresAndEveryOtherParentDeclaresAnotherType:
+				"Leaf.swift:7:5: error: @Received property `\(received)` is hidden in chain: Root -> Instantiator<B> -> Instantiator<Shared> -> Leaf. `B` declares `x: Y` with the same label, so the types below `B` receive `x: Y` instead. Give `x: Y` on `B` a different label to fix."
+			}
+		}
+		return (skippedSubtreeCounts[LabelBeneath.allCases.firstIndex(of: beneath) ?? 0], error)
 	}
 
 	/// `Shared` beneath `A`, `B`, `C` and `D`, which `Root` builds in `order`: only `B` declares `x: Y`, which hides the `x: X`
