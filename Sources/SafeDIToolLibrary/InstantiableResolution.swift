@@ -20,6 +20,53 @@
 
 import SafeDICore
 
+extension ModuleInfo {
+	/// This module with each declaration adopting the `defaultIsolation` that the `#SafeDIConfiguration` of the module
+	/// that declares it declares (`Instantiable.adoptingModuleDefaultIsolation(_:)`): `ownConfiguration` for a declaration
+	/// of the module this run generates code for, and, under the plugin's target graph, the configuration in a file the
+	/// graph attributes to the declaration's module for a declaration of another module whose files the run read, as that
+	/// module's own run resolves it. A declaration of a module SafeDI does not know, such as one in a directory the
+	/// configuration adds under a build system that names the module, adopts none. A module info file carries what this
+	/// returns, so every module that reads it sees the attributes the declaring module resolved. Applied once, before
+	/// anything reads the declarations' attributes.
+	/// - Parameters:
+	///   - ownConfiguration: The `#SafeDIConfiguration` of the module this run generates code for.
+	///   - membership: The modules this run's files belong to, as `declared(by:dependingOn:)` applied them.
+	func adoptingDeclaredDefaultIsolation(ownConfiguration: SafeDIConfiguration?, membership: ModuleMembership?) -> ModuleInfo {
+		// The first in declaration order: a module of the graph that declares two configurations fails its own run.
+		let defaultIsolationByModuleName = Dictionary(
+			configurations.compactMap { configuration -> (String, SafeDIConfiguration.DefaultIsolation)? in
+				guard let defaultIsolation = configuration.defaultIsolation,
+				      let moduleName = configuration.sourceFilePath.flatMap({ membership?.declaringModule(ofFileAt: $0) })?.moduleName
+				else { return nil }
+				return (moduleName, defaultIsolation)
+			},
+			uniquingKeysWith: { first, _ in first },
+		)
+		guard ownConfiguration?.defaultIsolation != nil || !defaultIsolationByModuleName.isEmpty else { return self }
+		return ModuleInfo(
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables.map { instantiable in
+				let defaultIsolation = if instantiable.moduleName == moduleName {
+					ownConfiguration?.defaultIsolation
+				} else {
+					instantiable.moduleName.flatMap { defaultIsolationByModuleName[$0] }
+				}
+				return defaultIsolation.map(instantiable.adoptingModuleDefaultIsolation) ?? instantiable
+			},
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			plainTypeDeclarations: plainTypeDeclarations,
+		)
+	}
+}
+
 /// `unnormalizedInstantiables` with each type a declaration spells – each dependency's property type, `fulfilledByType:`
 /// type, and alias `ofType:` type, the arguments of its initializer, other initializers, and hand-written mock, and that
 /// mock's return type – qualified as the compiler resolves it where the declaration spells it, so generated code outside
@@ -159,6 +206,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 			declarationLocation: unnormalizedInstantiable.declarationLocation,
 			moduleName: unnormalizedInstantiable.moduleName,
 			packageName: unnormalizedInstantiable.packageName,
+			usesModuleDefaultIsolation: unnormalizedInstantiable.usesModuleDefaultIsolation,
 		)
 		normalizedInstantiable.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 		normalizedInstantiable.isInsideCompilerDecidedBlock = unnormalizedInstantiable.isInsideCompilerDecidedBlock

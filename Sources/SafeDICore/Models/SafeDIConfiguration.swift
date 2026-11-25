@@ -29,6 +29,10 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	/// the one generated code calls, a plain one for code a person writes. It decides only the code the module generates
 	/// for its own types, so a module that reads another module's `.safedi` file never reads it.
 	public let generatePlainDependencyTreeInitializers: Bool
+	/// The isolation the module's declarations default to, as its `#SafeDIConfiguration` declares it: `nil` when it
+	/// declares none. Each `@Instantiable` the module declares whose attribute text is empty is generated with it
+	/// (`Instantiable.usesModuleDefaultIsolation`).
+	public let defaultIsolation: DefaultIsolation?
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
 	public var sourceFilePath: String?
@@ -42,6 +46,7 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 		additionalMocksToGenerate: [String] = [],
 		mockConditionalCompilation: String? = "DEBUG",
 		generatePlainDependencyTreeInitializers: Bool = false,
+		defaultIsolation: DefaultIsolation? = nil,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		self.additionalImportedModules = additionalImportedModules
@@ -49,6 +54,7 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.mockConditionalCompilation = mockConditionalCompilation
 		self.generatePlainDependencyTreeInitializers = generatePlainDependencyTreeInitializers
+		self.defaultIsolation = defaultIsolation
 		self.declarationLocation = declarationLocation
 	}
 
@@ -61,9 +67,26 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
 			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockConditionalCompilation: mockConditionalCompilation,
+			defaultIsolation: defaultIsolation,
 			declarationLocation: declarationLocation,
 		)
 		configuration.sourceFilePath = sourceFilePath
 		return configuration
+	}
+
+	/// An isolation a module's declarations can default to: one of the values Swift's `defaultIsolation` build setting
+	/// takes other than `nil`.
+	public enum DefaultIsolation: String, Codable, Hashable, Sendable {
+		/// `MainActor.self`.
+		case mainActor = "MainActor"
+
+		/// The attribute text SafeDI supplies for a type whose attribute text is empty, in a module that declares this
+		/// isolation.
+		public var suppliedAttributes: String {
+			switch self {
+			case .mainActor:
+				"@MainActor"
+			}
+		}
 	}
 }

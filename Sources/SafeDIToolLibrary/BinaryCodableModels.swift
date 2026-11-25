@@ -431,6 +431,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
 				BinaryLayoutField("mockConditionalCompilation", \.mockConditionalCompilation),
 				BinaryLayoutField("generatePlainDependencyTreeInitializers", \.generatePlainDependencyTreeInitializers),
+				BinaryLayoutField("defaultIsolation", \.defaultIsolation),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
@@ -445,6 +446,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 			additionalMocksToGenerate: reader.read(),
 			mockConditionalCompilation: reader.read() as String?,
 			generatePlainDependencyTreeInitializers: reader.read(),
+			defaultIsolation: reader.read() as SafeDIConfiguration.DefaultIsolation?,
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
 		)
 		sourceFilePath = try reader.read() as String?
@@ -456,8 +458,31 @@ extension SafeDIConfiguration: BinarySchemaMember {
 		writer.write(additionalMocksToGenerate)
 		writer.write(mockConditionalCompilation)
 		writer.write(generatePlainDependencyTreeInitializers)
+		writer.write(defaultIsolation)
 		writer.write(declarationLocation)
 		writer.write(sourceFilePath)
+	}
+}
+
+extension SafeDIConfiguration.DefaultIsolation: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .mainActor: .mainActor
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .mainActor: writer.writeTag(Tag.mainActor)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case mainActor
 	}
 }
 
@@ -493,6 +518,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
+				BinaryLayoutField("usesModuleDefaultIsolation", \.usesModuleDefaultIsolation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
 				BinaryLayoutField("conformanceListNamesSendable", \.conformanceListNamesSendable),
@@ -536,6 +562,7 @@ extension Instantiable: BinarySchemaMember {
 			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
 			moduleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			usesModuleDefaultIsolation: fieldFlags.next(),
 		)
 		sourceFilePath = try reader.readOptional(flaggedIn: &fieldFlags) as String?
 		isInsideCompilerDecidedBlock = fieldFlags.next()
@@ -577,6 +604,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
 			writer.writeOptional(moduleName, flaggedIn: &fieldFlags)
 			writer.writeOptional(packageName, flaggedIn: &fieldFlags)
+			fieldFlags.append(usesModuleDefaultIsolation)
 			writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
 			fieldFlags.append(isInsideCompilerDecidedBlock)
 			fieldFlags.append(conformanceListNamesSendable)

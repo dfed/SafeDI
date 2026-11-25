@@ -2337,6 +2337,7 @@ extension DependencyTreeGenerator {
 			declarationLocation: seam.declarationLocation,
 			moduleName: seam.moduleName,
 			packageName: seam.packageName,
+			usesModuleDefaultIsolation: seam.usesModuleDefaultIsolation,
 		)
 		leaf.sourceFilePath = seam.sourceFilePath
 		return leaf

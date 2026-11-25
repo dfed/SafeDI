@@ -400,7 +400,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			writtenTagsByType[String(reflecting: type(of: value)), default: []].insert(writer.bytes[0])
 		}
 
-		#expect(writtenTagsByType.count == 7)
+		#expect(writtenTagsByType.count == 8)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
 			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(Self.caseCount(of: schemaMember))), "\(schemaMember)")
 		}
@@ -591,7 +591,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	func schemaDescription_describesTypeOfEveryFieldAndPayloadInWriteOrder() {
 		let lines = BinaryFile.schemaDescription.split(separator: "\n").map(String.init)
 
-		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, generatePlainDependencyTreeInitializers: Swift.Bool, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
+		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, generatePlainDependencyTreeInitializers: Swift.Bool, defaultIsolation: Swift.Optional<SafeDICore.SafeDIConfiguration.DefaultIsolation>, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
 		#expect(lines.contains("SafeDICore.Dependency.Source: instantiated(fulfillingTypeDescription: Swift.Optional<SafeDICore.TypeDescription>, erasedToConcreteExistential: Swift.Bool), received(onlyIfAvailable: Swift.Bool), aliased(fulfillingProperty: SafeDICore.Property, erasedToConcreteExistential: Swift.Bool, onlyIfAvailable: Swift.Bool), forwarded"))
 	}
 
@@ -1537,6 +1537,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			    additionalDirectoriesToInclude: ["\(additionalDirectory.path)"],
 			    additionalMocksToGenerate: ["Other"],
 			    mockConditionalCompilation: nil,
+			    defaultIsolation: MainActor.self,
 			)
 			""",
 			"Kitchen.swift": """
@@ -1949,6 +1950,7 @@ extension FileVisitor.ImportSegment: BinarySample {}
 extension ConditionalCompilationDecision: BinarySample {}
 extension KeptPlainTypeNames: BinarySample {}
 extension SafeDIConfiguration: BinarySample {}
+extension SafeDIConfiguration.DefaultIsolation: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
 extension Instantiable.DependencyLabelInUnselectedClause: BinarySample {}
