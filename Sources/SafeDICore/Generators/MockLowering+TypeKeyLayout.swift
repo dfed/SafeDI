@@ -284,7 +284,7 @@ extension MockLowering.Walk {
 			// A read of the nearest place of its type above, which the function it is called in was handed, or `nil`.
 			// A configuration struct is taken non-optional, and the nearest is set wherever a read of it resolved.
 			own.readsConfigurationStruct ? .spliced([.value(nearestRead), .text(" ?? "), .value(.emptyInitialization(own.type))]) : nearestRead
-		case .emptyInitialization, .member, .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
+		case .emptyInitialization, .memberRead, .rootDeclaration, .passedArgument, .optionalMemberRead, .call, .spliced:
 			.spliced([.value(nearestRead), .text(" ?? "), .value(value)])
 		}
 	}
@@ -300,10 +300,10 @@ extension MockLowering.Walk {
 			switch value {
 			case let .passedArgument(name):
 				valueByName[name] ?? value
-			case let .member(member, of: base):
-				.member(member, of: substituting(base))
-			case let .optionalMember(member, of: base):
-				.optionalMember(member, of: substituting(base))
+			case let .memberRead(member, of: base):
+				.member(member, of: substituting(base.value))
+			case let .optionalMemberRead(member, of: base):
+				.optionalMember(member, of: substituting(base.value))
 			case let .call(member, of: base, arguments: arguments, argumentsWrapper: wrapper):
 				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
 			case let .spliced(segments):

@@ -245,6 +245,25 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: depth))
 	}
 
+	@Test(arguments: [1_500, 10_000])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesMockLaidOutByTypeKey_whenSeamWhoseMockIsGeneratedStartsADeepChainOfFeaturesEachInstantiatingTheNext(depth: Int) async throws {
+		// Each place's override is a member of its parent's, so the path the layout reads a place's override through is as
+		// deep as the chain, which releasing the records must not release one nested level at a time.
+		let output = try await MockLowering.$laysOutWithTypeKey.withValue(true) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.featureChain(depth: depth, rootAttribute: "@Instantiable(generateDependencyTree: true, generateMock: true)", featuresAreConstant: false),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty above is compiled instead.
+				skipCompileVerification: true,
+			)
+		}
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.laidOutInstantiatorChainMock(depth: depth))
+		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: depth))
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesMockLaidOutByTypeKeyThatCompiles_whenTypeWhoseMockIsGeneratedStartsAChainOfTwentyFeaturesEachInstantiatingTheNext() async throws {
