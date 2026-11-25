@@ -22,12 +22,12 @@ extension TypeKeyLayout {
 	// MARK: Classes
 
 	/// The type of a path declaration.
-	func type(of value: PathValue, label: String) -> TypeDescription? {
+	func type(of value: PathValue, label readLabel: String) -> TypeDescription? {
 		switch value {
 		case .none:
 			nil
 		case let .statement(body, index):
-			property(of: bodies[body].statements[index], label: label)?.typeDescription
+			property(of: bodies[body].statements[index], label: readLabel)?.typeDescription
 		case let .forwarded(body, label):
 			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):

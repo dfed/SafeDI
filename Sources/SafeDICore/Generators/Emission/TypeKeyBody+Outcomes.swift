@@ -105,12 +105,12 @@ extension TypeKeyLayout {
 	// MARK: Parameter types
 
 	/// The type of a type key's declaration, `nil` for none or a parameter not typed yet.
-	func type(of declaration: TypeDeclaration, label: String) -> TypeDescription? {
+	func type(of declaration: TypeDeclaration, label readLabel: String) -> TypeDescription? {
 		switch declaration {
 		case .none:
 			nil
 		case let .statement(owner, index):
-			property(of: statements(ofClass: owner)[index], label: label)?.typeDescription
+			property(of: statements(ofClass: owner)[index], label: readLabel)?.typeDescription
 		case let .forwarded(owner, label):
 			representative(of: owner)?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .read(owner, label):

@@ -300,7 +300,7 @@ extension TypeKeyLayout {
 		case let .closer(record, _):
 			record.property
 		case let .alias(record):
-			record.property.label == label ? record.property : record.otherBindings.first { $0.label == label } ?? record.property
+			record.property.label == label ? record.property : record.otherBindings.first { $0.label == label }
 		}
 	}
 
