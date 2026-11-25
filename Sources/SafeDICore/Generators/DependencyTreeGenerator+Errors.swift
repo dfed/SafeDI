@@ -92,6 +92,9 @@ extension DependencyTreeGenerator {
 		/// this run read under a mock condition that module does not guard its mock-only declarations with. See
 		/// `SeamModuleMockConditionDifference`.
 		case seamModuleMockConditionDiffers([SeamModuleMockConditionDifference])
+		/// Reported at an own root or seam whose generated initializer states no isolation and builds a seam another
+		/// module generated main-actor. See `SeamCalledWithoutIsolation`.
+		case seamCalledWithoutIsolation([SeamCalledWithoutIsolation])
 		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
 		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
 		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
@@ -189,6 +192,10 @@ extension DependencyTreeGenerator {
 				error.sourceDiagnostics
 			case let .seamModuleMockConditionDiffers(differences):
 				differences
+					.map(\.sourceDiagnostic)
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			case let .seamCalledWithoutIsolation(calls):
+				calls
 					.map(\.sourceDiagnostic)
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .seamTierOmitsProvidedValue(omissions):
@@ -1089,6 +1096,24 @@ extension DependencyTreeGenerator {
 					severity: .error,
 					location: callingDependencyLocation,
 					message: "\(callingModuleName) calls the initializer SafeDI generated for `\(seam.asSource)` in module \(seamModuleName), whose signature SafeDI computes from \(seamModuleName)’s declarations as \(seamModuleName) reads them, mock-only declarations under \(seamModuleName)’s mock condition included. \(seamModuleName) guards its mocks with \(spelling(of: seamModuleMockCondition)) and \(callingModuleName) with \(spelling(of: callingModuleMockCondition)), so \(callingModuleName) cannot read them as \(seamModuleName) does. Use the same `mockConditionalCompilation` in both modules.",
+				)
+			}
+		}
+
+		/// An own root or seam whose generated initializer states no isolation, and the first seam of another module it
+		/// builds whose initializers that module generated main-actor, as its `defaultIsolation` declares.
+		struct SeamCalledWithoutIsolation {
+			let callingType: TypeDescription
+			let callingDeclarationLocation: Dependency.DeclarationLocation?
+			let seam: TypeDescription
+			let seamModule: ModuleIdentity
+
+			var sourceDiagnostic: SourceDiagnostic {
+				let seamModuleName = seamModule.moduleName.map { "`\($0)`" } ?? "another module"
+				return SourceDiagnostic(
+					severity: .error,
+					location: callingDeclarationLocation,
+					message: "The initializer SafeDI generates for `\(callingType.asSource)` calls the initializer module \(seamModuleName) generates for `\(seam.asSource)`, which is `@MainActor` because \(seamModuleName) declares `defaultIsolation: MainActor.self` in its `#\(SafeDIConfigurationVisitor.macroName)`, but the initializer SafeDI generates for `\(callingType.asSource)` states no isolation. Declare `defaultIsolation: MainActor.self` in this module’s `#\(SafeDIConfigurationVisitor.macroName)`, or write `generatedAttributes: \"@MainActor\"` on `\(callingType.asSource)`.",
 				)
 			}
 		}
