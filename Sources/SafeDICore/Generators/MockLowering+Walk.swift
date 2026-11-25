@@ -501,6 +501,10 @@ extension MockLowering {
 		/// binds what it hands the function before it calls (`PassedArgument.bindsBeforeCall`), as the locals are bound
 		/// (`recordBuiltPlaces()`).
 		var pathsStartingExtraction = Set<[Int]>()
+		/// The statements each place's builder function begins with before its children's, as places the type key reads: each
+		/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the
+		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:sendableAutoclosureBindings:)`).
+		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
 		/// SPIKE: why each place has no record, for the switch's log.
 		var unrecordedReasons = [[Int]: String]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
@@ -1337,11 +1341,11 @@ extension MockLowering {
 			if !rebindingLines.isEmpty {
 				unplannedKinds.append("rebindings")
 			}
-			if !receiverBindings.isEmpty {
-				unplannedKinds.append("receiverBindings")
-			}
-			if !node.sendableAutoclosureBindings.isEmpty {
-				unplannedKinds.append("sendableAutoclosures")
+			if !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty {
+				leadingBodyPlaces[childIndexPath] = MockLowering.receiverBindingPlaces(
+					receiverBindings: receiverBindings,
+					sendableAutoclosureBindings: uncoveredInstantiatedProperties.compactMap { property in sendableAutoclosureBindings[property].map { (property, $0) } },
+				)
 			}
 			// A function that reads overrides into locals because its construction hands a configuration read to a `@Sendable`
 			// autoclosure keeps the walk's body: the record would read the configuration inside the autoclosure.
