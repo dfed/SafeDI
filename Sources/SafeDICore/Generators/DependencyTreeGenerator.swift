@@ -828,7 +828,7 @@ public actor DependencyTreeGenerator {
 									if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
 										var labelSet = Set(Self.collectReceivedProperties(from: calledScope, cache: &receivedPropertiesCache).received.map(\.label))
 										labelSet.insert(context.property.label)
-												let labels = labelSet.sorted()
+										let labels = labelSet.sorted()
 										// A call is of the function's property: where the path is building the value the call place
 										// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
 										// cycle on that property's function, beneath the calling scope's declarations.
