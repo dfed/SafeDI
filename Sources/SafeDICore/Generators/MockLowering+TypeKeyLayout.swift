@@ -183,9 +183,9 @@ extension MockLowering.Walk {
 					// its type's configuration first, as a closer of its type hands it, where its parent's function takes
 					// that nearest one: it is set exactly where a place of its type is above, which no built place has.
 					if let first = built.passedArguments.first, first.parameterName == own.name,
-					   let nearestRead = nearest.nearestRead(of: own, calledFrom: Array(path.dropLast())),
-					   let value = Self.nearestFirst(nearestRead, orElse: first.value, own: own, context: builtPlaceConfigurationContexts[path])
+					   let nearestRead = nearest.nearestRead(of: own, calledFrom: Array(path.dropLast()))
 					{
+						let value = Self.nearestFirst(nearestRead, orElse: first.value, own: own)
 						var handed = PassedArgument(parameterName: first.parameterName, type: first.type, value: value, staysOutsideSendableFunctions: first.staysOutsideSendableFunctions)
 						handed.bindsBeforeCall = first.bindsBeforeCall
 						built.passedArguments[0] = handed
@@ -204,29 +204,17 @@ extension MockLowering.Walk {
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
-	/// its type, `nearestRead`: that, else what it hands now, a field of its parent's or a configuration built afresh, or
-	/// that alone where it hands `nil`; `nil` where it hands anything else, which it keeps.
-	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, own: MockLowering.ConfigurationParameter, context: MockLowering.BuiltPlaceConfigurationContext?) -> ValuePath? {
+	/// its type, `nearestRead`: that, else what it hands now. `value` is what `MockLowering.passedArguments(ofBuiltPlaceOf:…)`
+	/// hands, one of four forms: its parent's field of it, a configuration built afresh, a read of its own type's parameter,
+	/// or `nil`.
+	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, own: MockLowering.ConfigurationParameter) -> ValuePath {
 		switch value {
-		case .emptyInitialization:
-			return .spliced([.value(nearestRead), .text(" ?? "), .value(value)])
-		case .member:
-			guard let context, let parentConfiguration = context.parentConfiguration, value == .member(context.fieldName, of: parentConfiguration) else { return nil }
-			return .spliced([.value(nearestRead), .text(" ?? "), .value(value)])
-		case let .read(read):
-			switch read.source {
-			case .nil:
-				return nearestRead
-			case .lazyInstance, .forwardedSpread, .wrapper, .optionalWrapper, .builderArgument, .spelledArgument:
-				return nil
-			case let .binding(label):
-				guard label == own.name else { return nil }
-				// A read of the nearest place of its type above, which the function it is called in was handed. A
-				// configuration struct is taken non-optional, and the nearest is set wherever this read resolved.
-				return own.readsConfigurationStruct ? .spliced([.value(nearestRead), .text(" ?? "), .value(.emptyInitialization(own.type))]) : nearestRead
-			}
-		case .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
-			return nil
+		case .read:
+			// A read of the nearest place of its type above, which the function it is called in was handed, or `nil`.
+			// A configuration struct is taken non-optional, and the nearest is set wherever a read of it resolved.
+			own.readsConfigurationStruct ? .spliced([.value(nearestRead), .text(" ?? "), .value(.emptyInitialization(own.type))]) : nearestRead
+		case .emptyInitialization, .member, .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
+			.spliced([.value(nearestRead), .text(" ?? "), .value(value)])
 		}
 	}
 

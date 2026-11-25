@@ -44,18 +44,14 @@ extension MockLowering {
 		}
 
 		/// What a call made in the function of the place at `callerPath`, or at the root where it is one place long,
-		/// hands the nearest configuration of `parameter`: the caller's own, the one the caller was handed, or `nil`.
+		/// hands the nearest configuration of `parameter`: the caller's own, the one the caller was handed, or `nil` at the
+		/// root. A function's list holds every parameter a function it calls takes but its own
+		/// (`nearestConfigurations(childPathsByParent:)`), so a caller below the root was handed each one it hands on.
 		func nearestValue(of parameter: ConfigurationParameter, calledFrom callerPath: [Int]) -> ValuePath {
 			guard let callerParameter = ownParameterByPath[callerPath] else {
 				return .spliced([.text("nil")])
 			}
-			if callerParameter == parameter {
-				return .passedArgument(parameter.name)
-			} else if parametersByKey[callerParameter.name, default: []].contains(parameter) {
-				return .passedArgument(Self.nearestName(of: parameter))
-			} else {
-				return .spliced([.text("nil")])
-			}
+			return .passedArgument(callerParameter == parameter ? parameter.name : Self.nearestName(of: parameter))
 		}
 
 		/// The nearest configuration of `parameter` a function of the place at `callerPath` was handed, where it takes one.
@@ -89,10 +85,8 @@ extension MockLowering {
 				return .passedArgument(closedOn.name)
 			} else if let parentField {
 				return .spliced([.value(.passedArgument(Self.nearestName(of: closedOn))), .text(" ?? "), .value(parentField)])
-			} else if closedOn.readsConfigurationStruct {
-				return .spliced([.value(.passedArgument(Self.nearestName(of: closedOn))), .text(" ?? "), .value(.emptyInitialization(closedOn.type))])
 			} else {
-				return .passedArgument(Self.nearestName(of: closedOn))
+				return MockLowering.Walk.nearestFirst(.passedArgument(Self.nearestName(of: closedOn)), orElse: closedOn.read(isProvided: false), own: closedOn)
 			}
 		}
 	}
@@ -114,11 +108,7 @@ extension MockLowering.Walk {
 				ownParameterByPath[path] = parameter
 				if firstReachedIndexByName[parameter.name] == nil {
 					firstReachedIndexByName[parameter.name] = index
-					staysOutsideSendableFunctionsByName[parameter.name] = if node.hasConfiguration {
-						!sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
-					} else {
-						!node.requiresSendable
-					}
+					staysOutsideSendableFunctionsByName[parameter.name] = node.hasConfiguration ? !sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource) : !node.requiresSendable
 				}
 			} else if case let .closer(record)? = closerAndDefaultRecords[path], let argument = record.passedArguments.first {
 				closedOnParameterByPath[path] = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
