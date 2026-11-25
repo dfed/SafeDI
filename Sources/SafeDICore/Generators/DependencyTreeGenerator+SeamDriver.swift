@@ -79,6 +79,59 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// Validates that each initializer this module generates that states no isolation – an own root's, or an own seam's,
+	/// whose `generatedInitializerAttributes` are empty – calls no initializer another module generated as main-actor
+	/// because that module declares `defaultIsolation: MainActor.self`, which a nonisolated initializer cannot call. Only
+	/// the facts SafeDI recorded are compared: whether the calling initializer's attributes are empty, and whether SafeDI
+	/// supplied the seam's. The walk stops at every seam, whose tree its own initializer builds.
+	func validateCalledSeamsShareIsolation() throws {
+		let ownRoots = rootInstantiables.filter { root in
+			emittingModule.map { emittingModule in typeDescriptionToFulfillingInstantiableMap[root]?.sourceFilePath.map(emittingModule.isOwnFile) == true } ?? true
+		}
+		var calls = [DependencyTreeGeneratorError.SeamCalledWithoutIsolation]()
+		for callingType in ownRoots.union(generatedSeamTypes).sorted() {
+			guard let callingInstantiable = typeDescriptionToFulfillingInstantiableMap[callingType],
+			      callingInstantiable.generatedInitializerAttributes.isEmpty,
+			      let (seamType, foreignSeam) = firstMainActorForeignSeam(calledBy: callingInstantiable)
+			else { continue }
+			calls.append(DependencyTreeGeneratorError.SeamCalledWithoutIsolation(
+				callingType: callingInstantiable.concreteInstantiable,
+				callingDeclarationLocation: callingInstantiable.declarationLocation,
+				seam: seamType,
+				seamModule: foreignSeam.declaringModule,
+			))
+		}
+		if !calls.isEmpty {
+			throw DependencyTreeGeneratorError.seamCalledWithoutIsolation(calls)
+		}
+	}
+
+	/// The first seam of another module, breadth first and in the order the dependencies are declared, that `callingInstantiable`'s
+	/// generated initializer builds and whose initializers its module generated main-actor, or `nil` for none.
+	private func firstMainActorForeignSeam(calledBy callingInstantiable: Instantiable) -> (TypeDescription, SeamResolution.ForeignSeam)? {
+		var visitedTypes = Set<TypeDescription>()
+		// A worklist rather than recursion, since a chain of types can be as long as the module has types.
+		var instantiablesToVisit = [callingInstantiable]
+		var nextIndex = 0
+		while nextIndex < instantiablesToVisit.count {
+			let instantiable = instantiablesToVisit[nextIndex]
+			nextIndex += 1
+			for dependency in instantiable.dependencies where dependency.isInstantiated {
+				guard let fulfillingInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType],
+				      visitedTypes.insert(fulfillingInstantiable.concreteInstantiable).inserted
+				else { continue }
+				if let foreignSeam = seams.foreignSeams[fulfillingInstantiable.concreteInstantiable] {
+					if fulfillingInstantiable.initializerUsesModuleDefaultIsolation {
+						return (fulfillingInstantiable.concreteInstantiable, foreignSeam)
+					}
+				} else if !fulfillingInstantiable.generatesDependencyTree {
+					instantiablesToVisit.append(fulfillingInstantiable)
+				}
+			}
+		}
+		return nil
+	}
+
 	/// The signature of each foreign seam this module's trees reach, by concrete type, or `nil` for a seam whose
 	/// generated signature equals its own initializer's (see `computeSeamRoots(foreignSeamRoots:)`), computed once per
 	/// run, before the inlined trees are validated: a module info this run lacks is then reported with its remedy, rather

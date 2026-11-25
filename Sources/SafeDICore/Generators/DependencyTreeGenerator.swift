@@ -637,6 +637,8 @@ public actor DependencyTreeGenerator {
 			// A foreign seam whose module's files this run read under another mock condition is reported before
 			// its signature is computed from them.
 			try validateCalledSeamModulesShareMockCondition()
+			// A nonisolated initializer cannot call a seam another module generated main-actor.
+			try validateCalledSeamsShareIsolation()
 			// A foreign seam's module info this run lacks is reported before the inlined trees, which reach that
 			// module's declarations, are found unfulfillable.
 			let foreignSeamRoots = try await computeForeignSeamRoots()
