@@ -160,7 +160,7 @@ extension ScopeGenerator {
 		)
 		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
 		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
-		if laysOutWithTypeKey || SpikeShadow.logPath != nil {
+		if laysOutWithTypeKey {
 			walk.recordBuiltPlaces()
 		}
 		if laysOutWithTypeKey {
@@ -168,10 +168,7 @@ extension ScopeGenerator {
 			if let typeKeyLines = layout.lines {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
 			}
-			MockLowering.logTypeKeyLayout(of: instantiable, outcome: layout.fallback)
-		}
-		if SpikeShadow.logPath != nil {
-			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty, walk: walk)
+			MockLowering.typeKeyLayoutObserver?(instantiable.concreteInstantiable.asSource, layout.fallback)
 		}
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
@@ -468,8 +465,6 @@ extension MockLowering {
 		// The path of child indices (`OrderedChild.index`) from the root to the node being lowered,
 		// which keys what the walk reads per place.
 		var childIndexPath = [Int]()
-		// SPIKE: the hook each place's construction would be replaced by, keyed by its path of child indices.
-		var placeHooks = [[Int]: ConstructionHook]()
 		/// The records of the closers and defaults the walk lowered (`MockLowering+ClosersAndDefaults.swift`), by their paths of
 		/// child indices, which the plan reads where it writes their places.
 		var closerAndDefaultRecords = [[Int]: PlaceRecord]()
@@ -479,8 +474,6 @@ extension MockLowering {
 		var builtRecords = [[Int]: PlaceRecord]()
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
-		/// The error production's record function threw at a built place, which leaves it unrecorded.
-		var unrecordedPlaceErrors = [[Int]: Initializer.GenerationError]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
 		var planNodes = [PlanNodeKey: PlanNode]()
 		/// What the walk hands production's record function at each built place, which `recordBuiltPlaces()` calls once the
@@ -489,7 +482,7 @@ extension MockLowering {
 		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
 		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
 		var pathsWithUnplannedLines = Set<[Int]>()
-		/// SPIKE: which kinds of unplanned statements each such place writes, for the fallback log.
+		/// Which kinds of unplanned statements each such place writes, which name its root's fallback.
 		var unplannedLineKinds = [[Int]: String]()
 		/// The places whose `@Sendable` builder functions read the overrides beneath them into locals before the function
 		/// (`SendableOverrideExtractor`). The type key lays such a place out where every place beneath it is recorded: its call
@@ -500,7 +493,7 @@ extension MockLowering {
 		/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the
 		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:sendableAutoclosureBindings:)`).
 		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
-		/// SPIKE: why each place has no record, for the switch's log.
+		/// Why each place has no record, which names its root's fallback (`MockLowering.typeKeyLayoutObserver`).
 		var unrecordedReasons = [[Int]: String]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
@@ -1314,9 +1307,6 @@ extension MockLowering {
 			// function.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead?.text, indent: indent))
-				if let overrideRead {
-					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead.text, call: node.spikeHookCall, construction: node.spikeConstruction)
-				}
 				recordInputs(of: node, hasFunction: false, overrideRead: overrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 				return .finished(node)
 			}
@@ -1529,9 +1519,6 @@ extension MockLowering {
 				node.arguments = readingDefaultsInsideFunction()
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
-			if let functionOverrideRead {
-				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead.text, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
-			}
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
@@ -1758,17 +1745,6 @@ extension MockLowering {
 		/// The name of the node's builder function.
 		var functionName: String {
 			renamedFunctionName ?? MockLowering.builderFunctionName(boundAs: bindingName)
-		}
-
-		/// SPIKE: the node's construction without an override.
-		var spikeConstruction: String {
-			construction
-		}
-
-		/// SPIKE: the call of the node's override builder, as its construction's replacement.
-		var spikeHookCall: String {
-			let builder = ReservedName.configurationBuilderPropertyName
-			return isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 		}
 
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
