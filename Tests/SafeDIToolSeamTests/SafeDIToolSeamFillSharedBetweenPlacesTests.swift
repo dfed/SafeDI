@@ -226,6 +226,38 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfItsOwnForPlace_whenItHandsItsFillOptionalOfValueOtherPlacesHand(buildsFillOfEveryPlace: Bool) async {
+		// `First` and `Second` hand their fills a `token` of `Token`, and `Third`, built behind an instantiator, the
+		// `Token?` it forwards, which `LiveApi` receives only if available: the fields differ in their type alone.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: SafeDIToolSeamBuilderParameterTests.modules(
+						feature: [
+							"public protocol Api {}",
+							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+							seamFixtureType(named: "Token", declarations: []),
+							seamFixtureType(named: "First", declarations: ["@Instantiated let token: Token", "@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Second", declarations: ["@Instantiated let token: Token", "@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Third", declarations: ["@Forwarded let token: Token?", "@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second", "@Instantiated let thirdBuilder: Instantiator<Third>"]),
+						],
+						app: [
+							SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) let token: Token?"]),
+							seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+						],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		#expect(error == nil)
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsFillOfItsOwnForPlace_whenItHandsItsFillValueOtherPlacesHandDeferred(buildsFillOfEveryPlace: Bool) async {
 		// `Home` receives `token` for `Detail`, built behind an instantiator, so its parameter is deferred, and `First`'s and
 		// `Second`'s places hand their fills the deferred parameter. `Third` builds a `token` of its own, by value.
@@ -438,12 +470,14 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		""")
 	}
 
-	@Test(arguments: [false, true])
+	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_drawsPlaceStoodForAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool) async throws {
+	mutating func generate_drawsPlaceStoodForAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool, buildsFillAfterPlaceStoodFor: Bool) async throws {
 		// `MidSeam` calls `Home` and fills `agent` with `LiveAgent`, which holds a place of its own, `leaf`, so that fill
 		// is drawn after the fills that hold none, though the call builds it first. `Second`'s fill of `api` stands for
-		// `Third`'s, which is drawn after it and before `zed`'s, as its own fill would be.
+		// `Third`'s, which is drawn after it and before `zed`'s, as its own fill would be, or, where `Home` has no `zed`
+		// and the call builds no fill after it, before `agent`'s.
+		let zedDeclarations = buildsFillAfterPlaceStoodFor ? ["@Instantiated let zed: any Zed"] : []
 		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: SafeDIToolSeamBuilderParameterTests.modules(
@@ -462,8 +496,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 							"@Instantiated let first: First",
 							"@Instantiated let second: Second",
 							"@Instantiated let third: Third",
-							"@Instantiated let zed: any Zed",
-						]),
+						] + zedDeclarations),
 					],
 					app: [
 						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveAgent", fulfilling: "Agent", declarations: ["@Instantiated let leaf: any Leaf"]),
@@ -483,8 +516,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		    MidSeam -- "home: Home"
 		    "home: Home" -- "api: any Api"
 		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "zed: any Zed"
+		    "home: Home" -- "api: any Api"\(buildsFillAfterPlaceStoodFor ? "\n    \"home: Home\" -- \"zed: any Zed\"" : "")
 		    "home: Home" -- "agent: any Agent"
 		    "api: any Api" -- "row: Row"
 		    "api: any Api" -- "row: Row"

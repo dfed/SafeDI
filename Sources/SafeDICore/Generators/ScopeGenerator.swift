@@ -4622,7 +4622,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A place this fill stands for (`FillStoodFor`) hands its fill fields equal to this one's that other types can
 				// declare, and each capture names the declaration it reads, so the fill's tree is walked once more for each
 				// such place, with the place's own hole, as `DependencyTreeGenerator.validateFills` judges it.
-				for placeStoodFor in child.generator.fillKey.flatMap({ placesStoodForByStandInKey[$0] }) ?? [] {
+				for placeStoodFor in GenerationWork.taking(child.generator.fillKey.flatMap { placesStoodForByStandInKey[$0] } ?? [], by: .findingFillThatStandsForPlace) {
 					await captures.append(contentsOf: fillCaptures(
 						of: placeStoodFor.hole,
 						fill: child.generator,
