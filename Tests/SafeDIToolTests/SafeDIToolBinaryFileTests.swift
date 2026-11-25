@@ -1619,6 +1619,49 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		#expect(original.encoding == movedEncodingAtOriginalPath)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesNoPlanThatNamesTypeNestedMoreDeeplyThanReaderReads_whenPublicMockTakesDeepestTypeAsOptional() async throws {
+		// `Deep` nests as deeply as a reader reads, and `Home`'s mock takes it as `Deep?`, one level deeper, which only
+		// the plan names. `Shallow`'s plan names no such type. Each enclosing type is declared in an extension of the one
+		// around it, since a parser in a debug build reads fewer nested declarations than that.
+		let enclosingNames = (1..<BinaryReader.maximumNestingDepth).map { "Level\($0)" }
+		var deepSource = "public enum \(enclosingNames[0]) {}"
+		for index in enclosingNames.indices.dropFirst() {
+			deepSource += "\n\nextension \(enclosingNames[..<index].joined(separator: ".")) {\n    public enum \(enclosingNames[index]) {}\n}"
+		}
+		deepSource += "\n\nextension \(enclosingNames.joined(separator: ".")) {\n    @Instantiable\n    public struct Deep: Instantiable {\n        public init() {}\n    }\n}"
+		let deepType = (enclosingNames + ["Deep"]).joined(separator: ".")
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				deepSource,
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Home: Instantiable {
+				    public init(deep: \(deepType)) {
+				        self.deep = deep
+				    }
+
+				    @Received let deep: \(deepType)
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Shallow: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+
+		#expect(file.publicMockPlans.mockedTypes.map(\.asSource) == ["Shallow"])
+		#expect(try file.publicMockPlans.decoded.map(\.mockedType.asSource) == ["Shallow"])
+	}
+
 	@Test(arguments: [4, 6, 8])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_storesEachReceiverOfOmittableParameterOnce_whenTreeReachesItOnEveryPathOfLayeredDiamond(layerCount: Int) async throws {

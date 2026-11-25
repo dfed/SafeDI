@@ -662,10 +662,21 @@ struct ModulePublicMockPlans: Sendable {
 	/// - Parameter compilesGeneratedMocks: Whether the run that computed `plans` compiles the mocks it generates
 	///   (`ConditionalCompilationEvaluator.compilesGeneratedMocks`), which a plan depends on. A module with no plan
 	///   records `false`, so that its file's bytes do not depend on the build's conditions.
+	///
+	/// A plan that names a type nested more deeply than a ``BinaryReader`` reads is left out, so that a module calling
+	/// the mock computes it and the file stays one every run reads: a parameter that takes a type nested as deeply as a
+	/// declaration may as `T? = nil` nests one level deeper. Each plan is checked alone only when the plans together
+	/// nest too deeply.
 	init(_ plans: [StoredPublicMockPlan], compilesGeneratedMocks: Bool) {
-		mockedTypes = plans.map(\.mockedType)
-		self.compilesGeneratedMocks = compilesGeneratedMocks && !plans.isEmpty
-		storage = .decoded(plans)
+		var readablePlans = plans
+		var encoded = Self.encoding(of: plans, writingPositionsAsAbsent: true)
+		if encoded.nestsTooDeeply {
+			readablePlans = plans.filter { !Self.encoding(of: [$0], writingPositionsAsAbsent: true).nestsTooDeeply }
+			encoded = Self.encoding(of: readablePlans, writingPositionsAsAbsent: true)
+		}
+		mockedTypes = readablePlans.map(\.mockedType)
+		self.compilesGeneratedMocks = compilesGeneratedMocks && !readablePlans.isEmpty
+		storage = .decoded(readablePlans, encodingWithoutPositions: encoded.bytes)
 	}
 
 	init(mockedTypes: [TypeDescription], compilesGeneratedMocks: Bool, encoding: [UInt8]) {
@@ -690,7 +701,7 @@ struct ModulePublicMockPlans: Sendable {
 	var decoded: [StoredPublicMockPlan] {
 		get throws(BinaryDecodingError) {
 			switch storage {
-			case let .decoded(plans):
+			case let .decoded(plans, _):
 				plans
 			case let .encoded(encoding):
 				try Self.plans(decodingFrom: encoding)
@@ -710,29 +721,37 @@ struct ModulePublicMockPlans: Sendable {
 	/// `writesPositionsAsAbsent`. Only a run's own plans hold positions: a file is written with them absent.
 	func encoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
 		switch storage {
-		case let .decoded(plans):
-			var writer = BinaryWriter()
-			if writesPositionsAsAbsent {
-				writer.writingPositionsAsAbsent { writer in
-					writer.writeSharingSignatureValues { $0.write(plans) }
-				}
-			} else {
-				writer.writeSharingSignatureValues { $0.write(plans) }
-			}
-			return writer.encoded
+		case let .decoded(plans, encodingWithoutPositions):
+			writesPositionsAsAbsent ? encodingWithoutPositions : Self.encoding(of: plans, writingPositionsAsAbsent: false).bytes
 		case let .encoded(encoding):
-			return encoding
+			encoding
 		}
 	}
 
 	// MARK: Private
 
 	private enum Storage: Sendable {
-		case decoded([StoredPublicMockPlan])
+		/// The plans a run computed, with the encoding a file holds of them, made once.
+		case decoded([StoredPublicMockPlan], encodingWithoutPositions: [UInt8])
 		case encoded([UInt8])
 	}
 
 	private let storage: Storage
+
+	/// The encoding of `plans`, each type description and repeated field written once
+	/// (``BinaryWriter/writeSharingSignatureValues(_:)``), and whether it holds a value nested more deeply than a
+	/// ``BinaryReader`` reads.
+	private static func encoding(of plans: [StoredPublicMockPlan], writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> (bytes: [UInt8], nestsTooDeeply: Bool) {
+		var writer = BinaryWriter()
+		if writesPositionsAsAbsent {
+			writer.writingPositionsAsAbsent { writer in
+				writer.writeSharingSignatureValues { $0.write(plans) }
+			}
+		} else {
+			writer.writeSharingSignatureValues { $0.write(plans) }
+		}
+		return (writer.encoded, writer.isNestedTooDeeply)
+	}
 
 	private static func plans(decodingFrom encoding: [UInt8]) throws(BinaryDecodingError) -> [StoredPublicMockPlan] {
 		// `withUnsafeBytes` rethrows untyped, so the read is carried out of it as a result.

@@ -490,7 +490,8 @@ struct BinaryWriter {
 	private var valuesHeldForTheirStorage = [Any]()
 	private var sharedValueCount: UInt64 = 0
 	private var nestingDepth = 0
-	private var isNestedTooDeeply = false
+	/// Whether a value written through ``writeNested(_:)`` nests more deeply than a ``BinaryReader`` reads.
+	private(set) var isNestedTooDeeply = false
 }
 
 /// A key of a ``TableByWords``: a few words compared whole, with a hash of them that costs a few multiplications.
