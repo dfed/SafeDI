@@ -2740,6 +2740,44 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_lowersLeadingCapitalsKeepingTheLastBeforeALowercaseLetter_whenTypeNameIsNotASCII() async throws {
+		let feature = [
+			"public protocol ÄÖLoader {}",
+			Self.type("Host", seam: true, ["@Instantiated public let loader: any ÄÖLoader"]),
+		]
+		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ÄÖLoaderCarrier<__safeDI_Built> {
+		        public let loader: () -> __safeDI_Built
+
+		        public init(loader: @escaping () -> __safeDI_Built) {
+		            self.loader = loader
+		        }
+
+		        @_alwaysEmitIntoClient
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(loader: { __safeDI_builder() })
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_äöLoaderBuilder: __safeDI_ÄÖLoaderCarrier<any ÄÖLoader>) {
+		        let loader: any ÄÖLoader = __safeDI_äöLoaderBuilder.loader()
+		        self.init(loader: loader)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_9F6159AF378F031D {}
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsAParametersLabel_whenABuilderLabelEqualsIt() async throws {
 		let feature = [
 			Self.service,

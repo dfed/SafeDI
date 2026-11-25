@@ -103,6 +103,7 @@ let package = Package(
 				"SafeDICore/Models/SeamPlaceLevels.swift",
 				"SafeDICore/Models/SeamSignature.swift",
 				"SafeDICore/Models/SourceDiagnostic.swift",
+				"SafeDICore/Models/StoredPublicMockPlan.swift",
 				"SafeDICore/Models/TypeAccessProof.swift",
 				"SafeDICore/Models/TypeRequirements.swift",
 				"SafeDICore/Models/WithoutPositions.swift",
