@@ -4908,6 +4908,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Those of `cycleParameters` that are unavailable where this scope passes them, given what the scopes enclosing it
 	/// create, before any sibling's ordering is known (see `unavailableProperties(isGeneratedBefore:propertiesGeneratedLater:)`).
 	private let cycleParameterUnavailableProperties: Set<Property>
+	/// The labels of those of `cycleParameters` this scope passes `nil`, before any sibling's ordering is known.
+	nonisolated var labelsOfCycleParametersPassedNil: Set<String> {
+		Set(cycleParameters.lazy.filter { self.cycleParameterUnavailableProperties.contains($0.property) }.map(\.property.label))
+	}
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property where this scope passes
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.

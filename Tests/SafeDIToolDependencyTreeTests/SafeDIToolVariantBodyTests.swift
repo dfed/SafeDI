@@ -45,7 +45,8 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsBodyThatPassesNilWhereTodaysPlaceDoes_whenReceiveIsOfBuilderStillBeingBuilt() async throws {
 		// `Detail` receives `detail` only if available while it is the `detail` being built, so today's place and
-		// the body built from its answers both pass it `nil`; no other place is passed `nil` in either build.
+		// the body built from its answers both pass it `nil`; no other place is passed `nil` in either build. The places
+		// of `screenBuilder`'s function are compared again with what the call in `nextBuilder` gives them.
 		let bodies = try await bodies(of:
 			"""
 			@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -81,6 +82,9 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 			Bodies(place: "\"screenBuilder: Instantiator<Screen>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
 			Bodies(place: "\"detail: Detail\"", todaysUnavailableProperties: ["detail: Detail?"], bodysUnavailableProperties: ["detail: Detail?"]),
 			Bodies(place: "\"nextBuilder: Instantiator<Next>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"screenBuilder: Instantiator<Screen>\" called by \"screenBuilder: Instantiator<Screen>\" in \"nextBuilder: Instantiator<Next>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"detail: Detail\" called by \"screenBuilder: Instantiator<Screen>\" in \"nextBuilder: Instantiator<Next>\"", todaysUnavailableProperties: ["detail: Detail?"], bodysUnavailableProperties: ["detail: Detail?"]),
+			Bodies(place: "\"nextBuilder: Instantiator<Next>\" called by \"screenBuilder: Instantiator<Screen>\" in \"nextBuilder: Instantiator<Next>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
 		])
 	}
 

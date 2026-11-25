@@ -45,7 +45,10 @@ extension DependencyTreeGenerator {
 
 	/// A place of today's tree that builds a scope as a property, with the declarations its path gives it, as the scopes
 	/// above it declare them: each scope's declarations hide those above of their labels, and the property a place is
-	/// built as is being built beneath it.
+	/// built as is being built beneath it. A place inside a function a lazy cycle closes on is listed once for the call of
+	/// the scope that declares the function and once for each scope that closes the cycle on it, each time with the
+	/// declarations that call's path gives it: today one generator stands for the places of every call, and reads the
+	/// function's parameters.
 	struct PlaceContext {
 		let place: String
 		let generator: ScopeGenerator
@@ -53,51 +56,143 @@ extension DependencyTreeGenerator {
 		let property: Property
 		let nearestDeclarations: NearestDeclarations
 		let lazilyInstantiatedInstanceProperties: Set<Property>
-		/// The labels a function the place is built in takes as a parameter that no scope between declares again: today's
-		/// build of the place reads the parameter, whose value each call of the function decides, so one generator stands
-		/// for the places of every call, and a receive of such a label is compared where a call passes it, not here.
-		let cycleParameterLabels: Set<String>
+		/// The labels the place reads as a parameter of a function it is built in that the call passes `nil`: today's
+		/// generator passes the parameter on, so it does not list a receive of such a label as passed `nil`, and the value
+		/// is `nil` for every receive of the label.
+		let labelsPassedNil: Set<String>
 	}
 
-	/// Each place of `todaysTree` beneath its root, with its context. `rootScope` is the scope `todaysTree` was built
-	/// from; a place's children are its scope's, index by index.
-	static func placeContexts(ofTodaysTree todaysTree: ScopeGenerator, builtFrom rootScope: Scope) -> [PlaceContext] {
-		var contexts = [PlaceContext]()
-		var places = [(generator: todaysTree, scope: rootScope, nearestDeclarations: NearestDeclarations(), lazilyInstantiatedInstanceProperties: Set<Property>(), cycleParameterLabels: Set<String>())]
-		while let (generator, scope, nearestDeclarations, lazilyInstantiatedInstanceProperties, cycleParameterLabels) = places.popLast() {
-			let childCycleParameterLabels = cycleParameterLabels.subtracting(scope.declaredLabels)
-			var childNearestDeclarations = nearestDeclarations
+	/// A scope of today's tree that declares a builder function, which a scope beneath that closes a cycle on its
+	/// declaration calls.
+	struct FunctionPlace {
+		let generator: ScopeGenerator
+		let scope: Scope
+		let property: Property
+	}
+
+	/// A walk of the places of a tree as today builds it, each with its context. A place's children are its scope's, index
+	/// by index. The places of a function are walked again for each scope that closes a cycle on it, down to the scopes
+	/// that close a cycle there: a call made inside such a call is not followed, a limit the rules file states. The places
+	/// beneath the function such a call calls are walked only where `followCall()` is asked after `next()` returns it: a
+	/// tree of screens that open each other calls each function along a number of paths that grows with every cycle.
+	struct PlaceContextWalk {
+		/// - Parameter rootScope: The scope `todaysTree` was built from.
+		init(ofTodaysTree todaysTree: ScopeGenerator, builtFrom rootScope: Scope) {
+			places = [Place(
+				generator: todaysTree,
+				scope: rootScope,
+				nearestDeclarations: NearestDeclarations(),
+				lazilyInstantiatedInstanceProperties: [],
+				labelsPassedNil: [],
+				functions: [:],
+				callDescription: nil,
+			)]
+		}
+
+		/// The next place, and whether it is the function a scope that closes a cycle calls.
+		mutating func next() -> (context: PlaceContext, isCalledByCycleClosingScope: Bool)? {
+			calledPlace = nil
+			while placesOfScope.isEmpty, let place = places.popLast() {
+				placesOfScope = Self.childPlaces(of: place).reversed()
+			}
+			guard let (context, place, isCalledByCycleClosingScope) = placesOfScope.popLast() else { return nil }
+			if isCalledByCycleClosingScope {
+				calledPlace = place
+			} else {
+				places.append(place)
+			}
+			return (context, isCalledByCycleClosingScope)
+		}
+
+		/// Walks the places beneath the function the last place `next()` returned is, where a scope that closes a cycle
+		/// calls it.
+		mutating func followCall() {
+			if let calledPlace {
+				places.append(calledPlace)
+			}
+		}
+
+		private struct Place {
+			let generator: ScopeGenerator
+			let scope: Scope
+			let nearestDeclarations: NearestDeclarations
+			let lazilyInstantiatedInstanceProperties: Set<Property>
+			let labelsPassedNil: Set<String>
+			let functions: [ScopeGenerator.BuiltDeclaration: FunctionPlace]
+			let callDescription: String?
+		}
+
+		private var places: [Place]
+		private var placesOfScope = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
+		private var calledPlace: Place?
+
+		private static func childPlaces(of place: Place) -> [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)] {
+			let (generator, scope, functions, callDescription) = (place.generator, place.scope, place.functions, place.callDescription)
+			var childPlaces = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
+			let childLabelsPassedNil = place.labelsPassedNil.subtracting(scope.declaredLabels)
+			var childNearestDeclarations = place.nearestDeclarations
 			childNearestDeclarations.replaceLabels(of: scope.sortedDeclaredPropertyForms)
-			let childLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+			let childLazilyInstantiatedInstanceProperties = place.lazilyInstantiatedInstanceProperties
 				.filter { !scope.declaredLabels.contains($0.label) }
 				.union(scope.declaredLazilyInstantiatedInstanceProperties)
 			for child in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) where scope.propertiesToGenerate.indices.contains(child.index) {
 				if case let .instantiated(property, childScope, _) = scope.propertiesToGenerate[child.index] {
-					// A scope that closes a cycle builds nothing: it is today's call of the function it closes on, and has no body.
-					guard case .property(_, _, _, _, false, _) = child.generator.scopeData else { continue }
-					var placeNearestDeclarations = childNearestDeclarations
-					placeNearestDeclarations.build(property)
-					// A member of a loop of builders makes each wrapper its tree receives inside the loop again at the top of
-					// its function, its own included: that rebinding is the nearest declaration beneath it, and is not being
-					// built.
-					for reboundProperty in child.generator.reboundProperties {
-						placeNearestDeclarations.replace(reboundProperty, providing: CycleParameter.forms(providedBy: reboundProperty))
+					// What the place of `function`, built by `child`'s call of it, is given: a member of a loop of builders
+					// makes each wrapper its tree receives inside the loop again at the top of its function, its own included,
+					// so that rebinding is the nearest declaration beneath it, and is not being built.
+					func context(of function: FunctionPlace, describedAs description: String) -> PlaceContext {
+						var placeNearestDeclarations = childNearestDeclarations
+						placeNearestDeclarations.build(function.property)
+						for reboundProperty in function.generator.reboundProperties {
+							placeNearestDeclarations.replace(reboundProperty, providing: CycleParameter.forms(providedBy: reboundProperty))
+						}
+						return PlaceContext(
+							place: description,
+							generator: function.generator,
+							scope: function.scope,
+							property: function.property,
+							nearestDeclarations: placeNearestDeclarations,
+							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+							labelsPassedNil: childLabelsPassedNil.union(child.generator.labelsOfCycleParametersPassedNil),
+						)
 					}
-					let placeCycleParameterLabels = childCycleParameterLabels.union(child.generator.cycleParameters.map(\.property.label))
-					contexts.append(PlaceContext(
-						place: child.generator.scopeData.asDOTNode,
-						generator: child.generator,
-						scope: childScope,
-						property: property,
-						nearestDeclarations: placeNearestDeclarations,
-						lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
-						cycleParameterLabels: placeCycleParameterLabels,
-					))
-					places.append((child.generator, childScope, placeNearestDeclarations, childLazilyInstantiatedInstanceProperties, placeCycleParameterLabels))
+					if case .property(_, _, _, _, false, _) = child.generator.scopeData {
+						let function = FunctionPlace(generator: child.generator, scope: childScope, property: property)
+						let context = context(of: function, describedAs: callDescription.map { "\(child.generator.scopeData.asDOTNode) \($0)" } ?? child.generator.scopeData.asDOTNode)
+						var childFunctions = functions
+						if let declaration = child.generator.declaration {
+							childFunctions[declaration] = function
+						}
+						childPlaces.append((context, Place(
+							generator: child.generator,
+							scope: childScope,
+							nearestDeclarations: context.nearestDeclarations,
+							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+							labelsPassedNil: context.labelsPassedNil,
+							functions: childFunctions,
+							callDescription: callDescription,
+						), false))
+					} else if callDescription == nil,
+					          let function = child.generator.closedOnDeclaration.flatMap({ functions[$0] })
+					{
+						// A scope that closes a cycle builds nothing: it is a call of the function it closes on, whose places
+						// are walked again with what this call's path gives them.
+						let description = "called by \(child.generator.scopeData.asDOTNode) in \(generator.scopeData.asDOTNode)"
+						let context = context(of: function, describedAs: "\(function.generator.scopeData.asDOTNode) \(description)")
+						childPlaces.append((context, Place(
+							generator: function.generator,
+							scope: function.scope,
+							nearestDeclarations: context.nearestDeclarations,
+							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+							labelsPassedNil: context.labelsPassedNil,
+							functions: functions,
+							callDescription: description,
+						), true))
+					}
 				}
 			}
+			return childPlaces
 		}
-		return contexts
 	}
 
 	/// The scopes a production root reaches, each beside a copy whose children on a cycle are call places: scopes with no
