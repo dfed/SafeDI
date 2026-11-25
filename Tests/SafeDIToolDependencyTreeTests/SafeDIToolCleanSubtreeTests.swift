@@ -961,6 +961,8 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		return (skippedSubtreeCounts[LabelBeneath.allCases.firstIndex(of: beneath) ?? 0], error)
 	}
 
+	/// The order each type of a graph declares its properties in: the walk takes a scope's children last first, so which
+	/// path reaches a shared scope first follows it.
 	enum DeclarationOrder: CaseIterable {
 		case written
 		case reversed
