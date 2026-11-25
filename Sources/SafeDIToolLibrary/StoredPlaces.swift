@@ -751,22 +751,16 @@ enum ModulePlacesEncoder {
 			Dictionary(zip(place.uncarriedDeclarations.map(DeclarationKey.init), place.uncarriedDeclarations.indices), uniquingKeysWith: { first, _ in first })
 		}
 
-		/// A writer kept to compare places (`BinaryWriter.bytesWritten(by:)`).
-		private var comparisonWriter = BinaryWriter()
-
-		/// Whether a file holds `first` and `second` as the same bytes, with no position and no value shared: two places
-		/// are written as the same bytes exactly when a read finds no difference between them.
-		private mutating func isWritten(_ first: SeamSignature.Hole, as second: SeamSignature.Hole) -> Bool {
-			func bytes(_ place: SeamSignature.Hole, in writer: inout BinaryWriter) -> [UInt8] {
-				writer.bytesWritten { writer in
-					writer.writingPositionsAsAbsent { $0.write(place) }
-				}
+		/// Whether a file holds `first` and `second` as the same bytes, with no position: two places are written as the
+		/// same bytes exactly when a read finds no difference between them. Each is written by a writer of its own, since
+		/// a writer writes a value it wrote before as a reference to it.
+		private func isWritten(_ first: SeamSignature.Hole, as second: SeamSignature.Hole) -> Bool {
+			func bytes(_ place: SeamSignature.Hole) -> [UInt8] {
+				var writer = BinaryWriter.writingStringsInline()
+				writer.writingPositionsAsAbsent { $0.write(place) }
+				return writer.bytes
 			}
-			let firstBytes = bytes(first, in: &comparisonWriter)
-			let secondBytes = bytes(second, in: &comparisonWriter)
-			// A string `first` holds was written out where it was first written: written again, it is written as `second`
-			// writes it.
-			return firstBytes == secondBytes || bytes(first, in: &comparisonWriter) == secondBytes
+			return bytes(first) == bytes(second)
 		}
 	}
 }

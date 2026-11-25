@@ -578,17 +578,6 @@ struct BinaryWriter {
 		}
 	}
 
-	/// The bytes `write` writes, which this writer then holds no longer, for a writer kept to compare values: two values
-	/// written this way with no value shared are written as the same bytes exactly when they read back equal in every
-	/// respect, and each string is written out once for all the values compared.
-	mutating func bytesWritten(by write: (inout BinaryWriter) -> Void) -> [UInt8] {
-		let start = bytes.count
-		write(&self)
-		let written = Array(bytes[start...])
-		bytes.removeSubrange(start...)
-		return written
-	}
-
 	/// Every value written, without the string table.
 	private(set) var bytes = [UInt8]()
 
