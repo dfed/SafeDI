@@ -194,6 +194,50 @@ struct GraphFuzzerFixture: Equatable {
 		return conditionsByModuleName
 	}
 
+	/// The modules whose configuration declares the main actor their default isolation
+	/// (`declaringMainActorDefaultIsolation(seed:in:)`), which the oracle compiles with `-default-isolation MainActor`, as
+	/// such a module's build sets it. A graph in one module that declares it is `.seamModule`, as its compile names it.
+	var modulesDefaultingToMainActor: Set<GraphFuzzerModule> {
+		let fileModules = modules ?? Array(repeating: .seamModule, count: swiftFileContent.count)
+		return Set(zip(swiftFileContent, fileModules).filter { $0.0.contains(Self.mainActorDefaultIsolationArgument) }.map(\.1))
+	}
+
+	/// The `#SafeDIConfiguration` argument that declares the main actor a module's default isolation.
+	static let mainActorDefaultIsolationArgument = "defaultIsolation: MainActor.self"
+
+	/// The seed mask of the stream that decides whether a graph declares the main actor its default isolation, which no
+	/// other draw reads, so every graph it leaves alone is drawn as before.
+	private static let mainActorDefaultIsolationRandomSeedMask: UInt64 = 0x6D61696E41637472
+
+	/// `contents` with its module declaring the main actor its default isolation, for one graph in eight of the base
+	/// corpus: added to the graph's `#SafeDIConfiguration` where it declares one, since a second is an error, and declared
+	/// in the first file otherwise. A graph that spells `Sendable` is left as drawn: under a main-actor default its types
+	/// are main-actor, which a `@Sendable` builder or a `Sendable` conformance cannot hold, so the compile would reject the
+	/// fixture itself (the design's first group of failures, which SafeDI cannot change).
+	static func declaringMainActorDefaultIsolation(seed: UInt64, in contents: [String]) -> [String] {
+		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ mainActorDefaultIsolationRandomSeedMask)
+		guard random.percentChance(12),
+		      !contents.contains(where: { $0.contains("Sendable") }),
+		      !contents.isEmpty
+		else { return contents }
+		var result = contents
+		if let configurationIndex = contents.firstIndex(where: { $0.contains("#SafeDIConfiguration(") }) {
+			var lines = result[configurationIndex].components(separatedBy: "\n")
+			for lineIndex in lines.indices where lines[lineIndex].contains("#SafeDIConfiguration(") {
+				// `defaultIsolation` is the macro's last parameter, so it goes last.
+				if let closing = lines[lineIndex].range(of: ")", options: .backwards) {
+					let separator = lines[lineIndex][..<closing.lowerBound].hasSuffix("(") ? "" : ", "
+					lines[lineIndex].replaceSubrange(closing, with: separator + mainActorDefaultIsolationArgument + ")")
+				}
+				break
+			}
+			result[configurationIndex] = lines.joined(separator: "\n")
+		} else {
+			result[0] += "\n\n#SafeDIConfiguration(\(mainActorDefaultIsolationArgument))\n"
+		}
+		return result
+	}
+
 	/// The modules of a split graph that have no package, which their files' first lines say: the tool runs over each
 	/// without `--package-name`, and the oracle compiles each without `-package-name`.
 	var modulesOmittingPackageName: Set<GraphFuzzerModule> {
@@ -2454,7 +2498,12 @@ enum GraphFuzzerGenerator {
 			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed).swiftFileContent(storingEveryParameter: storingEveryParameter, isKnownRight: false))
 		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: storingEveryParameter)
-		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
+		let swiftFileContent = builder.build()
+		// The base corpus's graphs are in one module, which one graph in eight declares main-actor by default.
+		guard features.isEmpty else {
+			return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent)
+		}
+		return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed: seed, in: swiftFileContent))
 	}
 
 	/// The graph for `seed` and `features` without its second place of a hole – the property a hole draw adds that gives a
@@ -10232,6 +10281,9 @@ enum GraphFuzzerGenerator {
 /// from the generator's own bookkeeping, so a generator that stops emitting a kind cannot hide it.
 enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case constantProperty
+	/// A module whose configuration declares the main actor its default isolation, compiled with
+	/// `-default-isolation MainActor` (`GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed:in:)`).
+	case mainActorDefaultIsolation
 	case erasedConstantProperty
 	case instantiatorProperty
 	case sendableInstantiatorProperty
@@ -10741,6 +10793,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 	static func features(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
 		var features = Set<GraphFuzzerFeature>()
+		if !fixture.modulesDefaultingToMainActor.isEmpty {
+			features.insert(.mainActorDefaultIsolation)
+		}
 		var rootCount = 0
 		var typesByLabel = [String: Set<String>]()
 		var lazilyInstantiatedInstanceTypesByLabel = [String: Set<String>]()
@@ -17195,18 +17250,22 @@ enum GraphFuzzerOracle {
 		try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(fixtureDirectory)
 
-		// The graphs compiled together, keyed by their modules without a package, in the order each set is first met.
-		var packageConfigurations = [Set<GraphFuzzerModule>]()
-		var combinedUnitsByConfigurationAndModule = [Set<GraphFuzzerModule>: [GraphFuzzerModule: [CompilationUnit]]]()
+		// The graphs compiled together, keyed by their modules without a package and their modules that default to the main
+		// actor, in the order each configuration is first met.
+		var packageConfigurations = [ModuleConfiguration]()
+		var combinedUnitsByConfigurationAndModule = [ModuleConfiguration: [GraphFuzzerModule: [CompilationUnit]]]()
 		var inputOnlyUnitsBySeed = [UInt64: [(module: GraphFuzzerModule, unit: CompilationUnit)]]()
-		var modulesWithoutPackageBySeed = [UInt64: Set<GraphFuzzerModule>]()
+		var configurationBySeed = [UInt64: ModuleConfiguration]()
 		var seedsWithGeneratedCode = Set<UInt64>()
 		for runs in toolRuns {
-			let modulesWithoutPackage = runs.fixture.modulesOmittingPackageName
-			modulesWithoutPackageBySeed[runs.fixture.seed] = modulesWithoutPackage
-			if combinedUnitsByConfigurationAndModule[modulesWithoutPackage] == nil {
-				packageConfigurations.append(modulesWithoutPackage)
-				combinedUnitsByConfigurationAndModule[modulesWithoutPackage] = [:]
+			let configuration = ModuleConfiguration(
+				modulesWithoutPackage: runs.fixture.modulesOmittingPackageName,
+				modulesDefaultingToMainActor: runs.fixture.modulesDefaultingToMainActor,
+			)
+			configurationBySeed[runs.fixture.seed] = configuration
+			if combinedUnitsByConfigurationAndModule[configuration] == nil {
+				packageConfigurations.append(configuration)
+				combinedUnitsByConfigurationAndModule[configuration] = [:]
 			}
 			let fileModules = runs.fixture.modules ?? Array(repeating: .seamModule, count: runs.fixture.swiftFileContent.count)
 			// The hand-written calls `C` of each seam's readable initializer compile with the generated code; the outcomes the
@@ -17238,7 +17297,7 @@ enum GraphFuzzerOracle {
 					generatedFiles[stagedFileName] = contents
 				}
 				let combined = try stageCompileSources(inputSwiftFiles: fixtureFiles, generatedFiles: generatedFiles, filesToDelete: &filesToDelete)
-				combinedUnitsByConfigurationAndModule[modulesWithoutPackage, default: [:]][module, default: []].append(CompilationUnit(
+				combinedUnitsByConfigurationAndModule[configuration, default: [:]][module, default: []].append(CompilationUnit(
 					seed: runs.fixture.seed,
 					inputFiles: combined.inputFiles,
 					generatedFiles: combined.generatedFiles.sorted { $0.path < $1.path },
@@ -17255,8 +17314,8 @@ enum GraphFuzzerOracle {
 		var builderCallFailures = [UInt64: UnitDiagnostics]()
 		var generatedCodeWarningsByModule = [UInt64: [GraphFuzzerModule: [String]]]()
 		var inputWarningMessagesByModule = [UInt64: [GraphFuzzerModule: Set<String>]]()
-		for (configurationIndex, modulesWithoutPackage) in packageConfigurations.enumerated() {
-			let combinedUnitsByModule = combinedUnitsByConfigurationAndModule[modulesWithoutPackage] ?? [:]
+		for (configurationIndex, configuration) in packageConfigurations.enumerated() {
+			let combinedUnitsByModule = combinedUnitsByConfigurationAndModule[configuration] ?? [:]
 			var moduleOutputDirectories = [GraphFuzzerModule: URL]()
 			let laterModulesAreCompiled = combinedUnitsByModule.keys.contains { $0 != .seamModule }
 			for module in GraphFuzzerModule.allCases {
@@ -17269,7 +17328,8 @@ enum GraphFuzzerOracle {
 					outputDirectory: outputDirectory,
 					artifacts: artifacts,
 					module: module,
-					hasPackage: !modulesWithoutPackage.contains(module),
+					hasPackage: !configuration.modulesWithoutPackage.contains(module),
+					defaultsToMainActor: configuration.modulesDefaultingToMainActor.contains(module),
 					emitsModule: laterModulesAreCompiled,
 					moduleSearchPaths: module.transitiveDependencies.compactMap { moduleOutputDirectories[$0] },
 					definesDebug: definesDebug,
@@ -17317,7 +17377,8 @@ enum GraphFuzzerOracle {
 					outputDirectory: outputDirectory,
 					artifacts: artifacts,
 					module: module,
-					hasPackage: modulesWithoutPackageBySeed[seed]?.contains(module) != true,
+					hasPackage: configurationBySeed[seed]?.modulesWithoutPackage.contains(module) != true,
+					defaultsToMainActor: configurationBySeed[seed]?.modulesDefaultingToMainActor.contains(module) == true,
 					emitsModule: true,
 					moduleSearchPaths: module.transitiveDependencies.compactMap { seedModuleDirectories[$0] },
 					definesDebug: definesDebug,
@@ -17427,6 +17488,13 @@ enum GraphFuzzerOracle {
 		}
 	}
 
+	/// What a graph's modules are compiled with beyond their sources: the modules compiled without `-package-name`, and
+	/// those compiled with `-default-isolation MainActor`. Graphs that differ in either compile apart.
+	private struct ModuleConfiguration: Hashable {
+		let modulesWithoutPackage: Set<GraphFuzzerModule>
+		let modulesDefaultingToMainActor: Set<GraphFuzzerModule>
+	}
+
 	/// Compiles `units` together, then again without each unit an error is attributed to, until the rest compile.
 	/// A unit's warnings are read from the last compile it is part of, the one that passes, so a warning reported
 	/// only by a SIL pass that a type error elsewhere stopped is still read.
@@ -17436,6 +17504,7 @@ enum GraphFuzzerOracle {
 		artifacts: SafeDIBuildArtifacts,
 		module: GraphFuzzerModule,
 		hasPackage: Bool,
+		defaultsToMainActor: Bool,
 		emitsModule: Bool,
 		moduleSearchPaths: [URL],
 		definesDebug: Bool,
@@ -17451,6 +17520,7 @@ enum GraphFuzzerOracle {
 				moduleSearchPaths: moduleSearchPaths,
 				definesDebug: definesDebug,
 				upcomingFeatures: [existentialAnyFeature],
+				defaultIsolation: defaultsToMainActor ? "MainActor" : nil,
 			)
 		}
 		var remainingUnits = units
