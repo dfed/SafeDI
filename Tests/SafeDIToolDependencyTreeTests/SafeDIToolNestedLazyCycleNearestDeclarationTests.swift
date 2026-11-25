@@ -397,6 +397,77 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 		)
 	}
 
+	/// Every type is `Sendable` and every builder a `SendableInstantiator`, so each builder function is `@Sendable` and takes the label as the plain functions do.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNearestDeclaration_whenCyclesAreClosedThroughSendableInstantiators() async throws {
+		try await expectGeneratedTree(
+			of: Self.fixture(
+				rootDeclares: ["@Instantiated let l: L", "@Instantiated let wBuilder: SendableInstantiator<W>"],
+				wDeclares: ["@Instantiated let uBuilder: SendableInstantiator<U>", "@Instantiated let vBuilder: SendableInstantiator<V>"],
+				uDeclares: ["@Instantiated let pBuilder: SendableInstantiator<P>", "@Instantiated let wBuilder: SendableInstantiator<W>"],
+				pDeclares: ["@Instantiated let l: L", "@Instantiated let uBuilder: SendableInstantiator<U>"],
+				conformances: ", Sendable",
+			),
+			equals: { _ in
+				"""
+				extension Root {
+				    public convenience init() {
+				        let l = L()
+				        @Sendable nonisolated func __safeDI_wBuilder(l: L) -> W {
+				            let uBuilder = SendableInstantiator<U> {
+				                __safeDI_uBuilder(l: l)
+				            }
+				            let vBuilder = SendableInstantiator<V> {
+				                __safeDI_vBuilder(l: l)
+				            }
+				            return W(uBuilder: uBuilder, vBuilder: vBuilder)
+				        }
+				        @Sendable nonisolated func __safeDI_uBuilder(l: L) -> U {
+				            let pBuilder = SendableInstantiator<P>(__safeDI_pBuilder)
+				            let wBuilder = SendableInstantiator<W> {
+				                __safeDI_wBuilder(l: l)
+				            }
+				            return U(pBuilder: pBuilder, wBuilder: wBuilder)
+				        }
+				        @Sendable nonisolated func __safeDI_pBuilder() -> P {
+				            let l = L()
+				            let uBuilder = SendableInstantiator<U> {
+				                __safeDI_uBuilder(l: l)
+				            }
+				            return P(l: l, uBuilder: uBuilder)
+				        }
+				        @Sendable nonisolated func __safeDI_vBuilder(l: L) -> V {
+				            V(l: l)
+				        }
+				        let wBuilder = SendableInstantiator<W> {
+				            __safeDI_wBuilder(l: l)
+				        }
+				        self.init(l: l, wBuilder: wBuilder)
+				    }
+				}
+				"""
+			},
+			buildsTheSameValuesAs: """
+			extension Root {
+			    public convenience init() {
+			        @Sendable func w(l: L) -> W {
+			            W(uBuilder: SendableInstantiator<U> { u(l: l) }, vBuilder: SendableInstantiator<V> { V(l: l) })
+			        }
+			        @Sendable func u(l: L) -> U {
+			            U(pBuilder: SendableInstantiator<P> {
+			                let stepL = L()
+			                return P(l: stepL, uBuilder: SendableInstantiator<U> { u(l: stepL) })
+			            }, wBuilder: SendableInstantiator<W> { w(l: l) })
+			        }
+			        let l = L()
+			        self.init(l: l, wBuilder: SendableInstantiator<W> { w(l: l) })
+			    }
+			}
+			""",
+		)
+	}
+
 	/// `P` is forwarded `l`, and `V` receives `l` under another name.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -919,15 +990,16 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 		uDeclares: [String] = ["@Instantiated let pBuilder: Instantiator<P>", "@Instantiated let wBuilder: Instantiator<W>"],
 		pDeclares: [String] = ["@Instantiated let l: L", "@Instantiated let uBuilder: Instantiator<U>"],
 		vDeclares: [String] = ["@Received let l: L"],
+		conformances: String = "",
 		otherTypes: [String] = [],
 	) -> [String] {
 		[
-			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclares),
-			seamFixtureType(named: "W", isFinalClass: true, declarations: wDeclares),
-			seamFixtureType(named: "U", isFinalClass: true, declarations: uDeclares),
-			seamFixtureType(named: "P", isFinalClass: true, declarations: pDeclares),
-			seamFixtureType(named: "V", isFinalClass: true, declarations: vDeclares),
-			seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclares, conformances: conformances),
+			seamFixtureType(named: "W", isFinalClass: true, declarations: wDeclares, conformances: conformances),
+			seamFixtureType(named: "U", isFinalClass: true, declarations: uDeclares, conformances: conformances),
+			seamFixtureType(named: "P", isFinalClass: true, declarations: pDeclares, conformances: conformances),
+			seamFixtureType(named: "V", isFinalClass: true, declarations: vDeclares, conformances: conformances),
+			seamFixtureType(named: "L", isFinalClass: true, declarations: [], conformances: conformances),
 		] + otherTypes
 	}
 
