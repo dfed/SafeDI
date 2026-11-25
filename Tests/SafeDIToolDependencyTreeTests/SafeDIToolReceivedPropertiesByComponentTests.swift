@@ -114,6 +114,24 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		#expect(inPasses.collectedScopeCount == alongPaths.collectedScopeCount)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_collectsReceivedPropertiesAlongPaths_whenTypeOutsideCycleLeftToTheWalkOpensScreenOfIt() async throws {
+		// `Root` builds `screen0Builder` and then `hallBuilder`, and `Hall` opens `Screen2`. The walk from `Screen0` leaves
+		// `Screen2` without complete received properties, so `Hall`, asked next, reaches a scope left to the walk and is
+		// left to it too.
+		let fixture = Self.screensOpeningEveryOther(
+			screenCount: 5,
+			lastScreenDeclarations: ["@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?"],
+			rootDeclarations: ["@Instantiated let hallBuilder: Instantiator<Hall>"],
+		) + [seamFixtureType(named: "Hall", isFinalClass: true, declarations: ["@Instantiated let screen2Builder: Instantiator<Screen2>"])]
+		let inPasses = try await run(fixture, completingByComponent: true)
+		let alongPaths = try await run(fixture, completingByComponent: false)
+		#expect(inPasses.outcome == alongPaths.outcome)
+		#expect(inPasses.outcome.isGenerated)
+		#expect(inPasses.collectedScopeCount == alongPaths.collectedScopeCount)
+	}
+
 	// MARK: Tests – Diagnostics
 
 	@Test(arguments: SafeDIToolReceivedPropertiesByComponentTests.permutations(of: ["b", "e", "pBuilder", "qBuilder"]))
@@ -206,8 +224,8 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 	}
 
 	/// `screenCount` screens that each open every other and receive `service`, which `Root` instantiates beside the first
-	/// screen's builder; the last screen also declares `lastScreenDeclarations`.
-	private static func screensOpeningEveryOther(screenCount: Int, lastScreenDeclarations: [String]) -> [String] {
+	/// screen's builder and `rootDeclarations`; the last screen also declares `lastScreenDeclarations`.
+	private static func screensOpeningEveryOther(screenCount: Int, lastScreenDeclarations: [String], rootDeclarations: [String] = []) -> [String] {
 		var fixture = [String]()
 		for index in 0..<screenCount {
 			fixture.append(seamFixtureType(
@@ -219,7 +237,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 			))
 		}
 		fixture.append(seamFixtureType(named: "Service", isFinalClass: true, declarations: []))
-		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let screen0Builder: Instantiator<Screen0>"]))
+		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let screen0Builder: Instantiator<Screen0>"] + rootDeclarations))
 		return fixture
 	}
 
