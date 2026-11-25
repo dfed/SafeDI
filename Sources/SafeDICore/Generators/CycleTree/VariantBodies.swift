@@ -31,8 +31,9 @@ public enum VariantBodyObservation {
 /// anew. Test only.
 public enum PlanBodiesObservation {
 	/// Called for each root that reaches a cycle with the root's type, each body of a type on a cycle the plan builds, in
-	/// the order the plan first calls it, and the bodies today's places of such types take that the plan does not build.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String]) -> Void)?
+	/// the order the plan first calls it, the bodies today's places of such types take that the plan does not build, and
+	/// the values two properties of the root's tree build as twins (`CallPlaceShadow.twinValues`), sorted.
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String], _ twinValues: [String]) -> Void)?
 }
 
 extension DependencyTreeGenerator {

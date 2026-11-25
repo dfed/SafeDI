@@ -96,8 +96,8 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// by `Root`, and `screenBuilder` being built. Every place of today's tree takes one of them.
 		var plans = [Plan]()
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks in
-			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -139,6 +139,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 					"Next as nextBuilder: Instantiator<Next> [logger = logger: Logger] [nextBuilder = nextBuilder: Instantiator<Next>, being built]",
 				],
 				todaysBodiesPlanLacks: [],
+				twinValues: [],
 			),
 		])
 	}
@@ -152,8 +153,8 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// since the nearest declaration of `home` there is `Panel`'s. `Detail`'s call is answered as `Root`'s is.
 		var plans = [Plan]()
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks in
-			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 		}) {
 			_ = try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -198,6 +199,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 					"Home as home: Home [home = home: LazilyInstantiated<Home>, being built] [building home: Home]",
 				],
 				todaysBodiesPlanLacks: [],
+				twinValues: ["Home as home: Home"],
 			),
 		])
 	}
@@ -216,8 +218,8 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 			let roles = (0..<screenCount).map { ContextRole.allCases[$0 % ContextRole.allCases.count] }
 			let targets = (0..<screenCount).map { screen in [1, 3, 7].map { (screen + $0) % screenCount }.sorted() }
 			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks in
-				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
+			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
 			}) {
 				_ = try await executeSafeDIToolTest(
 					swiftFileContent: Self.screensOpeningEachOther(roles: roles, targets: targets),
@@ -283,6 +285,7 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		let root: String
 		let bodiesOfPlan: [String]
 		let todaysBodiesPlanLacks: [String]
+		let twinValues: [String]
 	}
 
 	private var filesToDelete: [URL]

@@ -858,6 +858,7 @@ public actor DependencyTreeGenerator {
 								scope.instantiable.concreteInstantiable.asSource,
 								bodiesOfPlan.map { bodies.bodies[$0].description },
 								todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
+								shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
 							)
 						}
 					}
