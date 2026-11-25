@@ -506,9 +506,12 @@ extension ScopeRecord {
 		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
 		let root = ConstructionScope(table: table, record: self)
 		// The tree's plan by declaration, built only where a test reads it and read by nothing that generates code.
-		if PerTypePlanObservation.observer != nil || PerTypePlanObservation.variantsObserver != nil, let plan = PerTypePlan(root: root) {
+		var placeReadLabels: PlaceReadLabels?
+		if PerTypePlanObservation.observer != nil || PerTypePlanObservation.variantsObserver != nil || PlaceReadsObservation.observer != nil, let plan = PerTypePlan(root: root) {
 			PerTypePlanObservation.observer?(plan.projection)
-			PerTypePlanObservation.variantsObserver?(PlanVariants(plan: plan).projection)
+			let variants = PlanVariants(plan: plan)
+			PerTypePlanObservation.variantsObserver?(variants.projection)
+			placeReadLabels = variants.placeReadLabels
 		}
 		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
 		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees
@@ -544,6 +547,7 @@ extension ScopeRecord {
 					settledPassMemo: nil,
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+					placeReadLabels: placeReadLabels,
 				)
 			}
 			scopeGenerator = try createScopeGenerator(
@@ -562,6 +566,7 @@ extension ScopeRecord {
 				settledPassMemo: settledPassMemo,
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
+				placeReadLabels: placeReadLabels,
 			)
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
@@ -649,6 +654,7 @@ extension ScopeRecord {
 		settledPassMemo: ConstructionMemo?,
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
+		placeReadLabels: PlaceReadLabels?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
@@ -680,6 +686,7 @@ extension ScopeRecord {
 		var lookupCount = 0
 		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
 		let reusedPlaceObserver = ConstructionMemoOracle.reusedPlaceObserver
+		let placeReadsObserver = PlaceReadsObservation.observer
 		// The generators of the calls that pass fills this tree holds, none of which it may hold twice
 		// (`ConstructionMemo.Entry.callGenerators`).
 		var callGeneratorsInTree = Set<ObjectIdentifier>()
@@ -746,6 +753,18 @@ extension ScopeRecord {
 				} else {
 					// Filtered once, for the memo and the parent alike.
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
+					// A call that passes fills reads the caller's declarations for its fills' trees, which the plan has no edge
+					// for yet, so a place whose subtree holds a call or a fill is not compared.
+					if let placeReadLabels, let placeReadsObserver, createdScope.recordsReads, !scopeGenerator.treeHoldsCallOrFill, let built = createdScope.builtProperty {
+						placeReadsObserver(
+							createdScope.builtScope.instantiable.concreteInstantiable.asSource,
+							built.property.asSource,
+							// A place reads the declaration of its own property's label, which the scope that builds the place declares,
+							// to mark it as being built: the edge decides that answer, so no path's answers hold it.
+							readsAnsweredAbove.labelsOfReadsOfDeclarations.subtracting([built.property.label]).sorted(),
+							(placeReadLabels.plannedLabelsByPlace[PlaceReadLabels.Place(record: ObjectIdentifier(createdScope.builtScope.identity), property: built.id)] ?? []).sorted(),
+						)
+					}
 					let isSettled = createdScope.isSettled(building: scopeGenerator)
 					if let key = createdScope.memoKey, createdScope.isMemoizable {
 						memo.store(ConstructionMemo.Entry(
@@ -806,6 +825,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
 		self.depth = depth
 		self.recordsReads = recordsReads
+		self.builtProperty = builtProperty
 		// Every read of the context this scope inherits goes through `context`, logged, so a construction memo can tell
 		// whether another place inherits a context that answers the reads of this scope's subtree alike (see
 		// `ConstructionMemo`).
@@ -2336,6 +2356,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	private let property: Property?
+	/// The property this place builds its scope as, with its ID, or `nil` for a root or a fill (`PlaceReadsObservation`).
+	let builtProperty: (property: Property, id: PropertyID)?
 	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
 	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.
 	private let buildsWithHandWrittenMocks: Bool

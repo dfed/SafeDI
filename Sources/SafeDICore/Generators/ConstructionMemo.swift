@@ -627,6 +627,24 @@ struct ConstructionLog {
 		forEachRead(where: \.isCycleRead) { body($0.read.read, $0.answer) }
 	}
 
+	/// The labels of the reads of this log that are no cycle reads: what a place's subtree asked of the declarations above
+	/// it (`PlaceReadsObservation`).
+	var labelsOfReadsOfDeclarations: Set<String> {
+		var labels = Set<String>()
+		_ = forEachRead(where: { _ in true }) { recorded in
+			switch recorded.read.read {
+			case let .nearestDeclaration(label):
+				labels.insert(label)
+			case let .binding(property), let .passesNil(property, _, _):
+				labels.insert(property.label)
+			case .declarationClosedOn, .cycleParameterContext:
+				break
+			}
+			return true
+		}
+		return labels
+	}
+
 	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read
 	/// (and depth) once, with the first answer it was added with, until `body` returns `false`.
 	/// - Returns: Whether `body` returned `true` for every read.

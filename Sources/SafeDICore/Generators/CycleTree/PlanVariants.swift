@@ -83,6 +83,13 @@ struct PlanVariants: Sendable {
 		}
 		self.bodies = bodies
 		self.labels = labels
+		var plannedLabelsByPlace = [PlaceReadLabels.Place: Set<String>]()
+		for (index, declaration) in graph.nodes.enumerated() {
+			if let built = declaration.built {
+				plannedLabelsByPlace[PlaceReadLabels.Place(record: ObjectIdentifier(declaration.record), property: built.id), default: []].formUnion(labels.labels(of: index))
+			}
+		}
+		placeReadLabels = PlaceReadLabels(plannedLabelsByPlace: plannedLabelsByPlace)
 		nodeDescriptions = graph.nodes.map { declaration in
 			if let built = declaration.built {
 				"\(declaration.record.instantiable.concreteInstantiable.asSource) as \(built.property.asSource)"
@@ -93,6 +100,8 @@ struct PlanVariants: Sendable {
 	}
 
 	let bodies: [Body]
+	/// The labels each declaration reads from above, for the comparison with what its places read (`PlaceReadsObservation`).
+	let placeReadLabels: PlaceReadLabels
 
 	/// One line per body: its position, its declaration, each label it reads from above with its answer, and the
 	/// positions of the bodies its edges lead to.
