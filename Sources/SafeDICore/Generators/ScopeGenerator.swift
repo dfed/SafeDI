@@ -6901,7 +6901,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// What the construction of `instantiable` in this scope's builder function reads, for the type key, or `nil` where it is
 	/// constructed with anything but its initializer's arguments. It throws what the path key's construction
 	/// (`constructionArgumentList(of:unavailableProperties:propertiesGeneratedLater:holeBuilders:)`), which makes the same call first, throws.
-	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
+	/// It reads nothing but this generator and `unavailableProperties`, so every place of one generator written in one context
+	/// reads alike.
+	nonisolated func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
 		guard builderCallArguments.isEmpty else { return nil }
 		return try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 	}
@@ -7030,8 +7032,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isPlannedAtPlace: Bool,
 		readNames: [Property: String] = [:],
 		alternatives: [ConstructionAlternative] = [],
+		constructionReads computedConstructionReads: Result<[PlaceRead]?, Initializer.GenerationError>? = nil,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
-		guard isPlannedAtPlace, isPlannedByGenerator, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
+		// A caller that writes many places of one generator in one context hands the construction's reads it computed once for
+		// them (`constructionReads(of:unavailableProperties:)`).
+		guard isPlannedAtPlace, isPlannedByGenerator else { return nil }
+		let constructionReads = if let computedConstructionReads {
+			try computedConstructionReads.get()
+		} else {
+			try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
+		}
+		guard let arguments = constructionReads else { return nil }
 		var record = BuiltPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
