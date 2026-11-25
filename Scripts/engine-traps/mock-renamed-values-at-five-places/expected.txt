@@ -1,0 +1,44 @@
+no overrides: left: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+no overrides: left: all four are the place's session: true
+no overrides: left built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+no overrides: left built: all four are the place's session: true
+no overrides: right: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+no overrides: right: all four are the place's session: true
+no overrides: right built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+no overrides: right built: all four are the place's session: true
+no overrides: top built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+no overrides: top built: all four are the place's session: true
+no overrides: the sides hold the renamed sessions: true
+a name at each place: left: session, wrapped, leaf's session, leaf's wrapped, leaf: ["first", "first", "first", "first", "left leaf"]
+a name at each place: left: all four are the place's session: true
+a name at each place: left built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["first", "first", "first", "first", "left built leaf"]
+a name at each place: left built: all four are the place's session: true
+a name at each place: right: session, wrapped, leaf's session, leaf's wrapped, leaf: ["second", "second", "second", "second", "right leaf"]
+a name at each place: right: all four are the place's session: true
+a name at each place: right built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["second", "second", "second", "second", "right built leaf"]
+a name at each place: right built: all four are the place's session: true
+a name at each place: top built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["session", "session", "session", "session", "top built leaf"]
+a name at each place: top built: all four are the place's session: true
+a name at each place: the sides hold the renamed sessions: true
+builders at two places: left: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+builders at two places: left: all four are the place's session: true
+builders at two places: left built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "left built holder from a builder"]
+builders at two places: left built: all four are the place's session: true
+builders at two places: right: session, wrapped, leaf's session, leaf's wrapped, leaf: ["second from a builder", "second from a builder", "second from a builder", "second from a builder", "right leaf from a builder"]
+builders at two places: right: all four are the place's session: true
+builders at two places: right built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["second from a builder", "second from a builder", "second from a builder", "second from a builder", "built"]
+builders at two places: right built: all four are the place's session: true
+builders at two places: top built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+builders at two places: top built: all four are the place's session: true
+builders at two places: the sides hold the renamed sessions: true
+production: left: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+production: left: all four are the place's session: true
+production: left built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+production: left built: all four are the place's session: true
+production: right: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+production: right: all four are the place's session: true
+production: right built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+production: right built: all four are the place's session: true
+production: top built: session, wrapped, leaf's session, leaf's wrapped, leaf: ["built", "built", "built", "built", "built"]
+production: top built: all four are the place's session: true
+production: the sides hold the renamed sessions: true
