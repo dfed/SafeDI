@@ -96,6 +96,29 @@ struct SafeDIToolReleaseAcceptanceTests {
 
 	static let mockPassesNilAsProductionDoesReason = "#892, a 2.3.0 mock defect fixed and release-noted"
 
+	@Test(arguments: GraphFuzzerReleaseAcceptanceCorpus.allCases)
+	func releaseAcceptanceFixture_drawsTheCorpusGraphWithoutFeaturesOlderReleaseRejects_whenDrawnForComparison(corpus: GraphFuzzerReleaseAcceptanceCorpus) {
+		// 2.3.0 rejects `@Instantiated(onlyIfAvailable: true)` and the `@Instantiable` actors `addingActorArgumentShapes`
+		// draws, so a graph drawing either would be class A, compared by nothing.
+		func drawsFeatureOlderReleaseRejects(_ fixture: GraphFuzzerFixture) -> Bool {
+			let text = fixture.swiftFileContent.joined(separator: "\n")
+			return text.contains("@Instantiated(onlyIfAvailable: true") || text.range(of: #"actor \w+: Instantiable"#, options: .regularExpression) != nil
+		}
+		var corpusGraphsDrawingOne = 0
+		for seed in UInt64(0)..<300 {
+			let corpusFixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features, storingEveryParameter: true)
+			let comparedFixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features)
+			#expect(!drawsFeatureOlderReleaseRejects(comparedFixture), "seed \(seed)")
+			if drawsFeatureOlderReleaseRejects(corpusFixture) {
+				corpusGraphsDrawingOne += 1
+			} else {
+				// Each left-out draw has a stream of its own, so a graph that draws none of them is the corpus's.
+				#expect(comparedFixture.swiftFileContent == corpusFixture.swiftFileContent, "seed \(seed)")
+			}
+		}
+		#expect(corpusGraphsDrawingOne >= 10, "\(corpus)")
+	}
+
 	@Test
 	func listedSeeds_listEachSeedOnceAsABreak_forEachRelease() {
 		for (release, listedSeeds) in Self.listedSeedsByRelease {
@@ -258,7 +281,7 @@ struct SafeDIToolReleaseAcceptanceTests {
 	func verdicts_reportNoBreak_whenCurrentTreeIsComparedWithItselfOverGraphsSplitAcrossModules(corpus: GraphFuzzerReleaseAcceptanceCorpus) async throws {
 		guard compileVerificationIsEnabled else { return }
 		let seeds = Self.splitSeeds[corpus] ?? []
-		#expect(seeds.allSatisfy { GraphFuzzerGenerator.fixture(forSeed: $0, features: corpus.features, storingEveryParameter: true).modules != nil })
+		#expect(seeds.allSatisfy { GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: $0, features: corpus.features).modules != nil })
 		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: seeds, of: corpus, older: .currentTree)
 		#expect(verdicts.map(\.seed) == seeds)
 		#expect(verdicts.allSatisfy { $0.verdict.verdictClass == .valuesAgree }, "\(verdicts)")
