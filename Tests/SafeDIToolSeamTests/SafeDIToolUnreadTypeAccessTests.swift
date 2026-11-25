@@ -634,6 +634,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
@@ -694,6 +695,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.renderer = renderer
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(renderer: { _ in __safeDI_builder() })
 			        }
@@ -2736,7 +2738,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.brush = { _ in __safeDI_builder() }
+		                    self.init(brush: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -2750,7 +2752,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.badgeBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(badgeBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -6004,6 +6006,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
