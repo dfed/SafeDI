@@ -178,7 +178,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_expandsWithoutIssue_whenGeneratedInitializerAttributesStateNonisolated() {
+		func declaration_producesErrorReplacingNonisolated_whenGeneratedInitializerAttributesStateNonisolated() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true, generatedInitializerAttributes: "nonisolated")
@@ -199,15 +199,35 @@ import Testing
 				    private let presenter: Presenter
 				}
 				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
 				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
 			)
 		}
 
 		@Test
-		func declaration_expandsWithoutIssue_whenGeneratedInitializerAttributesSpellAnotherAttributeWithoutArguments() {
+		func declaration_producesError_whenGeneratedInitializerAttributesSpellAnAttributeThatStatesNoIsolation() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(isRoot: true, generatedInitializerAttributes: "@DatabaseActor")
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@inlinable")
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -225,15 +245,36 @@ import Testing
 				    private let presenter: Presenter
 				}
 				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
 				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor @inlinable")
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
 			)
 		}
 
 		@Test
-		func declaration_expandsWithoutIssue_whenRootTypeSpellsAnotherAttributeWithoutArguments() {
+		func declaration_producesError_whenRootTypeIsBoundToAnotherGlobalActor() {
 			assertMacroExpansion(
 				"""
-				@Instantiable(isRoot: true, generateMock: true) @DatabaseActor
+				@Instantiable(isRoot: true, generateMock: true)
+				@DatabaseActor
 				public final class Root: Instantiable {
 				    @MainActor public init(presenter: Presenter) {
 				        self.presenter = presenter
@@ -252,7 +293,128 @@ import Testing
 				    private let presenter: Presenter
 				}
 				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes` and `mockAttributes`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `mock()` SafeDI generates calls it, so that `mock()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `mockAttributes`.",
+						line: 1,
+						column: 1,
+					),
+				],
 				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor", mockAttributes: "@MainActor", generateMock: true)
+				@DatabaseActor
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesError_whenRootTypeSpellsAnAttributeThatStatesNoIsolation() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				@Observable
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				@Observable
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				@Observable
+				public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesError_whenRootTypeIsNonisolated() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				nonisolated public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
+				expandedSource: """
+				nonisolated public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    private let presenter: Presenter
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`Root`’s initializer is `@MainActor`, and the `init()` SafeDI generates for this root calls it, so that `init()` must be `@MainActor` too. SafeDI does not infer the isolation of the code it generates: add `@MainActor` to `generatedInitializerAttributes`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `@MainActor` to `generatedInitializerAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				nonisolated public final class Root: Instantiable {
+				    @MainActor public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated private let presenter: Presenter
+				}
+				""",
 			)
 		}
 

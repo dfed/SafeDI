@@ -24,16 +24,17 @@ import SwiftSyntaxMacros
 
 extension InstantiableMacro {
 	/// Reports each declaration SafeDI generates for `concreteDeclaration` – a root’s `init()`, a seam’s initializers,
-	/// a `mock()` – that calls a declaration spelling `@MainActor` while nothing states an isolation for the generated
-	/// declaration, with a fix-it that adds `@MainActor` to the attribute argument the generated declaration reads.
+	/// a `mock()` – that calls a declaration spelling `@MainActor` while nothing states that the generated declaration is
+	/// `@MainActor` too, with a fix-it that adds `@MainActor` to the attribute argument the generated declaration reads.
 	///
 	/// SafeDI infers no isolation: a generated declaration has the type’s isolation, or the one its attributes spell, so
-	/// a `@MainActor` callee of a type that states no isolation makes generated code that does not compile, with the
-	/// compiler’s error in a generated file. The macro reads spellings only, and matches no actor by its name: it fires
-	/// only where the callee spells exactly `@MainActor`, and stays quiet wherever anything else could state an
-	/// isolation. The type, or the attribute argument the generated declaration reads, states one when it spells
-	/// `nonisolated` or any attribute without arguments, which may be a global actor. A callee that spells
-	/// `nonisolated` or `@preconcurrency` adds no isolation to what calls it (the generator does not mirror
+	/// a `@MainActor` callee of a type that is not stated to be `@MainActor` makes generated code that does not compile,
+	/// with the compiler’s error in a generated file. The macro reads spellings only, and matches no actor by its name:
+	/// it fires only where the callee spells exactly `@MainActor`, and only a stated `@MainActor` keeps it quiet, on the
+	/// type or in the attribute argument the generated declaration reads. Any other isolation stated there –
+	/// `nonisolated`, or another global actor – makes the generated declaration unable to call the callee too, and an
+	/// attribute that states no isolation, such as `@Observable`, changes nothing, so neither keeps it quiet. A callee
+	/// that spells `nonisolated` or `@preconcurrency` adds no isolation to what calls it (the generator does not mirror
 	/// `@preconcurrency` either), so it is not reported; nor is a callee bound to another global actor, or to
 	/// `@MainActor` spelled any other way.
 	///
@@ -41,12 +42,14 @@ extension InstantiableMacro {
 	/// superclass, or a protocol bound to a global actor, such as `UIViewController` or SwiftUI’s `View`) can take its
 	/// global actor from there, which the macro cannot see, so it is not reported. Neither is an `@Instantiable`
 	/// extension, whose extended type’s isolation the macro cannot see, nor the mock of a type whose hand-written mock
-	/// is in a separate `mockOnly` declaration. A type whose attribute list holds an `#if` clause is not reported either,
-	/// since the clause may state its isolation.
+	/// is in a separate `mockOnly` declaration, nor a type whose attribute list holds an `#if` clause, which may state
+	/// its isolation. A type that spells `@MainActor` another way (`@_Concurrency.MainActor`, or a type alias of it) is
+	/// reported though its generated code compiles, and the fix-it’s `@MainActor` keeps it compiling.
 	///
 	/// When the root’s or seam’s initializers and the `mock()` are both reported, the first diagnostic’s fix-it adds
 	/// `@MainActor` to every argument either reads, and the second has none, so that no two fix-its edit the attribute.
-	/// Each fix-it replaces only the `@Instantiable` attribute.
+	/// Each fix-it replaces only the `@Instantiable` attribute, and drops a `nonisolated` the argument spells, which
+	/// would contradict it.
 	static func diagnoseUnstatedGlobalActorIsolation(
 		of concreteDeclaration: ConcreteDeclSyntaxProtocol,
 		instantiableMacro: AttributeSyntax,
@@ -54,7 +57,7 @@ extension InstantiableMacro {
 		context: some MacroExpansionContext,
 	) {
 		guard !visitor.conformanceListNamesOtherTypes,
-		      !statesIsolation(modifiers: concreteDeclaration.modifiers, attributes: concreteDeclaration.attributes, besides: instantiableMacro)
+		      !statesMainActor(attributes: concreteDeclaration.attributes)
 		else { return }
 		let typeName = concreteDeclaration.name.text
 		let constructionInitializer = zip(visitor.initializers, visitor.initializerSyntaxes).first { initializer, _ in
@@ -83,7 +86,7 @@ extension InstantiableMacro {
 		if let generatedInitializers,
 		   let (_, initializerSyntax) = constructionInitializer,
 		   spellsExactlyMainActor(modifiers: initializerSyntax.modifiers, attributes: initializerSyntax.attributes),
-		   !statesIsolation(visitor.generatedInitializerAttributes)
+		   !statesMainActor(visitor.generatedInitializerAttributes)
 		{
 			findings.append(UnstatedIsolation(
 				callee: .initializer(typeName: typeName),
@@ -104,7 +107,7 @@ extension InstantiableMacro {
 			}
 			if let mockCallee,
 			   spellsExactlyMainActor(modifiers: mockCallee.modifiers, attributes: mockCallee.attributes),
-			   !statesIsolation(visitor.mockAttributes)
+			   !statesMainActor(visitor.mockAttributes)
 			{
 				findings.append(UnstatedIsolation(
 					callee: mockCallee.callee,
@@ -174,32 +177,26 @@ extension InstantiableMacro {
 		return spellsMainActor && !modifiers.contains { $0.name.tokenKind == .keyword(.nonisolated) }
 	}
 
-	/// Whether a type states an isolation: it spells `nonisolated`, or an attribute without arguments other than
-	/// `instantiableMacro`, which may be a global actor whatever its name, or an `#if` clause, which may hold one.
-	private static func statesIsolation(
-		modifiers: DeclModifierListSyntax,
-		attributes: AttributeListSyntax,
-		besides instantiableMacro: AttributeSyntax,
-	) -> Bool {
-		modifiers.contains { $0.name.tokenKind == .keyword(.nonisolated) }
-			|| attributes.contains {
-				switch $0 {
-				case let .attribute(attribute):
-					attribute.id != instantiableMacro.id && attribute.arguments == nil
-				case .ifConfigDecl:
-					true
-				}
+	/// Whether a type states that it is `@MainActor`: it spells exactly `@MainActor`, or an `#if` clause, which may.
+	private static func statesMainActor(attributes: AttributeListSyntax) -> Bool {
+		attributes.contains {
+			switch $0 {
+			case let .attribute(attribute):
+				attribute.attributeName.trimmedDescription == "MainActor" && attribute.arguments == nil
+			case .ifConfigDecl:
+				true
 			}
+		}
 	}
 
-	/// Whether `attributes`, the text of an attribute argument, states an isolation: it spells `nonisolated`, or an
-	/// attribute without arguments, which may be a global actor whatever its name.
-	private static func statesIsolation(_ attributes: String) -> Bool {
-		attributes.split(separator: " ").contains { $0 == "nonisolated" || ($0.hasPrefix("@") && !$0.contains("(")) }
+	/// Whether `attributes`, the text of an attribute argument, spells exactly `@MainActor`.
+	private static func statesMainActor(_ attributes: String) -> Bool {
+		attributes.split(separator: " ").contains("@MainActor")
 	}
 
-	/// Returns `instantiableMacro` with `attribute` added before the text of its argument `label`, `text`, or with the
-	/// argument added, in the position the macro’s parameters give it, when the attribute has none.
+	/// Returns `instantiableMacro` with `attribute` added before the text of its argument `label`, `text`, less any
+	/// `nonisolated`, or with the argument added, in the position the macro’s parameters give it, when the attribute has
+	/// none.
 	private static func addingAttribute(
 		_ attribute: String,
 		toArgumentLabeled label: String,
@@ -208,7 +205,10 @@ extension InstantiableMacro {
 	) -> AttributeSyntax {
 		// safedi-source-rule: allow forceUnwrap — a declaration SafeDI generates is asked for by an argument (`isRoot`, `generateDependencyTree` or `generateMock`) that `isRootValue`, `InstantiableVisitor.generatesDependencyTree` and `generateMockValue` read from labeled arguments.
 		var arguments = Array(LabeledExprListSyntax(instantiableMacro.arguments!)!)
-		let attributesText = text.isEmpty ? attribute : "\(attribute) \(text)"
+		// A `nonisolated` the argument spells would contradict the attribute added.
+		let words = text.split(separator: " ")
+		let keptText = words.contains("nonisolated") ? words.filter { $0 != "nonisolated" }.joined(separator: " ") : text
+		let attributesText = keptText.isEmpty ? attribute : "\(attribute) \(keptText)"
 		if let index = arguments.firstIndex(where: { $0.label?.text == label }) {
 			arguments[index].expression = ExprSyntax(StringLiteralExprSyntax(content: attributesText))
 		} else {
