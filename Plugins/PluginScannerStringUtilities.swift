@@ -20,10 +20,10 @@
 
 import Foundation
 
-/// The pattern that finds an `@Instantiable` whose `generateMock:` argument enables mock generation – `true`,
-/// `.internal`, `.public`, or `MockGeneration.` followed by either case – in source with its comments and strings
+/// The pattern that finds an `@Instantiable`, or `@SafeDI.Instantiable`, whose `generateMock:` argument enables mock
+/// generation – `true`, `.internal`, `.public`, or `MockGeneration.` or `SafeDI.MockGeneration.` followed by either case – in source with its comments and strings
 /// removed. `PluginScanner` plans a mock file for a file it matches.
-let generateMockEnablingPattern = #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*(true|(MockGeneration\s*)?\.\s*(internal|public))\b"#
+let generateMockEnablingPattern = #"@(SafeDI\s*\.\s*)?Instantiable\s*\((.|\n)*?generateMock\s*:\s*(true|((SafeDI\s*\.\s*)?MockGeneration\s*)?\.\s*(internal|public))\b"#
 
 /// Removes Swift line comments (`//`…EOL), block comments (`/* … */`,
 /// nesting supported), string literals (single and triple-quoted), and
