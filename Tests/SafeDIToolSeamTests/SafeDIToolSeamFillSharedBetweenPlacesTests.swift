@@ -182,6 +182,43 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == (buildsFillOfEveryPlace ? [3, 0] : [2, 1]))
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFindingOfOnePlace_whenAnotherPlacesFillStandsForPlaceThatBindsValueAfterIt(buildsFillOfEveryPlace: Bool) async {
+		// Only `Third` declares `token`, which receives `panel` and so is built after it: no place hands its fill a `token`, so
+		// the three places' fills are alike and `Second`'s stands for `Third`'s, whose own record alone says that the value
+		// `LiveApi` reads is bound after it.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: Self.modules(
+						parentDeclarations: [
+							["@Instantiated let panel: Panel"],
+							["@Instantiated let panel: Panel"],
+							["@Instantiated let panel: Panel", "@Instantiated let token: Token"],
+						],
+						panelDeclarations: ["@Instantiated let api: any Api"],
+						liveApiDeclarations: ["@Received(onlyIfAvailable: true) let token: Token?"],
+						tokenDeclarations: ["@Received let panel: Panel"],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `token: Token?`, which `Third` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Third.swift"]):9:5: note: `Third` declares `token: Token` here.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == (buildsFillOfEveryPlace ? [3, 0] : [2, 1]))
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsFillOfItsOwnForPlace_whenPlacesOfOneCaseHandTheirFillsOtherValues() async {
@@ -247,12 +284,13 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		appDeclarations: [String] = [],
 		rootDeclarations: [String] = [],
 		rowDeclarations: [String] = ["@Instantiated let api: any Api"],
+		tokenDeclarations: [String] = [],
 	) -> [ModuleFixture] {
 		let parentNames = ["First", "Second", "Third", "Fourth"]
 		var feature = [
 			"public protocol Api {}",
 			"public protocol Gadget {}",
-			seamFixtureType(named: "Token", declarations: []),
+			seamFixtureType(named: "Token", declarations: tokenDeclarations),
 			seamFixtureType(named: "Row", declarations: rowDeclarations),
 			seamFixtureType(named: "Panel", declarations: panelDeclarations),
 		]
