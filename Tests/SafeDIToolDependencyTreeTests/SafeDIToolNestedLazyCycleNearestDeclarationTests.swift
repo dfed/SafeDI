@@ -394,6 +394,12 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 			    }
 			}
 			""",
+			probeBeneathP: """
+			{ () -> [AnyObject] in
+			    let p = (Root().wBuilder.instantiate().uBuilder.instantiate().u as! U).pBuilder.instantiate()
+			    return [p, (p.uBuilder.instantiate().u as! U).wBuilder.instantiate()]
+			}()
+			""",
 		)
 	}
 
@@ -536,6 +542,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 			    }
 			}
 			""",
+			probeBeneathP: "Root().wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate(L())",
 		)
 	}
 
@@ -1018,13 +1025,16 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 
 	/// Generates `fixture`, expects `Root`'s generated tree to be `expectedTree` and, when `expectedMock` is given, its
 	/// mock to be `expectedMock`, and compares the values each builds with those `handBuiltTree` builds: a tree built by
-	/// hand in which each `V` is handed the `l` of the nearest `P` above it, or the root's.
+	/// hand in which each `V` is handed the `l` of the nearest `P` above it, or the root's. The describer calls no erased
+	/// builder and no builder that is forwarded a value, so a fixture whose `V` beneath `P` lies behind one names it in
+	/// `probeBeneathP`: an expression that calls those builders itself and holds `P` beside the `W` built again beneath it.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func expectGeneratedTree(
 		of fixture: [String],
 		equals expectedTree: (TestOutput) -> String,
 		mock expectedMock: String? = nil,
 		buildsTheSameValuesAs handBuiltTree: String,
+		probeBeneathP: String? = nil,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -1036,7 +1046,7 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: [
 				"Root+SafeDI.swift": handBuiltTree + (comparesMock ? "\n\nextension Root {\n    static func mock() -> Root {\n        Root()\n    }\n}" : ""),
 			]),
-			probes: [DifferentialValueProbe("Root()")] + (comparesMock ? [DifferentialValueProbe("Root.mock()")] : []),
+			probes: [DifferentialValueProbe("Root()")] + (comparesMock ? [DifferentialValueProbe("Root.mock()")] : []) + (probeBeneathP.map { [DifferentialValueProbe($0)] } ?? []),
 			filesToDelete: &filesToDelete,
 			sourceLocation: sourceLocation,
 		)
