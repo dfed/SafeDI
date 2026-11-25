@@ -1697,32 +1697,9 @@ extension DependencyTreeGenerator {
 			let declaredLabels: Set<String>
 			let fillsBindingLabels: [String: ScopeGenerator]
 		}
-		/// What a frame hands the walk of its generator beside the generator: the walk of a generator reads nothing else, so a
-		/// second visit of one generator with an equal context does what the first did and is skipped.
-		struct FrameContext: Hashable {
-			let providedProperties: Set<Property>
-			let insideSendable: Bool
-			let declaredLabels: Set<String>
-			let fillsBindingLabels: [String: ObjectIdentifier]
-
-			init(_ frame: Frame) {
-				providedProperties = frame.providedProperties
-				insideSendable = frame.insideSendable
-				declaredLabels = frame.declaredLabels
-				fillsBindingLabels = frame.fillsBindingLabels.mapValues(ObjectIdentifier.init)
-			}
-		}
-		/// The contexts each generator was visited with. A generator several places of the tree share (see
-		/// `ConstructionMemo`) is reached once per path to it; along paths that hand it equal contexts, its walk is made once.
-		/// The set of what this walk has seen dies with the walk, and what a generator finds depends on the path that
-		/// reached it, so no one result can be owned by the generator ("Share work by construction").
-		var contextsVisitedByGenerator = [ObjectIdentifier: Set<FrameContext>]()
-		var generatorsEntered = 0
 		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, declaredLabels: [], fillsBindingLabels: [:])]
 		while let frame = generatorsToVisit.popLast() {
 			let visited = frame.generator
-			guard contextsVisitedByGenerator[ObjectIdentifier(visited), default: []].insert(FrameContext(frame)).inserted else { continue }
-			generatorsEntered += 1
 			let providedProperties = frame.providedProperties
 			/// Records a read of `label` in this scope's code, inside a `@Sendable` function when `insideSendable` holds,
 			/// that reaches a parameter when no scope enclosing the read declares the label.
@@ -1860,7 +1837,6 @@ extension DependencyTreeGenerator {
 			}
 			generatorsToVisit.reverseElements(from: firstChildIndex)
 		}
-		GenerationWork.record(generatorsEntered, by: .walkingReceiversOfSeam)
 		return (receivers, parameterReads)
 	}
 
