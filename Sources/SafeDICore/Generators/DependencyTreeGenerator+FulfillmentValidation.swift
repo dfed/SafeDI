@@ -1257,6 +1257,17 @@ extension DependencyTreeGenerator {
 		/// The keys of the subtrees whose walk completed and left `memoBlockingEventCount` unchanged, shared by every root,
 		/// since a key holds its root's context.
 		var cleanSubtrees = Set<CleanSubtreeKey>()
+		/// For each scope, how many times in a row a walk keyed it and no remembered walk had an equal key. At
+		/// `cleanSubtreeMissLimit` a scope that reaches a cycle of instantiators is keyed no more: where screens open each other
+		/// without layers, a scope is reached along thousands of paths whose keys all differ, so every key and every
+		/// comparison at a scope that closes a cycle on it was paid for nothing. Shared by every root, as `cleanSubtrees`
+		/// is; the walk visits roots and children in a fixed order, so the count is the same on every run, and it decides
+		/// only which subtrees are walked again, never what a walk reports.
+		var cleanSubtreeMissesInARowByScope = [Scope: Int]()
+		/// Layered screens that open the first layer again find a scope's first equal key within three keys, and screens
+		/// that are seams of their own modules within one; a scope of sixteen screens that open each other at random
+		/// went up to 229 keys between two equal ones.
+		let cleanSubtreeMissLimit = 8
 		/// The scopes the walks reached, which alone are keyed when reached again.
 		var validationWalkScopesReached = Set<Scope>()
 		/// An index for each root context, so that a key holds one integer for it.
@@ -1702,6 +1713,11 @@ extension DependencyTreeGenerator {
 					let depth = scopeToValidate.propertyStack.count + (scopeToValidate.property == nil ? 0 : 1)
 					scopesInProgress.removeSubrange(depth...)
 					scopesInProgress.append((scopeToValidate.scope, key))
+					// The scopes at this depth and deeper are a finished subtree of the scope above, which what they closed on is
+					// beneath too: a scope that is not keyed has no end of its own to hand it up at.
+					if depth > 0, let shallowestDepthClosedOn = shallowestDepthClosedOnBeneath[depth...].min() {
+						shallowestDepthClosedOnBeneath[depth - 1] = min(shallowestDepthClosedOnBeneath[depth - 1], shallowestDepthClosedOn)
+					}
 					shallowestDepthClosedOnBeneath.removeSubrange(depth...)
 					shallowestDepthClosedOnBeneath.append(depth)
 					var children = [TreeValidationStep]()
@@ -1726,17 +1742,28 @@ extension DependencyTreeGenerator {
 							// This skip consults a memo inside the walk. Its planned replacement walks each distinct subtree context
 							// once by construction, as a node of its own that every equal visit shares, once a measurement shows
 							// that node pays for itself; it then takes this memo's place and `skipsCleanSubtrees` goes with it.
+							// One that reaches a cycle and was keyed `cleanSubtreeMissLimit` times in a row for nothing is keyed no more:
+							// its walk is then remembered nowhere, and a cycle that closes on it blocks the memo above, as any
+							// scope without a key does.
 							let isReachedAgain = !validationWalkScopesReached.insert(childToValidate.scope).inserted
-							if skipsCleanSubtrees, isReachedAgain || reachesInstantiationCycle(from: childToValidate.scope) {
+							let reachesCycle = reachesInstantiationCycle(from: childToValidate.scope)
+							let isKeyed = reachesCycle
+								? cleanSubtreeMissesInARowByScope[childToValidate.scope, default: 0] < cleanSubtreeMissLimit
+								: isReachedAgain
+							if skipsCleanSubtrees, isKeyed {
+								validationWalkObserver?(.keyedSubtree)
 								let childKey = cleanSubtreeKey(of: childToValidate, rootContextIndex: rootContextIndex)
 								if cleanSubtrees.contains(childKey) {
 									validationWalkObserver?(.skippedCleanSubtree)
+									cleanSubtreeMissesInARowByScope[childToValidate.scope] = 0
 								} else if let pendingDepth = pendingCleanSubtreeDepths[childKey] {
 									// Found clean beneath a scope still being walked, which this place is beneath too.
 									validationWalkObserver?(.skippedCleanSubtree)
 									shallowestDepthClosedOnBeneath[depth] = min(shallowestDepthClosedOnBeneath[depth], pendingDepth)
+									cleanSubtreeMissesInARowByScope[childToValidate.scope] = 0
 								} else {
 									walkItems.append(.step(child, key: childKey))
+									cleanSubtreeMissesInARowByScope[childToValidate.scope, default: 0] += 1
 								}
 							} else {
 								walkItems.append(.step(child, key: nil))
@@ -1773,7 +1800,10 @@ extension DependencyTreeGenerator {
 					)
 				case let .finished(key, eventCountBeforeScope, depth, pendingCount):
 					// A walk that throws never gets here, so only a completed walk is remembered.
-					let shallowestDepthClosedOn = shallowestDepthClosedOnBeneath[depth]
+					// The shallowest of this scope and of every scope still listed beneath it, which are the last subtree it walked.
+					let shallowestDepthClosedOn = shallowestDepthClosedOnBeneath[depth...].min() ?? depth
+					shallowestDepthClosedOnBeneath.removeSubrange((depth + 1)...)
+					shallowestDepthClosedOnBeneath[depth] = shallowestDepthClosedOn
 					if depth > 0 {
 						shallowestDepthClosedOnBeneath[depth - 1] = min(shallowestDepthClosedOnBeneath[depth - 1], shallowestDepthClosedOn)
 					}
