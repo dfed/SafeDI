@@ -83,42 +83,14 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 	mutating func generate_writesPlaceWhole_whenSeamsOfOneModuleCallOneAnotherInCycle() async throws {
 		// `First` and `Second` each pass up the place of `Third` that the other passes up. The two settle on places neither
 		// of whose routes extends the other's, and a record that named the other seam's would lead a read in a circle.
-		func seam(_ name: String, _ declarations: [(label: String, type: String, attribute: String)]) -> String {
-			"""
-			@Instantiable(generateDependencyTree: true)
-			public final class \(name): Instantiable {
-				public init(\(declarations.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
-			\(declarations.map { "\t\tself.\($0.label) = \($0.label)" }.joined(separator: "\n"))
-				}
-			\(declarations.map { "\t\($0.attribute) let \($0.label): \($0.type)" }.joined(separator: "\n"))
-			}
-			"""
-		}
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Base", swiftFileContent: [
 				"public protocol Gauge {}",
-				seam("Third", [("gauge", "any Gauge", "@Instantiated")]),
-				seam("First", [("secondBuilder", "Instantiator<Second>", "@Instantiated"), ("third", "Third", "@Instantiated")]),
-				seam("Second", [("firstBuilder", "Instantiator<First>", "@Instantiated")]),
+				Self.instantiable("Third", isSeam: true, [("gauge", "any Gauge")]),
+				Self.instantiable("First", isSeam: true, [("secondBuilder", "Instantiator<Second>"), ("third", "Third")]),
+				Self.instantiable("Second", isSeam: true, [("firstBuilder", "Instantiator<First>")]),
 			]),
-			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
-				"""
-				import Feature
-
-				@Instantiable(fulfillingAdditionalTypes: [Gauge.self])
-				public final class LiveGauge: Gauge, Instantiable {
-					public init() {}
-				}
-
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-					public init(first: First) {
-						self.first = first
-					}
-					@Instantiated let first: First
-				}
-				""",
-			], dependencies: ["Feature"]),
+			Self.appModule(instantiating: "First"),
 		]
 		let read = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
 		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
@@ -132,6 +104,33 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 			}
 		}
 		#expect(passedUpPlacesWrittenWhole.count == 1, "\(places.placesBySeam.map { $0.map { $0.isPassedUp } })")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsBackPlacesItWrote_whenTwoSeamsThatBuildOneAnotherPassUpPlacesDeclaredBeforeAndAfterTheCall() async throws {
+		// `Outer` and `Ping` build one another. `Outer` passes `Before`'s place up from `Before`, and `After`'s from `Ping`,
+		// which has it from `Outer`; `Ping` passes `Before`'s up from `Outer`. So `Ping` is among the seams whose records
+		// `Outer`'s place of `Before`'s site could name beside the one it copies, and `Ping`'s record of that site copies
+		// `Outer`'s: named, the two would each be read from the other.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Base", swiftFileContent: [
+				"public protocol Gauge {}",
+				Self.instantiable("Before", isSeam: true, [("gauge", "any Gauge")]),
+				Self.instantiable("After", isSeam: true, [("gauge", "any Gauge")]),
+				Self.instantiable("Outer", isSeam: true, [("beforeBuilder", "Instantiator<Before>"), ("pingBuilder", "Instantiator<Ping>"), ("afterBuilder", "Instantiator<After>")]),
+				Self.instantiable("Ping", isSeam: true, [("outerBuilder", "Instantiator<Outer>")]),
+			]),
+			Self.appModule(instantiating: "Outer"),
+		]
+		let read = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		#expect(read.modules["App"]?.generatedFiles == computed.modules["App"]?.generatedFiles)
+		// The file's own records read back, each place from the seam the run passed it up from.
+		let written = try #require(read.modules["Feature"]?.moduleInfoFile?.seamSignatures)
+		let outerPlaces = try #require(try written.decoded.first { $0.seamType.asSource == "Outer" }?.signature?.holes)
+		#expect(outerPlaces.map { "\($0.site.seamType.asSource) from \($0.innerSeamType?.asSource ?? "")" } == ["Before from Before", "After from Ping"])
+		#expect(try written.storedPlaces.placesBySeam.joined().contains { $0.isPassedUp })
 	}
 
 	// MARK: Tests – Size
@@ -367,6 +366,41 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 			viewsReferToModules: viewsReferToModules,
 			filesToDelete: &filesToDelete,
 		)
+	}
+
+	/// A public type that instantiates each of `properties`, a seam where `isSeam`.
+	private static func instantiable(_ name: String, isSeam: Bool, _ properties: [(label: String, type: String)]) -> String {
+		"""
+		@Instantiable\(isSeam ? "(generateDependencyTree: true)" : "")
+		public final class \(name): Instantiable {
+			public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+		\(properties.map { "\t\tself.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+			}
+		\(properties.map { "\t@Instantiated let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		}
+		"""
+	}
+
+	/// The module `App` above `Feature`, which fulfills `Gauge` and whose root instantiates `Feature`'s `seamName`.
+	private static func appModule(instantiating seamName: String) -> ModuleFixture {
+		ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Gauge.self])
+			public final class LiveGauge: Gauge, Instantiable {
+				public init() {}
+			}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+				public init(seam: \(seamName)) {
+					self.seam = seam
+				}
+				@Instantiated let seam: \(seamName)
+			}
+			""",
+		], dependencies: ["Feature"])
 	}
 
 	/// `Core`, then `layerCount` seams each of which builds the one beneath it and a model that builds `any Gauge`, which
