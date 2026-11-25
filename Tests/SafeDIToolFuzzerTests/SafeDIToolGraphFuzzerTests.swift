@@ -7005,7 +7005,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xF7ED69466460F53B
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD224CA9AB2DCC36A
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7015,15 +7015,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x43DE013E5DB44B9C
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC313EDAB229128B6
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xE4EFEC5D4A4B5A94
+	static let corpusFixtureHash: UInt64 = 0x1FF29AEFB259C2C7
 
-	static let corpusPartitionHash: UInt64 = 0xCE2ED71E61228691
+	static let corpusPartitionHash: UInt64 = 0x5D933B50BDB4FF45
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7382,7 +7382,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
 	/// derived on CI.
-	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 260, judgedWithNamed: 220, named: 2_142, conversions: 0, fills: 439)
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 260, judgedWithNamed: 220, named: 2_140, conversions: 0, fills: 439)
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
@@ -7392,7 +7392,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x47F14B403A57189F
+	static let seamCorpusFixtureHash: UInt64 = 0x3595E52A4D6009B6
 	static let seamCorpusAcceptedSeedCount = 623
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x48072926F71AC583
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -9001,7 +9001,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x879556EAB9AFFCD7
+	static let publicMockCorpusFixtureHash: UInt64 = 0x52879FD791F2736D
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9630,7 +9630,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [2_279, 2_787, 4_622],
+			seeds: [2_787, 4_622],
 		),
 	]
 
