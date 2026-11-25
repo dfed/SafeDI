@@ -59,6 +59,7 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			            self.rowB = rowB
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(rowA: .init(__safeDI_noScope: __safeDI_builder), rowB: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -72,6 +73,7 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			            self.cell = cell
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -85,6 +87,7 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			            self.cell = cell
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -98,6 +101,7 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			            self.gadget = gadget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(gadget: { __safeDI_builder() })
 			        }
@@ -111,6 +115,7 @@ struct SafeDIToolSeamSendableMemberCallTests: ~Copyable {
 			            self.screenBuilder = screenBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
