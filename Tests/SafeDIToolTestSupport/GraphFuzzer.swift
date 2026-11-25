@@ -8080,8 +8080,8 @@ enum GraphFuzzerGenerator {
 		/// `IfAvailableScreen`, which instantiates `ifAvailableToken: IfAvailableToken?` only if available and
 		/// `IfAvailableLeaf`, in either order, the leaf by value or through an `Instantiator`. Six draws in ten,
 		/// `IfAvailableToken` is `@Instantiable`, so the screen builds it; in the rest it is a plain class the screen's file
-		/// declares, which no declaration fulfills, so production and every mock bind the property to `nil` and a mock takes
-		/// no parameter for it, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
+		/// declares, which no declaration fulfills, so production binds the property to `nil` and a mock binds it from an
+		/// override that defaults to `nil`, and takes no parameter, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
 		/// form, required or only if available, and where it is only if available the root now and then builds a second
 		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
 		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
