@@ -21,3 +21,9 @@ The builder-surface oracle (`Tests/SafeDIToolTestSupport/GraphFuzzerBuilderSurfa
   - On a `package` seam, every value is `package`. That is as visible as the carrier's members, so the values stay positional (`holeLevelOfPackageValuesOnPackageSeam`).
   - An `internal` seam cannot have a hole, because its filler is in another module. So the `package` seam stands in for "a seam's values at its own access".
 - **What catches a mistake.** The compile oracle catches a value passed positionally that is narrower than its member. Both forms of a level within the count compile and build the same values, so the threshold itself is covered by hand-written tests, not by an oracle.
+
+## A seam's property instantiated only if available
+
+- **What the draw adds.** `addingOptionalPlaceShapes` (`optionalPlaceRandom`, six in ten split graphs, after `addingCarrierShapes`) gives `OptionalPlaceSeam`'s tree `@Instantiated(onlyIfAvailable: true) let optionalPlaceAnalytics: (any OptionalPlaceAnalytics)?`, a protocol only the roots' module may fulfill. So the seam takes `optionalPlaceAnalyticsOptionalBuilder`, a builder returning the optional.
+- **Its rolls.** The root fills that builder with `OptionalPlaceAnalyticsImpl` or with `nil`. The place sits on the seam or on `OptionalPlacePanel`, built by value or through an instantiator. `OptionalPlaceOuter` may pass the builder up. The holder may also instantiate the protocol required, so the optional builder sits beside the required one. The seam may generate its mock.
+- **How it is judged.** Each shape is an `optionalPlace…` draw feature: a gating draw (`isOptionalPlaceShape`) whose accepted counts are pinned and floored. The value comparator judges each graph against its inline build and its visible build. The label check reads the `Optional` stem (`expectedLabel(of:facts:)`).
