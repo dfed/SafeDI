@@ -320,6 +320,10 @@ extension MockLowering {
 		var parentConcreteType: String?
 		/// Whether the overrides of the node whose children the walk is at are reachable: no edge above it is in `cycleEdges`.
 		var overridePathReachable = true
+		/// The override path each configured type around the node the walk is at read, nearest last, with whether its
+		/// node read its configuration rather than a closure: a node a cycle builds again, which its parent's configuration
+		/// has no field for, reads the nearest one of its type (`MockLowering+CycleOverrides.swift`).
+		var overridePathsByType = [String: [MockLowering.AncestorOverridePath]]()
 		/// The labels `mock()` binds before its tree, which no node may bind again.
 		let rootLabels: Set<String>
 		/// The names `mock()` binds its overrides of what its tree receives only if available under, which a builder
@@ -986,7 +990,7 @@ extension MockLowering {
 			// A node that repeats a node around it reads no override of its own, and one beneath an edge in `cycleEdges`
 			// reads none of its own or beneath it: its parent's configuration has no field for it.
 			let isCycleNode = ancestorTypes.contains(cycleNodeKey)
-			let overrideReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
+			let ownFieldReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
 			// Every wrapper kind builds its type in a builder function, as an `Instantiator` does,
@@ -1046,7 +1050,17 @@ extension MockLowering {
 			// A default-valued parameter is a field of the node's configuration (`MockLowering+Defaults.swift`).
 			let defaultFields = configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer)
 			let hasConfiguration = childGenerators.contains { $0.mockLoweringBuiltProperty != nil } || !defaultFields.isEmpty
-			let nodePath = "\(path).\(bindingName)"
+			// A node a cycle builds again reads the overrides of the nearest node of its type around it
+			// (`MockLowering+CycleOverrides.swift`).
+			let ownOverridePath = MockLowering.AncestorOverridePath.own(
+				path: "\(path).\(bindingName)",
+				hasConfiguration: hasConfiguration,
+				builtWithHandWrittenMock: usesMockInitializer,
+				isReachable: !isCycleNode && ownFieldReachable,
+				nearest: overridePathsByType[instantiable.concreteInstantiable.asSource]?.last,
+			)
+			let nodePath = ownOverridePath?.path ?? "\(path).\(bindingName)"
+			let overrideReachable = ownOverridePath != nil
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
 			// Nor do the dependencies its type instantiates that the mock cannot build, whose receives
@@ -1104,7 +1118,7 @@ extension MockLowering {
 				}
 				receiverBindings.removeAll { bindingNamesPassedByName[$0.property.label] != nil }
 			}
-			let overrideRead: String? = isCycleNode || !overrideReachable ? nil : readingOverride(
+			let overrideRead: String? = !overrideReachable ? nil : readingOverride(
 				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
 				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
 			)
@@ -1164,8 +1178,22 @@ extension MockLowering {
 				}
 				return .finished(node)
 			}
-			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
-			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
+			let startsForSendableFunction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			// So does one whose construction passes a configuration read to a `@Sendable` autoclosure, which would capture
+			// the overrides the read names; a public mock passes the read to the type's construction function instead. Its
+			// configuration may be the plain form, which is not `Sendable`, so that function reads each field.
+			let startsExtraction = startsForSendableFunction || (
+				sendableOverrideExtractor == nil
+					&& !buildsPublicMock
+					&& overrideReachable
+					&& constructionPassesConfigurationReadToSendableAutoclosure(of: instantiable, usesMockInitializer: usesMockInitializer)
+			)
+			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
+			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
+			// does too (`ScopeGenerator.sendableConfigurationTypeNames()`), so each field is proven `Sendable` and the
+			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
+			let configurationPath = startsForSendableFunction && hasConfiguration && !buildsPublicMock ? nodePath : nil
+			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
 			// The payloads of the cases nested by type that lead through the node to a place, bound before
@@ -1201,6 +1229,9 @@ extension MockLowering {
 			enclosingBindingNamesPassedByName = bindingNamesPassedByName
 			parentConcreteType = instantiable.concreteInstantiable.asSource
 			overridePathReachable = overrideReachable
+			if let ownOverridePath {
+				overridePathsByType[instantiable.concreteInstantiable.asSource, default: []].append(ownOverridePath)
+			}
 			// The configured types around the node's children.
 			let configurationEntry = enteringConfiguredNode(of: instantiable.concreteInstantiable)
 			return .descending(DescendingBuiltNode(
@@ -1276,6 +1307,9 @@ extension MockLowering {
 			let configurationEntry = descending.configurationEntry
 			var node = descending.node
 			let finishedChildren = leavingConfiguredNode(configurationEntry)
+			if overrideReachable {
+				overridePathsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
+			}
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			renames = enclosingRenames

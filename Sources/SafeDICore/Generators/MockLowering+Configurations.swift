@@ -394,10 +394,6 @@ extension MockLowering.ConfigurationRecord {
 		let indent = ScopeGenerator.standardIndent
 		let innerIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 		let parameterIndent = "\(innerIndent)\(ScopeGenerator.standardIndent)"
-		var lines = [
-			"\(indent)/// Configuration for how this type is constructed within a mock tree.",
-			"\(indent)struct \(ScopeGenerator.mockConfigurationStructName) {",
-		]
 		var parameters = [String]()
 		var fields = [ConfigurationStorage.Field]()
 		for childField in childFields {
@@ -435,6 +431,19 @@ extension MockLowering.ConfigurationRecord {
 			isProvenSendable: requiresSendable,
 		))
 		let storage = ConfigurationStorage(fields: fields)
+		// A configuration built in a `@Sendable` function whose every field is proven `Sendable` is `nonisolated` and
+		// `Sendable`, so a `@Sendable nonisolated` function can take it and read its members in a module whose
+		// declarations default to the main actor. A plain configuration keeps the module's isolation: its default
+		// expressions may read main-actor state, which SafeDI cannot see and a `nonisolated` initializer could not read. So an
+		// actor's `mock()` there cannot read a plain configuration, a deliberate gap (issue 661; the actor cell of
+		// `SafeDIToolMockSendableConfigurationIsolationTests` says the same).
+		let isSendable = requiresSendable && fields.allSatisfy(\.isProvenSendable)
+		var lines = [
+			"\(indent)/// Configuration for how this type is constructed within a mock tree.",
+			isSendable
+				? "\(indent)nonisolated struct \(ScopeGenerator.mockConfigurationStructName): Sendable {"
+				: "\(indent)struct \(ScopeGenerator.mockConfigurationStructName) {",
+		]
 		lines.append("\(innerIndent)init(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")

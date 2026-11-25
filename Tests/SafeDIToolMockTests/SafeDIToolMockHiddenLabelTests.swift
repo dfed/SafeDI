@@ -2472,7 +2472,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            func __safeDI_bBuilder() -> B {
 		                func __safeDI_aBuilder() -> A {
 		                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		                    return A(token: token, bBuilder: bBuilder)
+		                    return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(token, bBuilder) } else { A(token: token, bBuilder: bBuilder) }
 		                }
 		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		                return if let safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }

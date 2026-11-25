@@ -182,6 +182,11 @@ struct ConstructionMemo {
 		/// The generator's `CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
 		/// that reuses it to merge.
 		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
+		/// The generators in the place's subtree, its own included, of calls of other modules' public mocks that pass fills
+		/// (`ScopeGeneratorUnderConstruction.callGeneratorsBeneath`), each of which one tree holds at most once: a mock root's
+		/// lowering keys a call's fills and builders by its generator (`MockLowering.FilledCallBuilders`), so a call generator at
+		/// two places of one root would bind each of its fill places twice, and read one place's builder family at the other.
+		let callGenerators: Set<ObjectIdentifier>
 	}
 
 	/// Every group of generators one pass started or collected to start, each group on one task, in order
@@ -216,19 +221,23 @@ struct ConstructionMemo {
 	/// A generator a sibling of the place holds is reused too: a scope tells its children apart by their indices.
 	/// - Parameter draw: The sharing schedule's draw for this lookup, test only (`ConstructionSharingSchedule`): whether the
 	///   place builds again, and the order the candidates are asked in.
-	func reuse(of key: Key, in context: ConstructionContext, drawing draw: ConstructionSharingSchedule.Draw? = nil) -> Reuse? {
+	/// - Parameter callGeneratorsInTree: The call generators the tree already holds (`Entry.callGenerators`): an entry that
+	///   holds one of them is not a candidate.
+	func reuse(of key: Key, in context: ConstructionContext, besideCallGenerators callGeneratorsInTree: Set<ObjectIdentifier>, drawing draw: ConstructionSharingSchedule.Draw? = nil) -> Reuse? {
 		guard let candidates = entriesByKey[key] else { return nil }
+		func reuse(of entry: Entry) -> Reuse? {
+			guard entry.callGenerators.isDisjoint(with: callGeneratorsInTree) else { return nil }
+			return entry.reads.answeredAlike(in: context).map { Reuse(entry: entry, reads: $0) }
+		}
 		guard let draw else {
 			for entry in candidates {
-				if let reads = entry.reads.answeredAlike(in: context) {
-					return Reuse(entry: entry, reads: reads)
+				if let reuse = reuse(of: entry) {
+					return reuse
 				}
 			}
 			return nil
 		}
-		return draw.reuse(among: candidates) { entry in
-			entry.reads.answeredAlike(in: context).map { Reuse(entry: entry, reads: $0) }
-		}
+		return draw.reuse(among: candidates, reuse)
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -355,7 +364,7 @@ struct ConstructionLog {
 	enum Read: Hashable {
 		/// The nearest declaration of a label, read whole (`NearestDeclarations.build(_:)` adds to it).
 		case nearestDeclaration(String)
-		/// The binding a receive of a property only if available reads (`NearestDeclarations.binding(of:)`).
+		/// The binding a receive of a property only if available reads (`NearestDeclarations.resolvingBinding(of:)`).
 		case binding(Property)
 		/// The declaration a scope building a property for a concrete type closes a cycle on, if any, by their IDs.
 		case declarationClosedOn(PropertyID, TypeID)

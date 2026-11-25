@@ -12,3 +12,4 @@ bazel-*
 
 # Python bytecode, which the scripts under .claude/skills write when imported
 __pycache__/
+*.profraw

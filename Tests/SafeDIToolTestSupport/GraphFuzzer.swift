@@ -2838,6 +2838,7 @@ enum GraphFuzzerGenerator {
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
 			sendableOnlyInsideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableOnlyInsideClosureRandomSeedMask)
 			throwingAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.throwingAutoclosureRandomSeedMask)
+			sendableAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableAutoclosureRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
 
 			fillCallRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.fillCallRandomSeedMask)
@@ -3225,6 +3226,8 @@ enum GraphFuzzerGenerator {
 		private static let sendableOnlyInsideClosureRandomSeedMask: UInt64 = 0x53656E64496E7369
 		/// The stream of the extension's throwing `@autoclosure` parameter.
 		private static let throwingAutoclosureRandomSeedMask: UInt64 = 0x5468726F77417574
+		/// The stream of the extension's `@Sendable` `@autoclosure` parameter.
+		private static let sendableAutoclosureRandomSeedMask: UInt64 = 0x53656E6441757463
 
 		/// The name of a helper type the `Sendable` builder motif declares, which is never `Sendable`.
 		private func nonSendableHelperTypeName(_ name: String) -> String {
@@ -3345,6 +3348,8 @@ enum GraphFuzzerGenerator {
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
 		private var sendableOnlyInsideClosureRandom: GraphFuzzerRandomNumberGenerator
 		private var throwingAutoclosureRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether the extension's `instantiate(…)` takes a `@Sendable` `@autoclosure` parameter.
+		private var sendableAutoclosureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
 		/// and which.
 		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
@@ -9922,6 +9927,12 @@ enum GraphFuzzerGenerator {
 			}
 			if let throwingAutoclosureDefault {
 				parameters.append(ParameterDeclaration(name: "attemptCount", type: "@autoclosure () throws -> Int", defaultValue: throwingAutoclosureDefault, isStored: false))
+			}
+			// Three times in ten, from a stream of its own, a `@Sendable` `@autoclosure` with a default: a mock that builds
+			// the extension in another type's tree reads its configuration's field before the construction, which would
+			// otherwise capture the mock's overrides in the `@Sendable` autoclosure.
+			if sendableAutoclosureRandom.percentChance(30) {
+				parameters.append(ParameterDeclaration(name: "pollInterval", type: "@autoclosure @escaping @Sendable () -> Int", defaultValue: "3", isStored: false))
 			}
 			// An unlabeled default-valued parameter last, which a generated call leaves to its default.
 			if random.percentChance(20) {
