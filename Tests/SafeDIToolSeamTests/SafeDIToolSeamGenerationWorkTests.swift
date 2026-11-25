@@ -58,7 +58,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// roots, which take one pass, as it does the type key's checks of reads at every member.
 		// A lookup in the construction memo asks the candidates its context answers alike, whatever the shape:
 		// `SafeDIToolConstructionMemoTests` counts them on a tree with cycles, and the reads it files entries under on a chain.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads])
+		// The walks of a seam's tree that enter each shared generator once per context grow with the layers, not the paths:
+		// `generate_growsEachSeamTreeWalkWithTheLayersNotThePaths_whenLayersOfScreensShareTheirPlaces` counts them.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads]).subtracting(Self.seamTreeWalkSteps)
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -87,7 +89,100 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		#expect(seamSteps.subtracting(countedSteps).isEmpty, "No shape counts work for \(seamSteps.subtracting(countedSteps).map(\.rawValue).sorted())")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_growsEachSeamTreeWalkWithTheLayersNotThePaths_whenLayersOfScreensShareTheirPlaces() async throws {
+		// Each screen of a layer opens all three screens of the next, and receives only what every path hands it, so the
+		// construction memo builds each screen's place once and the seam's tree reaches each screen's generator along every
+		// path to it: 3, 9, 27 … paths to a layer's screens. A walk that entered a generator on each path grew three times
+		// with each layer, as the paths do; one that enters each generator once for each context the scopes above hand it
+		// enters the same number more with each layer.
+		// The walks of `Home`'s receives and builder function names are measured on the first pass of `Home`'s signature,
+		// the pass the tool runs: the test's confirming pass, which the tool skips (`SkippedConfirmingPassChecks`), builds the
+		// tree again with a generator for every path, which its walks enter once each.
+		var workByLayerCount = [Int: [GenerationWork.Step: Int]]()
+		for layerCount in Self.sharedLayerCounts {
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: Self.sharedLayerModules(layerCount: layerCount),
+					integration: .moduleInfo,
+					compileVerification: layerCount == Self.sharedLayerCounts.first ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var work = [GenerationWork.Step: Int]()
+			for await record in stream {
+				switch record.step {
+				case .walkingReceiversOfSeam, .walkingBuilderFunctionNames:
+					// Each walk records the generators it entered once: the first is of the first pass.
+					if work[record.step] == nil {
+						work[record.step] = record.elementCount
+					}
+				case .walkingSeamTierOmissions:
+					work[record.step, default: 0] += record.elementCount
+				case .namingEntriesApart, .namingSeamBuilders, .gatheringFillsOfACall, .joiningNamesBoundBySeam, .namingInnerScopes, .namingValuesBindings, .reservingNamesOfACall, .layingOutTypeKeyViews, .findingRootFunctions, .askingMemoCandidates, .filingMemoEntryReads, .checkingReadsAtEveryMember:
+					continue
+				}
+			}
+			workByLayerCount[layerCount] = work
+		}
+		for step in Self.seamTreeWalkSteps.sorted(by: { $0.rawValue < $1.rawValue }) {
+			let work = Self.sharedLayerCounts.map { workByLayerCount[$0]?[step] ?? 0 }
+			#expect(work[0] > 0, "No work is counted for \(step.rawValue)")
+			#expect(work[2] - work[1] == work[1] - work[0], "\(step.rawValue) enters \(work.map(String.init).joined(separator: ", ")) generators for \(Self.sharedLayerCounts.map(String.init).joined(separator: ", ")) layers")
+		}
+	}
+
 	// MARK: Private
+
+	/// The walks of a seam's tree that enter each generator once for each context the scopes above hand it.
+	private static let seamTreeWalkSteps: Set<GenerationWork.Step> = [.walkingReceiversOfSeam, .walkingBuilderFunctionNames, .walkingSeamTierOmissions]
+
+	/// The layers of each shape of shared screens measured.
+	private static let sharedLayerCounts = [4, 5, 6]
+
+	/// A seam, `Home`, whose tree holds `layerCount` layers of three screens, each screen of a layer opening every screen of
+	/// the next and receiving `Service` from the root above `Home`, and a hole beside the screens that `App` fills.
+	private static func sharedLayerModules(layerCount: Int) -> [ModuleFixture] {
+		func screen(_ layer: Int, _ index: Int) -> String {
+			"L\(layer)S\(index)"
+		}
+		func builder(_ layer: Int, _ index: Int) -> String {
+			"l\(layer)S\(index)Builder: Instantiator<\(screen(layer, index))>"
+		}
+		func type(_ name: String, attributes: String = "@Instantiable", _ properties: [String]) -> String {
+			let parameters = properties.map { $0.components(separatedBy: " let ").last ?? "" }
+			let labels = parameters.map { String($0.prefix { $0 != ":" }) }
+			return """
+			\(attributes)
+			public final class \(name): Instantiable {
+			    public init(\(parameters.joined(separator: ", "))) {
+			\(labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+			    }
+			\(properties.map { "    \($0)" }.joined(separator: "\n"))
+			}
+			"""
+		}
+		var feature = [
+			"@Instantiable public final class Service: Instantiable { public init() {} }",
+			"public protocol Api {}",
+			type("Side", ["@Instantiated let api: any Api"]),
+			type("Home", attributes: "@Instantiable(generateDependencyTree: true)", ["@Received let service: Service", "@Instantiated let side: Side"] + (0..<3).map { "@Instantiated let \(builder(0, $0))" }),
+		]
+		for layer in 0..<layerCount {
+			for index in 0..<3 {
+				let opened = layer < layerCount - 1 ? (0..<3).map { "@Instantiated let \(builder(layer + 1, $0))" } : []
+				feature.append(type(screen(layer, index), ["@Received let service: Service"] + opened))
+			}
+		}
+		let app = [
+			"@Instantiable(fulfillingAdditionalTypes: [Api.self]) final class LiveApi: Api, Instantiable { init() {} }",
+			type("Root", attributes: "@Instantiable(isRoot: true)", ["@Instantiated let service: Service", "@Instantiated let home: Home"]),
+		]
+		return SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app)
+	}
 
 	private var filesToDelete: [URL]
 

@@ -838,13 +838,20 @@ extension DependencyTreeGenerator {
 	/// name inside the generated initializer must not equal.
 	static func builderFunctionNamesOfProperties(in generator: ScopeGenerator, includingHoleSites: Bool = true) -> Set<String> {
 		var names = Set<String>()
+		// A generator several places of the tree share (see `ConstructionMemo`) names the same functions on every path to it.
+		// The set of generators this walk has seen dies with the walk ("Share work by construction").
+		var generatorsVisited = Set<ObjectIdentifier>()
+		var generatorsEntered = 0
 		var generatorsToVisit = [generator]
 		while let visited = generatorsToVisit.popLast() {
+			guard generatorsVisited.insert(ObjectIdentifier(visited)).inserted else { continue }
+			generatorsEntered += 1
 			if let property = visited.property, includingHoleSites || visited.holeSite == nil {
 				names.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
 			}
 			generatorsToVisit.append(contentsOf: visited.children)
 		}
+		GenerationWork.record(generatorsEntered, by: .walkingBuilderFunctionNames)
 		return names
 	}
 

@@ -80,6 +80,19 @@ public struct GenerationWork: Sendable {
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
+		/// The generators the walk of a seam's receives (`DependencyTreeGenerator.receivers(in:of:instantiables:)`) entered,
+		/// recorded once for each walk: each generator, once for each context the scopes above hand it. A generator several
+		/// places share (`ConstructionMemo`) is reached along every path to it, so a walk that entered it on each path
+		/// entered the generators of a tree of n layers of shared places a number of times exponential in n.
+		case walkingReceiversOfSeam
+		/// The generators the walk of the builder function names a seam's tree declares
+		/// (`DependencyTreeGenerator.builderFunctionNamesOfProperties(in:includingHoleSites:)`) entered, recorded once for
+		/// each walk: each generator, once.
+		case walkingBuilderFunctionNames
+		/// Entering a scope in the walk of the values a tree omits from its calls of seams' tiers
+		/// (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`): each scope the walk enters, but for a subtree it
+		/// found nothing in before under the context it is handed again.
+		case walkingSeamTierOmissions
 	}
 
 	/// The step that did the work.
