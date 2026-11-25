@@ -976,8 +976,11 @@ struct GraphFuzzerMockMirror: Equatable {
 	/// - Parameters:
 	///   - conformance: What the mirror conforms to beyond `Instantiable`, as the graph's roots and types do.
 	///   - stamp: The creation stamp's stored property, in a fixture that stamps every class.
-	func source(conformance: String, stamp: String?) -> String {
-		var lines = [isForwarding ? "@Instantiable" : "@Instantiable(isRoot: true)", "public final class \(name): Instantiable\(conformance) {"]
+	///   - isolation: What the mirror's classes are spelled with before `public final class`: `@MainActor ` in a module
+	///     that declares the main actor its default isolation, where a class whose only conformance is `Instantiable`
+	///     is otherwise nonisolated and cannot call the main-actor `mock()` it mirrors.
+	func source(conformance: String, stamp: String?, isolation: String = "") -> String {
+		var lines = [isForwarding ? "@Instantiable" : "@Instantiable(isRoot: true)", "\(isolation)public final class \(name): Instantiable\(conformance) {"]
 		if let stamp {
 			lines += ["\t\(stamp)", ""]
 		}
@@ -992,7 +995,7 @@ struct GraphFuzzerMockMirror: Equatable {
 		if isForwarding {
 			// A `Sendable` root stores only `Sendable` wrappers.
 			let builderType = "\(conformance == ", Sendable" ? "SendableInstantiator" : "Instantiator")<\(name)>"
-			lines += ["", "@Instantiable(isRoot: true)", "public final class \(hostName): Instantiable\(conformance) {"]
+			lines += ["", "@Instantiable(isRoot: true)", "\(isolation)public final class \(hostName): Instantiable\(conformance) {"]
 			if let stamp {
 				lines += ["\t\(stamp)", ""]
 			}
@@ -1778,20 +1781,24 @@ struct GraphFuzzerValueOraclePlan {
 			? DifferentialValueCreationStamp.property(counterNamed: counterName)
 			: nil
 		let conformance = Self.mirrorConformance(of: fixture)
+		// The mirrors' files, the pinned place's root and the sentinel land in the graph's module, or in a split graph's
+		// same-package caller, whose default isolation they spell where it is the main actor.
+		let defaultsToMainActor = base.modules == nil ? !base.modulesDefaultingToMainActor.isEmpty : base.modulesDefaultingToMainActor.contains(.samePackageCaller)
+		let isolation = defaultsToMainActor ? "@MainActor " : ""
 		var swiftFileContent = base.swiftFileContent.map { $0.replacingOccurrences(of: "@Instantiable(isRoot: true)\n", with: "@Instantiable(isRoot: true, generateMock: true)\n") }
-		swiftFileContent += mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
+		swiftFileContent += mirrors.map { $0.source(conformance: conformance, stamp: stamp, isolation: isolation) }
 		if pinnedPlacePair != nil {
-			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp))
+			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp, isolation: isolation))
 		}
 		if storingEveryParameter {
-			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
+			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix, isNonisolated: defaultsToMainActor))
 		}
 		return GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: swiftFileContent)
 	}
 
 	/// The source of the root that builds `PinHost` for `pinnedPlacePair`, which conforms to what the mirrors conform to.
-	private static func pinnedPlaceRootSource(typeNamePrefix: String, conformance: String, stamp: String?) -> String {
-		var lines = ["@Instantiable(isRoot: true)", "public final class \(typeNamePrefix)\(pinnedPlaceRootName): Instantiable\(conformance) {"]
+	private static func pinnedPlaceRootSource(typeNamePrefix: String, conformance: String, stamp: String?, isolation: String) -> String {
+		var lines = ["@Instantiable(isRoot: true)", "\(isolation)public final class \(typeNamePrefix)\(pinnedPlaceRootName): Instantiable\(conformance) {"]
 		if let stamp {
 			lines += ["\t\(stamp)", ""]
 		}

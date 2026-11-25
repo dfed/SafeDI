@@ -72,11 +72,12 @@ enum GraphFuzzerOverrideSentinel {
 	/// type. `recording(_:)` wraps a builder in a `@Sendable` closure, which a builder field of either kind of
 	/// graph takes, and which converts to one that is not `@Sendable`; `recorded(_:)` records a value a closure the
 	/// oracle writes builds; `nonisolated(unsafe)` lets either write the record, which only the probe executable's one
-	/// thread reads.
-	static func source(typeNamePrefix: String) -> String {
+	/// thread reads. In a module that declares the main actor its default isolation the enum is `nonisolated`, so that the
+	/// `@Sendable` closure `recording(_:)` returns can call `recorded(_:)`.
+	static func source(typeNamePrefix: String, isNonisolated: Bool = false) -> String {
 		"""
 		\(GraphFuzzerFixture.fileNameMarker)\(typeName(typeNamePrefix: typeNamePrefix)).swift
-		enum \(typeName(typeNamePrefix: typeNamePrefix)) {
+		\(isNonisolated ? "nonisolated " : "")enum \(typeName(typeNamePrefix: typeNamePrefix)) {
 			nonisolated(unsafe) static var value: Any?
 
 			static func recording<each Argument, Value>(_ build: @escaping @Sendable (repeat each Argument) -> Value) -> @Sendable (repeat each Argument) -> Value {
