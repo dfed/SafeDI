@@ -3334,6 +3334,18 @@ struct NearestDeclarations: Sendable {
 	/// `MockReceivesPassedNil.promotedProperties`).
 	private var mockRootPromotedProperties = Set<Property>()
 
+	/// The nearest declarations of `labels` alone, as declarations a tree is given: what a body keyed by the answers to
+	/// those labels is built beneath, whatever else its path declares (`VariantBodyObservation`).
+	func keeping(labels: [String]) -> NearestDeclarations {
+		var kept = NearestDeclarations()
+		for label in labels {
+			if let nearestDeclaration = self[label] {
+				kept.set(nearestDeclaration, for: label)
+			}
+		}
+		return kept
+	}
+
 	/// Makes `nearestDeclaration` the nearest declaration of `label`.
 	private mutating func set(_ nearestDeclaration: NearestDeclaration, for label: String) {
 		changedDeclarations[label] = nearestDeclaration

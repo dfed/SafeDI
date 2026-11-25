@@ -28,7 +28,78 @@ public enum CallPlaceOrderObservation {
 	@TaskLocal public static var observer: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?
 }
 
+/// Lets a test compare, for each place of a production root's tree, which of its type's receives today's build passes
+/// `nil` with which a body passes `nil` that is built from the scope's copy with call places beneath only the nearest
+/// declarations of the labels the scope's tree receives and of the label it is built as: the answers a body is keyed by.
+public enum VariantBodyObservation {
+	/// Called with what the place is and the two sets of properties passed `nil`, each sorted.
+	@TaskLocal public static var observer: (@Sendable (_ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void)?
+}
+
 extension DependencyTreeGenerator {
+	/// What the bodies compared with today's places are kept by: the scope built and the property it is built as.
+	struct VariantBodyKey: Hashable {
+		let scope: ObjectIdentifier
+		let property: Property
+	}
+
+	/// A place of today's tree that builds a scope as a property, with the declarations its path gives it, as the scopes
+	/// above it declare them: each scope's declarations hide those above of their labels, and the property a place is
+	/// built as is being built beneath it.
+	struct PlaceContext {
+		let place: String
+		let generator: ScopeGenerator
+		let scope: Scope
+		let property: Property
+		let nearestDeclarations: NearestDeclarations
+		let lazilyInstantiatedInstanceProperties: Set<Property>
+		/// The labels a function the place is built in takes as a parameter that no scope between declares again: today's
+		/// build of the place reads the parameter, whose value each call of the function decides, so one generator stands
+		/// for the places of every call, and a receive of such a label is compared where a call passes it, not here.
+		let cycleParameterLabels: Set<String>
+	}
+
+	/// Each place of `todaysTree` beneath its root, with its context. `rootScope` is the scope `todaysTree` was built
+	/// from; a place's children are its scope's, index by index.
+	static func placeContexts(ofTodaysTree todaysTree: ScopeGenerator, builtFrom rootScope: Scope) -> [PlaceContext] {
+		var contexts = [PlaceContext]()
+		var places = [(generator: todaysTree, scope: rootScope, nearestDeclarations: NearestDeclarations(), lazilyInstantiatedInstanceProperties: Set<Property>(), cycleParameterLabels: Set<String>())]
+		while let (generator, scope, nearestDeclarations, lazilyInstantiatedInstanceProperties, cycleParameterLabels) = places.popLast() {
+			let childCycleParameterLabels = cycleParameterLabels.subtracting(scope.declaredLabels)
+			var childNearestDeclarations = nearestDeclarations
+			childNearestDeclarations.replaceLabels(of: scope.sortedDeclaredPropertyForms)
+			let childLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+				.filter { !scope.declaredLabels.contains($0.label) }
+				.union(scope.declaredLazilyInstantiatedInstanceProperties)
+			for child in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) where scope.propertiesToGenerate.indices.contains(child.index) {
+				if case let .instantiated(property, childScope, _) = scope.propertiesToGenerate[child.index] {
+					// A scope that closes a cycle builds nothing: it is today's call of the function it closes on, and has no body.
+					guard case .property(_, _, _, _, false, _) = child.generator.scopeData else { continue }
+					var placeNearestDeclarations = childNearestDeclarations
+					placeNearestDeclarations.build(property)
+					// A member of a loop of builders makes each wrapper its tree receives inside the loop again at the top of
+					// its function, its own included: that rebinding is the nearest declaration beneath it, and is not being
+					// built.
+					for reboundProperty in child.generator.reboundProperties {
+						placeNearestDeclarations.replace(reboundProperty, providing: CycleParameter.forms(providedBy: reboundProperty))
+					}
+					let placeCycleParameterLabels = childCycleParameterLabels.union(child.generator.cycleParameters.map(\.property.label))
+					contexts.append(PlaceContext(
+						place: child.generator.scopeData.asDOTNode,
+						generator: child.generator,
+						scope: childScope,
+						property: property,
+						nearestDeclarations: placeNearestDeclarations,
+						lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+						cycleParameterLabels: placeCycleParameterLabels,
+					))
+					places.append((child.generator, childScope, placeNearestDeclarations, childLazilyInstantiatedInstanceProperties, placeCycleParameterLabels))
+				}
+			}
+		}
+		return contexts
+	}
+
 	/// The scopes a production root reaches, each beside a copy whose children on a cycle are call places: scopes with no
 	/// children whose types receive what the child's whole tree receives from above it (`collectReceivedProperties`, the
 	/// least sets, which no order of siblings feeds).

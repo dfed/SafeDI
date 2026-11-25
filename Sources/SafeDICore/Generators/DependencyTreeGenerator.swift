@@ -733,6 +733,47 @@ public actor DependencyTreeGenerator {
 							}
 						}
 					}
+					// Each place of the root's tree against a body built from its scope's copy beneath the answers its path
+					// gives the labels the scope's tree receives, built only where a test compares the two.
+					if let observer = VariantBodyObservation.observer,
+					   let todaysTree = roots.last?.scopeGenerator,
+					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
+					{
+						// The bodies built so far of each scope and property, each with the declarations it was built beneath.
+						var bodiesByPlace = [VariantBodyKey: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, unavailableOptionalProperties: Set<Property>)]]()
+						let placesWithCopies = Self.placeContexts(ofTodaysTree: todaysTree, builtFrom: scope).compactMap { context in
+							shadow.copy(of: context.scope).map { (context: context, copy: $0) }
+						}
+						for (context, copy) in placesWithCopies {
+							var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &receivedPropertiesCache).received.map(\.label))
+							labelSet.insert(context.property.label)
+							let labels = labelSet.sorted()
+							let answers = labels.map { context.nearestDeclarations[$0] }
+							let lazilyInstantiatedInstanceProperties = context.lazilyInstantiatedInstanceProperties.filter { labelSet.contains($0.label) }
+							let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property)
+							let bodysUnavailableOptionalProperties: Set<Property>
+							if let body = bodiesByPlace[key]?.first(where: { $0.nearestDeclarations == answers && $0.lazilyInstantiatedInstanceProperties == lazilyInstantiatedInstanceProperties }) {
+								bodysUnavailableOptionalProperties = body.unavailableOptionalProperties
+							} else {
+								let (bodyTable, bodyRecord) = validatedWorld.frozenScopeMap.freezing(rootScope: copy)
+								var bodyMemo = ConstructionMemo()
+								bodysUnavailableOptionalProperties = try bodyRecord.createScopeGenerator(
+									in: bodyTable,
+									nearestDeclarations: context.nearestDeclarations.keeping(labels: labels),
+									lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+									erasedToConcreteExistential: false,
+									declaredTypeNames: declaredTypeNames,
+									constructionMemo: &bodyMemo,
+								).unavailableOptionalProperties
+								bodiesByPlace[key, default: []].append((answers, lazilyInstantiatedInstanceProperties, bodysUnavailableOptionalProperties))
+							}
+							observer(
+								context.place,
+								context.generator.unavailableOptionalProperties.filter { !context.cycleParameterLabels.contains($0.label) }.map(\.asSource).sorted(),
+								bodysUnavailableOptionalProperties.filter { !context.cycleParameterLabels.contains($0.label) }.map(\.asSource).sorted(),
+							)
+						}
+					}
 				}
 				rootScopeGenerators = roots
 			} else {
