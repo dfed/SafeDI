@@ -16,6 +16,8 @@ There are a total of five macros in the SafeDI library:
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 | [`#SafeDIConfiguration`](#safediconfiguration) | Freestanding declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
+SafeDI reads its attached macros, its wrappers and `MockGeneration` spelled with its module name (`@SafeDI.Instantiable`, `@SafeDI.Instantiated`, `SafeDI.Instantiator<T>`) as it reads their bare spellings.
+
 Let’s walk through each of these macros in detail.
 
 ### @Instantiable

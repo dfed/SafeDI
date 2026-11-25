@@ -178,6 +178,19 @@ public struct Dependency: Codable, Hashable, Sendable {
 	static let sendableErasedInstantiatorType = "SendableErasedInstantiator"
 	static let lazilyInstantiatedType = "LazilyInstantiated"
 	static let sendableLazilyInstantiatedType = "SendableLazilyInstantiated"
+	/// The name of SafeDI's own module, which may qualify the names of its macros and wrappers.
+	static let safeDIModuleName = "SafeDI"
+
+	/// Whether `name` is the name of one of SafeDI's wrappers: an instantiator or a lazily instantiated wrapper.
+	static func isWrapperTypeName(_ name: String) -> Bool {
+		switch name {
+		case instantiatorType, erasedInstantiatorType, sendableInstantiatorType, sendableErasedInstantiatorType, lazilyInstantiatedType, sendableLazilyInstantiatedType:
+			true
+		default:
+			false
+		}
+	}
+
 	/// The associated type of `Instantiable` that names what an `Instantiator` of the conforming type forwards.
 	static let forwardedPropertiesType = "ForwardedProperties"
 	/// The function type each instantiator declares, nested in it, that it is created with.
