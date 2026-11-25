@@ -159,6 +159,27 @@ extension MockLowering.Walk {
 				unrecordedReasons[path] = "threw:" + String(describing: error).prefix { $0 != "(" } + configured
 			}
 		}
+		// The calls hold each place's tree node and inputs, which the layout reads no more.
+		builtPlaceCalls = [:]
+		builtPlaceInputs = [:]
+	}
+
+	/// Drops what the walk kept to record and lay out its places once the root's lines are written, so that the rest of the
+	/// mock's assembly does not hold it beside the body.
+	mutating func dropRecords() {
+		closerAndDefaultRecords = [:]
+		builtPlaceInputs = [:]
+		builtRecords = [:]
+		placePathsInWalkOrder = []
+		planNodes = [:]
+		builtPlaceCalls = [:]
+		pathsWithUnplannedLines = []
+		unplannedLineKinds = [:]
+		pathsStartingExtraction = []
+		leadingBodyPlaces = [:]
+		unrecordedReasons = [:]
+		closedOnPlacesByLabel = [:]
+		builtPlaceConfigurationContexts = [:]
 	}
 
 	/// The code of the place at `path` as the type key reads it: its record, or text, which keeps the root's walk body.
