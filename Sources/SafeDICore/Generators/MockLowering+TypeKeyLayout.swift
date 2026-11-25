@@ -18,11 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#if canImport(Glibc)
-	import Glibc
-#elseif canImport(Darwin)
-	import Darwin
-#endif
 import Foundation
 
 /// The type key's layout of an internal mock's body (`TypeKeyBody`), behind a switch tests turn on: the walk's places, each
@@ -33,12 +28,11 @@ extension MockLowering {
 	/// of the graph fuzzer's corpora.
 	@TaskLocal static var laysOutWithTypeKey = ProcessInfo.processInfo.environment["SAFEDI_MOCK_TYPE_KEY"] == "1"
 
-	/// SPIKE: appends whether the type key laid `instantiable`'s mock out, or why not, to `SAFEDI_MOCK_TYPE_KEY_LOG`.
-	static func logTypeKeyLayout(of instantiable: Instantiable, outcome: String) {
-		guard let logPath = ProcessInfo.processInfo.environment["SAFEDI_MOCK_TYPE_KEY_LOG"], let file = fopen(logPath, "a") else { return }
-		fputs("TYPEKEY\t\(instantiable.concreteInstantiable.asSource)\t\(outcome)\n", file)
-		fclose(file)
-	}
+	/// Called with each internal mock root's layout outcome while the switch is on: `laidOut`, or why the root keeps the walk's
+	/// body, as `unrecorded:threw:<error case>` where production's record function threw at one of its places. Set by the
+	/// tests and the graph fuzzer, which fails a graph that falls back on an error case it does not expect; never by the
+	/// tool.
+	@TaskLocal public static var typeKeyLayoutObserver: (@Sendable (_ mockedType: String, _ outcome: String) -> Void)?
 
 	/// What the walk hands production's record function at a built place.
 	struct BuiltPlaceCall {
@@ -158,8 +152,11 @@ extension MockLowering.Walk {
 				}
 				sharingNode(ofBuiltPlaceAt: path, nodesByKey: &sharedRecordsByKey)
 			} catch {
-				unrecordedReasons[path] = "threw"
-				unrecordedPlaceErrors[path] = error
+				// The error is named by its case alone (`unexpectedArgument`), and by whether the place calls its type's hand-written
+				// mock or reads its configuration's defaults, whose arguments production's initializer need not take: the tests and
+				// the graph fuzzer judge the name (`typeKeyLayoutObserver`).
+				let configured = call.inputs.configuredConstruction == nil ? "" : ":configuredConstruction"
+				unrecordedReasons[path] = "threw:" + String(describing: error).prefix { $0 != "(" } + configured
 			}
 		}
 	}

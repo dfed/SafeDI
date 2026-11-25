@@ -169,7 +169,7 @@ extension ScopeGenerator {
 			if let typeKeyLines = layout.lines {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
 			}
-			MockLowering.logTypeKeyLayout(of: instantiable, outcome: layout.fallback)
+			MockLowering.typeKeyLayoutObserver?(instantiable.concreteInstantiable.asSource, layout.fallback)
 		}
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
@@ -480,8 +480,6 @@ extension MockLowering {
 		var builtRecords = [[Int]: PlaceRecord]()
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
-		/// The error production's record function threw at a built place, which leaves it unrecorded.
-		var unrecordedPlaceErrors = [[Int]: Initializer.GenerationError]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
 		var planNodes = [PlanNodeKey: PlanNode]()
 		/// What the walk hands production's record function at each built place, which `recordBuiltPlaces()` calls once the
@@ -490,7 +488,7 @@ extension MockLowering {
 		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
 		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
 		var pathsWithUnplannedLines = Set<[Int]>()
-		/// SPIKE: which kinds of unplanned statements each such place writes, for the fallback log.
+		/// Which kinds of unplanned statements each such place writes, which name its root's fallback.
 		var unplannedLineKinds = [[Int]: String]()
 		/// The places whose `@Sendable` builder functions read the overrides beneath them into locals before the function
 		/// (`SendableOverrideExtractor`). The type key lays such a place out where every place beneath it is recorded: its call
@@ -501,7 +499,7 @@ extension MockLowering {
 		/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the
 		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:sendableAutoclosureBindings:)`).
 		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
-		/// SPIKE: why each place has no record, for the switch's log.
+		/// Why each place has no record, which names its root's fallback (`MockLowering.typeKeyLayoutObserver`).
 		var unrecordedReasons = [[Int]: String]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).

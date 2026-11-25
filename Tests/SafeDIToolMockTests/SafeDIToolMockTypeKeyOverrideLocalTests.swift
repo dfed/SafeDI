@@ -387,6 +387,57 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 		#expect(walk != laidOut)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsWalksBody_whenProductionsRecordFunctionThrowsAtPlaceBuiltWithHandWrittenMockThatTakesNoDependency() async throws {
+		// `MyService`'s hand-written mock takes no `database`, so the mock's scope leaves it out, and production's
+		// initializer, which takes it, names an argument the scope does not declare.
+		let fixtureFiles = [
+			"Parent.swift": """
+			@Instantiable(generateMock: true)
+			public struct Parent: Instantiable {
+			    public init(service: MyService) {
+			        self.service = service
+			    }
+			    @Instantiated let service: MyService
+			}
+			""",
+			"Database.swift": """
+			@Instantiable
+			public struct Database: Instantiable {
+			    public init() {}
+			}
+			""",
+			"MyService.swift": """
+			@Instantiable
+			public struct MyService: Instantiable {
+			    public init(database: Database) {
+			        self.database = database
+			    }
+			    @Instantiated let database: Database
+			}
+			""",
+			"MyServiceMock.swift": """
+			@Instantiable(mockOnly: true)
+			extension MyService {
+			    public static func mock() -> MyService { MyService(database: Database()) }
+			}
+			""",
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		let mocks = try await MockLowering.$typeKeyLayoutObserver.withValue({ mockedType, outcome in continuation.yield("\(mockedType): \(outcome)") }) {
+			try await generatedMocks(of: fixtureFiles)
+		}
+		continuation.finish()
+		var outcomes = [String]()
+		for await outcome in stream {
+			outcomes.append(outcome)
+		}
+
+		#expect(outcomes == ["Parent: unrecorded:threw:unexpectedArgument:configuredConstruction"])
+		#expect(mocks.laidOut.mockFiles == mocks.walk.mockFiles)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
