@@ -226,8 +226,19 @@ extension DependencyTreeGenerator {
 			widestTier: seamTypeAccess,
 		)
 		let stemByHoleType = tierNames.stemByHoleType
+		// Each tier's two labels of each hole type, spelled once: spelled at each use, a label was spelled again for every
+		// comparison of the sort below and for every place, case and route that names it.
+		var labelsByTier = [AccessLevel: [SeamSignature.HoleType: (plain: String, sendable: String)]]()
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool, in names: TierNames) -> String {
-			names.label(ofStem: stemByHoleType[holeType, default: ""], isSendable: isSendable)
+			let labels: (plain: String, sendable: String)
+			if let spelledLabels = labelsByTier[names.tier]?[holeType] {
+				labels = spelledLabels
+			} else {
+				let stem = stemByHoleType[holeType, default: ""]
+				labels = (plain: names.label(ofStem: stem, isSendable: false), sendable: names.label(ofStem: stem, isSendable: true))
+				labelsByTier[names.tier, default: [:]][holeType] = labels
+			}
+			return isSendable ? labels.sendable : labels.plain
 		}
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool) -> String {
 			label(of: holeType, isSendable: isSendable, in: tierNames.tiers[0])
@@ -768,20 +779,27 @@ extension DependencyTreeGenerator {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
+		// A builder of a place instantiated only if available returns an optional: its stem is its type's followed by
+		// `Optional` in every seam, so a required builder of the same type added later renames neither.
 		var stems = holeTypes.map { holeType in
-			holeType.instantiatedType == holeType.builtType
+			let stemOfType = holeType.instantiatedType == holeType.builtType.unwrapped
 				? stem(of: holeType.instantiatedType)
-				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
+				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType.unwrapped))"
+			return holeType.builtType.isOptional ? stemOfType + "Optional" : stemOfType
 		}
 		// A stem collides where another stem equals it, or gives its plain label as its own plain or `@Sendable` label: a
 		// stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
 		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems give
 		// equal plain labels, so counting the stems that give each label in each family finds every collision with one pass
 		// over the stems: comparing every pair of stems, and lowering both stems' capitals for each pair, grew with the
-		// square of the hole types.
+		// square of the hole types. An optional builder's stem that collides is named apart first, so a required builder
+		// keeps its name beside it.
 		var labelCounts = BuilderLabelCounts(stems: stems)
-		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
-		if !colliding.isEmpty {
+		for namesApartOptionalStems in [true, false] {
+			let colliding = holeTypes.indices.filter {
+				(!namesApartOptionalStems || holeTypes[$0].builtType.isOptional) && labelCounts.collides(stems[$0])
+			}
+			guard !colliding.isEmpty else { continue }
 			let collidingIndices = Set(colliding)
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
@@ -793,7 +811,7 @@ extension DependencyTreeGenerator {
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
-			for index in stems.indices {
+			for index in namesApartOptionalStems ? colliding : Array(stems.indices) {
 				while labelCounts.collides(stems[index]) {
 					labelCounts.replace(stems[index], with: stems[index] + "_")
 					stems[index] += "_"
@@ -844,14 +862,32 @@ extension DependencyTreeGenerator {
 	}
 
 	private static func loweredLeadingCapitals(of stem: String) -> String {
-		let characters = Array(stem)
+		// An ASCII stem, as nearly every identifier is, is read by its bytes: each is one `Character`, upper or lowercase
+		// exactly where it is a Latin letter of that case, and lowered by its letter alone, so the result is the one the
+		// reading by `Character` gives, without decoding a grapheme per letter.
+		if stem.utf8.allSatisfy({ $0 < 0x80 }) {
+			var bytes = Array(stem.utf8)
+			let lowerCount = countOfLeadingCapitalsToLower(in: bytes, isUppercase: { $0 >= 0x41 && $0 <= 0x5A }, isLowercase: { $0 >= 0x61 && $0 <= 0x7A })
+			for index in 0..<lowerCount {
+				bytes[index] += 0x20
+			}
+			return lowerCount > 0 ? String(decoding: bytes, as: UTF8.self) : stem
+		} else {
+			let characters = Array(stem)
+			let lowerCount = countOfLeadingCapitalsToLower(in: characters, isUppercase: \.isUppercase, isLowercase: \.isLowercase)
+			return lowerCount > 0 ? String(characters[..<lowerCount]).lowercased() + String(characters[lowerCount...]) : stem
+		}
+	}
+
+	/// How many of `elements`' leading capitals `loweredLeadingCapitals(of:)` lowers: every one, but the last when a
+	/// lowercase letter follows it and it is not the first.
+	private static func countOfLeadingCapitalsToLower<Element>(in elements: [Element], isUppercase: (Element) -> Bool, isLowercase: (Element) -> Bool) -> Int {
 		var capitalCount = 0
-		while capitalCount < characters.count, characters[capitalCount].isUppercase {
+		while capitalCount < elements.count, isUppercase(elements[capitalCount]) {
 			capitalCount += 1
 		}
-		guard capitalCount > 0 else { return stem }
-		let lowerCount = capitalCount < characters.count && characters[capitalCount].isLowercase ? max(capitalCount - 1, 1) : capitalCount
-		return String(characters[..<lowerCount]).lowercased() + String(characters[lowerCount...])
+		guard capitalCount > 0 else { return 0 }
+		return capitalCount < elements.count && isLowercase(elements[capitalCount]) ? max(capitalCount - 1, 1) : capitalCount
 	}
 
 	/// The identifier a seam is named by inside a fill's or a dispatcher's name.
