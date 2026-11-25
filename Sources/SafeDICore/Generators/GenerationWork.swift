@@ -91,6 +91,11 @@ public struct GenerationWork: Sendable {
 		/// child of every site, so a seam whose own type builds n children that each hold a place compared n carriers n²
 		/// times.
 		case findingCarrierASiblingRequires
+		/// Finding the fill of a seam call that stands for a place (`ScopeGenerator.FillStoodFor`): each place of a call, each set of
+		/// fills of the place's case with one tree's reads that its lookup asks (`Scope.nextFill()`), and each place stood for that
+		/// the capture walk gathers under its fill. Scanned for, the fills of a case were compared for every place of
+		/// it, and the places stood for for every fill.
+		case findingFillThatStandsForPlace
 	}
 
 	/// The step that did the work.

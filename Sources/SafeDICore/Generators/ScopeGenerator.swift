@@ -3347,16 +3347,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 			}
+			// The fills count in the order the call built them, which `FillStoodFor.builtFillCountBefore` counts in. The fill
+			// of a place stood for would hold no place (`Scope.nextFill()`), so it would be drawn among the fills that start
+			// with their siblings, before the first of them built after it and before every fill that starts last
+			// (`startsAsCarrier(_:)`).
+			var builtFillIndexByKey = [String: Int]()
+			if !fillsStoodFor.isEmpty {
+				for child in propertiesToGenerate {
+					if let fillKey = child.fillKey {
+						builtFillIndexByKey[fillKey] = builtFillIndexByKey.count
+					}
+				}
+			}
 			var drawn = [(node: String, generator: ScopeGenerator?)]()
 			var fillsStoodForToDraw = fillsStoodFor[...]
-			var drawnFillCount = 0
 			for orderedPropertyToGenerate in orderedPropertiesToGenerate {
-				if orderedPropertyToGenerate.fillKey != nil {
-					while let fillStoodFor = fillsStoodForToDraw.first, fillStoodFor.builtFillCountBefore <= drawnFillCount {
+				if let builtFillIndex = orderedPropertyToGenerate.fillKey.flatMap({ builtFillIndexByKey[$0] }) {
+					while let fillStoodFor = fillsStoodForToDraw.first, startsAsCarrier(orderedPropertyToGenerate) || fillStoodFor.builtFillCountBefore <= builtFillIndex {
 						fillsStoodForToDraw.removeFirst()
 						drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
 					}
-					drawnFillCount += 1
 				}
 				drawn.append((orderedPropertyToGenerate.scopeData.asDOTNode, orderedPropertyToGenerate))
 			}
@@ -4567,6 +4577,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return captures
 		}
 
+		// The places each fill stands for, gathered once for the call: a scan of them for each fill compared every place
+		// with every fill.
+		let placesStoodForByStandInKey = Dictionary(grouping: GenerationWork.taking(fillsStoodFor, by: .findingFillThatStandsForPlace), by: \.standInKey)
 		for child in orderedChildren {
 			if case let .alias(property, fulfillingProperty, _, onlyIfAvailable, _) = child.generator.scopeData {
 				// The alias is bound in this scope's code, where its fulfilling property is read. An alias that keeps
@@ -4609,7 +4622,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A place this fill stands for (`FillStoodFor`) hands its fill fields equal to this one's that other types can
 				// declare, and each capture names the declaration it reads, so the fill's tree is walked once more for each
 				// such place, with the place's own hole, as `DependencyTreeGenerator.validateFills` judges it.
-				for placeStoodFor in fillsStoodFor where placeStoodFor.standInKey == child.generator.fillKey {
+				for placeStoodFor in child.generator.fillKey.flatMap({ placesStoodForByStandInKey[$0] }) ?? [] {
 					await captures.append(contentsOf: fillCaptures(
 						of: placeStoodFor.hole,
 						fill: child.generator,

@@ -3177,8 +3177,10 @@ struct SafeDIToolGraphFuzzerTests {
 		// `Instantiator` each parent declares, the fill closes a cycle on a declaration of the seam's tree that the places
 		// reach at two depths, or it reads a value only one place binds after it. The run that shares fills and the run that
 		// builds a fill of every place (`SeamFillSharing.buildsFillOfEveryPlace`) must print the same diagnostics, which
-		// name every place. With the capture walk not walking the places a fill stands for, seeds 384 and 1880 differ; with
-		// a closer's depth read from the path of the place the fill was built for, seeds 319 and 756 do.
+		// name every place with a finding: all three, or, for the value bound after its place, the last parent's, whose
+		// fill the call does not build. With the capture walk not walking the places a fill stands for, seeds 384 and 1880
+		// differ; with a closer's depth read from the path of the place the fill was built for, seeds 319 and 756 do; with
+		// the places a fill stands for not judged, the build of seeds 772 and 835 that shares fills is accepted.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(feature))
 		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
@@ -7431,7 +7433,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x46366FE53C7197ED
+	static let seamCorpusFixtureHash: UInt64 = 0xB8EFAF506E37BFC7
 	static let seamCorpusAcceptedSeedCount = 623
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x48072926F71AC583
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value

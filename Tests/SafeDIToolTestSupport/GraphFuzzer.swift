@@ -9997,8 +9997,9 @@ enum GraphFuzzerGenerator {
 		/// - In a graph not of all-`Sendable` wrappers, three times in four, each parent declares `stoodForRowBuilder`, an
 		///   `Instantiator` of `StoodForRow`, before its panel, and `StoodForLive` builds `StoodForWorker`, which receives
 		///   it, in a `SendableInstantiator`: a capture the error reports once per parent, each naming every parent.
-		/// - One parent, by roll, declares `stoodForToken`, whose type receives `stoodForPanel` and so is built after it,
-		///   and `StoodForLive` reads it only if available: only that place binds the value after it.
+		/// - The last parent, whose place the fill of the one before it stands for, declares `stoodForToken`, whose type
+		///   receives `stoodForPanel` and so is built after it, and `StoodForLive` reads it only if available: only that
+		///   place binds the value after it, which only its own record says.
 		///
 		/// Never drawn in a graph with a hole (one that declares `addingHoleShapes`' `HoleSeam`), whose rejection would
 		/// leave the hole draws' floors short. `placeStoodForRandom` draws only for this pass, which runs after every
@@ -10052,7 +10053,7 @@ enum GraphFuzzerGenerator {
 			} else {
 				let token = instantiable("StoodForToken", properties: [PropertyDeclaration(attribute: "@Received", label: "stoodForPanel", type: panel.name)])
 				added.append(token)
-				parentProperties[distinctParentIndex].append(PropertyDeclaration(attribute: "@Instantiated", label: "stoodForToken", type: token.name))
+				parentProperties[parentProperties.count - 1].append(PropertyDeclaration(attribute: "@Instantiated", label: "stoodForToken", type: token.name))
 				liveProperties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "stoodForToken", type: token.name + "?"))
 			}
 			var parentsProperties = [PropertyDeclaration]()

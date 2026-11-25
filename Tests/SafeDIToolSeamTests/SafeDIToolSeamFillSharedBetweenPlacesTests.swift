@@ -184,6 +184,111 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfItsOwnForPlace_whenOnlyItsPathHoldsDeclarationItsFillClosesCycleOn(buildsFillOfEveryPlace: Bool) async {
+		// `Panel`'s `api` is three places of one case, beneath `A`, `B` and `Shell`, and only the third has `shellBuilder`
+		// on its path. `LiveApi` builds `shellBuilder` again: beneath `A` and `B` that builds another `Shell`, whose
+		// `panel` no declaration of the place's path is, and beneath `Shell` it closes a cycle on `Home`'s own. `B`'s
+		// fill does not stand for `Shell`'s place, whose error it would not find.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: SafeDIToolSeamBuilderParameterTests.modules(
+						feature: [
+							"public protocol Api {}",
+							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+							seamFixtureType(named: "A", declarations: ["@Instantiated let aPanel: Panel"]),
+							seamFixtureType(named: "B", declarations: ["@Instantiated let bPanel: Panel"]),
+							seamFixtureType(named: "Shell", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let a: A", "@Instantiated let b: B", "@Instantiated let shellBuilder: Instantiator<Shell>"]),
+						],
+						app: [
+							SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+							seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+						],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):11:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfItsOwnForPlace_whenItHandsItsFillValueOtherPlacesHandDeferred(buildsFillOfEveryPlace: Bool) async {
+		// `Home` receives `token` for `Detail`, built behind an instantiator, so its parameter is deferred, and `First`'s and
+		// `Second`'s places hand their fills the deferred parameter. `Third` builds a `token` of its own, by value.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: SafeDIToolSeamBuilderParameterTests.modules(
+						feature: [
+							"public protocol Api {}",
+							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+							seamFixtureType(named: "Token", declarations: []),
+							seamFixtureType(named: "Detail", declarations: ["@Received let token: Token"]),
+							seamFixtureType(named: "First", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Second", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Third", declarations: ["@Instantiated let token: Token", "@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let detailBuilder: Instantiator<Detail>", "@Instantiated let first: First", "@Instantiated let second: Second", "@Instantiated let third: Third"]),
+						],
+						app: [
+							SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received let token: Token"]),
+							seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let home: Home"]),
+						],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		#expect(error == nil)
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfItsOwnForPlace_whenOnlyItsBuilderIsSendable(buildsFillOfEveryPlace: Bool) async {
+		// `Third` builds `Panel` behind a `SendableInstantiator`, so only its place's builder is `@Sendable`.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: SafeDIToolSeamBuilderParameterTests.modules(
+						feature: [
+							"public protocol Api: Sendable {}",
+							seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]) .replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
+							seamFixtureType(named: "First", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Second", declarations: ["@Instantiated let panel: Panel"]),
+							seamFixtureType(named: "Third", declarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"]),
+							seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let first: First", "@Instantiated let second: Second", "@Instantiated let third: Third"]),
+						],
+						app: [
+							SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []).replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
+							seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+						],
+					),
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		#expect(error == nil)
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFindingOfOnePlace_whenAnotherPlacesFillStandsForPlaceThatBindsValueAfterIt(buildsFillOfEveryPlace: Bool) async {
 		// Only `Third` declares `token`, which receives `panel` and so is built after it: no place hands its fill a `token`, so
 		// the three places' fills are alike and `Second`'s stands for `Third`'s, whose own record alone says that the value
@@ -329,6 +434,62 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		    "api: any Api" -- "row: Row"
 		    "api: any Api" -- "row: Row"
 		    "api: any Api" -- "row: Row"
+		}
+		""")
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_drawsPlaceStoodForAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool) async throws {
+		// `MidSeam` calls `Home` and fills `agent` with `LiveAgent`, which holds a place of its own, `leaf`, so that fill
+		// is drawn after the fills that hold none, though the call builds it first. `Second`'s fill of `api` stands for
+		// `Third`'s, which is drawn after it and before `zed`'s, as its own fill would be.
+		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: [
+						"public protocol Agent {}",
+						"public protocol Api {}",
+						"public protocol Leaf {}",
+						"public protocol Zed {}",
+						seamFixtureType(named: "Row", declarations: []),
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+						seamFixtureType(named: "First", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Second", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Third", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Home", isSeam: true, declarations: [
+							"@Instantiated let agent: any Agent",
+							"@Instantiated let first: First",
+							"@Instantiated let second: Second",
+							"@Instantiated let third: Third",
+							"@Instantiated let zed: any Zed",
+						]),
+					],
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveAgent", fulfilling: "Agent", declarations: ["@Instantiated let leaf: any Leaf"]),
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let row: Row"]),
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveZed", fulfilling: "Zed", declarations: []),
+						seamFixtureType(named: "MidSeam", isSeam: true, declarations: ["@Instantiated let home: Home"]),
+					],
+				),
+				integration: .moduleInfo,
+				writesDOTTrees: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.modules["App"]?.dotTree == """
+		graph SafeDI {
+		    ranksep=2
+		    MidSeam -- "home: Home"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "zed: any Zed"
+		    "home: Home" -- "agent: any Agent"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		    "agent: any Agent" -- "leaf: any Leaf"
 		}
 		""")
 	}

@@ -1528,6 +1528,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		while nextFillIndex < fillsOfThisCall.count {
 			let next = fillsOfThisCall[nextFillIndex]
 			nextFillIndex += 1
+			GenerationWork.record(1, by: .findingFillThatStandsForPlace)
 			// A fill drops a declaration the caller binds itself from its hole, which no other place's fill did for this
 			// one, and which its own fill would do for no other place.
 			guard sharesFillsBetweenPlaces, !next.fill.emitsCode, next.fill.hole.enumPlace != nil, !next.fill.hole.uncarriedDeclarations.contains(where: \.isBoundFromCallersArgument) else {
@@ -1665,7 +1666,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			}
 		}
 		let scopeIdentity = ObjectIdentifier(scope.identity)
-		for (reads, keysByVariant) in standIns.keysByVariantOfEachTreeReads {
+		for (reads, keysByVariant) in GenerationWork.taking(standIns.keysByVariantOfEachTreeReads, by: .findingFillThatStandsForPlace) {
 			if let key = keysByVariant[FillVariant(of: hole, builtBy: scopeIdentity, labels: reads.labels, builtTypes: reads.builtTypes)] {
 				return key
 			}
