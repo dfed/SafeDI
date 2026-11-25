@@ -564,9 +564,9 @@ enum ModulePlacesEncoder {
 	/// so that a difference this form does not cover is never read wrong.
 	static func places(of signatures: [StoredSeamSignature], signaturesRead: [TypeDescription: DependencyTreeGenerator.SeamSignatureRead], lower: [String: ModuleSeamSignatures]) -> (places: StoredModulePlaces, passedUpPlacesWrittenInFull: Int) {
 		var encoder = Encoder(signatures: signatures, signaturesRead: signaturesRead, lower: lower)
-		let placesBySeam = signatures.map { stored in
-			encoder.places(of: stored.signature?.holes ?? [])
-		}
+		let placesOfSeams = signatures.map { $0.signature?.holes ?? [] }
+		var placesBySeam = placesOfSeams.map { encoder.places(of: $0) }
+		encoder.writeWhole(placesNotReadBackFrom: &placesBySeam, as: placesOfSeams, of: signatures.map(\.seamType))
 		return (StoredModulePlaces(lowerSeams: encoder.lowerSeams, placesBySeam: placesBySeam), encoder.passedUpPlacesWrittenInFull)
 	}
 
@@ -617,6 +617,48 @@ enum ModulePlacesEncoder {
 			}
 		}
 
+		/// Reads every passed-up place of `placesBySeam` back as a later run reads it, and writes whole, and counts, each
+		/// that does not read back as the place it stands for among `placesOfSeams`, the places of the seams
+		/// `seamTypes`: compared as the bytes a file holds, which differ wherever two places do.
+		///
+		/// A record of the module's own seams is read from the form written for it here, never from the place the run
+		/// holds, so a form that names itself, or two that name one another, read back as nothing and are written whole.
+		/// A record of a module beneath is the place the run read from that module's file. The places are read shortest
+		/// route first: every record a place names has a shorter route than the place, so it is read before the place.
+		mutating func writeWhole(placesNotReadBackFrom placesBySeam: inout [[StoredPlace]], as placesOfSeams: [[SeamSignature.Hole]], of seamTypes: [TypeDescription]) {
+			// Of two signatures of one seam, the first is kept.
+			let ownSeamIndices = Dictionary(zip(seamTypes, seamTypes.indices), uniquingKeysWith: { first, _ in first })
+			var placesRead = placesBySeam.map { [ReadPlace?](repeating: nil, count: $0.count) }
+			let shortestRouteFirst = placesOfSeams.enumerated()
+				.flatMap { seam, places in places.enumerated().map { (seam: seam, place: $0.offset, routeLength: $0.element.typesToOwner.count) } }
+				.sorted { ($0.routeLength, $0.seam, $0.place) < ($1.routeLength, $1.seam, $1.place) }
+			for next in shortestRouteFirst {
+				let place = placesOfSeams[next.seam][next.place]
+				switch placesBySeam[next.seam][next.place] {
+				case .written:
+					placesRead[next.seam][next.place] = ReadPlace(place)
+				case let .passedUp(stored):
+					func read(_ reference: StoredRecordReference) -> ReadPlace? {
+						let lowerSeam = lowerSeams[reference.lowerSeam]
+						return lowerSeam.moduleName.isEmpty
+							? ownSeamIndices[lowerSeam.seamType].flatMap { placesRead[$0][reference.record] }
+							: lowerRecordsBySeam[lowerSeam.seamType].flatMap { $0.map { ReadPlace($0.places[reference.record]) } }
+					}
+					let record = read(stored.record)
+					let readBack = place.innerSeamType.flatMap { innerSeamType in
+						record.flatMap { stored.place(record: $0, innerSeamType: innerSeamType, others: stored.others.compactMap(read)) }
+					}
+					if let record, let readBack, isWritten(StoredPlaceWriteCheck.alteringPlaceReadBack?(readBack.place, record.place) ?? readBack.place, as: place) {
+						placesRead[next.seam][next.place] = readBack
+					} else {
+						passedUpPlacesWrittenInFull += 1
+						placesBySeam[next.seam][next.place] = .written(place)
+						placesRead[next.seam][next.place] = ReadPlace(place)
+					}
+				}
+			}
+		}
+
 		// MARK: Private
 
 		private let signaturesRead: [TypeDescription: DependencyTreeGenerator.SeamSignatureRead]
@@ -664,7 +706,8 @@ enum ModulePlacesEncoder {
 		}
 
 		/// `place`, passed up from `innerSeamType`, as the record it copies and what its seam adds; whole where its route
-		/// does not extend its record's; or `nil` where the record and the addition do not read back as `place`.
+		/// does not extend its record's; or `nil` where the run holds no record of it. That the form reads back as
+		/// `place` is checked once every place has its form (`writeWhole(placesNotReadBackFrom:as:of:)`).
 		private mutating func storedPlace(_ place: SeamSignature.Hole, passedUpFrom innerSeamType: TypeDescription, amongPlacesOf innerSeamTypes: [TypeDescription]) -> StoredPlace? {
 			guard let records = records(of: innerSeamType), let recordIndex = records.indicesBySite[place.site] else {
 				return nil
@@ -688,7 +731,7 @@ enum ModulePlacesEncoder {
 				}
 			}
 			// A declaration is found among a record's by its label, which a place holds once, its declaring type and its kind
-			// of reason; that the place then reads back as written is checked below.
+			// of reason; that the place then reads back as written is checked once every place has its form.
 			let recordDeclarations = Self.declarationIndices(of: record)
 			let candidateDeclarations = candidates.map { Self.declarationIndices(of: $0.place) }
 			let presentedPlaces = ([record] + candidates.map(\.place)).map(SeamSignature.Hole.UncarriedDeclaration.PresentedPlace.init)
@@ -749,12 +792,6 @@ enum ModulePlacesEncoder {
 					reenteringPlaceFields: areWritten(place.reenteringPlaceFields, as: record.reenteringPlaceFields) ? nil : place.reenteringPlaceFields,
 				),
 			)
-			// What a read will make of it, compared as the bytes a file holds, which differ wherever two places do.
-			guard let readBack = passedUp.place(record: ReadPlace(record), innerSeamType: innerSeamType, others: othersRead.map { ReadPlace(candidates[$0].place) })?.place,
-			      isWritten(StoredPlaceWriteCheck.alteringPlaceReadBack?(readBack, record) ?? readBack, as: place)
-			else {
-				return nil
-			}
 			return .passedUp(passedUp)
 		}
 
