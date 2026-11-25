@@ -1159,12 +1159,21 @@ extension MockLowering {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
-			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			let startsForSendableFunction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			// So does one whose construction passes a configuration read to a `@Sendable` autoclosure, which would capture
+			// the overrides the read names; a public mock passes the read to the type's construction function instead. Its
+			// configuration may be the plain form, which is not `Sendable`, so that function reads each field.
+			let startsExtraction = startsForSendableFunction || (
+				sendableOverrideExtractor == nil
+					&& !buildsPublicMock
+					&& overrideReachable
+					&& constructionPassesConfigurationReadToSendableAutoclosure(of: instantiable, usesMockInitializer: usesMockInitializer)
+			)
 			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
 			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
 			// does too (`ScopeGenerator.sendableConfigurationTypeNames()`), so each field is proven `Sendable` and the
 			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
-			let configurationPath = hasConfiguration && !buildsPublicMock ? nodePath : nil
+			let configurationPath = startsForSendableFunction && hasConfiguration && !buildsPublicMock ? nodePath : nil
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable

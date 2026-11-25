@@ -608,7 +608,7 @@ extension ScopeGenerator {
 				// that evaluates the default in this module, and the construction calls it (`generateReturnArgumentList`).
 				leadingParameters.append(optionalParameter(
 					named: rootDefault.label,
-					type: .closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType),
+					type: MockLowering.closureTaken(forAutoclosureReturning: valueType, isSendable: MockLowering.isSendableAutoclosure(type)),
 					resolvedTo: "{ \(rootDefault.defaultExpression) }",
 					role: .constructionDefault,
 				))
