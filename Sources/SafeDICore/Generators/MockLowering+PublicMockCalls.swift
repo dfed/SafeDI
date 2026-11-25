@@ -473,6 +473,10 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "publicMockCall:promoted"
 		} else if !extractionLines.isEmpty {
 			unrecordedReasons[childIndexPath] = "publicMockCall:sendableExtraction"
+		} else if readsOverride, publicMockCall.takesOverrides || overrideBuilders != nil, MockLowering.overrideReadPath(overrideRead) == nil {
+			// The call reads its override through a local an enclosing `@Sendable` function's extractor binds, which the type
+			// key, reading overrides by their paths, does not declare.
+			unrecordedReasons[childIndexPath] = "publicMockCall:extractedOverrideRead"
 		} else if filledCall != nil || !passesOnlyReads || overrideBuilders != nil {
 			// A call that passes builders is a built place with a function of its own (`recordPublicMockCallPlace`).
 			recordsAsPlace = true
