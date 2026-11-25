@@ -66,6 +66,9 @@ public enum MockLowering {
 		/// The declarations whose modules code that builds the node's type for its property needs imported, where it does
 		/// not name them (`FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)`).
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
+		/// Whether SafeDI supplied the module's default isolation to the type (`Instantiable.usesModuleDefaultIsolation`), so
+		/// that its plain-form configuration takes that isolation too (`configurationStruct(amongConfigurationsTypedSendable:)`).
+		var takesModuleDefaultIsolation = false
 
 		/// The configuration's fields for the node's children, in the order its initializer takes them.
 		var childFields: [ChildField] {

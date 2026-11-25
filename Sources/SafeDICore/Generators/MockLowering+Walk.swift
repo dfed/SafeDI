@@ -222,25 +222,39 @@ extension ScopeGenerator {
 		let overridesFields = inlineOrderedNodes.compactMap(\.overridesField)
 		// The builders `mock()` takes, listed among the flat received parameters by label.
 		var parameterLines = signature.parameterLines(indent: bodyIndent, builders: builders)
+		// Where SafeDI supplied the module's default isolation to the mock, its `SafeDIOverrides` takes the mock's isolation,
+		// and `mock()` defaults it to `nil`, resolved first thing in its body: Swift 5 mode evaluates a default argument
+		// outside the function's isolation, where the main-actor `.init()` cannot be called.
+		let helpersTakeModuleDefaultIsolation = instantiable.usesModuleDefaultIsolation
+		let overridesAttributesPrefix = helpersTakeModuleDefaultIsolation ? "\(MockLowering.moduleDefaultIsolationAttribute) " : ""
+		let overridesParameterLine = helpersTakeModuleDefaultIsolation
+			? "\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName)? = nil"
+			: "\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()"
+		var declaresOverrides = false
 		if !overridesFields.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty {
-			lines.append(contentsOf: overridesStruct(of: overridesFields, onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
+			lines.append(contentsOf: overridesStruct(of: overridesFields, onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, takesModuleDefaultIsolation: helpersTakeModuleDefaultIsolation, indent: indent))
 			lines.append("")
-			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
+			parameterLines.append(overridesParameterLine)
+			declaresOverrides = true
 		} else if nodes.contains(where: \.isPropertyNode) {
 			// A tree whose nodes have no override, such as a call of a mock that takes no overrides and
 			// offers no override closure, still declares its `SafeDIOverrides`, empty.
 			lines.append("\(indent)/// Overrides for the mock dependency tree.")
-			lines.append("\(indent)struct \(ReservedName.mockOverridesTypeName) {")
+			lines.append("\(indent)\(overridesAttributesPrefix)struct \(ReservedName.mockOverridesTypeName) {")
 			lines.append("\(indent)\(standardIndent)init() {}")
 			lines.append("\(indent)}")
 			lines.append("")
-			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
+			parameterLines.append(overridesParameterLine)
+			declaresOverrides = true
 		}
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append(parameterLines.joined(separator: ",\n"))
 		// The type the mocked type's hand-written mock returns.
 		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
+		if declaresOverrides, helpersTakeModuleDefaultIsolation {
+			lines.append("\(bodyIndent)let \(ReservedName.mockOverridesParameterName) = \(ReservedName.mockOverridesParameterName) ?? .init()")
+		}
 		lines.append(contentsOf: bindingLines)
 		// The mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
@@ -258,12 +272,14 @@ extension ScopeGenerator {
 	}
 
 	/// The mock's `SafeDIOverrides`: the member that configures each node, in generation order.
-	private static func overridesStruct(of fields: [MockLowering.OverridesField], onlyIfAvailableOverrides: [OnlyIfAvailableOverride], sendableConfigurationTypeNames: Set<String>, indent: String) -> [String] {
+	/// Where it takes the module's default isolation (`takesModuleDefaultIsolation`), it is `@MainActor`, and each member
+	/// defaulted to its configuration's `.init()` defaults to `nil` instead, resolved in the initializer's body.
+	private static func overridesStruct(of fields: [MockLowering.OverridesField], onlyIfAvailableOverrides: [OnlyIfAvailableOverride], sendableConfigurationTypeNames: Set<String>, takesModuleDefaultIsolation: Bool, indent: String) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 		var lines = [
 			"\(indent)/// Overrides for the mock dependency tree.",
-			"\(indent)struct \(ReservedName.mockOverridesTypeName) {",
+			"\(indent)\(takesModuleDefaultIsolation ? "\(MockLowering.moduleDefaultIsolationAttribute) " : "")struct \(ReservedName.mockOverridesTypeName) {",
 		]
 		let storage = ConfigurationStorage(fields: fields.map { field in
 			ConfigurationStorage.Field(
@@ -276,8 +292,12 @@ extension ScopeGenerator {
 			)
 		})
 		lines.append("\(innerIndent)init(")
-		var initParameters = zip(storage.fields, fields).map { storageField, field in
-			"\(memberIndent)\(storageField.name.spelledAsAssigningParameter(labeled: storageField.name)): \(storageField.typeSource) = \(field.defaultValue)"
+		let resolvesInBody = fields.map { takesModuleDefaultIsolation && $0.defaultValue == MockLowering.configurationDefaultValue }
+		var initParameters = zip(storage.fields, zip(fields, resolvesInBody)).map { storageField, fieldAndResolution in
+			let (field, resolvesInBody) = fieldAndResolution
+			return resolvesInBody
+				? "\(memberIndent)\(storageField.name.spelledAsAssigningParameter(labeled: storageField.name)): \(storageField.typeSource)? = nil"
+				: "\(memberIndent)\(storageField.name.spelledAsAssigningParameter(labeled: storageField.name)): \(storageField.typeSource) = \(field.defaultValue)"
 		}
 		// Each override of what the mock receives only if available, after the storage's fields and
 		// stored beside the storage (`generateSafeDIOverridesStruct`).
@@ -287,7 +307,9 @@ extension ScopeGenerator {
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
 		if !storage.fields.isEmpty {
-			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
+			lines.append(contentsOf: storage.initialization(to: zip(storage.fields, resolvesInBody).map { field, resolvesInBody in
+				resolvesInBody ? "\(field.name.spelledAsAssigningParameterName) ?? \(MockLowering.configurationDefaultValue)" : field.name.spelledAsAssigningParameterName
+			}, indent: memberIndent))
 		}
 		for override in onlyIfAvailableOverrides {
 			lines.append("\(memberIndent)self.\(override.name) = \(override.name.spelledAsAssigningParameterName)")
@@ -1976,6 +1998,7 @@ extension MockLowering.ConfigurationRecord {
 			builderParameters: MockLowering.BuilderParameters(of: node.instantiable, usesMockInitializer: node.usesMockInitializer),
 			defaultFields: node.defaultFields,
 		)
+		takesModuleDefaultIsolation = node.instantiable.usesModuleDefaultIsolation
 	}
 }
 
