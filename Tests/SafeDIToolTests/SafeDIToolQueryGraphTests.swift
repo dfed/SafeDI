@@ -203,12 +203,13 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		        {
 		          "filePath" : "\(path)/Root.swift",
 		          "fulfilledBy" : "App.DefaultService",
+		          "fulfilledByType" : "DefaultService",
 		          "isErased" : false,
 		          "isOnlyIfAvailable" : false,
 		          "label" : "service",
 		          "lifetime" : "eager",
 		          "line" : 11,
-		          "plainType" : "DefaultService",
+		          "plainType" : "Service",
 		          "source" : "instantiated",
 		          "type" : "any Service"
 		        },
@@ -976,6 +977,64 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_marksInstantiatedDependencyOnlyIfAvailable_whetherOrNotADeclarationFulfillsItsType() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(cache: Cache?, missing: Missing?, reader: Reader, service: Service) {
+			        self.cache = cache
+			        self.missing = missing
+			        self.reader = reader
+			        self.service = service
+			    }
+
+			    @Instantiated(onlyIfAvailable: true) let cache: Cache?
+			    @Instantiated(onlyIfAvailable: true) let missing: Missing?
+			    @Instantiated let reader: Reader
+			    @Instantiated let service: Service
+			}
+			""",
+			"Cache.swift": """
+			@Instantiable
+			public final class Cache: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Missing.swift": """
+			public protocol Missing {}
+			""",
+			"Reader.swift": """
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(cache: Cache?, missing: Missing?) {
+			        self.cache = cache
+			        self.missing = missing
+			    }
+
+			    @Received(onlyIfAvailable: true) let cache: Cache?
+			    @Received(onlyIfAvailable: true) let missing: Missing?
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		let rootDependencies = try #require(report.declarations.first { $0.typeName == "Root" }).dependencies
+		#expect(report.completeness == .trees)
+		#expect(report.errors.isEmpty)
+		#expect(rootDependencies.map(\.label) == ["cache", "missing", "reader", "service"])
+		#expect(rootDependencies.map(\.isOnlyIfAvailable) == [true, true, false, false])
+		#expect(rootDependencies.map(\.fulfilledBy) == ["App.Cache", nil, "App.Reader", "App.Service"])
+		#expect(Self.supplies(in: report) == ["App.Reader.cache": "App.Root.cache", "App.Reader.missing": "App.Root.missing"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_reportsTreeErrorWithoutProvenance_whenTreeInstantiatesTypeNoDeclarationFulfills() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
@@ -1007,6 +1066,38 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		#expect(report.errors.map(\.message).allSatisfy { $0.hasPrefix("No @Instantiable type or extension fulfills `Missing`") })
 		#expect(report.declarations.flatMap(\.dependencies).map(\.provenance) == [nil, nil, nil])
 		#expect(report.declarations.map(\.isReachedByRoot) == [nil, nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsPropertysPlainType_whenInstantiatedDependencyIsFulfilledByAnotherType() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: any Service, serviceBuilder: Instantiator<any Service>) {
+			        self.service = service
+			        self.serviceBuilder = serviceBuilder
+			    }
+
+			    @Instantiated(fulfilledByType: "DefaultService") let service: any Service
+			    @Instantiated(fulfilledByType: "DefaultService") let serviceBuilder: Instantiator<any Service>
+			}
+			""",
+			"DefaultService.swift": """
+			public protocol Service {}
+
+			@Instantiable(fulfillingAdditionalTypes: [Service.self])
+			public final class DefaultService: Service, Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		let dependencies = report.declarations.first { $0.typeName == "Root" }?.dependencies ?? []
+		#expect(dependencies.map(\.plainType) == ["Service", "Service"])
+		#expect(dependencies.map(\.fulfilledByType) == ["DefaultService", "DefaultService"])
+		#expect(dependencies.map(\.fulfilledBy) == ["App.DefaultService", "App.DefaultService"])
 	}
 
 	@Test

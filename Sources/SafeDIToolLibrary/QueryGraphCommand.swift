@@ -31,7 +31,7 @@ public struct QueryGraph: AsyncParsableCommand {
 	public static let configuration = CommandConfiguration(
 		commandName: "graph",
 		abstract: "Export every `@Instantiable` declaration, its dependencies, which declaration fulfills each one and which declarations each fulfills, and where each received dependency’s value comes from, as JSON (alpha).",
-		discussion: "Reads the modules named with `--include` and `--module-info` once, as `query needs` reads them, and prints one JSON document: each production `@Instantiable` declaration with its module, file and line, the dependencies it declares, each with its type as declared and as a plain type, the declaration that fulfills each instantiated dependency (`fulfilledBy`) and, on each declaration, the dependencies it fulfills (`constructedBy`), the declaration that fulfills each type, and, read from the trees `generate` builds, each declaration whose value a received dependency is handed, or why it is handed `nil` (`provenance`). Each declaration and dependency appears once, however many trees reach it. The same inputs give the same bytes. `completeness` says how much SafeDI worked out: when two declarations fulfill one type, only the declarations are exported; when the trees are not valid, no provenance is; `errors` says why, and the command still succeeds. This command is in alpha: its options and JSON may change in any release, which the JSON’s `formatVersion` of 0 says. SafeDI’s Documentation/QueryGraph.md documents the format.",
+		discussion: "Reads the modules named with `--include` and `--module-info` once, as `query needs` reads them, and prints one JSON document: each production `@Instantiable` declaration with its module, file and line, the dependencies it declares, each with its type as declared and as a plain type and an instantiated one with the `fulfilledByType:` it names, the declaration that fulfills each instantiated dependency (`fulfilledBy`) and, on each declaration, the dependencies it fulfills (`constructedBy`), the declaration that fulfills each type, and, read from the trees `generate` builds, each declaration whose value a received dependency is handed, or why it is handed `nil` (`provenance`). Each declaration and dependency appears once, however many trees reach it. The same inputs give the same bytes. `completeness` says how much SafeDI worked out: when two declarations fulfill one type, only the declarations are exported; when the trees are not valid, no provenance is; `errors` says why, and the command still succeeds. This command is in alpha: its options and JSON may change in any release, which the JSON’s `formatVersion` of 0 says. SafeDI’s Documentation/QueryGraph.md documents the format.",
 	)
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, as `query needs` takes them.") var include: [String] = []
@@ -369,19 +369,22 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 		self.filePath = filePath
 		line = dependency.declarationLocation?.line
 		switch dependency.source {
-		case let .instantiated(_, erasedToConcreteExistential):
+		case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
 			source = .instantiated
 			lifetime = Lifetime(builtAs: dependency.property.typeDescription.propertyType)
-			plainType = dependency.asInstantiatedType.plainType.asSource
+			plainType = dependency.property.typeDescription.plainType.asSource
+			// `asInstantiatedType` is the `fulfilledByType:` type as normalization qualified it.
+			fulfilledByType = fulfillingTypeDescription == nil ? nil : dependency.asInstantiatedType.plainType.asSource
 			self.fulfilledBy = fulfilledBy
 			isErased = erasedToConcreteExistential
-			isOnlyIfAvailable = false
+			isOnlyIfAvailable = dependency.isInstantiatedOnlyIfAvailable
 			aliasOf = nil
 			self.provenance = nil
 		case let .received(onlyIfAvailable):
 			source = .received
 			lifetime = nil
 			plainType = dependency.property.typeDescription.plainType.asSource
+			fulfilledByType = nil
 			self.fulfilledBy = nil
 			isErased = false
 			isOnlyIfAvailable = onlyIfAvailable
@@ -391,6 +394,7 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 			source = .received
 			lifetime = nil
 			plainType = dependency.property.typeDescription.plainType.asSource
+			fulfilledByType = nil
 			self.fulfilledBy = nil
 			isErased = erasedToConcreteExistential
 			isOnlyIfAvailable = onlyIfAvailable
@@ -404,6 +408,7 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 			source = .forwarded
 			lifetime = nil
 			plainType = dependency.property.typeDescription.plainType.asSource
+			fulfilledByType = nil
 			self.fulfilledBy = nil
 			isErased = false
 			isOnlyIfAvailable = false
@@ -418,12 +423,15 @@ public struct GraphDependency: Encodable, Equatable, Sendable {
 	let lifetime: Lifetime?
 	/// The property's type, as declared.
 	let type: String
-	/// The type of the value the dependency holds, with no optional, wrapper or `any`; for an instantiated dependency,
-	/// the type SafeDI builds: `fulfilledByType:`, or the property's type without its wrapper.
+	/// The type of the value the dependency holds, with no optional, wrapper or `any`.
 	let plainType: String
+	/// For an instantiated dependency that names the type SafeDI builds with `fulfilledByType:`, that type, with no
+	/// optional, wrapper or `any`.
+	let fulfilledByType: String?
 	/// The SafeDI wrapper the property is held in, when it is held in one.
 	let wrapper: String?
-	/// For an instantiated dependency in a resolved graph, the id of the declaration that fulfills `plainType`; absent
+	/// For an instantiated dependency in a resolved graph, the id of the declaration that fulfills the type SafeDI
+	/// builds (`fulfilledByType`, else `plainType`); absent
 	/// when no production declaration does.
 	let fulfilledBy: String?
 	let isErased: Bool
