@@ -368,6 +368,36 @@ struct TypeKeyBodyValuePathTests {
 		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(read), staysOutsideSendableFunctions: false), isSendable: true)) == nil)
 	}
 
+	@Test
+	func statements_erasesInsideTheFunction_whenAnErasedPlacesFunctionReturnsTheErasedType() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(boundAs: .simple(name: "AnyB"), isErased: true) { built in
+			built.functionReturnType = .simple(name: "AnyB")
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: .simple(name: "AnyB"))]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> AnyB {
+		            if let make = overrides.make { AnyB(make()) } else { AnyB(B()) }
+		        }
+		        let b: AnyB = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_returnsThePropertysType_whenAPlacesFunctionReturnsTheProtocolItsTypeFulfills() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(boundAs: .simple(name: "BProtocol")) { built in
+			built.functionReturnType = .simple(name: "BProtocol")
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> BProtocol {
+		            if let make = overrides.make { make() } else { B() }
+		        }
+		        let b: BProtocol = __safeDI_b()
+		""")
+	}
+
 	private static let cRead = PlaceRead(
 		argumentLabel: "c",
 		label: "c",
@@ -461,12 +491,12 @@ struct TypeKeyBodyValuePathTests {
 		source: .binding(label: "id"),
 	)
 
-	/// `let id = 1`, then a place that builds `b: B` with `arguments` in a function of its own, `@Sendable` where `isSendable`, whose body builds `children`, as `configure` records it.
-	private static func rootBody(arguments: [PlaceRead] = [], children: [GeneratedCode] = [], isSendable: Bool = false, _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
+	/// `let id = 1`, then a place that builds a `B` bound as `b: <propertyType>`, erased to it where `isErased`, with `arguments` in a function of its own, `@Sendable` where `isSendable`, whose body builds `children`, as `configure` records it.
+	private static func rootBody(arguments: [PlaceRead] = [], children: [GeneratedCode] = [], isSendable: Bool = false, boundAs propertyType: TypeDescription = .simple(name: "B"), isErased: Bool = false, _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
 		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
 		var built = BuiltPlaceRecord(
-			property: Property(label: "b", typeDescription: .simple(name: "B")),
-			isErased: false,
+			property: Property(label: "b", typeDescription: propertyType),
+			isErased: isErased,
 			concreteType: .simple(name: "B"),
 			isExtension: false,
 			target: .initializer(.simple(name: "B")),

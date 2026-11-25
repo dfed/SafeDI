@@ -70,6 +70,9 @@ extension BuiltPlaceRecord {
 		if let constructionValue {
 			shape.append("value|\(constructionValue.value.shape)|\(constructionValue.resultWrapper?.asSource ?? "")")
 		}
+		if let functionReturnType {
+			shape.append("returns|\(functionReturnType.asSource)")
+		}
 		return shape
 	}
 }

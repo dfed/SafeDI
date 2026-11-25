@@ -80,7 +80,11 @@ extension TypeKeyLayout {
 					typesDeclaredEscaping.insert(argument.type)
 				}
 			}
+			// A function that returns a type of its own erases an erased place's value itself, so its calls do not.
 			var value = Expression.construction(representative.target, arguments: arguments)
+			if let functionReturnType = representative.functionReturnType {
+				value = value.erased(to: functionReturnType, where: representative.isErased)
+			}
 			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
 				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
@@ -90,7 +94,7 @@ extension TypeKeyLayout {
 				isSendable: isDecorated[owner],
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-				returnType: representative.concreteType,
+				returnType: representative.functionReturnType ?? representative.concreteType,
 				body: BuilderBody(statements: body),
 				value: value,
 				lineEnd: representative.lineEnd,
@@ -147,8 +151,10 @@ extension TypeKeyLayout {
 	}
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.
-	func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, inClass owner: Int, at index: Int) -> String? {
+	func spelledCall(of callee: Int, binding property: Property, isErased placeIsErased: Bool, isExtension: Bool, inClass owner: Int, at index: Int) -> String? {
 		guard let representative = representative(of: callee) else { return nil }
+		// A function that returns a type of its own erased the value already (`spelledRootStatements`).
+		let isErased = placeIsErased && representative.functionReturnType == nil
 		var arguments = [String]()
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
 			guard let parameterType = parameterTypes[callee][label],
@@ -187,7 +193,7 @@ extension TypeKeyLayout {
 				property: property,
 				rule: .constant(
 					isErased: isErased,
-					constructedTypeIsPropertyType: representative.concreteType.asSource == property.typeDescription.asSource,
+					constructedTypeIsPropertyType: (representative.functionReturnType ?? representative.concreteType).asSource == property.typeDescription.asSource,
 					hasBuilderFunction: true,
 					isExtension: isExtension,
 				),
