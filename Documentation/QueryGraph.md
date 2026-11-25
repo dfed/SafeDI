@@ -144,11 +144,12 @@ The export does not say the order a type builds its dependencies in, which can d
 
 These use [`jq`](https://jqlang.org).
 
-Where `Cache` is used – held, built, received or renamed – with each site’s file and line:
+Where `Cache` is used – held, received or renamed as `Cache`, or built as `App.Cache`, also through a type it fulfills – with each site’s file and line:
 
 ```bash
-jq --arg T Cache '[.declarations[] as $owner | $owner.dependencies[]
-  | select(.plainType == $T or .fulfilledByType == $T or .aliasOf.plainType == $T)
+jq --arg T Cache --arg ID App.Cache '[.declarations[] as $owner | $owner.dependencies[]
+  | select(.plainType == $T or .aliasOf.plainType == $T
+    or .fulfilledByType == $T or .fulfilledBy == $ID)
   | {owner: $owner.id, source, lifetime, label, filePath, line}]' graph.json
 ```
 
