@@ -1722,6 +1722,7 @@ struct GraphFuzzerValueOraclePlan {
 				knownRightExpression: "\(fixture.typeNamePrefix)\(Self.pinnedPlaceRootName)().pinHost.pinMiddle.pinScreen",
 			)
 			: nil
+		nestedCycleShape = NestedCycleShape(of: fixture)
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -1762,6 +1763,127 @@ struct GraphFuzzerValueOraclePlan {
 	/// production does, and the other the `PinToken` it builds. `nil` in every other graph.
 	let pinnedPlacePair: DifferentialValueProbePair?
 
+	/// In a graph that draws a type built again through a second lazy cycle (`addingTypeBuiltAgainThroughSecondLazyCycle`),
+	/// what the draw drew of `NestRoot`'s tree, read from the graph's source. `nil` in every other graph.
+	let nestedCycleShape: NestedCycleShape?
+
+	/// `NestRoot`'s production build against the same tree built by hand to the Manual's rule, a `@Received` property
+	/// takes the nearest declaration above it, by `ZNestMirror.build()`, which only the value-oracle fixture declares:
+	/// a mock of `NestRoot` and its production build pass a label through the functions lazy cycles close on by one rule,
+	/// so the root's own pair cannot tell a wrong rule from a right one. `nil` in every graph without the draw.
+	var nestedCyclePair: DifferentialValueProbePair? {
+		guard nestedCycleShape != nil else { return nil }
+		return DifferentialValueProbePair(
+			name: "\(fixture.typeNamePrefix)NestRoot() against a tree built by hand",
+			featureExpression: "\(fixture.typeNamePrefix)NestRoot()",
+			knownRightExpression: "\(fixture.typeNamePrefix)\(Self.nestedCycleMirrorName).build()",
+		)
+	}
+
+	/// The name, after the graph's prefix, of the type whose `build()` builds `NestRoot`'s tree by hand in the
+	/// value-oracle fixture of a graph with a `nestedCyclePair`. It sorts after every type name of the graph, as a
+	/// mirror's does.
+	static let nestedCycleMirrorName = "ZNestMirror"
+
+	/// What `addingTypeBuiltAgainThroughSecondLazyCycle` drew, read from a graph's source.
+	struct NestedCycleShape: Equatable {
+		/// `nil` for a graph without `NestRoot`.
+		init?(of fixture: GraphFuzzerFixture) {
+			let prefix = fixture.typeNamePrefix
+			var propertiesByTypeName = [String: [(label: String, type: String)]]()
+			var currentTypeName = ""
+			for line in fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentTypeName = name
+				case let .property(_, label, type):
+					propertiesByTypeName[currentTypeName, default: []].append((label, type))
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+			guard let rootProperties = propertiesByTypeName["\(prefix)NestRoot"],
+			      let innerProperties = propertiesByTypeName["\(prefix)NestInner"]
+			else { return nil }
+			closesFirstCycleFirst = innerProperties.first?.label == "nestOuterBuilder"
+			hasThirdCycle = propertiesByTypeName["\(prefix)NestThird"] != nil
+			receivesOnlyIfAvailable = !rootProperties.contains { $0.label == "nestLabel" }
+			isSendable = rootProperties.contains { $0.type.hasPrefix("SendableInstantiator<") }
+		}
+
+		/// `NestInner` declares the instantiator of `NestOuter`, which closes the first cycle, before the one that opens
+		/// the second.
+		let closesFirstCycleFirst: Bool
+		/// `NestThird` sits between `NestInner` and `NestRedeclarer`, which builds it again.
+		let hasThirdCycle: Bool
+		/// `NestReader` receives `nestLabel` only if available, and `NestRoot` declares none.
+		let receivesOnlyIfAvailable: Bool
+		/// Every instantiator of the tree is a `SendableInstantiator`.
+		let isSendable: Bool
+
+		/// The file of `ZNestMirror`, which names itself (`GraphFuzzerFixture.fileNameMarker`), as it declares no
+		/// `@Instantiable` type, and whose `build()` builds `NestRoot`'s tree by hand: each function takes the
+		/// `nestLabel` of the nearest `NestRedeclarer` above the type it builds, or `NestRoot`'s, and each `NestReader`
+		/// is handed it.
+		func mirrorSource(typeNamePrefix prefix: String) -> String {
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let function = isSendable ? "@Sendable func" : "func"
+			let labelType = "\(prefix)NestLabel" + (receivesOnlyIfAvailable ? "?" : "")
+			let outerBuilder = "nestOuterBuilder: \(instantiator)<\(prefix)NestOuter> { outer(nestLabel: nestLabel) }"
+			let secondCycleBuilder = hasThirdCycle
+				? "nestThirdBuilder: \(instantiator)<\(prefix)NestThird> { third(nestLabel: nestLabel) }"
+				: "nestRedeclarerBuilder: \(instantiator)<\(prefix)NestRedeclarer> { redeclarer() }"
+			var lines = [
+				"\(GraphFuzzerFixture.fileNameMarker)\(prefix)\(GraphFuzzerValueOraclePlan.nestedCycleMirrorName).swift",
+				"enum \(prefix)\(GraphFuzzerValueOraclePlan.nestedCycleMirrorName) {",
+				"\tstatic func build() -> \(prefix)NestRoot {",
+				"\t\t\(function) outer(nestLabel: \(labelType)) -> \(prefix)NestOuter {",
+				"\t\t\t\(prefix)NestOuter(",
+				"\t\t\t\tnestInnerBuilder: \(instantiator)<\(prefix)NestInner> { inner(nestLabel: nestLabel) },",
+				"\t\t\t\tnestReaderBuilder: \(instantiator)<\(prefix)NestReader> { \(prefix)NestReader(nestLabel: nestLabel) }",
+				"\t\t\t)",
+				"\t\t}",
+				"\t\t\(function) inner(nestLabel: \(labelType)) -> \(prefix)NestInner {",
+				"\t\t\t\(prefix)NestInner(",
+				"\t\t\t\t\(closesFirstCycleFirst ? outerBuilder : secondCycleBuilder),",
+				"\t\t\t\t\(closesFirstCycleFirst ? secondCycleBuilder : outerBuilder)",
+				"\t\t\t)",
+				"\t\t}",
+			]
+			if hasThirdCycle {
+				lines += [
+					"\t\t\(function) third(nestLabel: \(labelType)) -> \(prefix)NestThird {",
+					"\t\t\t\(prefix)NestThird(",
+					"\t\t\t\tnestRedeclarerBuilder: \(instantiator)<\(prefix)NestRedeclarer> { redeclarer() },",
+					"\t\t\t\tnestInnerBuilder: \(instantiator)<\(prefix)NestInner> { inner(nestLabel: nestLabel) }",
+					"\t\t\t)",
+					"\t\t}",
+				]
+			}
+			lines += [
+				"\t\t\(function) redeclarer() -> \(prefix)NestRedeclarer {",
+				"\t\t\tlet nestLabel = \(prefix)NestLabel()",
+				"\t\t\treturn \(prefix)NestRedeclarer(",
+				"\t\t\t\tnestLabel: nestLabel,",
+				hasThirdCycle
+					? "\t\t\t\tnestThirdBuilder: \(instantiator)<\(prefix)NestThird> { third(nestLabel: nestLabel) }"
+					: "\t\t\t\tnestInnerBuilder: \(instantiator)<\(prefix)NestInner> { inner(nestLabel: nestLabel) }",
+				"\t\t\t)",
+				"\t\t}",
+			]
+			if receivesOnlyIfAvailable {
+				lines.append("\t\treturn \(prefix)NestRoot(nestOuterBuilder: \(instantiator)<\(prefix)NestOuter> { outer(nestLabel: nil) })")
+			} else {
+				lines += [
+					"\t\tlet nestLabel = \(prefix)NestLabel()",
+					"\t\treturn \(prefix)NestRoot(nestLabel: nestLabel, nestOuterBuilder: \(instantiator)<\(prefix)NestOuter> { outer(nestLabel: nestLabel) })",
+				]
+			}
+			lines += ["\t}", "}"]
+			return lines.joined(separator: "\n") + "\n"
+		}
+	}
+
 	/// The name, after the graph's prefix, of the root that builds `PinHost` in the value-oracle fixture of a graph with
 	/// a `pinnedPlacePair`. It is no root of the graph, whose mock the value oracle would make: a root's mock rejects
 	/// `PinHost`'s tree by design. It sorts after every type name of the graph, as a mirror's does.
@@ -1782,6 +1904,9 @@ struct GraphFuzzerValueOraclePlan {
 		swiftFileContent += mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
 		if pinnedPlacePair != nil {
 			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp))
+		}
+		if let nestedCycleShape {
+			swiftFileContent.append(nestedCycleShape.mirrorSource(typeNamePrefix: fixture.typeNamePrefix))
 		}
 		if storingEveryParameter {
 			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
@@ -1807,13 +1932,16 @@ struct GraphFuzzerValueOraclePlan {
 	}
 
 	/// The pairs the oracle compares: each root's mock with its production build, then each mirrored mock with its
-	/// mirror's value, then `pinnedPlacePair`. Never a mirror itself, which builds the mocked type's dependencies the
+	/// mirror's value, then `pinnedPlacePair` and `nestedCyclePair`. Never a mirror itself, which builds the mocked type's dependencies the
 	/// mocked type does not hold.
 	var probePairs: [DifferentialValueProbePair] {
 		var pairs = rootTypeNames.map { DifferentialValueProbePair(name: "\($0).mock()", featureExpression: "\($0).mock()", knownRightExpression: "\($0)()") }
 		pairs += mirrors.map { DifferentialValueProbePair(name: "\($0.mockedTypeName).mock()", featureExpression: $0.featureExpression, knownRightExpression: $0.knownRightExpression) }
 		if let pinnedPlacePair {
 			pairs.append(pinnedPlacePair)
+		}
+		if let nestedCyclePair {
+			pairs.append(nestedCyclePair)
 		}
 		return pairs
 	}
@@ -2116,6 +2244,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	/// The compared pairs of a mock of a type built twice with differing pins against production's build of it
 	/// (`GraphFuzzerValueOraclePlan.pinnedPlacePair`).
 	var pinnedPlacePairCount = 0
+	/// The compared pairs of a production build of a type built again through a second lazy cycle against the tree built
+	/// by hand (`GraphFuzzerValueOraclePlan.nestedCyclePair`).
+	var nestedCyclePairCount = 0
 
 	/// Counts the skips and the drawn mock files R6 normalizes of a graph the value oracle inspected and, when its
 	/// value-oracle graph was compared, its pairs and their shapes.
@@ -2149,6 +2280,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		if plan.pinnedPlacePair != nil {
 			pinnedPlacePairCount += 1
 		}
+		if plan.nestedCyclePair != nil {
+			nestedCyclePairCount += 1
+		}
 	}
 
 	/// The counts as one report field, `key=value` separated by commas, every key present: what
@@ -2169,6 +2303,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields.append("overridePairsSum=0x\(String(overridePairsSum.value, radix: 16, uppercase: true))")
 		fields += GraphFuzzerOverrideFieldKind.allCases.map { "override.\($0.rawValue)=\(overrideFieldKindCounts[$0, default: 0])" }
 		fields.append("pinnedPlacePairs=\(pinnedPlacePairCount)")
+		fields.append("nestedCyclePairs=\(nestedCyclePairCount)")
 		return fields.joined(separator: ",")
 	}
 
