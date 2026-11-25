@@ -6786,7 +6786,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    __safeDI_next(id: $0)
 		                }
 		                let service: any Service = __safeDI_serviceBuilder_next.service(SafeDIMockScope_Service.Node_Scope.service_Values(id: id, next: next))
-		                return Node.__safeDI_init(id: id, next: next, service: service, safeDIBuilder: nil)
+		                return Node.__safeDI_init(id: id, next: next, service: service, safeDIBuilder: safeDIOverrides.node.safeDIBuilder)
 		            }
 		            let next = Instantiator<Node> {
 		                __safeDI_next(id: $0)

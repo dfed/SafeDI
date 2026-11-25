@@ -143,13 +143,14 @@ If your session started outside the worktree you are editing, scoped rules and n
 | "Cycle mechanisms": cycle closing, builder function names, sibling order, deep walks | `.claude/rules/cycle-generation.md` |
 | "Cycle mechanisms": a cycle or received-property walk | `.claude/rules/cycle-validation.md` |
 | "Mock generation specifics": `mock()` bodies, hand-written mocks, overrides | `.claude/rules/mock-generation.md` |
+| `mockRootParameters` or `seamMockBuilders` in `ScopeGenerator.swift`, which does not load it | `.claude/rules/mock-generation.md` |
 | promotion to the mock root, parameter naming | `.claude/rules/mock-root-promotion.md` |
 | `LazilyInstantiated` anywhere | `.claude/rules/lazily-instantiated.md` |
 | `generateMock: .public`, generated attributes; a public mock's or a seam's own mock's builders that take nothing | `.claude/rules/public-mocks.md`, `public-mock-builders.md`, `calling-mock-hole-builders.md` |
 | `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-carriers.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
-| the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `emission-decisions.md` |
+| the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `construction-memo-calls.md`, `emission-decisions.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |
 | a change's tests, before writing them | `.claude/rules/test-design.md` |
 | a new test file, a fixture's file name, a temporary or expected path in a test | `.claude/rules/test-infrastructure.md` |
