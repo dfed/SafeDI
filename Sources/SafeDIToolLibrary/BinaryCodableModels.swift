@@ -480,7 +480,6 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
 				BinaryLayoutField("generatedInitializerAttributes", \.generatedInitializerAttributes),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
-				BinaryLayoutField("declarationIsolation", \.declarationIsolation),
 				BinaryLayoutField("generateMock", \.generateMock),
 				BinaryLayoutField("mockGenerationArgumentRange", \.mockGenerationArgumentRange),
 				BinaryLayoutField("mockOnly", \.mockOnly),
@@ -524,7 +523,6 @@ extension Instantiable: BinarySchemaMember {
 			enclosingExtensionAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
 			generatedInitializerAttributes: reader.read(),
 			mockAttributes: reader.read(),
-			declarationIsolation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			generateMock: reader.read(),
 			mockGenerationArgumentRange: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.SourceRange?,
 			mockOnly: fieldFlags.next(),
@@ -566,7 +564,6 @@ extension Instantiable: BinarySchemaMember {
 			writer.writeOptional(enclosingExtensionAccess, flaggedIn: &fieldFlags)
 			writer.write(generatedInitializerAttributes)
 			writer.write(mockAttributes)
-			writer.writeOptional(declarationIsolation, flaggedIn: &fieldFlags)
 			writer.write(generateMock)
 			writer.writeOptional(mockGenerationArgumentRange, flaggedIn: &fieldFlags)
 			fieldFlags.append(mockOnly)
