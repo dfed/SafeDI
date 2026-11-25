@@ -48,7 +48,7 @@ extension MockLowering.Walk {
 		let lines = unit.lines
 		guard let firstLine = lines.first(where: { !$0.allSatisfy(\.isWhitespace) }) else { return }
 		let indent = String(firstLine.prefix { $0 == " " || $0 == "\t" })
-		let unindented = lines.map { line in line.hasPrefix(indent) ? String(line.dropFirst(indent.count)) : line }
+		let unindented = Self.unindenting(lines, by: indent)
 		// The bindings the unit makes at its top, by name, with their types.
 		var bindings = [Property]()
 		for line in unit.bindings {
@@ -70,7 +70,7 @@ extension MockLowering.Walk {
 		for name in boundNames {
 			outerTypes[name] = nil
 		}
-		let functionText = unit.functions.map { line in line.hasPrefix(indent) ? String(line.dropFirst(indent.count)) : line }.joined(separator: "\n")
+		let functionText = Self.unindenting(unit.functions, by: indent).joined(separator: "\n")
 		guard let place = MockLowering.textPlace(functionText, outerTypes: outerTypes) else {
 			unrecordedReasons[first.path] = "loop:functionText"
 			return
@@ -83,7 +83,7 @@ extension MockLowering.Walk {
 			return
 		}
 		// The bindings read the functions the unit declares, and the members the unit binds before them.
-		let bindingText = unit.bindings.map { line in line.hasPrefix(indent) ? String(line.dropFirst(indent.count)) : line }.joined(separator: "\n")
+		let bindingText = Self.unindenting(unit.bindings, by: indent).joined(separator: "\n")
 		let bindingTokens = MockLowering.codeTokens(in: bindingText)
 		guard !bindingTokens.contains(where: { !$0.isMember && $0.name.hasPrefix(ReservedName.builderFunctionNamePrefix) && !place.declaredFunctionNames.contains($0.name) }) else {
 			unrecordedReasons[first.path] = "loop:namesFunctionOrLocalAround"
@@ -109,5 +109,16 @@ extension MockLowering.Walk {
 			otherBindings: Array(bindings.dropFirst()),
 			declaredFunctionNames: place.declaredFunctionNames,
 		))
+	}
+
+	/// The unit's text, each line without the unit's indent. An element can hold several lines, such as a rebinding
+	/// wrapped in `#sourceLocation` directives, so each of its lines is unindented, never only its first.
+	private static func unindenting(_ elements: [String], by indent: String) -> [String] {
+		elements.map { element in
+			element
+				.split(separator: "\n", omittingEmptySubsequences: false)
+				.map { line in line.hasPrefix(indent) ? String(line.dropFirst(indent.count)) : String(line) }
+				.joined(separator: "\n")
+		}
 	}
 }
