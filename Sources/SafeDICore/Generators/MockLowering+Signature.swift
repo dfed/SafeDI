@@ -103,6 +103,9 @@ extension MockLowering {
 			let properties: [Property]
 			/// The parameter's type as `mock()` declares it.
 			let typeSource: String
+			/// The parameter's default: a builder that returns `nil` for a builder of places instantiated only if available,
+			/// whose type is optional, the value production gives a place nothing fulfills.
+			let defaultExpression: String?
 			// The places of a seam's own internal mock the builder builds, each the uncovered dependency
 			// it stands for, named as its parameter would have been (`ScopeGenerator.seamMockBuilders`).
 			let places: [ScopeGenerator.MockRootParameters.UncoveredParameter]
@@ -123,7 +126,7 @@ extension MockLowering {
 		// received parameters by its label, in label order.
 		var placeOnlyBuilderDeclarations: [(label: String, declaration: String)] {
 			passedUpBuilders.compactMap { builder in
-				builder.properties.isEmpty ? (builder.label, "\(builder.label): \(builder.typeSource)") : nil
+				builder.properties.isEmpty ? (builder.label, "\(builder.label): \(builder.typeSource)\(builder.defaultExpression.map { " = \($0)" } ?? "")") : nil
 			}
 		}
 
@@ -302,6 +305,7 @@ extension ScopeGenerator {
 				internalName: builder.internalName,
 				properties: builder.passedUpProperties,
 				typeSource: builder.parameterType.asSource,
+				defaultExpression: builder.family.holeType.builtType.isOptional ? ReservedName.nilBuilderSource : nil,
 				places: builder.places,
 				family: builder.family,
 				adapters: builder.adapters.map { .init(property: $0.property, name: $0.name, typeSource: $0.typeDescription.asSource) },
@@ -415,7 +419,7 @@ extension ScopeGenerator {
 		for builder in passedUpBuilders {
 			guard let property = builder.properties.first else { continue }
 			let position = flatReceivedParameters.firstIndex { $0.property.label > builder.label } ?? flatReceivedParameters.endIndex
-			flatReceivedParameters.insert(.init(property: property, defaultExpression: nil, typeSource: builder.typeSource, name: builder.label), at: position)
+			flatReceivedParameters.insert(.init(property: property, defaultExpression: builder.defaultExpression, typeSource: builder.typeSource, name: builder.label), at: position)
 		}
 		var signature = MockLowering.RootSignature(
 			forwardedParameters: forwardedParameters,
@@ -563,13 +567,11 @@ extension ScopeGenerator {
 				}
 			}
 		}
-		/// The declarations of the properties a generator's type instantiates only if available that nothing fulfills.
-		func unavailableDependencyDeclarations(of generator: ScopeGenerator, declaredBy dependencies: [Dependency]) -> [Dependency] {
-			let unavailableProperties = Set(generator.orderedChildGenerators.lazy.filter(\.isUnavailableDependency).compactMap(\.property))
-			return unavailableProperties.isEmpty ? [] : dependencies.filter { unavailableProperties.contains($0.property) }
+		/// The properties a generator's type instantiates only if available that nothing fulfills.
+		func unavailableDependencyProperties(of generator: ScopeGenerator) -> [Property] {
+			generator.orderedChildGenerators.lazy.filter(\.isUnavailableDependency).compactMap(\.property)
 		}
-		var unavailableDeclarations = unavailableDependencyDeclarations(of: self, declaredBy: instantiable.dependencies)
-		var unavailableProperties = unavailableDeclarations.map(\.property)
+		var unavailableProperties = unavailableDependencyProperties(of: self)
 		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, under: nil, insideSendableFunction: false)
 		let rootHoleSiteProperties = holeSiteProperties(of: self)
 		var builtProperties = Set<Property>(rootHoleSiteProperties)
@@ -618,10 +620,9 @@ extension ScopeGenerator {
 			}
 			// A node that closes a cycle builds nothing beneath it, and its dependencies surface as no parameter.
 			guard !isPropertyCycle else { continue }
-			for declaration in unavailableDependencyDeclarations(of: visit.generator, declaredBy: nodeInstantiable.dependencies) {
-				unavailableDeclarations.append(declaration)
-				if !visit.isInsideSendableFunction, !unavailableProperties.contains(declaration.property) {
-					unavailableProperties.append(declaration.property)
+			if !visit.isInsideSendableFunction {
+				for property in unavailableDependencyProperties(of: visit.generator) where !unavailableProperties.contains(property) {
+					unavailableProperties.append(property)
 				}
 			}
 			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, under: visit.nodeIndex, insideSendableFunction: visit.isInsideSendableFunction)
@@ -680,7 +681,6 @@ extension ScopeGenerator {
 		)
 		names.propertyNodes = propertyNodes
 		names.unavailableDependencyProperties = unavailableProperties
-		names.unavailableDependencyDeclarations = unavailableDeclarations
 		names.rootHoleSiteProperties = rootHoleSiteProperties
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.
 		if readsFills, !passedUpBuilderProperties.isEmpty {

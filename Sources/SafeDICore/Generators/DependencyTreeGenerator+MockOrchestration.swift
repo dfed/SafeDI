@@ -955,9 +955,10 @@ extension DependencyTreeGenerator {
 							instantiatedScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
-					} else if dependency.isInstantiatedOnlyIfAvailable {
-						// No declaration the module sees fulfills the type, fake included: the mock binds the property to
-						// `nil`, as production does, and takes no parameter, override or builder for it.
+					} else if dependency.isInstantiatedOnlyIfAvailable, !buildsHoles || !Self.canBeHole(dependency) {
+						// No declaration the module sees fulfills the type, fake included: an internal mock binds the property
+						// where production binds `nil`, from an override that defaults to `nil`. A public mock's is a hole
+						// (below), whose builder defaults to one that returns `nil`, but for a type spelled as no hole can be.
 						scope.propertiesToGenerate.append(Self.unavailableDependency(dependency))
 					} else if buildsHoles, Self.canBeHole(dependency) {
 						// No declaration the module sees fulfills the type, fake included: a public mock takes a builder for
