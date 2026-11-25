@@ -77,7 +77,7 @@ extension MockLowering.Walk {
 				}
 			}
 			guard let call = builtPlaceCalls[path] else { continue }
-			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
+			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
 			// An erased place the mock can override is built from a closure that returns the erased type, and a place built in
 			// a function whose property is another type than the one it builds (`fulfilledByType:`, a protocol) from an
 			// override that returns the property's type: its function returns the property's type (`functionReturnType`).
@@ -260,6 +260,11 @@ extension MockLowering.Walk {
 				}
 				frames[frames.count - 1].visible.insert(closer.property.label)
 			case let .alias(alias):
+				// A rename of a name `mock()` binds apart, such as a sibling its root names apart, reads no declaration the
+				// records name.
+				if let fulfillingProperty = alias.fulfillingProperty, !visible.contains(fulfillingProperty.label) {
+					return fulfillingProperty.label
+				}
 				frames[frames.count - 1].visible.insert(alias.property.label)
 			}
 		}
@@ -279,6 +284,10 @@ extension MockLowering.RootSignature {
 		}
 		for override in onlyIfAvailableOverrides {
 			declarations.append(Property(label: override.name, typeDescription: override.typeDescription))
+		}
+		// The local `mock()` reads each `@Sendable` autoclosure parameter into, which the bindings of its value read.
+		for (property, parameter) in sendableAutoclosureBindings.sorted(by: { $0.value.localName < $1.value.localName }) {
+			declarations.append(MockLowering.sendableAutoclosureLocalProperty(of: parameter, builds: property))
 		}
 		return declarations
 	}
