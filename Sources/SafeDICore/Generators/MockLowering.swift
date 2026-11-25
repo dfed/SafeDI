@@ -94,7 +94,7 @@ public enum MockLowering {
 					let configuredTypeName = concreteType.asSource
 					if hasConfiguration {
 						let typeSource = "\(configuredTypeName).\(ScopeGenerator.mockConfigurationStructName)"
-						return ChildField(name: bindingName, typeSource: typeSource, defaultValue: ".init()", sendableForm: .init(typeSource: typeSource, defaultValue: ".init()", configuredTypeName: configuredTypeName))
+						return ChildField(name: bindingName, typeSource: typeSource, defaultValue: ".init()", sendableForm: .init(typeSource: typeSource, defaultValue: ".init()", configuredTypeName: configuredTypeName), defaultsToConfiguration: true)
 					} else {
 						let builderClosureType = "(\(builderParameters.spelled)) -> \(propertyType.asInstantiatedTypeSpelledAsDeclared.asSource)"
 						return ChildField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendableForm: .init(typeSource: "(@Sendable \(builderClosureType))?", defaultValue: "nil", configuredTypeName: nil))
@@ -113,6 +113,9 @@ public enum MockLowering {
 			/// The field in a configuration `@Sendable`-typed (`ScopeGenerator.configurationField`'s `parentRequiresSendable`),
 			/// or `nil` for a node that has none there.
 			var sendableForm: SendableForm?
+			/// Whether the default is the child's configuration SafeDI builds with `.init()`, which a configuration that takes
+			/// the module's default isolation defaults to `nil` and resolves in its body instead; never a default a person wrote.
+			var defaultsToConfiguration = false
 
 			/// A child's field in a configuration `@Sendable`-typed: a `@Sendable` closure, which is `Sendable`, or the
 			/// child's configuration, `Sendable` where it is `@Sendable`-typed too.

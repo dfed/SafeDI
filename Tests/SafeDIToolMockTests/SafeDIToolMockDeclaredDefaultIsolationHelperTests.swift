@@ -1464,6 +1464,178 @@ struct SafeDIToolMockDeclaredDefaultIsolationHelperTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: Build.swift6Builds)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsWrittenDefault_whenParameterDefaultsToInitInDeclaredModule(build: Build) async throws {
+		// A default the user writes as `.init()` is the user’s, not a configuration SafeDI defaults: the configuration keeps it
+		// as written, while the child’s configuration it nests is defaulted to `nil`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				nonisolated public struct Options {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Store: Instantiable {
+				    public init(options: Options = .init()) {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(store: Store, options: Options = .init()) {
+				        self.store = store
+				    }
+
+				    @Instantiated let store: Store
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+
+				    @Instantiated let child: Child
+				}
+				""",
+			],
+			swiftFileContentByFilePath: Self.declaredConfiguration,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			verificationCompilerSettings: build.settings,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    @MainActor struct SafeDIOverrides {
+			        init(
+			            child: Child.SafeDIMockConfiguration? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child ?? .init()
+			            )
+			        }
+
+			        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: Child.SafeDIMockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: Child.SafeDIMockConfiguration
+			        }
+			    }
+
+			    @MainActor static func mock(
+			        safeDIOverrides: SafeDIOverrides? = nil
+			    ) -> Root {
+			        let safeDIOverrides = safeDIOverrides ?? .init()
+			        func __safeDI_child() -> Child {
+			            func __safeDI_store() -> Store {
+			                return if let safeDIBuilder = safeDIOverrides.child.store.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.store.options) } else { Store(options: safeDIOverrides.child.store.options) }
+			            }
+			            let store: Store = __safeDI_store()
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(store, safeDIOverrides.child.options) } else { Child(store: store, options: safeDIOverrides.child.options) }
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Store {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    @MainActor struct SafeDIMockConfiguration {
+			        init(
+			            options: Options = .init(),
+			            _ safeDIBuilder: ((Options) -> Store)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                options: options,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var options: Options { __safeDI_storage.options }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((Options) -> Store)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                options: Options,
+			                safeDIBuilder: ((Options) -> Store)?
+			            ) {
+			                self.options = options
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let options: Options
+			            let safeDIBuilder: ((Options) -> Store)?
+			        }
+			    }
+			}
+
+			extension Child {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    @MainActor struct SafeDIMockConfiguration {
+			        init(
+			            store: Store.SafeDIMockConfiguration? = nil,
+			            options: Options = .init(),
+			            _ safeDIBuilder: ((Store, Options) -> Child)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                store: store ?? .init(),
+			                options: options,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var store: Store.SafeDIMockConfiguration { __safeDI_storage.store }
+			        var options: Options { __safeDI_storage.options }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((Store, Options) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                store: Store.SafeDIMockConfiguration,
+			                options: Options,
+			                safeDIBuilder: ((Store, Options) -> Child)?
+			            ) {
+			                self.store = store
+			                self.options = options
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let store: Store.SafeDIMockConfiguration
+			            let options: Options
+			            let safeDIBuilder: ((Store, Options) -> Child)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
 	@Test(arguments: DeclaringModule.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_spellsHelpersMainActor_whenEitherModuleOfAdditionalMockDeclaresDefaultIsolation(declaringModule: DeclaringModule) async throws {

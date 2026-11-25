@@ -246,9 +246,9 @@ extension MockLowering {
 	/// The attribute SafeDI spells on the `SafeDIOverrides` and plain-form `SafeDIMockConfiguration` of a type it supplied the
 	/// module's default isolation to, the isolation `#SafeDIConfiguration(defaultIsolation: MainActor.self)` declares.
 	static let moduleDefaultIsolationAttribute = "@MainActor"
-	/// The default of a member that holds a configuration: a configuration that takes the module's default isolation takes
-	/// such a member `nil` by default instead, resolved to this in its initializer's body, since Swift 5 mode evaluates a
-	/// default argument outside the initializer's isolation.
+	/// What a member that defaults to a configuration SafeDI builds (`OverridesField.defaultsToConfiguration`) resolves
+	/// `nil` to in its initializer's body, where it takes the module's default isolation: Swift 5 mode evaluates a default
+	/// argument outside the initializer's isolation.
 	static let configurationDefaultValue = ".init()"
 
 	/// The member of a configuration that configures a node bound as `bindingName` that closes a cycle on a node of
@@ -260,6 +260,7 @@ extension MockLowering {
 			typeSource: "\(concreteType.asSource).\(ScopeGenerator.mockConfigurationStructName)",
 			defaultValue: ".init()",
 			sendability: .whenConfigurationIsTypedSendable(concreteType.asSource),
+			defaultsToConfiguration: true,
 		)
 	}
 
@@ -415,7 +416,7 @@ extension MockLowering.ConfigurationRecord {
 			} else {
 				(childField.typeSource, childField.defaultValue, false)
 			}
-			if takesModuleDefaultIsolation, defaultValue == MockLowering.configurationDefaultValue {
+			if takesModuleDefaultIsolation, childField.defaultsToConfiguration {
 				parameters.append("\(parameterIndent)\(childField.name): \(typeSource)? = nil")
 				values.append("\(childField.name) ?? \(MockLowering.configurationDefaultValue)")
 			} else {

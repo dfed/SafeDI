@@ -289,7 +289,7 @@ extension ScopeGenerator {
 			)
 		})
 		lines.append("\(innerIndent)init(")
-		let resolvesInBody = fields.map { takesModuleDefaultIsolation && $0.defaultValue == MockLowering.configurationDefaultValue }
+		let resolvesInBody = fields.map { takesModuleDefaultIsolation && $0.defaultsToConfiguration }
 		var initParameters = zip(storage.fields, zip(fields, resolvesInBody)).map { storageField, fieldAndResolution in
 			let (field, resolvesInBody) = fieldAndResolution
 			return resolvesInBody
@@ -1495,7 +1495,7 @@ extension MockLowering {
 			// A node built in or as a `@Sendable` builder function takes a `@Sendable` override, which
 			// is `Sendable`, as is a configuration `@Sendable`-typed.
 			hasConfiguration
-				? OverridesField(name: bindingName, typeSource: configurationTypeName, defaultValue: ".init()", sendability: .whenConfigurationIsTypedSendable(instantiable.concreteInstantiable.asSource))
+				? OverridesField(name: bindingName, typeSource: configurationTypeName, defaultValue: ".init()", sendability: .whenConfigurationIsTypedSendable(instantiable.concreteInstantiable.asSource), defaultsToConfiguration: true)
 				: OverridesField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendability: requiresSendable ? .always : .never)
 		}
 
@@ -1704,6 +1704,9 @@ extension MockLowering {
 		let typeSource: String
 		let defaultValue: String
 		let sendability: Sendability
+		/// Whether the default is the node's configuration SafeDI builds with `.init()`, which overrides that take the module's
+		/// default isolation default to `nil` and resolve in their body instead; never a default a person wrote.
+		var defaultsToConfiguration = false
 
 		/// What proves the member `Sendable`.
 		enum Sendability {
@@ -1967,12 +1970,12 @@ extension MockLowering.ConfigurationRecord {
 				// A node that closes a cycle is configured by the configuration of the type it repeats.
 				case let .cycleClosing(_, bindingName, concreteType):
 					let field = MockLowering.cycleClosingOverridesField(boundAs: bindingName, concreteType: concreteType)
-					return .spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: .init(typeSource: field.typeSource, defaultValue: field.defaultValue, configuredTypeName: concreteType.asSource)))
+					return .spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: .init(typeSource: field.typeSource, defaultValue: field.defaultValue, configuredTypeName: concreteType.asSource), defaultsToConfiguration: field.defaultsToConfiguration))
 				// A call's member in a configuration `@Sendable`-typed is a `@Sendable` closure
 				// (`publicMockOverridesMember(sendable:)`).
 				case let .publicMockCall(call):
 					return call.overridesField.map { field in
-						.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: call.sendableConfigurationFieldForm))
+						.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: call.sendableConfigurationFieldForm, defaultsToConfiguration: field.defaultsToConfiguration))
 					}
 				}
 			},
