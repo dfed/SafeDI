@@ -494,8 +494,12 @@ jobs:
         with:
           pattern: graph-fuzzer-report-*
           path: reports
+      # `reports/report.txt` is where the one report lies when one shard alone
+      # uploaded: a pattern that matches one artifact unpacks it into the path
+      # itself. The script keeps the paths that exist, and names the shards
+      # whose reports are absent.
       - name: Combine Shard Reports
-        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt reports/report.txt
       # Prints what the shards' reports say the pins should be, for a session
       # that cannot download this run's artifacts: the analysis's report, then
       # its pins.json as lines that
