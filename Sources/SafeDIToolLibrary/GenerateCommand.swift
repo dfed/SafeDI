@@ -402,7 +402,10 @@ public struct Generate: AsyncParsableCommand {
 		func modulesRead(byRunOfModuleNamed moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead {
 			Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
 		}
-		let normalizedInstantiables = distinguishingTypesUnnameable(
+		let normalizedInstantiables = adoptingDefaultIsolation(
+			sourceConfiguration?.defaultIsolation,
+			ofAdditionalMocksToGenerate: manifest?.additionalMocksToGenerate ?? sourceConfiguration?.additionalMocksToGenerate ?? [],
+			in: distinguishingTypesUnnameable(
 			from: ownModuleIdentity,
 			among: normalizingInstantiableTypes(
 				of: unnormalizedInstantiablesReadByThisRun,
@@ -416,6 +419,7 @@ public struct Generate: AsyncParsableCommand {
 			),
 			plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
 			modulesRead: modulesRead(byRunOfModuleNamed:),
+		),
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))
