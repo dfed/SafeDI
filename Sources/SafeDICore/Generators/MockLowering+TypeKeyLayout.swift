@@ -67,7 +67,12 @@ extension MockLowering.Walk {
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
 			guard let call = builtPlaceCalls[path] else { continue }
-			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
+			guard !pathsCoveredByLoopUnits.contains(path), loopUnitRecords[path] == nil else { continue }
+			guard !pathsNamedApart.contains(path) else {
+				unrecordedReasons[path] = "namedApart"
+				continue
+			}
+			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:)) : []
 			// An erased place the mock can override is built from a closure that returns the erased type, where the type
 			// key's function returns the concrete one: it keeps the walk's body.
 			// So is a place built in a function whose property is another type than the one it builds (`fulfilledByType:`,
@@ -164,7 +169,9 @@ extension MockLowering.Walk {
 	}
 
 	func placeCode(at path: [Int]) -> GeneratedCode {
-		let record: PlaceRecord? = if let built = builtRecords[path] {
+		let record: PlaceRecord? = if let loopUnit = loopUnitRecords[path] {
+			loopUnit
+		} else if let built = builtRecords[path] {
 			built
 		} else if case let .closer(closer) = closerAndDefaultRecords[path] {
 			.closer(closer)
@@ -184,10 +191,10 @@ extension MockLowering.Walk {
 		for property in rootDeclarations {
 			rootBody.append(.place(PlacePlan(code: .empty, record: .alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))))
 		}
-		for path in placePathsInWalkOrder where path.count == 1 {
+		for path in placePathsInWalkOrder where path.count == 1 && !pathsCoveredByLoopUnits.contains(path) {
 			rootBody.append(placeCode(at: path))
 		}
-		if let path = placePathsInWalkOrder.first(where: { builtRecords[$0] == nil && closerAndDefaultRecords[$0] == nil }) {
+		if let path = placePathsInWalkOrder.first(where: { !pathsCoveredByLoopUnits.contains($0) && loopUnitRecords[$0] == nil && builtRecords[$0] == nil && closerAndDefaultRecords[$0] == nil }) {
 			return (nil, "unrecorded:\(unrecordedReasons[path] ?? "closerOrOther")")
 		}
 		if let label = Self.unresolvedRead(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))) {

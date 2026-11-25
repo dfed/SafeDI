@@ -105,12 +105,12 @@ extension TypeKeyLayout {
 	// MARK: Parameter types
 
 	/// The type of a type key's declaration, `nil` for none or a parameter not typed yet.
-	func type(of declaration: TypeDeclaration) -> TypeDescription? {
+	func type(of declaration: TypeDeclaration, label: String) -> TypeDescription? {
 		switch declaration {
 		case .none:
 			nil
 		case let .statement(owner, index):
-			property(of: statements(ofClass: owner)[index])?.typeDescription
+			property(of: statements(ofClass: owner)[index], label: label)?.typeDescription
 		case let .forwarded(owner, label):
 			representative(of: owner)?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .read(owner, label):
@@ -131,12 +131,12 @@ extension TypeKeyLayout {
 					var isComplete = true
 					for site in callSitesByClass[owner].sorted(by: { ($0.owner, $0.index) < ($1.owner, $1.index) }) {
 						let declaration = typeLookUp(label, inClass: site.owner, before: site.index)
-						if case .read = declaration, type(of: declaration) == nil {
+						if case .read = declaration, type(of: declaration, label: label) == nil {
 							// A parameter whose type is not known yet passes a value of some type, never `nil`: it is
 							// left out until it is known, so it never makes this parameter optional.
 							isComplete = false
 						} else {
-							types.append(type(of: declaration))
+							types.append(type(of: declaration, label: label))
 						}
 					}
 					guard isComplete || parameterTypes[owner][label] == nil else { continue }

@@ -378,7 +378,7 @@ extension TypeKeyLayout {
 
 	/// The value `read` passes where a statement before `index` of `owner`'s body makes it.
 	func spelledValue(of read: PlaceRead, inClass owner: Int, before index: Int) -> String? {
-		guard read.source != .nil, let declaredType = type(of: typeLookUp(read.label, inClass: owner, before: index)) else { return "nil" }
+		guard read.source != .nil, let declaredType = type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label) else { return "nil" }
 		return Self.spelledRead(read, declaredAs: declaredType)
 	}
 
