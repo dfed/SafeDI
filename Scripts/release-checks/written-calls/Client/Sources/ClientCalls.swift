@@ -64,4 +64,17 @@ func callOverrideOfPublicMockWithoutOverrides() {
 		FeedBadge.mock(feedRendererBuilder: feedRendererBuilder)
 	}))
 }
+
+struct StubFeedAnalytics: FeedAnalytics {}
+
+// “Dependencies instantiated only if available”: a public mock takes a builder for such a dependency that nothing its
+// module sees fulfills, which defaults to one that returns `nil`; a mock in another module that sees no type fulfilling
+// it either takes the builder too and passes it on.
+func callOptionalBuilderMocks() {
+	let _: FeedTracker = FeedTracker.mock()
+	let _: FeedTracker = FeedTracker.mock(feedAnalyticsOptionalBuilder: { StubFeedAnalytics() })
+	let _: FeedTracker = FeedTracker.mock(feedAnalyticsOptionalBuilder: { nil })
+	let _: ClientTrackerScreen = ClientTrackerScreen.mock()
+	let _: ClientTrackerScreen = ClientTrackerScreen.mock(feedAnalyticsOptionalBuilder: { StubFeedAnalytics() })
+}
 #endif
