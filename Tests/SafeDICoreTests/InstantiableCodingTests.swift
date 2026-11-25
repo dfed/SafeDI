@@ -53,6 +53,38 @@ struct InstantiableCodingTests {
 	}
 
 	@Test
+	func decode_readsBackSuppliedAttributes_whenDeclarationAdoptedModuleDefaultIsolation() throws {
+		let instantiable = try #require(walkedInstantiables(of: Self.declarationsSettingRarelySetFields).dropFirst().first).adoptingModuleDefaultIsolation(.mainActor)
+
+		let encoded = try JSONEncoder().encode(instantiable)
+		let decoded = try JSONDecoder().decode(Instantiable.self, from: encoded)
+		let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+		#expect(decoded == instantiable)
+		#expect(decoded.usesModuleDefaultIsolation)
+		#expect(decoded.generatedInitializerAttributes == "@MainActor")
+		#expect(decoded.mockAttributes == "@MainActor")
+		#expect(object["usesModuleDefaultIsolation"] as? Bool == true)
+	}
+
+	@Test
+	func adoptingModuleDefaultIsolation_keepsDeclaration_whenDeclarationSpellsAttributeText() throws {
+		let instantiable = try #require(walkedInstantiables(of: """
+		@Instantiable(mockAttributes: "nonisolated")
+		public struct Formatter: Instantiable {
+		    public init() {}
+		}
+		""").first)
+
+		let adopted = instantiable.adoptingModuleDefaultIsolation(.mainActor)
+
+		#expect(adopted == instantiable)
+		#expect(!adopted.usesModuleDefaultIsolation)
+		#expect(adopted.generatedInitializerAttributes == "")
+		#expect(adopted.mockAttributes == "nonisolated")
+	}
+
+	@Test
 	func withoutHandWrittenMock_equalsDeclarationThatNeverHadOne_whenMockProviderWasMergedIn() throws {
 		let instantiables = walkedInstantiables(of: Self.declarationsSettingRarelySetFields)
 		let plain = try #require(instantiables.dropFirst().first)
