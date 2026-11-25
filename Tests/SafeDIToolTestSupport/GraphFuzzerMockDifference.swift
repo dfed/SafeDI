@@ -816,7 +816,7 @@ private struct Rendering {
 		guard builtName == label || builtName.hasPrefix("\(label)_"),
 		      let field = fields[owner]?[label],
 		      droppedFields.contains(field),
-		      "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)" == argumentLabel,
+		      argumentLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)",
 		      field.type.hasSuffix(".\(mockConfigurationStructName)")
 		else { return nil }
 		return "\(argumentLabel): \(nearest.map { "\($0.trimmedDescription) ?? " } ?? "")\(field.type)()"
