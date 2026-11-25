@@ -505,13 +505,26 @@ extension ScopeRecord {
 		let keysPlacesAtOnePlace = sharesMemo && constructionMemo.sharing == .acrossTrees
 			|| ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true
 		let scopesBuiltAtOnePlace = keysPlacesAtOnePlace || !ConstructionMemo.isEnabled ? nil : ScopesBuiltAtOnePlace(treeRootedAt: root)
+		// Spike: a light first pass where the tree is predicted to take a seed.
+		var spikeBuildsLightPass = ProcessInfo.processInfo.environment["SPIKE_LIGHT"] != nil
+			&& CycleParameterPlan.isEnabled
+			&& !forMockGeneration
+			&& seamRoot == nil
+			&& mockBuilders == nil
+			&& !nearestDeclarations.mayPassNil
+			&& ConstructionSharingSchedule.current == nil
+			&& (ProcessInfo.processInfo.environment["SPIKE_PREDICTOR"] != "cycle" || Self.spikeReachesCycle(from: self, in: table))
+		var spikePreviousPassWasLight = false
+		var spikeRedoFirstPass = false
 		repeat {
+			spikeRedoFirstPass = false
+			startOrderChanged = false
 			// A memo shared across trees carries each pass to the pass after it, whose keys name the generators of the pass
 			// before, so a later pass of this tree reuses what a later pass of another tree built from the same generator.
 			var passMemo = sharesMemo ? constructionMemo.memo(forPassAfter: previousPassMemo) : ConstructionMemo()
 			// A place whose generator the pass before built settled is reused across passes only while the passes share
 			// the place-holding properties every place's build reads.
-			let settledPassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
+			let settledPassMemo = !spikePreviousPassWasLight && placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
@@ -534,7 +547,8 @@ extension ScopeRecord {
 				)
 			}
 			let spikeT0 = ContinuousClock.now
-			scopeGenerator = try createScopeGenerator(
+			let spikeLightNow = spikeBuildsLightPass
+			scopeGenerator = try ScopeGenerator.$spikeBuildsLightPass.withValue(spikeLightNow) { try createScopeGenerator(
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				seamRoot: seamRoot,
@@ -550,7 +564,7 @@ extension ScopeRecord {
 				settledPassMemo: settledPassMemo,
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
-			)
+			) }
 			let spikeT1 = ContinuousClock.now
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
@@ -565,8 +579,22 @@ extension ScopeRecord {
 			}
 			let spikeT2 = ContinuousClock.now
 			if ProcessInfo.processInfo.environment["SPIKE_TIMING"] != nil {
-				FileHandle.standardError.write(Data("SPIKE pass=\(previousPassGenerator == nil ? 1 : 2) seeded=\(cycleParameterSeed != nil) passPlusSeed=\(spikeT2 - spikeT0) seedOnly=\(spikeT2 - spikeT1)\n".utf8))
+				FileHandle.standardError.write(Data("SPIKE pass=\(previousPassGenerator == nil ? 1 : 2) light=\(spikeLightNow) seeded=\(cycleParameterSeed != nil) passPlusSeed=\(spikeT2 - spikeT0) seedOnly=\(spikeT2 - spikeT1)\n".utf8))
 			}
+			spikeBuildsLightPass = false
+			if spikeLightNow, cycleParameterSeed == nil {
+				// Predictor miss: the light tree takes no seed, so pass 1 is built again in full.
+				if ProcessInfo.processInfo.environment["SPIKE_TIMING"] != nil || ProcessInfo.processInfo.environment["SPIKE_MISSES"] != nil {
+					FileHandle.standardError.write(Data("SPIKE miss root=\(instantiable.concreteInstantiable.asSource)\n".utf8))
+				}
+				spikeRedoFirstPass = true
+				spikePreviousPassWasLight = false
+				continue
+			}
+			if spikeLightNow, ProcessInfo.processInfo.environment["SPIKE_MISSES"] != nil {
+				FileHandle.standardError.write(Data("SPIKE hit root=\(instantiable.concreteInstantiable.asSource)\n".utf8))
+			}
+			spikePreviousPassWasLight = spikeLightNow
 			if sharesMemo {
 				passMemo.keepAlive(passTree: scopeGenerator, seed: cycleParameterSeed)
 			}
@@ -581,7 +609,7 @@ extension ScopeRecord {
 					startOrderChanged = true
 				}
 			}
-		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockLevelReentriesChangedInTree
+		} while spikeRedoFirstPass || startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockLevelReentriesChangedInTree
 		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
 		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
 		// the whole mock pass, so no later mock root reads the memo after a root that failed. A change that adds a
@@ -591,6 +619,32 @@ extension ScopeRecord {
 			constructionMemo.keepEntries(ofLastPass: previousPassMemo)
 		}
 		return scopeGenerator
+	}
+
+	/// Spike: whether the scope graph reachable from `root` through instantiated properties holds a cycle.
+	static func spikeReachesCycle(from root: ScopeRecord, in table: ScopeTable) -> Bool {
+		var state = [ObjectIdentifier: Bool]() // false: on the stack, true: done
+		var stack = [(record: root, index: 0)]
+		state[ObjectIdentifier(root)] = false
+		while let frame = stack.last {
+			let children = frame.record.propertiesToGenerate
+			guard frame.index < children.count else {
+				state[ObjectIdentifier(frame.record)] = true
+				stack.removeLast()
+				continue
+			}
+			stack[stack.count - 1].index += 1
+			guard case let .instantiated(_, id, _, _) = children[frame.index] else { continue }
+			let child = table[id]
+			switch state[ObjectIdentifier(child)] {
+			case .some(false): return true
+			case .some(true): continue
+			case .none:
+				state[ObjectIdentifier(child)] = false
+				stack.append((child, 0))
+			}
+		}
+		return false
 	}
 
 	/// The cycle parameters `CycleParameterPlan` settles on `tree`, a first pass's, where only they would drive the passes
@@ -668,6 +722,7 @@ extension ScopeRecord {
 			recordsReads: false,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
+		let spikeFreeSharing = ProcessInfo.processInfo.environment["SPIKE_FREE_SHARING"] != nil
 		// The sharing oracle's schedule, test only, and how many lookups it has drawn for (`ConstructionSharingSchedule`).
 		let sharingSchedule = ConstructionSharingSchedule.current
 		var lookupCount = 0
@@ -676,24 +731,41 @@ extension ScopeRecord {
 		// The generators of the calls that pass fills this tree holds, none of which it may hold twice
 		// (`ConstructionMemo.Entry.callGenerators`).
 		var callGeneratorsInTree = Set<ObjectIdentifier>()
+		var spikeMemoTime = Duration.zero
+		var spikeLookups = 0
+		let spikeClock = ContinuousClock()
+		defer {
+			if ProcessInfo.processInfo.environment["SPIKE_TIMING"] != nil {
+				let c = ConstructionMemo.SpikeCounters.self
+				FileHandle.standardError.write(Data("SPIKE memo light=\(ScopeGenerator.spikeBuildsLightPass) previous=\(previousPassGenerator != nil) lookups=\(spikeLookups) memoTime=\(spikeMemoTime) memoLookups=\(c.lookups) candidates=\(c.candidatesAtLookup) tried=\(c.candidatesTried) hits=\(c.hits) reads=\(c.readsAnswered) cycleReads=\(c.cycleReadsAnswered)\n".utf8))
+				c.lookups = 0; c.candidatesAtLookup = 0; c.candidatesTried = 0; c.hits = 0; c.readsAnswered = 0; c.cycleReadsAnswered = 0
+			}
+		}
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential, propertyID):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
+					let spikeLookupStart = spikeClock.now
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
+					if key != nil { spikeLookups += 1 }
 					if key != nil, let keyedPlaceObserver {
 						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
 					}
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
-					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), besideCallGenerators: callGeneratorsInTree, drawing: draw) {
+					let spikeReuse = key.flatMap { memo.reuse(of: $0, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), besideCallGenerators: callGeneratorsInTree, drawing: draw) }
+					let spikeSettledReuse = spikeReuse == nil ? key.flatMap { settledPassMemo?.settledReuse(of: $0, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) } : nil
+					spikeMemoTime += spikeClock.now - spikeLookupStart
+					if let key, ScopeGenerator.spikeBuildsLightPass, spikeFreeSharing, let reuse = memo.spikeAnyReuse(of: key) {
+						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
+					} else if key != nil, let reuse = spikeReuse {
 						reusedPlaceObserver?(scope.instantiable.concreteInstantiable.asSource, previousPassGenerator == nil)
 						callGeneratorsInTree.formUnion(reuse.entry.callGenerators)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
-					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
+					} else if let key, let reuse = spikeSettledReuse {
 						// The pass before built this place's generator settled: building the place again would build it again.
 						// The memo holds it for the places after it.
 						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
@@ -738,8 +810,10 @@ extension ScopeRecord {
 					return scopeGenerator
 				} else {
 					// Filtered once, for the memo and the parent alike.
+					let spikeStoreStart = spikeClock.now
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
 					let isSettled = createdScope.isSettled(building: scopeGenerator)
+					defer { spikeMemoTime += spikeClock.now - spikeStoreStart }
 					if let key = createdScope.memoKey, createdScope.isMemoizable {
 						memo.store(ConstructionMemo.Entry(
 							reads: readsAnsweredAbove,

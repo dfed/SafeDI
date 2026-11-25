@@ -199,14 +199,32 @@ struct ConstructionMemo {
 			return entry.reads.answeredAlike(in: context).map { Reuse(entry: entry, reads: $0) }
 		}
 		guard let draw else {
+			SpikeCounters.lookups += 1
+			SpikeCounters.candidatesAtLookup += candidates.count
 			for entry in candidates {
+				SpikeCounters.candidatesTried += 1
 				if let reuse = reuse(of: entry) {
+					SpikeCounters.hits += 1
 					return reuse
 				}
 			}
 			return nil
 		}
 		return draw.reuse(among: candidates, reuse)
+	}
+
+	enum SpikeCounters {
+		nonisolated(unsafe) static var lookups = 0
+		nonisolated(unsafe) static var candidatesAtLookup = 0
+		nonisolated(unsafe) static var candidatesTried = 0
+		nonisolated(unsafe) static var hits = 0
+		nonisolated(unsafe) static var readsAnswered = 0
+		nonisolated(unsafe) static var cycleReadsAnswered = 0
+	}
+
+	/// Spike ceiling probe: the first entry of `key`, its reads unchecked.
+	func spikeAnyReuse(of key: Key) -> Reuse? {
+		entriesByKey[key]?.first.map { Reuse(entry: $0, reads: $0.reads) }
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -473,6 +491,8 @@ struct ConstructionLog {
 		var answers = [RecordedRead]()
 		for asksCycleReads in [true, false] {
 			let isAnsweredAlike = forEachRead(where: { $0.isCycleRead == asksCycleReads }) { recorded in
+				ConstructionMemo.SpikeCounters.readsAnswered += 1
+				if asksCycleReads { ConstructionMemo.SpikeCounters.cycleReadsAnswered += 1 }
 				let (answer, depth) = context.answer(recorded.read.read)
 				guard answer.isAlike(recorded.answer) else { return false }
 				// An alike answer at the same depth keeps the recorded read, which a fresh read would equal for every later

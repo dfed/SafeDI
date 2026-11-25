@@ -24,6 +24,9 @@ import SwiftSyntax
 
 /// A model capable of generating code for a scope’s dependency tree.
 actor ScopeGenerator: CustomStringConvertible, Sendable {
+	/// Spike only: whether the pass being built is a light first pass, which skips what the seed never reads.
+	@TaskLocal static var spikeBuildsLightPass = false
+
 	// MARK: Initialization
 
 	/// - Parameters:
@@ -333,19 +336,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A scope that closes a cycle builds nothing, so its children are on no loop. A fill's one child is the property it
 		// fills, whose builder function the seam's initializer declares: a receive of that property in the fill's tree is a
 		// fill finding (`receivesInstantiatorBuildingSite`), never a loop the fill rebinds.
-		let receivedBuilderLoops = isPropertyCycle || fill != nil
+		let spikeLight = ScopeGenerator.spikeBuildsLightPass
+		let receivedBuilderLoops = isPropertyCycle || fill != nil || spikeLight
 			? ReceivedBuilderLoops()
 			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: aliasRequirements.requiredOnlyIfAvailableAliasProperties)
 		self.receivedBuilderLoops = receivedBuilderLoops
-		orderedPropertyToGenerateIndices = Self.orderedPropertyToGenerateIndices(
+		orderedPropertyToGenerateIndices = spikeLight ? Array(propertiesToGenerate.indices) : Self.orderedPropertyToGenerateIndices(
 			of: propertiesToGenerate,
 			receivedBuilderLoops: receivedBuilderLoops,
 			requiredOnlyIfAvailableAliasProperties: aliasRequirements.requiredOnlyIfAvailableAliasProperties,
 			placeHoldingProperties: placeHoldingProperties,
 			startingCarriersLast: true,
 		)
-		receivedBuilderLoopsChangedInTree = receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
-			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
+		receivedBuilderLoopsChangedInTree = !spikeLight && (receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
+			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree))
 		// In a seam's own tree, a loop whose members bind two or more payloads or levels holds them in one box, unless a
 		// member's function is `@Sendable`, which could not capture the box (see `boxedLoops`).
 		let loopBoxes = Self.loopBoxes(
