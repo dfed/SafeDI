@@ -1304,6 +1304,336 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_compilesPublicActorMock_whenActorsArgumentHoldsInstantiator() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: .public)
+				public actor Store: Instantiable {
+				    public init(worker: Worker) {
+				        self.worker = worker
+				    }
+
+				    @Instantiated let worker: Worker
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Worker: Instantiable {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Worker` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Worker_MockConfiguration {
+			    public init(
+			        childBuilder: (@Sendable () -> Child)? = nil,
+			        _ safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            childBuilder: childBuilder,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    public var childBuilder: (@Sendable () -> Child)? { __safeDI_storage.childBuilder }
+			    /// Overrides how `Worker` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            childBuilder: (@Sendable () -> Child)?,
+			            safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)?
+			        ) {
+			            self.childBuilder = childBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let childBuilder: (@Sendable () -> Child)?
+			        let safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)?
+			    }
+			}
+
+			extension Worker {
+			    static func __safeDI_init(childBuilder: Instantiator<Child>, safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)?) -> Worker {
+			        if let safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			    }
+			}
+			#endif
+
+			""",
+			"Store+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Store {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            worker: __safeDI_Worker_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                worker: worker
+			            )
+			        }
+
+			        public var worker: __safeDI_Worker_MockConfiguration { __safeDI_storage.worker }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                worker: __safeDI_Worker_MockConfiguration
+			            ) {
+			                self.worker = worker
+			            }
+
+			            let worker: __safeDI_Worker_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Store {
+			        Store.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Store {
+			        let __safeDI_worker__worker_childBuilder_safeDIBuilder = safeDIOverrides.worker.childBuilder
+			        let __safeDI_worker__safeDIBuilder = safeDIOverrides.worker.safeDIBuilder
+			        func __safeDI_worker() -> Worker {
+			            func __safeDI_childBuilder() -> Child {
+			                if let safeDIBuilder = __safeDI_worker__worker_childBuilder_safeDIBuilder { safeDIBuilder() } else { Child() }
+			            }
+			            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			            return Worker.__safeDI_init(childBuilder: childBuilder, safeDIBuilder: __safeDI_worker__safeDIBuilder)
+			        }
+			        let worker: Worker = __safeDI_worker()
+			        return Store(worker: worker)
+			    }
+			}
+
+			extension Store {
+			    public enum __safeDI_Store_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_compilesPublicMock_whenActorInItsTreeHasArgumentHoldingInstantiator() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Root: Instantiable {
+				    public init(store: Store) {
+				        self.store = store
+				    }
+
+				    @Instantiated let store: Store
+				}
+				""",
+				"""
+				@Instantiable
+				public actor Store: Instantiable {
+				    public init(worker: Worker) {
+				        self.worker = worker
+				    }
+
+				    @Instantiated let worker: Worker
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Worker: Instantiable {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            store: __safeDI_Store_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                store: store
+			            )
+			        }
+
+			        public var store: __safeDI_Store_MockConfiguration { __safeDI_storage.store }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                store: __safeDI_Store_MockConfiguration
+			            ) {
+			                self.store = store
+			            }
+
+			            let store: __safeDI_Store_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_store() -> Store {
+			            let __safeDI_worker__store_worker_childBuilder_safeDIBuilder = safeDIOverrides.store.worker.childBuilder
+			            let __safeDI_worker__safeDIBuilder = safeDIOverrides.store.worker.safeDIBuilder
+			            func __safeDI_worker() -> Worker {
+			                func __safeDI_childBuilder() -> Child {
+			                    if let safeDIBuilder = __safeDI_worker__store_worker_childBuilder_safeDIBuilder { safeDIBuilder() } else { Child() }
+			                }
+			                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			                return Worker.__safeDI_init(childBuilder: childBuilder, safeDIBuilder: __safeDI_worker__safeDIBuilder)
+			            }
+			            let worker: Worker = __safeDI_worker()
+			            return Store.__safeDI_init(worker: worker, safeDIBuilder: safeDIOverrides.store.safeDIBuilder)
+			        }
+			        let store: Store = __safeDI_store()
+			        return Root(store: store)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Worker` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Worker_MockConfiguration {
+			    public init(
+			        childBuilder: (@Sendable () -> Child)? = nil,
+			        _ safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            childBuilder: childBuilder,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    public var childBuilder: (@Sendable () -> Child)? { __safeDI_storage.childBuilder }
+			    /// Overrides how `Worker` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            childBuilder: (@Sendable () -> Child)?,
+			            safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)?
+			        ) {
+			            self.childBuilder = childBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let childBuilder: (@Sendable () -> Child)?
+			        let safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)?
+			    }
+			}
+
+			extension Worker {
+			    static func __safeDI_init(childBuilder: Instantiator<Child>, safeDIBuilder: (@Sendable (Instantiator<Child>) -> Worker)?) -> Worker {
+			        if let safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			    }
+			}
+
+			/// Configuration for how `Store` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Store_MockConfiguration {
+			    public init(
+			        worker: __safeDI_Worker_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((sending Worker) -> Store)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            worker: worker,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    public var worker: __safeDI_Worker_MockConfiguration { __safeDI_storage.worker }
+			    /// Overrides how `Store` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: ((sending Worker) -> Store)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            worker: __safeDI_Worker_MockConfiguration,
+			            safeDIBuilder: ((sending Worker) -> Store)?
+			        ) {
+			            self.worker = worker
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let worker: __safeDI_Worker_MockConfiguration
+			        let safeDIBuilder: ((sending Worker) -> Store)?
+			    }
+			}
+
+			extension Store {
+			    static func __safeDI_init(worker: sending Worker, safeDIBuilder: ((sending Worker) -> Store)?) -> Store {
+			        if let safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
