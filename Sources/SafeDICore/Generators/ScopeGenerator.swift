@@ -9124,14 +9124,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		lines.append("\(memberIndent)}")
 		lines.append("")
+		// Only a seam's readable initializer and a call of a public mock call this initializer, in this module or in one that
+		// calls the seam, which this module cannot see. Emitted into each caller that uses it, it costs nothing to compile
+		// where nothing calls it: in a module that sets neither, it was a tenth of the compile of the generated code. It
+		// delegates, as an initializer emitted into its caller must where the module is built with library evolution.
+		lines.append("\(memberIndent)@_alwaysEmitIntoClient")
 		lines.append("\(memberIndent)public \(carrierName == nil ? "" : "convenience ")init(\(ReservedName.noScopeArgumentLabel) \(builderParameter): @escaping \(noScopeType.asSource)) {")
-		if carrierName != nil {
-			lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name.spelledAsArgumentLabel): \($0.isLetChild ? $0.noScopeValue : "{ \(ignoredArguments[$0.name] ?? "")\($0.noScopeValue) }")" }.joined(separator: ", ")))")
-		} else {
-			for member in members {
-				lines.append("\(bodyIndent)self.\(member.name) = { _ in \(member.noScopeValue) }")
-			}
-		}
+		lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name.spelledAsArgumentLabel): \($0.isLetChild ? $0.noScopeValue : "{ \(ignoredArguments[$0.name] ?? "_ in ")\($0.noScopeValue) }")" }.joined(separator: ", ")))")
 		lines.append("\(memberIndent)}")
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
