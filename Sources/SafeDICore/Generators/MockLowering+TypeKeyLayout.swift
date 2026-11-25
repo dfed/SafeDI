@@ -66,8 +66,8 @@ extension MockLowering.Walk {
 		}
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
-			guard let call = builtPlaceCalls[path] else { continue }
-			guard !pathsCoveredByLoopUnits.contains(path), loopUnitRecords[path] == nil else { continue }
+			// A place a loop of builders' text holds is that text's, which records it whole.
+			guard let call = builtPlaceCalls[path], !pathsCoveredByLoopUnits.contains(path), loopUnitRecords[path] == nil else { continue }
 			guard !pathsNamedApart.contains(path) else {
 				unrecordedReasons[path] = "namedApart"
 				continue
