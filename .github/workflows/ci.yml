@@ -2294,7 +2294,9 @@ jobs:
   # with -Osize while publishing 2.3.0-alpha-1, on x86_64 and arm64 alike,
   # though the same commit had passed the test job's release build under
   # Swift 6.2. It therefore runs in publish's container, swift:6.3, not the
-  # test job's swift:6.2; keep it in step with publish.yml. It caches nothing,
+  # test job's swift:6.2; keep it in step with publish.yml, flags included:
+  # publish built for size then, and now builds for speed, with the -O that
+  # `-c release` passes. It caches nothing,
   # so every module is compiled from scratch, as publish compiles it.
   #
   # Because every module compiles here, this job also fails when SafeDI's own
@@ -2325,14 +2327,14 @@ jobs:
         run: |
           set -eo pipefail
           log="$RUNNER_TEMP/swift-build.log"
-          swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize 2>&1 | tee "$log"
+          swift build -c release --product SafeDITool --static-swift-stdlib 2>&1 | tee "$log"
           targets=$(swift package describe | awk '/^ *Name: /{name=$2} /^ *Path: (Sources|Plugins)\//{print name}' | sort -u)
           if [ -z "$targets" ]; then
             echo "::error::swift package describe listed no target under Sources or Plugins."
             exit 1
           fi
           for target in $targets; do
-            swift build -c release --target "$target" --static-swift-stdlib -Xswiftc -Osize 2>&1 | tee -a "$log"
+            swift build -c release --target "$target" --static-swift-stdlib 2>&1 | tee -a "$log"
           done
           if grep -F ': warning: ' "$log" | grep -F -e "$PWD/Sources/" -e "$PWD/Plugins/" > "$RUNNER_TEMP/source-warnings.log"; then
             echo "::error::SafeDI's own sources produced a compiler warning:"
