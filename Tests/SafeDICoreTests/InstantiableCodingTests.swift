@@ -68,7 +68,7 @@ struct InstantiableCodingTests {
 	}
 
 	@Test
-	func adoptingModuleDefaultIsolation_keepsDeclaration_whenDeclarationSpellsAttributeText() throws {
+	func adoptingModuleDefaultIsolation_keepsOnlyWrittenField_whenDeclarationSpellsMockAttributes() throws {
 		let instantiable = try #require(walkedInstantiables(of: """
 		@Instantiable(mockAttributes: "nonisolated")
 		public struct Formatter: Instantiable {
@@ -78,10 +78,26 @@ struct InstantiableCodingTests {
 
 		let adopted = instantiable.adoptingModuleDefaultIsolation(.mainActor)
 
+		#expect(!adopted.usesModuleDefaultIsolation)
+		#expect(adopted.initializerUsesModuleDefaultIsolation)
+		#expect(adopted.generatedInitializerAttributes == "@MainActor")
+		#expect(adopted.mockAttributes == "nonisolated")
+	}
+
+	@Test
+	func adoptingModuleDefaultIsolation_keepsDeclaration_whenDeclarationSpellsGeneratedAttributes() throws {
+		let instantiable = try #require(walkedInstantiables(of: """
+		@Instantiable(generatedAttributes: "nonisolated")
+		public struct Formatter: Instantiable {
+		    public init() {}
+		}
+		""").first)
+
+		let adopted = instantiable.adoptingModuleDefaultIsolation(.mainActor)
+
 		#expect(adopted == instantiable)
 		#expect(!adopted.usesModuleDefaultIsolation)
-		#expect(adopted.generatedInitializerAttributes == "")
-		#expect(adopted.mockAttributes == "nonisolated")
+		#expect(!adopted.initializerUsesModuleDefaultIsolation)
 	}
 
 	@Test

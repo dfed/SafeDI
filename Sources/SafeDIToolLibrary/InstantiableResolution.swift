@@ -207,6 +207,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 			moduleName: unnormalizedInstantiable.moduleName,
 			packageName: unnormalizedInstantiable.packageName,
 			usesModuleDefaultIsolation: unnormalizedInstantiable.usesModuleDefaultIsolation,
+			initializerUsesModuleDefaultIsolation: unnormalizedInstantiable.initializerUsesModuleDefaultIsolation,
 		)
 		normalizedInstantiable.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 		normalizedInstantiable.isInsideCompilerDecidedBlock = unnormalizedInstantiable.isInsideCompilerDecidedBlock

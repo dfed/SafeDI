@@ -56,6 +56,7 @@ extension Instantiable {
 			moduleName: moduleName,
 			packageName: packageName,
 			usesModuleDefaultIsolation: usesModuleDefaultIsolation,
+			initializerUsesModuleDefaultIsolation: initializerUsesModuleDefaultIsolation,
 		)
 		instantiable.sourceFilePath = sourceFilePath
 		instantiable.conformanceListNamesSendable = conformanceListNamesSendable
