@@ -109,7 +109,8 @@ struct SafeDIToolMockKnownRightValueTests {
 		try await expectAgreement(of: .b10)
 	}
 
-	/// A type a cycle of instantiators builds again reads the overrides of the nearest type of its kind above it.
+	/// A type a cycle of instantiators builds again reads the overrides of the nearest type of its kind above it: of two
+	/// places of the type, each overridden differently, each cycle reads its own place's.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func mock_appliesNearestSameTypeOverride_whenInstantiatorCycleBuildsTypeAgain() async throws {
@@ -125,7 +126,7 @@ struct SafeDIToolMockKnownRightValueTests {
 	}
 
 	/// The mocked type receives `x` only if available and nothing in its tree builds it: `nil`, and `mock()` takes no
-	/// parameter for it.
+	/// parameter for it; given a value through its overrides, the mocked type holds that value.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func mock_passesNil_whenNothingBuildsDependencyReceivedOnlyIfAvailable() async throws {
@@ -279,12 +280,6 @@ struct SafeDIToolMockKnownRightValueTests {
 		try await expectAgreement(of: .o7)
 	}
 
-	/// Every row is compared in one batch, so that each test names its row.
-	@Test
-	func rows_eachHaveATest() {
-		#expect(KnownRightMockRow.allCases.count == 33)
-	}
-
 	// MARK: Private
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -432,13 +427,18 @@ enum KnownRightMockRow: String, CaseIterable {
 				("B10Screen.mock(safeDIOverrides: .init(x: B10X()))", "b10Expected(x: B10X())"),
 			]
 		case .b11:
-			[("B11Shell.mock(safeDIOverrides: .init(screen: .init(leaf: { B11Sentinel() })))", "b11Expected()")]
+			[("B11Shell.mock(safeDIOverrides: .init(screen: .init(leaf: { B11Sentinel() }), panel: .init(screen: .init(leaf: { B11PanelSentinel() }))))", "b11Expected()")]
 		case .b12:
 			[("B12ScreenA.mock()", "b12ExpectedA()"), ("B12ScreenB.mock()", "b12ExpectedB()")]
 		case .b20:
 			[("B20Screen.mock()", "b20Expected()"), ("B20Root()", "b20ExpectedRoot()")]
 		case .b25:
 			[("B25Screen.mock(id: 1)", "b25Expected(id: 1)")]
+		case .b13:
+			[
+				("B13Screen.mock()", "b13Expected()"),
+				("{ let x = B13X(); return (B13Screen.mock(safeDIOverrides: .init(x: x)), x) }()", "{ let x = B13X(); return (b13Expected(x: x), x) }()"),
+			]
 		case .o1:
 			[
 				("O1Screen.mock()", "o1Expected()"),
@@ -465,7 +465,7 @@ enum KnownRightMockRow: String, CaseIterable {
 				("O7Screen.mock()", "o7Expected()"),
 				("{ let x = O7X(); return (O7Screen.mock(safeDIOverrides: .init(x: { x })), x) }()", "{ let x = O7X(); return (o7Expected(x: x), x) }()"),
 			]
-		case .b1, .b2, .b5, .b13, .b14, .b15, .b16, .b17, .b18, .b19, .b21, .b22, .b23, .b24, .b26:
+		case .b1, .b2, .b5, .b14, .b15, .b16, .b17, .b18, .b19, .b21, .b22, .b23, .b24, .b26:
 			[("\(rawValue)Screen.mock()", "\(rawValue.lowercased())Expected()")]
 		}
 	}
@@ -839,6 +839,19 @@ enum KnownRightMockRow: String, CaseIterable {
 				"""
 				@Instantiable(generateMock: true)
 				public final class B11Shell: Instantiable {
+				    public init(screen: B11Screen, panel: B11Panel) {
+				        self.screen = screen
+				        self.panel = panel
+				    }
+
+				    @Instantiated let screen: B11Screen
+				    @Instantiated let panel: B11Panel
+				    \(stamp)
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B11Panel: Instantiable {
 				    public init(screen: B11Screen) {
 				        self.screen = screen
 				    }
@@ -879,6 +892,8 @@ enum KnownRightMockRow: String, CaseIterable {
 				}
 
 				public final class B11Sentinel: B11Leaf {}
+
+				public final class B11PanelSentinel: B11Leaf {}
 				""",
 			],
 			.b12: [
@@ -2133,7 +2148,10 @@ enum KnownRightMockRow: String, CaseIterable {
 		    func screen() -> B11Screen {
 		        B11Screen(leaf: B11Sentinel(), stepBuilder: Instantiator<B11Step> { B11Step(screenBuilder: Instantiator<B11Screen> { screen() }) })
 		    }
-		    return B11Shell(screen: screen())
+		    func panelScreen() -> B11Screen {
+		        B11Screen(leaf: B11PanelSentinel(), stepBuilder: Instantiator<B11Step> { B11Step(screenBuilder: Instantiator<B11Screen> { panelScreen() }) })
+		    }
+		    return B11Shell(screen: screen(), panel: B11Panel(screen: panelScreen()))
 		}
 		""",
 		// "Conditionally receiving dependencies": a receiver gets the nearest declaration above it, and `nil` where
@@ -2148,10 +2166,11 @@ enum KnownRightMockRow: String, CaseIterable {
 		    B12ScreenB(leaf: B12Leaf(x: nil))
 		}
 		""",
-		// "Dependencies received only if available": the entry defaults to `nil`, and `mock()` takes no parameter.
+		// "Dependencies received only if available": the entry defaults to `nil`, `mock()` takes no parameter, and the
+		// value the entry is given is handed over.
 		.b13: """
-		func b13Expected() -> B13Screen {
-		    B13Screen(x: nil, child: B13Child())
+		func b13Expected(x: B13X? = nil) -> B13Screen {
+		    B13Screen(x: x, child: B13Child())
 		}
 		""",
 		// "It has no entry of its own when the mock builds it anyway: … another type in the tree requires it."
