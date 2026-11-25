@@ -1098,7 +1098,7 @@ private func walkFiles(
 	.get()
 }
 
-/// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` read of the file at `path`. A struct, never
+/// What `walkFiles(named:conditionalCompilation:findingTypesOtherModulesCanName:)` read of the file at `path`. A struct, never
 /// a tuple (`taskGroupTupleElement` in `.claude/rules/source-rules.md`).
 private struct WalkedFileRead: Sendable {
 	let path: String
