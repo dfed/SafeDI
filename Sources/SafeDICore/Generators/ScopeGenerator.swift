@@ -3336,11 +3336,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return await child.generateDOT()
 		} else {
 			let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
-			let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
-			var childDOTs = [String]()
+			// A place whose fill another place's stands for (`FillStoodFor`) is drawn where its own fill would be, among
+			// the call's fills in the order the call met their places, with the tree of the fill that stands for it: the
+			// tree its own fill would build. So the drawing does not depend on which fills the call built.
+			var fillsByKey = [String: ScopeGenerator]()
+			if !fillsStoodFor.isEmpty {
+				for child in orderedPropertiesToGenerate {
+					if let fillKey = child.fillKey {
+						fillsByKey[fillKey] = child
+					}
+				}
+			}
+			var drawn = [(node: String, generator: ScopeGenerator?)]()
+			var fillsStoodForToDraw = fillsStoodFor[...]
+			var drawnFillCount = 0
 			for orderedPropertyToGenerate in orderedPropertiesToGenerate {
-				let childDOT = await orderedPropertyToGenerate.generateDOT()
-				if !childDOT.isEmpty {
+				if orderedPropertyToGenerate.fillKey != nil {
+					while let fillStoodFor = fillsStoodForToDraw.first, fillStoodFor.builtFillCountBefore <= drawnFillCount {
+						fillsStoodForToDraw.removeFirst()
+						drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
+					}
+					drawnFillCount += 1
+				}
+				drawn.append((orderedPropertyToGenerate.scopeData.asDOTNode, orderedPropertyToGenerate))
+			}
+			for fillStoodFor in fillsStoodForToDraw {
+				drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
+			}
+			let instantiatedProperties = drawn.map(\.node)
+			var childDOTs = [String]()
+			for (_, generator) in drawn {
+				if let childDOT = await generator?.generateDOT(), !childDOT.isEmpty {
 					childDOTs.append(childDOT)
 				}
 			}

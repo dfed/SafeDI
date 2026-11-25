@@ -1528,17 +1528,26 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		while nextFillIndex < fillsOfThisCall.count {
 			let next = fillsOfThisCall[nextFillIndex]
 			nextFillIndex += 1
-			guard sharesFillsBetweenPlaces, !next.fill.emitsCode, next.fill.hole.enumPlace != nil else {
+			// A fill drops a declaration the caller binds itself from its hole, which no other place's fill did for this
+			// one, and which its own fill would do for no other place.
+			guard sharesFillsBetweenPlaces, !next.fill.emitsCode, next.fill.hole.enumPlace != nil, !next.fill.hole.uncarriedDeclarations.contains(where: \.isBoundFromCallersArgument) else {
 				builtFillCount += 1
 				return next
 			}
+			// The case's stand-ins are taken out of the dictionary while they are asked and changed, and put back, so that
+			// no place copies them.
 			let caseKey = ScopeGenerator.fillCaseKey(of: next.fill.hole)
-			if let standIn = standIn(forFillOf: next.fill.hole, builtBy: next.scope, amongFillsOfCaseKeyed: caseKey) {
+			var standIns = fillStandInsByCaseKey.removeValue(forKey: caseKey) ?? FillStandIns()
+			let standInKey = standInKey(forFillOf: next.fill.hole, builtBy: next.scope, among: &standIns)
+			if standInKey == nil, !standIns.noFillStandsIn {
+				standIns.fillWhoseTreeIsNotReadYet = FillStandIn(childIndex: childGenerators.count, key: next.fill.key, hole: next.fill.hole, scope: ObjectIdentifier(next.scope.identity))
+			}
+			fillStandInsByCaseKey[caseKey] = standIns
+			if let standInKey {
 				// What building the fill would check of the place itself.
 				try validateForwardedProperties(of: next.fill.hole.property, declaredAt: next.fill.hole.declarationLocation, on: next.fill.hole.ownerType, seeingThroughModulesNamed: next.fill.hole.declaringModuleNames, building: next.scope.instantiable)
-				fillsStoodFor.append(ScopeGenerator.FillStoodFor(hole: next.fill.hole, key: next.fill.key, standInKey: standIn, builtFillCountBefore: builtFillCount))
+				fillsStoodFor.append(ScopeGenerator.FillStoodFor(hole: next.fill.hole, key: next.fill.key, standInKey: standInKey, builtFillCountBefore: builtFillCount))
 			} else {
-				fillStandInsByCaseKey[caseKey, default: []].append(FillStandIn(childIndex: childGenerators.count, key: next.fill.key, hole: next.fill.hole, scope: ObjectIdentifier(next.scope.identity)))
 				builtFillCount += 1
 				return next
 			}
@@ -1568,19 +1577,29 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let hole: SeamSignature.Hole
 		/// The scope the fill builds.
 		let scope: ObjectIdentifier
-		/// What the fill's tree reads, found when a later place first asks; `nil` inside when the tree holds what no other
-		/// place's judgement could read of it (`standIn(forFillOf:builtBy:amongFillsOfCaseKeyed:)`).
-		var reads: FillTreeReads??
 	}
 
 	/// What the tree a fill built reads of the place it was built for.
-	private struct FillTreeReads {
+	private struct FillTreeReads: Hashable {
 		/// The labels the tree receives from outside it, which the fill's fields or the caller's declarations answer.
 		let labels: Set<String>
 		/// The concrete types the tree builds, whose properties alone can repeat an entry of the seam's path.
 		let builtTypes: Set<TypeDescription>
-		/// The stand-in's own place, projected to them.
-		let variant: FillVariant
+	}
+
+	/// The fills this call built for one case that can stand for the case's later places, found by what a place hands its
+	/// fill, so that a place neither scans nor copies the fills built before it: a case reached along thousands of paths
+	/// has that many places. Held while the call's fills are created, with the scope under construction.
+	private struct FillStandIns {
+		/// The fill built last, whose tree the next place of the case to ask reads: its generator exists only once it is
+		/// built, after `nextFill()` returns it.
+		var fillWhoseTreeIsNotReadYet: FillStandIn?
+		/// What each distinct tree among the fills reads, in the order the fills were built, each with the key of the fill
+		/// built for each place those reads tell apart. Fills of one case build one scope, so nearly every case has one.
+		var keysByVariantOfEachTreeReads = [(reads: FillTreeReads, keysByVariant: [FillVariant: String])]()
+		/// Whether a fill of the case holds what no other place's judgement could read of it (`treeReads(ofFillStandingIn:)`).
+		/// The fills of a case build one scope, whose tree holds it for every place, so no later fill is kept either.
+		var noFillStandsIn = false
 	}
 
 	/// What the tree of a fill that generates no code is built from, of its place: two places of one case with equal
@@ -1631,18 +1650,24 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The key of the fill this call built that stands for the fill of `hole`, which would build `scope`, or `nil` when the
 	/// place needs a fill of its own.
-	private mutating func standIn(forFillOf hole: SeamSignature.Hole, builtBy scope: ConstructionScope, amongFillsOfCaseKeyed caseKey: String) -> String? {
-		// The fill drops a declaration the caller binds itself from its hole, which no other place's fill did for this one.
-		guard let standIns = fillStandInsByCaseKey[caseKey], !hole.uncarriedDeclarations.contains(where: \.isBoundFromCallersArgument) else { return nil }
-		let scopeIdentity = ObjectIdentifier(scope.identity)
-		for index in standIns.indices where standIns[index].scope == scopeIdentity {
-			if standIns[index].reads == nil {
-				let treeReads = treeReads(ofFillStandingIn: standIns[index])
-				fillStandInsByCaseKey[caseKey]?[index].reads = .some(treeReads)
+	private func standInKey(forFillOf hole: SeamSignature.Hole, builtBy scope: ConstructionScope, among standIns: inout FillStandIns) -> String? {
+		if let built = standIns.fillWhoseTreeIsNotReadYet {
+			standIns.fillWhoseTreeIsNotReadYet = nil
+			if let reads = treeReads(ofFillStandingIn: built) {
+				let variant = FillVariant(of: built.hole, builtBy: built.scope, labels: reads.labels, builtTypes: reads.builtTypes)
+				if let index = standIns.keysByVariantOfEachTreeReads.firstIndex(where: { $0.reads == reads }) {
+					standIns.keysByVariantOfEachTreeReads[index].keysByVariant[variant] = built.key
+				} else {
+					standIns.keysByVariantOfEachTreeReads.append((reads, [variant: built.key]))
+				}
+			} else {
+				standIns = FillStandIns(noFillStandsIn: true)
 			}
-			guard let reads = fillStandInsByCaseKey[caseKey]?[index].reads ?? nil else { continue }
-			if FillVariant(of: hole, builtBy: scopeIdentity, labels: reads.labels, builtTypes: reads.builtTypes) == reads.variant {
-				return standIns[index].key
+		}
+		let scopeIdentity = ObjectIdentifier(scope.identity)
+		for (reads, keysByVariant) in standIns.keysByVariantOfEachTreeReads {
+			if let key = keysByVariant[FillVariant(of: hole, builtBy: scopeIdentity, labels: reads.labels, builtTypes: reads.builtTypes)] {
+				return key
 			}
 		}
 		return nil
@@ -1656,8 +1681,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		guard let built = fillGenerator.children.first,
 		      !built.treeHoldsCallOrFill,
 		      !built.containsBuildSite,
-		      fillGenerator.fieldsCarriedBySites.isEmpty,
-		      !standIn.hole.uncarriedDeclarations.contains(where: \.isBoundFromCallersArgument)
+		      fillGenerator.fieldsCarriedBySites.isEmpty
 		else { return nil }
 		var builtTypes = Set<TypeDescription>()
 		var generatorsToVisit = [built]
@@ -1667,32 +1691,45 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			}
 			generatorsToVisit.append(contentsOf: generator.children)
 		}
-		let labels = Set(built.receivedProperties.map(\.label))
-		return FillTreeReads(labels: labels, builtTypes: builtTypes, variant: FillVariant(of: standIn.hole, builtBy: standIn.scope, labels: labels, builtTypes: builtTypes))
+		return FillTreeReads(labels: Set(built.receivedProperties.map(\.label)), builtTypes: builtTypes)
 	}
 
 	/// The fills this call built that can stand for later places of their cases, by `ScopeGenerator.fillCaseKey(of:)`.
-	private var fillStandInsByCaseKey = [String: [FillStandIn]]()
+	private var fillStandInsByCaseKey = [String: FillStandIns]()
 	/// The places whose fills this call did not build (see `nextFill()`).
 	private var fillsStoodFor = [ScopeGenerator.FillStoodFor]()
 	/// How many fills `nextFill()` has handed out to build.
 	private var builtFillCount = 0
 
 	/// The generator the pass before created for the fill keyed `key`, or the one that stood for it there, or `nil` in the
-	/// first pass. A pass can build a fill for a place another pass built none for, so a fill is found by its key.
-	private func previousPassFillGenerator(keyed key: String) -> ScopeGenerator? {
+	/// first pass. A pass can build a fill for a place another pass built none for, so a fill that is not where this
+	/// pass's is, is found by its key.
+	private mutating func previousPassFillGenerator(keyed key: String) -> ScopeGenerator? {
 		guard let previousPassGenerator else { return nil }
 		let previousPassChildren = previousPassGenerator.children
 		if previousPassChildren.indices.contains(childGenerators.count), previousPassChildren[childGenerators.count].fillKey == key {
 			return previousPassChildren[childGenerators.count]
-		} else if let fill = previousPassChildren.first(where: { $0.fillKey == key }) {
-			return fill
-		} else if let standInKey = previousPassGenerator.fillsStoodFor.first(where: { $0.key == key })?.standInKey {
-			return previousPassChildren.first { $0.fillKey == standInKey }
 		} else {
-			return nil
+			if previousPassFillGeneratorsByKey == nil {
+				var generatorsByKey = [String: ScopeGenerator]()
+				for child in previousPassChildren {
+					if let fillKey = child.fillKey {
+						generatorsByKey[fillKey] = child
+					}
+				}
+				for fillStoodFor in previousPassGenerator.fillsStoodFor {
+					generatorsByKey[fillStoodFor.key] = generatorsByKey[fillStoodFor.standInKey]
+				}
+				previousPassFillGeneratorsByKey = generatorsByKey
+			}
+			return previousPassFillGeneratorsByKey?[key]
 		}
 	}
+
+	/// The pass before's generator of each of this call's fills, and for each place it built none for the one that stood
+	/// for it, by the fill's key: built once, when a fill is first not where this pass's is, and held while the call's
+	/// fills are created.
+	private var previousPassFillGeneratorsByKey: [String: ScopeGenerator]?
 
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site

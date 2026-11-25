@@ -22,7 +22,8 @@
 /// would be built alike (`ScopeGenerator.FillStoodFor`). Which of the two a call does must reach no output, generated
 /// code or diagnostic: a judgment that reads more of a place than its fill's fields (a capture, a closer's depth) reads
 /// it for each place the fill stands for. Only a test sets this, to compare a run that shares fills with a run that
-/// builds every one, as the seam corpus does for every graph.
+/// builds every one, as the seam corpus does for every graph. The tree
+/// `--dot-file-output` draws shows a place whose fill is not built with the tree of the fill that stands for it.
 public enum SeamFillSharing {
 	@TaskLocal public static var buildsFillOfEveryPlace = false
 

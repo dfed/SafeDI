@@ -1062,7 +1062,9 @@ extension DependencyTreeGenerator {
 		// The scopes on the path below the root whose builder function a cycle-closing scope in their tree calls, each with
 		// its level on the path and the type that declares its property.
 		var scopesACycleClosesOn = [(level: Int, generator: ScopeGenerator, declaration: ScopeGenerator.BuiltDeclaration, declaringType: TypeDescription)]()
-		// Shadow only: the index in `levels` of each closed-on scope's level, by its frame's level.
+		// For the tests' checks only, so only while a test observes the levels: the index in `levels` of each closed-on
+		// scope's level, by its frame's level.
+		let observesLevels = SeamPlaceLevels.observer != nil
 		var levelIndexByClosedOnFrameLevel = [Int: Int]()
 		// The type that declares the properties of the previous frame's children: the next frame's declaring type.
 		var childDeclaringType = seam.concreteInstantiable
@@ -1077,7 +1079,9 @@ extension DependencyTreeGenerator {
 			}
 			if level > 0, let declaration = frame.generator.declarationACycleClosesOn {
 				scopesACycleClosesOn.append((level, frame.generator, declaration, childDeclaringType))
-				levelIndexByClosedOnFrameLevel[level] = levels.count
+				if observesLevels {
+					levelIndexByClosedOnFrameLevel[level] = levels.count
+				}
 			}
 			// A fill the seam generates for a seam it calls binds every field of that seam's struct a site inside it carries,
 			// which is every field it binds (`ScopeGenerator.fillBoundFields`): what the struct carries is what inline holds
@@ -1161,8 +1165,10 @@ extension DependencyTreeGenerator {
 					levelDeclarations[levelDeclarations.count - 1].isFieldOfSeamParameter = field.isSeamParameter
 				}
 				endLevel(builtType: nil, nextProperty: frame.orderedChildren[frame.nextPosition - 1].generator.property)
-				levels[levels.count - 1].fillBaseStack = filledHole.fillPropertyStack
-				levels[levels.count - 1].fillBaseConcreteTypes = filledHole.fillConcreteTypeStack
+				if observesLevels {
+					levels[levels.count - 1].fillBaseStack = filledHole.fillPropertyStack
+					levels[levels.count - 1].fillBaseConcreteTypes = filledHole.fillConcreteTypeStack
+				}
 				continue
 			}
 			guard let instantiable = frame.generator.builtInstantiable else { continue }

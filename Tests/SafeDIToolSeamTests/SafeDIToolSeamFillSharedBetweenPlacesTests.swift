@@ -269,6 +269,70 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		#expect(fills.prefix(2).map { [$0.builtFillCount, $0.placeStoodForCount] } == [[3, 1], [4, 0]])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfEveryPlace_whenFillsTreeCallsSeam() async {
+		// `LiveApi` builds `Other`, a seam, so what its tree hands on is keyed by each fill's own place: no fill stands for
+		// another place, and after the first such fill of a case the call keeps none to compare later places with.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					parentDeclarations: Array(repeating: ["@Instantiated let panel: Panel"], count: 4),
+					panelDeclarations: ["@Instantiated let api: any Api"],
+					liveApiDeclarations: ["@Instantiated let other: Other"],
+					appDeclarations: [seamFixtureType(named: "Other", isSeam: true, declarations: ["@Instantiated let token: Token"])],
+					rowDeclarations: [],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(error == nil)
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [4, 0])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_drawsEveryPlaceInDOTTree_whenAnotherPlacesFillStandsForPlace(buildsFillOfEveryPlace: Bool) async throws {
+		// `Second` builds no `token`, so its place is judged with a fill of its own, between `First`'s, which generates
+		// code, and `Third`'s, which stands for `Fourth`'s. The tree draws each of the four places beneath the call, in
+		// the order the call meets them, each with `LiveApi`'s tree, whichever fills the call built.
+		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					parentDeclarations: [
+						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
+						["@Instantiated let panel: Panel"],
+						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
+						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
+					],
+					panelDeclarations: ["@Instantiated let api: any Api"],
+					liveApiDeclarations: ["@Received let token: Token", "@Instantiated let row: Row"],
+					rootDeclarations: ["@Instantiated let token: Token"],
+					rowDeclarations: [],
+				),
+				integration: .moduleInfo,
+				writesDOTTrees: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.modules["App"]?.dotTree == """
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "token: Token"
+		    Root -- "home: Home"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		}
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
