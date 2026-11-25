@@ -78,22 +78,21 @@ extension MockLowering.Walk {
 				}
 			}
 		}
-		if let nearest {
-			for path in placePathsInWalkOrder {
-				guard case var .closer(record)? = closerAndDefaultRecords[path], let argument = record.passedArguments.first else { continue }
-				let closedOn = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
-				// Where a built place of the closed-on type and the closer's label reads its parent's field, the closer hands
-				// the same expression that place hands, `nearest ?? parent.field`: the nearest is set exactly where a place
-				// of its type is above, so both read what they read before, and both are one call of the type's function.
-				let parentField = closerParentFieldReads[path].flatMap { read in
-					parentFieldsReadByBuiltPlaces.contains(ParentFieldRead(parentConfiguration: read.parentConfiguration, fieldName: read.fieldName))
-						? ValuePath.member(read.fieldName, of: read.parentConfiguration)
-						: nil
-				}
-				let value = nearest.closedOnValue(of: closedOn, at: path, parentField: parentField) ?? argument.value
-				record.passedArguments = [PassedArgument(parameterName: argument.parameterName, type: argument.type, value: value, staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)]
-					+ nearest.nearestArguments(ofCallTo: closedOn, at: path)
-				closerAndDefaultRecords[path] = .closer(record)
+		// What a call hands the nearest configurations its callee's function takes is the same at every call of that
+		// function made in a function of one type, so each list is made once and every such call's record shares it.
+		struct NearestCall: Hashable {
+			let calleeName: String
+			let callerName: String?
+		}
+		var nearestArgumentsByCall = [NearestCall: [PassedArgument]]()
+		func nearestArguments(_ nearest: MockLowering.NearestConfigurations, ofCallTo callee: MockLowering.ConfigurationParameter, at path: [Int]) -> [PassedArgument] {
+			let call = NearestCall(calleeName: callee.name, callerName: nearest.ownParameterByPath[Array(path.dropLast())]?.name)
+			if let arguments = nearestArgumentsByCall[call] {
+				return arguments
+			} else {
+				let arguments = nearest.nearestArguments(ofCallTo: callee, at: path)
+				nearestArgumentsByCall[call] = arguments
+				return arguments
 			}
 		}
 		// What each generator's construction reads in each context it is written in, which reads only the generator and its
@@ -118,14 +117,46 @@ extension MockLowering.Walk {
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
 			defer {
+				builtPlaceCalls[path] = nil
+				builtPlaceConfigurationContexts[path] = nil
 				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil {
+					firstUnrecordedPath = path
 					for depth in 1..<max(path.count, 1) {
 						pathsAboveUnrecordedPlace.insert(Array(path.prefix(depth)))
 					}
 				}
 			}
+			// A closer hands the configuration of the place it closes on when its turn comes, so that its record holds what it
+			// hands only until its parent's record takes it: a mock that enters a lazy cycle has thousands of closers, each
+			// handed a nearest configuration per type the cycle closes on.
+			if let nearest, case var .closer(record)? = closerAndDefaultRecords[path], let argument = record.passedArguments.first {
+				let closedOn = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
+				// Where a built place of the closed-on type and the closer's label reads its parent's field, the closer hands
+				// the same expression that place hands, `nearest ?? parent.field`: the nearest is set exactly where a place
+				// of its type is above, so both read what they read before, and both are one call of the type's function.
+				let parentField = closerParentFieldReads[path].flatMap { read in
+					parentFieldsReadByBuiltPlaces.contains(ParentFieldRead(parentConfiguration: read.parentConfiguration, fieldName: read.fieldName))
+						? ValuePath.member(read.fieldName, of: read.parentConfiguration)
+						: nil
+				}
+				let value = nearest.closedOnValue(of: closedOn, at: path, parentField: parentField) ?? argument.value
+				record.passedArguments = [PassedArgument(parameterName: argument.parameterName, type: argument.type, value: value, staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)]
+					+ nearestArguments(nearest, ofCallTo: closedOn, at: path)
+				closerAndDefaultRecords[path] = .closer(record)
+				closerParentFieldReads[path] = nil
+			}
 			guard let call = builtPlaceCalls[path] else { continue }
 			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
+			// The record made below holds its children's, so the walk's tables let go of them, and of what the walk kept to
+			// record this place, as soon as they are read: the tables then hold the places still waiting for their parents,
+			// never every place of the tree at once.
+			if call.inputs.hasFunction {
+				leadingBodyPlaces[path] = nil
+				for child in childPathsByParent[path] ?? [] {
+					builtRecords[child] = nil
+					closerAndDefaultRecords[child] = nil
+				}
+			}
 			// An erased place the mock can override is built from a closure that returns the erased type, and a place built in
 			// a function whose property is another type than the one it builds (`fulfilledByType:`, a protocol) from an
 			// override that returns the property's type: its function returns the property's type (`functionReturnType`).
@@ -196,7 +227,7 @@ extension MockLowering.Walk {
 						handed.bindsBeforeCall = first.bindsBeforeCall
 						built.passedArguments[0] = handed
 					}
-					built.passedArguments += nearest.nearestArguments(ofCallTo: own, at: path)
+					built.passedArguments += nearestArguments(nearest, ofCallTo: own, at: path)
 					builtRecords[path] = .built(built)
 				}
 				if !call.inputs.hasFunction {
@@ -315,7 +346,7 @@ extension MockLowering.Walk {
 		for path in placePathsInWalkOrder where path.count == 1 {
 			rootBody.append(placeCode(at: path))
 		}
-		if let path = placePathsInWalkOrder.first(where: { builtRecords[$0] == nil && closerAndDefaultRecords[$0] == nil }) {
+		if let path = firstUnrecordedPath {
 			return (nil, "unrecorded:\(unrecordedReasons[path] ?? "closerOrOther")")
 		}
 		if let label = Self.unresolvedRead(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))) {
