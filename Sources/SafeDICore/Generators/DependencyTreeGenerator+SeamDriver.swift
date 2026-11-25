@@ -1412,7 +1412,7 @@ extension DependencyTreeGenerator {
 		var typeDescriptionToScopeMap = [TypeDescription: Scope]()
 		var scopes = [Scope]()
 		// Visited in type order: a type the map holds under several keys gets one scope whichever key is met first.
-		for typeDescription in reachableTypeDescriptions.sorted() {
+		for typeDescription in reachableTypeDescriptions.sortedBySpelling() {
 			guard let instantiable = instantiables[typeDescription], typeDescriptionToScopeMap[instantiable.concreteInstantiable] == nil else { continue }
 			let scope: Scope
 			if instantiable.generatesDependencyTree, let seamRoot = seamRoots[instantiable.concreteInstantiable] ?? nil {
