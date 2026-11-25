@@ -68,15 +68,12 @@ extension MockLowering.Walk {
 		for path in placePathsInWalkOrder.reversed() {
 			guard let call = builtPlaceCalls[path] else { continue }
 			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
-			// An erased place the mock can override is built from a closure that returns the erased type, where the type
-			// key's function returns the concrete one: it keeps the walk's body.
-			// So is a place built in a function whose property is another type than the one it builds (`fulfilledByType:`,
-			// a protocol), whose override returns the property's type.
+			// An erased place the mock can override is built from a closure that returns the erased type, and a place built in
+			// a function whose property is another type than the one it builds (`fulfilledByType:`, a protocol) from an
+			// override that returns the property's type: its function returns the property's type (`functionReturnType`).
 			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable))
-			let isPlanned = call.isPlannedAtPlace && !overrideReturnsAnotherType
-			if overrideReturnsAnotherType {
-				unrecordedReasons[path] = "overrideReturnsAnotherType"
-			} else if pathsWithUnplannedLines.contains(path) {
+			let isPlanned = call.isPlannedAtPlace
+			if pathsWithUnplannedLines.contains(path) {
 				unrecordedReasons[path] = "unplannedLines:" + (unplannedLineKinds[path] ?? "")
 			} else if !call.isPlannedAtPlace {
 				unrecordedReasons[path] = "notPlannedAtPlace"
@@ -98,10 +95,14 @@ extension MockLowering.Walk {
 				)
 				// A construction that reads defaults or calls a hand-written mock records it in place of production's call
 				// (`MockLowering+ClosersAndDefaults.swift`).
-				let record = if let configuredConstruction = call.inputs.configuredConstruction {
+				var record = if let configuredConstruction = call.inputs.configuredConstruction {
 					productionRecord.flatMap { configuring($0, with: configuredConstruction, instantiable: call.instantiable) }
 				} else {
 					productionRecord
+				}
+				if overrideReturnsAnotherType, case var .built(built)? = record {
+					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
+					record = .built(built)
 				}
 				// A record whose construction passes `nil` where the walk passes a value, or the other way, as for an
 				// `@Instantiated` dependency the mock takes as a parameter where production builds nothing, keeps the walk's
