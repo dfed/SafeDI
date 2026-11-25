@@ -162,7 +162,9 @@ extension GraphFuzzerValueOraclePlan {
 		let fields = GraphFuzzerMockOverrides.overrideFields(mockFile)
 		let matched = candidates.compactMap { candidate -> (candidate: GraphFuzzerOverrideCandidate, kind: GraphFuzzerOverrideFieldKind)? in
 			// A root's generated `convenience init()` would make a reference to the type's initializer ambiguous.
+			// The sentinel's `@Sendable` builder cannot send the values it is handed on to an actor's initializer.
 			guard !rootTypeNames.contains(candidate.builtTypeName),
+			      !actorTypeNames.contains(candidate.builtTypeName),
 			      let field = fields.first(where: { $0.label == candidate.label })
 			else { return nil }
 			// A field of another type than the one built – an erased or fulfilled-by-type protocol – takes a builder that
