@@ -110,7 +110,7 @@ extension MockLowering.Walk {
 	mutating func recordPublicConstruction(of node: MockLowering.ConstantNode, children: [MockLowering.TreeNode], builderRead: String?) {
 		guard buildsPublicMock, node.hasConfiguration, builtPlaceInputs[childIndexPath] != nil else { return }
 		let construction = MockLowering.PublicConstructionRecord(of: node, children: children)
-		builtPlaceInputs[childIndexPath]?.publicConstruction = MockLowering.PublicConstructionInputs(
+		publicConstructionInputs[childIndexPath] = MockLowering.PublicConstructionInputs(
 			construction: construction,
 			builderRead: builderRead,
 			writtenCall: MockLowering.publicConstructionCall(of: construction, arguments: node.arguments.map(\.value), builderRead: builderRead, erasedTo: nil),
@@ -118,9 +118,9 @@ extension MockLowering.Walk {
 	}
 
 	/// The record of a public mock's place production's record function made, `record`, as the public mock writes it.
-	mutating func publicRecord(of record: PlaceRecord, inputs: MockLowering.BuiltPlaceInputs) -> PlaceRecord? {
+	mutating func publicRecord(of record: PlaceRecord, at path: [Int]) -> PlaceRecord? {
 		guard buildsPublicMock, case let .built(builtRecord) = record else { return record }
-		guard let publicConstruction = inputs.publicConstruction else {
+		guard let publicConstruction = publicConstructionInputs[path] else {
 			countPublicBuiltPlace(builtRecord)
 			return record
 		}
