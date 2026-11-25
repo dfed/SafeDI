@@ -249,7 +249,7 @@ struct ReadPlace {
 
 	/// The elements of a record with what each seam above put before them, each seam's kept as it added them: a copy
 	/// passed up shares its record's, so a chain of copies holds each element once.
-	fileprivate indirect enum Prefixed<Element> {
+	indirect fileprivate enum Prefixed<Element> {
 		case elements([Element])
 		case prefixed([Element], Prefixed<Element>)
 
@@ -269,7 +269,7 @@ struct ReadPlace {
 
 	/// The declarations a place cannot read, as the runs each record on the way added, in order: a copy passed up shares
 	/// its record's runs.
-	fileprivate indirect enum Runs {
+	indirect fileprivate enum Runs {
 		case run(ArraySlice<SeamSignature.Hole.UncarriedDeclaration>)
 		case joined([Runs], count: Int)
 
@@ -696,7 +696,13 @@ enum ModulePlacesEncoder {
 					declarations.append(.written(declaration))
 				}
 			}
-			if let whole = declarations.firstIndex(where: { if case .kept(first: 0, count: record.uncarriedDeclarations.count) = $0 { true } else { false } }) {
+			if let whole = declarations.firstIndex(where: {
+				if case .kept(first: 0, count: record.uncarriedDeclarations.count) = $0 {
+					true
+				} else {
+					false
+				}
+			}) {
 				declarations[whole] = .record
 			}
 			let presentation = StoredPlacePresentation(place)

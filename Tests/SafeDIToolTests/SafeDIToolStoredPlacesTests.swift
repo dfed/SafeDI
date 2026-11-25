@@ -251,7 +251,7 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		#expect {
 			try malformed.decoded(moduleName: "Layer1", in: ["Layer0": lower])
 		} throws: { error in
-			"\(error)" == expectedError
+			expectedError == "\(error)"
 		}
 	}
 
