@@ -1265,11 +1265,11 @@ extension MockLowering {
 			if let ownOverridePath {
 				overridePathsByType[instantiable.concreteInstantiable.asSource, default: []].append(ownOverridePath)
 			}
-			configurationReads.append(hasConfiguration ? MockLowering.ConfigurationParameter(
+			configurationReads.append(hasConfiguration ? .passedArgument(MockLowering.ConfigurationParameter(
 				concreteType: instantiable.concreteInstantiable,
 				builtWithHandWrittenMock: usesMockInitializer,
 				configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
-			).read(isProvided: true) : nil)
+			).name) : nil)
 			// The configured types around the node's children.
 			let configurationEntry = enteringConfiguredNode(of: instantiable.concreteInstantiable)
 			return .descending(DescendingBuiltNode(
