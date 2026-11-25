@@ -377,7 +377,7 @@ struct SafeDIToolGraphFuzzerTests {
 			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 42, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
 			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 39, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 62, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
-			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 166, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
+			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 149, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
 			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
 			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 49, namedMemberClosureCount: 12, conversionFunctionCount: 0, fillFunctionCount: 2),
 			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 73, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
@@ -8967,6 +8967,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.promotedHolePublicMockPassedUp: 17,
 		.promotedHolePublicMockPublicConsumer: 40,
 		.promotedHolePublicMockSendableLazily: 12,
+		.optionalPlacePublicMock: 165,
+		.optionalPlacePublicMockOnLeaf: 73,
+		.optionalPlacePublicMockSendably: 27,
+		.optionalPlacePublicMockReceived: 84,
+		.optionalPlacePublicMockPassedUp: 67,
+		.optionalPlacePublicMockPublicConsumer: 45,
 		.unbuildableValuePublicMockCall: 174,
 		.unbuildableValuePublicMockCallPublicTier: 174,
 		.carrierBeforeSiblingBeneathInternallyConfiguredChild: 26,
@@ -9020,7 +9026,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x52879FD791F2736D
+	static let publicMockCorpusFixtureHash: UInt64 = 0x61CCC49786C55235
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9082,7 +9088,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x83B3A47D52108C53
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xA16ED3BEF7F33D2E
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9350,6 +9356,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.promotedHolePublicMockSendableLazily: 13,
 		.promotedHolePublicMockPassedUp: 18,
 		.promotedHolePublicMockPublicConsumer: 40,
+		.optionalPlacePublicMock: 178,
+		.optionalPlacePublicMockOnLeaf: 81,
+		.optionalPlacePublicMockSendably: 30,
+		.optionalPlacePublicMockReceived: 94,
+		.optionalPlacePublicMockPassedUp: 70,
+		.optionalPlacePublicMockPublicConsumer: 48,
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,
