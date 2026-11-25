@@ -75,9 +75,20 @@ extension MockLowering.Walk {
 			unrecordedReasons[first.path] = "loop:functionText"
 			return
 		}
+		// A name of SafeDI's the text does not declare is a function around it, which the type key may rename or give
+		// parameters, or a local a `@Sendable` function around it reads its overrides into, which it may not declare: no
+		// read tells either apart, so the loop keeps the walk's body.
+		guard !place.reads.contains(where: { $0.label.hasPrefix(ReservedName.builderFunctionNamePrefix) }) else {
+			unrecordedReasons[first.path] = "loop:namesFunctionOrLocalAround"
+			return
+		}
 		// The bindings read the functions the unit declares, and the members the unit binds before them.
 		let bindingText = unit.bindings.map { line in line.hasPrefix(indent) ? String(line.dropFirst(indent.count)) : line }.joined(separator: "\n")
 		let bindingTokens = MockLowering.codeTokens(in: bindingText)
+		guard !bindingTokens.contains(where: { !$0.isMember && $0.name.hasPrefix(ReservedName.builderFunctionNamePrefix) && !place.declaredFunctionNames.contains($0.name) }) else {
+			unrecordedReasons[first.path] = "loop:namesFunctionOrLocalAround"
+			return
+		}
 		var reads = place.reads.filter { !boundNames.contains($0.label) }
 		var readNames = Set(reads.map(\.label))
 		for token in bindingTokens where !token.isMember && !token.isLabel && !MockLowering.keywords.contains(token.name) && !place.declaredFunctionNames.contains(token.name) && !boundNames.contains(token.name) {
