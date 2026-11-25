@@ -1463,16 +1463,32 @@ extension ModuleInfoFile: BinarySchemaMember {
 	}
 }
 
-extension ModuleSeamSignatures: BinaryCodable {
+extension ModuleSeamSignatures: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("seamTypes", \.seamTypes),
+				BinaryLayoutField("encoding", \.encodingWithPositions),
+			],
+			// Written as `encoding`.
+			unwrittenProperties: ["storage"],
+		)
+	}
+
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(seamTypes: reader.read(), encoding: reader.readEncoding())
+		try self.init(seamTypes: reader.read(), encoding: (reader.read() as BinaryEncoding).bytes)
 	}
 
 	/// Writes the seams, then the encoding of their signatures (``encoding(writingPositionsAsAbsent:)``), which shares the
 	/// values a signature repeats among the module's signatures alone: a run that reads one module's decodes no other's.
 	func write(to writer: inout BinaryWriter) {
 		writer.write(seamTypes)
-		writer.writeEncoding(encoding(writingPositionsAsAbsent: writer.writesPositionsAsAbsent))
+		writer.write(BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: writer.writesPositionsAsAbsent)))
+	}
+
+	/// The encoding as a writer that writes positions writes it.
+	private var encodingWithPositions: BinaryEncoding {
+		BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: false))
 	}
 }
 

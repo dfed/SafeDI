@@ -1123,6 +1123,24 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 	}
 }
 
+/// Bytes another writer encoded (``BinaryWriter/encoded``), written behind their length, so that a reader keeps them
+/// without reading what they hold and decodes them later with a reader of their own.
+struct BinaryEncoding: BinaryCodable {
+	let bytes: [UInt8]
+
+	init(bytes: [UInt8]) {
+		self.bytes = bytes
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		bytes = try reader.readEncoding()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeEncoding(bytes)
+	}
+}
+
 /// A value whose repeated type descriptions, hole fields and reasons are each written once
 /// (``BinaryWriter/writeSharingSignatureValues(_:)``).
 struct BinarySharingSignatureValues<Value: BinaryCodable>: BinaryCodable {

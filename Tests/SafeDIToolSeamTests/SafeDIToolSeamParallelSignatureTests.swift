@@ -97,7 +97,7 @@ struct SafeDIToolSeamParallelSignatureTests: ~Copyable {
 		}
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
-		let seamSignatures = try #require(output.moduleInfoFile?.seamSignatures)
+		let seamSignatures = try #require(output.moduleInfoFile?.seamSignatures).decoded
 		#expect(seamSignatures.count == 25)
 		let fixtureDirectory = URL(fileURLWithPath: output.fixtures["Token.swift"]).deletingLastPathComponent().path
 		return try Generated(
