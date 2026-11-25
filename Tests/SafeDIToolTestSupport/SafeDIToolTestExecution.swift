@@ -348,7 +348,9 @@ func executeSafeDIToolTest(
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
 										try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
-											try await tool.generate()
+											try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+												try await tool.generate()
+											}
 										}
 									}
 								}

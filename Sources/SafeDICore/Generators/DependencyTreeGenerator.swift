@@ -709,6 +709,30 @@ public actor DependencyTreeGenerator {
 							constructionMemo: &constructionMemo,
 						),
 					))
+					// Each scope the root reaches with its children on a cycle as call places, built only where a test compares
+					// the order it gives the scope's children with today's.
+					if let observer = CallPlaceOrderObservation.observer,
+					   let todaysTree = roots.last?.scopeGenerator,
+					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
+					{
+						var callPlaceOrderByScope = [ObjectIdentifier: [Int]]()
+						for (place, placeScope, todaysOrder) in Self.siblingOrders(ofTodaysTree: todaysTree, builtFrom: scope) {
+							if callPlaceOrderByScope[ObjectIdentifier(placeScope)] == nil, let copy = shadow.copy(of: placeScope) {
+								let (callPlaceTable, callPlaceRecord) = validatedWorld.frozenScopeMap.freezing(rootScope: copy)
+								var callPlaceMemo = ConstructionMemo()
+								callPlaceOrderByScope[ObjectIdentifier(placeScope)] = try callPlaceRecord.createScopeGenerator(
+									in: callPlaceTable,
+									lazilyInstantiatedInstanceProperties: [],
+									erasedToConcreteExistential: false,
+									declaredTypeNames: declaredTypeNames,
+									constructionMemo: &callPlaceMemo,
+								).orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.index)
+							}
+							if let callPlaceOrder = callPlaceOrderByScope[ObjectIdentifier(placeScope)] {
+								observer(place, todaysOrder, callPlaceOrder)
+							}
+						}
+					}
 				}
 				rootScopeGenerators = roots
 			} else {
