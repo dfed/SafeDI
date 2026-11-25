@@ -56,6 +56,13 @@ extension MockLowering {
 		)
 	}
 
+	/// An override read a place's construction makes: its text, and the value path it reads where it names the overrides'
+	/// members (`overrideReadPath(_:)`), `nil` where it reads a local a `@Sendable` function's extractor bound it to.
+	struct OverrideRead {
+		let text: String
+		let path: ValuePath?
+	}
+
 	/// The value path of an override read spelled `safeDIOverrides.<member>.<member>…`, or `nil` for any other read, such
 	/// as a local a `@Sendable` function's extractor bound it to.
 	static func overrideReadPath(_ read: String) -> ValuePath? {
@@ -109,8 +116,8 @@ extension MockLowering {
 
 	/// The alternative a place tries before its construction where the walk reads its override at `overrideRead`, whose
 	/// result is wrapped in `resultWrapper`; `nil` where the read is no value path, as a local an extractor bound it to.
-	static func overrideAlternative(reading overrideRead: String, resultWrapper: TypeDescription?) -> ConstructionAlternative? {
-		overrideReadPath(overrideRead).map { closure in
+	static func overrideAlternative(reading overrideRead: ValuePath?, resultWrapper: TypeDescription?) -> ConstructionAlternative? {
+		overrideRead.map { closure in
 			ConstructionAlternative(
 				closure: closure,
 				bindingName: ReservedName.configurationBuilderPropertyName,
@@ -156,7 +163,7 @@ extension MockLowering.Walk {
 	mutating func recordInputs(
 		of node: MockLowering.ConstantNode,
 		hasFunction: Bool,
-		overrideRead: String?,
+		overrideRead: MockLowering.OverrideRead?,
 		initializer: Initializer,
 		instantiable: Instantiable,
 		dependencyArguments: [(label: String, value: String)],
@@ -174,7 +181,7 @@ extension MockLowering.Walk {
 			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded,
 			// except in an internal mock, whose record reads the override of the configuration its call hands it
 			// (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the read its path names.
-			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper)
+			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead.path, resultWrapper: node.overrideResultWrapper)
 				?? internalMockOverrideAlternative(of: node)
 			else {
 				unrecordedReasons[childIndexPath] = "overrideLocal"

@@ -33,6 +33,9 @@ extension MockLowering {
 	/// The override path a place reads, and whether it reads a configuration rather than a closure.
 	struct AncestorOverridePath: Equatable {
 		let path: String
+		/// `path` as the value path the place's record reads, built a member at a time beside the text, since reading it
+		/// again from the text would cost each place the length of its path.
+		let value: ValuePath
 		let hasConfiguration: Bool
 		/// Whether the place is built with its type's hand-written mock, whose configuration has another shape.
 		let builtWithHandWrittenMock: Bool
@@ -40,9 +43,9 @@ extension MockLowering {
 		/// The override path the place reads: `path` where its parent's configuration has a field for it
 		/// (`isReachable`), else the path of the nearest place of its type above it where both read a configuration or
 		/// both a closure and both are built the same way, else `nil`, and the place reads no override.
-		static func own(path: String, hasConfiguration: Bool, builtWithHandWrittenMock: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
+		static func own(path: String, value: ValuePath, hasConfiguration: Bool, builtWithHandWrittenMock: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
 			if isReachable {
-				AncestorOverridePath(path: path, hasConfiguration: hasConfiguration, builtWithHandWrittenMock: builtWithHandWrittenMock)
+				AncestorOverridePath(path: path, value: value, hasConfiguration: hasConfiguration, builtWithHandWrittenMock: builtWithHandWrittenMock)
 			} else if let nearest, nearest.hasConfiguration == hasConfiguration, nearest.builtWithHandWrittenMock == builtWithHandWrittenMock {
 				nearest
 			} else {
