@@ -146,7 +146,7 @@ struct ConstructionScope: Sendable {
 		}
 	}
 
-	fileprivate let table: ScopeTable
+	let table: ScopeTable
 	fileprivate let record: ScopeRecord
 }
 
