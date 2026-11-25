@@ -81,24 +81,34 @@ extension TypeKeyLayout {
 	/// Whether every read of every place reads in the type key's code the declaration it reads in the path key's.
 	mutating func checkEveryRead() -> Bool {
 		normalizeCycleParameters()
+		// Whether each read is `nil` in every member of its class, asked once per class rather than once per member: the
+		// answer is the class's, and asking it for every member walked every member again.
+		var isNilByRead = [NilReadKey: Bool]()
 		for body in bodies.indices {
 			let owner = classByBody[body]
 			let statements = bodies[body].statements
 			if let record = bodies[body].record {
 				for (position, argument) in record.arguments.enumerated() where record.argumentValues[position] == nil {
-					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNilAtEveryMember(owner: owner) { $0.arguments[position] }) else { return false }
+					let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: -1, position: position)) {
+						isNilAtEveryMember(owner: owner) { $0.arguments[position] }
+					}
+					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNil) else { return false }
 				}
 			}
 			for (index, statement) in statements.enumerated() {
 				switch statement {
 				case let .inline(record):
 					for position in record.arguments.indices where record.argumentValues[position] == nil {
-						let isNil = isNilAtEveryMember(owner: owner, inlineStatement: index, argument: position)
+						let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: index, position: position)) {
+							isNilAtEveryMember(owner: owner, inlineStatement: index, argument: position)
+						}
 						guard checkRead(record.arguments[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
 					}
 				case let .alias(record):
 					for position in record.listedReads.indices {
-						let isNil = isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+						let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: index, position: position)) {
+							isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+						}
 						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil),
 						      isNil || readsDeclarationOfSameType(record.listedReads[position], inBody: body, before: index, owner: owner)
 						else { return false }
@@ -121,8 +131,26 @@ extension TypeKeyLayout {
 		return true
 	}
 
+	/// A read of a class's statement at `statement` (-1 for the arguments of the class's own place), the read at
+	/// `position` of it.
+	struct NilReadKey: Hashable {
+		let owner: Int
+		let statement: Int
+		let position: Int
+	}
+
+	static func memoized(_ answers: inout [NilReadKey: Bool], _ key: NilReadKey, _ answer: () -> Bool) -> Bool {
+		if let known = answers[key] {
+			return known
+		}
+		let computed = answer()
+		answers[key] = computed
+		return computed
+	}
+
 	func isNilAtEveryMember(owner: Int, read: (BuiltPlaceRecord) -> PlaceRead) -> Bool {
 		guard owner != 0 else { return false }
+		GenerationWork.record(membersByClass[owner].count, by: .checkingReadsAtEveryMember)
 		return membersByClass[owner].allSatisfy { member in
 			bodies[member].record.map { read($0).source == .nil } ?? false
 		}
@@ -148,8 +176,10 @@ extension TypeKeyLayout {
 	}
 
 	/// The statement at `index` of each member of `owner`'s class, or of the root's body.
-	func statements(at index: Int, ofEveryMemberOf owner: Int) -> [Statement] {
-		(owner == 0 ? [0] : membersByClass[owner]).map { bodies[$0].statements[index] }
+	func statements(at index: Int, ofEveryMemberOf owner: Int) -> LazyMapSequence<[Int], Statement> {
+		let members = owner == 0 ? [0] : membersByClass[owner]
+		GenerationWork.record(members.count, by: .checkingReadsAtEveryMember)
+		return members.lazy.map { bodies[$0].statements[index] }
 	}
 
 	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {

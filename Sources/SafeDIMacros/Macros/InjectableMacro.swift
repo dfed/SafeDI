@@ -198,6 +198,23 @@ public struct InjectableMacro: PeerMacro {
 						],
 					))
 				}
+				// SafeDI builds a wrapper's value from an `@Instantiable` type, and generated code passes the built
+				// instance where the outer wrapper expects the inner one, which does not compile.
+				if let type = binding.typeAnnotation?.type,
+				   case let .simple(_, generics) = type.typeDescription.unwrapped,
+				   let outerWrapperTypeName = type.typeDescription.propertyType.wrapperTypeName,
+				   let builtTypeIndex = Self.builtTypeIndex(of: type.typeDescription.propertyType),
+				   builtTypeIndex < generics.count,
+				   generics[builtTypeIndex].propertyType.wrapperTypeName != nil
+				{
+					context.addDiagnostics(
+						from: InjectableError.instantiatedWrapperBuildsWrapper(
+							outerWrapperTypeName: outerWrapperTypeName,
+							builtType: generics[builtTypeIndex].unwrapped.asSource,
+						),
+						node: type,
+					)
+				}
 			}
 		}
 
@@ -444,6 +461,9 @@ public struct InjectableMacro: PeerMacro {
 		/// initializers take a function, of a dependency not spelled as a function.
 		case erasedRenameIntoWrapper(wrapperTypeName: String)
 		case erasedInstantiatorUsedWithoutFulfilledByType
+		/// An `@Instantiated` SafeDI wrapper, named `outerWrapperTypeName`, whose built type, spelled `builtType`, is
+		/// itself a SafeDI wrapper.
+		case instantiatedWrapperBuildsWrapper(outerWrapperTypeName: String, builtType: String)
 		case onlyIfAvailableInvalidType
 		/// An `@Instantiated` property declared with `onlyIfAvailable: true` whose type is the SafeDI wrapper named
 		/// `wrapperTypeName`, optional or not.
@@ -471,6 +491,8 @@ public struct InjectableMacro: PeerMacro {
 				"`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `\(wrapperTypeName)`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency."
 			case .erasedInstantiatorUsedWithoutFulfilledByType:
 				"An @Instantiated `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds."
+			case let .instantiatedWrapperBuildsWrapper(outerWrapperTypeName, builtType):
+				"An @Instantiated `\(outerWrapperTypeName)` cannot build `\(builtType)`, which is itself a SafeDI wrapper: SafeDI builds a wrapper’s value from an `@Instantiable` type. Declare the property as `\(builtType)`, or as a `\(outerWrapperTypeName)` of the type the inner wrapper builds."
 			case .onlyIfAvailableInvalidType:
 				"The argument `onlyIfAvailable` must be a Bool literal (`true` or `false`)."
 			case let .onlyIfAvailableInstantiatedWrapper(wrapperTypeName):
