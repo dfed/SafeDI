@@ -1748,10 +1748,12 @@ extension DependencyTreeGenerator {
 			// Each generator with what the calls inside every fill of its seam call hide from it, when it is such a fill, the
 			// children of its parent, which are the fills of that call, and what the calls inside the fills of public mock calls
 			// enclosing it hide from the fills of public mock calls nested in those fills (`inheritedCalledCopyDeclarations`).
-			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, fillsOfCall: [ScopeGenerator](), isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]]())]
-			while let (generator, hidden, fillsOfCall, isFillOfPublicMockCall, inheritedCalledCopyDeclarations) = generatorsToVisit.popLast() {
-				if let hole = generator.fillHole, let child = generator.children.first {
-					findingsOfFill(of: hole, fill: generator, child: child, fillsOfCall: fillsOfCall, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
+			// A fill that stands for another place's (`ScopeGenerator.FillStoodFor`) is visited once more for that place, with
+			// the place's own hole and what the calls hide from its own key, where the place's own fill would be.
+			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, call: ScopeGenerator?.none, isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]](), placeStoodFor: SeamSignature.Hole?.none)]
+			while let (generator, hidden, call, isFillOfPublicMockCall, inheritedCalledCopyDeclarations, placeStoodFor) = generatorsToVisit.popLast() {
+				if let hole = placeStoodFor ?? generator.fillHole, let child = generator.children.first, let call {
+					findingsOfFill(of: hole, fill: generator, child: child, call: call, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
 				}
 				// A seam call's children are its fills, which are judged against the calls inside any of them. A public mock's call
 				// inside one of its fills that re-enters a level function the call declares hands it only what that call reads of its
@@ -1766,7 +1768,7 @@ extension DependencyTreeGenerator {
 					[:]
 				}
 				if generator.seamCall != nil {
-					findingsOfCasesNestedByType(filledBy: generator.children, callerModule: callerModule).forEach(record)
+					findingsOfCasesNestedByType(filledBy: generator.children, standingFor: generator.fillsStoodFor, callerModule: callerModule).forEach(record)
 				}
 				// A public mock call nested in a fill of an enclosing public mock call hands its own fills what they read of the
 				// caller's scope from that enclosing fill's, which the calls inside the enclosing call's fills that re-enter it hand
@@ -1789,8 +1791,35 @@ extension DependencyTreeGenerator {
 				for label in declaredLabels {
 					childInheritedCalledCopyDeclarations[label] = nil
 				}
-				generatorsToVisit.append(contentsOf: generator.children.reversed().filter(\.treeHoldsCallOrFill).map { child in
-					var childHidden = child.fillKey.flatMap { hiddenByFillKey[$0] }
+				// The children in the order the call's arguments list their places: each place a fill stands for after the fills
+				// built before it.
+				var childrenToVisit = [(child: ScopeGenerator, placeStoodFor: ScopeGenerator.FillStoodFor?)]()
+				let fillsStoodFor = generator.fillsStoodFor
+				if fillsStoodFor.isEmpty {
+					childrenToVisit = generator.children.map { ($0, nil) }
+				} else {
+					let standInByKey = Dictionary(generator.children.compactMap { child in child.fillKey.map { ($0, child) } }, uniquingKeysWith: { first, _ in first })
+					var nextStoodForIndex = 0
+					var builtFillCount = 0
+					func appendPlacesStoodFor() {
+						while nextStoodForIndex < fillsStoodFor.count, fillsStoodFor[nextStoodForIndex].builtFillCountBefore <= builtFillCount {
+							if let standIn = standInByKey[fillsStoodFor[nextStoodForIndex].standInKey] {
+								childrenToVisit.append((standIn, fillsStoodFor[nextStoodForIndex]))
+							}
+							nextStoodForIndex += 1
+						}
+					}
+					for child in generator.children {
+						if child.fillKey != nil {
+							appendPlacesStoodFor()
+							builtFillCount += 1
+						}
+						childrenToVisit.append((child, nil))
+					}
+					appendPlacesStoodFor()
+				}
+				generatorsToVisit.append(contentsOf: childrenToVisit.reversed().filter(\.child.treeHoldsCallOrFill).map { child, stoodFor in
+					var childHidden = (stoodFor?.key ?? child.fillKey).flatMap { hiddenByFillKey[$0] }
 					if generator.publicMockCall != nil, child.fillHole != nil, !childInheritedCalledCopyDeclarations.isEmpty {
 						var merged = childHidden ?? FillReentryHidings()
 						for (label, declarations) in childInheritedCalledCopyDeclarations where merged.calledCopyDeclarations[label] == nil {
@@ -1798,7 +1827,7 @@ extension DependencyTreeGenerator {
 						}
 						childHidden = merged
 					}
-					return (child, childHidden, generator.children, generator.publicMockCall != nil && child.fillHole != nil, childInheritedCalledCopyDeclarations)
+					return (child, childHidden, generator, generator.publicMockCall != nil && child.fillHole != nil, childInheritedCalledCopyDeclarations, stoodFor?.hole)
 				})
 			}
 		}
@@ -1816,12 +1845,25 @@ extension DependencyTreeGenerator {
 	/// case, in label order. A case whose places the inner seam's two root enums both reach, whose fill's tree builds a place
 	/// or passes one up, is one such function could hand only one of the two scope values its root enums' dispatchers hold
 	/// (`placeInsideFillOfCaseOfBothRootEnums`).
-	private static func findingsOfCasesNestedByType(filledBy fills: [ScopeGenerator], callerModule: ModuleIdentity) -> [DependencyTreeGeneratorError.FillFinding] {
+	private static func findingsOfCasesNestedByType(filledBy fills: [ScopeGenerator], standingFor fillsStoodFor: [ScopeGenerator.FillStoodFor], callerModule: ModuleIdentity) -> [DependencyTreeGeneratorError.FillFinding] {
 		var placesByCaseKey = [String: [SeamSignature.Hole]]()
 		var emittingFillByCaseKey = [String: ScopeGenerator]()
 		var caseKeys = [String]()
+		// The places in the order of the call's arguments, each place a fill stands for after the fills built before it.
+		var nextStoodForIndex = 0
+		var builtFillCount = 0
+		func appendPlacesStoodFor() {
+			while nextStoodForIndex < fillsStoodFor.count, fillsStoodFor[nextStoodForIndex].builtFillCountBefore <= builtFillCount {
+				let hole = fillsStoodFor[nextStoodForIndex].hole
+				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
+				nextStoodForIndex += 1
+			}
+		}
 		for fill in fills {
-			guard let hole = fill.fillHole, hole.enumPlace != nil else { continue }
+			guard let hole = fill.fillHole else { continue }
+			appendPlacesStoodFor()
+			builtFillCount += 1
+			guard hole.enumPlace != nil else { continue }
 			let caseKey = ScopeGenerator.fillCaseKey(of: hole)
 			if placesByCaseKey[caseKey] == nil {
 				caseKeys.append(caseKey)
@@ -1831,6 +1873,7 @@ extension DependencyTreeGenerator {
 				emittingFillByCaseKey[caseKey] = fill
 			}
 		}
+		appendPlacesStoodFor()
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
 		for caseKey in caseKeys {
 			guard let places = placesByCaseKey[caseKey], let firstPlace = places.first, let child = emittingFillByCaseKey[caseKey]?.children.first else { continue }
@@ -1886,7 +1929,7 @@ extension DependencyTreeGenerator {
 	/// `validateCyclesFromRootsOfForeignSeamsWithHoles`, which inlines every seam, judges those.
 	/// - Parameters:
 	///   - fill: The fill's generator, whose fields say which memos it binds.
-	///   - fillsOfCall: The fills of the seam call that declares this fill, which decide whether a type above the seam can
+	///   - call: The seam call that declares this fill, whose fills decide whether a type above the seam can
 	///     build a declaration whose tree holds the places they fill.
 	///   - hidden: What the calls inside the fills of the seam call that declares this fill hide from it.
 	///   - compilesGeneratedMocks: Whether the build compiles the generated mocks, where a finding about a mock's code alone
@@ -1896,7 +1939,7 @@ extension DependencyTreeGenerator {
 		of hole: SeamSignature.Hole,
 		fill: ScopeGenerator,
 		child: ScopeGenerator,
-		fillsOfCall: [ScopeGenerator],
+		call: ScopeGenerator,
 		hidden: FillReentryHidings,
 		requirement: AccessRequirement,
 		callerModule: ModuleIdentity,
@@ -2139,7 +2182,7 @@ extension DependencyTreeGenerator {
 				// which does not carry what that seam binds on its path to the call presenting the site: each such call's.
 				?? hidden.calledCopyDeclarations[property.label]
 			{
-				for declaration in declarations.map({ $0.resolvingBuildabilityAboveSeam(fillsOfCall: fillsOfCall) }) {
+				for declaration in declarations.map({ $0.resolvingBuildabilityAboveSeam(fillsOfCall: call) }) {
 					switch declaration.reason {
 					case let .boundByPassingUpSeam(_, passingUpSeamModule, _):
 						findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: passingUpSeamModule)))
@@ -3267,10 +3310,10 @@ extension SeamSignature.Hole.UncarriedDeclaration {
 	/// for that tree (`labelsHeldAboveSeam`). A place none of them fills is filled by a module whose fill this one does not
 	/// see, which can read what that module binds, so neither a type above the seam nor one of this module could build the
 	/// tree for certain: no remedy moves the declaration (`holdsPlaceFilledElsewhere`).
-	func resolvingBuildabilityAboveSeam(fillsOfCall: [ScopeGenerator]) -> SeamSignature.Hole.UncarriedDeclaration {
+	func resolvingBuildabilityAboveSeam(fillsOfCall call: ScopeGenerator) -> SeamSignature.Hole.UncarriedDeclaration {
 		guard isBuildableAboveSeam, !placesInTree.isEmpty else { return self }
 		var declaration = self
-		let fulfillingScopes = placesInTree.map { site in fillsOfCall.first { $0.fillHole?.site == site }?.children.first }
+		let fulfillingScopes = placesInTree.map { site in call.fill(judgingPlaceAt: site)?.children.first }
 		declaration.holdsPlaceFilledElsewhere = fulfillingScopes.contains { $0 == nil }
 		declaration.isBuildableAboveSeam = fulfillingScopes.allSatisfy { fulfillingScope in
 			fulfillingScope?.receivedProperties.allSatisfy { labelsHeldAboveSeam.contains($0.label) } ?? false

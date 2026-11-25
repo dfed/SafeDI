@@ -715,7 +715,7 @@ extension ScopeRecord {
 						erasedToConcreteExistential: erasedToConcreteExistential,
 					)
 				}
-			} else if let fill = scopeGeneratorsUnderConstruction[index].nextFill() {
+			} else if let fill = try scopeGeneratorsUnderConstruction[index].nextFill() {
 				try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].fillUnderConstruction(
 					fill: fill.fill,
 					scope: fill.scope,
@@ -1513,11 +1513,178 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The next of `fillsOfThisCall` to create a generator for, once every one of `propertiesToGenerate` has its
 	/// generator, or `nil` once every fill has its generator.
-	mutating func nextFill() -> (fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)? {
-		guard nextFillIndex < fillsOfThisCall.count else { return nil }
-		let fill = fillsOfThisCall[nextFillIndex]
-		nextFillIndex += 1
-		return fill
+	///
+	/// A place of a case nested by type whose fill generates no code, and whose fill would be built from values equal, in
+	/// everything the tree reads, to those an earlier such place of its case was built from, gets no generator: that
+	/// place's stands for it (`ScopeGenerator.FillStoodFor`), and it is recorded in `fillsStoodFor`.
+	mutating func nextFill() throws -> (fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)? {
+		while nextFillIndex < fillsOfThisCall.count {
+			let next = fillsOfThisCall[nextFillIndex]
+			nextFillIndex += 1
+			guard sharesFillsBetweenPlaces, !next.fill.emitsCode, next.fill.hole.enumPlace != nil else {
+				builtFillCount += 1
+				return next
+			}
+			let caseKey = ScopeGenerator.fillCaseKey(of: next.fill.hole)
+			if let standIn = standIn(forFillOf: next.fill.hole, builtBy: next.scope, amongFillsOfCaseKeyed: caseKey) {
+				// What building the fill would check of the place itself.
+				try validateForwardedProperties(of: next.fill.hole.property, declaredAt: next.fill.hole.declarationLocation, on: next.fill.hole.ownerType, seeingThroughModulesNamed: next.fill.hole.declaringModuleNames, building: next.scope.instantiable)
+				fillsStoodFor.append(ScopeGenerator.FillStoodFor(hole: next.fill.hole, key: next.fill.key, standInKey: standIn, builtFillCountBefore: builtFillCount))
+			} else {
+				fillStandInsByCaseKey[caseKey, default: []].append(FillStandIn(childIndex: childGenerators.count, key: next.fill.key, hole: next.fill.hole, scope: ObjectIdentifier(next.scope.identity)))
+				builtFillCount += 1
+				return next
+			}
+		}
+		return nil
+	}
+
+	/// Whether this scope's seam call builds one fill for the places of a case whose fills would be built alike. Only a
+	/// production tree's call of a seam, outside every fill: a public mock's caller decides per route, a mock's tree shares a
+	/// call whole through the construction memo, and a call inside a fill passes the fills enclosing it by key. Never once a
+	/// pass found a fill of every place needed (`ScopeGenerator.buildsFillOfEveryPlace`).
+	private var sharesFillsBetweenPlaces: Bool {
+		!SeamFillSharing.buildsFillOfEveryPlace
+			&& scope.seamCall != nil
+			&& scope.publicMockCall == nil
+			&& !forMockGeneration
+			&& fill == nil
+			&& enclosingFills.isEmpty
+			&& previousPassGenerator?.buildsFillOfEveryPlace != true
+	}
+
+	/// A fill this call built that generates no code, which can stand for a later place of its case.
+	private struct FillStandIn {
+		/// The index of the fill's generator among `childGenerators`.
+		let childIndex: Int
+		let key: String
+		let hole: SeamSignature.Hole
+		/// The scope the fill builds.
+		let scope: ObjectIdentifier
+		/// What the fill's tree reads, found when a later place first asks; `nil` inside when the tree holds what no other
+		/// place's judgement could read of it (`standIn(forFillOf:builtBy:amongFillsOfCaseKeyed:)`).
+		var reads: FillTreeReads??
+	}
+
+	/// What the tree a fill built reads of the place it was built for.
+	private struct FillTreeReads {
+		/// The labels the tree receives from outside it, which the fill's fields or the caller's declarations answer.
+		let labels: Set<String>
+		/// The concrete types the tree builds, whose properties alone can repeat an entry of the seam's path.
+		let builtTypes: Set<TypeDescription>
+		/// The stand-in's own place, projected to them.
+		let variant: FillVariant
+	}
+
+	/// What the tree of a fill that generates no code is built from, of its place: two places of one case with equal
+	/// values get equal trees. The place's fields of the labels the tree receives, in order, since a field is the nearest
+	/// declaration of its label in the fill, each with what decides how the fill binds it; the entries of the seam's path
+	/// the fill is built beneath that the tree could close a cycle on, as a set, since a scope closes on the entry of its
+	/// property and concrete type wherever on the path it is; and what the fill reads of the place besides.
+	private struct FillVariant: Hashable {
+		struct Field: Hashable {
+			let property: Property
+			let spelling: String
+			let deferral: SeamSignature.Parameter.Deferral
+			let bindsMemo: Bool
+		}
+
+		struct PathEntry: Hashable {
+			let property: Property
+			let concreteType: TypeDescription
+		}
+
+		let scope: ObjectIdentifier
+		let property: Property
+		let propertySpelling: String
+		let erasedToConcreteExistential: Bool
+		let isSendable: Bool
+		let isPassedUpByCalledSeam: Bool
+		let fields: [Field]
+		let path: Set<PathEntry>
+
+		init(of hole: SeamSignature.Hole, builtBy scope: ObjectIdentifier, labels: Set<String>, builtTypes: Set<TypeDescription>) {
+			self.scope = scope
+			property = hole.property
+			propertySpelling = hole.property.typeDescription.asSource
+			erasedToConcreteExistential = hole.erasedToConcreteExistential
+			isSendable = hole.isSendable
+			isPassedUpByCalledSeam = hole.innerSeamType != nil
+			fields = hole.fields.compactMap { field in
+				guard labels.contains(field.property.label) else { return nil }
+				return Field(property: field.property, spelling: field.property.typeDescription.asSource, deferral: field.deferral, bindsMemo: field.bindsMemo)
+			}
+			var path = Set<PathEntry>()
+			for (property, concreteType) in zip(hole.fillPropertyStack, hole.fillConcreteTypeStack) where builtTypes.contains(concreteType) {
+				path.insert(PathEntry(property: property, concreteType: concreteType))
+			}
+			self.path = path
+		}
+	}
+
+	/// The key of the fill this call built that stands for the fill of `hole`, which would build `scope`, or `nil` when the
+	/// place needs a fill of its own.
+	private mutating func standIn(forFillOf hole: SeamSignature.Hole, builtBy scope: ConstructionScope, amongFillsOfCaseKeyed caseKey: String) -> String? {
+		// The fill drops a declaration the caller binds itself from its hole, which no other place's fill did for this one.
+		guard let standIns = fillStandInsByCaseKey[caseKey], !hole.uncarriedDeclarations.contains(where: \.isBoundFromCallersArgument) else { return nil }
+		let scopeIdentity = ObjectIdentifier(scope.identity)
+		for index in standIns.indices where standIns[index].scope == scopeIdentity {
+			if standIns[index].reads == nil {
+				let treeReads = treeReads(ofFillStandingIn: standIns[index])
+				fillStandInsByCaseKey[caseKey]?[index].reads = .some(treeReads)
+			}
+			guard let reads = fillStandInsByCaseKey[caseKey]?[index].reads ?? nil else { continue }
+			if FillVariant(of: hole, builtBy: scopeIdentity, labels: reads.labels, builtTypes: reads.builtTypes) == reads.variant {
+				return standIns[index].key
+			}
+		}
+		return nil
+	}
+
+	/// What the tree of `standIn`'s fill reads, or `nil` where the tree holds a call of a seam or a public mock, a fill, or
+	/// a place: what such a tree hands on is keyed by the fill's own place.
+	private func treeReads(ofFillStandingIn standIn: FillStandIn) -> FillTreeReads? {
+		guard childGenerators.indices.contains(standIn.childIndex) else { return nil }
+		let fillGenerator = childGenerators[standIn.childIndex]
+		guard let built = fillGenerator.children.first,
+		      !built.treeHoldsCallOrFill,
+		      !built.containsBuildSite,
+		      fillGenerator.fieldsCarriedBySites.isEmpty,
+		      !standIn.hole.uncarriedDeclarations.contains(where: \.isBoundFromCallersArgument)
+		else { return nil }
+		var builtTypes = Set<TypeDescription>()
+		var generatorsToVisit = [built]
+		while let generator = generatorsToVisit.popLast() {
+			if let instantiable = generator.builtInstantiable {
+				builtTypes.insert(instantiable.concreteInstantiable)
+			}
+			generatorsToVisit.append(contentsOf: generator.children)
+		}
+		let labels = Set(built.receivedProperties.map(\.label))
+		return FillTreeReads(labels: labels, builtTypes: builtTypes, variant: FillVariant(of: standIn.hole, builtBy: standIn.scope, labels: labels, builtTypes: builtTypes))
+	}
+
+	/// The fills this call built that can stand for later places of their cases, by `ScopeGenerator.fillCaseKey(of:)`.
+	private var fillStandInsByCaseKey = [String: [FillStandIn]]()
+	/// The places whose fills this call did not build (see `nextFill()`).
+	private var fillsStoodFor = [ScopeGenerator.FillStoodFor]()
+	/// How many fills `nextFill()` has handed out to build.
+	private var builtFillCount = 0
+
+	/// The generator the pass before created for the fill keyed `key`, or the one that stood for it there, or `nil` in the
+	/// first pass. A pass can build a fill for a place another pass built none for, so a fill is found by its key.
+	private func previousPassFillGenerator(keyed key: String) -> ScopeGenerator? {
+		guard let previousPassGenerator else { return nil }
+		let previousPassChildren = previousPassGenerator.children
+		if previousPassChildren.indices.contains(childGenerators.count), previousPassChildren[childGenerators.count].fillKey == key {
+			return previousPassChildren[childGenerators.count]
+		} else if let fill = previousPassChildren.first(where: { $0.fillKey == key }) {
+			return fill
+		} else if let standInKey = previousPassGenerator.fillsStoodFor.first(where: { $0.key == key })?.standInKey {
+			return previousPassChildren.first { $0.fillKey == standInKey }
+		} else {
+			return nil
+		}
 	}
 
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
@@ -1634,7 +1801,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// function of its own, declared where the seam is called, so no function enclosing the call that a lazy cycle
 			// closes on encloses a cycle-closing scope in the fill. The fill's own built scope takes the parameters the
 			// pass before found for it as any scope does, when a lazy cycle inside the fill closes on its property.
-			previousPassGenerator: previousPassChildGenerator?.children.first,
+			previousPassGenerator: previousPassFillGenerator(keyed: fill.key)?.children.first,
 			cycleParameterContexts: [:],
 			// A place inside the fill is a place of the type the fill builds, whose builds start their children in its order.
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
@@ -2206,6 +2373,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// Both read the caller's declarations, which they log.
 		let builderCallArguments = builderCallArguments(fillNames: fillNames)
 		let enclosingLevelCalls = scope.publicMockCall == nil ? [:] : enclosingLevelCalls()
+		if builtFillCount > 0, let observer = SeamFillSharing.observer {
+			observer(SeamFillSharing.FillsOfCall(builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count))
+		}
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -2281,6 +2451,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			enclosingLevelCalls: enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
+			fillsStoodFor: fillsStoodFor,
+			previousPassBuildsFillOfEveryPlace: previousPassGenerator?.buildsFillOfEveryPlace ?? false,
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
 		return if let fill {

@@ -16304,10 +16304,15 @@ enum GraphFuzzerOracle {
 			// permuted by its seed (`ConstructionInternerOrder.secondRun(forGraphSeed:)`), which gives every ID another value;
 			// it must still give the first run's outcome. A hand mutation that appends a root's interned type ID to its
 			// generated code fails seed 0 (reversed) and seed 1 (permuted) of the base corpus with "two runs of the tool differ".
+			// It also builds a fill for every place of every seam call, where the first run builds one for the places of a
+			// case whose fills would be built alike (`SeamFillSharing`), so a place judged against another place's fill must
+			// be judged as against its own.
 			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
 				try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
 					try await ConstructionInternerOrder.secondRun(forGraphSeed: fixture.seed).applying {
-						try await toolOutcome(of: fixture)
+						try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(true) {
+							try await toolOutcome(of: fixture)
+						}
 					}
 				}
 			},

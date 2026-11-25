@@ -1,0 +1,207 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// A caller generates one function per case of a seam's enums, and builds a fill for a case's other places only to judge
+/// each. It builds one such fill for the places of a case that hand their fills the same values, and judges the others
+/// against it, each with its own place (`ScopeGenerator.FillStoodFor`).
+struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillsGrowingWithTheCasesNotThePaths_whenSeamReachesItsPlacesAlongManyPaths() async {
+		// Shape E (`SafeDIToolSeamScopeByTypeTests.shapeEModules`) triples the paths to its places, those of the last layer's
+		// four screens, with each layer of screens: 36, 108 and 324 paths to four cases. The caller builds two fills per case,
+		// the one that generates code and one that stands for every other place, whatever the paths.
+		for (screenCount, pathCount) in [(12, 36), (16, 108), (20, 324)] {
+			let (fills, error) = await fillsOfCalls { filesToDelete in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: SafeDIToolSeamScopeByTypeTests.shapeEModules(screenCount: screenCount),
+					integration: .moduleInfo,
+					compileVerification: .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			#expect(error == nil)
+			#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [8, pathCount - 8])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFindingOfEveryPlaceOnce_whenAnotherPlacesFillStandsForPlaceWithFinding() async {
+		// `Home` builds `Panel` beneath `First`, `Second` and `Third`, so `Panel`'s `api` is three places of one case, each
+		// handed the same values, as is `Row`'s. `LiveApi` receives `rowBuilder`, which `Panel` builds after `api` and is
+		// building at `Row`'s `api`, at every one of them.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					parentDeclarations: [["@Instantiated let panel: Panel"], ["@Instantiated let panel: Panel"], ["@Instantiated let panel: Panel"]],
+					panelDeclarations: ["@Instantiated let api: any Api", "@Instantiated let rowBuilder: Instantiator<Row>"],
+					liveApiDeclarations: ["@Received(onlyIfAvailable: true) let rowBuilder: Instantiator<Row>?"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rowBuilder: Instantiator<Row>?`, which `Panel` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Instantiate `rowBuilder` on a type above `Home`, and receive it on `Panel` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Panel.swift"]):9:5: note: `Panel` declares `rowBuilder: Instantiator<Row>` here.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rowBuilder: Instantiator<Row>?`, which `Home`’s tree is building where it calls the builder for `Row`’s `api: any Api` (`api` of `apiBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rowBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rowBuilder` on a type above `Home`, and receive it on `Panel` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Panel.swift"]):9:5: note: `Panel` instantiates `rowBuilder: Instantiator<Row>` here.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+		// Of each case's three places, the first is judged with the fill that generates code, the second with a fill of its
+		// own, and the third against the second's.
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [4, 2])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfItsOwnForPlace_whenPlacesOfOneCaseHandTheirFillsOtherValues() async {
+		// `First`, `Third` and `Fourth` build `token` before `panel`, and `Second` builds none, so the place beneath `Second`
+		// hands its fill no `token`, which `LiveApi` then reads from `Root`: that place is judged with a fill of its own,
+		// `Third`'s with another, and `Fourth`'s against `Third`'s.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					parentDeclarations: [
+						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
+						["@Instantiated let panel: Panel"],
+						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
+						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
+					],
+					panelDeclarations: ["@Instantiated let api: any Api"],
+					liveApiDeclarations: ["@Received let token: Token"],
+					rootDeclarations: ["@Instantiated let token: Token"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(error == nil)
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 1])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillOfEveryPlaceInLaterPass_whenFillOfAnotherPlaceBuildsSeamAgain() async {
+		// `LiveGadget`, which fills `Home`'s `gadget`, builds `Home` again, and that call passes on every fill of the call
+		// that encloses it, by the key of each fill's place: every place gets a fill of its own from the next pass on.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					parentDeclarations: [["@Instantiated let panel: Panel"], ["@Instantiated let panel: Panel"], ["@Instantiated let panel: Panel"]],
+					panelDeclarations: ["@Instantiated let api: any Api"],
+					liveApiDeclarations: [],
+					homeDeclarations: ["@Instantiated let gadget: any Gadget"],
+					appDeclarations: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Instantiated let homeBuilder: Instantiator<Home>"])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(error == nil)
+		// The fill of `gadget` and two of the three places of `api`, then all four.
+		#expect(fills.prefix(2).map { [$0.builtFillCount, $0.placeStoodForCount] } == [[3, 1], [4, 0]])
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// `Home`, a seam of `Feature` that declares `homeDeclarations` and then one type per entry of `parentDeclarations`,
+	/// each declaring its entry, which builds `Panel`, with `panelDeclarations`; and `App`, whose `Root` calls `Home` and
+	/// fills each `api` with `LiveApi`, which declares `liveApiDeclarations`, after it builds `rootDeclarations`.
+	private static func modules(
+		parentDeclarations: [[String]],
+		panelDeclarations: [String],
+		liveApiDeclarations: [String],
+		homeDeclarations: [String] = [],
+		appDeclarations: [String] = [],
+		rootDeclarations: [String] = [],
+	) -> [ModuleFixture] {
+		let parentNames = ["First", "Second", "Third", "Fourth"]
+		var feature = [
+			"public protocol Api {}",
+			"public protocol Gadget {}",
+			seamFixtureType(named: "Token", declarations: []),
+			seamFixtureType(named: "Row", declarations: ["@Instantiated let api: any Api"]),
+			seamFixtureType(named: "Panel", declarations: panelDeclarations),
+		]
+		for (name, declarations) in zip(parentNames, parentDeclarations) {
+			feature.append(seamFixtureType(named: name, declarations: declarations))
+		}
+		feature.append(seamFixtureType(named: "Home", isSeam: true, declarations: homeDeclarations + zip(parentNames, parentDeclarations).map { name, _ in
+			"@Instantiated let \(name.prefix(1).lowercased() + name.dropFirst()): \(name)"
+		}))
+		return SafeDIToolSeamBuilderParameterTests.modules(
+			feature: feature,
+			app: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: liveApiDeclarations)]
+				+ appDeclarations
+				+ [seamFixtureType(named: "Root", isRoot: true, declarations: rootDeclarations + ["@Instantiated let home: Home"])],
+		)
+	}
+
+	/// What each call that fills a place built while `body` ran, in the order the calls' generators were finished, and the
+	/// error `body` threw, if any.
+	private mutating func fillsOfCalls(_ body: (inout [URL]) async throws -> Void) async -> (fills: [SeamFillSharing.FillsOfCall], error: (any Error)?) {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamFillSharing.FillsOfCall.self)
+		var thrownError: (any Error)?
+		var filesToDelete = filesToDelete
+		do {
+			try await SeamFillSharing.$observer.withValue({ continuation.yield($0) }) {
+				try await body(&filesToDelete)
+			}
+		} catch {
+			thrownError = error
+		}
+		self.filesToDelete = filesToDelete
+		continuation.finish()
+		var fills = [SeamFillSharing.FillsOfCall]()
+		for await fill in stream {
+			fills.append(fill)
+		}
+		return (fills, thrownError)
+	}
+}

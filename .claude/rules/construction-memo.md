@@ -49,6 +49,7 @@ Construction reads the scopes through `ConstructionScope`, a record of a frozen 
 | `seamRoot`, `mockBuilders` | The root place only (children get `seamRoot: nil`), and a root place is never stored. A tree with either keeps its memo to itself (`sharesMemo` in `Scope.createScopeGenerator`). |
 | `holeArguments`, which feed `holeCallArguments`, `builderCallArguments`, `fillDispatchers` and `passedUpHoles` | Read from `scope`, in the key; all four are empty where it is. Outside a mock's tree a call with holes is excluded. |
 | `closedOnFillPathDeclarationsBeneath` | Non-nil only inside a fill. Derived from the call. |
+| `fillsStoodFor`, `buildsFillOfEveryPlace`, and the pass before's `buildsFillOfEveryPlace` and fill generators read by key (`previousPassFillGenerator(keyed:)`) | Excluded: non-empty or set only on a production tree's seam call that fills a place, which has non-empty `holeArguments` outside a mock's tree. |
 | A hole generator's `ownerPropertyStack`, `ownerConcreteTypeStack`, `siteCarrierUse` | Excluded by `addHoleGenerator`: the creating scope and every ancestor are not memoizable. |
 | `isBuiltByFill`, `fillReturnsWrapperBuilder`, and a fill generator's own fields, `fillCarrierUse` among them | Derived from the call. |
 | `constructsWithHandWrittenMock` | Key (flag, scope, property). |
