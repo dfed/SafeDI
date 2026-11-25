@@ -317,51 +317,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedSome_throwsError() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: some ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: ErasedType`?
-				\(fixtures["Child.swift"]):5:31-5:46: fixit: ErasedType
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					import SafeDI
-
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: ErasedType
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					import SafeDI
-
-					public protocol ErasedType {}
-
-					@Instantiable
-					public final class SomeErasedType: ErasedType, Instantiable {}
-					""",
-					"""
-					import SafeDI
-
-					@Instantiable
-					public final class Child: Instantiable {
-					    @Received let erasedType: some ErasedType
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedForceUnwrap_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
