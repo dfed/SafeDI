@@ -1,7 +1,7 @@
 ---
 paths:
   - "Sources/SafeDICore/Generators/CycleTree/*.swift"
-  - "Tests/SafeDICoreTests/OrderedGraphTests.swift"
+  - "Tests/SafeDICoreTests/{OrderedGraph,LabelsReadFromAbove}Tests.swift"
   - "Tests/SafeDIToolDependencyTreeTests/SafeDIToolPerTypePlanTests.swift"
 ---
 
@@ -14,3 +14,5 @@ paths:
 - **A declaration is a record and a property.** `Declaration` is equal by the scope's record, the property's ID and whether it is erased, never by a path. The graph has an edge for each property a scope instantiates (`ScopeRecord.PropertyToGenerate.instantiated`); an alias builds nothing and has none.
 - **Twins.** Generation closes a cycle on the property as cycle validation sees it and the concrete type built (`CycleIdentity`, as `ContextStack.entryClosedOn(byPropertyID:concreteTypeID:interner:)` compares them). Two declarations of one component with one identity, such as a constant and a `LazilyInstantiated` of one label built for one type, are twins (`PerTypePlan.twins`): a path closes on whichever it built first, so what such a declaration builds differs between paths, and a plan cannot stand for both.
 - **Nothing crosses a module.** A plan is built from the frozen table of one run and dropped with its root's build. Nothing of it is written to a `.safedi` file, a manifest or a cache.
+- **Labels read from above.** `LabelsReadFromAbove` gives each node the labels its subtree reads that it does not bind, the least sets that satisfy the rule, a component at a time. A node's order is its own labels, then each target's in edge order; inside a cycle, passes over the cycle's nodes in position order, so no order but the graph's reaches it. A node's bound labels hide a label from the nodes above whichever of its properties is built first, since the nearest declaration of a label answers a read even where it is built later.
+- **Shapes not built yet.** `Answer`, `Variant`, `PlanStatement` and `PerPathReason` (`PlanStatement.swift`) are the shapes the layout and the tree walks are written against. Nothing constructs them until the plan's variants are built; a pull request of this folder either builds each or removes it.
