@@ -330,7 +330,7 @@ struct TypeKeyBodyValuePathTests {
 			children: [
 				.place(PlacePlan(code: .text("let c = C()"), record: .built(c))),
 				.place(PlacePlan(code: .text("let d = D(id: id)"), record: .built(d))),
-				.place(PlacePlan(code: .text("let e = 2"), record: .alias(AliasPlaceRecord(property: Property(label: "e", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let e = 2")))),
+				.place(PlacePlan(code: .text("let e = 2"), record: .alias(AliasPlaceRecord(property: Property(label: "e", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let e = 2", reads: [])))),
 			],
 			isSendable: true,
 		) { _ in }))
@@ -523,7 +523,7 @@ struct TypeKeyBodyValuePathTests {
 
 	/// `let id = 1`, then a place that builds a `B` bound as `b: <propertyType>`, erased to it where `isErased`, with `arguments` in a function of its own, `@Sendable` where `isSendable`, whose body builds `children`, as `configure` records it.
 	private static func rootBody(arguments: [PlaceRead] = [], children: [GeneratedCode] = [], isSendable: Bool = false, boundAs propertyType: TypeDescription = .simple(name: "B"), isErased: Bool = false, _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
-		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
+		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1", reads: [])
 		var built = BuiltPlaceRecord(
 			property: Property(label: "b", typeDescription: propertyType),
 			isErased: isErased,
@@ -551,7 +551,7 @@ struct TypeKeyBodyValuePathTests {
 
 	/// `let id = 1`, then a place built inline as `b: B(id: id)`, as `configure` records it.
 	private static func inlineBody(_ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
-		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
+		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1", reads: [])
 		var inline = BuiltPlaceRecord(
 			property: Property(label: "b", typeDescription: .simple(name: "B")),
 			isErased: false,

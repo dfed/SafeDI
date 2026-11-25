@@ -81,9 +81,11 @@ struct BuilderNode: Sendable {
 	/// copied to write the block.
 	func spelled(after prefix: String = "", followedBy suffix: String = "") -> GeneratedCode {
 		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+		// A `@Sendable` function's body calls only `@Sendable` functions, which a root function it reaches is declared as.
+		let statements = GeneratedCode.lines(body.statements)
 		return .sequence([
 			.text("\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable))func \(name)(\(parameterList)) -> \(returnType.asSource) {\n"),
-			.lines(body.statements),
+			isSendable ? .sendableFunction(statements) : statements,
 			.text("\n\(ScopeGenerator.standardIndent)\(body.returnKeyword)\(value.spelled)\(lineEnd)\n}\n\(suffix)"),
 		])
 	}

@@ -896,17 +896,17 @@ A tree that calls the seam fills the builder when its module can see an implemen
 
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
+func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+    .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
+}
+func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
+    .init(userService: {
+        let userService: any UserService = DefaultUserService(analytics: analytics)
+        return userService
+    })
+}
 func __safeDI_service() -> Service {
     _ = Service.__safeDI_Service_88819F20AD4FA546.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-        .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
-    }
-    func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
-        .init(userService: {
-            let userService: any UserService = DefaultUserService(analytics: analytics)
-            return userService
-        })
-    }
     return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 }
 ```
