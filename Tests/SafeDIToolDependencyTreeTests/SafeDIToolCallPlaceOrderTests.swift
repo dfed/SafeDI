@@ -48,29 +48,29 @@ struct SafeDIToolCallPlaceOrderTests: ~Copyable {
 		// `screenBuilder`. As a call place `screenBuilder` receives what `Screen`'s tree receives, `logger` only if
 		// available, which waits on nothing that waits on it: the order is today's.
 		let orders = try await orders(of:
-					"""
-					@Instantiable(isRoot: true) public final class Root: Instantiable {
-					    @Instantiated let logger: Logger
-					    @Instantiated let screenBuilder: Instantiator<Screen>
-					    public init(logger: Logger, screenBuilder: Instantiator<Screen>) { self.logger = logger; self.screenBuilder = screenBuilder }
-					}
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let logger: Logger
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    public init(logger: Logger, screenBuilder: Instantiator<Screen>) { self.logger = logger; self.screenBuilder = screenBuilder }
+			}
 
-					@Instantiable public final class Logger: Instantiable {
-					    @Received(onlyIfAvailable: true) let screenBuilder: Instantiator<Screen>?
-					    public init(screenBuilder: Instantiator<Screen>?) { self.screenBuilder = screenBuilder }
-					}
+			@Instantiable public final class Logger: Instantiable {
+			    @Received(onlyIfAvailable: true) let screenBuilder: Instantiator<Screen>?
+			    public init(screenBuilder: Instantiator<Screen>?) { self.screenBuilder = screenBuilder }
+			}
 
-					@Instantiable public final class Screen: Instantiable {
-					    @Received(onlyIfAvailable: true) let logger: Logger?
-					    @Instantiated let detailBuilder: Instantiator<Detail>
-					    public init(logger: Logger?, detailBuilder: Instantiator<Detail>) { self.logger = logger; self.detailBuilder = detailBuilder }
-					}
+			@Instantiable public final class Screen: Instantiable {
+			    @Received(onlyIfAvailable: true) let logger: Logger?
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			    public init(logger: Logger?, detailBuilder: Instantiator<Detail>) { self.logger = logger; self.detailBuilder = detailBuilder }
+			}
 
-					@Instantiable public final class Detail: Instantiable {
-					    @Instantiated let screenBuilder: Instantiator<Screen>
-					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
-					}
-					""")
+			@Instantiable public final class Detail: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+			}
+			""")
 
 		#expect(orders == [Orders(scope: "Root", todaysOrder: [1, 0], callPlaceOrder: [1, 0])])
 	}
