@@ -217,6 +217,11 @@ struct PassedArgument: Hashable, Sendable {
 	/// Whether the value cannot cross into a `@Sendable` function: a call made inside one cannot hand it on, so no
 	/// function sharing moves such a call into one.
 	let staysOutsideSendableFunctions: Bool
+	/// Whether the call binds the value to a local of its own before it calls the function, and hands it the local. A
+	/// call made inside a `Sendable` wrapper's closure then captures the local, never what the value reads: so the value
+	/// may read what stays outside `@Sendable` functions only where the local is itself `Sendable`, which whoever sets
+	/// this says.
+	var bindsBeforeCall = false
 }
 
 /// A construction that is a value other than a call of the built type: `value`, wrapped in `resultWrapper` where set.

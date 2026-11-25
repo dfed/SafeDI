@@ -484,6 +484,36 @@ struct TypeKeyBodyValuePathTests {
 		}) == nil)
 	}
 
+	@Test
+	func statements_bindsAPassedArgumentToALocalBeforeTheCall_whenTheArgumentBindsBeforeTheCall() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "make", type: .optional(.simple(name: "Make")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false, bindsBeforeCall: true)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(make: Make?) -> B {
+		            B()
+		        }
+		        let __safeDI_b__make: Make? = overrides.make
+		        let b: B = __safeDI_b(make: __safeDI_b__make)
+		""")
+	}
+
+	@Test
+	func statements_laysOutASendableFunction_whenItTakesAPassedArgumentThatStaysOutsideSendableFunctionsBoundBeforeTheCall() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(isSendable: true) { built in
+			built.passedArguments = [PassedArgument(parameterName: "make", type: .optional(.simple(name: "Make")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: true, bindsBeforeCall: true)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        @Sendable nonisolated func __safeDI_b(make: Make?) -> B {
+		            B()
+		        }
+		        let __safeDI_b__make: Make? = overrides.make
+		        let b: B = __safeDI_b(make: __safeDI_b__make)
+		""")
+	}
+
 	private static let idRead = PlaceRead(
 		argumentLabel: "id",
 		label: "id",
