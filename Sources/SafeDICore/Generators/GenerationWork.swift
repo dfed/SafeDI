@@ -66,6 +66,11 @@ public struct GenerationWork: Sendable {
 		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
 		/// and its levels do not grow with the paths through the tree.
 		case findingRootFunctions
+		/// Asking whether a read of a type key class's statement is `nil` in every member of the class
+		/// (`TypeKeyLayout.checkEveryRead`): each member's statement read. The answer is the class's, so each read is asked
+		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
+		/// n² times.
+		case checkingReadsAtEveryMember
 	}
 
 	/// The step that did the work.
