@@ -199,14 +199,28 @@ struct ConstructionMemo {
 			return entry.reads.answeredAlike(in: context).map { Reuse(entry: entry, reads: $0) }
 		}
 		guard let draw else {
-			for entry in candidates {
-				if let reuse = reuse(of: entry) {
+			// The places of one key differ mostly in what a cycle closes on or passes, the reads `answeredAlike(in:)` asks first,
+			// which `context` answers the same for every candidate: so each is answered once per lookup, and a candidate whose
+			// recorded answer to one differs is set aside without asking its log, as `answeredAlike(in:)` would set it aside at
+			// that read. The first candidate in the order they were stored that `context` answers alike is reused, as before.
+			var contextAnswers = [ConstructionLog.Read: ConstructionLog.Answer]()
+			func contextAnswer(_ read: ConstructionLog.Read) -> ConstructionLog.Answer {
+				if let answer = contextAnswers[read] {
+					return answer
+				} else {
+					let answer = context.answer(read).answer
+					contextAnswers[read] = answer
+					return answer
+				}
+			}
+			for candidate in candidates where candidate.cycleReads.allSatisfy({ contextAnswer($0.read) == $0.answer }) {
+				if let reuse = reuse(of: candidate.entry) {
 					return reuse
 				}
 			}
 			return nil
 		}
-		return draw.reuse(among: candidates, reuse)
+		return draw.reuse(among: candidates.map(\.entry), reuse)
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -246,7 +260,7 @@ struct ConstructionMemo {
 
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ScopeRecord) {
-		entriesByKey[key, default: []].append(entry)
+		entriesByKey[key, default: []].append(Candidate(entry: entry, cycleReads: entry.reads.cycleReads))
 		let generator = ObjectIdentifier(entry.generator)
 		if entriesByGenerator[generator] == nil {
 			entriesByGenerator[generator] = (key, entry)
@@ -254,7 +268,14 @@ struct ConstructionMemo {
 		keyedScopes.append(scope)
 	}
 
-	private var entriesByKey = [Key: [Entry]]()
+	/// An entry of a key, with the reads of what a cycle closes on or passes that a lookup asks of it first
+	/// (`ConstructionLog.cycleReads`), which most candidates of one key differ in.
+	private struct Candidate {
+		let entry: Entry
+		let cycleReads: [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
+	}
+
+	private var entriesByKey = [Key: [Candidate]]()
 	/// Each stored generator with the key and entry it was first stored under.
 	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
@@ -285,7 +306,7 @@ struct ConstructionMemo {
 		}
 	}
 
-	private var oracleEntriesByKey = [Key: [Entry]]()
+	private var oracleEntriesByKey = [Key: [Candidate]]()
 	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [ScopeRecord]()
 	private var oraclePassTrees = [ScopeGenerator]()
@@ -488,6 +509,18 @@ struct ConstructionLog {
 		var readsKept = Set<AnsweredRead>()
 		readsKept.reserveCapacity(answers.count)
 		return Self(reads: answers.filter { readsKept.insert($0.read).inserted })
+	}
+
+	/// The reads of what a cycle closes on or passes that `answeredAlike(in:)` asks first, in the order it asks them, each
+	/// with its recorded answer. A context whose answer to one is not `==` the recorded one answers the log otherwise
+	/// (`Answer.isAlike` requires `==`).
+	var cycleReads: [(read: Read, answer: Answer)] {
+		var cycleReads = [(read: Read, answer: Answer)]()
+		_ = forEachRead(where: \.isCycleRead) { recorded in
+			cycleReads.append((recorded.read.read, recorded.answer))
+			return true
+		}
+		return cycleReads
 	}
 
 	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read
