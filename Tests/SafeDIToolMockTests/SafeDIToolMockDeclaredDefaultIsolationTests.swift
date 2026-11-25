@@ -216,7 +216,7 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
+		    @MainActor struct SafeDIOverrides {
 		        init(
 		            client: (() -> Client)? = nil
 		        ) {
@@ -241,8 +241,9 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 		    }
 
 		    @MainActor static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        safeDIOverrides: SafeDIOverrides? = nil
 		    ) -> Root {
+		        let safeDIOverrides = safeDIOverrides ?? .init()
 		        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
 		        return Root(client: client)
 		    }
@@ -270,7 +271,7 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
+		    @MainActor struct SafeDIOverrides {
 		        init(
 		            client: (() -> Client)? = nil
 		        ) {
@@ -295,8 +296,9 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 		    }
 
 		    @MainActor static func mock(
-		        safeDIOverrides: SafeDIOverrides = .init()
+		        safeDIOverrides: SafeDIOverrides? = nil
 		    ) -> Root {
+		        let safeDIOverrides = safeDIOverrides ?? .init()
 		        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
 		        return Root(client: client)
 		    }

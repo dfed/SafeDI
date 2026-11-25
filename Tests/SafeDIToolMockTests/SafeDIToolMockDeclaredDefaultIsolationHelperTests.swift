@@ -991,7 +991,7 @@ struct SafeDIToolMockDeclaredDefaultIsolationHelperTests: ~Copyable {
 			            func __safeDI_bBuilder() -> B {
 			                func __safeDI_aBuilder() -> A {
 			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			                    return A(bBuilder: bBuilder)
+			                    return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(bBuilder, safeDIOverrides.a.label) } else { A(bBuilder: bBuilder, label: safeDIOverrides.a.label) }
 			                }
 			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
@@ -1464,6 +1464,143 @@ struct SafeDIToolMockDeclaredDefaultIsolationHelperTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: DeclaringModule.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsHelpersMainActor_whenEitherModuleOfAdditionalMockDeclaresDefaultIsolation(declaringModule: DeclaringModule) async throws {
+		// `Tests` generates `Root`’s mock, which `Feature` declares, through `additionalMocksToGenerate`. Its helpers are
+		// spelled where either module declares the main actor default, which that module is also built with.
+		let declaration = "#SafeDIConfiguration(defaultIsolation: MainActor.self)"
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Feature",
+					packageName: "App",
+					swiftFileContent: [
+						"""
+						@Instantiable
+						public final class Store: Instantiable {
+						    public init(limit: Int = 10) {}
+						}
+						""",
+						"""
+						@Instantiable
+						public final class Root: Instantiable {
+						    public init(store: Store) {
+						        self.store = store
+						    }
+
+						    @Instantiated let store: Store
+						}
+						""",
+					],
+					swiftFileContentByFilePath: declaringModule == .feature ? ["SafeDIConfiguration.swift": declaration] : [:],
+					compilerSettings: declaringModule == .feature ? VerificationCompilerSettings(defaultIsolation: "MainActor") : VerificationCompilerSettings(),
+				),
+				ModuleFixture(
+					name: "Tests",
+					packageName: "App",
+					swiftFileContentByFilePath: [
+						"SafeDIConfiguration.swift": declaringModule == .tests
+							? "#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"], defaultIsolation: MainActor.self)"
+							: "#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])",
+					],
+					dependencies: ["Feature"],
+					compilerSettings: declaringModule == .tests ? VerificationCompilerSettings(defaultIsolation: "MainActor") : VerificationCompilerSettings(),
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Store` is no additional mock, so its configuration follows `Store`’s own module: spelled only where `Feature`
+		// declares the default, and isolated by `Tests`’ build setting otherwise.
+		let storeConfigurationAttribute = declaringModule == .feature ? "@MainActor " : ""
+		#expect(output.modules["Tests"]?.generatedFiles == [
+			"Tests.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    @MainActor struct SafeDIOverrides {
+			        init(
+			            store: Store.SafeDIMockConfiguration? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                store: store ?? .init()
+			            )
+			        }
+
+			        var store: Store.SafeDIMockConfiguration { __safeDI_storage.store }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                store: Store.SafeDIMockConfiguration
+			            ) {
+			                self.store = store
+			            }
+
+			            let store: Store.SafeDIMockConfiguration
+			        }
+			    }
+
+			    @MainActor static func mock(
+			        safeDIOverrides: SafeDIOverrides? = nil
+			    ) -> Root {
+			        let safeDIOverrides = safeDIOverrides ?? .init()
+			        func __safeDI_store() -> Store {
+			            return if let safeDIBuilder = safeDIOverrides.store.safeDIBuilder { safeDIBuilder(safeDIOverrides.store.limit) } else { Store(limit: safeDIOverrides.store.limit) }
+			        }
+			        let store: Store = __safeDI_store()
+			        return Root(store: store)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension Store {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    \(storeConfigurationAttribute)struct SafeDIMockConfiguration {
+			        init(
+			            limit: Int = 10,
+			            _ safeDIBuilder: ((Int) -> Store)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                limit: limit,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var limit: Int { __safeDI_storage.limit }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((Int) -> Store)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                limit: Int,
+			                safeDIBuilder: ((Int) -> Store)?
+			            ) {
+			                self.limit = limit
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let limit: Int
+			            let safeDIBuilder: ((Int) -> Store)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1474,6 +1611,14 @@ struct SafeDIToolMockDeclaredDefaultIsolationHelperTests: ~Copyable {
 		#SafeDIConfiguration(defaultIsolation: MainActor.self)
 		""",
 	]
+
+	/// The module of an additional mock that declares the main actor default.
+	enum DeclaringModule: CaseIterable {
+		/// `Feature`, which declares the mocked type.
+		case feature
+		/// `Tests`, which generates the mock.
+		case tests
+	}
 
 	/// How each test's generated code is compiled: Swift 6 with and without `-default-isolation MainActor`, and Swift 5
 	/// mode with it, where a default argument is evaluated outside the function's isolation.
