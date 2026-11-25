@@ -328,6 +328,67 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		#expect(skipping.outcome == walking.outcome)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_stopsKeyingScope_whenScreensOpenEachOtherWithoutLayersAndNoKeyOfItIsFoundAgain() async throws {
+		// The screens are in no layers and differ in what they do with `context`, so each is reached along paths whose keys
+		// nearly all differ. A scope keyed eight
+		// times in a row with no remembered walk of an equal key is keyed no more, so the keys built stay a small part of
+		// the scopes walked; the walk reports what it reports without the skip. Keyed wherever they were reached, the same
+		// walks built 90 and 270 keys and skipped nothing more.
+		var keyedCounts = [Int]()
+		var validatedCounts = [Int]()
+		for screenCount in [8, 10] {
+			let fixture = [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let context: Context", "@Instantiated let screen0Builder: Instantiator<Screen0>"]),
+				seamFixtureType(named: "Context", isFinalClass: true, declarations: []),
+			] + Self.screensOpeningEachOtherWithoutLayers(screenCount: screenCount)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			#expect(walking.keyedSubtreeCount == 0)
+			keyedCounts.append(skipping.keyedSubtreeCount)
+			validatedCounts.append(skipping.validatedScopeCount)
+		}
+		#expect(keyedCounts == [66, 123])
+		#expect(validatedCounts == [83, 223])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorsOfWalkWithoutSkip_whateverOrderRootsThatShareScopesNoLongerKeyedAreDeclaredIn() async throws {
+		// Four roots open four of eight screens that open each other without layers, where `Screen5` declares `x: Y` and
+		// hides the `x: X` that `Leaf`, beneath `Screen2`, receives from a root. The roots share the count that stops a
+		// scope being keyed, so which root is walked first decides which walks are remembered, and nothing of the errors.
+		var outcomes = [Outcome]()
+		for rootNames in [["RootA", "RootB", "RootC", "RootD"], ["RootD", "RootC", "RootB", "RootA"], ["RootC", "RootA", "RootD", "RootB"]] {
+			let roots = zip(rootNames, [0, 3, 5, 6]).map { name, screen in
+				seamFixtureType(named: name, isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let context: Context", "@Instantiated let screen\(screen)Builder: Instantiator<Screen\(screen)>"])
+			}
+			let fixture = roots.sorted() + Self.screensOpeningEachOtherWithoutLayers(
+				screenCount: 8,
+				additionalDeclarations: [5: ["@Instantiated let x: Y"], 2: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]],
+			) + [
+				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let x: X"]),
+				seamFixtureType(named: "Context", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+			]
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome, "Roots \(rootNames)")
+			#expect(skipping.keyedSubtreeCount < skipping.validatedScopeCount, "Roots \(rootNames)")
+			outcomes.append(skipping.outcome)
+		}
+		#expect(outcomes.allSatisfy {
+			if case .error = $0 {
+				true
+			} else {
+				false
+			}
+		})
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -342,6 +403,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		let outcome: Outcome
 		let validatedScopeCount: Int
 		let skippedSubtreeCount: Int
+		let keyedSubtreeCount: Int
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -361,6 +423,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		continuation.finish()
 		var validatedScopeCount = 0
 		var skippedSubtreeCount = 0
+		var keyedSubtreeCount = 0
 		for await observation in stream {
 			switch observation {
 			case .validatedScope:
@@ -369,9 +432,11 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 				skippedSubtreeCount += 1
 			case .collectedReceivedPropertiesOfScope:
 				break
+			case .keyedSubtree:
+				keyedSubtreeCount += 1
 			}
 		}
-		return Run(outcome: outcome, validatedScopeCount: validatedScopeCount, skippedSubtreeCount: skippedSubtreeCount)
+		return Run(outcome: outcome, validatedScopeCount: validatedScopeCount, skippedSubtreeCount: skippedSubtreeCount, keyedSubtreeCount: keyedSubtreeCount)
 	}
 
 	/// `description` with each fixture's directory left out, so two runs' diagnostics compare equal.
@@ -424,6 +489,23 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }))
 		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let home: Home"]))
 		return fixture
+	}
+
+	/// Screen `i` of `screenCount` opens screens `i + 1`, `2i + 3` and `3i + 5` (modulo the count; itself and a screen
+	/// twice left out) through `Instantiator`s, after its `additionalDeclarations`. Every fourth screen declares
+	/// `context: Context`, the one after it receives it and the one after that receives it only if available, so what a
+	/// screen's subtree is handed differs with the screens it is built inside.
+	private static func screensOpeningEachOtherWithoutLayers(screenCount: Int, additionalDeclarations: [Int: [String]] = [:]) -> [String] {
+		(0..<screenCount).map { screen in
+			var opened = [Int]()
+			for other in [screen + 1, 2 * screen + 3, 3 * screen + 5].map({ $0 % screenCount }) where other != screen && !opened.contains(other) {
+				opened.append(other)
+			}
+			let context = [["@Instantiated let context: Context"], ["@Received let context: Context"], ["@Received(onlyIfAvailable: true) let context: Context?"], []][screen % 4]
+			return seamFixtureType(named: "Screen\(screen)", isFinalClass: true, declarations: context + additionalDeclarations[screen, default: []] + opened.map {
+				"@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>"
+			})
+		}
 	}
 
 	/// `Shared` beneath `A`, `B`, `C` and `D`, which `Root` builds in `order`: only `B` declares `x: Y`, which hides the `x: X`

@@ -192,7 +192,8 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 			case .collectedReceivedPropertiesOfScope:
 				collectedScopeCount += 1
 			case .validatedScope,
-			     .skippedCleanSubtree:
+			     .skippedCleanSubtree,
+			     .keyedSubtree:
 				break
 			}
 		}
