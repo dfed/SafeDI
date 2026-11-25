@@ -1,0 +1,26 @@
+no overrides: holders (left, left built, right, right built): ["built", "built", "built", "built"]
+no overrides: leaves (left, left built, right, right built): ["built", "built", "built", "built"]
+no overrides: left's holders and leaves read left's token: true
+no overrides: right's holders and leaves read right's token: true
+no overrides: the tokens differ: true
+a name at each place: holders (left, left built, right, right built): ["left", "left built", "right", "right built"]
+a name at each place: leaves (left, left built, right, right built): ["left leaf", "left built leaf", "right leaf", "right built leaf"]
+a name at each place: left's holders and leaves read left's token: true
+a name at each place: right's holders and leaves read right's token: true
+a name at each place: the tokens differ: true
+one place only: holders (left, left built, right, right built): ["built", "built", "built", "built"]
+one place only: leaves (left, left built, right, right built): ["built", "built", "built", "right built leaf"]
+one place only: left's holders and leaves read left's token: true
+one place only: right's holders and leaves read right's token: true
+one place only: the tokens differ: true
+builders: holders (left, left built, right, right built): ["built", "built", "right from a builder", "built"]
+builders: leaves (left, left built, right, right built): ["built", "left built leaf from a builder", "built", "built"]
+builders: left's holders and leaves read left's token: true
+builders: right's holders and leaves read right's token: true
+builders: the tokens differ: true
+builders: left's token is the overriding one: true
+production: holders (left, left built, right, right built): ["built", "built", "built", "built"]
+production: leaves (left, left built, right, right built): ["built", "built", "built", "built"]
+production: left's holders and leaves read left's token: true
+production: right's holders and leaves read right's token: true
+production: the tokens differ: true
