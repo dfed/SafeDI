@@ -162,6 +162,8 @@ extension MockLowering.Walk {
 			built
 		} else if case let .closer(closer) = closerAndDefaultRecords[path] {
 			.closer(closer)
+		} else if case let .alias(alias) = closerAndDefaultRecords[path] {
+			.alias(alias)
 		} else {
 			nil
 		}
