@@ -581,11 +581,11 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	private static func withFixtureNames(_ description: String) -> String {
 		description.split(separator: "\n", omittingEmptySubsequences: false).map { line in
 			if let swiftRange = line.range(of: ".swift:"), let slash = line[..<swiftRange.lowerBound].lastIndex(of: "/") {
-				return String(line[line.index(after: slash)...])
+				String(line[line.index(after: slash)...])
 			} else if let fileRange = line.range(of: "#sourceLocation(file: \""), let slash = line.lastIndex(of: "/") {
-				return String(line[..<fileRange.upperBound]) + line[line.index(after: slash)...]
+				String(line[..<fileRange.upperBound]) + line[line.index(after: slash)...]
 			} else {
-				return String(line)
+				String(line)
 			}
 		}.joined(separator: "\n")
 	}
