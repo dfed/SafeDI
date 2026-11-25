@@ -2077,7 +2077,10 @@ public struct SeamResolution: Sendable {
 	/// Whether a foreign seam carries the signature its module's run stored.
 	public var readsStoredSignature: Bool {
 		foreignSeams.values.contains { $0.storedSignatures != nil }
-			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignatures != nil } }
+			|| foreignPublicMocks.values.contains { $0.storedPlans != nil }
+			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { declarations in
+				declarations.seams.values.contains { $0.storedSignatures != nil } || declarations.publicMocks.values.contains { $0.storedPlans != nil }
+			}
 	}
 
 	/// The declarations a module sees.
@@ -2097,11 +2100,12 @@ public struct SeamResolution: Sendable {
 	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
 	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
 	public struct ForeignPublicMock: Sendable {
-		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
+		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition, storedPlans: StoredPublicMockPlans? = nil) {
 			self.declaringModule = declaringModule
 			self.visibleDeclarations = visibleDeclarations
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
+			self.storedPlans = storedPlans
 		}
 
 		/// The module that declares the type, whose name is known: a type whose module is unknown is built inline.
@@ -2115,6 +2119,11 @@ public struct SeamResolution: Sendable {
 		/// The condition the declaring module generates its mocks under: its configuration's, `DEBUG` without one, read
 		/// from its module info or, under the target graph, from the configuration in a file the graph attributes to it.
 		public let declaringModuleMockCondition: MockCondition
+		/// The plans of the public mocks of the type's module as that module's run computed them, among which the module
+		/// info this run read them from carries this type's; `nil` when it carries none of this type, and when this run
+		/// read the module's files, under the SwiftPM plugin's target graph. Every public mock of one module holds the
+		/// same.
+		public let storedPlans: StoredPublicMockPlans?
 	}
 
 	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], foreignDeclarationsSeenByModule: [String: ForeignDeclarations]? = nil, callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false, generatesPlainDependencyTreeInitializers: Bool = false) {

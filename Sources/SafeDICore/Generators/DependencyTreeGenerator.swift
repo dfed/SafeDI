@@ -200,6 +200,10 @@ public actor DependencyTreeGenerator {
 		/// The types whose configurations `mockConfigurationCode` declares that the properties they are built for do not
 		/// name, whose modules the header can need.
 		public let mockConfigurationFulfillers: Set<FulfillerImports.Fulfiller>
+		/// The plan of each public mock the module's own files declare, sorted by type, as a module that calls the mock
+		/// reads it, which the module's module info carries (`SeamResolution.ForeignPublicMock.storedPlans`); empty unless
+		/// the request stores them (`MockRequest.storesPublicMockPlans`).
+		public let storedPublicMockPlans: [StoredPublicMockPlan]
 	}
 
 	/// The code a generated file holds, which decides what its header imports.
@@ -280,15 +284,19 @@ public actor DependencyTreeGenerator {
 		///   - currentModuleSourceFilePaths: The module's own files, whose `generateMock` types get a mock, or `nil` when
 		///     every file is the module's.
 		///   - additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
-		public init(mockConditionalCompilation: String?, currentModuleSourceFilePaths: Set<String>? = nil, additionalMocksToGenerate: Set<String> = []) {
+		///   - storesPublicMockPlans: Whether the result holds the plan of each public mock the module declares, which a
+		///     run that writes a module info file stores in it.
+		public init(mockConditionalCompilation: String?, currentModuleSourceFilePaths: Set<String>? = nil, additionalMocksToGenerate: Set<String> = [], storesPublicMockPlans: Bool = false) {
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.currentModuleSourceFilePaths = currentModuleSourceFilePaths
 			self.additionalMocksToGenerate = additionalMocksToGenerate
+			self.storesPublicMockPlans = storesPublicMockPlans
 		}
 
 		public let mockConditionalCompilation: String?
 		public let currentModuleSourceFilePaths: Set<String>?
 		public let additionalMocksToGenerate: Set<String>
+		public let storesPublicMockPlans: Bool
 	}
 
 	/// What `generate(_:)` generated.
@@ -383,6 +391,7 @@ public actor DependencyTreeGenerator {
 				mockConditionalCompilation: mockRequest.mockConditionalCompilation,
 				currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
 				additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
+				storesPublicMockPlans: mockRequest.storesPublicMockPlans,
 				publicMockContext: declaresPublicMock ? publicMockContext : nil,
 			)
 		}

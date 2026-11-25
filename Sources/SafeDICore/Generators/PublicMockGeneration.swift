@@ -304,21 +304,7 @@ struct PublicMockParameter: Sendable {
 	/// public mock whose tier omits it.
 	var nestedOmission: NestedOmission?
 
-	/// A call of another module's public mock, in a public mock's tree, whose tier omits a parameter that nothing else
-	/// in the tree receives, so that no tier of the public mock takes it.
-	struct NestedOmission: Sendable {
-		/// The type whose public mock the call calls.
-		let type: TypeDescription
-		/// The tier the call reaches.
-		let tier: AccessLevel
-		/// The tier of the called mock that takes the parameter.
-		let parameterAccess: AccessLevel
-		let declaringModule: ModuleIdentity
-		let callerModule: ModuleIdentity
-		let requirement: AccessRequirement
-		/// The declarations in the called mock's tree that receive the parameter.
-		let receivers: [(declaringType: TypeDescription, dependency: Dependency)]
-	}
+	typealias NestedOmission = StoredPublicMockPlan.NestedOmission
 
 	/// What the parameter stands for, which decides what a mock tree that calls the public mock passes for it.
 	var role: Role
@@ -371,24 +357,7 @@ struct PublicMockParameter: Sendable {
 		return parameter
 	}
 
-	/// What a parameter of a public mock stands for.
-	enum Role: Sendable {
-		/// The mocked type's `@Forwarded` property, which a caller building the type with an `Instantiator` is handed.
-		case forwarded(Property)
-		/// A default-valued parameter of the type's construction, which a calling mock tree never passes.
-		case constructionDefault
-		/// A dependency the mocked type's tree receives, received as `property`: required where the mock cannot build
-		/// it, and otherwise taken as `T? = nil`, which the mock builds when `nil`.
-		case received(Property, isRequired: Bool)
-		/// The `SafeDIOverrides` of the mock's tree.
-		case overrides
-		/// A builder the mock takes optional, `= nil`, for the places of one hole type and family its calls of other modules'
-		/// public mocks fill (`ScopeGenerator.FilledCall`), which replaces those fills where it is passed. Where the mock also
-		/// takes a builder of the family for places it passes up (`joinedBuilder`, that builder's enum), `mock()` passes that
-		/// builder on to it and takes no parameter of its own for it, so that one builder a person writes serves every place.
-		/// A generated caller never passes it: the called mock's own fills build the places.
-		case optionalBuilder(joinedBuilder: SeamSignature.ScopeEnum.Key?)
-	}
+	typealias Role = StoredPublicMockPlan.Role
 }
 
 /// What a public mock (`generateMock: .public`) generates beyond an internal mock's body.
@@ -1328,6 +1297,59 @@ struct OwnPublicMockPlan: Sendable {
 	let typesDeclaredEscaping: Set<TypeDescription>
 }
 
+extension StoredPublicMockPlan {
+	/// What a module that calls the mock reads of `ownPlan`.
+	init(_ ownPlan: OwnPublicMockPlan) {
+		let parameters = ownPlan.plan.parameters.map(Parameter.init)
+		let noTierParameters = ownPlan.plan.noTierParameters.map(Parameter.init)
+		// A tier omits only a received parameter narrower than `public`, or one on no tier.
+		var omittableLabels = Set<String>()
+		for parameter in parameters + noTierParameters {
+			guard case let .received(property, _) = parameter.role, parameter.access < .public || parameter.nestedOmission != nil else { continue }
+			omittableLabels.insert(property.label)
+		}
+		var receivers = [Receiver]()
+		if !omittableLabels.isEmpty {
+			for label in ownPlan.receiversByLabel.keys.sorted() where omittableLabels.contains(label) {
+				for receiver in ownPlan.receiversByLabel[label, default: []] where receiver.dependency.source.isReceived {
+					receivers.append(Receiver(declaringType: receiver.declaringType, dependency: receiver.dependency))
+				}
+			}
+		}
+		let parameterTypes = Set(parameters.map(\.type))
+		self.init(
+			mockedType: ownPlan.instantiable.concreteInstantiable,
+			parameters: parameters,
+			noTierParameters: noTierParameters,
+			tiers: ownPlan.plan.tiers,
+			guardTypeName: ownPlan.plan.guardTypeName,
+			holes: ownPlan.plan.holes,
+			builders: ownPlan.plan.builders,
+			scopeEnums: ownPlan.plan.scopeEnums,
+			receivers: receivers,
+			typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.filter(parameterTypes.contains).sorted(),
+		)
+	}
+}
+
+extension StoredPublicMockPlan.Parameter {
+	/// What a module that calls the mock reads of `parameter`.
+	init(_ parameter: PublicMockParameter) {
+		self.init(
+			name: parameter.name,
+			narrowerTierNames: parameter.narrowerTierNames,
+			type: parameter.type,
+			access: parameter.access,
+			accessCause: parameter.accessCause,
+			nestedOmission: parameter.nestedOmission,
+			role: parameter.role,
+			isBuiltWhenNil: parameter.isBuiltWhenNil,
+			builtWrapper: parameter.builtWrapper,
+			builder: parameter.builder,
+		)
+	}
+}
+
 /// How a mock tree calls the public mock another module generated for a type the tree cannot build itself (see
 /// `Scope.publicMockCall`). The tree's scope for the type is a leaf that declares the mock's whole signature: each
 /// parameter of the tier the call reaches as the dependency it stands for – a forwarded property, or a received one,
@@ -1341,7 +1363,7 @@ struct PublicMockCall: Sendable {
 	/// The parameters of `tier` that stand for a dependency, in signature order, which the call passes by name.
 	let passedParameters: [PassedParameter]
 	/// The parameters `tier` omits, which the call passes `nil` for by leaving them out.
-	let omittedParameters: [PublicMockParameter]
+	let omittedParameters: [StoredPublicMockPlan.Parameter]
 	/// Whether the mock takes `safeDIOverrides`, which the call passes the calling mock's entry for the type.
 	let takesOverrides: Bool
 	/// The enum the call names, whose name hashes the mock's signature.
@@ -1370,8 +1392,9 @@ struct PublicMockCall: Sendable {
 		declaringModuleMockCondition.conditionalCompilation == nil || declaringModuleMockCondition == callerModuleMockCondition
 	}
 
-	/// The declarations in the public mock's tree that receive each label, which a diagnostic notes.
-	let receiversByLabel: [String: [(declaringType: TypeDescription, dependency: Dependency)]]
+	/// The declarations in the public mock's tree that receive each label a tier can omit, which a diagnostic notes
+	/// (`StoredPublicMockPlan.receivers`).
+	let receiversByLabel: [String: [StoredPublicMockPlan.Receiver]]
 	/// The places the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), each
 	/// with a fill on every route; the call passes every other place up.
 	var filledHoles = [SeamSignature.Hole]()

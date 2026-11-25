@@ -618,7 +618,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
 		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
-		// own. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// own; the public mock plans that follow the signatures were added by hand. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
 			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x01, 0x03, 0x00, 0x08,
@@ -636,7 +636,11 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02,
 			0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00,
-			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
+			0x00, 0x00, 0x02, 0x00, 0x00,
+			// The empty view.
+			0x00, 0x00, 0x00,
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
@@ -662,9 +666,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
-	/// The types a module info file writes only inside the signature of a seam its module declares.
+	/// The types a module info file writes only inside the signature of a seam, or the plan of a public mock, its module
+	/// declares.
 	private static let seamSignatureMembers: [any BinarySchemaMember.Type] = [
 		StoredSeamSignature.self,
+		StoredPublicMockPlan.self,
+		StoredPublicMockPlan.Parameter.self,
+		StoredPublicMockPlan.Role.self,
+		StoredPublicMockPlan.NestedOmission.self,
+		StoredPublicMockPlan.Receiver.self,
 		SeamSignature.self,
 		SeamSignature.Receiver.self,
 		SeamSignature.NestedSeamCall.self,
@@ -2253,6 +2263,12 @@ extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
 extension StoredSeamSignature: BinarySample {}
 extension ModuleSeamSignatures: BinarySample {}
+extension ModulePublicMockPlans: BinarySample {}
+extension StoredPublicMockPlan: BinarySample {}
+extension StoredPublicMockPlan.Parameter: BinarySample {}
+extension StoredPublicMockPlan.Role: BinarySample {}
+extension StoredPublicMockPlan.NestedOmission: BinarySample {}
+extension StoredPublicMockPlan.Receiver: BinarySample {}
 
 extension BinaryEncoding: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) throws -> BinaryEncoding {

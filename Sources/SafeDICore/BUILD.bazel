@@ -26,6 +26,7 @@ filegroup(
             "Models/Scope.swift",
             "Models/SeamPlaceLevels.swift",
             "Models/SeamSignature.swift",
+            "Models/StoredPublicMockPlan.swift",
             "Models/SourceDiagnostic.swift",
             "Models/TypeAccessProof.swift",
             "Models/TypeRequirements.swift",

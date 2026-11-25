@@ -100,6 +100,7 @@ enum BinaryFile {
 			ModuleInfo.self,
 			ModuleInfoFile.self,
 			ModuleSeamSignatures.self,
+			ModulePublicMockPlans.self,
 			ModuleInfoView.self,
 			ViewedModuleIdentity.self,
 			ViewedModule.self,
@@ -129,6 +130,11 @@ enum BinaryFile {
 			TypeDescription.TupleElement.self,
 			UnorderedEquatingCollection<TypeDescription>.self,
 			StoredSeamSignature.self,
+			StoredPublicMockPlan.self,
+			StoredPublicMockPlan.Parameter.self,
+			StoredPublicMockPlan.Role.self,
+			StoredPublicMockPlan.NestedOmission.self,
+			StoredPublicMockPlan.Receiver.self,
 			SeamSignature.self,
 			SeamSignature.Receiver.self,
 			SeamSignature.NestedSeamCall.self,
@@ -179,7 +185,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0xC96288D29BCEB215
+	static let schemaFingerprint: UInt64 = 0x54ED291C2DE18F4D
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
