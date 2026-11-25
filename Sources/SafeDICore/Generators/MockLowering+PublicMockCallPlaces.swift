@@ -175,8 +175,26 @@ extension MockLowering {
 			} else if namesAValue(token.name, outerTypes: outerTypes) {
 				guard !token.isCalled || outerTypes[token.name] != nil else { return nil }
 				appendText(upTo: token.range.lowerBound)
-				segments.append(.value(.read(valueRead(token.name, outerTypes: outerTypes))))
-				cursor = token.range.upperBound
+				// A read of a lazy wrapper's instance is one read, which the type key spells from the wrapper it resolves to.
+				let rest = text[token.range.upperBound...]
+				let instanceSuffixes = [(".\(Dependency.lazilyInstantiatedInstancePropertyName)", false), ("?.\(Dependency.lazilyInstantiatedInstancePropertyName)", true)]
+				if let (suffix, throughOptional) = instanceSuffixes.first(where: { suffix, _ in
+					rest.hasPrefix(suffix) && !(rest.dropFirst(suffix.count).first.map { $0.isLetter || $0.isNumber || $0 == "_" } ?? false)
+				}) {
+					let declaredType = outerTypes[token.name] ?? .simple(name: "Any")
+					let instanceType = declaredType.lazilyInstantiatedInstanceType ?? declaredType
+					segments.append(.value(.read(PlaceRead(
+						argumentLabel: token.name,
+						label: token.name,
+						property: Property(label: token.name, typeDescription: throughOptional ? .optional(instanceType.unwrapped) : instanceType),
+						source: .lazyInstance(label: token.name, throughOptional: throughOptional),
+						staysOutsideSendableFunctions: true,
+					))))
+					cursor = text.index(token.range.upperBound, offsetBy: suffix.count)
+				} else {
+					segments.append(.value(.read(valueRead(token.name, outerTypes: outerTypes))))
+					cursor = token.range.upperBound
+				}
 			}
 		}
 		appendText(upTo: text.endIndex)
