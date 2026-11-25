@@ -320,6 +320,8 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
+The `@Instantiable` macro checks a type’s own initializer, or the hand-written mock its `mock()` calls: when it spells `@MainActor`, and nothing on the type or in the argument the generated declaration reads could make that declaration `@MainActor` too, the macro reports an error with a fix-it that adds `@MainActor`. It matches no actor by its name, so any attribute without arguments there keeps it quiet, as does an `#if` among the type’s attributes; `nonisolated` does not, since the generated declaration could not call the initializer either. It cannot see the initializers of the types a tree builds, nor an actor a type takes from its superclass or a protocol, so add those attributes yourself.
+
 A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation. It leaves out `@_spi`, `@backDeployed` and `@objc`, which that function cannot take. An attached macro there expands on that function too; if the macro cannot, give the type a hand-written `mock()` without it, which the public mock then builds the type with.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
@@ -346,6 +348,8 @@ Each `@Instantiated` property is a distinct instance.
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
 An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
+
+The type an `@Instantiated` SafeDI wrapper builds cannot itself be a SafeDI wrapper, as in `LazilyInstantiated<Instantiator<Screen>>`: SafeDI builds a wrapper’s value from an `@Instantiable` type, so declare the inner wrapper, `Instantiator<Screen>`, instead.
 
 In a SwiftUI `View`, `@Instantiated` objects are re-initialized each time SwiftUI recreates the view; see this [deep dive on SwiftUI view lifecycles](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
