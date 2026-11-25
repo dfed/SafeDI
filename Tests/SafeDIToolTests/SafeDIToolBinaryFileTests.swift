@@ -618,7 +618,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
 		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
-		// own. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// own; the public mock plans that follow the signatures were added by hand. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
 			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x01, 0x03, 0x00, 0x08,
@@ -636,7 +636,11 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02,
 			0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00,
-			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
+			0x00, 0x00, 0x02, 0x00, 0x00,
+			// The empty view.
+			0x00, 0x00, 0x00,
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
@@ -662,9 +666,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
-	/// The types a module info file writes only inside the signature of a seam its module declares.
+	/// The types a module info file writes only inside the signature of a seam, or the plan of a public mock, its module
+	/// declares.
 	private static let seamSignatureMembers: [any BinarySchemaMember.Type] = [
 		StoredSeamSignature.self,
+		StoredPublicMockPlan.self,
+		StoredPublicMockPlan.Parameter.self,
+		StoredPublicMockPlan.Role.self,
+		StoredPublicMockPlan.NestedOmission.self,
+		StoredPublicMockPlan.Receiver.self,
 		SeamSignature.self,
 		SeamSignature.Receiver.self,
 		SeamSignature.NestedSeamCall.self,
@@ -1475,6 +1485,239 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func modulePublicMockPlans_throwsRatherThanTraps_whenEncodingIsCutShortAtAnyByte() throws {
+		let encoding = try ModulePublicMockPlans([StoredPublicMockPlan.sample(isDistinct: true), StoredPublicMockPlan.sample(isDistinct: false)], compilesGeneratedMocks: true).encoding(writingPositionsAsAbsent: true)
+
+		for length in 0..<encoding.count {
+			let cutShort = ModulePublicMockPlans(mockedTypes: [], compilesGeneratedMocks: true, encoding: Array(encoding.prefix(length)))
+			#expect(throws: BinaryDecodingError.self, "cut short at \(length) of \(encoding.count) bytes") { try cutShort.decoded }
+		}
+		#expect(try ModulePublicMockPlans(mockedTypes: [], compilesGeneratedMocks: true, encoding: encoding).decoded.count == 2)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameCodeAsFromIntactFile_whenPublicMockPlanEncodingOfReachedModuleIsCutShort() async throws {
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamPublicMockSource],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		let upstreamModuleInfoURL = try URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath)
+		let intact = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamPublicMockCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Other"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: upstreamModuleInfoURL))
+		#expect(file.publicMockPlans.mockedTypes.map(\.asSource) == ["UpstreamService"])
+		// A file whose checksum holds over a plan encoding cut short, which only a SafeDITool that wrote a malformed
+		// encoding could make: the file reads, the encoding throws when the downstream mock calls the public mock, and the
+		// run computes the plan from its module's declarations, as any run that throws after reading one does.
+		try ModuleInfoFile(
+			moduleName: file.moduleName,
+			ownEntryChecksum: file.ownEntryChecksum,
+			packageName: file.packageName,
+			dependencyModuleNames: file.dependencyModuleNames,
+			imports: file.imports,
+			mockImports: file.mockImports,
+			instantiables: file.instantiables,
+			configurations: file.configurations,
+			filesWithUnexpectedNodes: file.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: file.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: file.instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: file.plainTypeDeclarations,
+			seamSignatures: file.seamSignatures,
+			publicMockPlans: ModulePublicMockPlans(mockedTypes: file.publicMockPlans.mockedTypes, compilesGeneratedMocks: file.publicMockPlans.compilesGeneratedMocks, encoding: file.publicMockPlans.encoding(writingPositionsAsAbsent: true).dropLast()),
+			view: file.view,
+		).moduleInfoData.write(to: upstreamModuleInfoURL)
+
+		let cutShort = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamPublicMockCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Other"],
+		)
+
+		#expect(cutShort.combinedOutput == intact.combinedOutput)
+		#expect(cutShort.combinedOutput == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Upstream)
+		import Upstream
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            upstreamService: UpstreamService.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                upstreamService: upstreamService
+		            )
+		        }
+
+		        var upstreamService: UpstreamService.SafeDIOverrides { __safeDI_storage.upstreamService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                upstreamService: UpstreamService.SafeDIOverrides
+		            ) {
+		                self.upstreamService = upstreamService
+		            }
+
+		            let upstreamService: UpstreamService.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = UpstreamService.__safeDI_UpstreamService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Upstream into Upstream: under Bazel, add Upstream’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let upstreamService = UpstreamService.__safeDI_mock(safeDIOverrides: safeDIOverrides.upstreamService)
+		        return Screen(upstreamService: upstreamService)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSamePublicMockPlanEncoding_whenBlankLineIsAddedAboveDeclarationThatReceivesOmittableParameter() async throws {
+		/// The module's plan encoding and the path of its source file, which the encoding names: each run's fixture is in a
+		/// directory of its own, where a build's file stays where it is.
+		func planEncoding(ofSource source: String) async throws -> (encoding: [UInt8], sourceFilePath: String) {
+			let output = try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Home.swift": source],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+			)
+			let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+			// The plan holds the receive of `theme`, whose declaration the blank line moves.
+			#expect(try file.publicMockPlans.decoded.map { $0.receivers.map(\.declaringType.asSource) } == [["Home"]])
+			return try (file.publicMockPlans.encoding(writingPositionsAsAbsent: true), #require(file.plainTypeDeclarations.first?.sourceFilePath))
+		}
+
+		let original = try await planEncoding(ofSource: Self.publicMockReceivingPackageTypeSource)
+		let moved = try await planEncoding(ofSource: "\n" + Self.publicMockReceivingPackageTypeSource)
+
+		#expect(original.sourceFilePath.utf8.count == moved.sourceFilePath.utf8.count)
+		let movedEncodingAtOriginalPath = Array(Data(moved.encoding).replacing(Data(moved.sourceFilePath.utf8), with: Data(original.sourceFilePath.utf8)))
+		#expect(original.encoding == movedEncodingAtOriginalPath)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesNoPlanThatNamesTypeNestedMoreDeeplyThanReaderReads_whenPublicMockTakesDeepestTypeAsOptional() async throws {
+		// `Deep` nests as deeply as a reader reads, and `Home`'s mock takes it as `Deep?`, one level deeper, which only
+		// the plan names. `Shallow`'s plan names no such type. Each enclosing type is declared in an extension of the one
+		// around it, since a parser in a debug build reads fewer nested declarations than that.
+		let enclosingNames = (1..<BinaryReader.maximumNestingDepth).map { "Level\($0)" }
+		var deepSource = "public enum \(enclosingNames[0]) {}"
+		for index in enclosingNames.indices.dropFirst() {
+			deepSource += "\n\nextension \(enclosingNames[..<index].joined(separator: ".")) {\n    public enum \(enclosingNames[index]) {}\n}"
+		}
+		deepSource += "\n\nextension \(enclosingNames.joined(separator: ".")) {\n    @Instantiable\n    public struct Deep: Instantiable {\n        public init() {}\n    }\n}"
+		let deepType = (enclosingNames + ["Deep"]).joined(separator: ".")
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				deepSource,
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Home: Instantiable {
+				    public init(deep: \(deepType)) {
+				        self.deep = deep
+				    }
+
+				    @Received let deep: \(deepType)
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Shallow: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+
+		#expect(file.publicMockPlans.mockedTypes.map(\.asSource) == ["Shallow"])
+		#expect(try file.publicMockPlans.decoded.map(\.mockedType.asSource) == ["Shallow"])
+	}
+
+	@Test(arguments: [4, 6, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesEachReceiverOfOmittableParameterOnce_whenTreeReachesItOnEveryPathOfLayeredDiamond(layerCount: Int) async throws {
+		// `Home` instantiates `A1` and `B1`, each of which instantiates `A2` and `B2`, down to the last layer, whose two
+		// types receive `theme`: two declarations on two to the power of `layerCount` paths.
+		var source = """
+		package struct Theme {}
+
+		@Instantiable(generateMock: .public)
+		public struct Home: Instantiable {
+		    package init(a1: A1, b1: B1) {}
+
+		    @Instantiated let a1: A1
+		    @Instantiated let b1: B1
+		}
+		"""
+		for layer in 1...layerCount {
+			for name in ["A", "B"] {
+				if layer == layerCount {
+					source += """
+
+
+					@Instantiable
+					package struct \(name)\(layer): Instantiable {
+					    package init(theme: Theme?) {}
+
+					    @Received(onlyIfAvailable: true) let theme: Theme?
+					}
+					"""
+				} else {
+					source += """
+
+
+					@Instantiable
+					package struct \(name)\(layer): Instantiable {
+					    package init(a\(layer + 1): A\(layer + 1), b\(layer + 1): B\(layer + 1)) {}
+
+					    @Instantiated let a\(layer + 1): A\(layer + 1)
+					    @Instantiated let b\(layer + 1): B\(layer + 1)
+					}
+					"""
+				}
+			}
+		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [source],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+
+		#expect(try file.publicMockPlans.decoded.map { $0.receivers.map(\.declaringType.asSource) } == [["A\(layerCount)", "B\(layerCount)"]])
+	}
+
+	@Test
 	func binaryReader_throws_whenEncodingCountsMoreBytesThanRemain() throws {
 		var writer = BinaryWriter()
 		writer.write(BinaryEncoding(bytes: [1, 2, 3]))
@@ -1510,6 +1753,46 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@Instantiable
 	public struct UpstreamService: Instantiable {
 	    public init() {}
+	}
+	"""
+
+	private static let upstreamPublicMockSource = """
+	@Instantiable(generateMock: .public)
+	public struct UpstreamService: Instantiable {
+	    init(store: Store) {
+	        self.store = store
+	    }
+
+	    @Instantiated let store: Store
+	}
+
+	@Instantiable
+	struct Store: Instantiable {
+	    init() {}
+	}
+	"""
+
+	private static let downstreamPublicMockCallerSource = """
+	import Upstream
+
+	@Instantiable(generateMock: true)
+	public struct Screen: Instantiable {
+	    public init(upstreamService: UpstreamService) {
+	        self.upstreamService = upstreamService
+	    }
+
+	    @Instantiated let upstreamService: UpstreamService
+	}
+	"""
+
+	private static let publicMockReceivingPackageTypeSource = """
+	package struct Theme {}
+
+	@Instantiable(generateMock: .public)
+	public struct Home: Instantiable {
+	    package init(theme: Theme?) {}
+
+	    @Received(onlyIfAvailable: true) let theme: Theme?
 	}
 	"""
 
@@ -2253,6 +2536,12 @@ extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
 extension StoredSeamSignature: BinarySample {}
 extension ModuleSeamSignatures: BinarySample {}
+extension ModulePublicMockPlans: BinarySample {}
+extension StoredPublicMockPlan: BinarySample {}
+extension StoredPublicMockPlan.Parameter: BinarySample {}
+extension StoredPublicMockPlan.Role: BinarySample {}
+extension StoredPublicMockPlan.NestedOmission: BinarySample {}
+extension StoredPublicMockPlan.Receiver: BinarySample {}
 
 extension BinaryEncoding: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) throws -> BinaryEncoding {

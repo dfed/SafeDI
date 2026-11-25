@@ -118,14 +118,14 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            return Detail(api: api)
 		        }
 		        let detail: Detail = __safeDI_detail()
+		        @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
-		            func __safeDI_detail() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                return Detail(api: api)
-		            }
-		            let detail: Detail = __safeDI_detail()
+		            let detail: Detail = __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Screen(id: id, detail: detail)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
@@ -248,14 +248,14 @@ struct SafeDIToolSeamCarrierFormationKeyTests: ~Copyable {
 		            return Detail(api: api)
 		        }
 		        let detail: Detail = __safeDI_detail()
+		        @Sendable nonisolated func __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_screenBuilder.detail(id)
-		            func __safeDI_detail() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                return Detail(api: api)
-		            }
-		            let detail: Detail = __safeDI_detail()
+		            let detail: Detail = __safeDI_detail_(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Screen(id: id, detail: detail)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {

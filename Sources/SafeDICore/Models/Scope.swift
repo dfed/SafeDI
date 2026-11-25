@@ -31,13 +31,17 @@ final class Scope: Hashable {
 	///   - seamCall: How a tree that reaches this scope calls it, when the scope stands for a seam whose generated
 	///     initializer another tree calls: `instantiable` then declares the initializer's parameters as its
 	///     dependencies and builds nothing. `nil` for every other scope.
+	///   - isUnavailableDependency: Whether the scope stands for an `@Instantiated(onlyIfAvailable: true)` property that
+	///     no production declaration fulfills: it builds nothing, and generated code binds its property to `nil`.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
 		builtInlineSeamComment: String? = nil,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
+		isUnavailableDependency: Bool = false,
 	) {
+		self.isUnavailableDependency = isUnavailableDependency
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.builtInlineSeamComment = builtInlineSeamComment
@@ -76,6 +80,12 @@ final class Scope: Hashable {
 
 	/// The comment that ends each line of a production tree that constructs the type, or `nil` for none.
 	let builtInlineSeamComment: String?
+
+	/// Whether this scope stands for an `@Instantiated(onlyIfAvailable: true)` property that no production declaration
+	/// fulfills (`DependencyTreeGenerator.instantiates(_:)`). Its `instantiable` names the type a declaration would
+	/// fulfill and declares no dependency, and generated code binds the property to `nil`, a declaration of its label like
+	/// the one a fulfilled property gets, so every receive, rename and argument beneath reads it as it reads that one.
+	let isUnavailableDependency: Bool
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
@@ -1654,6 +1664,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
+			// A tree that takes no builder, a root's, holds no place: the only hole validation leaves there is a property
+			// instantiated only if available that nothing fulfills, which is `nil`, and orders its siblings as it does in a
+			// module that generates no seam. A mock's tree keeps the place, a deliberate gap until mocks pass `nil`.
+			holdsPlace: seamHoles.takesBuilders || forMockGeneration || !property.typeDescription.isOptional,
 			ownerPropertyStack: childContextStack.propertiesInnermostFirst,
 			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
@@ -2100,6 +2114,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
 				}
 				guard isPublicMockCall else {
+					if enumKey.holeType.builtType.isOptional {
+						return .init(label: label, value: ".init(\(ReservedName.noScopeArgumentLabel): \(ReservedName.nilBuilderSource))")
+					}
 					return .init(label: label, value: "")
 				}
 				// A public mock's caller that fills no place of the builder passes up the struct it is handed: the member of its own
@@ -2222,6 +2239,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			closedOnDeclaration: closedOnDeclaration,
 			closedOnFillPathDeclarationsBeneath: closedOnFillPathDeclarationsBeneath,
 			builtInlineSeamComment: scope.builtInlineSeamComment,
+			isUnavailableDependency: scope.isUnavailableDependency,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
 			seamRoot: seamRoot,
@@ -3060,6 +3078,13 @@ struct SeamHoles: Sendable {
 
 	/// The seam whose tree is generated, or `nil` for a tree that is no seam's.
 	private let seamType: TypeDescription?
+
+	/// Whether the tree takes builders for its holes: a seam's or a public mock's, never a root's, which has no caller to
+	/// take one from.
+	var takesBuilders: Bool {
+		seamType != nil
+	}
+
 	private let routeCasesByCall: [RouteCall: RouteCase]
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]

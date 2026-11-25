@@ -102,15 +102,17 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
+		        @Sendable nonisolated func __safeDI_detailBuilder(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let token = Token()
 		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_screenBuilder.detailBuilder(id, token)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_apiSendableBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Screen(id: id, token: token, detailBuilder: detailBuilder)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
@@ -246,15 +248,17 @@ struct SafeDIToolSeamCarrierMixedTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
+		        @Sendable nonisolated func __safeDI_detailBuilder(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let __safeDI_apiSendableBuilder_screenBuilder = __safeDI_apiSendableBuilder.screenBuilder()
 		            let token = Token()
 		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_screenBuilder.detailBuilder(id, token)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_apiSendableBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Screen(id: id, token: token, detailBuilder: detailBuilder)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
