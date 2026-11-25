@@ -324,6 +324,12 @@ extension MockLowering {
 		/// node read its configuration rather than a closure: a node a cycle builds again, which its parent's configuration
 		/// has no field for, reads the nearest one of its type (`MockLowering+CycleOverrides.swift`).
 		var overridePathsByType = [String: [MockLowering.AncestorOverridePath]]()
+		/// The configuration each built place around the walk reads its children's fields of, in the type key's form, nearest
+		/// last: `mock()`'s `safeDIOverrides` at the root, then each place's own parameter, `nil` for a place that reads no
+		/// configuration struct (`MockLowering.relativeConfiguration(of:…)`).
+		var configurationReads: [ValuePath?] = [MockLowering.mockOverridesRead]
+		/// Where each built place the walk started reads its configuration in the type key's form, by its path of child indices.
+		var builtPlaceConfigurationContexts = [[Int]: MockLowering.BuiltPlaceConfigurationContext]()
 		/// The labels `mock()` binds before its tree, which no node may bind again.
 		let rootLabels: Set<String>
 		/// The names `mock()` binds its overrides of what its tree receives only if available under, which a builder
@@ -1075,6 +1081,18 @@ extension MockLowering {
 			)
 			let nodePath = ownOverridePath?.path ?? "\(path).\(bindingName)"
 			let overrideReachable = ownOverridePath != nil
+			let ownFieldIsRead = !isCycleNode && ownFieldReachable
+			builtPlaceConfigurationContexts[childIndexPath] = MockLowering.BuiltPlaceConfigurationContext(
+				fieldName: bindingName,
+				parentConfiguration: ownFieldIsRead ? configurationReads.last ?? nil : nil,
+				nearestIsProvided: !ownFieldIsRead && overrideReachable,
+				ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
+					concreteType: instantiable.concreteInstantiable,
+					builtWithHandWrittenMock: usesMockInitializer,
+					configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
+				).name : nil,
+				pathKeyConfiguration: overrideReachable ? MockLowering.overrideReadPath(nodePath) : nil,
+			)
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
 			// Nor do the dependencies its type instantiates that the mock cannot build, whose receives
@@ -1247,6 +1265,11 @@ extension MockLowering {
 			if let ownOverridePath {
 				overridePathsByType[instantiable.concreteInstantiable.asSource, default: []].append(ownOverridePath)
 			}
+			configurationReads.append(hasConfiguration ? MockLowering.ConfigurationParameter(
+				concreteType: instantiable.concreteInstantiable,
+				builtWithHandWrittenMock: usesMockInitializer,
+				configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
+			).read(isProvided: true) : nil)
 			// The configured types around the node's children.
 			let configurationEntry = enteringConfiguredNode(of: instantiable.concreteInstantiable)
 			return .descending(DescendingBuiltNode(
@@ -1325,6 +1348,7 @@ extension MockLowering {
 			if overrideReachable {
 				overridePathsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
 			}
+			configurationReads.removeLast()
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			renames = enclosingRenames
