@@ -411,46 +411,59 @@ public enum SeamRouteQueryShadow {
 		}
 		var hiddenMemo = [HiddenKey: Set<Property?>]()
 		var hiddenOnStack = Set<HiddenKey>()
+		// Iterative, as `answer` is: a seam's tree can be deeper than a concurrency thread's stack.
 		func hiddenAnswer(node: Int, label: String, crossed: Bool) -> Set<Property?> {
-			let key = HiddenKey(node: node, label: label, crossed: crossed)
-			if let known = hiddenMemo[key] {
-				return known
-			}
-			guard hiddenOnStack.insert(key).inserted else {
-				report.graphCycles += 1
-				return []
-			}
-			defer { hiddenOnStack.remove(key) }
-			var result = Set<Property?>()
-			if let declaration = declarationByLabelByNode[node][label] {
-				if levels[node].builtType == nil, declaration.isFieldOfSeamParameter, outcome(of: declaration, crossed: crossed).kind == .field {
-					// A declaration the fill binds before the field, such as one a passing-up seam binds that the filled seam's struct
-					// does not carry, is the nearest above the field.
-					let earlier = levels[node].declarations.prefix { $0 != declaration }.last { $0.property.label == label }
-					if let earlier {
-						result.insert(earlier.property == declaration.property ? nil : earlier.property)
-					}
-					for parent in parents[node] where earlier == nil {
-						for above in answer(node: parent, label: label, crossed: false) {
-							result.insert(above.property == declaration.property ? nil : above.property)
+			let start = HiddenKey(node: node, label: label, crossed: crossed)
+			var stack = [(key: start, isExpanded: false)]
+			while let (key, isExpanded) = stack.popLast() {
+				guard hiddenMemo[key] == nil else { continue }
+				if let declaration = declarationByLabelByNode[key.node][key.label] {
+					var result = Set<Property?>()
+					if levels[key.node].builtType == nil, declaration.isFieldOfSeamParameter, outcome(of: declaration, crossed: key.crossed).kind == .field {
+						// A declaration the fill binds before the field, such as one a passing-up seam binds that the filled seam's struct
+						// does not carry, is the nearest above the field.
+						let earlier = levels[key.node].declarations.prefix { $0 != declaration }.last { $0.property.label == key.label }
+						if let earlier {
+							result.insert(earlier.property == declaration.property ? nil : earlier.property)
+						}
+						for parent in parents[key.node] where earlier == nil {
+							for above in answer(node: parent, label: key.label, crossed: false) {
+								result.insert(above.property == declaration.property ? nil : above.property)
+							}
 						}
 					}
 					if result.isEmpty {
 						result.insert(nil)
 					}
-				} else {
-					result.insert(nil)
+					hiddenMemo[key] = result
+					continue
 				}
-			} else if parents[node].isEmpty {
-				result.insert(nil)
-			} else {
-				let parentCrossed = crossed || levels[node].opensSendableFunction
-				for parent in parents[node] {
-					result.formUnion(hiddenAnswer(node: parent, label: label, crossed: parentCrossed))
+				let parentCrossed = key.crossed || levels[key.node].opensSendableFunction
+				let parentKeys = parents[key.node].map { HiddenKey(node: $0, label: key.label, crossed: parentCrossed) }
+				if parentKeys.isEmpty {
+					hiddenMemo[key] = [nil]
+					continue
+				}
+				if isExpanded {
+					var result = Set<Property?>()
+					for parentKey in parentKeys {
+						if let known = hiddenMemo[parentKey] {
+							result.formUnion(known)
+						} else {
+							report.graphCycles += 1
+						}
+					}
+					hiddenMemo[key] = result
+					hiddenOnStack.remove(key)
+					continue
+				}
+				guard hiddenOnStack.insert(key).inserted else { continue }
+				stack.append((key, true))
+				for parentKey in parentKeys where hiddenMemo[parentKey] == nil && !hiddenOnStack.contains(parentKey) {
+					stack.append((parentKey, false))
 				}
 			}
-			hiddenMemo[key] = result
-			return result
+			return hiddenMemo[start] ?? []
 		}
 		for caseKey in caseOrder {
 			let placeIndices = placeIndicesByCase[caseKey] ?? []
@@ -503,27 +516,36 @@ public enum SeamRouteQueryShadow {
 		var stackMemo = [Int: Set<StackEntry>]()
 		var stackOnStack = Set<Int>()
 		func stackEntries(node: Int) -> Set<StackEntry> {
-			if let known = stackMemo[node] {
-				return known
-			}
-			guard stackOnStack.insert(node).inserted else {
-				report.graphCycles += 1
-				return []
-			}
-			defer { stackOnStack.remove(node) }
-			var result = Set<StackEntry>()
-			if levels[node].builtType == nil {
-				result.formUnion(fillBase(of: levels[node]))
-			} else if let builtType = levels[node].builtType {
-				for parent in parents[node] {
-					if let property = levels[parent].nextProperty {
-						result.formUnion(entries(of: property, builtAs: builtType))
+			var stack = [(node: node, isExpanded: false)]
+			while let (visited, isExpanded) = stack.popLast() {
+				guard stackMemo[visited] == nil else { continue }
+				guard let builtType = levels[visited].builtType else {
+					stackMemo[visited] = Set(fillBase(of: levels[visited]))
+					continue
+				}
+				if isExpanded {
+					var result = Set<StackEntry>()
+					for parent in parents[visited] {
+						if let property = levels[parent].nextProperty {
+							result.formUnion(entries(of: property, builtAs: builtType))
+						}
+						if let known = stackMemo[parent] {
+							result.formUnion(known)
+						} else {
+							report.graphCycles += 1
+						}
 					}
-					result.formUnion(stackEntries(node: parent))
+					stackMemo[visited] = result
+					stackOnStack.remove(visited)
+					continue
+				}
+				guard stackOnStack.insert(visited).inserted else { continue }
+				stack.append((visited, true))
+				for parent in parents[visited] where stackMemo[parent] == nil && !stackOnStack.contains(parent) {
+					stack.append((parent, false))
 				}
 			}
-			stackMemo[node] = result
-			return result
+			return stackMemo[node] ?? []
 		}
 		for caseKey in caseOrder {
 			let placeIndices = placeIndicesByCase[caseKey] ?? []
