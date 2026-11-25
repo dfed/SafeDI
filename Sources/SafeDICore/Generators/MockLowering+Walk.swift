@@ -804,6 +804,22 @@ extension MockLowering {
 				declarationReference: declarationReference,
 			)
 			lines.append(alias.bindingLines(indent: indent))
+			// The type key lays the alias out as a place written as text whose one read is the name it reads: the property in
+			// scope, or the wrapper whose instance it reads. A rename a loop's members bind again keeps the walk's body.
+			if loopMembership == nil {
+				let read: Property? = if alias.isBoundToNil {
+					nil
+				} else if let instanceWrapper {
+					Property(label: String(alias.fulfillingName.prefix { $0 != "." }), typeDescription: instanceWrapper.typeDescription)
+				} else {
+					Property(label: alias.fulfillingName, typeDescription: scopeFulfillingProperty.typeDescription)
+				}
+				closerAndDefaultRecords[childIndexPath] = .alias(AliasPlaceRecord(
+					property: Property(label: aliasBindingName, typeDescription: property.typeDescription),
+					fulfillingProperty: read,
+					text: alias.bindingLines(indent: ""),
+				))
+			}
 			return .alias(alias)
 		}
 
