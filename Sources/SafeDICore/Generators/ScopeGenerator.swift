@@ -11296,7 +11296,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var constructions = MockConstructions()
 		// A worklist rather than recursion, since the tree can be as deep as the module has types.
 		// Whether a generator's children build what an actor's initializer is handed, outside every lazy wrapper's builder
-		// function: a lazy wrapper there reads its overrides as a `@Sendable` builder function does (`isInsideActorArgument`
+		// function: such a child reads its overrides as a `@Sendable` builder function does (`isInsideActorArgument`
 		// in `MockLowering+Walk.swift`). A mock root that is an actor takes its level so. A public mock's tree, whose
 		// configurations are never `Sendable`, is a deliberate gap, as the walk states.
 		let rootInstantiable: Instantiable? = if case let .root(instantiable, _) = scopeData {
@@ -11310,7 +11310,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for child in generator.propertiesToGenerate {
 				if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
 					let isWrapped = !childProperty.propertyType.isConstant
-					let childInsideSendableScope = insideSendableScope || child.buildsInSendableFunction || (insideActorArgument && isWrapped)
+					let childInsideSendableScope = insideSendableScope || child.buildsInSendableFunction || insideActorArgument
 					if childInsideSendableScope {
 						let needsConfigurationStruct = isPropertyCycle
 							|| child.propertiesToGenerate.contains(where: \.isBuiltForProperty)
