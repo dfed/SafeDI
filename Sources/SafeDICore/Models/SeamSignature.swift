@@ -234,36 +234,7 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Codable, Sendable {
 		/// A value holding each stored property as given, which a module info file reads back.
 		public init(storing ownerType: TypeDescription, declaringModuleNames: [String], property: Property, instantiatedType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, erasedToConcreteExistential: Bool, sitePath: [Property], declaredSitePath: [DeclaredProperty], fillPropertyStack: [Property], fillConcreteTypeStack: [TypeDescription], builderLabel: String, narrowerTierBuilderLabels: [AccessLevel: String], internalName: String, scopeSeamType: TypeDescription, scopeSeamModule: ModuleIdentity, typesToOwner: [PathType], scopeTypeName: String, enumPlace: EnumPlace?, wrapperFunctionName: String?, fields: [Field], tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, uncarriedDeclarations: [UncarriedDeclaration], cycleReentryDeclarations: [CycleReentryDeclaration], reenteringCallDeclarations: [ReenteringCallDeclaration], reenteringPlaceFields: [ReenteringPlaceField], declarationsHiddenByFields: [DeclarationHiddenByField], innerSeamType: TypeDescription?, passedUpRoute: [DeclaredProperty], isSendable: Bool) {
-			self.ownerType = ownerType
-			self.declaringModuleNames = declaringModuleNames
-			self.property = property
-			self.instantiatedType = instantiatedType
-			self.declarationLocation = declarationLocation
-			self.erasedToConcreteExistential = erasedToConcreteExistential
-			self.sitePath = sitePath
-			self.declaredSitePath = declaredSitePath
-			self.fillPropertyStack = fillPropertyStack
-			self.fillConcreteTypeStack = fillConcreteTypeStack
-			self.builderLabel = builderLabel
-			self.narrowerTierBuilderLabels = narrowerTierBuilderLabels
-			self.internalName = internalName
-			self.scopeSeamType = scopeSeamType
-			self.scopeSeamModule = scopeSeamModule
-			self.typesToOwner = typesToOwner
-			self.scopeTypeName = scopeTypeName
-			self.enumPlace = enumPlace
-			self.wrapperFunctionName = wrapperFunctionName
-			self.fields = fields
-			self.tierAccess = tierAccess
-			self.accessCause = accessCause
-			self.uncarriedDeclarations = uncarriedDeclarations
-			self.cycleReentryDeclarations = cycleReentryDeclarations
-			self.reenteringCallDeclarations = reenteringCallDeclarations
-			self.reenteringPlaceFields = reenteringPlaceFields
-			self.declarationsHiddenByFields = declarationsHiddenByFields
-			self.innerSeamType = innerSeamType
-			self.passedUpRoute = passedUpRoute
-			self.isSendable = isSendable
+			storage = Storage(Fields(storing: ownerType, declaringModuleNames: declaringModuleNames, property: property, instantiatedType: instantiatedType, declarationLocation: declarationLocation, erasedToConcreteExistential: erasedToConcreteExistential, sitePath: sitePath, declaredSitePath: declaredSitePath, fillPropertyStack: fillPropertyStack, fillConcreteTypeStack: fillConcreteTypeStack, builderLabel: builderLabel, narrowerTierBuilderLabels: narrowerTierBuilderLabels, internalName: internalName, scopeSeamType: scopeSeamType, scopeSeamModule: scopeSeamModule, typesToOwner: typesToOwner, scopeTypeName: scopeTypeName, enumPlace: enumPlace, wrapperFunctionName: wrapperFunctionName, fields: fields, tierAccess: tierAccess, accessCause: accessCause, uncarriedDeclarations: uncarriedDeclarations, cycleReentryDeclarations: cycleReentryDeclarations, reenteringCallDeclarations: reenteringCallDeclarations, reenteringPlaceFields: reenteringPlaceFields, declarationsHiddenByFields: declarationsHiddenByFields, innerSeamType: innerSeamType, passedUpRoute: passedUpRoute, isSendable: isSendable))
 		}
 
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
@@ -732,126 +703,481 @@ public struct SeamSignature: Sendable {
 			isSendable: Bool = false,
 			enumPlace: EnumPlace? = nil,
 		) {
-			self.ownerType = ownerType
-			self.declaringModuleNames = declaringModuleNames
-			self.property = property
-			self.instantiatedType = instantiatedType
-			self.declarationLocation = declarationLocation
-			self.erasedToConcreteExistential = erasedToConcreteExistential
-			self.sitePath = sitePath
-			self.declaredSitePath = declaredSitePath
-			self.fillPropertyStack = fillPropertyStack
-			self.fillConcreteTypeStack = fillConcreteTypeStack
-			self.builderLabel = builderLabel
-			self.internalName = internalName
-			self.scopeSeamType = scopeSeamType
-			self.scopeSeamModule = scopeSeamModule
-			self.typesToOwner = typesToOwner
-			self.scopeTypeName = scopeTypeName
-			self.fields = fields
-			self.tierAccess = tierAccess
-			self.accessCause = accessCause
-			self.uncarriedDeclarations = uncarriedDeclarations
-			self.cycleReentryDeclarations = cycleReentryDeclarations
-			self.innerSeamType = innerSeamType
-			self.passedUpRoute = passedUpRoute
-			self.isSendable = isSendable
-			self.enumPlace = enumPlace
+			storage = Storage(Fields(
+				ownerType: ownerType,
+				declaringModuleNames: declaringModuleNames,
+				property: property,
+				instantiatedType: instantiatedType,
+				declarationLocation: declarationLocation,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				sitePath: sitePath,
+				declaredSitePath: declaredSitePath,
+				fillPropertyStack: fillPropertyStack,
+				fillConcreteTypeStack: fillConcreteTypeStack,
+				builderLabel: builderLabel,
+				internalName: internalName,
+				scopeSeamType: scopeSeamType,
+				scopeSeamModule: scopeSeamModule,
+				typesToOwner: typesToOwner,
+				scopeTypeName: scopeTypeName,
+				fields: fields,
+				tierAccess: tierAccess,
+				accessCause: accessCause,
+				uncarriedDeclarations: uncarriedDeclarations,
+				cycleReentryDeclarations: cycleReentryDeclarations,
+				innerSeamType: innerSeamType,
+				passedUpRoute: passedUpRoute,
+				isSendable: isSendable,
+				enumPlace: enumPlace,
+			))
+		}
+
+		/// Every stored property of a hole, held once behind `Storage`, so that a copy of a hole retains one reference rather than
+		/// each of its many fields: shaping, emitting and storing builders copies holes many times over.
+		fileprivate struct Fields: Codable, Sendable {
+			init(storing ownerType: TypeDescription, declaringModuleNames: [String], property: Property, instantiatedType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, erasedToConcreteExistential: Bool, sitePath: [Property], declaredSitePath: [DeclaredProperty], fillPropertyStack: [Property], fillConcreteTypeStack: [TypeDescription], builderLabel: String, narrowerTierBuilderLabels: [AccessLevel: String], internalName: String, scopeSeamType: TypeDescription, scopeSeamModule: ModuleIdentity, typesToOwner: [PathType], scopeTypeName: String, enumPlace: EnumPlace?, wrapperFunctionName: String?, fields: [Field], tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, uncarriedDeclarations: [UncarriedDeclaration], cycleReentryDeclarations: [CycleReentryDeclaration], reenteringCallDeclarations: [ReenteringCallDeclaration], reenteringPlaceFields: [ReenteringPlaceField], declarationsHiddenByFields: [DeclarationHiddenByField], innerSeamType: TypeDescription?, passedUpRoute: [DeclaredProperty], isSendable: Bool) {
+				self.ownerType = ownerType
+				self.declaringModuleNames = declaringModuleNames
+				self.property = property
+				self.instantiatedType = instantiatedType
+				self.declarationLocation = declarationLocation
+				self.erasedToConcreteExistential = erasedToConcreteExistential
+				self.sitePath = sitePath
+				self.declaredSitePath = declaredSitePath
+				self.fillPropertyStack = fillPropertyStack
+				self.fillConcreteTypeStack = fillConcreteTypeStack
+				self.builderLabel = builderLabel
+				self.narrowerTierBuilderLabels = narrowerTierBuilderLabels
+				self.internalName = internalName
+				self.scopeSeamType = scopeSeamType
+				self.scopeSeamModule = scopeSeamModule
+				self.typesToOwner = typesToOwner
+				self.scopeTypeName = scopeTypeName
+				self.enumPlace = enumPlace
+				self.wrapperFunctionName = wrapperFunctionName
+				self.fields = fields
+				self.tierAccess = tierAccess
+				self.accessCause = accessCause
+				self.uncarriedDeclarations = uncarriedDeclarations
+				self.cycleReentryDeclarations = cycleReentryDeclarations
+				self.reenteringCallDeclarations = reenteringCallDeclarations
+				self.reenteringPlaceFields = reenteringPlaceFields
+				self.declarationsHiddenByFields = declarationsHiddenByFields
+				self.innerSeamType = innerSeamType
+				self.passedUpRoute = passedUpRoute
+				self.isSendable = isSendable
+			}
+
+			init(
+				ownerType: TypeDescription,
+				declaringModuleNames: [String],
+				property: Property,
+				instantiatedType: TypeDescription,
+				declarationLocation: Dependency.DeclarationLocation?,
+				erasedToConcreteExistential: Bool,
+				sitePath: [Property],
+				declaredSitePath: [DeclaredProperty],
+				fillPropertyStack: [Property],
+				fillConcreteTypeStack: [TypeDescription],
+				builderLabel: String,
+				internalName: String,
+				scopeSeamType: TypeDescription,
+				scopeSeamModule: ModuleIdentity,
+				typesToOwner: [PathType],
+				scopeTypeName: String,
+				fields: [Field],
+				tierAccess: AccessLevel,
+				accessCause: TypeAccessProof.Cause? = nil,
+				uncarriedDeclarations: [UncarriedDeclaration],
+				cycleReentryDeclarations: [CycleReentryDeclaration],
+				innerSeamType: TypeDescription? = nil,
+				passedUpRoute: [DeclaredProperty] = [],
+				isSendable: Bool = false,
+				enumPlace: EnumPlace? = nil,
+			) {
+				self.ownerType = ownerType
+				self.declaringModuleNames = declaringModuleNames
+				self.property = property
+				self.instantiatedType = instantiatedType
+				self.declarationLocation = declarationLocation
+				self.erasedToConcreteExistential = erasedToConcreteExistential
+				self.sitePath = sitePath
+				self.declaredSitePath = declaredSitePath
+				self.fillPropertyStack = fillPropertyStack
+				self.fillConcreteTypeStack = fillConcreteTypeStack
+				self.builderLabel = builderLabel
+				self.internalName = internalName
+				self.scopeSeamType = scopeSeamType
+				self.scopeSeamModule = scopeSeamModule
+				self.typesToOwner = typesToOwner
+				self.scopeTypeName = scopeTypeName
+				self.fields = fields
+				self.tierAccess = tierAccess
+				self.accessCause = accessCause
+				self.uncarriedDeclarations = uncarriedDeclarations
+				self.cycleReentryDeclarations = cycleReentryDeclarations
+				self.innerSeamType = innerSeamType
+				self.passedUpRoute = passedUpRoute
+				self.isSendable = isSendable
+				self.enumPlace = enumPlace
+			}
+
+			/// The type whose `@Instantiated` property the site builds.
+			let ownerType: TypeDescription
+			/// The module of the seam whose tree holds the site, when it also declares the owner and no seam passes the site up,
+			/// which a spelling of the property's type or of the fulfiller's `@Forwarded` property may qualify a type with, since
+			/// the fulfiller is in another module. Empty otherwise: generated code spells the property's type in the module that
+			/// generates the fill, where a bare name may mean a type of that module, which its `.safedi` records only if a
+			/// declaration of that module mentions it.
+			let declaringModuleNames: [String]
+			/// The property the site builds, as its owner declares it: the builder returns its type without its wrapper
+			/// (`builtType`).
+			let property: Property
+			/// The type a declaration must fulfill to fill the builder: the property's instantiated type, or the type an
+			/// erased property names with `fulfilledByType:`.
+			let instantiatedType: TypeDescription
+			/// Where the owner declares the property.
+			let declarationLocation: Dependency.DeclarationLocation?
+			/// Whether the property is `erasedToConcreteExistential`, which a fill wraps the fulfilling type in.
+			let erasedToConcreteExistential: Bool
+			/// The properties from the root of the tree that holds the site down to the owner's property, outermost first:
+			/// the site's identity in that tree, which generated names are made from. Inside a fill of a passed-up hole it holds
+			/// a stand-in for the seam that holds that hole (`pathBeforePropertyInItsFill`), no declaration, so a diagnostic
+			/// prints `declaredSitePath` instead.
+			let sitePath: [Property]
+			/// The properties the code declares from the root of the tree that holds the site down to the owner's property,
+			/// outermost first, inside a fill of a passed-up hole through the calls that passed it up.
+			let declaredSitePath: [DeclaredProperty]
+			/// The stack a fill builds the property's tree with: the properties from the root of the seam whose tree holds
+			/// the site to the owner's property, innermost first, each lazily instantiated one preceded by its instance, as
+			/// `Scope.createScopeGenerator` stacks them.
+			let fillPropertyStack: [Property]
+			/// The concrete type each entry of `fillPropertyStack` is built for, beside it: a fill's scope closes a cycle only where it
+			/// repeats an entry of the same property built for the same concrete type, as inline's does.
+			let fillConcreteTypeStack: [TypeDescription]
+			/// The label the generated initializer takes the place's builder under: for a place in a seam's plain scope enum, that
+			/// enum's builder's label.
+			var builderLabel: String
+			/// The label each narrower tier takes the place's builder under, where it differs from `builderLabel`
+			/// (`Builder.narrowerTierLabels`).
+			var narrowerTierBuilderLabels = [AccessLevel: String]()
+			/// The name the generated initializer binds the builder to.
+			var internalName: String
+			/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
+			let scopeSeamType: TypeDescription
+			/// The module that declares `scopeSeamType`, which a module the hole reaches through a view knows only from here.
+			let scopeSeamModule: ModuleIdentity
+			/// The types from the seam that takes this builder, itself excluded, to the hole's owner, outermost first: for a
+			/// passed-up hole, every seam it passes through on the way to `scopeSeamType`. Empty when that seam owns the hole.
+			/// Each type's module is a fact of the hole, so no order among modules decides which one a diagnostic names.
+			let typesToOwner: [PathType]
+			/// The name of the enum whose case the place is (`enumPlace`), or, before the builders are shaped, a name made from the
+			/// place's owner and property.
+			var scopeTypeName: String
+			/// Where a scope enum of the seam or the public mock carries this place, once its builders are shaped.
+			var enumPlace: EnumPlace?
+			/// The name of the function that builds the wrapper this place is held in, or `nil` for one held by value and for a
+			/// public mock's, whose function the generator names (see `SeamBuilderNames`).
+			var wrapperFunctionName: String?
+			/// The values a fill of the place can read from what its builder is handed: the nearest declaration of each label on
+			/// the site's path that is bound before the site, inside the innermost `@Sendable` function that builds the site where
+			/// one does. The seam's parameters are no field of a place built in a `@Sendable` function: a fill reads them from the
+			/// caller's own scope.
+			let fields: [Field]
+			/// The access each tier that takes the builder must have no more than: the builder's type is as visible as the
+			/// narrowest type it names – the scope struct at the access of the seam that declares it, and the property's type
+			/// as the declarations the signature is computed from prove it (`TypeAccessProof`) – capped at the seam's type.
+			let tierAccess: AccessLevel
+			/// How the narrowest type the builder's type names is proven, which a diagnostic explains, or `nil` when every
+			/// type it names is `public`.
+			let accessCause: TypeAccessProof.Cause?
+			/// The declarations on the site's path a fill cannot read from the scope struct.
+			var uncarriedDeclarations: [UncarriedDeclaration]
+			/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
+			/// again, which a fill cannot read, the first of each label.
+			let cycleReentryDeclarations: [CycleReentryDeclaration]
+			/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
+			/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
+			/// order of their declarations. A copy a seam passes up keeps them all.
+			var reenteringCallDeclarations = [ReenteringCallDeclaration]()
+			/// The fields of places whose fills build the filled seam again that a fill of this place cannot read in their place
+			/// (see `ReenteringPlaceField`), every place's, in the order of their declarations. A copy a seam passes up keeps them all.
+			var reenteringPlaceFields = [ReenteringPlaceField]()
+			/// The declarations on the site's path that a fill's field of their label hides (see `DeclarationHiddenByField`), each
+			/// label once, the declaration the field hides. A copy a seam passes up keeps them.
+			var declarationsHiddenByFields = [DeclarationHiddenByField]()
+			/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
+			/// seam's own tree.
+			let innerSeamType: TypeDescription?
+			/// When this seam passes the hole up, the properties from its root to the call of the seam whose tree holds the
+			/// site, through the calls of every seam between, outermost first; empty for a site of this seam's own tree.
+			var passedUpRoute: [DeclaredProperty]
+			/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` function, which
+			/// captures it.
+			var isSendable: Bool
+		}
+
+		/// The immutable holder of a hole's fields, which every copy of the hole shares until one of them sets a field.
+		private final class Storage: Sendable {
+			init(_ fields: Fields) {
+				self.fields = fields
+			}
+
+			let fields: Fields
+		}
+
+		private var storage: Storage
+
+		public init(from decoder: any Decoder) throws {
+			storage = try Storage(Fields(from: decoder))
+		}
+
+		public func encode(to encoder: any Encoder) throws {
+			try storage.fields.encode(to: encoder)
 		}
 
 		/// The type whose `@Instantiated` property the site builds.
-		public let ownerType: TypeDescription
+		public var ownerType: TypeDescription {
+			storage.fields.ownerType
+		}
+
 		/// The module of the seam whose tree holds the site, when it also declares the owner and no seam passes the site up,
 		/// which a spelling of the property's type or of the fulfiller's `@Forwarded` property may qualify a type with, since
 		/// the fulfiller is in another module. Empty otherwise: generated code spells the property's type in the module that
 		/// generates the fill, where a bare name may mean a type of that module, which its `.safedi` records only if a
 		/// declaration of that module mentions it.
-		public let declaringModuleNames: [String]
+		public var declaringModuleNames: [String] {
+			storage.fields.declaringModuleNames
+		}
+
 		/// The property the site builds, as its owner declares it: the builder returns its type without its wrapper
 		/// (`builtType`).
-		public let property: Property
+		public var property: Property {
+			storage.fields.property
+		}
+
 		/// The type a declaration must fulfill to fill the builder: the property's instantiated type, or the type an
 		/// erased property names with `fulfilledByType:`.
-		public let instantiatedType: TypeDescription
+		public var instantiatedType: TypeDescription {
+			storage.fields.instantiatedType
+		}
+
 		/// Where the owner declares the property.
-		public let declarationLocation: Dependency.DeclarationLocation?
+		public var declarationLocation: Dependency.DeclarationLocation? {
+			storage.fields.declarationLocation
+		}
+
 		/// Whether the property is `erasedToConcreteExistential`, which a fill wraps the fulfilling type in.
-		public let erasedToConcreteExistential: Bool
+		public var erasedToConcreteExistential: Bool {
+			storage.fields.erasedToConcreteExistential
+		}
+
 		/// The properties from the root of the tree that holds the site down to the owner's property, outermost first:
 		/// the site's identity in that tree, which generated names are made from. Inside a fill of a passed-up hole it holds
 		/// a stand-in for the seam that holds that hole (`pathBeforePropertyInItsFill`), no declaration, so a diagnostic
 		/// prints `declaredSitePath` instead.
-		public let sitePath: [Property]
+		public var sitePath: [Property] {
+			storage.fields.sitePath
+		}
+
 		/// The properties the code declares from the root of the tree that holds the site down to the owner's property,
 		/// outermost first, inside a fill of a passed-up hole through the calls that passed it up.
-		public let declaredSitePath: [DeclaredProperty]
+		public var declaredSitePath: [DeclaredProperty] {
+			storage.fields.declaredSitePath
+		}
+
 		/// The stack a fill builds the property's tree with: the properties from the root of the seam whose tree holds
 		/// the site to the owner's property, innermost first, each lazily instantiated one preceded by its instance, as
 		/// `Scope.createScopeGenerator` stacks them.
-		public let fillPropertyStack: [Property]
+		public var fillPropertyStack: [Property] {
+			storage.fields.fillPropertyStack
+		}
+
 		/// The concrete type each entry of `fillPropertyStack` is built for, beside it: a fill's scope closes a cycle only where it
 		/// repeats an entry of the same property built for the same concrete type, as inline's does.
-		public let fillConcreteTypeStack: [TypeDescription]
+		public var fillConcreteTypeStack: [TypeDescription] {
+			storage.fields.fillConcreteTypeStack
+		}
+
 		/// The label the generated initializer takes the place's builder under: for a place in a seam's plain scope enum, that
 		/// enum's builder's label.
-		public internal(set) var builderLabel: String
+		public internal(set) var builderLabel: String {
+			get { storage.fields.builderLabel }
+			set {
+				var fields = storage.fields
+				fields.builderLabel = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The label each narrower tier takes the place's builder under, where it differs from `builderLabel`
 		/// (`Builder.narrowerTierLabels`).
-		public internal(set) var narrowerTierBuilderLabels = [AccessLevel: String]()
+		public internal(set) var narrowerTierBuilderLabels: [AccessLevel: String] {
+			get { storage.fields.narrowerTierBuilderLabels }
+			set {
+				var fields = storage.fields
+				fields.narrowerTierBuilderLabels = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The name the generated initializer binds the builder to.
-		public internal(set) var internalName: String
+		public internal(set) var internalName: String {
+			get { storage.fields.internalName }
+			set {
+				var fields = storage.fields
+				fields.internalName = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
-		public let scopeSeamType: TypeDescription
+		public var scopeSeamType: TypeDescription {
+			storage.fields.scopeSeamType
+		}
+
 		/// The module that declares `scopeSeamType`, which a module the hole reaches through a view knows only from here.
-		public let scopeSeamModule: ModuleIdentity
+		public var scopeSeamModule: ModuleIdentity {
+			storage.fields.scopeSeamModule
+		}
+
 		/// The types from the seam that takes this builder, itself excluded, to the hole's owner, outermost first: for a
 		/// passed-up hole, every seam it passes through on the way to `scopeSeamType`. Empty when that seam owns the hole.
 		/// Each type's module is a fact of the hole, so no order among modules decides which one a diagnostic names.
-		public let typesToOwner: [PathType]
+		public var typesToOwner: [PathType] {
+			storage.fields.typesToOwner
+		}
+
 		/// The name of the enum whose case the place is (`enumPlace`), or, before the builders are shaped, a name made from the
 		/// place's owner and property.
-		public internal(set) var scopeTypeName: String
+		public internal(set) var scopeTypeName: String {
+			get { storage.fields.scopeTypeName }
+			set {
+				var fields = storage.fields
+				fields.scopeTypeName = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// Where a scope enum of the seam or the public mock carries this place, once its builders are shaped.
-		public internal(set) var enumPlace: EnumPlace?
+		public internal(set) var enumPlace: EnumPlace? {
+			get { storage.fields.enumPlace }
+			set {
+				var fields = storage.fields
+				fields.enumPlace = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The name of the function that builds the wrapper this place is held in, or `nil` for one held by value and for a
 		/// public mock's, whose function the generator names (see `SeamBuilderNames`).
-		public internal(set) var wrapperFunctionName: String?
+		public internal(set) var wrapperFunctionName: String? {
+			get { storage.fields.wrapperFunctionName }
+			set {
+				var fields = storage.fields
+				fields.wrapperFunctionName = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The values a fill of the place can read from what its builder is handed: the nearest declaration of each label on
 		/// the site's path that is bound before the site, inside the innermost `@Sendable` function that builds the site where
 		/// one does. The seam's parameters are no field of a place built in a `@Sendable` function: a fill reads them from the
 		/// caller's own scope.
-		public let fields: [Field]
+		public var fields: [Field] {
+			storage.fields.fields
+		}
+
 		/// The access each tier that takes the builder must have no more than: the builder's type is as visible as the
 		/// narrowest type it names – the scope struct at the access of the seam that declares it, and the property's type
 		/// as the declarations the signature is computed from prove it (`TypeAccessProof`) – capped at the seam's type.
-		public let tierAccess: AccessLevel
+		public var tierAccess: AccessLevel {
+			storage.fields.tierAccess
+		}
+
 		/// How the narrowest type the builder's type names is proven, which a diagnostic explains, or `nil` when every
 		/// type it names is `public`.
-		public let accessCause: TypeAccessProof.Cause?
+		public var accessCause: TypeAccessProof.Cause? {
+			storage.fields.accessCause
+		}
+
 		/// The declarations on the site's path a fill cannot read from the scope struct.
-		public internal(set) var uncarriedDeclarations: [UncarriedDeclaration]
+		public internal(set) var uncarriedDeclarations: [UncarriedDeclaration] {
+			get { storage.fields.uncarriedDeclarations }
+			set {
+				var fields = storage.fields
+				fields.uncarriedDeclarations = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 		/// again, which a fill cannot read, the first of each label.
-		public let cycleReentryDeclarations: [CycleReentryDeclaration]
+		public var cycleReentryDeclarations: [CycleReentryDeclaration] {
+			storage.fields.cycleReentryDeclarations
+		}
+
 		/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
 		/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
 		/// order of their declarations. A copy a seam passes up keeps them all.
-		public internal(set) var reenteringCallDeclarations = [ReenteringCallDeclaration]()
+		public internal(set) var reenteringCallDeclarations: [ReenteringCallDeclaration] {
+			get { storage.fields.reenteringCallDeclarations }
+			set {
+				var fields = storage.fields
+				fields.reenteringCallDeclarations = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The fields of places whose fills build the filled seam again that a fill of this place cannot read in their place
 		/// (see `ReenteringPlaceField`), every place's, in the order of their declarations. A copy a seam passes up keeps them all.
-		public internal(set) var reenteringPlaceFields = [ReenteringPlaceField]()
+		public internal(set) var reenteringPlaceFields: [ReenteringPlaceField] {
+			get { storage.fields.reenteringPlaceFields }
+			set {
+				var fields = storage.fields
+				fields.reenteringPlaceFields = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The declarations on the site's path that a fill's field of their label hides (see `DeclarationHiddenByField`), each
 		/// label once, the declaration the field hides. A copy a seam passes up keeps them.
-		public internal(set) var declarationsHiddenByFields = [DeclarationHiddenByField]()
+		public internal(set) var declarationsHiddenByFields: [DeclarationHiddenByField] {
+			get { storage.fields.declarationsHiddenByFields }
+			set {
+				var fields = storage.fields
+				fields.declarationsHiddenByFields = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
-		public let innerSeamType: TypeDescription?
+		public var innerSeamType: TypeDescription? {
+			storage.fields.innerSeamType
+		}
+
 		/// When this seam passes the hole up, the properties from its root to the call of the seam whose tree holds the
 		/// site, through the calls of every seam between, outermost first; empty for a site of this seam's own tree.
-		public internal(set) var passedUpRoute: [DeclaredProperty]
+		public internal(set) var passedUpRoute: [DeclaredProperty] {
+			get { storage.fields.passedUpRoute }
+			set {
+				var fields = storage.fields
+				fields.passedUpRoute = newValue
+				storage = Storage(fields)
+			}
+		}
+
 		/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` function, which
 		/// captures it.
-		public internal(set) var isSendable: Bool
+		public internal(set) var isSendable: Bool {
+			get { storage.fields.isSendable }
+			set {
+				var fields = storage.fields
+				fields.isSendable = newValue
+				storage = Storage(fields)
+			}
+		}
 
 		/// Where a scope enum carries a place.
 		public struct EnumPlace: Codable, Sendable {
@@ -1817,6 +2143,18 @@ extension KeyedEncodingContainer {
 	}
 }
 
+/// The signatures a module info file carries of the seams of one module, read only when a run reaches one of those seams:
+/// a module's file carries those of every seam it declares, and a run reaches the seams of few of the modules it reads.
+public struct StoredSeamSignatures: Sendable {
+	/// - Parameter read: Returns the signatures, as `SafeDITool` decodes them from the module info file.
+	public init(read: @escaping @Sendable () throws -> [StoredSeamSignature]) {
+		self.read = read
+	}
+
+	/// The signatures, each of one seam, decoded each time this is called.
+	public let read: @Sendable () throws -> [StoredSeamSignature]
+}
+
 public struct StoredSeamSignature: Codable, Sendable {
 	public init(seamType: TypeDescription, signature: SeamSignature?) {
 		self.seamType = seamType
@@ -2034,12 +2372,12 @@ struct CalledBuilders: Sendable {
 public struct SeamResolution: Sendable {
 	/// A seam declared in another module, which that module's run of `generate` generated the initializer of.
 	public struct ForeignSeam: Sendable {
-		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil, storedSignature: StoredSeamSignature? = nil) {
+		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil, storedSignatures: StoredSeamSignatures? = nil) {
 			self.declaringModule = declaringModule
 			self.visibleDeclarations = visibleDeclarations
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
-			self.storedSignature = storedSignature
+			self.storedSignatures = storedSignatures
 		}
 
 		/// The module that declares the seam, whose name is known: a seam whose module is unknown is built inline.
@@ -2056,15 +2394,16 @@ public struct SeamResolution: Sendable {
 		/// conditions are spelled the same. `nil` when this run read the module's module info, which holds its
 		/// declarations as the module read them.
 		public let declaringModuleMockCondition: MockCondition?
-		/// The seam's signature as its module's run computed it, which the module info this run read it from carries;
-		/// `nil` when this run read the module's files, under the SwiftPM plugin's target graph.
-		public let storedSignature: StoredSeamSignature?
+		/// The signatures of the seams of the seam's module as that module's run computed them, among which the module
+		/// info this run read them from carries this seam's; `nil` when it carries none of this seam, and when this run
+		/// read the module's files, under the SwiftPM plugin's target graph. Every seam of one module holds the same.
+		public let storedSignatures: StoredSeamSignatures?
 	}
 
 	/// Whether a foreign seam carries the signature its module's run stored.
 	public var readsStoredSignature: Bool {
-		foreignSeams.values.contains { $0.storedSignature != nil }
-			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignature != nil } }
+		foreignSeams.values.contains { $0.storedSignatures != nil }
+			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignatures != nil } }
 	}
 
 	/// The declarations a module sees.
@@ -2263,5 +2602,14 @@ public enum SeamCallComment: Hashable, Sendable {
 	/// `text(for:)` after a space, to end the line with, or an empty string for `noComment`.
 	func lineEnd(for type: TypeDescription) -> String {
 		text(for: type).map { " \($0)" } ?? ""
+	}
+}
+
+// MARK: - CustomReflectable
+
+/// Reflects each stored field of a hole under its own name, as when each was stored in the struct rather than in `Storage`.
+extension SeamSignature.Hole: CustomReflectable {
+	public var customMirror: Mirror {
+		Mirror(self, children: Mirror(reflecting: storage.fields).children, displayStyle: .struct)
 	}
 }

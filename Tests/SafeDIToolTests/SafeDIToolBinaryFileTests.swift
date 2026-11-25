@@ -217,6 +217,146 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesEachStringOnce_whenManyStringsRepeatInTheirOwnStorageAndInAnother() throws {
+		// Short strings, held as their bytes, and long ones, held in storage: each is written a second time from the same
+		// storage and a third time from a copy in storage of its own.
+		let strings = (0..<200).flatMap { ["s\($0)", "a string longer than fifteen bytes, number \($0)"] }
+		let copies = strings.map { String(decoding: Array($0.utf8), as: UTF8.self) }
+		var writer = BinaryWriter()
+		writer.write(strings + strings + copies)
+		let encoded = writer.encoded
+
+		let readStrings: [String] = try read(encoded)
+
+		var expected = Self.unsigned(UInt64(strings.count))
+		for string in strings {
+			expected += Self.unsigned(UInt64(string.utf8.count)) + Array(string.utf8)
+		}
+		expected += Self.unsigned(UInt64(strings.count * 3))
+		for _ in 0..<3 {
+			expected += strings.indices.flatMap { Self.unsigned(UInt64($0)) }
+		}
+		#expect(encoded == expected)
+		#expect(readStrings == strings + strings + copies)
+	}
+
+	@Test
+	func binaryWriter_writesEachTypeDescriptionOnce_whenManyTypesRepeatAsTheSameValuesAndAsEqualOnes() throws {
+		// Each type is written a second time as the same value and a third time as an equal value made apart from it.
+		let types = (0..<200).map { TypeDescription.simple(name: "Type\($0)") }
+		let equalTypes = (0..<200).map { TypeDescription.simple(name: "Type\($0)") }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(types + types + equalTypes))
+		let encoded = writer.encoded
+
+		let readTypes: BinarySharingSignatureValues<[TypeDescription]> = try read(encoded)
+
+		var expected = Self.unsigned(UInt64(types.count))
+		for index in types.indices {
+			expected += Self.unsigned(UInt64("Type\(index)".utf8.count)) + Array("Type\(index)".utf8)
+		}
+		expected += Self.unsigned(UInt64(types.count * 3))
+		// In full: no reference, the tag of `simple`, the name, no generics.
+		expected += types.indices.flatMap { [0, TypeDescription.Tag.simple.rawValue] + Self.unsigned(UInt64($0)) + [0] }
+		for _ in 0..<2 {
+			expected += types.indices.flatMap { Self.unsigned(UInt64($0 + 1)) }
+		}
+		#expect(encoded == expected)
+		#expect(readTypes.value.map(\.asSource) == (types + types + equalTypes).map(\.asSource))
+	}
+
+	@Test
+	func binaryWriter_writesValueOnce_whenValueTooLargeToFindByItsRepresentationRepeats() {
+		// Four words, more than the writer finds a value by: each write is compared by its bytes.
+		let value: (UInt64, UInt64, UInt64, UInt64) = (1, 2, 3, 4)
+		var writer = BinaryWriter()
+		for _ in 0..<2 {
+			writer.writeSharedByBytes(value) { $0.writeUnsigned(7) }
+		}
+
+		// The value in full, then a reference to it.
+		#expect(writer.bytes == [0, 7, 1])
+	}
+
+	@Test
+	func binaryReader_readsEachProperty_whenPropertiesRepeatInsideSignatureValues() throws {
+		// A property is a label and a type: the first names its type in full, the second repeats both, and the others
+		// share only one of the two with it.
+		let properties = [
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+			Property(label: "other", typeDescription: .simple(name: "Service")),
+			Property(label: "service", typeDescription: .any(.simple(name: "Service"))),
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+			Property(label: "service", typeDescription: .any(.simple(name: "Service"))),
+		]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(properties))
+
+		let readProperties: BinarySharingSignatureValues<[Property]> = try read(writer.encoded)
+
+		#expect(readProperties.value.map(\.asSource) == ["service: Service", "service: Service", "other: Service", "service: any Service", "service: Service", "service: any Service"])
+		#expect(readProperties.value == properties)
+		#expect(readProperties.value.map(\.hashValue) == properties.map(\.hashValue))
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenListOfFewerThanEightBytesRepeatsInsideSignatureValues() throws {
+		// `[1, 2]` is three bytes: its count and its elements.
+		let lists: [[UInt64]] = [[1, 2], [3], [1, 2], [1, 2, 3], [], [1, 2], []]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == [0, 1, 0, 3, 4, 0, 4])
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenListsOfEightBytesOrMoreBeginWithTheSameBytes() throws {
+		// The second list has the first's length and first eight bytes, and the third only its first eight bytes.
+		let first: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+		let second: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 8, 10]
+		let third: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 300, 9]
+		let lists = [first, second, third, second, first, third, first]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == [0, 1, 2, 1, 0, 2, 0])
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenMoreListsBeginWithTheSameBytesThanAReaderTriesLengthsOf() throws {
+		// Twenty lists of twenty elements that begin with the same seven: list `index` writes `index` of the others in
+		// two bytes each, so each list has a length of its own. Then each list again, in reverse.
+		let distinctLists: [[UInt64]] = (0..<20).map { index in
+			Array(repeating: 1, count: 20 - index) + Array(repeating: 200, count: index)
+		}
+		let lists = distinctLists + distinctLists.reversed()
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == Array(0..<20) + Array((0..<20).reversed()))
+	}
+
+	@Test
+	func binaryReader_readsEachListByItself_whenListsRepeatOutsideSignatureValues() throws {
+		let lists: [[UInt64]] = [[1, 2], [1, 2], [1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9]]
+
+		let readLists: [[UInt64]] = try read(Self.encoded(lists))
+
+		#expect(readLists == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists) == [0, 1, 2, 3])
+	}
+
+	@Test
 	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
 		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
 		// list does. The second list refers to the first.
@@ -477,25 +617,26 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			)
 		}
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
-		// still made those copies. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
+		// own. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
-			0x04, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x08, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E,
-			0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44, 0x49, 0x5F, 0x64, 0x69, 0x73, 0x74,
-			0x69, 0x6E, 0x63, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x02, 0x00, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-			0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0x01,
-			0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01,
-			0x02, 0x00, 0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x01, 0x02, 0x01, 0x01, 0x01,
-			0x01, 0x01, 0x01, 0x02, 0x00, 0x02, 0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-			0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x01, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x00, 0x01, 0x02,
-			0x02, 0x02, 0x02, 0x01, 0x01, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00,
-			0x02, 0x01, 0x02, 0x02, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x01, 0x03, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00, 0x01, 0x02, 0x02, 0x02, 0x02, 0x01,
-			0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x02, 0x02,
-			0x01, 0x02, 0x01, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-			0x00,
+			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x01, 0x03, 0x00, 0x08,
+			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
+			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
+			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00,
+			0x01, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x02,
+			0x01, 0x02, 0x01, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x02,
+			0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x01, 0x00, 0x02,
+			0x02, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02,
+			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02,
+			0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00,
+			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
@@ -771,10 +912,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFormatVersionDiffers() async throws {
 		try await assertDumpThrows(
-			"The scan cache is in format version 3, but this SafeDITool reads format version 2.",
+			"The scan cache is in format version 4, but this SafeDITool reads format version 3.",
 			whenCacheIs: { cache in
 				var cache = cache
-				cache[cache.startIndex + 4] = 3
+				cache[cache.startIndex + 4] = 4
 				return cache
 			},
 		)
@@ -1115,8 +1256,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
 		let written = try #require(seamModule.moduleInfoFile)
-		#expect(dumped.seamSignatures.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
-		#expect(reflectedDescription(of: dumped.seamSignatures) == reflectedDescription(of: written.seamSignatures))
+		#expect(try dumped.seamSignatures.decoded.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
+		#expect(try reflectedDescription(of: dumped.seamSignatures.decoded) == reflectedDescription(of: written.seamSignatures.decoded))
 	}
 
 	@Test
@@ -1236,6 +1377,114 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenDependentModuleInfoFileIsInAnEarlierFormatVersion() async throws {
+		// A project upgrades SafeDI in every module at once, so a file an earlier SafeDITool wrote is reported, with the
+		// remedy that regenerates it, and never read as this version's layout.
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamServiceSource],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
+		// The format version is the two bytes after the magic, least significant first.
+		moduleInfo[moduleInfo.startIndex + 4] = 2
+		try moduleInfo.write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
+
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The module info file is in format version 2, but this SafeDITool reads format version 3. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.downstreamRootSource],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameCodeAsFromIntactFile_whenSeamSignatureEncodingOfReachedModuleIsCutShort() async throws {
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamSeamSource],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		let upstreamModuleInfoURL = try URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath)
+		let intact = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamSeamCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Example"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: upstreamModuleInfoURL))
+		// A file whose checksum holds over a signature encoding cut short, which only a SafeDITool that wrote a malformed
+		// encoding could make: the file reads, the encoding throws when the downstream tree reaches the seam, and the run
+		// computes the seam's signature from its module's declarations, as any run that throws after reading one does.
+		try ModuleInfoFile(
+			moduleName: file.moduleName,
+			ownEntryChecksum: file.ownEntryChecksum,
+			packageName: file.packageName,
+			dependencyModuleNames: file.dependencyModuleNames,
+			imports: file.imports,
+			mockImports: file.mockImports,
+			instantiables: file.instantiables,
+			configurations: file.configurations,
+			filesWithUnexpectedNodes: file.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: file.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: file.instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: file.plainTypeDeclarations,
+			seamSignatures: ModuleSeamSignatures(seamTypes: file.seamSignatures.seamTypes, encoding: file.seamSignatures.encoding(writingPositionsAsAbsent: true).dropLast()),
+			view: file.view,
+		).moduleInfoData.write(to: upstreamModuleInfoURL)
+
+		let cutShort = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamSeamCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Example"],
+		)
+
+		#expect(cutShort.combinedOutput == intact.combinedOutput)
+		#expect(cutShort.combinedOutput == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public init() {
+		        let upstreamSeam = UpstreamSeam()
+		        self.init(upstreamSeam: upstreamSeam)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	func moduleSeamSignatures_throwsRatherThanTraps_whenEncodingIsCutShortAtAnyByte() throws {
+		let encoding = try ModuleSeamSignatures([StoredSeamSignature.sample(isDistinct: true), StoredSeamSignature.sample(isDistinct: false)]).encoding(writingPositionsAsAbsent: true)
+
+		for length in 0..<encoding.count {
+			let cutShort = ModuleSeamSignatures(seamTypes: [], encoding: Array(encoding.prefix(length)))
+			#expect(throws: BinaryDecodingError.self, "cut short at \(length) of \(encoding.count) bytes") { try cutShort.decoded }
+		}
+		#expect(try ModuleSeamSignatures(seamTypes: [], encoding: encoding).decoded.count == 2)
+	}
+
+	@Test
+	func binaryReader_throws_whenEncodingCountsMoreBytesThanRemain() throws {
+		var writer = BinaryWriter()
+		writer.write(BinaryEncoding(bytes: [1, 2, 3]))
+		let cutShort = Array(writer.encoded.dropLast())
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 3, offset: 1)) {
+			let _: BinaryEncoding = try read(cutShort)
+		}
+	}
+
 	// MARK: Private
 
 	/// `café` with a precomposed `é` (U+00E9), the spelling Unicode Normalization Form C produces.
@@ -1261,6 +1510,24 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@Instantiable
 	public struct UpstreamService: Instantiable {
 	    public init() {}
+	}
+	"""
+
+	private static let upstreamSeamSource = """
+	@Instantiable(generateDependencyTree: true)
+	public struct UpstreamSeam: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	private static let downstreamSeamCallerSource = """
+	@Instantiable(isRoot: true)
+	public struct Root: Instantiable {
+	    public init(upstreamSeam: UpstreamSeam) {
+	        self.upstreamSeam = upstreamSeam
+	    }
+
+	    @Instantiated let upstreamSeam: UpstreamSeam
 	}
 	"""
 
@@ -1365,6 +1632,22 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		case let .enumeration(cases):
 			cases.count
 		}
+	}
+
+	/// For each list, the index of the first list that holds its elements in the same storage, or its own index when it
+	/// holds none.
+	private static func indicesOfFirstListInSameStorage(_ lists: [[UInt64]]) -> [Int] {
+		let storages = lists.map { list in list.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) } }
+		return lists.indices.map { index in
+			storages[index] == nil ? lists.firstIndex(of: lists[index]) ?? index : storages.firstIndex(of: storages[index]) ?? index
+		}
+	}
+
+	/// `value` as a variable-length integer.
+	private static func unsigned(_ value: UInt64) -> [UInt8] {
+		var writer = BinaryWriter()
+		writer.writeUnsigned(value)
+		return writer.bytes
 	}
 
 	/// `value` with a string table holding the strings it writes.
@@ -1969,6 +2252,14 @@ extension TypeDescription.VoidSpelling: BinarySample {}
 extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
 extension StoredSeamSignature: BinarySample {}
+extension ModuleSeamSignatures: BinarySample {}
+
+extension BinaryEncoding: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinaryEncoding {
+		BinaryEncoding(bytes: isDistinct ? [1] : [])
+	}
+}
+
 extension SeamSignature: BinarySample {}
 extension SeamSignature.Receiver: BinarySample {}
 extension SeamSignature.NestedSeamCall: BinarySample {}

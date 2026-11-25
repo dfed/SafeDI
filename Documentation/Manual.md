@@ -311,7 +311,7 @@ extension Root {
 }
 ```
 
-Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`:
+Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`, and do the same for any other global actor, spelled as you spell it:
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor", generateMock: true)
@@ -319,6 +319,8 @@ public final class MyPresenter: Instantiable {
     @MainActor public init() { … }
 }
 ```
+
+A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation. It leaves out `@_spi`, `@backDeployed` and `@objc`, which that function cannot take. An attached macro there expands on that function too; if the macro cannot, give the type a hand-written `mock()` without it, which the public mock then builds the type with.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
@@ -861,6 +863,7 @@ extension Service {
             self.profile = profile
         }
 
+        @_alwaysEmitIntoClient
         public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
             self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
         }
@@ -874,6 +877,7 @@ extension Service {
             self.userService = userService
         }
 
+        @_alwaysEmitIntoClient
         public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
             self.init(userService: { __safeDI_builder() })
         }
@@ -1035,7 +1039,7 @@ A labeled default-valued `@autoclosure` parameter, such as `retries: @autoclosur
 
 Declare a default-valued parameter whose type is a typealias of a function type `@escaping`, as in `onFinish: @escaping Handler = {}`. Where a type beneath the mocked type declares one, its `SafeDIMockConfiguration` stores the value, and SafeDI cannot see that the typealias names a function type, so without `@escaping` the mock does not compile.
 
-Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call.
+Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call. The same holds for a type the mock builds for an argument of an actor’s initializer, down to the first `Instantiator` or `LazilyInstantiated` on the way, in an internal or a public mock: Swift needs that argument to share no state with the mock’s overrides, so the type’s override closures and default-valued parameters are `@Sendable` too, and an override of the actor takes each argument `sending`, which an override written as `{ worker in Store(worker: worker) }` already does.
 
 #### Dependency kinds in the generated mock
 
@@ -1308,8 +1312,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 
 - A non-optional default-valued parameter is `T? = nil`, where `nil` means the declaration’s default. A magic literal such as `#fileID` keeps its default.
 - An `@autoclosure` one, `retries: @autoclosure () -> Int = 3`, becomes `retries: (() -> Int)? = nil`: pass a closure, which the mock calls each time it builds the type. A field of a type’s configuration takes it the same way.
-- An optional-typed default-valued parameter, `note: String? = "x"`, is a parameter of `mock()` with the declaration’s default, as in an internal mock: `Banner.mock(note: "Ends Friday")`. A mock bound to a global actor evaluates the default in its isolation.
-- If a type is on the main actor only through a conformance or superclass, such as a SwiftUI `View` or a `UIViewController` subclass, give it `mockAttributes: "@MainActor"`. SafeDI sees only a global actor the declaration or `mockAttributes` spells. Without it, the type’s optional-typed defaults are evaluated outside the actor, and one that reads the actor’s state does not compile; the comment SafeDI writes there says so. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile either, as in an internal mock.
+- An optional-typed default-valued parameter, `note: String? = "x"`, is a parameter of `mock()` with the declaration’s default, as in an internal mock: `Banner.mock(note: "Ends Friday")`. The default is evaluated in `mock()`’s isolation: the type’s, whether its declaration spells it or it comes from a conformance or a superclass, such as a SwiftUI `View`, or the one `mockAttributes` states. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile, as in an internal mock.
 
 **Received dependencies.**
 

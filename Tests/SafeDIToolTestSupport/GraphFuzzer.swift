@@ -2566,6 +2566,8 @@ enum GraphFuzzerGenerator {
 		var enclosingTypeAccess = AccessLevel.public
 		/// Whether the type is a `struct` rather than a `final class`.
 		var isStruct = false
+		/// Whether the type is an `actor` rather than a `final class`.
+		var isActor = false
 		/// Declarations written before the type's own, in its file.
 		var precedingDeclarations = [String]()
 		/// Modules the type's file imports beyond those of its module's header.
@@ -2853,6 +2855,7 @@ enum GraphFuzzerGenerator {
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
+			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -2934,6 +2937,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingActorArgumentShapes(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
@@ -3381,6 +3386,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
 		/// every shape of that tree.
 		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
+		/// that tree.
+		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
@@ -8074,6 +8082,80 @@ enum GraphFuzzerGenerator {
 
 		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
 
+		// MARK: An actor's argument holding a lazy builder
+
+		/// The base corpus's draw, outside `Sendable` graphs, of a mock tree in which an actor's initializer takes a value
+		/// whose tree holds a lazy builder. `ActorStore`, an actor, instantiates `ActorWorker`, which holds an `Instantiator`
+		/// or `LazilyInstantiated` of `ActorChild`, directly or through `ActorHelper`; `ActorChild` half the time takes a
+		/// default-valued parameter, so its configuration has a field, and a quarter of the time receives `actorToken`,
+		/// which `ActorWorker` instantiates. `ActorStore`'s mock is generated, or `ActorHost`'s, a class that instantiates
+		/// the store and, after it, `ActorOther`, or both. Swift 6 rejects sending the actor a value whose region holds the
+		/// mock's overrides, which a lazy builder reading them joined, so the compile is the oracle. No root reaches the tree.
+		/// `actorArgumentRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingActorArgumentShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, actorArgumentRandom.percentChance(16), sendability != .sendable else { return declarations }
+			var declarations = declarations
+			let wrapper = actorArgumentRandom.percentChance(50) ? "Instantiator" : "LazilyInstantiated"
+			let throughHelper = actorArgumentRandom.percentChance(50)
+			let childTakesDefault = actorArgumentRandom.percentChance(50)
+			let childReceivesToken = actorArgumentRandom.percentChance(25)
+			let mocksStore: Bool
+			let mocksHost: Bool
+			switch actorArgumentRandom.integer(in: 0...2) {
+			case 0:
+				(mocksStore, mocksHost) = (true, false)
+			case 1:
+				(mocksStore, mocksHost) = (false, true)
+			default:
+				(mocksStore, mocksHost) = (true, true)
+			}
+			func declaration(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: [],
+				)
+			}
+			let tokenName = "\(prefix)ActorToken"
+			let childName = "\(prefix)ActorChild"
+			let helperName = "\(prefix)ActorHelper"
+			let workerName = "\(prefix)ActorWorker"
+			let storeName = "\(prefix)ActorStore"
+			let lazyChild = PropertyDeclaration(attribute: "@Instantiated", label: "actorChild", type: "\(wrapper)<\(childName)>")
+			var child = declaration(childName, childReceivesToken ? [PropertyDeclaration(attribute: "@Received", label: "actorToken", type: tokenName)] : [])
+			if childTakesDefault {
+				child.defaultValuedParameters = [ParameterDeclaration(name: "name", type: "String", defaultValue: "\"child\"")]
+			}
+			declarations.append(child)
+			var workerProperties = [PropertyDeclaration]()
+			if childReceivesToken {
+				declarations.append(declaration(tokenName, []))
+				workerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorToken", type: tokenName))
+			}
+			if throughHelper {
+				declarations.append(declaration(helperName, [lazyChild]))
+				workerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorHelper", type: helperName))
+			} else {
+				workerProperties.append(lazyChild)
+			}
+			declarations.append(declaration(workerName, workerProperties))
+			var store = declaration(storeName, generatesMock: mocksStore, [PropertyDeclaration(attribute: "@Instantiated", label: "actorWorker", type: workerName)])
+			store.isActor = true
+			declarations.append(store)
+			if mocksHost {
+				declarations.append(declaration("\(prefix)ActorOther", []))
+				declarations.append(declaration("\(prefix)ActorHost", generatesMock: true, [
+					PropertyDeclaration(attribute: "@Instantiated", label: "actorStore", type: storeName),
+					PropertyDeclaration(attribute: "@Instantiated", label: "actorOther", type: "\(prefix)ActorOther"),
+				]))
+			}
+			return declarations
+		}
+
+		private static let actorArgumentRandomSeedMask: UInt64 = 0x6163746F72417267
+
 		// MARK: A type built again through a second lazy cycle
 
 		/// The base corpus's draw, in one graph of twenty-five, of two lazy cycles that share a type, with a label declared
@@ -10138,7 +10220,7 @@ enum GraphFuzzerGenerator {
 				"Instantiable"
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
-			var lines = [instantiableAttribute, "\(declaration.access.modifier)\(declaration.isStruct ? "struct" : "final class") \(declaration.name): \(conformances) {"]
+			var lines = [instantiableAttribute, "\(declaration.access.modifier)\(declaration.isStruct ? "struct" : declaration.isActor ? "actor" : "final class") \(declaration.name): \(conformances) {"]
 			// A function-typed parameter is stored, so it escapes.
 			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
 			// The initializer is no wider, once its type caps it, than the narrowest type it names, so that the fixture
@@ -12990,6 +13072,23 @@ enum GraphFuzzerSourceLine: Equatable {
 		return Substring(line)
 	}
 
+	/// The names of the `actor` types `@Instantiable` attributes decorate in `contents`, which only `addingActorArgumentShapes`
+	/// draws.
+	static func actorTypeNames(in contents: [String]) -> Set<String> {
+		var names = Set<String>()
+		for content in contents {
+			var previousLineWasInstantiableAttribute = false
+			for rawLine in content.split(separator: "\n", omittingEmptySubsequences: false) {
+				let line = rawLine.trimmingCharacters(in: .whitespaces)
+				if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("actor ") {
+					names.insert(String(declaration.dropFirst("actor ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }))
+				}
+				previousLineWasInstantiableAttribute = line.hasPrefix("@Instantiable")
+			}
+		}
+		return names
+	}
+
 	static func lines(of content: String) -> [GraphFuzzerSourceLine] {
 		var lines = [GraphFuzzerSourceLine]()
 		var previousLineWasInstantiableAttribute = false
@@ -12998,8 +13097,9 @@ enum GraphFuzzerSourceLine: Equatable {
 			let parsedLine: GraphFuzzerSourceLine
 			if line.hasPrefix("@Instantiable") {
 				parsedLine = .instantiableAttribute(arguments: String(line.dropFirst("@Instantiable".count)))
-			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("final class ") {
-				let name = declaration.dropFirst("final class ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), let keyword = ["final class ", "actor "].first(where: { declaration.hasPrefix($0) }) {
+				// Only `addingActorArgumentShapes` draws an actor, so reading one changes no other graph's files or model.
+				let name = declaration.dropFirst(keyword.count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("extension ") {
 				// The extended type's last component: a nested extended type's file is named after it.

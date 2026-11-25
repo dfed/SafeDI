@@ -67,6 +67,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -80,6 +81,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		            self.k = k
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(k: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -134,7 +136,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -152,7 +154,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.k = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(k: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }

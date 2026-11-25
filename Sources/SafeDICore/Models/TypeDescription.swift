@@ -229,6 +229,22 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The spellings `<` compares, spelled once, so that a sort of many types by this key orders them as `<` does without
+	/// spelling both types again at every comparison.
+	struct SpellingOrderKey: Comparable {
+		init(_ type: TypeDescription) {
+			spellingWithoutAny = type.withoutAny.asSource
+			spelling = type.asSource
+		}
+
+		static func < (lhs: SpellingOrderKey, rhs: SpellingOrderKey) -> Bool {
+			(lhs.spellingWithoutAny, lhs.spelling) < (rhs.spellingWithoutAny, rhs.spelling)
+		}
+
+		private let spellingWithoutAny: String
+		private let spelling: String
+	}
+
 	/// This type as a seam names a hole type: without `any` at every depth, each composition's members in the order of their
 	/// identifiers, so spellings of one type name one hole type.
 	var spelledCanonically: TypeDescription {
@@ -1819,5 +1835,14 @@ extension Array {
 			}
 		}
 		return replacedElements
+	}
+}
+
+extension Sequence<TypeDescription> {
+	/// These types in `<`'s order, as `sorted()` gives them, each spelled once rather than at every comparison.
+	func sortedBySpelling() -> [TypeDescription] {
+		map { (key: TypeDescription.SpellingOrderKey($0), type: $0) }
+			.sorted { $0.key < $1.key }
+			.map(\.type)
 	}
 }

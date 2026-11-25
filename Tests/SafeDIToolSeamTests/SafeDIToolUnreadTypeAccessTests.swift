@@ -634,6 +634,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
@@ -694,6 +695,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.renderer = renderer
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(renderer: { _ in __safeDI_builder() })
 			        }
@@ -2736,7 +2738,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.brush = { _ in __safeDI_builder() }
+		                    self.init(brush: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -2750,7 +2752,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.badgeBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(badgeBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2945,10 +2947,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    // SafeDI counts `Palette` and `Window` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
+		    @usableFromInline static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
 
 		    public static func mock(
 		        tint: Palette? = Screen.__safeDI_publicMockDefault_tint(),
@@ -6004,6 +6003,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }

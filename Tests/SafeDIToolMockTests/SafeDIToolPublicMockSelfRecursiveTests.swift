@@ -77,8 +77,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
-			                self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(service: { _ in __safeDI_builder() }, next: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -272,7 +271,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.featureBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(featureBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -288,8 +287,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
-			                self.step = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(service: { _ in __safeDI_builder() }, step: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -521,7 +519,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
+			                self.init(service: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -538,7 +536,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(next: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -739,8 +737,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
-			                self.next = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(service: { _ in __safeDI_builder() }, next: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
