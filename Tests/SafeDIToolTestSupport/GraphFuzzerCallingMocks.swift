@@ -408,6 +408,9 @@ struct GraphFuzzerCallingMockDraw {
 		// Drawn after everything else, and only where a graph joins a filled call, so no other graph changes. A `.public` caller
 		// calls `Dock`'s public mock all the same (`DependencyTreeGenerator.publicMockCalls`).
 		buildsDockInline = joinsFilledCall && random.element(of: [false, true])
+		// Drawn after everything else, and only where a probe hands the caller's own value's mock the filled hole type's
+		// builder, so no other graph changes.
+		buildsDockInlineBesideBuilder = filledHoleBuilderPass?.passesBuilder == true && random.element(of: [false, true])
 	}
 
 	/// For the shape whose called type holds its place lazily, how.
@@ -869,6 +872,14 @@ struct GraphFuzzerCallingMockDraw {
 	/// (`ScopeGenerator.holeBuildersByInlinePlace`). The same probe judges it (`joinedCallProbes`).
 	let buildsDockInline: Bool
 
+	/// For the caller's own value's shape, where a probe hands `mock()` the filled hole type's builder
+	/// (`filledHoleBuilderPass`), whether the caller also instantiates `Dock`, a public mock of the called type's module
+	/// whose initializer is public and whose root holds a place of the hole type in the cell's form, so the calling mock
+	/// builds it inline beside its call of the called type's public mock, and that place, a hole of `Dock`'s module, reads
+	/// the builder `mock()` takes before its fill (`HoleBuilder.inlinePlaceValue`). The probe reads whether both places
+	/// hold what the builder builds (`filledHoleBuilderProbes`).
+	let buildsDockInlineBesideBuilder: Bool
+
 	/// The name and label of the second called type of `joinsFilledCall`.
 	var dockName: String {
 		"\(names.inner)Dock"
@@ -1218,9 +1229,19 @@ struct GraphFuzzerCallingMockDraw {
 				)]
 			}
 		}
+		// Where the caller builds `Dock` inline, its place holds what the builder builds too.
+		let dockPlace = "\(dockName.lowercasedFirst).\(holePlace(protocolName: names.hole, fillName: names.fill).label)"
+		let builtDockPlace = switch cell.place {
+		case .plain:
+			"caller.\(dockPlace)"
+		case .deferred:
+			"caller.\(dockPlace).instantiate(7)"
+		}
+		let holds = buildsDockInlineBesideBuilder ? "\(builtPlace) === stub && \(builtDockPlace) === stub" : "\(builtPlace) === stub"
+		let held = buildsDockInlineBesideBuilder ? "\(caller).\(place) and \(caller).\(dockPlace) hold" : "\(caller).\(place) holds"
 		return [DifferentialValueProbe(
-			name: "\(caller).\(place) holds what the \(label) passed\(pass.passesOverride ? " beside an override" : "") builds",
-			expression: "{ final class Stub: \(names.innerModuleName).\(names.hole) {}; let stub = Stub(); let caller = \(mockCall); return \(builtPlace) === stub }()",
+			name: "\(held) what the \(label) passed\(pass.passesOverride ? " beside an override" : "") builds",
+			expression: "{ final class Stub: \(names.innerModuleName).\(names.hole) {}; let stub = Stub(); let caller = \(mockCall); return \(holds) }()",
 			knownRightExpression: "true",
 		)]
 	}
@@ -1868,6 +1889,7 @@ struct GraphFuzzerCallingMockDraw {
 			}
 			"""
 		}
+		content += dockDeclaration
 		return content
 	}
 
@@ -2208,7 +2230,9 @@ struct GraphFuzzerCallingMockDraw {
 			declarations.append(callerDeclaration(form, properties: [(names.outer.lowercasedFirst, names.outer)]))
 		case .callersOwnValue, .calledTypeReceivesValueOnlyIfAvailableNothingProvides:
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.value.lowercasedFirst, names.value), isPublic: callerIsPublic))
-			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
+			// The caller instantiates `Dock` last, where the graph `buildsDockInlineBesideBuilder`.
+			let dockProperty: [(String, String)] = buildsDockInlineBesideBuilder ? [(dockName.lowercasedFirst, dockName)] : []
+			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)] + dockProperty))
 		case .calledTypeHoldsPlaceLazily:
 			// A fill a `@Sendable` function builds reads nothing.
 			let received = lazyPlace?.fillReadsValue == false ? nil : (label: names.value.lowercasedFirst, type: names.value)
@@ -2549,17 +2573,19 @@ struct GraphFuzzerCallingMockDraw {
 	}
 
 	/// `Dock`, where the graph `joinsFilledCall`: a seam and public mock whose root holds a place of the hole type in the
-	/// cell's form, or, where the graph `buildsDockInline`, a public mock whose initializer is public. Empty elsewhere.
+	/// cell's form, or, where the graph `buildsDockInline` or `buildsDockInlineBesideBuilder`, a public mock whose
+	/// initializer is public. Empty elsewhere.
 	private var dockDeclaration: String {
-		guard joinsFilledCall else { return "" }
+		guard joinsFilledCall || buildsDockInlineBesideBuilder else { return "" }
 		let place = holePlace(protocolName: names.hole, fillName: names.fill)
-		let attribute = buildsDockInline ? "@Instantiable(generateMock: .public)" : "@Instantiable(generateDependencyTree: true, generateMock: .public)"
+		let isBuiltInline = buildsDockInline || buildsDockInlineBesideBuilder
+		let attribute = isBuiltInline ? "@Instantiable(generateMock: .public)" : "@Instantiable(generateDependencyTree: true, generateMock: .public)"
 		return """
 
 
 		\(attribute)
 		public final class \(dockName): Instantiable {
-		    \(buildsDockInline ? "public " : "")init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
+		    \(isBuiltInline ? "public " : "")init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
 		    \(place.attribute) public let \(place.label): \(place.type)
 		}
 		"""

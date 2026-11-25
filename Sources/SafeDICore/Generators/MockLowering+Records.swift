@@ -166,6 +166,7 @@ extension MockLowering.Walk {
 		dependencyArguments: [(label: String, value: String)],
 		usesMockInitializer: Bool,
 	) {
+		guard recordsPlaces else { return }
 		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
 		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
 		// A place of another module's public mock built inline reads the builder `mock()` takes for its hole first

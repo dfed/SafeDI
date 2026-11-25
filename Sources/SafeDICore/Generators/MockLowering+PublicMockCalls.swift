@@ -472,7 +472,9 @@ extension MockLowering.Walk {
 		// The call's place, which the walk records once its lines are written (`recordPublicMockCall`): copied as written, with
 		// the values it reads by name listed. A call that passes anything else keeps the walk's body, since the type key lays
 		// out no place whose reads it cannot list (`TypeKeyLayout.read`).
-		if loopMembership != nil {
+		if !recordsPlaces {
+			// Places are recorded only where the type key lays the mock out.
+		} else if loopMembership != nil {
 			unrecordedReasons[childIndexPath] = "publicMockCall:loop"
 		} else if isPromoted {
 			unrecordedReasons[childIndexPath] = "publicMockCall:promoted"
