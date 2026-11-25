@@ -1261,13 +1261,13 @@ public struct SeamSignature: Sendable {
 			/// `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns can be a plain struct,
 			/// which that function could not capture.
 			public struct Member: Codable, Sendable {
-				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPath: [Property], isCalledInsideFunction: Bool, isLetChild: Bool = false) {
+				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPathLength: Int, isCalledInsideFunction: Bool, isLetChild: Bool = false) {
 					self.isLetChild = isLetChild
 					self.bindingName = bindingName
 					self.valuesType = valuesType
 					self.fields = fields
 					self.levelType = levelType
-					self.bindingPath = bindingPath
+					self.bindingPathLength = bindingPathLength
 					self.isCalledInsideFunction = isCalledInsideFunction
 				}
 
@@ -1275,48 +1275,61 @@ public struct SeamSignature: Sendable {
 				public let valuesType: TypeDescription
 				public let fields: [Field]
 				public let levelType: TypeDescription
-				public let bindingPath: [Property]
+				/// How many properties of the path of the place or call the route leads to, from the seam's root, lead to the
+				/// property the call is made for. A length, not the path: a route holds a step per level, so a path per step
+				/// would grow with the square of the place's depth.
+				public let bindingPathLength: Int
 				public let isCalledInsideFunction: Bool
 				/// Whether the level is a carrier's `let` child (`ScopeEnum.Case.isLetChildOfCarrier`), read, not called.
 				public let isLetChild: Bool
+
+				/// The path, from the seam's root, of the property the call is made for, on the route to the place or call at
+				/// `sitePath`.
+				public func bindingPath(onRouteTo sitePath: [Property]) -> [Property] {
+					Array(sitePath.prefix(bindingPathLength))
+				}
 			}
 
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
 			/// type of its struct, as the seam's extension spells it, and its fields, what the case's type binds before its
 			/// property.
 			public struct Values: Codable, Sendable {
-				public init(bindingName: String, type: TypeDescription, fields: [Field], bindingPath: [Property] = []) {
+				public init(bindingName: String, type: TypeDescription, fields: [Field]) {
 					self.bindingName = bindingName
 					self.type = type
 					self.fields = fields
-					self.bindingPath = bindingPath
 				}
 
 				public let bindingName: String
 				public let type: TypeDescription
 				public let fields: [Field]
-				/// The path, from the seam's root, of the property the seam's tree binds the payload just before building.
-				public let bindingPath: [Property]
 			}
 
 			/// The scope value an inner seam hands a fill its caller declares, as a place inside the fill's tree reads it: the
 			/// call's path, the inner seam's root enum the builder the fill is passed for is handed, and the name of the
 			/// parameter the fill, and each dispatcher that leads to it, take the value under.
 			public struct InnerScope: Codable, Sendable {
-				public init(callPath: [Property], innerKey: ScopeEnum.Key, enumType: TypeDescription, builderLabel: String, name: String) {
-					self.callPath = callPath
+				public init(callPathLength: Int, innerKey: ScopeEnum.Key, enumType: TypeDescription, builderLabel: String, name: String) {
+					self.callPathLength = callPathLength
 					self.innerKey = innerKey
 					self.enumType = enumType
 					self.builderLabel = builderLabel
 					self.name = name
 				}
 
-				public let callPath: [Property]
+				/// How many properties of the path of the place or call the route leads to, from the seam's root, lead to the
+				/// call (`Member.bindingPathLength` says why a length).
+				public let callPathLength: Int
 				public let innerKey: ScopeEnum.Key
 				public let enumType: TypeDescription
 				/// The label of the builder the fill is passed for, which the name is made from.
 				public let builderLabel: String
 				public let name: String
+
+				/// The call's path, from the seam's root, on the route to the place or call at `sitePath`.
+				public func callPath(onRouteTo sitePath: [Property]) -> [Property] {
+					Array(sitePath.prefix(callPathLength))
+				}
 			}
 
 			/// The step with its payload bound under `bindingName`, and its inner scope named `innerScopeName`; with its member
@@ -1324,11 +1337,11 @@ public struct SeamSignature: Sendable {
 			func named(_ bindingName: String?, innerScopeName: String? = nil, memberBindingName: String? = nil) -> RouteStep {
 				RouteStep(
 					caseName: caseName,
-					values: values.map { Values(bindingName: bindingName ?? $0.bindingName, type: $0.type, fields: $0.fields, bindingPath: $0.bindingPath) },
-					innerScope: innerScope.map { InnerScope(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
+					values: values.map { Values(bindingName: bindingName ?? $0.bindingName, type: $0.type, fields: $0.fields) },
+					innerScope: innerScope.map { InnerScope(callPathLength: $0.callPathLength, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
 					leadsIntoFill: leadsIntoFill,
 					member: memberBindingName.flatMap { name in
-						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction, isLetChild: $0.isLetChild) }
+						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPathLength: $0.bindingPathLength, isCalledInsideFunction: $0.isCalledInsideFunction, isLetChild: $0.isLetChild) }
 					},
 				)
 			}
@@ -2403,7 +2416,10 @@ public struct SeamResolution: Sendable {
 	/// Whether a foreign seam carries the signature its module's run stored.
 	public var readsStoredSignature: Bool {
 		foreignSeams.values.contains { $0.storedSignatures != nil }
-			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignatures != nil } }
+			|| foreignPublicMocks.values.contains { $0.storedPlans != nil }
+			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { declarations in
+				declarations.seams.values.contains { $0.storedSignatures != nil } || declarations.publicMocks.values.contains { $0.storedPlans != nil }
+			}
 	}
 
 	/// The declarations a module sees.
@@ -2423,11 +2439,12 @@ public struct SeamResolution: Sendable {
 	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
 	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
 	public struct ForeignPublicMock: Sendable {
-		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
+		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition, storedPlans: StoredPublicMockPlans? = nil) {
 			self.declaringModule = declaringModule
 			self.visibleDeclarations = visibleDeclarations
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
+			self.storedPlans = storedPlans
 		}
 
 		/// The module that declares the type, whose name is known: a type whose module is unknown is built inline.
@@ -2441,6 +2458,11 @@ public struct SeamResolution: Sendable {
 		/// The condition the declaring module generates its mocks under: its configuration's, `DEBUG` without one, read
 		/// from its module info or, under the target graph, from the configuration in a file the graph attributes to it.
 		public let declaringModuleMockCondition: MockCondition
+		/// The plans of the public mocks of the type's module as that module's run computed them, among which the module
+		/// info this run read them from carries this type's; `nil` when it carries none of this type, and when this run
+		/// read the module's files, under the SwiftPM plugin's target graph. Every public mock of one module holds the
+		/// same.
+		public let storedPlans: StoredPublicMockPlans?
 	}
 
 	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], foreignDeclarationsSeenByModule: [String: ForeignDeclarations]? = nil, callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false, generatesPlainDependencyTreeInitializers: Bool = false) {

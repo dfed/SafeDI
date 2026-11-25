@@ -251,9 +251,10 @@ struct BinaryWriter {
 	}
 
 	/// Writes an optional field of a struct that writes its fields' flags: its presence as a flag, and then its value
-	/// only when it holds one.
-	mutating func writeOptional(_ value: (some BinaryCodable)?, flaggedIn flags: inout BinaryFieldFlags) {
-		if let value {
+	/// only when it holds one. A ``BinaryPosition`` is written as absent inside ``writingPositionsAsAbsent(_:)``, as
+	/// `Optional`'s own coder writes it.
+	mutating func writeOptional<Value: BinaryCodable>(_ value: Value?, flaggedIn flags: inout BinaryFieldFlags) {
+		if let value, !(writesPositionsAsAbsent && Value.self is any BinaryPosition.Type) {
 			flags.append(true)
 			write(value)
 		} else {
@@ -489,7 +490,8 @@ struct BinaryWriter {
 	private var valuesHeldForTheirStorage = [Any]()
 	private var sharedValueCount: UInt64 = 0
 	private var nestingDepth = 0
-	private var isNestedTooDeeply = false
+	/// Whether a value written through ``writeNested(_:)`` nests more deeply than a ``BinaryReader`` reads.
+	private(set) var isNestedTooDeeply = false
 }
 
 /// A key of a ``TableByWords``: a few words compared whole, with a hash of them that costs a few multiplications.

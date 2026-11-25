@@ -3753,7 +3753,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The leaf that calls the public mock.
 		let publicMockCall: PublicMockCall
 		/// The parameter the tier omits.
-		let parameter: PublicMockParameter
+		let parameter: StoredPublicMockPlan.Parameter
 		/// The property the leaf receives for the parameter.
 		let receivedProperty: Property
 		/// The declaration whose binding the receivers would read built inline: the property it declares, and the type
