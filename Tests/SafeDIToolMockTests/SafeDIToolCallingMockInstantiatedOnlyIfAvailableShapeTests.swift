@@ -615,7 +615,7 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.screen = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(screen: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
