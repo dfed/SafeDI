@@ -113,6 +113,11 @@ struct StoredPlaceAddition: Codable, Sendable {
 	let route: [SeamSignature.Hole.DeclaredProperty]
 	let isSendable: Bool
 	let declarations: [StoredPlaceDeclaration]
+	/// The place's `reenteringCallDeclarations` where they are not the record's: a seam that calls the record's seam
+	/// inside a fill built again gives the place its own.
+	let reenteringCallDeclarations: [SeamSignature.Hole.ReenteringCallDeclaration]?
+	/// The place's `reenteringPlaceFields` where they are not the record's.
+	let reenteringPlaceFields: [SeamSignature.Hole.ReenteringPlaceField]?
 }
 
 /// A place a seam passes up, as the record it copies and what the seam adds.
@@ -182,6 +187,8 @@ struct ReadPlace {
 		innerSeamType = written.innerSeamType
 		isSendable = written.isSendable
 		declarations = .run(written.uncarriedDeclarations[...])
+		reenteringCallDeclarations = written.reenteringCallDeclarations
+		reenteringPlaceFields = written.reenteringPlaceFields
 	}
 
 	/// The place as a signature holds it.
@@ -222,8 +229,8 @@ struct ReadPlace {
 			accessCause: presentation.accessCause,
 			uncarriedDeclarations: declarations.elements,
 			cycleReentryDeclarations: written.cycleReentryDeclarations,
-			reenteringCallDeclarations: written.reenteringCallDeclarations,
-			reenteringPlaceFields: written.reenteringPlaceFields,
+			reenteringCallDeclarations: reenteringCallDeclarations,
+			reenteringPlaceFields: reenteringPlaceFields,
 			declarationsHiddenByFields: written.declarationsHiddenByFields,
 			innerSeamType: innerSeamType,
 			passedUpRoute: passedUpRoute.elements,
@@ -241,6 +248,8 @@ struct ReadPlace {
 	fileprivate var innerSeamType: TypeDescription?
 	fileprivate var isSendable: Bool
 	fileprivate var declarations: Runs
+	fileprivate var reenteringCallDeclarations: [SeamSignature.Hole.ReenteringCallDeclaration]
+	fileprivate var reenteringPlaceFields: [SeamSignature.Hole.ReenteringPlaceField]
 
 	/// The place as its seam presents it to a call (`SeamSignature.Hole.UncarriedDeclaration.PresentedPlace.init(_:)`).
 	fileprivate var presentedPlace: SeamSignature.Hole.UncarriedDeclaration.PresentedPlace {
@@ -345,6 +354,12 @@ extension StoredPassedUpPlace {
 		place.innerSeamType = innerSeamType
 		place.isSendable = addition.isSendable
 		place.declarations = .joined(runs, count: count)
+		if let reenteringCallDeclarations = addition.reenteringCallDeclarations {
+			place.reenteringCallDeclarations = reenteringCallDeclarations
+		}
+		if let reenteringPlaceFields = addition.reenteringPlaceFields {
+			place.reenteringPlaceFields = reenteringPlaceFields
+		}
 		return place
 	}
 }
@@ -589,11 +604,11 @@ enum ModulePlacesEncoder {
 				guard let innerSeamType = place.innerSeamType else {
 					return .written(place)
 				}
-				guard let passedUp = passedUpPlace(place, from: innerSeamType, amongPlacesOf: innerSeamTypes) else {
+				guard let stored = storedPlace(place, passedUpFrom: innerSeamType, amongPlacesOf: innerSeamTypes) else {
 					GenerationWork.recordStoredPlaces(1, by: .writingPassedUpPlaceInFull)
 					return .written(place)
 				}
-				return .passedUp(passedUp)
+				return stored
 			}
 		}
 
@@ -643,13 +658,20 @@ enum ModulePlacesEncoder {
 			}
 		}
 
-		/// `place`, passed up from `innerSeamType`, as the record it copies and what its seam adds, or `nil` where that does
-		/// not read back as `place`.
-		private mutating func passedUpPlace(_ place: SeamSignature.Hole, from innerSeamType: TypeDescription, amongPlacesOf innerSeamTypes: [TypeDescription]) -> StoredPassedUpPlace? {
+		/// `place`, passed up from `innerSeamType`, as the record it copies and what its seam adds; whole where its route
+		/// does not extend its record's; or `nil` where the record and the addition do not read back as `place`.
+		private mutating func storedPlace(_ place: SeamSignature.Hole, passedUpFrom innerSeamType: TypeDescription, amongPlacesOf innerSeamTypes: [TypeDescription]) -> StoredPlace? {
 			guard let records = records(of: innerSeamType), let recordIndex = records.indicesBySite[place.site] else {
 				return nil
 			}
 			let record = records.places[recordIndex]
+			// A record is a place whose route the place's extends. Seams of one module that call one another in a cycle
+			// settle on places that pass one another up, where neither route extends the other's: those are written
+			// whole, as a place in a seam's own tree is, so that a read never follows records in a circle. A module's
+			// seams are in no cycle with another module's, so such a place is written whole once, in its module's file.
+			guard place.typesToOwner.count > record.typesToOwner.count, place.passedUpRoute.count > record.passedUpRoute.count else {
+				return .written(place)
+			}
 			// The same site as the other seams the place's seam calls hold it.
 			var candidates = [(seamType: TypeDescription, index: Int, place: SeamSignature.Hole)]()
 			for otherSeamType in innerSeamTypes where otherSeamType != innerSeamType {
@@ -715,6 +737,8 @@ enum ModulePlacesEncoder {
 					route: Array(place.passedUpRoute.dropLast(record.passedUpRoute.count)),
 					isSendable: place.isSendable,
 					declarations: declarations,
+					reenteringCallDeclarations: areWritten(place.reenteringCallDeclarations, as: record.reenteringCallDeclarations) ? nil : place.reenteringCallDeclarations,
+					reenteringPlaceFields: areWritten(place.reenteringPlaceFields, as: record.reenteringPlaceFields) ? nil : place.reenteringPlaceFields,
 				),
 			)
 			// What a read will make of it, compared as the bytes a file holds, which differ wherever two places do.
@@ -723,7 +747,7 @@ enum ModulePlacesEncoder {
 			else {
 				return nil
 			}
-			return passedUp
+			return .passedUp(passedUp)
 		}
 
 		/// What finds a declaration among a record's.
@@ -744,9 +768,10 @@ enum ModulePlacesEncoder {
 				case .other:
 					reason = 3
 					passingSeam = nil
-				case let .boundByPassingUpSeam(seam, _, _):
+				case let .boundByPassingUpSeam(seam, _, place):
 					reason = 4
 					passingSeam = seam
+					presentedBuilderLabel = place.builderLabel
 				case .boundOutsideSendableFunction:
 					reason = 5
 					passingSeam = nil
@@ -757,6 +782,9 @@ enum ModulePlacesEncoder {
 			let declaringType: TypeDescription
 			let reason: Int
 			let passingSeam: TypeDescription?
+			/// How the seam that passes the place up names its builder, which two seams that pass one site up may not
+			/// name alike.
+			var presentedBuilderLabel: String?
 		}
 
 		/// Where each of `place`'s declarations is, the first of each key.
@@ -774,6 +802,16 @@ enum ModulePlacesEncoder {
 				return writer.bytes
 			}
 			return bytes(first) == bytes(second)
+		}
+
+		/// Whether a file holds `first` and `second` as the same bytes, which two empty lists are without being written.
+		private func areWritten<Element: BinaryCodable>(_ first: [Element], as second: [Element]) -> Bool {
+			func bytes(_ elements: [Element]) -> [UInt8] {
+				var writer = BinaryWriter.writingStringsInline()
+				writer.writingPositionsAsAbsent { $0.write(elements) }
+				return writer.bytes
+			}
+			return (first.isEmpty && second.isEmpty) || bytes(first) == bytes(second)
 		}
 	}
 }

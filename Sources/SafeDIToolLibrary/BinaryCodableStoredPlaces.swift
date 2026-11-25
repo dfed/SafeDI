@@ -135,6 +135,8 @@ extension StoredPlaceAddition: BinarySchemaMember {
 				BinaryLayoutField("route", \.route),
 				BinaryLayoutField("isSendable", \.isSendable),
 				BinaryLayoutField("declarations", \.declarations),
+				BinaryLayoutField("reenteringCallDeclarations", \.reenteringCallDeclarations),
+				BinaryLayoutField("reenteringPlaceFields", \.reenteringPlaceFields),
 			],
 			unwrittenProperties: [],
 		)
@@ -158,7 +160,7 @@ extension StoredPlaceAddition: BinarySchemaMember {
 	}
 
 	private init(readingUnsharedFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(typesToCall: reader.read(), route: reader.read(), isSendable: reader.read(), declarations: reader.read())
+		try self.init(typesToCall: reader.read(), route: reader.read(), isSendable: reader.read(), declarations: reader.read(), reenteringCallDeclarations: reader.read(), reenteringPlaceFields: reader.read())
 	}
 
 	private func writeUnshared(to writer: inout BinaryWriter) {
@@ -166,6 +168,8 @@ extension StoredPlaceAddition: BinarySchemaMember {
 		writer.write(route)
 		writer.write(isSendable)
 		writer.write(declarations)
+		writer.write(reenteringCallDeclarations)
+		writer.write(reenteringPlaceFields)
 	}
 }
 

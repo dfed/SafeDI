@@ -78,6 +78,62 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		#expect(places.placesBySeam.joined().contains { $0.isPassedUp })
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesPlaceWhole_whenSeamsOfOneModuleCallOneAnotherInCycle() async throws {
+		// `First` and `Second` each pass up the place of `Third` that the other passes up. The two settle on places neither
+		// of whose routes extends the other's, and a record that named the other seam's would lead a read in a circle.
+		func seam(_ name: String, _ declarations: [(label: String, type: String, attribute: String)]) -> String {
+			"""
+			@Instantiable(generateDependencyTree: true)
+			public final class \(name): Instantiable {
+				public init(\(declarations.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+			\(declarations.map { "\t\tself.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+				}
+			\(declarations.map { "\t\($0.attribute) let \($0.label): \($0.type)" }.joined(separator: "\n"))
+			}
+			"""
+		}
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Base", swiftFileContent: [
+				"public protocol Gauge {}",
+				seam("Third", [("gauge", "any Gauge", "@Instantiated")]),
+				seam("First", [("secondBuilder", "Instantiator<Second>", "@Instantiated"), ("third", "Third", "@Instantiated")]),
+				seam("Second", [("firstBuilder", "Instantiator<First>", "@Instantiated")]),
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [Gauge.self])
+				public final class LiveGauge: Gauge, Instantiable {
+					public init() {}
+				}
+
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+					public init(first: First) {
+						self.first = first
+					}
+					@Instantiated let first: First
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+		let read = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		#expect(read.modules["App"]?.generatedFiles == computed.modules["App"]?.generatedFiles)
+		let places = try #require(read.modules["Feature"]?.moduleInfoFile?.seamSignatures).storedPlaces
+		let passedUpPlacesWrittenWhole = places.placesBySeam.joined().filter {
+			if case let .written(place) = $0 {
+				place.innerSeamType != nil
+			} else {
+				false
+			}
+		}
+		#expect(passedUpPlacesWrittenWhole.count == 1, "\(places.placesBySeam.map { $0.map { $0.isPassedUp } })")
+	}
+
 	// MARK: Tests – Size
 
 	@Test
@@ -204,7 +260,7 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 				record: record,
 				others: passedUp.others,
 				presentation: passedUp.presentation,
-				addition: StoredPlaceAddition(typesToCall: passedUp.addition.typesToCall, route: passedUp.addition.route, isSendable: passedUp.addition.isSendable, declarations: declarations ?? passedUp.addition.declarations),
+				addition: StoredPlaceAddition(typesToCall: passedUp.addition.typesToCall, route: passedUp.addition.route, isSendable: passedUp.addition.isSendable, declarations: declarations ?? passedUp.addition.declarations, reenteringCallDeclarations: nil, reenteringPlaceFields: nil),
 			)
 		}
 		let malformed: ModuleSeamSignatures
@@ -277,6 +333,22 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		#expect(placesWrittenInFull == 3)
 		#expect(try #require(output.modules["Layer2"]?.moduleInfoFile?.seamSignatures).storedPlaces.placesBySeam.joined().contains { $0.isPassedUp } == false)
 		#expect(output.modules["App"]?.generatedFiles == computed.modules["App"]?.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolMultiModuleTest_recordsIssue_whenModuleWritesPassedUpPlaceInFull() async throws {
+		// Every multi-module test and fuzzer graph runs under this check: a place the form does not hold fails the test.
+		let modules = Self.chainModules(layerCount: 2)
+		var filesToDelete = [URL]()
+		try await withKnownIssue {
+			_ = try await StoredPlaceWriteCheck.$alteringPlaceReadBack.withValue({ _, record in record }) {
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+			}
+		} matching: { issue in
+			issue.description.contains("The run of module `Layer1` wrote 1 passed-up place in full, not as the record it copies")
+		}
+		self.filesToDelete += filesToDelete
 	}
 
 	// MARK: Private
