@@ -35,6 +35,13 @@ struct InitializerTests {
 		("@_Concurrency.MainActor init() {}", "@_Concurrency.MainActor"),
 		("@available(iOS 17, *)\n@MainActor public init() {}", "@available(iOS 17, *) @MainActor"),
 		("@MainActor nonisolated init() {}", "@MainActor nonisolated"),
+		("@objc init() {}", nil),
+		("@objc(make) @MainActor init() {}", "@MainActor"),
+		("@_spi(Testing) public init() {}", nil),
+		("@backDeployed(before: macOS 99) public init() {}", nil),
+		("@objcMembers init() {}", "@objcMembers"),
+		("@Space.objc init() {}", "@Space.objc"),
+		("@objcActor init() {}", "@objcActor"),
 	] as [(String, String?)])
 	func init_recordsSpelledAttributesAsWritten_whenInitializerSpellsAttributesOrNonisolated(source: String, spelledAttributes: String?) throws {
 		// A public mock's construction function repeats the attributes the initializer it calls spells, reading no name.
