@@ -92,6 +92,32 @@ extension MockLowering {
 		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
 		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
 		var configuredConstruction: ConfiguredConstruction?
+		/// The override the place's construction reads, as the walk spelled it, or `nil`.
+		var overrideReadText: String?
+
+		/// What of these the place's record reads beyond its generator, which a plan node is made once for: one generator
+		/// can be lowered at two places that differ in them, whose records then differ.
+		var recordedKey: RecordedKey {
+			RecordedKey(
+				functionName: functionName,
+				hasFunction: hasFunction,
+				readNames: readNames,
+				labelsPassedNil: labelsPassedNil,
+				labelsPassedValue: labelsPassedValue,
+				configuredConstruction: configuredConstruction,
+				overrideReadText: overrideReadText,
+			)
+		}
+
+		struct RecordedKey: Hashable {
+			let functionName: String
+			let hasFunction: Bool
+			let readNames: [Property: String]
+			let labelsPassedNil: Set<String>
+			let labelsPassedValue: Set<String>
+			let configuredConstruction: ConfiguredConstruction?
+			let overrideReadText: String?
+		}
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
@@ -154,9 +180,14 @@ extension ArgumentSource {
 extension MockLowering.Walk {
 	/// A generator in one context it is written in: what production's plan node is made once for (`planNode(…)` in
 	/// `ScopeGenerator`).
+	///
+	/// Mock roots share one construction memo, so whether two places hold one generator follows the order the roots are
+	/// built in. The key therefore also holds what the place's record reads beyond the generator (`BuiltPlaceInputs.RecordedKey`):
+	/// two places of one generator share a node only where their records agree, as places of two generators never do.
 	struct PlanNodeKey: Hashable {
 		let generator: ObjectIdentifier
 		let unavailableProperties: Set<Property>
+		let inputs: MockLowering.BuiltPlaceInputs.RecordedKey
 	}
 
 	/// Keeps what the walk hands production's record function at the built place it is lowering.
@@ -197,6 +228,7 @@ extension MockLowering.Walk {
 			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
 			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
 			configuredConstruction: configuredConstruction.recorded,
+			overrideReadText: overrideRead?.text,
 		)
 	}
 
@@ -206,7 +238,7 @@ extension MockLowering.Walk {
 		      let inputs = builtPlaceInputs[childIndexPath],
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
 		else { return }
-		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties)
+		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties, inputs: inputs.recordedKey)
 		let planNode = planNodes[key] ?? PlanNode()
 		planNodes[key] = planNode
 		// The record is made once the walk is done (`recordBuiltPlaces()`), when the records of the places in its builder
