@@ -255,8 +255,26 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		(text: "enum Namespace {\n    struct Config { let isPublicly = true }\n}", mayDeclare: false),
 		// `public` without a nested type: a top-level type needs no record.
 		(text: "public struct Config {}", mayDeclare: false),
+		// Modifiers and attributes between `public` and the nested type's keyword.
+		(text: "public enum Namespace {\n    public final class Config {}\n}", mayDeclare: true),
+		(text: "enum Namespace {\n    @MainActor\n    public\n    struct Config {}\n}", mayDeclare: true),
+		// A comment between `public` and the keyword that holds a word introducing another declaration.
+		(text: "enum Namespace {\n    public /* func */ struct Config {}\n}", mayDeclare: true),
+		(text: "enum Namespace {\n    public // var\n    struct Config {}\n}", mayDeclare: true),
+		(text: "enum Namespace {\n    public /* extension */ struct Config {}\n}", mayDeclare: true),
+		// A nested type narrower than its `public` enclosing type: its `public` applies to the enclosing type.
+		(text: "public struct Model: Codable {\n    private enum CodingKeys: CodingKey {}\n}", mayDeclare: false),
+		(text: "public struct Model {\n    struct Inner {}\n}", mayDeclare: false),
+		// `public` members before a narrower nested type: each `public` applies to its own member.
+		(text: "public struct Model {\n    public var name: String\n    public let count: Int\n    public init() {}\n    public func run() {}\n    public subscript(index: Int) -> Int { index }\n    struct Inner {}\n}", mayDeclare: false),
+		(text: "public enum Kind {\n    case first\n}\nextension Kind {\n    struct Inner {}\n}", mayDeclare: false),
+		(text: "import Foundation\npublic import Other\nenum Namespace {\n    struct Config {}\n}", mayDeclare: false),
+		(text: "public final class Helper {\n    public static var shared: Helper { Helper() }\n    deinit {}\n    enum State {}\n}", mayDeclare: false),
+		// A `public` extension makes the types nested in it `public` without a modifier of their own.
+		(text: "public extension Namespace {\n    enum Config {}\n}", mayDeclare: true),
+		(text: "public /* func */ extension Namespace {\n    enum Config {}\n}", mayDeclare: true),
 	] as [(text: String, mayDeclare: Bool)])
-	func typeDeclarationWords_mayDeclareTypeOtherModulesCanName_onlyWhenPublicWordAccompaniesTypeKeywordInsideBraces(text: String, mayDeclare: Bool) {
+	func typeDeclarationWords_mayDeclareTypeOtherModulesCanName_onlyWhenPublicWordMayApplyToTypeKeywordInsideBraces(text: String, mayDeclare: Bool) {
 		// A `public` or `open` type nested in another is one another module names only through its record.
 		#expect(Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName == mayDeclare)
 	}
