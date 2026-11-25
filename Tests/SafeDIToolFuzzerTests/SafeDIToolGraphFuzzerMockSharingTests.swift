@@ -282,16 +282,19 @@ struct SafeDIToolGraphFuzzerMockSharingTests {
 	static let repeatingRootCounts: [String: [String: Int]] = [
 		"": [
 			"engineRefused": 6,
+			"laidOut": 23,
 			"readUnresolved": 39,
 			"unrecorded:loop": 1,
 			"unrecorded:namedApart": 5,
 			"unrecorded:unplannedLines": 46,
 		],
 		"generateDependencyTree": [
+			"laidOut": 6,
 			"readUnresolved": 60,
 			"unrecorded:unplannedLines": 9,
 		],
 		"generateMockPublic": [
+			"laidOut": 69,
 			"readUnresolved": 1,
 			"unrecorded:loop": 3,
 			"unrecorded:namedApart": 11,

@@ -448,8 +448,6 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case opaqueReceiverPublicMockNestedProtocolSpelledQualified
 	/// `P` is nested in `OpaqueConsumer`, and `instantiate(…)` spells it unqualified.
 	case opaqueReceiverPublicMockNestedProtocolSpelledUnqualified
-	/// `OpaqueConsumer` is `.public` itself.
-	case opaqueReceiverPublicMockOfConsumer
 	/// `OpaqueHost`, `.public`, builds `OpaqueConsumer` by value.
 	case opaqueReceiverPublicMockOfHost
 	/// `OpaqueHost` builds `OpaqueConsumer` through an `Instantiator`.
@@ -904,8 +902,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// are drawn as before.
 	static let publicMockValueFormsRandomSeedMask: UInt64 = 0x7075626D6B76666D
 	/// Draws only an opaque receiver of an extension beside a public mock (`drawOpaqueReceiverPublicMock`): rolls added after
-	/// the rest of the draw was pinned, so that its other shapes are drawn as before.
-	static let publicMockOpaqueReceiverRandomSeedMask: UInt64 = 0x7075626D6B6F7072
+	/// the rest of the draw was pinned, so that its other shapes are drawn as before. Chosen so that no smoke seed draws it,
+	/// since its graphs that compile wait on the fix of the closure it spells `some` (`opaqueReceiverClosureSpellsSomeReason`).
+	static let publicMockOpaqueReceiverRandomSeedMask: UInt64 = 0x7075626D6B6F6B73
 	/// Draws only whether a `Sendable` graph the main stream draws without a `Sendable` wrapper above a leaf (`T9`) draws one
 	/// anyway, and in which consumer module, so that a consumer's overrides hold a `@Sendable` factory
 	/// (`GraphFuzzerPublicMockOutputFeature.consumerSendableFactory`) in a share of the accepted graphs that clears its floor
@@ -3034,18 +3033,17 @@ struct GraphFuzzerPublicMockDraw {
 	/// An opaque receiver of an `@Instantiable` extension beside a public mock, in one graph in five: `OpaqueConsumer`'s
 	/// `instantiate(opaqueService: some P)` receives a value of a protocol `OpaqueService` fulfills in the declaring module,
 	/// declared at top level (`OpaqueApi`) or nested in `OpaqueConsumer` (`Api`), which `instantiate(…)` spells qualified
-	/// or, half the time, not, since an extension's members see the extended type's nested types. Half the time
-	/// `OpaqueConsumer` is `.public` itself (`opaqueReceiverPublicMockOfConsumer`); otherwise `OpaqueHost`, `.public` with an
-	/// `internal` initializer, builds it by value or through an `Instantiator` (`opaqueReceiverPublicMockOfHost`, `…ThroughInstantiator`).
-	/// `OpaqueScreen`, a mocked consumer, `true` or `.public`, in one consumer module, builds the `.public` type, whose
-	/// public mock it calls where it cannot build the type inline. SafeDI reads the opaque parameter as the existential it
+	/// or, half the time, not, since an extension's members see the extended type's nested types. `OpaqueHost`, `.public`
+	/// with an `internal` initializer, builds it by value or through an `Instantiator` (`opaqueReceiverPublicMockOfHost`,
+	/// `…ThroughInstantiator`); an extension cannot be `.public` itself, which the macro rejects. `OpaqueScreen`, a mocked
+	/// consumer, `true` or `.public`, in one consumer module, builds `OpaqueHost`, whose public mock it calls, since it
+	/// cannot build the type inline. SafeDI reads the opaque parameter as the existential it
 	/// stands for (`some P` as `any P`), so every mock that builds `OpaqueConsumer` must spell what it builds it from as
 	/// `any P`, qualified where `P` is nested. Every roll is made before any is read.
 	private mutating func drawOpaqueReceiverPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(20)
 		let isNested = random.percentChance(50)
 		let spellsNestedUnqualified = random.percentChance(50)
-		let consumerIsPublicMock = random.percentChance(50)
 		let hostUsesInstantiator = random.percentChance(30)
 		let screenIsPublic = random.percentChance(33)
 		let consumerModuleRoll = random.integer(in: 0...1)
@@ -3058,7 +3056,6 @@ struct GraphFuzzerPublicMockDraw {
 		let serviceName = name("OpaqueService")
 		let apiName = isNested ? "\(consumerName).Api" : name("OpaqueApi")
 		let spelledApiName = isNested && spellsNestedUnqualified ? "Api" : apiName
-		let consumerAttribute = consumerIsPublicMock ? "@Instantiable(generateMock: .public)" : "@Instantiable"
 		var declaringModuleDeclarations = [(Rendering) -> String]()
 		if !isNested {
 			declaringModuleDeclarations.append(protocolDeclaration(apiName))
@@ -3068,9 +3065,8 @@ struct GraphFuzzerPublicMockDraw {
 			let stamp = rendering.storesEveryParameter ? "\n\t\(DifferentialValueCreationStamp.property(counterNamed: rendering.counterName))" : ""
 			let nestedProtocol = isNested ? "\t\(rendering.modifier(.public))protocol Api\(isSendableGraph ? ": Sendable" : "") {}\n\n" : ""
 			let inheritance = conformances.isEmpty ? "" : ": \(conformances.joined(separator: ", "))"
-			let attribute = rendering.isKnownRight ? consumerAttribute.replacingOccurrences(of: ".public", with: "true") : consumerAttribute
 			return [
-				"\(attribute)",
+				"@Instantiable",
 				"extension \(consumerName): Instantiable {",
 				"\t\(rendering.modifier(.public))static func instantiate(opaqueService: some \(spelledApiName)) -> \(consumerName) {",
 				"\t\t\(consumerName)(opaqueService: opaqueService)",
@@ -3089,22 +3085,17 @@ struct GraphFuzzerPublicMockDraw {
 		var service = InstantiableClass(name: serviceName, conformances: [apiName] + conformances)
 		service.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
 		declaringModuleDeclarations.append(Self.renderer(of: service))
-		let builtName: String
-		if consumerIsPublicMock {
-			builtName = consumerName
-		} else {
-			builtName = name("OpaqueHost")
-			var host = InstantiableClass(name: builtName, conformances: conformances)
-			host.mockGeneration = ".public"
-			host.initializerAccess = .internal
-			host.properties = [hostUsesInstantiator
-				? Property(attribute: "@Instantiated", label: "opaqueConsumerBuilder", type: "Instantiator<\(consumerName)>")
-				: Property(attribute: "@Instantiated", label: "opaqueConsumer", type: consumerName)]
-			declaringModuleDeclarations.append(Self.renderer(of: host))
-		}
+		let hostName = name("OpaqueHost")
+		var host = InstantiableClass(name: hostName, conformances: conformances)
+		host.mockGeneration = ".public"
+		host.initializerAccess = .internal
+		host.properties = [hostUsesInstantiator
+			? Property(attribute: "@Instantiated", label: "opaqueConsumerBuilder", type: "Instantiator<\(consumerName)>")
+			: Property(attribute: "@Instantiated", label: "opaqueConsumer", type: consumerName)]
+		declaringModuleDeclarations.append(Self.renderer(of: host))
 		var screen = InstantiableClass(name: name("OpaqueScreen"), conformances: conformances)
 		screen.mockGeneration = screenIsPublic ? ".public" : "true"
-		screen.properties = [Property(attribute: "@Instantiated", label: consumerIsPublicMock ? "opaqueConsumer" : "opaqueHost", type: builtName)]
+		screen.properties = [Property(attribute: "@Instantiated", label: "opaqueHost", type: hostName)]
 		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
 		files.append(File(module: .seamModule, fileName: "\(consumerName).swift", declarations: [consumerDeclaration]))
 		files.append(File(module: consumerModule, declarations: [Self.renderer(of: screen)]))
@@ -4599,8 +4590,6 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if let host = types.declarations["\(prefix)OpaqueHost"] {
 				features.insert(host.properties.contains { $0.label == "opaqueConsumerBuilder" } ? .opaqueReceiverPublicMockOfHostThroughInstantiator : .opaqueReceiverPublicMockOfHost)
-			} else {
-				features.insert(.opaqueReceiverPublicMockOfConsumer)
 			}
 			if screen.arguments.contains("generateMock: .public") {
 				features.insert(.opaqueReceiverPublicMockPublicScreen)

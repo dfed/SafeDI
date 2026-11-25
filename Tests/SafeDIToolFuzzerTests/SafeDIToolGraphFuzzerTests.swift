@@ -7248,7 +7248,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedFeatureCounts: corpusAcceptedFeatureCounts,
 		knownIssues: knownIssues,
 		knownIssuesName: "knownIssues",
-		staleSeedRemedy: { _, _ in "remove it from `knownIssuesBesideReportedIssueShapes`, or from `repeatedAncestorLazyCycleSeeds` or `receiveThroughCycleWalkedEarlierLazyCycleSeeds` for a reported issue’s shape, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
+		staleSeedRemedy: { _, _ in "remove it from `knownIssuesBesideReportedIssueShapes`, or from `repeatedAncestorLazyCycleSeeds` or `receiveThroughCycleWalkedEarlierLazyCycleSeeds` for a reported issue’s shape, or from `opaqueReceiverClosureSpellsSomeSeeds` for the `some`-spelled closure, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
 		valueOracleInspectedGraphCount: corpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: 0,
@@ -9097,16 +9097,16 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 649, 653,
-				677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
+				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 583, 598, 612, 616, 649, 653,
+				677, 697, 825, 832, 833, 884, 907, 944, 946,
 			],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
 		// proves the holder `public`, or, `package`, leaves a consumer in another package holding none.
 		GraphFuzzerKnownIssue(
-			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive (Intended: an oracle limit on a divergence the public mock contract states; one seed)",
-			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")],
+			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive (Intended: an oracle limit on a divergence the public mock contract states; one seed); and \(opaqueReceiverClosureSpellsSomeReason)",
+			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session"), opaqueReceiverClosureSpellsSomeSignature],
 			seeds: [95],
 		),
 		// The nested builders' design, as a seam orders its builders: a mock's parameters are sorted by label, and a builder's
@@ -9114,7 +9114,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [176, 455, 685],
+			seeds: [455, 685],
 		),
 		// As above, with the optional builder of a hole type a calling mock's calls fill, which is listed among the flat
 		// parameters by label as a required builder is; and a lazy cycle's configuration field.
@@ -9133,7 +9133,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(passedUpBuildersNamedApartReason); and \(publicMockBuilderOrderReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockCode)],
-			seeds: [19, 299, 456, 510],
+			seeds: [19, 299],
 		),
 		// The root-level stream's label in two forms (`holeRootReceivesLabelInTwoForms`), in `T6`'s mock and in a consumer's
 		// call of it: a public mock's required parameters keep their places in the comparison, which sorts only the
@@ -9141,7 +9141,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 156, 242, 326, 327, 474, 629, 731, 821, 881, 983],
+			seeds: [18, 242, 326, 327, 629, 731, 821],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
@@ -9153,7 +9153,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [12, 65, 407],
+			seeds: [65, 407],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason)",
@@ -9191,6 +9191,46 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason), in a mock that `mockConditionalCompilation: nil` puts in its type's dependency tree file",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.dependencyTreeCode)],
 			seeds: [658],
+		),
+		// The public mock corpus's draw of an opaque receiver (`drawOpaqueReceiverPublicMock`): a mock that builds
+		// `OpaqueConsumer` spells its builder closure `((some P) -> T)?`, alone and beside the shapes above.
+		GraphFuzzerKnownIssue(
+			reason: opaqueReceiverClosureSpellsSomeReason,
+			signatures: [opaqueReceiverClosureSpellsSomeSignature],
+			seeds: [
+				2, 8, 31, 34, 38, 39, 54, 70, 84, 87, 89, 94, 110, 115, 118, 119, 124, 138, 150, 158, 162, 168, 181, 187,
+				188, 201, 203, 204, 206, 218, 222, 249, 254, 256, 263, 267, 271, 282, 288, 293, 295, 298, 306, 312, 320, 330,
+				350, 353, 357, 362, 364, 380, 386, 398, 408, 424, 425, 428, 436, 440, 465, 466, 468, 472, 480, 492, 496, 498,
+				500, 501, 504, 515, 516, 529, 532, 534, 537, 540, 560, 564, 567, 576, 585, 592, 603, 615, 619, 624, 631, 632,
+				634, 637, 638, 639, 642, 644, 650, 652, 654, 655, 657, 659, 663, 673, 679, 681, 694, 696, 698, 705, 707, 711,
+				715, 719, 720, 732, 737, 740, 743, 746, 750, 762, 779, 784, 794, 798, 814, 817, 841, 852, 854, 858, 859, 862,
+				869, 872, 874, 879, 887, 893, 898, 900, 910, 916, 918, 935, 938, 940, 943, 945, 962, 971, 973, 976, 982,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(lazyCycleConfigurationFieldReason); and \(opaqueReceiverClosureSpellsSomeReason)",
+			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), opaqueReceiverClosureSpellsSomeSignature],
+			seeds: [574, 909],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockBuilderOrderReason); and \(opaqueReceiverClosureSpellsSomeReason)",
+			signatures: [.renamedGraphDiffers(.mockCode), opaqueReceiverClosureSpellsSomeSignature],
+			seeds: [176],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(passedUpBuildersNamedApartReason); and \(publicMockBuilderOrderReason); and \(opaqueReceiverClosureSpellsSomeReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockCode), opaqueReceiverClosureSpellsSomeSignature],
+			seeds: [456, 510],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockFormsNamedApartOrderReason); and \(opaqueReceiverClosureSpellsSomeReason)",
+			signatures: [.renamedGraphDiffers(.mockCode), opaqueReceiverClosureSpellsSomeSignature],
+			seeds: [22, 156, 474, 881, 983],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason); and \(opaqueReceiverClosureSpellsSomeReason)",
+			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence), opaqueReceiverClosureSpellsSomeSignature],
+			seeds: [12],
 		),
 	]
 
@@ -9437,13 +9477,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.twoLeavesReceiveUnnameableDependency: 43,
 		.twoPublicMockTypes: 299,
 		.typeInExtensionOfInstantiable: 219,
-		.opaqueReceiverPublicMock: 179,
-		.opaqueReceiverPublicMockNestedProtocolSpelledQualified: 37,
-		.opaqueReceiverPublicMockNestedProtocolSpelledUnqualified: 44,
-		.opaqueReceiverPublicMockOfConsumer: 71,
-		.opaqueReceiverPublicMockOfHost: 80,
-		.opaqueReceiverPublicMockOfHostThroughInstantiator: 28,
-		.opaqueReceiverPublicMockPublicScreen: 45,
+		.opaqueReceiverPublicMock: 183,
+		.opaqueReceiverPublicMockNestedProtocolSpelledQualified: 38,
+		.opaqueReceiverPublicMockNestedProtocolSpelledUnqualified: 43,
+		.opaqueReceiverPublicMockOfHost: 141,
+		.opaqueReceiverPublicMockOfHostThroughInstantiator: 42,
+		.opaqueReceiverPublicMockPublicScreen: 60,
 	]
 
 	/// Seed 2760, whose mock of `S2760_T2` the tool rejected until a mock passed `nil` to a receive only if available that
@@ -9477,15 +9516,46 @@ struct SafeDIToolGraphFuzzerTests {
 	static let remedyRelabelLeavesSeamLabelInTwoFormsReason = "An error at a receive that a declaration of its label hides advises relabeling the hiding declaration, which leaves a seam's tree receiving the label in two forms, which a seam rejects (\"Receive `t0Builder` the same way in every type of the tree\"; seed 1935: relabeling `t0Builder: SendableInstantiator<S1935_T0>` on `S1935_T2` leaves `S1935_T1` receiving `t0Builder: Instantiator<S1935_T0>?` and `S1935_T4` receiving `t0Builder: Instantiator<S1935_T0>`)"
 	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled, or a dependency cycle through the wrapper's type (seed 871: `FormsUser` -> `FormsScreen` -> `FormsUser`; remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let valueOracleSendableTreeReceivingInstantiatorReason = "A value-oracle fixture limit: a root's mock accepts a `SendableInstantiator` tree that receives a non-`Sendable` `Instantiator` from outside, which production rejects under any host, so the fixture that calls the mock beside production is rejected (Intended: an oracle limit, not a SafeDI defect; seed 2764: `S2764_Root1` builds `t3Builder: SendableInstantiator<S2764_T1>`, and `S2764_T1` receives `t2Builder: Instantiator<S2764_T2>`, which cannot be received inside a `@Sendable` function)"
-	/// Fixed by the loops lane's draft of the `some` spelling: a mocked type that builds an extension-based type whose
+	/// Fixed in #1085: a mocked type that builds an extension-based type whose
 	/// `instantiate(…)` takes `some P` spells the configuration's or overrides' builder closure `((some P) -> T)?`.
-	static let opaqueReceiverClosureSpellsSomeReason = "A mock that builds an extension-based type whose `instantiate(…)` receives `some P` spells the builder closure of its `SafeDIOverrides` or `SafeDIMockConfiguration` `((some P) -> T)?`, which Swift rejects (\"'some' cannot appear in parameter position\"); the closure must take `any P`, as SafeDI reads the parameter. Drawn by `addingOpaqueReceiverOfExtension`; fixed in the loops lane's draft of the `some` spelling"
+	static let opaqueReceiverClosureSpellsSomeReason = "A mock that builds an extension-based type whose `instantiate(…)` receives `some P` spells the builder closure of its `SafeDIOverrides` or `SafeDIMockConfiguration` `((some P) -> T)?`, which Swift rejects (\"'some' cannot appear in parameter position\"); the closure must take `any P`, as SafeDI reads the parameter. Drawn by `addingOpaqueReceiverOfExtension` and `drawOpaqueReceiverPublicMock`; fixed in #1085, which spells the closure’s parameter `any P`"
 	static let opaqueReceiverClosureSpellsSomeSignature = GraphFuzzerKnownIssue.Signature.compilerError(containing: "'some' cannot appear in parameter position")
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). Naming every declaration whose `@Sendable` chain reaches the receive leaves out, in the base corpus's seeds 1436 and 4829, a root that reaches it on a chain that is not `@Sendable`, or the mock of a type that receives it"
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
-	static let knownIssues = addingReportedIssueShapes(to: knownIssuesBesideReportedIssueShapes)
+	static let knownIssues = GraphFuzzerKnownIssue.adding(
+		opaqueReceiverClosureSpellsSomeSignature,
+		reason: opaqueReceiverClosureSpellsSomeReason,
+		seeds: opaqueReceiverClosureSpellsSomeSeeds,
+		to: addingReportedIssueShapes(to: knownIssuesBesideReportedIssueShapes),
+	)
+
+	/// The base corpus graphs of `addingOpaqueReceiverOfExtension` whose mocks spell the builder closure `((some P) -> T)?`
+	/// (`opaqueReceiverClosureSpellsSomeReason`), each combined with the shapes it shows besides. Only the base corpus draws
+	/// the shape, so, as the reported issues’ shapes, they are added to `knownIssues` alone, never inherited by `seamKnownIssues`.
+	static let opaqueReceiverClosureSpellsSomeSeeds: [UInt64] = [
+		23, 26, 36, 44, 57, 74, 78, 111, 121, 142, 164, 171, 180, 184, 191, 229, 247, 252, 283, 299, 303, 308, 313,
+		370, 381, 391, 399, 436, 439, 470, 482, 505, 510, 530, 539, 541, 545, 549, 557, 596, 621, 653, 716, 721, 761,
+		790, 796, 801, 817, 820, 827, 829, 865, 874, 1_003, 1_004, 1_028, 1_041, 1_049, 1_050, 1_053, 1_055, 1_059,
+		1_065, 1_070, 1_078, 1_119, 1_123, 1_193, 1_213, 1_216, 1_236, 1_257, 1_258, 1_268, 1_295, 1_332, 1_346,
+		1_388, 1_398, 1_431, 1_432, 1_476, 1_478, 1_480, 1_496, 1_513, 1_518, 1_566, 1_590, 1_600, 1_615, 1_619,
+		1_623, 1_634, 1_656, 1_657, 1_664, 1_679, 1_686, 1_721, 1_735, 1_745, 1_751, 1_782, 1_796, 1_820, 1_829,
+		1_834, 1_863, 1_874, 1_876, 1_882, 1_886, 1_908, 1_910, 1_946, 1_952, 1_998, 2_046, 2_053, 2_057, 2_068,
+		2_103, 2_105, 2_108, 2_114, 2_137, 2_160, 2_193, 2_204, 2_220, 2_229, 2_232, 2_247, 2_254, 2_287, 2_301,
+		2_331, 2_339, 2_348, 2_354, 2_398, 2_424, 2_428, 2_437, 2_448, 2_452, 2_469, 2_472, 2_477, 2_480, 2_493,
+		2_513, 2_522, 2_551, 2_559, 2_565, 2_572, 2_586, 2_589, 2_603, 2_605, 2_620, 2_622, 2_630, 2_681, 2_689,
+		2_694, 2_716, 2_722, 2_723, 2_770, 2_783, 2_786, 2_808, 2_815, 2_878, 2_882, 2_884, 2_891, 2_899, 2_916,
+		2_967, 2_990, 3_012, 3_024, 3_033, 3_065, 3_090, 3_092, 3_120, 3_122, 3_134, 3_168, 3_189, 3_191, 3_205,
+		3_211, 3_216, 3_224, 3_231, 3_257, 3_305, 3_306, 3_322, 3_327, 3_329, 3_335, 3_345, 3_356, 3_363, 3_385,
+		3_405, 3_409, 3_448, 3_461, 3_491, 3_502, 3_532, 3_559, 3_577, 3_585, 3_592, 3_615, 3_635, 3_662, 3_674,
+		3_684, 3_730, 3_767, 3_774, 3_777, 3_798, 3_805, 3_811, 3_821, 3_831, 3_839, 3_840, 3_845, 3_849, 3_854,
+		3_863, 3_870, 3_873, 3_893, 3_906, 3_931, 3_940, 3_972, 3_977, 3_980, 3_982, 3_983, 3_988, 4_051, 4_058,
+		4_062, 4_079, 4_084, 4_102, 4_191, 4_193, 4_197, 4_220, 4_244, 4_246, 4_251, 4_253, 4_277, 4_278, 4_313,
+		4_328, 4_411, 4_422, 4_426, 4_427, 4_441, 4_448, 4_493, 4_509, 4_539, 4_542, 4_543, 4_560, 4_585, 4_589,
+		4_637, 4_649, 4_650, 4_684, 4_691, 4_692, 4_699, 4_708, 4_723, 4_763, 4_769, 4_772, 4_797, 4_842, 4_843,
+		4_869, 4_887, 4_890, 4_895, 4_905,
+	]
 
 	/// Why a graph that draws `GraphFuzzerGenerator.addingRepeatedAncestorShapes`'s roll changes under a renaming: the
 	/// roll's `RepeatScreen` and `RepeatFlow` are a two-type lazy cycle, which shows `lazyCycleConfigurationFieldReason`.
@@ -9531,12 +9601,40 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: mockParameterAndFieldOrderReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [6, 7, 14, 36, 45, 51, 55, 64, 157, 281, 300, 342, 371, 380, 381, 434, 455, 476, 541, 548, 577, 593, 624, 634, 657, 695, 774, 801, 808, 840, 848, 903, 1_024, 1_042, 1_073, 1_081, 1_140, 1_163, 1_185, 1_216, 1_217, 1_300, 1_301, 1_335, 1_369, 1_432, 1_434, 1_442, 1_483, 1_521, 1_563, 1_572, 1_646, 1_664, 1_675, 1_742, 1_795, 1_816, 1_817, 1_853, 1_867, 1_959, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484, 2_532, 2_594, 2_626, 2_707, 2_790, 2_791, 2_836, 2_841, 2_863, 2_916, 2_935, 2_949, 3_013, 3_040, 3_160, 3_352, 3_470, 3_491, 3_513, 3_527, 3_537, 3_600, 3_613, 3_623, 3_661, 3_674, 3_704, 3_822, 3_843, 3_908, 3_922, 3_940, 3_943, 3_987, 3_994, 4_015, 4_025, 4_090, 4_191, 4_192, 4_278, 4_430, 4_541, 4_607, 4_613, 4_634, 4_664, 4_712, 4_729, 4_834, 4_857, 4_865, 4_891, 4_947, 4_955],
+			seeds: [
+				6, 7, 14, 27, 36, 45, 51, 55, 64, 157, 188, 209, 272, 281, 300, 342, 371, 380, 381, 434, 455, 476, 541,
+				548, 577, 593, 624, 634, 657, 695, 774, 801, 808, 840, 848, 903, 1_024, 1_042, 1_073, 1_081, 1_140,
+				1_163, 1_185, 1_216, 1_217, 1_300, 1_301, 1_335, 1_369, 1_432, 1_434, 1_442, 1_483, 1_521, 1_563, 1_572,
+				1_646, 1_659, 1_664, 1_675, 1_742, 1_795, 1_805, 1_816, 1_817, 1_853, 1_867, 1_959, 2_051, 2_057, 2_083,
+				2_149, 2_296, 2_337, 2_484, 2_532, 2_594, 2_626, 2_707, 2_790, 2_791, 2_836, 2_841, 2_863, 2_916, 2_935,
+				2_949, 3_013, 3_040, 3_160, 3_352, 3_470, 3_491, 3_513, 3_527, 3_534, 3_537, 3_547, 3_589, 3_600, 3_613,
+				3_623, 3_661, 3_674, 3_704, 3_822, 3_843, 3_908, 3_922, 3_940, 3_943, 3_987, 3_994, 4_015, 4_025, 4_090,
+				4_103, 4_191, 4_192, 4_278, 4_430, 4_541, 4_607, 4_613, 4_634, 4_664, 4_712, 4_729, 4_834, 4_857, 4_865,
+				4_891, 4_947, 4_955, 4_983,
+			],
 		),
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [3, 107, 114, 116, 131, 168, 204, 223, 241, 264, 265, 311, 323, 338, 364, 383, 390, 431, 448, 450, 473, 508, 515, 525, 527, 545, 567, 595, 617, 628, 630, 644, 680, 714, 728, 732, 735, 742, 749, 751, 768, 785, 786, 836, 847, 886, 912, 940, 948, 953, 975, 987, 991, 993, 1_004, 1_029, 1_051, 1_061, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_149, 1_172, 1_236, 1_244, 1_322, 1_329, 1_352, 1_362, 1_372, 1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_559, 1_567, 1_580, 1_633, 1_708, 1_758, 1_781, 1_784, 1_804, 1_857, 1_926, 1_938, 1_972, 2_009, 2_013, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_529, 2_555, 2_577, 2_630, 2_633, 2_637, 2_669, 2_682, 2_732, 2_808, 2_835, 2_845, 2_874, 2_972, 3_064, 3_074, 3_075, 3_134, 3_180, 3_183, 3_196, 3_215, 3_221, 3_232, 3_241, 3_250, 3_252, 3_298, 3_306, 3_344, 3_345, 3_359, 3_361, 3_430, 3_504, 3_506, 3_522, 3_533, 3_567, 3_577, 3_579, 3_582, 3_584, 3_588, 3_594, 3_596, 3_602, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_832, 3_850, 3_858, 3_879, 3_885, 3_894, 3_915, 4_068, 4_102, 4_107, 4_110, 4_122, 4_125, 4_156, 4_177, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428, 4_515, 4_545, 4_567, 4_603, 4_619, 4_637, 4_640, 4_642, 4_666, 4_684, 4_707, 4_716, 4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_859, 4_904, 4_918, 4_921, 4_944, 4_963, 4_964, 4_996],
+			seeds: [
+				3, 35, 107, 114, 116, 131, 168, 204, 223, 241, 264, 265, 311, 323, 338, 364, 383, 390, 431, 448, 450,
+				473, 508, 515, 525, 527, 545, 567, 595, 617, 628, 630, 644, 680, 714, 728, 732, 735, 742, 749, 751, 768,
+				785, 786, 836, 847, 886, 912, 940, 948, 953, 975, 987, 991, 993, 1_004, 1_029, 1_044, 1_051, 1_061,
+				1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_149, 1_172, 1_236, 1_244, 1_322, 1_329, 1_352,
+				1_362, 1_372, 1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_559, 1_567, 1_580, 1_602,
+				1_633, 1_708, 1_758, 1_781, 1_784, 1_804, 1_857, 1_896, 1_926, 1_938, 1_972, 2_009, 2_013, 2_017, 2_084,
+				2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403,
+				2_430, 2_432, 2_437, 2_444, 2_456, 2_529, 2_555, 2_577, 2_630, 2_633, 2_637, 2_669, 2_682, 2_732, 2_808,
+				2_835, 2_845, 2_874, 2_914, 2_972, 3_004, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_196, 3_215,
+				3_221, 3_232, 3_241, 3_250, 3_252, 3_298, 3_306, 3_329, 3_344, 3_345, 3_359, 3_361, 3_430, 3_504, 3_506,
+				3_522, 3_526, 3_533, 3_541, 3_567, 3_577, 3_579, 3_582, 3_584, 3_588, 3_594, 3_596, 3_602, 3_648, 3_699,
+				3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_832, 3_850, 3_858, 3_879,
+				3_885, 3_894, 3_915, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213,
+				4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428,
+				4_515, 4_534, 4_545, 4_549, 4_567, 4_603, 4_619, 4_637, 4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716,
+				4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859, 4_904, 4_918, 4_921, 4_922, 4_944, 4_963, 4_964,
+				4_996,
+			],
 		),
 		// A graph that shows both reasons, under one renaming or across them, is documented only by the shape that names both.
 		GraphFuzzerKnownIssue(
@@ -9550,13 +9648,16 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
 			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")],
-			seeds: [47, 451, 471, 598, 685, 939, 1_028, 1_116, 1_323, 1_374, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698, 3_813, 4_079, 4_311, 4_388, 4_790],
+			seeds: [
+				47, 207, 451, 471, 598, 685, 939, 1_028, 1_116, 1_323, 1_374, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775,
+				3_089, 3_208, 3_698, 3_813, 4_079, 4_311, 4_388, 4_790,
+			],
 		),
 		// A known rejection masks no later failure, so a graph that also changes under a renaming documents both.
 		GraphFuzzerKnownIssue(
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose mock's parameters and fields also reorder under a renaming",
 			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [309, 1_864, 3_132, 3_141, 3_692],
+			seeds: [309, 1_561, 1_864, 3_132, 3_141, 3_692],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose lazy cycle also drops another configuration field under a renaming",
@@ -9585,7 +9686,9 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.receiveOptionallyIfAvailable, containing: "is hidden in chain"),
 				.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "is hidden in chain"),
 			],
-			seeds: [492, 1_832, 2_322, 2_500, 2_663, 2_982, 3_529, 3_778, 4_142, 4_441, 4_940],
+			seeds: [
+				492, 1_832, 2_322, 2_500, 2_663, 2_982, 3_529, 3_778, 3_799, 4_142, 4_441, 4_940,
+			],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedyHidingDeclarationMasksMockTreeReceiveReason,
@@ -9623,37 +9726,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [2_787, 4_622],
-		),
-		GraphFuzzerKnownIssue(
-			reason: opaqueReceiverClosureSpellsSomeReason,
-			signatures: [opaqueReceiverClosureSpellsSomeSignature],
-			seeds: [39, 43, 44, 69, 97, 113, 117, 123, 136, 160, 198, 234, 248, 273, 276, 285, 295, 296, 305, 324, 355, 359, 370, 418, 464, 481, 486, 490, 501, 564, 575, 578, 584, 611, 613, 618, 623, 639, 683, 690, 706, 759, 775, 778, 819, 835, 837, 844, 880, 883, 891, 910, 911, 914, 935, 1_052, 1_058, 1_074, 1_091, 1_130, 1_158, 1_174, 1_176, 1_178, 1_200, 1_207, 1_225, 1_232, 1_237, 1_271, 1_289, 1_296, 1_310, 1_341, 1_348, 1_351, 1_359, 1_370, 1_399, 1_405, 1_414, 1_418, 1_450, 1_463, 1_507, 1_536, 1_540, 1_546, 1_548, 1_576, 1_578, 1_594, 1_652, 1_679, 1_680, 1_757, 1_790, 1_801, 1_809, 1_821, 1_822, 1_927, 1_929, 1_945, 1_992, 2_023, 2_026, 2_032, 2_047, 2_060, 2_081, 2_086, 2_101, 2_105, 2_154, 2_156, 2_162, 2_173, 2_216, 2_217, 2_247, 2_250, 2_254, 2_256, 2_267, 2_275, 2_286, 2_291, 2_294, 2_299, 2_315, 2_332, 2_350, 2_391, 2_395, 2_402, 2_448, 2_467, 2_481, 2_497, 2_511, 2_528, 2_534, 2_538, 2_539, 2_573, 2_586, 2_588, 2_618, 2_621, 2_639, 2_656, 2_700, 2_702, 2_714, 2_727, 2_731, 2_755, 2_761, 2_800, 2_802, 2_840, 2_855, 2_884, 2_898, 2_907, 2_912, 2_931, 2_933, 2_945, 2_946, 2_977, 3_010, 3_016, 3_047, 3_068, 3_069, 3_087, 3_110, 3_138, 3_151, 3_175, 3_197, 3_257, 3_258, 3_291, 3_325, 3_369, 3_371, 3_404, 3_424, 3_436, 3_438, 3_489, 3_492, 3_508, 3_521, 3_559, 3_570, 3_612, 3_642, 3_653, 3_657, 3_664, 3_671, 3_675, 3_678, 3_711, 3_725, 3_726, 3_757, 3_761, 3_786, 3_793, 3_794, 3_802, 3_856, 3_905, 3_926, 3_935, 3_971, 4_001, 4_009, 4_019, 4_058, 4_059, 4_073, 4_116, 4_120, 4_146, 4_151, 4_158, 4_197, 4_253, 4_263, 4_275, 4_279, 4_291, 4_307, 4_341, 4_353, 4_411, 4_434, 4_440, 4_447, 4_487, 4_543, 4_552, 4_554, 4_577, 4_584, 4_608, 4_674, 4_676, 4_681, 4_692, 4_727, 4_732, 4_766, 4_780, 4_784, 4_793, 4_797, 4_855, 4_862, 4_869, 4_877, 4_882, 4_931],
-		),
-		GraphFuzzerKnownIssue(
-			reason: mockParameterAndFieldOrderReason + "; and " + opaqueReceiverClosureSpellsSomeReason,
-			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), opaqueReceiverClosureSpellsSomeSignature],
-			seeds: [27, 188, 209, 272, 1_659, 1_805, 3_534, 3_547, 3_589, 4_103, 4_983],
-		),
-		GraphFuzzerKnownIssue(
-			reason: lazyCycleConfigurationFieldReason + "; and " + opaqueReceiverClosureSpellsSomeReason,
-			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), opaqueReceiverClosureSpellsSomeSignature],
-			seeds: [35, 1_044, 1_064, 1_602, 1_896, 2_389, 2_914, 3_004, 3_091, 3_329, 3_526, 3_541, 3_648, 4_044, 4_117, 4_206, 4_534, 4_549, 4_699, 4_795, 4_922],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree" + "; and " + opaqueReceiverClosureSpellsSomeReason,
-			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), opaqueReceiverClosureSpellsSomeSignature],
-			seeds: [207],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose mock's parameters and fields also reorder under a renaming" + "; and " + opaqueReceiverClosureSpellsSomeReason,
-			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockParameterAndFieldOrder), opaqueReceiverClosureSpellsSomeSignature],
-			seeds: [1_561],
-		),
-		GraphFuzzerKnownIssue(
-			reason: remedyHiddenByCloserDeclarationReason + "; and " + opaqueReceiverClosureSpellsSomeReason,
-			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRootAndReceiveOnlyIfAvailable, containing: "is hidden in chain"), .remedyLeavesErrorAtSite(.receiveOnlyIfAvailable, containing: "is hidden in chain"), .remedyLeavesErrorAtSite(.receiveOptionallyIfAvailable, containing: "is hidden in chain"), .remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "is hidden in chain"), opaqueReceiverClosureSpellsSomeSignature],
-			seeds: [3_799],
+			seeds: [2_787, 4_083, 4_622],
 		),
 	]
 

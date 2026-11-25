@@ -39,11 +39,10 @@ struct SafeDIToolGraphFuzzerOpaqueReceiverTests {
 	}
 
 	@Test
-	func otherCorpora_drawNoOpaqueReceiver() {
-		for features: Set<GraphFuzzerGeneratorFeature> in [[.generateDependencyTree], [.generateMockPublic]] {
-			for seed in UInt64(0)..<200 {
-				#expect(Self.shapes(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)).isEmpty, "seed \(seed) of \(features)")
-			}
+	func seamCorpus_drawsNoOpaqueReceiver() {
+		// The public mock corpus draws its own (`opaqueReceiverPublicMock…`, pinned with that corpus's draw features).
+		for seed in UInt64(0)..<200 {
+			#expect(Self.shapes(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])).isEmpty, "seed \(seed)")
 		}
 	}
 
@@ -68,12 +67,12 @@ struct SafeDIToolGraphFuzzerOpaqueReceiverTests {
 	}
 
 	static let drawnShapeCounts: [Shape: Int] = [
-		.drawn: 526,
-		.topLevelProtocol: 263,
-		.nestedProtocolSpelledQualified: 123,
+		.drawn: 522,
+		.topLevelProtocol: 261,
+		.nestedProtocolSpelledQualified: 121,
 		.nestedProtocolSpelledUnqualified: 140,
-		.consumerMocked: 253,
-		.builtByMockedHost: 293,
+		.consumerMocked: 249,
+		.builtByMockedHost: 291,
 		.builtThroughInstantiatorByMockedHost: 134,
 	]
 
