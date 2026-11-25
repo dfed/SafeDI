@@ -78,6 +78,10 @@ extension MockLowering {
 		let hasFunction: Bool
 		let readNames: [Property: String]
 		let alternatives: [ConstructionAlternative]
+		/// The argument labels of the construction the walk passes `nil`, which a record must pass `nil` too.
+		var labelsPassedNil = Set<String>()
+		/// The argument labels of the construction the walk passes a value.
+		var labelsPassedValue = Set<String>()
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
@@ -169,6 +173,8 @@ extension MockLowering.Walk {
 			hasFunction: hasFunction,
 			readNames: MockLowering.readNames(of: initializer, given: instantiable.dependencies, argumentValues: dependencyArguments),
 			alternatives: alternatives,
+			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
+			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
 		)
 	}
 
@@ -181,25 +187,18 @@ extension MockLowering.Walk {
 		let key = PlanNodeKey(generator: ObjectIdentifier(generator), unavailableProperties: unavailableProperties)
 		let planNode = planNodes[key] ?? PlanNode()
 		planNodes[key] = planNode
-		// A construction whose reads the record function cannot name (`Initializer.GenerationError`) leaves the place
-		// unrecorded: the walk's own statement is what the mock writes.
-		do {
-			builtRecords[childIndexPath] = try generator.builtPlaceRecord(
-				of: property,
-				instantiable: instantiable,
-				forwardedProperties: forwardedProperties,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				unavailableProperties: unavailableProperties,
-				functionName: inputs.functionName,
-				hasFunction: inputs.hasFunction,
-				children: [],
-				node: planNode,
-				isPlannedAtPlace: seamCall == nil && !isLoopMember,
-				readNames: inputs.readNames,
-				alternatives: inputs.alternatives,
-			)
-		} catch {
-			unrecordedPlaceErrors[childIndexPath] = error
-		}
+		// The record is made once the walk is done (`recordBuiltPlaces()`), when the records of the places in its builder
+		// function are known.
+		builtPlaceCalls[childIndexPath] = MockLowering.BuiltPlaceCall(
+			generator: generator,
+			property: property,
+			instantiable: instantiable,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			unavailableProperties: unavailableProperties,
+			inputs: inputs,
+			node: planNode,
+			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
+		)
 	}
 }

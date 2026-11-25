@@ -157,6 +157,14 @@ extension ScopeGenerator {
 			indent: bodyIndent,
 			lines: &bindingLines,
 		)
+		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
+		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
+		if laysOutWithTypeKey || SpikeShadow.logPath != nil {
+			walk.recordBuiltPlaces()
+		}
+		if laysOutWithTypeKey, let typeKeyLines = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations) {
+			bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
+		}
 		if SpikeShadow.logPath != nil {
 			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty, walk: walk)
 		}
@@ -457,6 +465,12 @@ extension MockLowering {
 		var unrecordedPlaceErrors = [[Int]: Initializer.GenerationError]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
 		var planNodes = [PlanNodeKey: PlanNode]()
+		/// What the walk hands production's record function at each built place, which `recordBuiltPlaces()` calls once the
+		/// walk is done, by its path of child indices.
+		var builtPlaceCalls = [[Int]: MockLowering.BuiltPlaceCall]()
+		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
+		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
+		var pathsWithUnplannedLines = Set<[Int]>()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
 		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
@@ -1221,6 +1235,9 @@ extension MockLowering {
 			let declarationIndex = lines.count
 			if isWrapped {
 				lines.append(contentsOf: valuesBindingLines)
+			}
+			if !valuesBindingLines.isEmpty || !generator.memberCallsInsideBuilderFunction.isEmpty || !rebindingLines.isEmpty || !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty || startsExtraction {
+				pathsWithUnplannedLines.insert(childIndexPath)
 			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
 			lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(indent)\(ScopeGenerator.standardIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
