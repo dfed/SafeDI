@@ -412,6 +412,29 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		#expect(validatedCounts == [324, 696])
 	}
 
+	// MARK: Tests – A receive inside a cycle of instantiators
+
+	@Test(arguments: ReceiveInsideCycle.allCases, DeclarationOrder.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenTypeInsideCycleOfInstantiatorsReceivesWhatOnlySomePathsToCycleDeclare(graph: ReceiveInsideCycle, order: DeclarationOrder) async throws {
+		// A type on a cycle of instantiators receives a property, so every type of the cycle reads that label from above
+		// wherever the cycle is entered: the key of each holds the label's closest declaration. The paths into the cycle
+		// declare the label, declare it with another type, or do not declare it, so a walk of the cycle found clean beneath
+		// one must not be skipped beneath another, whichever type of the cycle a path enters at and whatever order the
+		// declarations are in. With the labels a type on a cycle reads taken from a walk that stops at a type whose own
+		// walk is in progress, a type's key lacked the label and the error of a path was lost.
+		let fixture = graph.fixture(order: order)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		switch walking.outcome {
+		case .generated:
+			#expect(!graph.isInvalid)
+		case .error:
+			#expect(graph.isInvalid)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -604,6 +627,136 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			return seamFixtureType(named: "Screen\(screen)", isFinalClass: true, declarations: context + additionalDeclarations[screen, default: []] + opened.map {
 				"@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>"
 			})
+		}
+	}
+
+	/// The order each type of a graph declares its properties in: the walk takes a scope's children last first, so which
+	/// path reaches a shared scope first follows it.
+	enum DeclarationOrder: CaseIterable {
+		case written
+		case reversed
+		case rootRotated
+		case rootRotatedAndOthersReversed
+
+		func ordered(_ declarations: [String], ofRoot isRoot: Bool) -> [String] {
+			switch self {
+			case .written:
+				declarations
+			case .reversed:
+				declarations.reversed()
+			case .rootRotated:
+				isRoot ? Array(declarations.dropFirst() + declarations.prefix(1)) : declarations
+			case .rootRotatedAndOthersReversed:
+				isRoot ? Array(declarations.dropFirst() + declarations.prefix(1)) : declarations.reversed()
+			}
+		}
+	}
+
+	/// Graphs in which a type on a cycle of instantiators receives a property that the paths into the cycle declare
+	/// differently.
+	enum ReceiveInsideCycle: CaseIterable {
+		/// `A` and `B` build each other; `B` receives `y: Y`. `One` and `Third` declare `y` and enter the cycle at `A` and at
+		/// `B`; `Two` enters at `A` and declares nothing.
+		case requiredAndOnePathDeclaresNothing
+		/// The same, with `B` receiving `y` only if available: `nil` beneath `Two`.
+		case onlyIfAvailableAndOnePathDeclaresNothing
+		/// The same, with `B` renaming `y`.
+		case renamedAndOnePathDeclaresNothing
+		/// `A` and `B` build each other; `A` receives `x: X`, and `B` builds `C`, which forwards `x`. `Flow` and `Flow2`
+		/// declare `x` and enter at `A`; `Middle` enters at `B` and declares nothing.
+		case requiredBesideForwarderAndOnePathDeclaresNothing
+		/// `A` and `B` build each other; `A` receives `x: X`, which `Root` declares. `P` and `Q` each declare `x: Y` and
+		/// build, for one label, a type that enters the cycle at `B`: `N`, which declares `x: X` again, and `M`, which
+		/// declares `x: Y`, which hides `Root`'s.
+		case requiredAndOnePathHides
+		/// The same, with `A` receiving `x` only if available.
+		case onlyIfAvailableAndOnePathHides
+		/// `Screen1`, `Screen3` and `Screen4` build each other, one through an erased instantiator; `Screen1` receives
+		/// `y: X`, which `Root` declares. `Root` enters the cycle at `Screen1` and, through `Screen2`, at `Screen4`; `Screen0`
+		/// declares `y: Y`, which hides `Root`'s, and enters through `Screen2` too.
+		case requiredInsideCycleThroughErasedInstantiatorAndOnePathHides
+
+		var isInvalid: Bool {
+			switch self {
+			case .requiredAndOnePathDeclaresNothing, .renamedAndOnePathDeclaresNothing, .requiredBesideForwarderAndOnePathDeclaresNothing, .requiredAndOnePathHides, .onlyIfAvailableAndOnePathHides, .requiredInsideCycleThroughErasedInstantiatorAndOnePathHides:
+				true
+			case .onlyIfAvailableAndOnePathDeclaresNothing:
+				false
+			}
+		}
+
+		private var types: [(name: String, declarations: [String])] {
+			switch self {
+			case .requiredAndOnePathDeclaresNothing, .onlyIfAvailableAndOnePathDeclaresNothing, .renamedAndOnePathDeclaresNothing:
+				let receive = switch self {
+				case .onlyIfAvailableAndOnePathDeclaresNothing:
+					"@Received(onlyIfAvailable: true) let y: Y?"
+				case .renamedAndOnePathDeclaresNothing:
+					"@Received(fulfilledByDependencyNamed: \"y\", ofType: Y.self) let renamed: Y"
+				case .requiredAndOnePathDeclaresNothing, .requiredBesideForwarderAndOnePathDeclaresNothing, .requiredAndOnePathHides, .onlyIfAvailableAndOnePathHides, .requiredInsideCycleThroughErasedInstantiatorAndOnePathHides:
+					"@Received let y: Y"
+				}
+				return [
+					("Root", ["@Instantiated let one: Instantiator<One>", "@Instantiated let two: Instantiator<Two>", "@Instantiated let third: Instantiator<Third>"]),
+					("One", ["@Instantiated let y: Y", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Two", ["@Instantiated let aBuilder: Instantiator<A>"]),
+					("Third", ["@Instantiated let y: Y", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("A", ["@Instantiated let bBuilder: Instantiator<B>"]),
+					("B", [receive, "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Y", []),
+				]
+			case .requiredBesideForwarderAndOnePathDeclaresNothing:
+				return [
+					("Root", ["@Instantiated let flow: Flow", "@Instantiated let middle: Middle", "@Instantiated let flow2: Flow2"]),
+					("Flow", ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Flow2", ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Middle", ["@Instantiated let bBuilder: Instantiator<B>"]),
+					("A", ["@Received let x: X", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("B", ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let cBuilder: Instantiator<C>"]),
+					("C", ["@Forwarded let x: X"]),
+					("X", []),
+				]
+			case .requiredAndOnePathHides, .onlyIfAvailableAndOnePathHides:
+				return [
+					("Root", ["@Instantiated let x: X", "@Instantiated let p: P", "@Instantiated let q: Q", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("P", ["@Instantiated let x: Y", "@Instantiated let link: N"]),
+					("Q", ["@Instantiated let link: M"]),
+					("N", ["@Instantiated let x: X", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("M", ["@Instantiated let x: Y", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("A", [self == .requiredAndOnePathHides ? "@Received let x: X" : "@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let link: Leaf", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("B", ["@Instantiated let aBuilder: Instantiator<A>"]),
+					("Leaf", []),
+					("X", []),
+					("Y", []),
+				]
+			case .requiredInsideCycleThroughErasedInstantiatorAndOnePathHides:
+				return [
+					("Root", ["@Instantiated let y: X", "@Instantiated(fulfilledByType: \"Screen2\", erasedToConcreteExistential: true) let root2: ErasedInstantiator<(), AnyScreen>", "@Instantiated let root0: Instantiator<Screen0>", "@Instantiated let root1: Instantiator<Screen1>"]),
+					("Screen0", ["@Instantiated let y: Y", "@Instantiated let builder0: Instantiator<Screen2>"]),
+					("Screen1", ["@Instantiated(fulfilledByType: \"Screen3\", erasedToConcreteExistential: true) let builder0: ErasedInstantiator<(), AnyScreen>", "@Received let y: X"]),
+					("Screen2", ["@Instantiated let builder0: Instantiator<Screen4>"]),
+					("Screen3", ["@Instantiated let builder0: Instantiator<Screen4>"]),
+					("Screen4", ["@Instantiated let builder1: Instantiator<Screen1>"]),
+					("X", []),
+					("Y", []),
+				]
+			}
+		}
+
+		func fixture(order: DeclarationOrder) -> [String] {
+			types.map { name, declarations in
+				seamFixtureType(named: name, isRoot: name == "Root", isFinalClass: true, declarations: order.ordered(declarations, ofRoot: name == "Root"))
+			} + [
+				"""
+				public final class AnyScreen {
+				    public init(_ screen: AnyObject) {
+				        self.screen = screen
+				    }
+
+				    public let screen: AnyObject
+				}
+				""",
+			]
 		}
 	}
 

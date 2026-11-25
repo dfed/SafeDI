@@ -1358,13 +1358,41 @@ extension DependencyTreeGenerator {
 		}
 		/// For `start` and every scope `successors` reaches from it, `componentValue` of its strongly connected component
 		/// (given the component and each member's successors) combined with the values of the components it reaches,
-		/// remembered in `cache` for each scope reached. Tarjan's strongly connected components on an explicit stack, so each
-		/// component shares one answer and a deep graph needs no recursion.
+		/// remembered in `cache` for each scope reached: each component shares one answer.
 		func valueReached<Value>(
 			from start: Scope,
 			successors: (Scope) -> [Scope],
 			componentValue: (_ component: Set<Scope>, _ successorsByScope: [Scope: [Scope]]) -> Value,
 			combining combine: (inout Value, Value) -> Void,
+			empty: Value,
+			cache: inout [Scope: Value],
+		) -> Value {
+			valuesReached(
+				from: start,
+				successors: successors,
+				componentValues: { component, successorsByScope, valueByReachedScope in
+					let componentScopes = Set(component)
+					var value = componentValue(componentScopes, successorsByScope)
+					for member in component {
+						for successor in successorsByScope[member, default: []] where !componentScopes.contains(successor) {
+							combine(&value, valueByReachedScope[successor, default: empty])
+						}
+					}
+					return Dictionary(component.map { ($0, value) }, uniquingKeysWith: { first, _ in first })
+				},
+				empty: empty,
+				cache: &cache,
+			)
+		}
+		/// For `start` and every scope `successors` reaches from it, the value `componentValues` gives it, remembered in
+		/// `cache`. `componentValues` is asked once for each strongly connected component, after every component it reaches,
+		/// with the component's members, each member's successors and the values of the scopes outside it, so a value is
+		/// only ever remembered whole. Tarjan's strongly connected components on an explicit stack, so a deep graph needs no
+		/// recursion.
+		func valuesReached<Value>(
+			from start: Scope,
+			successors: (Scope) -> [Scope],
+			componentValues: (_ component: [Scope], _ successorsByScope: [Scope: [Scope]], _ valueByReachedScope: [Scope: Value]) -> [Scope: Value],
 			empty: Value,
 			cache: inout [Scope: Value],
 		) -> Value {
@@ -1415,16 +1443,7 @@ extension DependencyTreeGenerator {
 								break
 							}
 						}
-						let componentScopes = Set(component)
-						var value = componentValue(componentScopes, successorsByScope)
-						for member in component {
-							for successor in successorsByScope[member, default: []] where !componentScopes.contains(successor) {
-								combine(&value, cache[successor, default: empty])
-							}
-						}
-						for member in component {
-							cache[member] = value
-						}
+						cache.merge(componentValues(component, successorsByScope, cache), uniquingKeysWith: { _, value in value })
 					}
 				}
 			}
@@ -1480,36 +1499,48 @@ extension DependencyTreeGenerator {
 			)
 		}
 		/// The labels whose closest declaration above `scope` a walk of its subtree reads: its own reads, and those of the
-		/// scopes it instantiates that it does not declare itself. A scope whose walk is in progress counts as reading
-		/// nothing: a subtree that reaches it closes a cycle, which a walk of it meets, so it is never clean.
+		/// scopes it instantiates that it does not declare itself. Scopes that instantiate one another are answered together,
+		/// each taking what the others read until nothing is added, so no scope is remembered with part of a cycle unread:
+		/// a subtree that reaches a cycle of instantiators is remembered too, and its key is built from this.
 		func labelsReadFromAbove(by scope: Scope) -> Set<String> {
-			if let cached = labelsReadFromAboveByScope[scope] {
-				return cached
-			}
-			var inProgress: Set<Scope> = [scope]
-			var visits = [(scope: scope, children: instantiatedScopes(of: scope), nextChild: 0)]
-			while let (visitedScope, children, nextChild) = visits.last {
-				if nextChild < children.count {
-					visits[visits.count - 1].nextChild += 1
-					let child = children[nextChild]
-					if labelsReadFromAboveByScope[child] == nil, inProgress.insert(child).inserted {
-						visits.append((child, instantiatedScopes(of: child), 0))
+			valuesReached(
+				from: scope,
+				successors: instantiatedScopes(of:),
+				componentValues: { component, successorsByScope, labelsByReachedScope in
+					var declaredLabelsByScope = [Scope: Set<String>]()
+					var labelsByScope = [Scope: Set<String>]()
+					for member in component {
+						var declaredLabels = Set<String>()
+						for dependency in member.instantiable.dependencies where member.createdProperties.contains(dependency.property) {
+							declaredLabels.insert(dependency.property.label)
+						}
+						declaredLabelsByScope[member] = declaredLabels
+						var labels = labelsReadThroughReceives(by: member)
+						for child in successorsByScope[member, default: []] {
+							labels.formUnion(labelsByReachedScope[child, default: []].subtracting(declaredLabels))
+						}
+						labelsByScope[member] = labels
 					}
-				} else {
-					visits.removeLast()
-					var declaredLabels = Set<String>()
-					for dependency in visitedScope.instantiable.dependencies where visitedScope.createdProperties.contains(dependency.property) {
-						declaredLabels.insert(dependency.property.label)
+					var addedLabel = component.count > 1
+					while addedLabel {
+						addedLabel = false
+						for member in component {
+							var labels = labelsByScope[member, default: []]
+							let labelCount = labels.count
+							for child in successorsByScope[member, default: []] {
+								labels.formUnion(labelsByScope[child, default: []].subtracting(declaredLabelsByScope[member, default: []]))
+							}
+							if labels.count > labelCount {
+								labelsByScope[member] = labels
+								addedLabel = true
+							}
+						}
 					}
-					var labels = labelsReadThroughReceives(by: visitedScope)
-					for child in children {
-						labels.formUnion(labelsReadFromAboveByScope[child, default: []].subtracting(declaredLabels))
-					}
-					labelsReadFromAboveByScope[visitedScope] = labels
-					inProgress.remove(visitedScope)
-				}
-			}
-			return labelsReadFromAboveByScope[scope, default: []]
+					return labelsByScope
+				},
+				empty: [],
+				cache: &labelsReadFromAboveByScope,
+			)
 		}
 		/// What the scopes a walk of `scope`'s subtree can reach, its own included, do with each label.
 		func cleanSubtreeLabelFacts(of scope: Scope) -> CleanSubtreeLabelFacts {
