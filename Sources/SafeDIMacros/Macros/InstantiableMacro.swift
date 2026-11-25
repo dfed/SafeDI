@@ -205,7 +205,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockOnlyWithGenerateMock(spelling: Self.spelling(ofGenerateMockArgumentOf: instantiableMacro)),
-					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro),
 				))
 			}
 			if !isMockOnly,
@@ -226,7 +226,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockOnlyWithIsRoot,
-					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro),
 				))
 			}
 			if isMockOnly,
@@ -236,7 +236,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockAttributesOnMockOnly,
-					changes: Self.removeArgument(labeled: "mockAttributes", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "mockAttributes", from: instantiableMacro),
 				))
 			}
 			if visitor.generatesDependencyTree, visitor.isRoot,
@@ -245,7 +245,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.generateDependencyTreeWithIsRoot,
-					changes: Self.removeArgument(labeled: "generateDependencyTree", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "generateDependencyTree", from: instantiableMacro),
 				))
 			}
 			if visitor.generatesDependencyTree, isMockOnly,
@@ -254,7 +254,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.generateDependencyTreeWithMockOnly,
-					changes: Self.removeArgument(labeled: "generateDependencyTree", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "generateDependencyTree", from: instantiableMacro),
 				))
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
@@ -621,18 +621,21 @@ public struct InstantiableMacro: MemberMacro {
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
 						error: FixableInstantiableError.customMockNameWithoutMockGeneration,
-						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex), on: declaration),
+						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex)),
 					))
 				}
-				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed.
+				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed. A
+				// `mockOnly` declaration’s `mock()` is its hand-written mock, so there the error is `generateMock` itself,
+				// whose fix-it removes it.
 				if instantiableMacro.generateMockValue,
+				   !isMockOnly,
 				   customMockNameValue == nil,
 				   let mockSyntax = visitor.mockFunctionSyntax
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(mockSyntax),
 						error: FixableInstantiableError.mockMethodNeedsCustomName,
-						changes: Self.renameMethodToCustomMock(mockSyntax: mockSyntax, instantiableMacro: instantiableMacro, on: declaration),
+						changes: Self.renameMethodToCustomMock(mockSyntax: mockSyntax, instantiableMacro: instantiableMacro),
 					))
 				}
 				// When customMockName is set and a literal "mock" method also exists, it conflicts with the generated mock.
@@ -922,7 +925,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockOnlyWithGenerateMock(spelling: Self.spelling(ofGenerateMockArgumentOf: instantiableMacro)),
-					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro),
 				))
 			}
 			if isMockOnly, visitor.isRoot,
@@ -931,7 +934,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockOnlyWithIsRoot,
-					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro),
 				))
 			}
 			if isMockOnly,
@@ -941,7 +944,7 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockAttributesOnMockOnly,
-					changes: Self.removeArgument(labeled: "mockAttributes", from: instantiableMacro, on: declaration),
+					changes: Self.removeArgument(labeled: "mockAttributes", from: instantiableMacro),
 				))
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
@@ -988,18 +991,21 @@ public struct InstantiableMacro: MemberMacro {
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
 						error: FixableInstantiableError.customMockNameWithoutMockGeneration,
-						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex), on: declaration),
+						changes: Self.addGenerateMockArgument(to: instantiableMacro, arguments: arguments, customMockNameOffset: arguments.distance(from: arguments.startIndex, to: customMockNameIndex)),
 					))
 				}
-				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed.
+				// When generateMock: true and a method named "mock" exists (not custom-named), it must be renamed. A
+				// `mockOnly` declaration’s `mock()` is its hand-written mock, so there the error is `generateMock` itself,
+				// whose fix-it removes it.
 				if instantiableMacro.generateMockValue,
+				   !isMockOnly,
 				   customMockNameValue == nil,
 				   let firstMock = visitor.mockFunctionSyntax
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(firstMock),
 						error: FixableInstantiableError.mockMethodNeedsCustomName,
-						changes: Self.renameMethodToCustomMock(mockSyntax: firstMock, instantiableMacro: instantiableMacro, on: declaration),
+						changes: Self.renameMethodToCustomMock(mockSyntax: firstMock, instantiableMacro: instantiableMacro),
 					))
 				}
 				// When customMockName is set and a literal "mock" method also exists, it conflicts with the generated mock.
@@ -2030,7 +2036,6 @@ public struct InstantiableMacro: MemberMacro {
 	private static func removeArgument(
 		labeled label: String,
 		from attribute: AttributeSyntax,
-		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		var fixedAttribute = attribute
 		// safedi-source-rule: allow forceUnwrap — callers remove an argument only from an attribute whose accessor for its label (`generateMockValue`, `isRootValue`, `generateDependencyTree`, `mockAttributes`) read it from labeled arguments.
@@ -2045,9 +2050,7 @@ public struct InstantiableMacro: MemberMacro {
 			newArguments[lastIndex].trailingComma = nil
 		}
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
-		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
-		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
-		return [.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration)]
+		return [.replace(oldNode: Syntax(attribute), newNode: Syntax(fixedAttribute))]
 	}
 
 	/// Builds fix-it changes that add `generateMock: true` to an existing `@Instantiable` attribute.
@@ -2055,7 +2058,6 @@ public struct InstantiableMacro: MemberMacro {
 		to attribute: AttributeSyntax,
 		arguments: LabeledExprListSyntax,
 		customMockNameOffset: Int,
-		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		var fixedAttribute = attribute
 		let generateMockArgument = LabeledExprSyntax(
@@ -2068,16 +2070,13 @@ public struct InstantiableMacro: MemberMacro {
 		var newArguments = Array(arguments)
 		newArguments.insert(generateMockArgument, at: customMockNameOffset)
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
-		let rewriter = AttributeRewriter(oldID: attribute.id, replacement: fixedAttribute)
-		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
-		return [.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration)]
+		return [.replace(oldNode: Syntax(attribute), newNode: Syntax(fixedAttribute))]
 	}
 
 	/// Builds fix-it changes that rename a `mock()` method to `customMock()` and add `customMockName: "customMock"` to the attribute.
 	private static func renameMethodToCustomMock(
 		mockSyntax: FunctionDeclSyntax,
 		instantiableMacro: AttributeSyntax,
-		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		// Rename the method from "mock" to "customMock".
 		var renamedMock = mockSyntax
@@ -2100,12 +2099,10 @@ public struct InstantiableMacro: MemberMacro {
 		newArguments.append(customMockNameArgument)
 		fixedAttribute.arguments = .argumentList(LabeledExprListSyntax(newArguments))
 
-		// Apply both changes: rename method and update attribute.
-		let rewriter = AttributeRewriter(oldID: instantiableMacro.id, replacement: fixedAttribute)
-		let fixedDeclaration = rewriter.rewrite(Syntax(declaration))
+		// Apply both changes, which edit disjoint nodes: rename the method and update the attribute.
 		return [
 			.replace(oldNode: Syntax(mockSyntax), newNode: Syntax(renamedMock)),
-			.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration),
+			.replace(oldNode: Syntax(instantiableMacro), newNode: Syntax(fixedAttribute)),
 		]
 	}
 
@@ -2417,24 +2414,6 @@ extension Initializer.GenerationError {
 	}
 }
 
-// MARK: - AttributeRewriter
-
-/// Replaces a single attribute in a syntax tree by matching its node ID.
-private final class AttributeRewriter: SyntaxRewriter {
-	let oldID: SyntaxIdentifier
-	let replacement: AttributeSyntax
-	init(oldID: SyntaxIdentifier, replacement: AttributeSyntax) {
-		self.oldID = oldID
-		self.replacement = replacement
-	}
-
-	override func visit(_ node: AttributeSyntax) -> AttributeSyntax {
-		if node.id == oldID {
-			return replacement
-		}
-		return node
-	}
-}
 
 // MARK: - DependencyTypeSyntax
 
