@@ -1206,6 +1206,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				            self.userService = userService
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(userService: { __safeDI_builder() })
 				        }
@@ -1283,6 +1284,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				            self.userService = userService
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(userService: { __safeDI_builder() })
 				        }
