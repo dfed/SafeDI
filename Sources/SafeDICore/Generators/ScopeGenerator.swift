@@ -3497,8 +3497,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			visitNumber: 0,
 			referenceLocation: { instantiable.declarationLocation },
 			isOwnFile: isOwnFile,
-			visitCountsOfSubtreesOmittingNothing: [:],
-		).findings.judged()
+		).judged()
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
 		// tree that make it one say why the seam takes it.
@@ -3511,11 +3510,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// - Parameters:
-	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
-	///     parameters (see `CycleParameter`), by the declaration each builds.
-	///   - visitCountsOfSubtreesOmittingNothing: The visits the walk made of each subtree it found nothing in, by the
-	///     subtree's context (`SeamTierOmissionContext`). Returned with the subtrees beneath this scope added.
+	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
+	///   take parameters (see `CycleParameter`), by the declaration each builds.
 	private func seamTierOmissions(
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
@@ -3524,9 +3520,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		visitNumber: Int,
 		referenceLocation: @escaping @Sendable () -> Dependency.DeclarationLocation?,
 		isOwnFile: @escaping @Sendable (String) -> Bool,
-		visitCountsOfSubtreesOmittingNothing: consuming [SeamTierOmissionContext: Int],
-	) async -> (findings: OmissionFindings<SeamTierOmission>, visitCountsOfSubtreesOmittingNothing: [SeamTierOmissionContext: Int]) {
-		GenerationWork.record(1, by: .walkingSeamTierOmissions)
+	) async -> OmissionFindings<SeamTierOmission> {
 		let declaringType = instantiable.concreteInstantiable
 		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
 		for dependency in instantiable.dependencies where !dependency.source.isReceived {
@@ -3612,76 +3606,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own.
 				let function = findings.nextVisitNumber
 				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
-				let bodyPropertiesGeneratedLater = child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater)
-				let bodyDeclarationsByLabel = child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel)
-				let bodyEnclosingCycleFunctions = child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions)
-				// A generator several places of the tree share (see `ConstructionMemo`) is reached along every path to it. A
-				// subtree the walk found nothing in finds nothing again where it is handed a context that provides the same
-				// properties under the same labels and closes cycles on the same declarations: it is skipped, its visits
-				// numbered as the first walk of it numbered them. The table dies with the walk, and what a subtree finds depends
-				// on the path that reached it, so no one result can be owned by the generator ("Share work by construction").
-				let context = SeamTierOmissionContext(
-					generator: ObjectIdentifier(child.generator),
-					propertiesGeneratedLater: bodyPropertiesGeneratedLater,
-					declarationsByLabel: bodyDeclarationsByLabel,
-					enclosingCycleFunctions: bodyEnclosingCycleFunctions,
-				)
-				if let visitCount = visitCountsOfSubtreesOmittingNothing[context] {
-					findings.skipVisits(visitCount)
-				} else {
-					let walk = await child.generator.seamTierOmissions(
-						of: childInstantiable,
-						propertiesGeneratedLater: bodyPropertiesGeneratedLater,
-						declarationsByLabel: bodyDeclarationsByLabel,
-						enclosingCycleFunctions: bodyEnclosingCycleFunctions,
-						visitNumber: function,
-						referenceLocation: childReferenceLocation(of: child.generator.property),
-						isOwnFile: isOwnFile,
-						// Handed on, not copied, so that the walk beneath adds to it in place.
-						visitCountsOfSubtreesOmittingNothing: consume visitCountsOfSubtreesOmittingNothing,
-					)
-					visitCountsOfSubtreesOmittingNothing = walk.visitCountsOfSubtreesOmittingNothing
-					if walk.findings.isEmpty {
-						visitCountsOfSubtreesOmittingNothing[context] = walk.findings.nextVisitNumber - function
-					}
-					findings.append(contentsOf: walk.findings)
-				}
+				await findings.append(contentsOf: child.generator.seamTierOmissions(
+					of: childInstantiable,
+					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
+					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
+					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
+					visitNumber: function,
+					referenceLocation: childReferenceLocation(of: child.generator.property),
+					isOwnFile: isOwnFile,
+				))
 			}
 		}
-		return (findings, visitCountsOfSubtreesOmittingNothing)
-	}
-
-	/// What the walk of omitted values (`seamTierOmissions`) hands a scope that a subtree finding nothing depends on: the
-	/// scope's generator, what is generated after it, the properties each label's declarations provide
-	/// (`VisibleDeclaration.provides`), and the declarations that enclosing builder functions build and cycles close on.
-	/// The rest of what the walk hands the scope – the declarations' types and locations, the numbers of the enclosing
-	/// functions, where the scope's construction is referred to – is read only to describe what the subtree finds. So a
-	/// subtree that found nothing under a context finds nothing under an equal one, and makes as many visits.
-	private struct SeamTierOmissionContext: Hashable, Sendable {
-		init(
-			generator: ObjectIdentifier,
-			propertiesGeneratedLater: Set<Property>,
-			declarationsByLabel: [String: [VisibleDeclaration]],
-			enclosingCycleFunctions: [BuiltDeclaration: Int],
-		) {
-			self.generator = generator
-			self.propertiesGeneratedLater = propertiesGeneratedLater
-			providedPropertiesByLabel = declarationsByLabel.mapValues { declarations in
-				declarations.map { ProvidedProperties(property: $0.property, instanceProperty: $0.instanceProperty) }
-			}
-			declarationsCyclesCloseOn = Set(enclosingCycleFunctions.keys)
-		}
-
-		/// The properties one declaration provides.
-		private struct ProvidedProperties: Hashable, Sendable {
-			let property: Property
-			let instanceProperty: Property?
-		}
-
-		private let generator: ObjectIdentifier
-		private let propertiesGeneratedLater: Set<Property>
-		private let providedPropertiesByLabel: [String: [ProvidedProperties]]
-		private let declarationsCyclesCloseOn: Set<BuiltDeclaration>
+		return findings
 	}
 
 	/// The value each receive in the tree rooted at this scope, a root of the dependency tree, is handed in each place the
@@ -4194,16 +4130,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for parameter in child.generator.cycleParameters where !child.unavailableProperties.contains(parameter.property) {
 				calls.append(Call(function: function, label: parameter.property.label, declarations: declarationsByLabel[parameter.property.label, default: []]))
 			}
-		}
-
-		/// Whether the walk found no omission, read of a parameter or call of a function.
-		var isEmpty: Bool {
-			omissions.isEmpty && parameterReads.isEmpty && calls.isEmpty
-		}
-
-		/// Numbers the visits of a subtree the walk skips, which found nothing where the walk visited it before.
-		mutating func skipVisits(_ visitCount: Int) {
-			nextVisitNumber += visitCount
 		}
 
 		/// Adds the findings of a visit this visit made, which numbered the visits beneath it from this visit's
