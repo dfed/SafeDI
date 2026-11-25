@@ -202,28 +202,32 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		        func __safeDI_tBuilder() -> T {
 		            let api: any Api = __safeDI_apiBuilder_tBuilder.api()
 		            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_tBuilder.cBuilder(api)
-		            func __safeDI_cBuilder() -> C {
-		                let api: any Api = __safeDI_apiBuilder_cBuilder.api()
-		                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-		                return C(api: api, tBuilder: tBuilder)
+		            let cBuilder = Instantiator<C> {
+		                __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
 		            }
-		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		            return T(api: api, cBuilder: cBuilder)
 		        }
-		        let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(tBuilder)
-		        func __safeDI_cBuilder() -> C {
+		        func __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>) -> C {
 		            let api: any Api = __safeDI_apiBuilder_cBuilder.api()
-		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(api)
-		            func __safeDI_tBuilder() -> T {
-		                let api: any Api = __safeDI_apiBuilder_tBuilder.api()
-		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-		                return T(api: api, cBuilder: cBuilder)
-		            }
 		            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 		            return C(api: api, tBuilder: tBuilder)
 		        }
-		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		        let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(tBuilder)
+		        func __safeDI_cBuilder_() -> C {
+		            let api: any Api = __safeDI_apiBuilder_cBuilder.api()
+		            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(api)
+		            let tBuilder = Instantiator<T> {
+		                __safeDI_tBuilder_(__safeDI_apiBuilder_tBuilder: __safeDI_apiBuilder_tBuilder)
+		            }
+		            return C(api: api, tBuilder: tBuilder)
+		        }
+		        func __safeDI_tBuilder_(__safeDI_apiBuilder_tBuilder: __safeDI_ApiCarrier_T<any Api>) -> T {
+		            let api: any Api = __safeDI_apiBuilder_tBuilder.api()
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder_)
+		            return T(api: api, cBuilder: cBuilder)
+		        }
+		        let cBuilder = Instantiator<C>(__safeDI_cBuilder_)
 		        self.init(tBuilder: tBuilder, cBuilder: cBuilder)
 		    }
 		}
@@ -368,33 +372,35 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder.tBuilder
+		        func __safeDI_r(__safeDI_apiBuilder_r: __safeDI_ApiCarrier_R<any Api>) -> R {
+		            let api: any Api = __safeDI_apiBuilder_r.api()
+		            return R(api: api)
+		        }
+		        func __safeDI_uBuilder(__safeDI_apiBuilder_uBuilder: __safeDI_ApiCarrier_U<any Api>) -> U {
+		            let api: any Api = __safeDI_apiBuilder_uBuilder.api()
+		            let __safeDI_apiBuilder_otherT = __safeDI_apiBuilder_uBuilder.otherT(api)
+		            let otherT = Instantiator<T> {
+		                __safeDI_otherT(__safeDI_apiBuilder_otherT: __safeDI_apiBuilder_otherT, __safeDI_apiBuilder_uBuilder: __safeDI_apiBuilder_uBuilder)
+		            }
+		            return U(api: api, otherT: otherT)
+		        }
+		        func __safeDI_otherT(__safeDI_apiBuilder_otherT: __safeDI_ApiCarrier_T<any Api>, __safeDI_apiBuilder_uBuilder: __safeDI_ApiCarrier_U<any Api>) -> T {
+		            let q = Q()
+		            let __safeDI_apiBuilder_r = __safeDI_apiBuilder_otherT.r(q)
+		            let r: R = __safeDI_r(__safeDI_apiBuilder_r: __safeDI_apiBuilder_r)
+		            let uBuilder = Instantiator<U> {
+		                __safeDI_uBuilder(__safeDI_apiBuilder_uBuilder: __safeDI_apiBuilder_uBuilder)
+		            }
+		            return T(r: r, uBuilder: uBuilder, q: q)
+		        }
 		        func __safeDI_tBuilder() -> T {
 		            let q = Q()
 		            let __safeDI_apiBuilder_r = __safeDI_apiBuilder_tBuilder.r(q)
-		            func __safeDI_r() -> R {
-		                let api: any Api = __safeDI_apiBuilder_r.api()
-		                return R(api: api)
-		            }
-		            let r: R = __safeDI_r()
+		            let r: R = __safeDI_r(__safeDI_apiBuilder_r: __safeDI_apiBuilder_r)
 		            let __safeDI_apiBuilder_uBuilder = __safeDI_apiBuilder_tBuilder.uBuilder(q, r)
-		            func __safeDI_uBuilder() -> U {
-		                let api: any Api = __safeDI_apiBuilder_uBuilder.api()
-		                let __safeDI_apiBuilder_otherT = __safeDI_apiBuilder_uBuilder.otherT(api)
-		                func __safeDI_otherT() -> T {
-		                    let q = Q()
-		                    let __safeDI_apiBuilder_r = __safeDI_apiBuilder_otherT.r(q)
-		                    func __safeDI_r() -> R {
-		                        let api: any Api = __safeDI_apiBuilder_r.api()
-		                        return R(api: api)
-		                    }
-		                    let r: R = __safeDI_r()
-		                    let uBuilder = Instantiator<U>(__safeDI_uBuilder)
-		                    return T(r: r, uBuilder: uBuilder, q: q)
-		                }
-		                let otherT = Instantiator<T>(__safeDI_otherT)
-		                return U(api: api, otherT: otherT)
+		            let uBuilder = Instantiator<U> {
+		                __safeDI_uBuilder(__safeDI_apiBuilder_uBuilder: __safeDI_apiBuilder_uBuilder)
 		            }
-		            let uBuilder = Instantiator<U>(__safeDI_uBuilder)
 		            return T(r: r, uBuilder: uBuilder, q: q)
 		        }
 		        let tBuilder = Instantiator<T>(__safeDI_tBuilder)

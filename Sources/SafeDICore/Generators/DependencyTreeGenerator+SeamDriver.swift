@@ -497,12 +497,11 @@ extension DependencyTreeGenerator {
 			seamRoot.generatesPlainInitializers = seams.generatesPlainDependencyTreeInitializers
 			let finalSeamRoot = seamRoot
 			let declaredTypeNames = declaredTypeNames
-			func builtTree(startingCodeGeneration startsCodeGeneration: Bool) throws -> ScopeGenerator {
+			func builtTree() throws -> ScopeGenerator {
 				try Self.seamRootGenerator(
 					rootScope: seamRootScope,
 					in: .seamWorld(seamWorld),
 					seamRoot: finalSeamRoot,
-					startsCodeGeneration: startsCodeGeneration,
 					declaredTypeNames: declaredTypeNames,
 				)
 			}
@@ -512,7 +511,7 @@ extension DependencyTreeGenerator {
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
 				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
-					let treeBuiltAnew = try builtTree(startingCodeGeneration: false)
+					let treeBuiltAnew = try builtTree()
 					observer(ReusedSeamTree(
 						signature: StoredSeamSignature(seamType: seam.concreteInstantiable, signature: finalSeamRoot.signature),
 						reusedTreeCode: { try await scopeGenerator.generatePlan().spelled() },
@@ -520,7 +519,7 @@ extension DependencyTreeGenerator {
 					))
 				}
 			} else {
-				scopeGenerator = try builtTree(startingCodeGeneration: true)
+				scopeGenerator = try builtTree()
 			}
 			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
@@ -1040,7 +1039,6 @@ extension DependencyTreeGenerator {
 						rootScope: rootScope,
 						in: construction.signaturePass(over: frozenScopeMap),
 						seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
-						startsCodeGeneration: false,
 						declaredTypeNames: declaredTypeNames,
 					)
 					let seamRoot = try Self.seamRoot(
@@ -1581,7 +1579,6 @@ extension DependencyTreeGenerator {
 		rootScope: Scope,
 		in world: SeamTreeWorld,
 		seamRoot: ScopeGenerator.SeamRoot,
-		startsCodeGeneration: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
 		var nearestDeclarations = NearestDeclarations()
@@ -1615,7 +1612,6 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			erasedToConcreteExistential: false,
-			startsCodeGeneration: startsCodeGeneration,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
 		)

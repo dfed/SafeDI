@@ -168,17 +168,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(panel: __safeDI_serviceBuilder_Host_Panel_Scope())
+			        }
+			        func __safeDI_serviceBuilder_Host_Panel_Scope() -> Host.__safeDI_ServiceCarrier_Panel<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_87413095D2DB8935.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(panel: __safeDI_serviceBuilder_Host_Panel_Scope())
-			            }
-			            func __safeDI_serviceBuilder_Host_Panel_Scope() -> Host.__safeDI_ServiceCarrier_Panel<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -274,23 +274,23 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(panel: __safeDI_serviceBuilder_Host_Panel_Scope(), row: { values_panel in __safeDI_serviceBuilder_Host_Row_Scope() })
+			        }
+			        func __safeDI_serviceBuilder_Host_Panel_Scope() -> Host.__safeDI_ServiceCarrier_Panel<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
+			        func __safeDI_serviceBuilder_Host_Row_Scope() -> Host.__safeDI_ServiceCarrier_Row<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_61BEE9F915B4B25B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(panel: __safeDI_serviceBuilder_Host_Panel_Scope(), row: { values_panel in __safeDI_serviceBuilder_Host_Row_Scope() })
-			            }
-			            func __safeDI_serviceBuilder_Host_Panel_Scope() -> Host.__safeDI_ServiceCarrier_Panel<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
-			            func __safeDI_serviceBuilder_Host_Row_Scope() -> Host.__safeDI_ServiceCarrier_Row<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -415,20 +415,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                first: {
+			                    let first: any Service = DefaultService()
+			                    return first
+			                },
+			                second: { scope_first in
+			                    let second: any Service = DefaultService()
+			                    return second
+			                }
+			            )
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_E8233D5EEF2D7EE6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    first: {
-			                        let first: any Service = DefaultService()
-			                        return first
-			                    },
-			                    second: { scope_first in
-			                        let second: any Service = DefaultService()
-			                        return second
-			                    }
-			                )
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -500,20 +500,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
+			            .init(gadget: { scope_service in
+			                let gadget: any Gadget = DefaultGadget()
+			                return gadget
+			            })
+			        }
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_34C6967D52BE233C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
-			                .init(gadget: { scope_service in
-			                    let gadget: any Gadget = DefaultGadget()
-			                    return gadget
-			                })
-			            }
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host(), __safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1021,23 +1021,23 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
-			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_B2B431110653F981.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    inner: __safeDI_serviceBuilder_Inner(),
-			                    service: { scope_inner in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                inner: __safeDI_serviceBuilder_Inner(),
+			                service: { scope_inner in
 			                    let service: any Service = DefaultService()
 			                    return service
-			                })
-			            }
+			                }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
+			        func __safeDI_host() -> Host {
+			            _ = Host.__safeDI_Host_B2B431110653F981.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1243,17 +1243,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(first: __safeDI_serviceBuilder_Inner(), second: __safeDI_serviceBuilder_Inner())
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_10E1F3F1E8CC3D0D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(first: __safeDI_serviceBuilder_Inner(), second: __safeDI_serviceBuilder_Inner())
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1370,20 +1370,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(mid: __safeDI_serviceBuilder_Mid())
+			        }
+			        func __safeDI_serviceBuilder_Mid() -> Mid.__safeDI_ServiceCarrier<any Service> {
+			            .init(deep: __safeDI_serviceBuilder_Deep())
+			        }
+			        func __safeDI_serviceBuilder_Deep() -> Deep.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_00B80B51F1C0DBBF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(mid: __safeDI_serviceBuilder_Mid())
-			            }
-			            func __safeDI_serviceBuilder_Mid() -> Mid.__safeDI_ServiceCarrier<any Service> {
-			                .init(deep: __safeDI_serviceBuilder_Deep())
-			            }
-			            func __safeDI_serviceBuilder_Deep() -> Deep.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1534,20 +1534,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(plain: __safeDI_serviceBuilder_Inner())
+			        }
+			        @Sendable nonisolated func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(held: { __safeDI_serviceBuilder_Inner() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_9550B0BEF688A6B7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(plain: __safeDI_serviceBuilder_Inner())
-			            }
-			            @Sendable nonisolated func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(held: { __safeDI_serviceBuilder_Inner() })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1695,26 +1695,26 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(inner: __safeDI_serviceBuilder_Inner())
+			        }
+			        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+			            .init(plain: __safeDI_serviceBuilder_Deep())
+			        }
+			        @Sendable nonisolated func __safeDI_serviceBuilder_Deep() -> Deep.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(inner_Sendable: __safeDI_serviceSendableBuilder_Inner())
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Inner() -> Inner.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(held: { __safeDI_serviceBuilder_Deep() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_A7DF80B9E6DEF022.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(inner: __safeDI_serviceBuilder_Inner())
-			            }
-			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-			                .init(plain: __safeDI_serviceBuilder_Deep())
-			            }
-			            @Sendable nonisolated func __safeDI_serviceBuilder_Deep() -> Deep.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(inner_Sendable: __safeDI_serviceSendableBuilder_Inner())
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Inner() -> Inner.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(held: { __safeDI_serviceBuilder_Deep() })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1790,17 +1790,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(job: { __safeDI_serviceBuilder_Host_Job_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceBuilder_Host_Job_Scope() -> Host.__safeDI_ServiceCarrier_Job<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_61618E265A173DF6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(job: { __safeDI_serviceBuilder_Host_Job_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceBuilder_Host_Job_Scope() -> Host.__safeDI_ServiceCarrier_Job<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2025,20 +2025,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_A() -> A.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                service: { scope_bBuilder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                bBuilder: { __safeDI_serviceBuilder_B() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_B() -> B.__safeDI_ServiceCarrier<any Service> {
+			            .init(aBuilder: { __safeDI_serviceBuilder_A() })
+			        }
 			        func __safeDI_a() -> A {
 			            _ = A.__safeDI_A_4310AAFCAAE5697A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_A() -> A.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    service: { scope_bBuilder in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    },
-			                    bBuilder: { __safeDI_serviceBuilder_B() }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_B() -> B.__safeDI_ServiceCarrier<any Service> {
-			                .init(aBuilder: { __safeDI_serviceBuilder_A() })
-			            }
 			            return A(__safeDI_serviceBuilder: __safeDI_serviceBuilder_A())
 			        }
 			        let a: A = __safeDI_a()
@@ -2144,20 +2144,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_serviceBuilder_A() -> A.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: { scope_bBuilder in
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_A() -> A.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(bBuilder_Sendable: { __safeDI_serviceSendableBuilder_B() })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_B() -> B.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(aBuilder: { __safeDI_serviceBuilder_A() }, aBuilder_Sendable: { __safeDI_serviceSendableBuilder_A() })
+			        }
 			        func __safeDI_a() -> A {
 			            _ = A.__safeDI_A_0CBC6A899F21E707.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_serviceBuilder_A() -> A.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: { scope_bBuilder in
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_A() -> A.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(bBuilder_Sendable: { __safeDI_serviceSendableBuilder_B() })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_B() -> B.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(aBuilder: { __safeDI_serviceBuilder_A() }, aBuilder_Sendable: { __safeDI_serviceSendableBuilder_A() })
-			            }
 			            return A(__safeDI_serviceBuilder: __safeDI_serviceBuilder_A(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_A())
 			        }
 			        let a: A = __safeDI_a()
@@ -2219,17 +2219,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_S() -> S.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                service: { scope_nextBuilder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                nextBuilder: { __safeDI_serviceBuilder_S() }
+			            )
+			        }
 			        func __safeDI_s() -> S {
 			            _ = S.__safeDI_S_004BE8E9F6F4AA37.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_S() -> S.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    service: { scope_nextBuilder in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    },
-			                    nextBuilder: { __safeDI_serviceBuilder_S() }
-			                )
-			            }
 			            return S(__safeDI_serviceBuilder: __safeDI_serviceBuilder_S())
 			        }
 			        let s: S = __safeDI_s()
@@ -2310,20 +2310,20 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_S() -> S.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                service: { scope_step in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                step: { __safeDI_serviceBuilder_S_Step_Scope() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S_Step_Scope() -> S.__safeDI_ServiceCarrier_Step<any Service> {
+			            .init(sBuilder: { __safeDI_serviceBuilder_S() })
+			        }
 			        func __safeDI_s() -> S {
 			            _ = S.__safeDI_S_2503D99080B73F48.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_S() -> S.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    service: { scope_step in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    },
-			                    step: { __safeDI_serviceBuilder_S_Step_Scope() }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_S_Step_Scope() -> S.__safeDI_ServiceCarrier_Step<any Service> {
-			                .init(sBuilder: { __safeDI_serviceBuilder_S() })
-			            }
 			            return S(__safeDI_serviceBuilder: __safeDI_serviceBuilder_S())
 			        }
 			        let s: S = __safeDI_s()
@@ -2908,6 +2908,24 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Inner_Inner_job_() -> Inner_Inner_job.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(staged_Sendable: __safeDI_serviceSendableBuilder_Staged())
+			        }
+			        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Staged() -> Staged.__safeDI_ServiceSendableCarrier<any Service> {
+			            .init(pod: { __safeDI_serviceBuilder_Staged_Job_Scope() })
+			        }
+			        @Sendable nonisolated func __safeDI_serviceBuilder_Staged_Job_Scope() -> Staged.__safeDI_ServiceCarrier_Job<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_21F652AED089ABCB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_serviceBuilder_Inner_Inner_job(_ scope__scope: Token) -> any Service {
@@ -2919,24 +2937,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            }
 			            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
 			                .init(job: { scope_scope in __safeDI_serviceBuilder_Inner_Inner_job(scope_scope) })
-			            }
-			            func __safeDI_serviceBuilder_Inner_Inner_job_() -> Inner_Inner_job.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(staged_Sendable: __safeDI_serviceSendableBuilder_Staged())
-			            }
-			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Staged() -> Staged.__safeDI_ServiceSendableCarrier<any Service> {
-			                .init(pod: { __safeDI_serviceBuilder_Staged_Job_Scope() })
-			            }
-			            @Sendable nonisolated func __safeDI_serviceBuilder_Staged_Job_Scope() -> Staged.__safeDI_ServiceCarrier_Job<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
 			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host(), __safeDI_serviceSendableBuilder: __safeDI_serviceSendableBuilder_Host())
 			        }
@@ -3273,17 +3273,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+		            .init(deep: __safeDI_serviceBuilder_Deep())
+		        }
+		        func __safeDI_serviceBuilder_Deep() -> Deep.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: {
+		                let service: any Service = DefaultService()
+		                return service
+		            })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_0E589766B056A983.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-		                .init(deep: __safeDI_serviceBuilder_Deep())
-		            }
-		            func __safeDI_serviceBuilder_Deep() -> Deep.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: {
-		                    let service: any Service = DefaultService()
-		                    return service
-		                })
-		            }
 		            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -3318,6 +3318,18 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
+			            .init(inner: __safeDI_gadgetBuilder_Inner())
+			        }
+			        func __safeDI_gadgetBuilder_Inner() -> Inner.__safeDI_GadgetCarrier<any Gadget> {
+			            .init(deep: __safeDI_gadgetBuilder_Deep())
+			        }
+			        func __safeDI_gadgetBuilder_Deep() -> Deep.__safeDI_GadgetCarrier<any Gadget> {
+			            .init(gadget: {
+			                let gadget: any Gadget = DefaultGadget()
+			                return gadget
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_6C150D4BF5C855DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_serviceBuilder_Inner_service(_ scope_deep: Deep) -> any Service {
@@ -3327,18 +3339,6 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			                }
 			                let service: any Service = __safeDI_service()
 			                return service
-			            }
-			            func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
-			                .init(inner: __safeDI_gadgetBuilder_Inner())
-			            }
-			            func __safeDI_gadgetBuilder_Inner() -> Inner.__safeDI_GadgetCarrier<any Gadget> {
-			                .init(deep: __safeDI_gadgetBuilder_Deep())
-			            }
-			            func __safeDI_gadgetBuilder_Deep() -> Deep.__safeDI_GadgetCarrier<any Gadget> {
-			                .init(gadget: {
-			                    let gadget: any Gadget = DefaultGadget()
-			                    return gadget
-			                })
 			            }
 			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
 			                .init(inner: __safeDI_serviceBuilder_Inner())
@@ -3402,21 +3402,21 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Folder() -> Folder.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                folderBuilder: { __safeDI_serviceBuilder_Folder() },
+			                fileBuilder: { __safeDI_serviceBuilder_File() },
+			                service: { scope_folderBuilder, scope_fileBuilder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_File() -> File.__safeDI_ServiceCarrier<any Service> {
+			            .init(folderBuilder: { __safeDI_serviceBuilder_Folder() }, fileBuilder: { __safeDI_serviceBuilder_File() })
+			        }
 			        func __safeDI_folder() -> Folder {
 			            _ = Folder.__safeDI_Folder_6509345684BCE60B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Folder() -> Folder.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    folderBuilder: { __safeDI_serviceBuilder_Folder() },
-			                    fileBuilder: { __safeDI_serviceBuilder_File() },
-			                    service: { scope_folderBuilder, scope_fileBuilder in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_File() -> File.__safeDI_ServiceCarrier<any Service> {
-			                .init(folderBuilder: { __safeDI_serviceBuilder_Folder() }, fileBuilder: { __safeDI_serviceBuilder_File() })
-			            }
 			            return Folder(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Folder())
 			        }
 			        let folder: Folder = __safeDI_folder()
@@ -3449,33 +3449,33 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Home() -> Home.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                listBuilder: { __safeDI_serviceBuilder_List() },
+			                service: { scope_listBuilder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_List() -> List.__safeDI_ServiceCarrier<any Service> {
+			            .init(detailBuilder: { __safeDI_serviceBuilder_Detail() })
+			        }
+			        func __safeDI_serviceBuilder_Detail() -> Detail.__safeDI_ServiceCarrier<any Service> {
+			            .init(homeBuilder: { __safeDI_serviceBuilder_Home() }, settingsBuilder: { __safeDI_serviceBuilder_Settings() })
+			        }
+			        func __safeDI_serviceBuilder_Settings() -> Settings.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                homeBuilder: { __safeDI_serviceBuilder_Home() },
+			                detailBuilder: { __safeDI_serviceBuilder_Detail() },
+			                service: { scope_homeBuilder, scope_detailBuilder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                }
+			            )
+			        }
 			        func __safeDI_home() -> Home {
 			            _ = Home.__safeDI_Home_57C6AD0678D98E67.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Home() -> Home.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    listBuilder: { __safeDI_serviceBuilder_List() },
-			                    service: { scope_listBuilder in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_List() -> List.__safeDI_ServiceCarrier<any Service> {
-			                .init(detailBuilder: { __safeDI_serviceBuilder_Detail() })
-			            }
-			            func __safeDI_serviceBuilder_Detail() -> Detail.__safeDI_ServiceCarrier<any Service> {
-			                .init(homeBuilder: { __safeDI_serviceBuilder_Home() }, settingsBuilder: { __safeDI_serviceBuilder_Settings() })
-			            }
-			            func __safeDI_serviceBuilder_Settings() -> Settings.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    homeBuilder: { __safeDI_serviceBuilder_Home() },
-			                    detailBuilder: { __safeDI_serviceBuilder_Detail() },
-			                    service: { scope_homeBuilder, scope_detailBuilder in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
 			            return Home(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Home())
 			        }
 			        let home: Home = __safeDI_home()
@@ -3506,42 +3506,42 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_S0() -> S0.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                to1: { __safeDI_serviceBuilder_S1() },
+			                to3: { __safeDI_serviceBuilder_S3() },
+			                service: { scope_to1, scope_to3 in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S1() -> S1.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                to0: { __safeDI_serviceBuilder_S0() },
+			                to2: { __safeDI_serviceBuilder_S2() },
+			                service: { scope_to0, scope_to2 in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S2() -> S2.__safeDI_ServiceCarrier<any Service> {
+			            .init(to0: { __safeDI_serviceBuilder_S0() }, to3: { __safeDI_serviceBuilder_S3() })
+			        }
+			        func __safeDI_serviceBuilder_S3() -> S3.__safeDI_ServiceCarrier<any Service> {
+			            .init(
+			                to0: { __safeDI_serviceBuilder_S0() },
+			                to1: { __safeDI_serviceBuilder_S1() },
+			                to2: { __safeDI_serviceBuilder_S2() },
+			                service: { scope_to0, scope_to1, scope_to2 in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                }
+			            )
+			        }
 			        func __safeDI_s0() -> S0 {
 			            _ = S0.__safeDI_S0_1574D6F39CB45E94.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_S0() -> S0.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    to1: { __safeDI_serviceBuilder_S1() },
-			                    to3: { __safeDI_serviceBuilder_S3() },
-			                    service: { scope_to1, scope_to3 in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_S1() -> S1.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    to0: { __safeDI_serviceBuilder_S0() },
-			                    to2: { __safeDI_serviceBuilder_S2() },
-			                    service: { scope_to0, scope_to2 in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
-			            func __safeDI_serviceBuilder_S2() -> S2.__safeDI_ServiceCarrier<any Service> {
-			                .init(to0: { __safeDI_serviceBuilder_S0() }, to3: { __safeDI_serviceBuilder_S3() })
-			            }
-			            func __safeDI_serviceBuilder_S3() -> S3.__safeDI_ServiceCarrier<any Service> {
-			                .init(
-			                    to0: { __safeDI_serviceBuilder_S0() },
-			                    to1: { __safeDI_serviceBuilder_S1() },
-			                    to2: { __safeDI_serviceBuilder_S2() },
-			                    service: { scope_to0, scope_to1, scope_to2 in
-			                        let service: any Service = DefaultService()
-			                        return service
-			                    }
-			                )
-			            }
 			            return S0(__safeDI_serviceBuilder: __safeDI_serviceBuilder_S0())
 			        }
 			        let s0: S0 = __safeDI_s0()
@@ -3715,18 +3715,18 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(zsvc: { scope_Type, scope_init in
+			                let Type = scope_Type
+			                let `init` = scope_init
+			                let zsvc: any Service = DefaultService(Type: Type, init: `init`)
+			                return zsvc
+			            })
+			        }
 			        let Type = Kind()
 			        let `init` = Name()
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_577F52FE7B7A69E6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(zsvc: { scope_Type, scope_init in
-			                    let Type = scope_Type
-			                    let `init` = scope_init
-			                    let zsvc: any Service = DefaultService(Type: Type, init: `init`)
-			                    return zsvc
-			                })
-			            }
 			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host() -> Host.__safeDI_ServiceSendableCarrier<any Service> {
 			                .init(job: { __safeDI_serviceBuilder_Host_Job_Scope() })
 			            }
@@ -3821,17 +3821,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
+			            .init(inner: `__safeDI_serviceBuilder_My Inner`())
+			        }
+			        func `__safeDI_serviceBuilder_My Inner`() -> `My Inner`.__safeDI_ServiceCarrier<any Service> {
+			            .init(service: {
+			                let service: any Service = DefaultService()
+			                return service
+			            })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_55C4240F519A7BB9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.__safeDI_ServiceCarrier<any Service> {
-			                .init(inner: `__safeDI_serviceBuilder_My Inner`())
-			            }
-			            func `__safeDI_serviceBuilder_My Inner`() -> `My Inner`.__safeDI_ServiceCarrier<any Service> {
-			                .init(service: {
-			                    let service: any Service = DefaultService()
-			                    return service
-			                })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -3866,92 +3866,92 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_p_and_QBuilder_Host() -> Host.__safeDI_P_and_QCarrier<any (P & Q)> {
+			            .init(
+			                p01: {
+			                    let p01: any (P & Q) = DefaultPQ()
+			                    return p01
+			                },
+			                p02: { scope in
+			                    let p02: any (Q & P) = DefaultPQ()
+			                    return p02
+			                },
+			                p03: { scope in
+			                    let p03: any (Q & P) = DefaultPQ()
+			                    return p03
+			                },
+			                p04: { scope in
+			                    let p04: any (Q & P) = DefaultPQ()
+			                    return p04
+			                },
+			                p05: { scope in
+			                    let p05: any (Q & P) = DefaultPQ()
+			                    return p05
+			                },
+			                p06: { scope in
+			                    let p06: any (Q & P) = DefaultPQ()
+			                    return p06
+			                },
+			                p07: { scope in
+			                    let p07: any (Q & P) = DefaultPQ()
+			                    return p07
+			                },
+			                p08: { scope in
+			                    let p08: any (Q & P) = DefaultPQ()
+			                    return p08
+			                },
+			                p09: { scope in
+			                    let p09: any (Q & P) = DefaultPQ()
+			                    return p09
+			                },
+			                p10: { scope in
+			                    let p10: any (Q & P) = DefaultPQ()
+			                    return p10
+			                },
+			                p11: { scope in
+			                    let p11: any (Q & P) = DefaultPQ()
+			                    return p11
+			                },
+			                p12: { scope in
+			                    let p12: any (Q & P) = DefaultPQ()
+			                    return p12
+			                },
+			                p13: { scope in
+			                    let p13: any (Q & P) = DefaultPQ()
+			                    return p13
+			                },
+			                p14: { scope in
+			                    let p14: any (Q & P) = DefaultPQ()
+			                    return p14
+			                },
+			                p15: { scope in
+			                    let p15: any (Q & P) = DefaultPQ()
+			                    return p15
+			                },
+			                p16: { scope in
+			                    let p16: any (Q & P) = DefaultPQ()
+			                    return p16
+			                },
+			                p17: { scope in
+			                    let p17: any (Q & P) = DefaultPQ()
+			                    return p17
+			                },
+			                p18: { scope in
+			                    let p18: any (Q & P) = DefaultPQ()
+			                    return p18
+			                },
+			                p19: { scope in
+			                    let p19: any (Q & P) = DefaultPQ()
+			                    return p19
+			                },
+			                p20: { scope in
+			                    let p20: any (Q & P) = DefaultPQ()
+			                    return p20
+			                }
+			            )
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_D6AD75169F7A13E4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_p_and_QBuilder_Host() -> Host.__safeDI_P_and_QCarrier<any (P & Q)> {
-			                .init(
-			                    p01: {
-			                        let p01: any (P & Q) = DefaultPQ()
-			                        return p01
-			                    },
-			                    p02: { scope in
-			                        let p02: any (Q & P) = DefaultPQ()
-			                        return p02
-			                    },
-			                    p03: { scope in
-			                        let p03: any (Q & P) = DefaultPQ()
-			                        return p03
-			                    },
-			                    p04: { scope in
-			                        let p04: any (Q & P) = DefaultPQ()
-			                        return p04
-			                    },
-			                    p05: { scope in
-			                        let p05: any (Q & P) = DefaultPQ()
-			                        return p05
-			                    },
-			                    p06: { scope in
-			                        let p06: any (Q & P) = DefaultPQ()
-			                        return p06
-			                    },
-			                    p07: { scope in
-			                        let p07: any (Q & P) = DefaultPQ()
-			                        return p07
-			                    },
-			                    p08: { scope in
-			                        let p08: any (Q & P) = DefaultPQ()
-			                        return p08
-			                    },
-			                    p09: { scope in
-			                        let p09: any (Q & P) = DefaultPQ()
-			                        return p09
-			                    },
-			                    p10: { scope in
-			                        let p10: any (Q & P) = DefaultPQ()
-			                        return p10
-			                    },
-			                    p11: { scope in
-			                        let p11: any (Q & P) = DefaultPQ()
-			                        return p11
-			                    },
-			                    p12: { scope in
-			                        let p12: any (Q & P) = DefaultPQ()
-			                        return p12
-			                    },
-			                    p13: { scope in
-			                        let p13: any (Q & P) = DefaultPQ()
-			                        return p13
-			                    },
-			                    p14: { scope in
-			                        let p14: any (Q & P) = DefaultPQ()
-			                        return p14
-			                    },
-			                    p15: { scope in
-			                        let p15: any (Q & P) = DefaultPQ()
-			                        return p15
-			                    },
-			                    p16: { scope in
-			                        let p16: any (Q & P) = DefaultPQ()
-			                        return p16
-			                    },
-			                    p17: { scope in
-			                        let p17: any (Q & P) = DefaultPQ()
-			                        return p17
-			                    },
-			                    p18: { scope in
-			                        let p18: any (Q & P) = DefaultPQ()
-			                        return p18
-			                    },
-			                    p19: { scope in
-			                        let p19: any (Q & P) = DefaultPQ()
-			                        return p19
-			                    },
-			                    p20: { scope in
-			                        let p20: any (Q & P) = DefaultPQ()
-			                        return p20
-			                    }
-			                )
-			            }
 			            return Host(__safeDI_p_and_QBuilder: __safeDI_p_and_QBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -4041,24 +4041,24 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			            .init(mid_gadgetBuilder: { _ in __safeDI_serviceBuilder_Host_Mid() })
+			        }
+			        func __safeDI_serviceBuilder_Host_FeatureGadget_Scope(user: User) -> Host.SafeDIScope_Service.FeatureGadget_Scope.__safeDI_Builder<any Service> {
+			            .init(service: { _ in
+			                let service: any Service = DefaultService(user: user)
+			                return service
+			            })
+			        }
+			        func __safeDI_serviceBuilder_Host_Mid() -> Mid.__safeDI_GadgetCarrier<Host.SafeDIScope_Service.FeatureGadget_Scope.__safeDI_Builder<any Service>> {
+			            .init(helper: __safeDI_serviceBuilder_Host_Helper())
+			        }
+			        func __safeDI_serviceBuilder_Host_Helper() -> Helper.__safeDI_GadgetCarrier<Host.SafeDIScope_Service.FeatureGadget_Scope.__safeDI_Builder<any Service>> {
+			            .init(gadget: { values_user in __safeDI_serviceBuilder_Host_FeatureGadget_Scope(user: values_user) })
+			        }
 			        let user = User()
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_BDCE36EA0B3ADBC3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Host() -> Host.SafeDIScope_Service.__safeDI_Builder<any Service> {
-			                .init(mid_gadgetBuilder: { _ in __safeDI_serviceBuilder_Host_Mid() })
-			            }
-			            func __safeDI_serviceBuilder_Host_FeatureGadget_Scope(user: User) -> Host.SafeDIScope_Service.FeatureGadget_Scope.__safeDI_Builder<any Service> {
-			                .init(service: { _ in
-			                    let service: any Service = DefaultService(user: user)
-			                    return service
-			                })
-			            }
-			            func __safeDI_serviceBuilder_Host_Mid() -> Mid.__safeDI_GadgetCarrier<Host.SafeDIScope_Service.FeatureGadget_Scope.__safeDI_Builder<any Service>> {
-			                .init(helper: __safeDI_serviceBuilder_Host_Helper())
-			            }
-			            func __safeDI_serviceBuilder_Host_Helper() -> Helper.__safeDI_GadgetCarrier<Host.SafeDIScope_Service.FeatureGadget_Scope.__safeDI_Builder<any Service>> {
-			                .init(gadget: { values_user in __safeDI_serviceBuilder_Host_FeatureGadget_Scope(user: values_user) })
-			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
