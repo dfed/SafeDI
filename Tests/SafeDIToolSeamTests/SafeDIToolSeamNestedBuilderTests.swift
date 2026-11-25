@@ -2756,6 +2756,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.loader = loader
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(loader: { __safeDI_builder() })
 		        }

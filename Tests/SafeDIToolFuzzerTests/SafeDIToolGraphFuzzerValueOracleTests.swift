@@ -1248,6 +1248,47 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		])
 	}
 
+	@Test
+	func mirror_handsActorsInitializerEachArgumentThroughLocal_whenMockedTypeIsActor() throws {
+		#expect(try Self.mirrorSource(of: "S1_Screen", in: Self.actorScreenFixture) == """
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0: Instantiable {
+			public init(worker: S1_Worker, row: S1_Row) {
+				self.worker = worker
+				self.row = row
+				// Swift 6 does not let the mirror send the actor values in its initializer’s region, so each argument is a local.
+				do {
+					nonisolated(unsafe) let mirrorArgument0: S1_Worker = worker
+					nonisolated(unsafe) let mirrorArgument1: S1_Row = row
+					differentialMirrorValue = S1_Screen(worker: mirrorArgument0, row: mirrorArgument1)
+				}
+			}
+
+			@Instantiated let worker: S1_Worker
+			@Instantiated let row: S1_Row
+			let differentialMirrorValue: S1_Screen
+		}
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportOtherValues_whenGeneratedMockOfActorBuildsSecondInstanceOfItsArgumentsDependency() async throws {
+		let runs = try await Self.valueOracleRuns(of: Self.actorScreenFixture, editingMockOf: "S1_Screen", replacing: "S1_Row(worker: worker)", with: "S1_Row(worker: S1_Worker())")
+
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1]?.first)
+
+		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
+		#expect(failure.valueDifferences == [
+			"""
+			probe `S1_Screen.mock()` at <1> S1_Screen > row > worker:
+			  feature:     worker: <4> S1_Worker
+			  known right: worker: <2> S1_Worker (seen, first at <1> S1_Screen > worker)
+			""",
+		])
+	}
+
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueComparisons_reportOtherValues_whenGeneratedMockPassesNilWhereItsMirrorPassesValue() async throws {
@@ -1499,6 +1540,14 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		lines.append("}")
 		return lines.joined(separator: "\n") + "\n"
 	}
+
+	/// `S1_Screen`, a mocked actor, builds `S1_Worker` and `S1_Row`, which receives it.
+	private static let actorScreenFixture = fixture([
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let worker: S1_Worker", "@Instantiated let row: S1_Row"])
+			.replacingOccurrences(of: "public final class S1_Screen", with: "public actor S1_Screen"),
+		type("S1_Worker", properties: []),
+		type("S1_Row", properties: ["@Received let worker: S1_Worker"]),
+	])
 
 	private static func fixture(_ files: [String]) -> GraphFuzzerFixture {
 		GraphFuzzerFixture(seed: 1, swiftFileContent: files)
