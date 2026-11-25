@@ -126,6 +126,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.panel = panel
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -139,6 +140,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -213,6 +215,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.row = row
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(panel: .init(__safeDI_noScope: __safeDI_builder), row: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -226,6 +229,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -239,6 +243,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -324,6 +329,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.second = second
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(first: .init(__safeDI_noScope: __safeDI_builder), second: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -337,6 +343,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -390,6 +397,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.second = second
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 			        }
@@ -462,6 +470,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.gadget = gadget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(gadget: { _ in __safeDI_builder() })
 			        }
@@ -475,6 +484,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -554,6 +564,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.erased = erased
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(erased: { _ in __safeDI_builder() })
 		        }
@@ -567,6 +578,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.plain = plain
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(plain: { __safeDI_builder() })
 		        }
@@ -606,6 +618,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -619,6 +632,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.other = other
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(other: { _ in __safeDI_builder() })
 		        }
@@ -660,6 +674,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.second = second
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 		        }
@@ -701,6 +716,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.second = second
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 		        }
@@ -872,6 +888,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.second = second
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 		        }
@@ -921,6 +938,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.second = second
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(first: { __safeDI_builder() }, second: { _ in __safeDI_builder() })
 		        }
@@ -966,6 +984,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(inner: .init(__safeDI_noScope: __safeDI_builder), service: { _ in __safeDI_builder() })
 			        }
@@ -997,6 +1016,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -1085,6 +1105,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder), service: { _ in __safeDI_builder() })
 		        }
@@ -1121,6 +1142,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -1184,6 +1206,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.second = second
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(first: .init(__safeDI_noScope: __safeDI_builder), second: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1219,6 +1242,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -1286,6 +1310,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -1312,6 +1337,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.mid = mid
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(mid: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1342,6 +1368,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.deep = deep
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(deep: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1416,6 +1443,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.deep = deep
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(deep: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1462,6 +1490,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.plain = plain
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(plain: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1475,6 +1504,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.held = held
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(held: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1510,6 +1540,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -1580,6 +1611,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -1606,6 +1638,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.inner = inner
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1619,6 +1652,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.inner_Sendable = inner_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1649,6 +1683,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.plain = plain
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(plain: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1662,6 +1697,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.held = held
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(held: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1748,6 +1784,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -1761,6 +1798,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.job = job
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(job: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1843,6 +1881,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.inner_Sendable = inner_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1870,6 +1909,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.held_Sendable = held_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(held_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1899,6 +1939,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.held_Sendable = held_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(inner_Sendable: .init(__safeDI_noScope: __safeDI_builder), held_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1966,6 +2007,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() }, bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1997,6 +2039,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2070,6 +2113,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
@@ -2083,6 +2127,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.bBuilder_Sendable = bBuilder_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(bBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2116,6 +2161,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.aBuilder_Sendable = aBuilder_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, aBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2190,6 +2236,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.nextBuilder = nextBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() }, nextBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2263,6 +2310,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.step = step
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() }, step: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2276,6 +2324,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.sBuilder = sBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(sBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2356,6 +2405,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.c = c
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, c: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -2391,6 +2441,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -2421,6 +2472,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -2527,6 +2579,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.maker = maker
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: Name), __safeDI_Built>.Builder) {
 			            self.init(maker: { __safeDI_builder })
 			        }
@@ -2596,6 +2649,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.`my leaf` = `my leaf`
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(default: { __safeDI_builder() }, `my leaf`: { _ in __safeDI_builder() })
 			        }
@@ -2649,6 +2703,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.kp = kp
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(kp: { _ in __safeDI_builder() })
 		        }
@@ -2662,6 +2717,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.loader = loader
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(loader: { __safeDI_builder() })
 		        }
@@ -2700,6 +2756,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() })
 		        }
@@ -2739,6 +2796,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service_Values = service_Values
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() }, service_Values: { _ in __safeDI_builder() })
 		        }
@@ -2779,6 +2837,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.nested = nested
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(nested: { __safeDI_builder() })
 		        }
@@ -2792,6 +2851,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.joined = joined
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(joined: { _ in __safeDI_builder() })
 		        }
@@ -2837,6 +2897,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.nested = nested
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(nested: { _ in __safeDI_builder() })
 		        }
@@ -2850,6 +2911,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.joined = joined
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(joined: { _, _ in __safeDI_builder() })
 		        }
@@ -3033,6 +3095,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.inner = inner
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -3063,6 +3126,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }
@@ -3153,6 +3217,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.deep = deep
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(deep: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -3228,6 +3293,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.part = part
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(part: { __safeDI_builder })
 		        }
@@ -3609,6 +3675,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		            self.maker = maker
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Callback, __safeDI_Built>.Builder) {
 		            self.init(maker: { __safeDI_builder })
 		        }
@@ -3659,6 +3726,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.zsvc = zsvc
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(zsvc: { _, _ in __safeDI_builder() })
 			        }
@@ -3672,6 +3740,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -3685,6 +3754,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.job = job
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(job: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -3767,6 +3837,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { __safeDI_builder() })
 			        }
@@ -3793,6 +3864,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            self.inner = inner
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 			        }

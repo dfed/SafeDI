@@ -617,25 +617,26 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			)
 		}
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
-		// still made those copies. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
+		// own. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
-			0x04, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x08, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E,
-			0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44, 0x49, 0x5F, 0x64, 0x69, 0x73, 0x74,
-			0x69, 0x6E, 0x63, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x02, 0x00, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-			0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0x01,
-			0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01,
-			0x02, 0x00, 0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x01, 0x02, 0x01, 0x01, 0x01,
-			0x01, 0x01, 0x01, 0x02, 0x00, 0x02, 0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-			0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x01, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x00, 0x01, 0x02,
-			0x02, 0x02, 0x02, 0x01, 0x01, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00,
-			0x02, 0x01, 0x02, 0x02, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x01, 0x03, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00, 0x01, 0x02, 0x02, 0x02, 0x02, 0x01,
-			0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x02, 0x02,
-			0x01, 0x02, 0x01, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-			0x00,
+			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xEB, 0x01, 0x03, 0x00, 0x08,
+			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
+			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
+			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00,
+			0x01, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x02,
+			0x01, 0x02, 0x01, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x02,
+			0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x01, 0x00, 0x02,
+			0x02, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02,
+			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02,
+			0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00,
+			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
@@ -911,10 +912,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFormatVersionDiffers() async throws {
 		try await assertDumpThrows(
-			"The scan cache is in format version 3, but this SafeDITool reads format version 2.",
+			"The scan cache is in format version 4, but this SafeDITool reads format version 3.",
 			whenCacheIs: { cache in
 				var cache = cache
-				cache[cache.startIndex + 4] = 3
+				cache[cache.startIndex + 4] = 4
 				return cache
 			},
 		)
@@ -1255,8 +1256,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
 		let written = try #require(seamModule.moduleInfoFile)
-		#expect(dumped.seamSignatures.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
-		#expect(reflectedDescription(of: dumped.seamSignatures) == reflectedDescription(of: written.seamSignatures))
+		#expect(try dumped.seamSignatures.decoded.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
+		#expect(try reflectedDescription(of: dumped.seamSignatures.decoded) == reflectedDescription(of: written.seamSignatures.decoded))
 	}
 
 	@Test
@@ -1376,6 +1377,114 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenDependentModuleInfoFileIsInAnEarlierFormatVersion() async throws {
+		// A project upgrades SafeDI in every module at once, so a file an earlier SafeDITool wrote is reported, with the
+		// remedy that regenerates it, and never read as this version's layout.
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamServiceSource],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
+		// The format version is the two bytes after the magic, least significant first.
+		moduleInfo[moduleInfo.startIndex + 4] = 2
+		try moduleInfo.write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
+
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The module info file is in format version 2, but this SafeDITool reads format version 3. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.downstreamRootSource],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameCodeAsFromIntactFile_whenSeamSignatureEncodingOfReachedModuleIsCutShort() async throws {
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamSeamSource],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		let upstreamModuleInfoURL = try URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath)
+		let intact = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamSeamCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Example"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: upstreamModuleInfoURL))
+		// A file whose checksum holds over a signature encoding cut short, which only a SafeDITool that wrote a malformed
+		// encoding could make: the file reads, the encoding throws when the downstream tree reaches the seam, and the run
+		// computes the seam's signature from its module's declarations, as any run that throws after reading one does.
+		try ModuleInfoFile(
+			moduleName: file.moduleName,
+			ownEntryChecksum: file.ownEntryChecksum,
+			packageName: file.packageName,
+			dependencyModuleNames: file.dependencyModuleNames,
+			imports: file.imports,
+			mockImports: file.mockImports,
+			instantiables: file.instantiables,
+			configurations: file.configurations,
+			filesWithUnexpectedNodes: file.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: file.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: file.instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: file.plainTypeDeclarations,
+			seamSignatures: ModuleSeamSignatures(seamTypes: file.seamSignatures.seamTypes, encoding: file.seamSignatures.encoding(writingPositionsAsAbsent: true).dropLast()),
+			view: file.view,
+		).moduleInfoData.write(to: upstreamModuleInfoURL)
+
+		let cutShort = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamSeamCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Example"],
+		)
+
+		#expect(cutShort.combinedOutput == intact.combinedOutput)
+		#expect(cutShort.combinedOutput == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public init() {
+		        let upstreamSeam = UpstreamSeam()
+		        self.init(upstreamSeam: upstreamSeam)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	func moduleSeamSignatures_throwsRatherThanTraps_whenEncodingIsCutShortAtAnyByte() throws {
+		let encoding = try ModuleSeamSignatures([StoredSeamSignature.sample(isDistinct: true), StoredSeamSignature.sample(isDistinct: false)]).encoding(writingPositionsAsAbsent: true)
+
+		for length in 0..<encoding.count {
+			let cutShort = ModuleSeamSignatures(seamTypes: [], encoding: Array(encoding.prefix(length)))
+			#expect(throws: BinaryDecodingError.self, "cut short at \(length) of \(encoding.count) bytes") { try cutShort.decoded }
+		}
+		#expect(try ModuleSeamSignatures(seamTypes: [], encoding: encoding).decoded.count == 2)
+	}
+
+	@Test
+	func binaryReader_throws_whenEncodingCountsMoreBytesThanRemain() throws {
+		var writer = BinaryWriter()
+		writer.write(BinaryEncoding(bytes: [1, 2, 3]))
+		let cutShort = Array(writer.encoded.dropLast())
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 3, offset: 1)) {
+			let _: BinaryEncoding = try read(cutShort)
+		}
+	}
+
 	// MARK: Private
 
 	/// `café` with a precomposed `é` (U+00E9), the spelling Unicode Normalization Form C produces.
@@ -1401,6 +1510,24 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@Instantiable
 	public struct UpstreamService: Instantiable {
 	    public init() {}
+	}
+	"""
+
+	private static let upstreamSeamSource = """
+	@Instantiable(generateDependencyTree: true)
+	public struct UpstreamSeam: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	private static let downstreamSeamCallerSource = """
+	@Instantiable(isRoot: true)
+	public struct Root: Instantiable {
+	    public init(upstreamSeam: UpstreamSeam) {
+	        self.upstreamSeam = upstreamSeam
+	    }
+
+	    @Instantiated let upstreamSeam: UpstreamSeam
 	}
 	"""
 
@@ -2125,6 +2252,14 @@ extension TypeDescription.VoidSpelling: BinarySample {}
 extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
 extension StoredSeamSignature: BinarySample {}
+extension ModuleSeamSignatures: BinarySample {}
+
+extension BinaryEncoding: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinaryEncoding {
+		BinaryEncoding(bytes: isDistinct ? [1] : [])
+	}
+}
+
 extension SeamSignature: BinarySample {}
 extension SeamSignature.Receiver: BinarySample {}
 extension SeamSignature.NestedSeamCall: BinarySample {}

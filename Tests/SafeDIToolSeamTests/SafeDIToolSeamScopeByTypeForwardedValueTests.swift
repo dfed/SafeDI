@@ -94,6 +94,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		            self.panel = panel
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Name, __safeDI_Built>.Builder) {
 		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -107,6 +108,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		            self.maker = maker
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Name, __safeDI_Built>.Builder) {
 		            self.init(maker: { _ in __safeDI_builder })
 		        }

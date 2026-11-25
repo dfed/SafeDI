@@ -168,6 +168,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -206,6 +207,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -294,6 +296,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		            self.nextBuilder = nextBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _ in __safeDI_builder() }, nextBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
