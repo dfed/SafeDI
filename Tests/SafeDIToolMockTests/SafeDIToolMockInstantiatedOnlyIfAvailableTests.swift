@@ -1034,6 +1034,163 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsHandWrittenMockWithCallingModulesImplementation_whenPublicMocksRemedyIsApplied() async throws {
+		// The remedy the error above names: `Screen` declares `mock()` by hand instead of `generateMock: .public`. `App`, which
+		// declares a type that fulfills `Analytics`, builds `Screen` in `Root.mock()` with that mock and passes it the value
+		// production builds at `Screen`. Both modules compile.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "feature", swiftFileContent: [
+					"""
+					import SafeDI
+
+					public protocol Analytics {}
+
+					@Instantiable
+					public final class Screen: Instantiable {
+					    public init(analytics: (any Analytics)?) {
+					        self.analytics = analytics
+					    }
+
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+
+					    #if DEBUG
+					    public static func mock(analytics: (any Analytics)? = nil) -> Screen {
+					        Screen(analytics: analytics)
+					    }
+					    #endif
+					}
+					""",
+				]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+					"""
+					import Feature
+					import SafeDI
+
+					@Instantiable(fulfillingAdditionalTypes: [Analytics.self])
+					public final class AnalyticsImpl: Analytics, Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					import Feature
+					import SafeDI
+
+					@Instantiable(isRoot: true, generateMock: true)
+					public final class Root: Instantiable {
+					    public init(screen: Screen) {
+					        self.screen = screen
+					    }
+
+					    @Instantiated let screen: Screen
+					}
+					""",
+				], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_screen() -> Screen {
+		            let analytics: (any Analytics)? = AnalyticsImpl()
+		            return Screen(analytics: analytics)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
+		}
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screen: screen
+		            )
+		        }
+
+		        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screen: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screen = screen
+		            }
+
+		            let screen: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_screen() -> Screen {
+		            let analytics: any Analytics = if let safeDIBuilder = safeDIOverrides.screen.analytics { safeDIBuilder() } else { AnalyticsImpl() }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(analytics) } else { Screen.mock(analytics: analytics) }
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        return Root(screen: screen)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            analytics: (() -> any Analytics)? = nil,
+		            _ safeDIBuilder: (((any Analytics)?) -> Screen)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: (((any Analytics)?) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> any Analytics)?,
+		                safeDIBuilder: (((any Analytics)?) -> Screen)?
+		            ) {
+		                self.analytics = analytics
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let analytics: (() -> any Analytics)?
+		            let safeDIBuilder: (((any Analytics)?) -> Screen)?
+		        }
+		    }
+		}
+		#endif
+
+		""", "Unexpected output \(output.modules["App"]?.generatedFiles["App.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_takesOverrideDefaultingToNil_whenMockedSeamInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
 		// The seam's initializer takes a builder that returns the optional; its own mock takes an override of the value instead.
 		let output = try await executeSafeDIToolTest(
