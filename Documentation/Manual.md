@@ -349,6 +349,8 @@ Each `@Instantiated` property is a distinct instance.
 
 An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
 
+The type an `@Instantiated` SafeDI wrapper builds cannot itself be a SafeDI wrapper, as in `LazilyInstantiated<Instantiator<Screen>>`: SafeDI builds a wrapper’s value from an `@Instantiable` type, so declare the inner wrapper, `Instantiator<Screen>`, instead.
+
 In a SwiftUI `View`, `@Instantiated` objects are re-initialized each time SwiftUI recreates the view; see this [deep dive on SwiftUI view lifecycles](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
 ### @Forwarded
