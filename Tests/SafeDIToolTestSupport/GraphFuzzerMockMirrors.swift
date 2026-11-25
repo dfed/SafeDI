@@ -995,6 +995,7 @@ struct GraphFuzzerMockMirror: Equatable {
 		if argumentBindings.isEmpty {
 			lines.append("\t\t\(Self.valueLabel) = \(construction)")
 		} else {
+			lines.append("\t\t// Swift 6 does not let the mirror send the actor values in its initializer’s region, so each argument is a local.")
 			lines.append("\t\tdo {")
 			lines += argumentBindings.map { "\t\t\tnonisolated(unsafe) let \($0)" }
 			lines.append("\t\t\t\(Self.valueLabel) = \(construction)")

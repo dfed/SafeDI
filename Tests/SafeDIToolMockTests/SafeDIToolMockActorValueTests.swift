@@ -124,6 +124,8 @@ struct SafeDIToolMockActorValueTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsOverriddenValues_whenOverridesReachActorsArgument() async throws {
+		// The known-right build hands the actor a `Worker` the probe's closure built, whose region Swift 6 cannot tell from
+		// the closure's, so it passes it through a `nonisolated(unsafe)` local; the generated mock needs none.
 		let path = try await Self.path(of: Self.storeFixture(generateMock: "true"), filesToDelete: &filesToDelete)
 		try await expectDifferentialValuesAgree(
 			feature: path,
