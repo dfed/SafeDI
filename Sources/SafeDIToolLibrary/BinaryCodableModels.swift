@@ -519,6 +519,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("usesModuleDefaultIsolation", \.usesModuleDefaultIsolation),
+				BinaryLayoutField("initializerUsesModuleDefaultIsolation", \.initializerUsesModuleDefaultIsolation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
 				BinaryLayoutField("conformanceListNamesSendable", \.conformanceListNamesSendable),
@@ -563,6 +564,7 @@ extension Instantiable: BinarySchemaMember {
 			moduleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			usesModuleDefaultIsolation: fieldFlags.next(),
+			initializerUsesModuleDefaultIsolation: fieldFlags.next(),
 		)
 		sourceFilePath = try reader.readOptional(flaggedIn: &fieldFlags) as String?
 		isInsideCompilerDecidedBlock = fieldFlags.next()
@@ -605,6 +607,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.writeOptional(moduleName, flaggedIn: &fieldFlags)
 			writer.writeOptional(packageName, flaggedIn: &fieldFlags)
 			fieldFlags.append(usesModuleDefaultIsolation)
+			fieldFlags.append(initializerUsesModuleDefaultIsolation)
 			writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
 			fieldFlags.append(isInsideCompilerDecidedBlock)
 			fieldFlags.append(conformanceListNamesSendable)
