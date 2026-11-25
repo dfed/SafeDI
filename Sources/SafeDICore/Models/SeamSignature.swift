@@ -2143,6 +2143,18 @@ extension KeyedEncodingContainer {
 	}
 }
 
+/// The signatures a module info file carries of the seams of one module, read only when a run reaches one of those seams:
+/// a module's file carries those of every seam it declares, and a run reaches the seams of few of the modules it reads.
+public struct StoredSeamSignatures: Sendable {
+	/// - Parameter read: Returns the signatures, as `SafeDITool` decodes them from the module info file.
+	public init(read: @escaping @Sendable () throws -> [StoredSeamSignature]) {
+		self.read = read
+	}
+
+	/// The signatures, each of one seam, decoded each time this is called.
+	public let read: @Sendable () throws -> [StoredSeamSignature]
+}
+
 public struct StoredSeamSignature: Codable, Sendable {
 	public init(seamType: TypeDescription, signature: SeamSignature?) {
 		self.seamType = seamType
@@ -2360,12 +2372,12 @@ struct CalledBuilders: Sendable {
 public struct SeamResolution: Sendable {
 	/// A seam declared in another module, which that module's run of `generate` generated the initializer of.
 	public struct ForeignSeam: Sendable {
-		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil, storedSignature: StoredSeamSignature? = nil) {
+		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil, storedSignatures: StoredSeamSignatures? = nil) {
 			self.declaringModule = declaringModule
 			self.visibleDeclarations = visibleDeclarations
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
-			self.storedSignature = storedSignature
+			self.storedSignatures = storedSignatures
 		}
 
 		/// The module that declares the seam, whose name is known: a seam whose module is unknown is built inline.
@@ -2382,15 +2394,16 @@ public struct SeamResolution: Sendable {
 		/// conditions are spelled the same. `nil` when this run read the module's module info, which holds its
 		/// declarations as the module read them.
 		public let declaringModuleMockCondition: MockCondition?
-		/// The seam's signature as its module's run computed it, which the module info this run read it from carries;
-		/// `nil` when this run read the module's files, under the SwiftPM plugin's target graph.
-		public let storedSignature: StoredSeamSignature?
+		/// The signatures of the seams of the seam's module as that module's run computed them, among which the module
+		/// info this run read them from carries this seam's; `nil` when it carries none of this seam, and when this run
+		/// read the module's files, under the SwiftPM plugin's target graph. Every seam of one module holds the same.
+		public let storedSignatures: StoredSeamSignatures?
 	}
 
 	/// Whether a foreign seam carries the signature its module's run stored.
 	public var readsStoredSignature: Bool {
-		foreignSeams.values.contains { $0.storedSignature != nil }
-			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignature != nil } }
+		foreignSeams.values.contains { $0.storedSignatures != nil }
+			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignatures != nil } }
 	}
 
 	/// The declarations a module sees.

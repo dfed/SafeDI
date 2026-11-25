@@ -1003,7 +1003,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.clock = { _ in __safeDI_builder() }
+		                    self.init(clock: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1017,7 +1017,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.innerScreen = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(innerScreen: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
