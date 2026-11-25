@@ -55,12 +55,6 @@ public enum SeamRouteQueryShadow {
 		public var routeDependentAnswers = 0
 		public var mismatchSamples = [String]()
 		public var conflictSamples = [String]()
-		public var queryNanoseconds: Int64 = 0
-		public var graphNanoseconds: Int64 = 0
-	}
-
-	static func nanoseconds(_ duration: Duration) -> Int64 {
-		duration.components.seconds * 1_000_000_000 + duration.components.attoseconds / 1_000_000_000
 	}
 
 	public static func report(of placeLevels: SeamPlaceLevels) -> Report {
@@ -68,9 +62,7 @@ public enum SeamRouteQueryShadow {
 		report.seamType = placeLevels.seamType.asSource
 		report.places = placeLevels.places.count
 
-		let graphStart = ContinuousClock.now
 		let graph = SeamPlaceGraph(places: placeLevels.places)
-		report.graphNanoseconds = nanoseconds(ContinuousClock.now - graphStart)
 		report.nodes = graph.nodes.count
 		report.edges = graph.nodes.reduce(0) { $0 + $1.parents.count }
 		report.cases = graph.cases.count
@@ -83,7 +75,6 @@ public enum SeamRouteQueryShadow {
 		}
 
 		var query = SeamPlaceGraph.Query(of: graph)
-		let queryStart = ContinuousClock.now
 		for (caseIndex, placeCase) in graph.cases.enumerated() {
 			let placeIndices = placeIndicesByCase[caseIndex]
 			let places = placeIndices.map { placeLevels.places[$0] }
@@ -189,7 +180,6 @@ public enum SeamRouteQueryShadow {
 				appendSample("stack entries of case at \(paths): today \(today.count) query \(entries.count)", to: &report)
 			}
 		}
-		report.queryNanoseconds = nanoseconds(ContinuousClock.now - queryStart)
 		report.graphCycles = query.graphCycles
 		return report
 	}
