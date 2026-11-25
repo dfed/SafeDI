@@ -788,6 +788,33 @@ extension DependencyTreeGenerator {
 		let declarations: [PathDeclaration?]
 		/// The properties of the children that start as carriers (`ScopeGenerator.startsAsCarrier(_:)`).
 		let carrierProperties: [Property]
+
+		/// Each carrier property's first position among `carrierProperties`, and the carrier there.
+		private let firstCarrierByProperty: [Property: (position: Int, carrier: Property)]
+
+		init(declarations: [PathDeclaration?], carrierProperties: [Property]) {
+			self.declarations = declarations
+			self.carrierProperties = carrierProperties
+			firstCarrierByProperty = Dictionary(
+				carrierProperties.enumerated().map { ($0.element, (position: $0.offset, carrier: $0.element)) },
+				uniquingKeysWith: { first, _ in first },
+			)
+		}
+
+		/// The first of `carrierProperties`, other than `pathProperty`, that is among `requiredProperties`. Whichever of the
+		/// two is smaller is walked and the other looked up in, so a scope of many carriers whose children each require a
+		/// few properties compares only those few for each child.
+		func firstCarrier(otherThan pathProperty: Property, among requiredProperties: Set<Property>) -> Property? {
+			GenerationWork.record(min(requiredProperties.count, carrierProperties.count), by: .findingCarrierASiblingRequires)
+			if requiredProperties.count < carrierProperties.count {
+				return requiredProperties.lazy
+					.compactMap { firstCarrierByProperty[$0] }
+					.filter { $0.carrier != pathProperty }
+					.min { $0.position < $1.position }?.carrier
+			} else {
+				return carrierProperties.first { $0 != pathProperty && requiredProperties.contains($0) }
+			}
+		}
 	}
 
 	/// A type's dependencies, looked up by property: what a scan of them in declaration order for the first of a property
@@ -1260,7 +1287,6 @@ extension DependencyTreeGenerator {
 				carrierProperties: frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil },
 			)
 			childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] = childDeclarations
-			let carrierProperties = childDeclarations.carrierProperties
 			for (position, child) in frame.orderedChildren.enumerated() {
 				guard var pathDeclaration = childDeclarations.declarations[position] else { continue }
 				let property = pathDeclaration.property
@@ -1279,7 +1305,7 @@ extension DependencyTreeGenerator {
 					pathDeclaration.builtAfter = pathProperty
 					if child.generator.onlyIfAvailableUnwrappedReceivedProperties.contains(pathProperty.asUnwrappedProperty) {
 						pathDeclaration.reason = .receivesPathScopeOnlyIfAvailable(type: childType)
-					} else if let carrier = carrierProperties.first(where: { $0 != pathProperty && child.generator.requiredReceivedProperties.contains($0) }) {
+					} else if let carrier = childDeclarations.firstCarrier(otherThan: pathProperty, among: child.generator.requiredReceivedProperties) {
 						pathDeclaration.reason = .requiresOtherCarrier(type: childType, carrier: carrier)
 					}
 				} else if position > pathPosition, let pathProperty, child.generator.holeSite != nil {
@@ -1427,9 +1453,6 @@ extension DependencyTreeGenerator {
 		let declaration: SeamSignature.Hole.UncarriedDeclaration
 		/// For a parameter of the builder function of a scope between, which a cycle nested inside closes on, that scope.
 		let parameterOfScope: ObjectIdentifier?
-		/// For a declaration a cycle nested inside a scope between declares, which that scope's builder function is passed
-		/// wherever a type in its tree receives the label, the type that scope builds; `nil` for a declaration on the path.
-		var typeOfScopeNestedCyclePassesIt: TypeDescription?
 	}
 
 	/// A parameter of the builder function of a scope a nested cycle closes on.
@@ -1438,51 +1461,13 @@ extension DependencyTreeGenerator {
 		let label: String
 	}
 
-	/// A scope on the path, whose builder function a nested cycle may close on.
+	/// A scope on the path whose builder function a nested cycle closes on.
 	private struct NestedClosedOnScope {
 		let scope: ObjectIdentifier
 		let declaration: ScopeGenerator.BuiltDeclaration?
-		/// The type the scope builds.
-		let type: TypeDescription
 		let parameterLabels: [String]
-		/// The scope's own property's label and the labels it declares itself, whose nearest declaration beneath it is its
-		/// own, and the labels of its function's parameters, which are on the path already.
-		let labelsBoundByScope: Set<String>
 		/// The index in the path's declarations of the first declaration beneath the scope.
 		let firstDeclarationBeneath: Int
-	}
-
-	/// The path from the builder function of a scope a cycle closes on to a cycle-closing scope that calls it.
-	private struct PathToCycleClosingScope {
-		let declarations: [DeclarationOnCyclePath]
-		/// The scopes on the path beneath the closed-on scope.
-		let scopes: ArraySlice<NestedClosedOnScope>
-		/// The index in `declarations` of the first declaration beneath the closed-on scope.
-		let firstDeclarationBeneath: Int
-
-		/// The path's declarations beneath the closed-on scope, the nearest to the cycle-closing scope first. A scope on the
-		/// path that a cycle nested inside closes on stands, just above its children, for each label that cycle declares
-		/// again (`declarationsOfNestedCycles`): inline, its function takes that label wherever its tree receives it, and
-		/// what it builds beneath receives that parameter, which no declaration on this path shows.
-		func declarationsNearestFirst(declarationsOfNestedCycles: [ObjectIdentifier: [DeclarationOnCyclePath]]) -> [DeclarationOnCyclePath] {
-			var nearestFirst = [DeclarationOnCyclePath]()
-			var scopesLeft = scopes
-			for index in stride(from: declarations.count, through: firstDeclarationBeneath, by: -1) {
-				while let scope = scopesLeft.last, scope.firstDeclarationBeneath == index {
-					scopesLeft.removeLast()
-					for var declaration in declarationsOfNestedCycles[scope.scope] ?? []
-						where !scope.labelsBoundByScope.contains(declaration.declaration.property.label)
-					{
-						declaration.typeOfScopeNestedCyclePassesIt = scope.type
-						nearestFirst.append(declaration)
-					}
-				}
-				if index > firstDeclarationBeneath {
-					nearestFirst.append(declarations[index - 1])
-				}
-			}
-			return nearestFirst
-		}
 	}
 
 	/// The declarations between the builder function of `closedOnScope` and each cycle-closing scope in its tree that calls
@@ -1504,20 +1489,21 @@ extension DependencyTreeGenerator {
 			// A label the scope declares itself is no parameter of its function, so this removes only the parameters'.
 			ownLabels.subtract(closedOnScope.cycleParameters.map(\.property.label))
 		}
-		var pathsToCycleClosingScopes = [(path: PathToCycleClosingScope, reenteringType: TypeDescription)]()
-		var pathsToNestedCycleClosingScopes = [(closedOnScope: ObjectIdentifier, path: PathToCycleClosingScope)]()
+		var declarationsMet = [(declaration: DeclarationOnCyclePath, reenteringType: TypeDescription)]()
 		var bindingByNestedCycleParameter = [NestedCycleParameter: DeclarationOnCyclePath]()
 		var generatorsToVisit = closedOnScope.children.reversed().map { (generator: $0, parentType: closedOnDeclaration.concreteType, pathDeclarations: [DeclarationOnCyclePath](), nestedClosedOnScopes: [NestedClosedOnScope]()) }
 		while let (generator, parentType, pathDeclarations, nestedClosedOnScopes) = generatorsToVisit.popLast() {
 			if generator.closesPropertyCycle, generator.closedOnDeclaration == closedOnDeclaration {
-				pathsToCycleClosingScopes.append((PathToCycleClosingScope(declarations: pathDeclarations, scopes: nestedClosedOnScopes[...], firstDeclarationBeneath: 0), parentType))
-			} else if generator.closesPropertyCycle, let nestedIndex = nestedClosedOnScopes.lastIndex(where: { $0.declaration == generator.closedOnDeclaration }) {
-				let nestedClosedOnScope = nestedClosedOnScopes[nestedIndex]
-				pathsToNestedCycleClosingScopes.append((nestedClosedOnScope.scope, PathToCycleClosingScope(
-					declarations: pathDeclarations,
-					scopes: nestedClosedOnScopes[(nestedIndex + 1)...],
-					firstDeclarationBeneath: nestedClosedOnScope.firstDeclarationBeneath,
-				)))
+				// The nearest declaration of each label on the path, which the cycle-closing scope passes the function.
+				var labelsMet = Set<String>()
+				for pathDeclaration in pathDeclarations.reversed()
+					where labelsMet.insert(pathDeclaration.declaration.property.label).inserted
+					&& !ownLabels.contains(pathDeclaration.declaration.property.label)
+					&& !declarationsMet.contains(where: { $0.declaration.declaration.property.label == pathDeclaration.declaration.property.label })
+				{
+					declarationsMet.append((pathDeclaration, parentType))
+				}
+			} else if generator.closesPropertyCycle, let nestedClosedOnScope = nestedClosedOnScopes.last(where: { $0.declaration == generator.closedOnDeclaration }) {
 				// A nested cycle passes each parameter of the function it closes on its nearest declaration beneath that scope.
 				// Keyed by the nested closed-on scope's generator: a generator a construction memo shares between two places
 				// beneath one closed-on scope has the same subtree at both, so the first place's binding is the binding at each.
@@ -1529,10 +1515,8 @@ extension DependencyTreeGenerator {
 				}
 			} else if generator.fillHole == nil, let instantiable = generator.builtInstantiable {
 				var childPathDeclarations = pathDeclarations
-				var labelsBoundByScope = Set(generator.property.map { [$0.label] } ?? [])
 				for declaration in declarationsBound(by: generator, includingForwardedProperties: true, reason: .other) {
 					childPathDeclarations.append(DeclarationOnCyclePath(declaration: declaration, parameterOfScope: nil))
-					labelsBoundByScope.insert(declaration.property.label)
 				}
 				var childNestedClosedOnScopes = nestedClosedOnScopes
 				for parameter in generator.cycleParameters {
@@ -1540,45 +1524,11 @@ extension DependencyTreeGenerator {
 						declaration: SeamSignature.Hole.UncarriedDeclaration(property: parameter.property, declaringType: instantiable.concreteInstantiable, declarationLocation: nil, builtAfter: nil, reason: .other),
 						parameterOfScope: ObjectIdentifier(generator),
 					))
-					labelsBoundByScope.insert(parameter.property.label)
 				}
-				childNestedClosedOnScopes.append(NestedClosedOnScope(
-					scope: ObjectIdentifier(generator),
-					declaration: generator.declaration,
-					type: instantiable.concreteInstantiable,
-					parameterLabels: generator.cycleParameters.map(\.property.label),
-					labelsBoundByScope: labelsBoundByScope,
-					firstDeclarationBeneath: childPathDeclarations.count,
-				))
+				if !generator.cycleParameters.isEmpty {
+					childNestedClosedOnScopes.append(NestedClosedOnScope(scope: ObjectIdentifier(generator), declaration: generator.declaration, parameterLabels: generator.cycleParameters.map(\.property.label), firstDeclarationBeneath: childPathDeclarations.count))
+				}
 				generatorsToVisit.append(contentsOf: generator.children.reversed().map { ($0, instantiable.concreteInstantiable, childPathDeclarations, childNestedClosedOnScopes) })
-			}
-		}
-		// What each scope's nested cycles declare again, the first declaration of each label a pass meets. A nested cycle's
-		// own path can hold a scope a cycle nested deeper closes on, whose labels a later path may add, so the passes
-		// repeat until one adds nothing; each adds a label to a scope at most once, and the labels and scopes are finite.
-		var declarationsOfNestedCycles = [ObjectIdentifier: [DeclarationOnCyclePath]]()
-		var addedDeclaration = !pathsToNestedCycleClosingScopes.isEmpty
-		while addedDeclaration {
-			addedDeclaration = false
-			for (nestedClosedOnScope, path) in pathsToNestedCycleClosingScopes {
-				for declaration in path.declarationsNearestFirst(declarationsOfNestedCycles: declarationsOfNestedCycles)
-					where declarationsOfNestedCycles[nestedClosedOnScope]?.contains(where: { $0.declaration.property.label == declaration.declaration.property.label }) != true
-				{
-					declarationsOfNestedCycles[nestedClosedOnScope, default: []].append(declaration)
-					addedDeclaration = true
-				}
-			}
-		}
-		var declarationsMet = [(declaration: DeclarationOnCyclePath, reenteringType: TypeDescription)]()
-		for (path, reenteringType) in pathsToCycleClosingScopes {
-			// The nearest declaration of each label on the path, which the cycle-closing scope passes the function.
-			var labelsMet = Set<String>()
-			for pathDeclaration in path.declarationsNearestFirst(declarationsOfNestedCycles: declarationsOfNestedCycles)
-				where labelsMet.insert(pathDeclaration.declaration.property.label).inserted
-				&& !ownLabels.contains(pathDeclaration.declaration.property.label)
-				&& !declarationsMet.contains(where: { $0.declaration.declaration.property.label == pathDeclaration.declaration.property.label })
-			{
-				declarationsMet.append((pathDeclaration, reenteringType))
 			}
 		}
 		return declarationsMet.map { pathDeclaration, reenteringType in
@@ -1591,7 +1541,7 @@ extension DependencyTreeGenerator {
 				property: binding.declaration.property,
 				declaringType: binding.declaration.declaringType,
 				declarationLocation: binding.declaration.declarationLocation,
-				parameterTakingType: pathDeclaration.parameterOfScope.map { _ in pathDeclaration.declaration.declaringType } ?? pathDeclaration.typeOfScopeNestedCyclePassesIt,
+				parameterTakingType: pathDeclaration.parameterOfScope.map { _ in pathDeclaration.declaration.declaringType },
 				closedOnProperty: closedOnProperty,
 				reenteringType: reenteringType,
 			)
