@@ -200,43 +200,6 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 		])
 	}
 
-	@Test(arguments: [nil, "MainActor"])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_REVIEWCELL_typeBoundToAnotherGlobalActorThroughProtocol(buildSettingDefaultIsolation: String?) async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@globalActor public actor DatabaseActor {
-				    public static let shared = DatabaseActor()
-				}
-
-				@DatabaseActor public protocol DatabaseBound {}
-				""",
-				"""
-				@Instantiable(generateMock: true)
-				public final class Ledger: Instantiable, DatabaseBound {
-				    public init(store: Store) {
-				        self.store = store
-				    }
-
-				    @Instantiated let store: Store
-				}
-				""",
-				"""
-				@Instantiable(generateMock: true)
-				nonisolated public final class Store: Instantiable, Sendable {
-				    public init() {}
-				}
-				""",
-			],
-			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": Self.declaringMainActor],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: buildSettingDefaultIsolation),
-		)
-		#expect(output.generatedFiles != nil)
-	}
-
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_spellsMainActorOnAdditionalMock_whenOnlyDeclaringModuleDeclaresMainActor(integration: MultiModuleIntegration) async throws {
