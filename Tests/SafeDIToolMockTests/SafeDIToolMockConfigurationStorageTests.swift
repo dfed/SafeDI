@@ -248,12 +248,10 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_childBuilder__childBuilder_grand_safeDIBuilder = safeDIOverrides.childBuilder.grand
-			        let __safeDI_childBuilder__childBuilder_capacity = safeDIOverrides.childBuilder.capacity
-			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
+			        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
 			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
-			            let grand = if let safeDIBuilder = __safeDI_childBuilder__childBuilder_grand_safeDIBuilder { safeDIBuilder() } else { Grand() }
-			            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(grand, __safeDI_childBuilder__childBuilder_capacity()) } else { Child(grand: grand, capacity: __safeDI_childBuilder__childBuilder_capacity()) }
+			            let grand = if let safeDIBuilder = __safeDI_childBuilder__overrides.grand { safeDIBuilder() } else { Grand() }
+			            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(grand, __safeDI_childBuilder__overrides.capacity()) } else { Child(grand: grand, capacity: __safeDI_childBuilder__overrides.capacity()) }
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 			        return Root(childBuilder: childBuilder)
@@ -265,7 +263,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			#if DEBUG
 			extension Child {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            grand: (@Sendable () -> Grand)? = nil,
 			            capacity: @autoclosure @escaping @Sendable () -> Int = 10,
@@ -375,10 +373,9 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_childBuilder__childBuilder_capacity = safeDIOverrides.childBuilder.capacity
-			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
+			        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
 			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
-			            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__childBuilder_capacity()) } else { Child(capacity: __safeDI_childBuilder__childBuilder_capacity()) }
+			            if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__overrides.capacity()) } else { Child(capacity: __safeDI_childBuilder__overrides.capacity()) }
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
 			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
@@ -391,7 +388,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			#if DEBUG
 			extension Child {
 			    /// Configuration for how this type is constructed within a mock tree.
-			    struct SafeDIMockConfiguration {
+			    nonisolated struct SafeDIMockConfiguration: Sendable {
 			        init(
 			            capacity: @autoclosure @escaping @Sendable () -> Int = 10,
 			            _ safeDIBuilder: (@Sendable (Int) -> Child)? = nil

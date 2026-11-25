@@ -1132,19 +1132,17 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        let __safeDI_screenBuilder__screenBuilder_stepBuilder_safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder
-		        let __safeDI_screenBuilder__screenBuilder_stepBuilder_session_safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session
-		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
 		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session) -> Screen {
 		            @Sendable nonisolated func __safeDI_stepBuilder() -> Step {
-		                let session = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_stepBuilder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
+		                let session = if let safeDIBuilder = __safeDI_screenBuilder__overrides.stepBuilder.session { safeDIBuilder() } else { Session() }
 		                let screenBuilder = SendableInstantiator<Screen> {
 		                    __safeDI_screenBuilder(session: session)
 		                }
-		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_stepBuilder_safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		                return if let safeDIBuilder = __safeDI_screenBuilder__overrides.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
 		            }
 		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
-		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(session, stepBuilder) } else { Screen(session: session, stepBuilder: stepBuilder) }
+		            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(session, stepBuilder) } else { Screen(session: session, stepBuilder: stepBuilder) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
 		            __safeDI_screenBuilder(session: session)
@@ -1764,29 +1762,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
-		        let __safeDI_hostBuilder__hostBuilder_session_safeDIBuilder = safeDIOverrides.hostBuilder.session
-		        let __safeDI_hostBuilder__hostBuilder_t3Builder_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.safeDIBuilder
-		        let __safeDI_hostBuilder__hostBuilder_t3Builder_flag = safeDIOverrides.hostBuilder.t3Builder.flag
-		        let __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.t0Builder.safeDIBuilder
-		        let __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_session_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.t0Builder.session
-		        let __safeDI_hostBuilder__safeDIBuilder = safeDIOverrides.hostBuilder.safeDIBuilder
+		        let __safeDI_hostBuilder__overrides = safeDIOverrides.hostBuilder
 		        @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
-		            let session = if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
+		            let session = if let safeDIBuilder = __safeDI_hostBuilder__overrides.session { safeDIBuilder() } else { Session() }
 		            @Sendable nonisolated func __safeDI_t3Builder(session: Session) -> T3 {
 		                @Sendable nonisolated func __safeDI_t0Builder() -> T0 {
-		                    let session = if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
+		                    let session = if let safeDIBuilder = __safeDI_hostBuilder__overrides.t3Builder.t0Builder.session { safeDIBuilder() } else { Session() }
 		                    let t3Builder = SendableInstantiator<T3> {
 		                        __safeDI_t3Builder(session: session)
 		                    }
-		                    return if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
+		                    return if let safeDIBuilder = __safeDI_hostBuilder__overrides.t3Builder.t0Builder.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
 		                }
 		                let t0Builder = SendableInstantiator<T0>(__safeDI_t0Builder)
-		                return if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_safeDIBuilder { safeDIBuilder(session, t0Builder, __safeDI_hostBuilder__hostBuilder_t3Builder_flag()) } else { T3(session: session, t0Builder: t0Builder, flag: __safeDI_hostBuilder__hostBuilder_t3Builder_flag()) }
+		                return if let safeDIBuilder = __safeDI_hostBuilder__overrides.t3Builder.safeDIBuilder { safeDIBuilder(session, t0Builder, __safeDI_hostBuilder__overrides.t3Builder.flag()) } else { T3(session: session, t0Builder: t0Builder, flag: __safeDI_hostBuilder__overrides.t3Builder.flag()) }
 		            }
 		            let t3Builder = SendableInstantiator<T3> {
 		                __safeDI_t3Builder(session: session)
 		            }
-		            return if let safeDIBuilder = __safeDI_hostBuilder__safeDIBuilder { safeDIBuilder(session, t3Builder) } else { Host(session: session, t3Builder: t3Builder) }
+		            return if let safeDIBuilder = __safeDI_hostBuilder__overrides.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { Host(session: session, t3Builder: t3Builder) }
 		        }
 		        let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
 		        return App(hostBuilder: hostBuilder)
@@ -2774,7 +2767,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                        let aBuilder = Instantiator<A> {
 		                            __safeDI_aBuilder(renamed: nil)
 		                        }
-		                        return X(renamed: nil, aBuilder: aBuilder)
+		                        return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(nil, aBuilder) } else { X(renamed: nil, aBuilder: aBuilder) }
 		                    }
 		                    let x: X = __safeDI_x()
 		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
@@ -3533,7 +3526,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                                let bBuilder = Instantiator<B> {
 		                                    __safeDI_bBuilder(renamed: nil)
 		                                }
-		                                return X(renamed: nil, bBuilder: bBuilder)
+		                                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.safeDIBuilder { safeDIBuilder(nil, bBuilder) } else { X(renamed: nil, bBuilder: bBuilder) }
 		                            }
 		                            let source: X = __safeDI_source()
 		                            #sourceLocation(file: "\(fixtures["C.swift"])", line: 10)
@@ -4085,7 +4078,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                        let aBuilder = Instantiator<A> {
 		                            __safeDI_aBuilder(renamed: nil)
 		                        }
-		                        return X(aBuilder: aBuilder)
+		                        return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(aBuilder) } else { X(aBuilder: aBuilder) }
 		                    }
 		                    let source: X = __safeDI_source()
 		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
@@ -5195,15 +5188,13 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	}
 
 	/// The expression a mock of `Root` reads the override at `path` beneath `safeDIOverrides.aBuilder` with: the override
-	/// itself, or, where `wrapper` is `Sendable`, the local a `@Sendable` builder function reads it from, bound before the
-	/// function and named after the override's path, ending in `safeDIBuilder`.
+	/// itself, or, where `wrapper` is `Sendable`, a member of the local a `@Sendable` builder function reads `aBuilder`'s
+	/// whole configuration from, bound before the function.
 	private static func mockOverride(_ path: String, wrapper: CycleClosingWrapper) -> String {
-		if !wrapper.isSendable {
-			"safeDIOverrides.aBuilder.\(path)"
-		} else if path == "safeDIBuilder" {
-			"__safeDI_aBuilder__safeDIBuilder"
+		if wrapper.isSendable {
+			"__safeDI_aBuilder__overrides.\(path)"
 		} else {
-			"__safeDI_aBuilder__aBuilder_\(path.replacingOccurrences(of: ".", with: "_"))\(path.hasSuffix("safeDIBuilder") ? "" : "_safeDIBuilder")"
+			"safeDIOverrides.aBuilder.\(path)"
 		}
 	}
 
@@ -5267,7 +5258,6 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// as `parameterType`.
 	private static func expectedTypeBuiltAsParameterLabelMock(wrapper: CycleClosingWrapper, parameterType: String) -> String {
 		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
-		let overrideLocals = wrapper.isSendable ? ["midBuilder.safeDIBuilder", "midBuilder.renamed", "safeDIBuilder"] : []
 		let aConstruction = { (construction: String) in wrapper.isErased ? "AnyA(\(construction))" : construction }
 		return """
 		#if DEBUG
@@ -5307,7 +5297,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		\(overrideLocals.map { "        let \(mockOverride($0, wrapper: wrapper)) = safeDIOverrides.aBuilder.\($0)\n" }.joined())        \(sendable)func __safeDI_aBuilder(renamed: \(parameterType)) -> \(wrapper.isErased ? "AnyA" : "A") {
+		\(wrapper.isSendable ? "        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder\n" : "")        \(sendable)func __safeDI_aBuilder(renamed: \(parameterType)) -> \(wrapper.isErased ? "AnyA" : "A") {
 		            \(sendable)func __safeDI_midBuilder() -> Mid {
 		                let renamed = if let safeDIBuilder = \(mockOverride("midBuilder.renamed", wrapper: wrapper)) { safeDIBuilder(nil) } else { X(renamed: nil) }
 		                let aBuilder = \(wrapper.generatedType) {
@@ -5526,16 +5516,6 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	private static func expectedAliasOfParameterLabelMock(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
 		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let override = { (path: String) in mockOverride(path, wrapper: wrapper) }
-		// Appended rather than joined with `+` around ternaries: Swift 6.2 on Linux can time out type-checking a `+` chain
-		// of arrays with ternaries; later Swift does not.
-		var overrideLocals = [String]()
-		if wrapper.isSendable {
-			overrideLocals.append(contentsOf: ["midBuilder.safeDIBuilder", "midBuilder.x"])
-			if aliasPosition == .aboveCycleClosingScopesType {
-				overrideLocals.append("midBuilder.innerBuilder.safeDIBuilder")
-			}
-			overrideLocals.append("safeDIBuilder")
-		}
 		let midConstruction = switch aliasPosition {
 		case .besideCycleClosingScope:
 			"""
@@ -5592,7 +5572,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed: X? = safeDIOverrides.renamed
-		\(overrideLocals.map { "        let \(override($0)) = safeDIOverrides.aBuilder.\($0)\n" }.joined())        \(sendable)func __safeDI_aBuilder(renamed: X?) -> \(wrapper.isErased ? "AnyA" : "A") {
+		\(wrapper.isSendable ? "        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder\n" : "")        \(sendable)func __safeDI_aBuilder(renamed: X?) -> \(wrapper.isErased ? "AnyA" : "A") {
 		            \(sendable)func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = \(override("midBuilder.x")) { safeDIBuilder(nil) } else { X(renamed: nil) }
 		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
