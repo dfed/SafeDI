@@ -632,7 +632,7 @@ func executeSafeDIToolMultiModuleTest(
 
 		if let generateOutput {
 			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
-			StoredBlockDecodeChecks.expectNoDiscardedRun(before: generateOutput, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
 		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
