@@ -50,9 +50,16 @@ extension TypeKeyLayout {
 		var allocator = GeneratedNameAllocator(reserving: namesInScope)
 		functionNames = membersByClass.indices.map { owner in
 			guard let representative = representative(of: owner) else { return "" }
-			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
+			let name = ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label)
+			// A function for a label another function took is named after the distinction its place records, if any.
+			return if let distinction = representative.functionNameDistinction, allocator.isTaken(name) {
+				allocator.claim("\(name)_\(distinction)".spelledAsJoinedIdentifier)
+			} else {
+				allocator.claim(name)
+			}
 		}
-		// Each call names its locals after the function it calls and the parameter, apart from every other call's.
+		// Each call names its locals after the function it calls and the parameter, or the suffix the argument gives, apart
+		// from every other call's.
 		for owner in membersByClass.indices {
 			for (index, statement) in statements(ofClass: owner).enumerated() {
 				let callee: Int
@@ -66,7 +73,7 @@ extension TypeKeyLayout {
 					continue
 				}
 				for argument in passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) where argument.bindsBeforeCall {
-					boundArgumentNames[CallSite(owner: owner, index: index), default: [:]][argument.parameterName] = allocator.claim("\(functionNames[callee])__\(argument.parameterName)".spelledAsJoinedIdentifier)
+					boundArgumentNames[CallSite(owner: owner, index: index), default: [:]][argument.parameterName] = allocator.claim((argument.boundLocalSuffix.map { "\(functionNames[callee])_\($0)" } ?? "\(functionNames[callee])__\(argument.parameterName)").spelledAsJoinedIdentifier)
 				}
 			}
 		}

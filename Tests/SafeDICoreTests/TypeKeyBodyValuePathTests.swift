@@ -597,6 +597,71 @@ struct TypeKeyBodyValuePathTests {
 		""")
 	}
 
+	@Test
+	func statements_namesTheBoundLocalAfterTheArgumentsSuffix_whenTheArgumentGivesOne() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			var argument = PassedArgument(parameterName: "__safeDI_B_make", type: .optional(.simple(name: "Make")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false, bindsBeforeCall: true)
+			argument.boundLocalSuffix = "make"
+			built.passedArguments = [argument]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(__safeDI_B_make: Make?) -> B {
+		            B()
+		        }
+		        let __safeDI_b_make: Make? = overrides.make
+		        let b: B = __safeDI_b(__safeDI_B_make: __safeDI_b_make)
+		""")
+	}
+
+	@Test
+	func statements_namesASecondFunctionOfOneLabelAfterItsDistinction_whenItsPlaceRecordsOne() throws {
+		func built(label: String, type: String, children: [GeneratedCode], distinction: String?) -> GeneratedCode {
+			var record = BuiltPlaceRecord(
+				property: Property(label: label, typeDescription: .simple(name: type)),
+				isErased: false,
+				concreteType: .simple(name: type),
+				isExtension: false,
+				target: .initializer(.simple(name: type)),
+				arguments: [],
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: "__safeDI_\(label)",
+				isSendable: false,
+				typesDeclaredEscaping: [],
+				lineEnd: "",
+				hasFunction: true,
+				children: children,
+				node: PlanNode(),
+			)
+			record.functionNameDistinction = distinction
+			return .place(PlacePlan(code: .text(""), record: .built(record)))
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [
+			built(label: "a", type: "A", children: [built(label: "child", type: "ChildA", children: [], distinction: "ChildA")], distinction: "A"),
+			built(label: "b", type: "B", children: [built(label: "child", type: "ChildB", children: [], distinction: "ChildB")], distinction: "B"),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        func __safeDI_child() -> ChildA {
+		            ChildA()
+		        }
+		        func __safeDI_a() -> A {
+		            let child: ChildA = __safeDI_child()
+		            return A()
+		        }
+		        let a: A = __safeDI_a()
+		        func __safeDI_child_ChildB() -> ChildB {
+		            ChildB()
+		        }
+		        func __safeDI_b() -> B {
+		            let child: ChildB = __safeDI_child_ChildB()
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
 	private static let idRead = PlaceRead(
 		argumentLabel: "id",
 		label: "id",

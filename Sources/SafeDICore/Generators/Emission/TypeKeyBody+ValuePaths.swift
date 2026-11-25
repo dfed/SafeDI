@@ -73,6 +73,9 @@ extension BuiltPlaceRecord {
 		if let functionReturnType {
 			shape.append("returns|\(functionReturnType.asSource)")
 		}
+		if let functionNameDistinction {
+			shape.append("named|\(functionNameDistinction)")
+		}
 		return shape
 	}
 }
@@ -212,7 +215,7 @@ extension PlaceRead {
 extension PassedArgument {
 	/// The argument for a caller's structural key: its parameter, its type and the shape of its value.
 	var shape: String {
-		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)"
+		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)|\(boundLocalSuffix ?? "")"
 	}
 }
 
@@ -224,7 +227,7 @@ extension PassedArgument {
 	var closerShape: String {
 		switch value {
 		case let .read(read):
-			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
+			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)|\(boundLocalSuffix ?? "")"
 		case .rootDeclaration,
 		     .passedArgument,
 		     .member,

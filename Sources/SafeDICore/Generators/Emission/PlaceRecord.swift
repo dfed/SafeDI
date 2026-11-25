@@ -85,19 +85,19 @@ struct BuiltPlaceRecord: Sendable {
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
 		get { sharingFields?.passedArguments ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType, functionNameDistinction: functionNameDistinction) }
 	}
 
 	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
 	var constructionValue: ConstructionValue? {
 		get { sharingFields?.constructionValue }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType, functionNameDistinction: functionNameDistinction) }
 	}
 
 	/// The optional closures the construction tries first, in order, before calling `target` or its construction value.
 	var alternatives: [ConstructionAlternative] {
 		get { sharingFields?.alternatives ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues, functionReturnType: functionReturnType, functionNameDistinction: functionNameDistinction) }
 	}
 
 	/// The values of the construction's arguments that are no read, by the argument's position in `arguments`, whose read
@@ -105,7 +105,7 @@ struct BuiltPlaceRecord: Sendable {
 	/// once, where the argument is passed.
 	var argumentValues: [Int: ValuePath] {
 		get { sharingFields?.argumentValues ?? [:] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue, functionReturnType: functionReturnType, functionNameDistinction: functionNameDistinction) }
 	}
 
 	/// Where set, the type the place's function returns in place of `concreteType`: its construction and every
@@ -113,7 +113,14 @@ struct BuiltPlaceRecord: Sendable {
 	/// value as it is.
 	var functionReturnType: TypeDescription? {
 		get { sharingFields?.functionReturnType }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: newValue) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: newValue, functionNameDistinction: functionNameDistinction) }
+	}
+
+	/// Where set, what the place's function is named after, beside its label, where another function took the name its
+	/// label gives; where `nil`, or where that name is taken too, the name has `_` appended instead.
+	var functionNameDistinction: String? {
+		get { sharingFields?.functionNameDistinction }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType, functionNameDistinction: newValue) }
 	}
 }
 
@@ -124,13 +131,15 @@ final class PlaceSharingFields: Sendable {
 	let alternatives: [ConstructionAlternative]
 	let argumentValues: [Int: ValuePath]
 	let functionReturnType: TypeDescription?
+	let functionNameDistinction: String?
 
-	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath], functionReturnType: TypeDescription?) {
+	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath], functionReturnType: TypeDescription?, functionNameDistinction: String?) {
 		self.passedArguments = passedArguments
 		self.constructionValue = constructionValue
 		self.alternatives = alternatives
 		self.argumentValues = argumentValues
 		self.functionReturnType = functionReturnType
+		self.functionNameDistinction = functionNameDistinction
 	}
 }
 
@@ -244,6 +253,9 @@ struct PassedArgument: Hashable, Sendable {
 	/// may read what stays outside `@Sendable` functions only where the local is itself `Sendable`, which whoever sets
 	/// this says.
 	var bindsBeforeCall = false
+	/// Where set, what the local a call binds the value to is named after, beside the called function's name, in place of
+	/// the parameter's name.
+	var boundLocalSuffix: String?
 }
 
 /// A construction that is a value other than a call of the built type: `value`, wrapped in `resultWrapper` where set.

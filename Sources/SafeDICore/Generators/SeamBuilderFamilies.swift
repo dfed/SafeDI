@@ -49,6 +49,11 @@ struct GeneratedNameAllocator: Sendable {
 		return name
 	}
 
+	/// Whether `name` is taken, so that a claim of it would claim another.
+	func isTaken(_ name: String) -> Bool {
+		taken.contains(name) || consulted.contains(name)
+	}
+
 	/// Takes `names` without claiming them: names a scope declares by rules of their own, which nothing claimed later may share.
 	mutating func reserve(_ names: some Sequence<String>) {
 		taken.formUnion(names)
