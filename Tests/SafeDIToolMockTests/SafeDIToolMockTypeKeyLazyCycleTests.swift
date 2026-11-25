@@ -116,6 +116,32 @@ struct SafeDIToolMockTypeKeyLazyCycleTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenRootsTreeAndPromotedTreeCloseLazyCycleAroundRedeclaration() async throws {
+		// `Feature` promotes `t1Builder` twice, as the `Instantiator<T1>` its promoted `t3Builder`'s tree receives and as the
+		// `T1` it receives itself, so the mock binds both apart (`t1Builder_Instantiator__T1`, `t1Builder_T1`). The laid-out
+		// mock binds each under its name, or keeps the walk's body: a binding under the bare label redeclares the one the
+		// cycle's function rebinds.
+		let fixture = [
+			"Root.swift": seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>", "@Instantiated let t3Builder: Instantiator<T3>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			"Feature.swift": seamFixtureType(named: "Feature", isFinalClass: true, declarations: ["@Received let t3Builder: Instantiator<T3>", "@Received let t1Builder: T1"])
+				.replacingOccurrences(of: "@Instantiable", with: "@Instantiable(generateMock: true)"),
+			"T3.swift": seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let t0Builder: Instantiator<T0>", "@Received let t1Builder: Instantiator<T1>"]),
+			"T0.swift": seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			"T1.swift": seamFixtureType(named: "T1", isFinalClass: true, declarations: []),
+		]
+		let mocks = try await generatedMocks(of: fixture)
+
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe("{ let t1 = T1(); return Feature.mock(safeDIOverrides: .init(t1Builder_T1: { t1 })).t1Builder === t1 }()"),
+			DifferentialValueProbe("{ let t1 = T1(); return Feature.mock(safeDIOverrides: .init(t1Builder_Instantiator__T1: { t1 })).t3Builder.instantiate().t1Builder.instantiate() === t1 }()"),
+			DifferentialValueProbe("{ let t1 = T1(); return Feature.mock(safeDIOverrides: .init(t1Builder_Instantiator__T1: { t1 })).t3Builder.instantiate().t0Builder.instantiate().t3Builder.instantiate().t1Builder.instantiate() === t1 }()"),
+			DifferentialValueProbe("{ let t1 = T1(); return Root.mock(safeDIOverrides: .init(t1Builder: { t1 })).t3Builder.instantiate().t1Builder.instantiate() === t1 }()"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
