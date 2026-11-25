@@ -675,5 +675,34 @@ struct KnownRightProductionShape: Sendable, CustomTestStringConvertible {
 			}
 			""",
 		),
+		// A26: two lazy cycles that share a type: `A26W` builds `A26U`, which builds `A26W` again and also `A26P`, which
+		// declares its own `l` and builds `A26U` again. Every `A26V` beneath that `A26P` receives the `A26P`'s `l`, the
+		// nearest declaration above it, and every other `A26V` the root's.
+		KnownRightProductionShape(
+			"A26",
+			fixture: [
+				stampedClass("A26Root", of: "A26", attribute: "@Instantiable(isRoot: true)", declarations: ["@Instantiated let l: A26L", "@Instantiated let wBuilder: Instantiator<A26W>"]),
+				stampedClass("A26W", of: "A26", declarations: ["@Instantiated let uBuilder: Instantiator<A26U>", "@Instantiated let vBuilder: Instantiator<A26V>"]),
+				stampedClass("A26U", of: "A26", declarations: ["@Instantiated let pBuilder: Instantiator<A26P>", "@Instantiated let wBuilder: Instantiator<A26W>"]),
+				stampedClass("A26P", of: "A26", declarations: ["@Instantiated let l: A26L", "@Instantiated let uBuilder: Instantiator<A26U>"]),
+				stampedClass("A26V", of: "A26", declarations: ["@Received let l: A26L"]),
+				stampedClass("A26L", of: "A26"),
+			],
+			handBuiltTree: """
+			func expectedA26Root() -> A26Root {
+			    func w(l: A26L) -> A26W {
+			        A26W(uBuilder: Instantiator<A26U> { u(l: l) }, vBuilder: Instantiator<A26V> { A26V(l: l) })
+			    }
+			    func u(l: A26L) -> A26U {
+			        A26U(pBuilder: Instantiator<A26P> {
+			            let pL = A26L()
+			            return A26P(l: pL, uBuilder: Instantiator<A26U> { u(l: pL) })
+			        }, wBuilder: Instantiator<A26W> { w(l: l) })
+			    }
+			    let l = A26L()
+			    return A26Root(l: l, wBuilder: Instantiator<A26W> { w(l: l) })
+			}
+			""",
+		),
 	]
 }
