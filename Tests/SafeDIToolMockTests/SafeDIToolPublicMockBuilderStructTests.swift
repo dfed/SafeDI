@@ -5652,9 +5652,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screen.stepBuilder(SafeDIMockScope_Api.Screen_Scope.stepBuilder_Values(cache: cache))
 		            func __safeDI_stepBuilder() -> Step {
 		                func __safeDI_screenBuilder() -> Screen {
-		                    let cache = Cache()
+		                    let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
 		                    let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		                    return Screen.__safeDI_init(cache: cache, stepBuilder: stepBuilder, safeDIBuilder: nil)
+		                    return Screen.__safeDI_init(cache: cache, stepBuilder: stepBuilder, safeDIBuilder: safeDIOverrides.screen.safeDIBuilder)
 		                }
 		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		                let api: any Api = __safeDI_apiBuilder_stepBuilder.api(SafeDIMockScope_Api.Step_Scope.api_Values(screenBuilder: screenBuilder))
@@ -5963,9 +5963,9 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screen.stepBuilder(SafeDIMockScope_Api.Screen_Scope.stepBuilder_Values(cache: cache))
 		            func __safeDI_stepBuilder() -> Step {
 		                func __safeDI_screenBuilder() -> Screen {
-		                    let cache = Cache()
+		                    let cache = if let safeDIBuilder = safeDIOverrides.screen.cache { safeDIBuilder() } else { Cache() }
 		                    let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		                    return Screen.__safeDI_init(cache: cache, stepBuilder: stepBuilder, safeDIBuilder: nil)
+		                    return Screen.__safeDI_init(cache: cache, stepBuilder: stepBuilder, safeDIBuilder: safeDIOverrides.screen.safeDIBuilder)
 		                }
 		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		                let api: any Api = __safeDI_apiBuilder_stepBuilder.api(SafeDIMockScope_Api.Step_Scope.api_Values(screenBuilder: screenBuilder))
@@ -6438,10 +6438,10 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(SafeDIMockScope_Api.Screen_Scope.api_Values(cache: cache))
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(SafeDIMockScope_Api.Screen_Scope.next_Values(cache: cache, api: api))
 		            func __safeDI_next() -> Screen {
-		                let cache = Cache()
+		                let cache = if let safeDIBuilder = safeDIOverrides.screenBuilder.cache { safeDIBuilder() } else { Cache() }
 		                let api: any Api = __safeDI_apiBuilder_next.api(SafeDIMockScope_Api.Screen_Scope.api_Values(cache: cache))
 		                let next = Instantiator<Screen>(__safeDI_next)
-		                return Screen.__safeDI_init(cache: cache, api: api, next: next, safeDIBuilder: nil)
+		                return Screen.__safeDI_init(cache: cache, api: api, next: next, safeDIBuilder: safeDIOverrides.screenBuilder.safeDIBuilder)
 		            }
 		            let next = Instantiator<Screen>(__safeDI_next)
 		            return Screen.__safeDI_init(cache: cache, api: api, next: next, safeDIBuilder: safeDIOverrides.screenBuilder.safeDIBuilder)

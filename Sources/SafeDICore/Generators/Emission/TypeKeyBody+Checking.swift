@@ -85,18 +85,24 @@ extension TypeKeyLayout {
 			let owner = classByBody[body]
 			let statements = bodies[body].statements
 			if let record = bodies[body].record {
-				for (position, argument) in record.arguments.enumerated() {
+				for (position, argument) in record.arguments.enumerated() where record.argumentValues[position] == nil {
 					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNilAtEveryMember(owner: owner) { $0.arguments[position] }) else { return false }
 				}
 			}
 			for (index, statement) in statements.enumerated() {
 				switch statement {
 				case let .inline(record):
-					for position in record.arguments.indices {
-						let isNil = isNilAtEveryMember(owner: owner, statement: index, argument: position)
+					for position in record.arguments.indices where record.argumentValues[position] == nil {
+						let isNil = isNilAtEveryMember(owner: owner, inlineStatement: index, argument: position)
 						guard checkRead(record.arguments[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
 					}
 				case let .alias(record):
+					for position in record.listedReads.indices {
+						let isNil = isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil),
+						      isNil || readsDeclarationOfSameType(record.listedReads[position], inBody: body, before: index, owner: owner)
+						else { return false }
+					}
 					guard let fulfillingProperty = record.fulfillingProperty else { continue }
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
@@ -122,12 +128,28 @@ extension TypeKeyLayout {
 		}
 	}
 
-	func isNilAtEveryMember(owner: Int, statement index: Int, argument position: Int) -> Bool {
-		let members = owner == 0 ? [0] : membersByClass[owner]
-		return members.allSatisfy { member in
-			guard case let .inline(record) = bodies[member].statements[index] else { return false }
-			return record.arguments[position].source == .nil
+	/// Whether the argument at `position` of the inline place at `index` is `nil` in every member of `owner`'s class. Every
+	/// member's statement at `index` is of one kind, since a class's key holds each statement's shape, which names its kind
+	/// (`statementShape`).
+	func isNilAtEveryMember(owner: Int, inlineStatement index: Int, argument position: Int) -> Bool {
+		for case let .inline(record) in statements(at: index, ofEveryMemberOf: owner) where record.arguments[position].source != .nil {
+			return false
 		}
+		return true
+	}
+
+	/// Whether the read at `position` of the text place at `index` is `nil` in every member of `owner`'s class, as
+	/// `isNilAtEveryMember(owner:inlineStatement:argument:)` judges an inline place's.
+	func isNilAtEveryMember(owner: Int, aliasStatement index: Int, read position: Int) -> Bool {
+		for case let .alias(record) in statements(at: index, ofEveryMemberOf: owner) where record.listedReads[position].source != .nil {
+			return false
+		}
+		return true
+	}
+
+	/// The statement at `index` of each member of `owner`'s class, or of the root's body.
+	func statements(at index: Int, ofEveryMemberOf owner: Int) -> [Statement] {
+		(owner == 0 ? [0] : membersByClass[owner]).map { bodies[$0].statements[index] }
 	}
 
 	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {
@@ -135,6 +157,15 @@ extension TypeKeyLayout {
 		let expected = normalized(pathValue(of: read, inBody: body, before: index))
 		let declaration = typeLookUp(read.label, inClass: owner, before: index)
 		return normalized(evaluate(declaration, inBody: body)) == expected
+	}
+
+	/// Whether `read`, which a text place spells as written, names a declaration of the type in the type key's code that it
+	/// names in the path key's. The engine adds `.instance` only to the reads it spells, so where two places of one
+	/// function hand it a value and its `LazilyInstantiated`, the merged function's wrapper would reach the text unread.
+	/// The types are compared by exact spelling (`any P` and `P`, `Optional<X>` and `X?`, differ), which is what text
+	/// copied as written needs: a looser match would only share more places, never one the copy reads alike.
+	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
+		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path

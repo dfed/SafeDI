@@ -403,9 +403,6 @@ public actor DependencyTreeGenerator {
 	/// `rootsOfOtherModules`, the roots another module declares.
 	private func plannedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [PlannedRoot] {
 		let rootScopeGenerators = roots
-		if let ordering = CodeTaskStart.ordering {
-			await ordering.runEveryStart()
-		}
 		let plannedRoots = try await withThrowingTaskGroup(
 			of: PlannedRoot?.self,
 			returning: [PlannedRoot].self,
@@ -617,10 +614,7 @@ public actor DependencyTreeGenerator {
 	///     (`PublicMockContext.unreadTypeComment`).
 	///   - ownAccessProof: The proof of every type's access over the module's declarations, which the signatures of the
 	///     seams this module generates read (`ownAccessProof()`).
-	///   - startsCodeGeneration: Whether each generator of a root's tree starts generating its code as it is created,
-	///     which trees built only to be read skip. Read only where no module holds a seam: a module that holds one always
-	///     generates code.
-	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, startsCodeGeneration: Bool = true) async throws -> DependencyTrees {
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof) async throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -696,7 +690,6 @@ public actor DependencyTreeGenerator {
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
-							startsCodeGeneration: startsCodeGeneration,
 							declaredTypeNames: declaredTypeNames,
 							constructionMemo: &constructionMemo,
 						),

@@ -65,6 +65,43 @@ struct PluginScannerScanTests {
 	}
 
 	@Test
+	func scan_plansRootDependencyTreeAndMockOutputs_whenMacroIsQualifiedBySafeDI() throws {
+		let project = try FixtureProject(files: [
+			"Root.swift": """
+			@SafeDI.Instantiable(isRoot: true)
+			public struct Root: Instantiable {}
+			""",
+			"Screen.swift": """
+			@SafeDI.Instantiable(generateDependencyTree: true)
+			public struct Screen: Instantiable {}
+			""",
+			"Service.swift": """
+			@SafeDI.Instantiable(generateMock: SafeDI.MockGeneration.internal)
+			public struct Service: Instantiable {}
+			""",
+			"Plain.swift": """
+			@SafeDI.Instantiable
+			public struct Plain: Instantiable {}
+			""",
+		])
+		defer { project.remove() }
+
+		let result = PluginScanner.scan(
+			swiftFiles: project.fileURLs,
+			mockScopedSwiftFiles: project.fileURLs,
+			relativeTo: project.root,
+			outputDirectory: project.outputDirectory,
+		)
+
+		#expect(result.outputFiles == [
+			project.outputDirectory.appendingPathComponent("Root+SafeDI.swift"),
+			project.outputDirectory.appendingPathComponent("Screen+SafeDI.swift"),
+			project.outputDirectory.appendingPathComponent("Service+SafeDIMock.swift"),
+			project.outputDirectory.appendingPathComponent("SafeDIMockConfiguration.swift"),
+		])
+	}
+
+	@Test
 	func scan_plansNoMockConfiguration_whenNoFileGeneratesAMock() throws {
 		let project = try FixtureProject(files: [
 			"Root.swift": """

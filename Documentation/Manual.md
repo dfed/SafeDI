@@ -16,6 +16,8 @@ There are a total of five macros in the SafeDI library:
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 | [`#SafeDIConfiguration`](#safediconfiguration) | Freestanding declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
+SafeDI reads its attached macros, its wrappers and `MockGeneration` spelled with its module name (`@SafeDI.Instantiable`, `@SafeDI.Instantiated`, `SafeDI.Instantiator<T>`) as it reads their bare spellings.
+
 Let’s walk through each of these macros in detail.
 
 ### @Instantiable
@@ -488,7 +490,7 @@ A type can also receive an instantiator declared above it, of any of the four ki
 
 A received property that is not an instantiator cannot close a cycle, a `LazilyInstantiated` one included. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. So does a router built as a value that receives `screenBuilder`, when the `Screen` it builds receives that router. Receive an instantiator of the property instead, or declare `@Received(onlyIfAvailable: true) let parent: Parent?`, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
 
-In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry, and neither does anything built through it. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
+In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry of its own. A type the cycle builds again is built with the entry of the nearest place above it that builds the same type the same way (both with the type’s hand-written mock method, or both with its initializer), and so is everything built through it, so a mock’s overrides hold however many times a test goes around the loop. A type built through that dependency that nothing above it builds that way has no entry. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
 
 ### ErasedInstantiator
 
@@ -896,17 +898,17 @@ A tree that calls the seam fills the builder when its module can see an implemen
 
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
+func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+    .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
+}
+func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
+    .init(userService: {
+        let userService: any UserService = DefaultUserService(analytics: analytics)
+        return userService
+    })
+}
 func __safeDI_service() -> Service {
     _ = Service.__safeDI_Service_88819F20AD4FA546.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-        .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
-    }
-    func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
-        .init(userService: {
-            let userService: any UserService = DefaultUserService(analytics: analytics)
-            return userService
-        })
-    }
     return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 }
 ```
@@ -1375,7 +1377,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
 ]
 ```
 
@@ -1476,13 +1478,13 @@ targets: [
 
 You can see this integration in practice in the [Example Package Integration](../Examples/Example%20Package%20Integration) package.
 
-Unlike the Xcode project plugin, the Swift package plugin finds the source files of dependent modules itself. It reads the modules of your package and of the packages it depends on by path, but not those of a package it fetches from a URL. To build an `@Instantiable` type a fetched package declares, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration`; SafeDI then knows no module for those types, with the limits [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) lists. If SafeDI’s generated code is missing required imports, list the modules in [`additionalImportedModules`](#safediconfiguration).
+Unlike the Xcode project plugin, the Swift package plugin finds the source files of dependent modules itself. It reads the modules of your package and of the packages it depends on by path, but not those of a package it fetches from a URL or a package registry, as SwiftPM reports each package’s origin, wherever the package is kept. To build an `@Instantiable` type a fetched package declares, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration`; SafeDI then knows no module for those types, with the limits [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) lists. Where the checkout directory is depends on the build folder: `swift build` keeps it at `.build/checkouts/<package>` in your package, or under the folder `--scratch-path` names, and Xcode keeps it in the project’s DerivedData folder, under `SourcePackages/checkouts/<package>`. SafeDI resolves a relative entry against your package’s directory under `swift build`, so `.build/checkouts/<package>` finds the package only in a build that uses the default build folder; a build that keeps its checkouts elsewhere reads nothing from that entry, and SafeDI warns at the configuration that nothing exists at its path. If SafeDI’s generated code is missing required imports, list the modules in [`additionalImportedModules`](#safediconfiguration).
 
 > **Note:** On Swift 6.4 or later, `swift build` can fail for a target with a couple thousand or more input files with `sandbox-exec: data object length … exceeds maximum (65535)`. Xcode is not affected. Build with `swift build --build-system native`, or with `swift build --disable-sandbox`, which turns off sandboxing for every plugin and package manifest in the build.
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.3.4")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.3.5")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1547,7 +1549,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
 ]
 ```
 
@@ -1963,10 +1965,13 @@ internal import Foundation
 To pick a level, SafeDI must know which module declares each type a generated declaration names. For a type whose declaration it does not read, it assumes:
 
 - every module your files import at the level of the declaration that names the type, or wider;
-- Foundation, for Foundation’s common types;
-- for other types, every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
+- every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
 
-This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name. To silence the warning, import that module below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
+The same holds for the standard library’s and Foundation’s types, such as `String` or `URL`: SafeDI never decides which module declares a type from its name, since any module may declare its own `Calendar` or `Result`.
+
+So when a module spells import levels, every module whose types its seams and public mocks name must spell them too. If a dependency’s file writes `import Foundation` and its `public init(url: URL)` reaches a seam’s initializer, the generated file imports Foundation too narrowly, and the compiler reports that the initializer “cannot be declared public because its parameter uses an internal type”. Write `public import Foundation` in that dependency’s file.
+
+This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name (“public import of 'Combine' was not used in public declarations or inlinable code”). To silence the warning, spell the type with its module’s name where your declaration names it (`public init(url: Foundation.URL)`), which tells SafeDI the one module that declares it. For a module only your own files import `public`, you can instead import it below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
@@ -2074,7 +2079,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.3.4"`
+2. Update your SafeDI dependency to `from: "2.3.5"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
