@@ -1401,6 +1401,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { _ in __safeDI_builder() })
 		        }
@@ -1509,6 +1510,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		            self.service = service
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }

@@ -1575,7 +1575,7 @@ extension DependencyTreeGenerator {
 						case let .fill(_, fulfillingScope):
 							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], childRootDependency))
 						case .passUp:
-							guard reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
+							guard !hole.builtType.isOptional, reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
 							// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
 							// list stops the walk before it meets the hole's type, and a declaration of that type gets no scope.
 							let unlistedModuleNames = hole.typesToOwner
@@ -2381,7 +2381,8 @@ extension DependencyTreeGenerator {
 			while let (generator, callingType, pathDeclarations) = generatorsToVisit.popLast() {
 				guard !generator.closesPropertyCycle else { continue }
 				for (fillKey, calledHole) in generator.enclosingFillsPassed {
-					var hidden = hiddenByFillKey[fillKey, default: FillReentryHidings()]
+					// Taken out of the dictionary while it grows, so appending to its lists never copies them.
+					var hidden = hiddenByFillKey.removeValue(forKey: fillKey) ?? FillReentryHidings()
 					for declaration in calledHole.uncarriedDeclarations {
 						hidden.calledCopyDeclarations[declaration.property.label, default: []].append(declaration)
 					}

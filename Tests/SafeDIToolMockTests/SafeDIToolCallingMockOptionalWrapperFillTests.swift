@@ -333,7 +333,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }

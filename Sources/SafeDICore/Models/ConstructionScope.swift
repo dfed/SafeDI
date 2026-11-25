@@ -50,6 +50,10 @@ struct ConstructionScope: Sendable {
 		record.builtInlineSeamComment
 	}
 
+	var isUnavailableDependency: Bool {
+		record.isUnavailableDependency
+	}
+
 	var seamCall: SeamCall? {
 		record.seamCall
 	}
@@ -142,7 +146,7 @@ struct ConstructionScope: Sendable {
 		}
 	}
 
-	fileprivate let table: ScopeTable
+	let table: ScopeTable
 	fileprivate let record: ScopeRecord
 }
 
