@@ -85,7 +85,7 @@ struct GeneratedCode: Sendable {
 
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 	static func place(_ plan: PlacePlan) -> GeneratedCode {
-		GeneratedCode(storage: .children(Children(.place(record: plan.record), [plan.code])))
+		GeneratedCode(storage: .children(Children(.place(record: plan.record, laysOut: TypeKeyLayout.laysOut(placeRecordedAs: plan.record)), [plan.code])))
 	}
 
 	/// A function the root may declare once at its top, written as the call declares it where the root does not
@@ -107,6 +107,27 @@ struct GeneratedCode: Sendable {
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
 
+	/// Whether the plan holds a root function (`Node.rootFunction`), which its levels record as they are built.
+	var holdsRootFunction: Bool {
+		switch storage {
+		case .text:
+			false
+		case let .children(children):
+			children.holdsRootFunction
+		}
+	}
+
+	/// Whether this level, under the indentations around it, is a place the type key can lay out with every place of its
+	/// tree (`TypeKeyLayout.laysOut(_:)`), which the place records as it is built.
+	var isPlaceTheTypeKeyLaysOut: Bool {
+		var code = self
+		while case let .indented(inner, _) = code.node {
+			code = inner
+		}
+		guard case let .children(children) = code.storage, case let .place(_, laysOut) = children.kind else { return false }
+		return laysOut
+	}
+
 	/// What this level of the plan is.
 	var node: Node {
 		switch storage {
@@ -120,7 +141,7 @@ struct GeneratedCode: Sendable {
 				.lines(children.codes)
 			case let .indented(indentation):
 				.indented(children.codes[0], by: indentation)
-			case let .place(record):
+			case let .place(record, _):
 				.place(PlacePlan(code: children.codes[0], record: record))
 			case let .rootFunction(record):
 				.rootFunction(record, inPlace: children.codes[0])
@@ -159,7 +180,9 @@ struct GeneratedCode: Sendable {
 			case sequence
 			case lines
 			case indented(String)
-			case place(record: PlaceRecord?)
+			/// `laysOut`: whether the type key can lay out every place of the tree beneath, its own included, which the
+			/// places beneath recorded as they were built, so no walk of the tree asks it.
+			case place(record: PlaceRecord?, laysOut: Bool)
 			case rootFunction(RootFunctionRecord)
 			case sendableFunction
 			case omittingRootFunctions(Set<String>)
@@ -167,10 +190,19 @@ struct GeneratedCode: Sendable {
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
 			self.kind = kind
+			holdsRootFunction = switch kind {
+			case .rootFunction:
+				true
+			case .sequence, .lines, .indented, .place, .sendableFunction, .omittingRootFunctions:
+				codes.contains(where: \.holdsRootFunction)
+			}
 			slot = DeferredReleaseSlot(codes)
 		}
 
 		let kind: Kind
+		/// Whether the level or a level beneath it is a root function, decided as the level is built from the levels beneath
+		/// it, so a walk for root functions skips every level that holds none. Held as long as the level.
+		let holdsRootFunction: Bool
 		var codes: [GeneratedCode] {
 			slot.value
 		}
