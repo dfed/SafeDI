@@ -179,4 +179,7 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
+	/// The local each call binds a passed argument to before it calls (`PassedArgument.bindsBeforeCall`), by the call's
+	/// site and the parameter's name.
+	var boundArgumentNames = [CallSite: [String: String]]()
 }

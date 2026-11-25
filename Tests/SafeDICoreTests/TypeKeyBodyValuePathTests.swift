@@ -115,6 +115,405 @@ struct TypeKeyBodyValuePathTests {
 		""")
 	}
 
+	@Test
+	func statements_constructsByTheAlternativeAlone_whenItHasNoCondition() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: nil, requiresAbsent: [], use: .wrapped(in: .simple(name: "Wrapper")), resultWrapper: nil)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            Wrapper(overrides.make)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_bindsTheClosureByItsOwnName_whenTheBindingNameIsThePassedArgument() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "make", type: .optional(.simple(name: "Make")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false)]
+			built.alternatives = [ConstructionAlternative(closure: .passedArgument("make"), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(make: Make?) -> B {
+		            if let make { make() } else { B() }
+		        }
+		        let b: B = __safeDI_b(make: overrides.make)
+		""")
+	}
+
+	@Test
+	func statements_requiresEachAbsentValueNil_whenAnAlternativeRequiresAValueAbsent() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [.optionalMember("other", of: .rootDeclaration("overrides"))], use: .calledWithNoArguments, resultWrapper: nil)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            if let make = overrides.make, overrides?.other == nil { make() } else { B() }
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_wrapsTheAlternativesResult_whenTheAlternativeHasAResultWrapper() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: .simple(name: "Box"))]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            if let make = overrides.make { Box(make()) } else { B() }
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_triesAlternativesInOrder_whenThePlaceHasTwo() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.alternatives = [
+				ConstructionAlternative(closure: .member("first", of: .rootDeclaration("overrides")), bindingName: "first", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil),
+				ConstructionAlternative(closure: .member("second", of: .rootDeclaration("overrides")), bindingName: "second", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil),
+			]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            if let first = overrides.first { first() } else if let second = overrides.second { second() } else { B() }
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_wrapsTheConstructionValue_whenTheValueHasAResultWrapper() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.constructionValue = ConstructionValue(value: .read(Self.idRead), resultWrapper: .simple(name: "Box"))
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            Box(id)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_passesWhatTheCallReads_whenACallHandsAPassedArgumentARead() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Int) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(cfg: id)
+		""")
+	}
+
+	@Test
+	func statements_declaresAPassedClosureEscaping_whenAPassedArgumentIsAClosure() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "make", type: .closure(arguments: [], isAsync: false, doesThrow: false, returnType: .simple(name: "B")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(make: @escaping () -> B) -> B {
+		            B()
+		        }
+		        let b: B = __safeDI_b(make: overrides.make)
+		""")
+	}
+
+	@Test
+	func statements_spellsAnArgumentValueInPlace_whenAnInlinePlaceReplacesAnArgument() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.inlineBody { inline in
+			inline.argumentValues = [0: .member("label", of: .rootDeclaration("overrides"))]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        let b = B(id: overrides.label)
+		""")
+	}
+
+	@Test
+	func statements_constructsAnInlinePlaceByItsAlternative_whenTheAlternativesClosureExists() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.inlineBody { inline in
+			inline.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [], use: .calledWithConstructionArguments, resultWrapper: nil)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        let b = if let make = overrides.make { make(id) } else { B(id: id) }
+		""")
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenAnInlinePlacesArgumentValueIsAtAPositionWithNoArgument() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.inlineBody { inline in
+			inline.argumentValues = [1: .member("label", of: .rootDeclaration("overrides"))]
+		}) == nil)
+	}
+
+	@Test
+	func statements_handsTheClosedOnFunctionARead_whenACloserHandsAPassedArgumentARead() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Int) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: id)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Int())
+		""")
+	}
+
+	@Test
+	func statements_handsTheClosedOnFunctionItsOwnArgument_whenACloserHandsThePassedArgumentOnward() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .passedArgument("cfg"), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: cfg)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenACloserHandsAPassedArgumentAMember() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))) == nil)
+	}
+
+	@Test
+	func statements_handsANestedCallWhatItsPassedArgumentReads_whenAPlaceInsideAFunctionTakesAPassedArgument() throws {
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true) { c in
+			c.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false)]
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [Self.cRead],
+			children: [.place(PlacePlan(code: .text("let c = C()"), record: .built(c)))],
+		) { _ in }))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_c(cfg: Int) -> C {
+		            C()
+		        }
+		        func __safeDI_b() -> B {
+		            let c: C = __safeDI_c(cfg: id)
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_laysOutASendableFunction_whenNothingItsBodyReadsOrHandsOnStaysOutsideSendableFunctions() throws {
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true) { c in
+			c.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false)]
+		}
+		let d = Self.builtRecord(label: "d", typeName: "D", hasFunction: false) { d in
+			d.argumentValues = [0: .read(Self.idRead)]
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [Self.cRead],
+			children: [
+				.place(PlacePlan(code: .text("let c = C()"), record: .built(c))),
+				.place(PlacePlan(code: .text("let d = D(id: id)"), record: .built(d))),
+				.place(PlacePlan(code: .text("let e = 2"), record: .alias(AliasPlaceRecord(property: Property(label: "e", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let e = 2")))),
+			],
+			isSendable: true,
+		) { _ in }))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        @Sendable nonisolated func __safeDI_c(cfg: Int) -> C {
+		            C()
+		        }
+		        @Sendable nonisolated func __safeDI_b() -> B {
+		            let c: C = __safeDI_c(cfg: id)
+		            let d = D(id: id)
+		            let e = 2
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenASendableFunctionHandsOnAPassedArgumentThatStaysOutsideSendableFunctions() {
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true) { c in
+			c.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: true)]
+		}
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [Self.cRead],
+			children: [.place(PlacePlan(code: .text("let c = C()"), record: .built(c)))],
+			isSendable: true,
+		) { _ in }) == nil)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenASendableFunctionsCloserReadsAValueThatStaysOutsideSendableFunctions() {
+		var read = Self.idRead
+		read.staysOutsideSendableFunctions = true
+		#expect(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(read), staysOutsideSendableFunctions: false), isSendable: true)) == nil)
+	}
+
+	@Test
+	func statements_erasesInsideTheFunction_whenAnErasedPlacesFunctionReturnsTheErasedType() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(boundAs: .simple(name: "AnyB"), isErased: true) { built in
+			built.functionReturnType = .simple(name: "AnyB")
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: .simple(name: "AnyB"))]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> AnyB {
+		            if let make = overrides.make { AnyB(make()) } else { AnyB(B()) }
+		        }
+		        let b: AnyB = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_returnsThePropertysType_whenAPlacesFunctionReturnsTheProtocolItsTypeFulfills() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(boundAs: .simple(name: "BProtocol")) { built in
+			built.functionReturnType = .simple(name: "BProtocol")
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> BProtocol {
+		            if let make = overrides.make { make() } else { B() }
+		        }
+		        let b: BProtocol = __safeDI_b()
+		""")
+	}
+
+	private static let cRead = PlaceRead(
+		argumentLabel: "c",
+		label: "c",
+		property: Property(label: "c", typeDescription: .simple(name: "C")),
+		source: .binding(label: "c"),
+	)
+
+	/// A place `<label>: <typeName>` constructed with `id`, in a function of its own where `hasFunction`, as `configure` records it.
+	private static func builtRecord(label: String, typeName: String, hasFunction: Bool, _ configure: (inout BuiltPlaceRecord) -> Void) -> BuiltPlaceRecord {
+		var record = BuiltPlaceRecord(
+			property: Property(label: label, typeDescription: .simple(name: typeName)),
+			isErased: false,
+			concreteType: .simple(name: typeName),
+			isExtension: false,
+			target: .initializer(.simple(name: typeName)),
+			arguments: hasFunction ? [] : [idRead],
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: "__safeDI_\(label)",
+			isSendable: false,
+			typesDeclaredEscaping: [],
+			lineEnd: "",
+			hasFunction: hasFunction,
+			children: [],
+			node: PlanNode(),
+		)
+		configure(&record)
+		return record
+	}
+
+	/// A read of `id` whose type is not `id`'s declaration's, nor its lazy wrapper's instance, so no code reads it.
+	private static let mistypedIdRead = PlaceRead(
+		argumentLabel: "id",
+		label: "id",
+		property: Property(label: "id", typeDescription: .simple(name: "String")),
+		source: .binding(label: "id"),
+	)
+
+	@Test(arguments: [
+		ValuePath.read(mistypedIdRead),
+		.member("value", of: .read(mistypedIdRead)),
+		.call("make", of: .read(mistypedIdRead), arguments: [], argumentsWrapper: nil),
+		.call("make", of: .rootDeclaration("overrides"), arguments: [mistypedIdRead], argumentsWrapper: nil),
+	])
+	func statements_keepsThePathKeysBody_whenAConstructionValueReadsADeclarationOfAnotherType(value: ValuePath) {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.constructionValue = ConstructionValue(value: value, resultWrapper: nil)
+		}) == nil)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenAnAlternativesClosureReadsADeclarationOfAnotherType() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.alternatives = [ConstructionAlternative(closure: .read(Self.mistypedIdRead), bindingName: "make", requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenAnAbsentValueReadsADeclarationOfAnotherType() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.alternatives = [ConstructionAlternative(closure: .member("make", of: .rootDeclaration("overrides")), bindingName: "make", requiresAbsent: [.read(Self.mistypedIdRead)], use: .calledWithNoArguments, resultWrapper: nil)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenAnArgumentValueReadsADeclarationOfAnotherType() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(arguments: [Self.idRead]) { built in
+			built.argumentValues = [0: .read(Self.mistypedIdRead)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenACallHandsAPassedArgumentAReadOfADeclarationOfAnotherType() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "String"), value: .read(Self.mistypedIdRead), staysOutsideSendableFunctions: false)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenASendableFunctionTakesAPassedArgumentThatStaysOutsideSendableFunctions() {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(isSendable: true) { built in
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: true)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_bindsAPassedArgumentToALocalBeforeTheCall_whenTheArgumentBindsBeforeTheCall() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "make", type: .optional(.simple(name: "Make")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false, bindsBeforeCall: true)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(make: Make?) -> B {
+		            B()
+		        }
+		        let __safeDI_b__make: Make? = overrides.make
+		        let b: B = __safeDI_b(make: __safeDI_b__make)
+		""")
+	}
+
+	@Test
+	func statements_laysOutASendableFunction_whenItTakesAPassedArgumentThatStaysOutsideSendableFunctionsBoundBeforeTheCall() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(isSendable: true) { built in
+			built.passedArguments = [PassedArgument(parameterName: "make", type: .optional(.simple(name: "Make")), value: .member("make", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: true, bindsBeforeCall: true)]
+		}))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        @Sendable nonisolated func __safeDI_b(make: Make?) -> B {
+		            B()
+		        }
+		        let __safeDI_b__make: Make? = overrides.make
+		        let b: B = __safeDI_b(make: __safeDI_b__make)
+		""")
+	}
+
 	private static let idRead = PlaceRead(
 		argumentLabel: "id",
 		label: "id",
@@ -122,12 +521,12 @@ struct TypeKeyBodyValuePathTests {
 		source: .binding(label: "id"),
 	)
 
-	/// `let id = 1`, then a place that builds `b: B` with `arguments` in a function of its own, whose body builds `children`, as `configure` records it.
-	private static func rootBody(arguments: [PlaceRead] = [], children: [GeneratedCode] = [], _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
+	/// `let id = 1`, then a place that builds a `B` bound as `b: <propertyType>`, erased to it where `isErased`, with `arguments` in a function of its own, `@Sendable` where `isSendable`, whose body builds `children`, as `configure` records it.
+	private static func rootBody(arguments: [PlaceRead] = [], children: [GeneratedCode] = [], isSendable: Bool = false, boundAs propertyType: TypeDescription = .simple(name: "B"), isErased: Bool = false, _ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
 		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
 		var built = BuiltPlaceRecord(
-			property: Property(label: "b", typeDescription: .simple(name: "B")),
-			isErased: false,
+			property: Property(label: "b", typeDescription: propertyType),
+			isErased: isErased,
 			concreteType: .simple(name: "B"),
 			isExtension: false,
 			target: .initializer(.simple(name: "B")),
@@ -136,7 +535,7 @@ struct TypeKeyBodyValuePathTests {
 			cycleParameters: [],
 			callCycleArguments: [],
 			functionName: "__safeDI_b",
-			isSendable: false,
+			isSendable: isSendable,
 			typesDeclaredEscaping: [],
 			lineEnd: "",
 			hasFunction: true,
@@ -148,5 +547,54 @@ struct TypeKeyBodyValuePathTests {
 			.place(PlacePlan(code: .text("let id = 1"), record: .alias(id))),
 			.place(PlacePlan(code: .text("let b = B()"), record: .built(built))),
 		]
+	}
+
+	/// `let id = 1`, then a place built inline as `b: B(id: id)`, as `configure` records it.
+	private static func inlineBody(_ configure: (inout BuiltPlaceRecord) -> Void) -> [GeneratedCode] {
+		let id = AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1")
+		var inline = BuiltPlaceRecord(
+			property: Property(label: "b", typeDescription: .simple(name: "B")),
+			isErased: false,
+			concreteType: .simple(name: "B"),
+			isExtension: false,
+			target: .initializer(.simple(name: "B")),
+			arguments: [idRead],
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: "__safeDI_b",
+			isSendable: false,
+			typesDeclaredEscaping: [],
+			lineEnd: "",
+			hasFunction: false,
+			children: [],
+			node: PlanNode(),
+		)
+		configure(&inline)
+		return [
+			.place(PlacePlan(code: .text("let id = 1"), record: .alias(id))),
+			.place(PlacePlan(code: .text("let b = B(id: id)"), record: .built(inline))),
+		]
+	}
+
+	/// The root of `rootBody`, whose place `b`, `@Sendable` where `isSendable`, takes `argument` and builds a closer `bBuilder` that closes on its function,
+	/// handing it `argument`.
+	private static func closerBody(handing argument: PassedArgument, isSendable: Bool = false) -> [GeneratedCode] {
+		var closer = ClosingPlaceRecord(
+			property: Property(label: "bBuilder", typeDescription: .simple(name: "Instantiator", generics: [.simple(name: "B")])),
+			isErased: false,
+			isExtension: false,
+			closedOnFunctionName: "__safeDI_b",
+			forwardedProperties: [],
+			cycleArguments: [],
+		)
+		closer.passedArguments = [argument]
+		return rootBody(
+			arguments: [PlaceRead(argumentLabel: "bBuilder", label: "bBuilder", property: closer.property, source: .binding(label: "bBuilder"))],
+			children: [.place(PlacePlan(code: .text("let bBuilder = Instantiator<B> { __safeDI_b(cfg: cfg) }"), record: .closer(closer)))],
+			isSendable: isSendable,
+		) { built in
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: argument.type, value: .emptyInitialization(argument.type), staysOutsideSendableFunctions: false)]
+		}
 	}
 }
