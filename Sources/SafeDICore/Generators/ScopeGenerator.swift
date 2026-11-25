@@ -1825,9 +1825,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none) {
+		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passedUpStruct: PassedUpStruct? = nil) {
 			self.label = label
 			self.value = value
+			self.passedUpStruct = passedUpStruct
 			self.enclosingFill = enclosingFill
 			self.isSendable = isSendable
 			self.builderStruct = builderStruct
@@ -1878,6 +1879,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderStruct: PublicMockBuilderStruct?
 		/// For a builder of another module's public mock, what an override closure of the call can be handed for it.
 		let overrideHanding: OverrideHanding
+		/// Where a seam's call passes the builder's places up, the struct `value` calls a member of, which the type key records
+		/// as the call's read; `nil` for every other argument.
+		let passedUpStruct: PassedUpStruct?
+
+		/// The builder or level struct a seam's call passing places up calls its member on, by the name the caller's tree binds
+		/// it under and its type there.
+		struct PassedUpStruct: Sendable {
+			let name: String
+			let type: TypeDescription
+		}
 	}
 
 	/// A level of a seam's or a public mock's tree a caller generates a function for, which returns the level's builder
@@ -6818,7 +6829,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// constructed with anything but its initializer's arguments. It throws what the path key's construction
 	/// (`constructionArgumentList(of:unavailableProperties:holeBuilders:)`), which makes the same call first, throws.
 	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
-		guard publicMockCall == nil, !constructsWithHandWrittenMock, builderCallArguments.isEmpty, let initializer = instantiable.initializer else { return nil }
+		guard builderCallArguments.isEmpty else { return nil }
+		return try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
+	}
+
+	/// What the construction of `instantiable` reads through its initializer's arguments, whatever builders the call passes
+	/// after them, or `nil` where it is constructed with anything but its initializer.
+	nonisolated private func initializerArgumentReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
+		guard publicMockCall == nil, !constructsWithHandWrittenMock, let initializer = instantiable.initializer else { return nil }
 		let arguments = try initializer.createInitializerArguments(
 			given: instantiable.dependencies,
 			unavailableProperties: bodyUnavailableProperties(unavailableProperties),
@@ -6845,8 +6863,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
 		      inlinePlaceBuilder == nil,
 		      cycleParameters.isEmpty,
-		      let reads = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
+		      var reads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
+		// A call that passes places up hands the seam a member of the builder or level the caller's tree holds for each: a read
+		// of that struct, typed as the caller's tree binds it. A call that fills a place, or passes a struct no binding of the
+		// tree types, such as one a fill is handed, is not planned.
+		for builderCallArgument in builderCallArguments {
+			guard let passedUpStruct = builderCallArgument.passedUpStruct else { return nil }
+			guard !reads.contains(where: { $0.label == passedUpStruct.name }) else { continue }
+			reads.append(PlaceRead(
+				argumentLabel: passedUpStruct.name,
+				label: passedUpStruct.name,
+				property: Property(label: passedUpStruct.name, typeDescription: passedUpStruct.type),
+				source: .binding(label: passedUpStruct.name),
+				// SafeDI cannot tell the struct is `Sendable`, as for a hole site's read of it.
+				staysOutsideSendableFunctions: true,
+			))
+		}
 		// The root declares the root functions the call reaches, which its text leaves out.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)

@@ -2097,7 +2097,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			guard !reachedSites.isDisjoint(with: filledSites) else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
-					return .init(label: label, value: memberCall)
+					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
 				}
 				guard isPublicMockCall else {
 					return .init(label: label, value: "")
@@ -2603,6 +2603,7 @@ struct SeamHoles: Sendable {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
+		let parameterTypeByEnum = Dictionary(builders.map { ($0.enumKey, $0.parameterType) }, uniquingKeysWith: { first, _ in first })
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
 		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none. A call's
 		// case for a builder it fills carries the scope value the inner seam handed the fill, which the fill takes.
@@ -2654,6 +2655,18 @@ struct SeamHoles: Sendable {
 			// the struct of the fill's own level, which the fill is handed, as `bindValues` leads on from it.
 			// A fulfilling call is handed the struct of the fill's own level: the inner scope its fill is handed, or, where its fill is
 			// built in a `@Sendable` function, whose case carries no inner scope, what the case's member returns.
+			// The struct the call's own member is called on, typed where the seam's tree binds it: the builder, or the level the
+			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
+			let parentStep = callRoute.route.last
+			let memberParent: ScopeGenerator.BuilderCallArgument.PassedUpStruct? = if parentStep?.innerScope != nil {
+				nil
+			} else if let member = parentStep?.member {
+				.init(name: member.bindingName, type: member.levelType)
+			} else if let builderType = parameterTypeByEnum[callRoute.rootKey] {
+				.init(name: builderName, type: builderType)
+			} else {
+				nil
+			}
 			let memberCall = if callRoute.handsFillLevelStruct {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
@@ -2670,7 +2683,10 @@ struct SeamHoles: Sendable {
 					}
 				}
 			}
-			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(memberCall: memberCall)
+			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
+				memberCall: memberCall,
+				passedUpStruct: callRoute.handsFillLevelStruct || memberCall == nil ? nil : memberParent,
+			)
 		}
 		self.routeCasesByCall = routeCasesByCall
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
@@ -2942,6 +2958,8 @@ struct SeamHoles: Sendable {
 	struct RouteCase {
 		/// The call of the call's own member, which returns the struct the inner seam is handed.
 		var memberCall: String?
+		/// The struct `memberCall` is called on, where the seam's tree binds it with a type: the type key's read of the call.
+		var passedUpStruct: ScopeGenerator.BuilderCallArgument.PassedUpStruct?
 	}
 
 	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
