@@ -211,5 +211,6 @@ extension MockLowering.Walk {
 		} catch {
 			unrecordedPlaceErrors[childIndexPath] = error
 		}
+		relateConfiguration(ofBuiltPlaceOf: node)
 	}
 }
