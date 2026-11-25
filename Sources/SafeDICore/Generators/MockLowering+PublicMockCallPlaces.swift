@@ -202,7 +202,7 @@ extension MockLowering {
 	}
 
 	/// What a place written as `text` reads, and the functions it declares at its top, or `nil` where it binds a value at
-	/// its top or calls a function it does not declare. Every name it uses that is not a member, a label, or a name it
+	/// its top or calls a function of SafeDI’s it does not declare. Every name it uses that is not a member, a label, or a name it
 	/// declares is a read, as is every name `outerTypes` holds, even one it declares too: a read too many is only a
 	/// declaration the type key must resolve as the walk does.
 	static func textPlace(_ text: String, outerTypes: [String: TypeDescription]) -> (reads: [PlaceRead], declaredFunctionNames: [String])? {
@@ -224,7 +224,9 @@ extension MockLowering {
 		for token in tokens where !token.isMember && !token.isLabel && !keywords.contains(token.name) && !token.name.hasPrefix("$") && !declaredFunctionNames.contains(token.name) {
 			let isOuter = outerTypes[token.name] != nil
 			guard isOuter || !localNames.contains(token.name), namesAValue(token.name, outerTypes: outerTypes) else { continue }
-			guard !token.isCalled || isOuter else { return nil }
+			// A function the walk declares is named with SafeDI’s reserved prefix; any other name called is a closure the
+			// text reads, such as a builder `mock()` takes.
+			guard !token.isCalled || isOuter || !token.name.hasPrefix(ReservedName.builderFunctionNamePrefix) else { return nil }
 			if readNames.insert(token.name).inserted {
 				reads.append(valueRead(token.name, outerTypes: outerTypes))
 			}
