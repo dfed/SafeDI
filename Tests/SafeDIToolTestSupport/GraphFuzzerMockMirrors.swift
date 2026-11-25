@@ -859,6 +859,10 @@ enum GraphFuzzerMirrorSkip: String, CaseIterable, Comparable {
 	/// its chain, nothing builds: a mock binds every property its tree receives only if available, to an override, so
 	/// it creates the alias, which production does not create, and rejects the receive.
 	case requiredReceiveOfUncreatedAlias
+	/// The mocked type is an actor, whose initializer a mirror cannot hand the values it stores: a value it was handed is
+	/// in the mirror's region, which Swift 6 does not let it send to the actor. The compile of the drawn graph judges the
+	/// mock.
+	case mockedActor
 
 	static func < (lhs: GraphFuzzerMirrorSkip, rhs: GraphFuzzerMirrorSkip) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -1169,7 +1173,9 @@ extension GraphFuzzerMockMirrorModel {
 		for dependency in mockedType.dependencies {
 			let argument: String? = switch dependency.source {
 			case .instantiated:
-				Self.argument(for: dependency.property, isRequired: true, from: declarations)
+				// An optional instantiated property is instantiated only if available, since the macro rejects every other
+				// one: where nothing the mock builds fulfills it, the mock binds `nil`, as production does.
+				Self.argument(for: dependency.property, isRequired: !dependency.property.isOptional, from: declarations)
 			case let .aliased(_, onlyIfAvailable):
 				Self.argument(for: dependency.property, isRequired: !onlyIfAvailable, from: declarations)
 			case let .received(onlyIfAvailable):
@@ -1438,6 +1444,37 @@ extension GraphFuzzerMockMirrorModel {
 		{
 			overrideCount += 1
 		}
+		// As `mockRootParameters`: an override too for each property a type of the tree instantiates only if available that
+		// nothing fulfills, outside every `@Sendable` builder function, but one of the label and type of a value `mock()`
+		// already takes. An optional instantiated property is instantiated only if available, since the macro rejects every
+		// other one.
+		var unavailableProperties = Set<GraphFuzzerMirrorProperty>()
+		var visitedTypes = Set<String>()
+		var typesToVisit = [(typeName: mockedTypeName, children: mockRoot.children, isInsideSendableFunction: false)]
+		while let visit = typesToVisit.popLast() {
+			guard visitedTypes.insert("\(visit.typeName) \(visit.isInsideSendableFunction)").inserted else { continue }
+			if !visit.isInsideSendableFunction {
+				let builtProperties = propertiesToGenerate(ofTypeNamed: visit.typeName).map(\.property)
+				for dependency in types[visit.typeName]?.dependencies ?? [] {
+					guard case .instantiated = dependency.source, dependency.property.isOptional, !builtProperties.contains(dependency.property) else { continue }
+					unavailableProperties.insert(dependency.property)
+				}
+			}
+			for case let .instantiated(property, scopeTypeName, _) in visit.children {
+				typesToVisit.append((
+					typeName: scopeTypeName,
+					children: propertiesToGenerate(ofTypeNamed: scopeTypeName),
+					isInsideSendableFunction: visit.isInsideSendableFunction || property.unwrapped.type.hasPrefix("Sendable"),
+				))
+			}
+		}
+		for property in unavailableProperties
+			where !receivedParameterProperties.contains(property)
+			&& !receivedParameterProperties.contains(property.unwrapped)
+			&& !isFulfilledByForwardedProperty(property)
+		{
+			overrideCount += 1
+		}
 		return overrideCount
 	}
 
@@ -1635,6 +1672,7 @@ struct GraphFuzzerValueOraclePlan {
 		var modelFailures = [String]()
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
 		let samples = GraphFuzzerSampleValues(fixture: fixture, model: model)
+		actorTypeNames = GraphFuzzerSourceLine.actorTypeNames(in: fixture.swiftFileContent)
 		// The tool creates mock roots in type order, sharing what it collects of each scope's received properties.
 		for typeName in model.typeOrder.sorted() where model.types[typeName]?.generatesMock == true && model.types[typeName]?.isRoot == false {
 			guard let mockFile = generatedFiles[typeName + mockFileSuffix] else {
@@ -1645,6 +1683,10 @@ struct GraphFuzzerValueOraclePlan {
 			let mockRoot = model.mockRoot(ofTypeNamed: typeName, cache: &cache)
 			if let disagreement = GraphFuzzerMockOverrides.disagreement(between: model.expectation(of: mockRoot, mockedTypeName: typeName), andMockFile: mockFile, typeNamePrefix: fixture.typeNamePrefix) {
 				modelFailures.append(disagreement)
+				continue
+			}
+			guard !actorTypeNames.contains(typeName) else {
+				skips.append((typeName, .mockedActor))
 				continue
 			}
 			// The mock's required parameters are handed sample values, which the mirror forwards.
@@ -1729,6 +1771,8 @@ struct GraphFuzzerValueOraclePlan {
 	let storingFixture: GraphFuzzerFixture
 	/// The graph's roots, in declaration order.
 	let rootTypeNames: [String]
+	/// The graph's `actor` types, which no mirror or override sentinel builds (`GraphFuzzerMirrorSkip.mockedActor`).
+	let actorTypeNames: Set<String>
 	/// The mock files the tool generated for the graph as drawn, by name, which the value-oracle run must generate alike
 	/// (R6).
 	let drawnMockFiles: [String: String]

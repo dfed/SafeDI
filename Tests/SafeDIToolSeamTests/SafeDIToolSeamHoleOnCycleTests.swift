@@ -282,6 +282,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -297,6 +298,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
 			        }
@@ -310,6 +312,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -431,6 +434,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.t = t
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -446,6 +450,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
 			        }
@@ -459,6 +464,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -601,6 +607,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.t = t
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -616,6 +623,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(cBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _, _, _ in __safeDI_builder() })
 			        }
@@ -629,6 +637,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.tBuilder = tBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -902,6 +911,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(api: { _ in __safeDI_builder() })
 			        }
@@ -915,6 +925,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.a_Sendable = a_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(a_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -928,6 +939,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -938,14 +950,16 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable
-			            @Sendable nonisolated func __safeDI_bBuilder() -> B {
-			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
-			                let a: A = __safeDI_a()
-			                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
-			                return B(api: api, a: a)
+			            let bBuilder = SendableInstantiator<B> {
+			                __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_apiSendableBuilder_a_Sendable)
 			            }
-			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			            return A(bBuilder: bBuilder)
+			        }
+			        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
+			            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
+			            let a: A = __safeDI_a()
+			            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
+			            return B(api: api, a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)

@@ -220,7 +220,7 @@ extension TypeKeyLayout {
 		case nil:
 			false
 		case let .built(built):
-			statementCodes(of: built.children).allSatisfy(laysOut)
+			built.children.allSatisfy(\.statementsAreLaidOutByTypeKey)
 		case .closer:
 			true
 		case let .alias(alias):
@@ -239,6 +239,8 @@ extension TypeKeyLayout {
 	/// another, as a scope's payload bindings precede its place (`ScopeGenerator.valuesBindingPlaces`), each indented as
 	/// the child is.
 	static func statementCodes(of codes: [GeneratedCode]) -> [GeneratedCode] {
+		// Most bodies hold no sequence of places, and keep their children as they are, with no copy.
+		guard codes.contains(where: isSequenceOfPlaces) else { return codes }
 		var statements = [GeneratedCode]()
 		for code in codes {
 			var indentations = [String]()
@@ -256,6 +258,16 @@ extension TypeKeyLayout {
 			}
 		}
 		return statements
+	}
+
+	/// Whether `code`, under its indentations, is pieces one after another, each a place (`statementCodes(of:)`).
+	private static func isSequenceOfPlaces(_ code: GeneratedCode) -> Bool {
+		var inner = code
+		while case let .indented(wrapped, _) = inner.node {
+			inner = wrapped
+		}
+		guard case let .sequence(pieces) = inner.node else { return false }
+		return pieces.allSatisfy { record(of: $0) != nil }
 	}
 
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.
