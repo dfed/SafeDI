@@ -42,7 +42,6 @@ extension Instantiable {
 			enclosingExtensionAccess: enclosingExtensionAccess?.withoutPositions(),
 			generatedInitializerAttributes: generatedInitializerAttributes,
 			mockAttributes: mockAttributes,
-			declarationIsolation: declarationIsolation,
 			generateMock: generateMock,
 			mockGenerationArgumentRange: nil,
 			mockOnly: mockOnly,

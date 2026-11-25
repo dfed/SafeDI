@@ -96,14 +96,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// or `nil` when it spells neither and takes its type's isolation.
 	public let spelledIsolation: String?
 
-	/// See `spelledIsolation`.
-	/// The global actor attribute among `attributes`, a space-separated list of attributes as `mockAttributes` spells
-	/// them (`"@MainActor"`), found as `spelledIsolation(modifiers:attributes:)` finds one: an attribute without
-	/// arguments whose name ends in `Actor`.
-	public static func globalActorAttribute(in attributes: String) -> String? {
-		attributes.split(separator: " ").first { $0.hasPrefix("@") && !$0.contains("(") && $0.hasSuffix("Actor") }.map(String.init)
-	}
-
 	static func spelledIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
 		if modifiers.contains(where: { $0.name.tokenKind == .keyword(.nonisolated) }) {
 			return "nonisolated"
