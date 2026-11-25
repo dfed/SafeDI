@@ -116,6 +116,22 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 		#expect(counts == [[4], [4]])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_checksEachReadAtEveryMemberOncePerClass_whenScreensOpenEachOtherAtTwoSizes() async throws {
+		// The reported graph's form at eight and twelve screens, as above, whose views grow from 133 to 1,918 while their
+		// classes stay one per screen: each read is asked once per class, reading each member once, so the work grows with
+		// the views (766 and 11,047). Asking it for every member read a class's members once per member, growing with the
+		// square of a class's members (15,076 and 2,180,277).
+		var totals = [Int]()
+		for screenCount in [8, 12] {
+			let roles = (0..<screenCount).map { ContextRole.allCases[$0 % ContextRole.allCases.count] }
+			let targets = (0..<screenCount).map { screen in [1, 3, 7].map { (screen + $0) % screenCount }.sorted() }
+			try await totals.append(workCounts(of: Self.screensOpeningEachOther(roles: roles, targets: targets), by: .checkingReadsAtEveryMember).reduce(0, +))
+		}
+		#expect(totals == [766, 11_047])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

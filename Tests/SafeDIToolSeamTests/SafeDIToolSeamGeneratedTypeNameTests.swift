@@ -61,6 +61,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -74,6 +75,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -87,6 +89,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -165,6 +168,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -178,6 +182,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.scopeBuilder = scopeBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(scopeBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -191,6 +196,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -204,6 +210,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -291,6 +298,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -304,6 +312,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -317,6 +326,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.api = api
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -395,6 +405,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -408,6 +419,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -421,6 +433,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.apiBuilder = apiBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Built, __safeDI_Built>.Builder) {
 		            self.init(apiBuilder: { __safeDI_builder })
 		        }
@@ -501,6 +514,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.detailBuilder = detailBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.init(detailBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -514,6 +528,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.leafBuilder = leafBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.init(leafBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -527,6 +542,7 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		            self.apiBuilder = apiBuilder
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(built: Built, id: Int), __safeDI_Built>.Builder) {
 		            self.init(apiBuilder: { __safeDI_builder })
 		        }

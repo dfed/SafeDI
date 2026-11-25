@@ -69,7 +69,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -108,7 +108,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -266,7 +266,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -305,7 +305,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -463,7 +463,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -502,7 +502,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -648,7 +648,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -687,7 +687,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -845,7 +845,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -884,7 +884,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -936,8 +936,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                    self.panelTwin = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(panel: { _ in .init(__safeDI_noScope: __safeDI_builder) }, panelTwin: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -955,7 +954,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(screenBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1080,7 +1079,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -1119,7 +1118,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -1291,7 +1290,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -1330,7 +1329,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+		                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 		            }
 		        }
 		    }
@@ -1490,7 +1489,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -1529,7 +1528,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -1688,7 +1687,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<HoleArguments, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -1727,7 +1726,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<HoleArguments, __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		                self.init(holeBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -1886,7 +1885,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+			                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 			            }
 			        }
 			    }
@@ -1930,7 +1929,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
+			                self.init(holeBuilder: { _ in { _ in __safeDI_builder() } })
 			            }
 			        }
 			    }
@@ -2115,7 +2114,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                    self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(panel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -2133,7 +2132,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(screenBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2263,7 +2262,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(panel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -2281,7 +2280,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(screenBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2413,7 +2412,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                    self.panel_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(panel_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -2427,7 +2426,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
-		                self.screenBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(screenBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }

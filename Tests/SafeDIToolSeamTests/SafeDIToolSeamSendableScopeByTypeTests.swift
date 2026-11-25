@@ -78,6 +78,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell = shell
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -91,6 +92,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -104,6 +106,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -117,6 +120,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -130,6 +134,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -235,6 +240,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -248,6 +254,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widgetBuilder = widgetBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
 			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
@@ -332,6 +339,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell = shell
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -345,6 +353,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.plainPanelBuilder = plainPanelBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(plainPanelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -358,6 +367,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -371,6 +381,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -384,6 +395,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -490,6 +502,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -503,6 +516,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -588,6 +602,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -601,6 +616,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -616,6 +632,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.screen_Sendable = screen_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(screen_Sendable_: .init(__safeDI_noScope: __safeDI_builder), screen_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -629,6 +646,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -815,6 +833,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(api: { __safeDI_builder() })
 			        }
@@ -828,6 +847,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.mid_Sendable = mid_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(mid_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -841,6 +861,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.screenBuilder = screenBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -981,6 +1002,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.api = api
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(api: { _ in __safeDI_builder() })
 			        }
@@ -994,6 +1016,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.aBuilder_Sendable = aBuilder_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(aBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1007,6 +1030,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(cBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1251,6 +1275,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		            self.hub_Sendable = hub_Sendable
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(hub_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1412,6 +1437,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1425,6 +1451,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widgetBuilder = widgetBuilder
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
 			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
