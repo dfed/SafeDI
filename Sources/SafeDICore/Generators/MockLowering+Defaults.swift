@@ -203,19 +203,19 @@ extension MockLowering.Walk {
 	/// argument a dependency fulfills is the next of `dependencyReads`, in order, and each default is the member of its
 	/// label of the configuration the node's function is handed (`configurationParameter`, `MockLowering+CycleOverrides.swift`),
 	/// called where the field is stored as a closure, read as a read of that parameter (`PlaceSharingFields.argumentValues`).
-	/// `nil` where the record cannot say it yet, and
-	/// the place keeps its text: a public mock's construction function, and a node no override reaches, whose defaults
-	/// are read from a configuration built afresh.
+	/// A node no override reaches reads its defaults alike: its call hands it a configuration built afresh
+	/// (`ConfigurationParameter.read(isProvided:)`), whose fields hold the defaults the path key elides, so the record is
+	/// the same whichever edge of a mocked lazy cycle `computeCycleEdges` leaves out. `nil` where the record cannot say it
+	/// yet, and the place keeps its text: a public mock's construction function.
 	mutating func defaultArgumentReads(
 		of instantiable: Instantiable,
 		usesMockInitializer: Bool,
 		dependencyReads: [PlaceRead],
 		configurationParameter: MockLowering.ConfigurationParameter,
-		overrideReachable: Bool,
 	) -> (arguments: [PlaceRead], argumentValues: [Int: ValuePath])? {
 		let construction = mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer)
 		guard Self.readsConfiguration(construction, given: instantiable) else { return (dependencyReads, [:]) }
-		guard !buildsPublicMock, overrideReachable else { return nil }
+		guard !buildsPublicMock else { return nil }
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		let configuration = ValuePath.passedArgument(configurationParameter.name)
 		let configurationProperty = Property(label: configurationParameter.name, typeDescription: configurationParameter.type)

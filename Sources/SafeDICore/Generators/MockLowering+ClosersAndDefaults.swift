@@ -208,19 +208,17 @@ extension MockLowering {
 
 	/// What a built place's record holds in place of production's call where its construction reads defaults from its
 	/// configuration or calls its type's hand-written mock: whether it calls the mock, the parameter its function takes its
-	/// configuration through, whose members its defaults read (`defaultArgumentReads(of:…)`), and whether an override
+	/// configuration through, whose members its defaults read (`defaultArgumentReads(of:…)`), whether or not an override
 	/// reaches the place.
 	struct ConfiguredConstruction: Hashable {
 		let usesMockInitializer: Bool
 		let configurationParameter: ConfigurationParameter
-		let overrideReachable: Bool
 	}
 }
 
 extension MockLowering.Walk {
 	/// How the record of `node`, a place of `instantiable` built as `usesMockInitializer` says, says its construction.
-	/// `readsOverride` is whether an override reaches the place.
-	mutating func configuredConstruction(of node: MockLowering.ConstantNode, instantiable: Instantiable, readsOverride: Bool, usesMockInitializer: Bool) -> MockLowering.ConstructionRecording {
+	mutating func configuredConstruction(of node: MockLowering.ConstantNode, instantiable: Instantiable, usesMockInitializer: Bool) -> MockLowering.ConstructionRecording {
 		guard usesMockInitializer || constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return .asProduction }
 		// A public mock builds such a place with its type's construction function, which no record says yet.
 		guard !buildsPublicMock else { return .unrecorded }
@@ -231,7 +229,6 @@ extension MockLowering.Walk {
 				builtWithHandWrittenMock: usesMockInitializer,
 				configurationType: MockLowering.configurationType(of: node),
 			),
-			overrideReachable: readsOverride,
 		))
 	}
 
@@ -255,7 +252,6 @@ extension MockLowering.Walk {
 			usesMockInitializer: construction.usesMockInitializer,
 			dependencyReads: dependencyReads,
 			configurationParameter: construction.configurationParameter,
-			overrideReachable: construction.overrideReachable,
 		) else { return nil }
 		var configured = BuiltPlaceRecord(
 			property: built.property,

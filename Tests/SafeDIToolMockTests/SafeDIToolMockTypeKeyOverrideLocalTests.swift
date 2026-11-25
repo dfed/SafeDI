@@ -316,17 +316,506 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsWalksBody_whenRootEntersMockedLazyCycle() async throws {
-		// Which edge of the cycle `computeCycleEdges` prunes follows the types' names, and so does whether a root's walk
-		// crosses it or only closes the cycle on it: every root that builds both types of the edge keeps the walk's body.
+	mutating func mock_laysOutRootSharingOneFunctionPerType_whenRootEntersMockedLazyCycle() async throws {
+		// Which edge of the cycle `computeCycleEdges` prunes follows the types' names, and so does whether a place of a type
+		// is built or closes the cycle: both call the one function of the type, handing it the nearest configuration of its
+		// type above, else what the walk hands it there.
 		let mocks = try await generatedMocks(of: Self.mockedLazyCycleFixture)
+		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
+
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            alphaBuilder: Alpha.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                alphaBuilder: alphaBuilder
+		            )
+		        }
+
+		        var alphaBuilder: Alpha.SafeDIMockConfiguration { __safeDI_storage.alphaBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                alphaBuilder: Alpha.SafeDIMockConfiguration
+		            ) {
+		                self.alphaBuilder = alphaBuilder
+		            }
+
+		            let alphaBuilder: Alpha.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_alphaBuilder(__safeDI_Alpha_configuration: Alpha.SafeDIMockConfiguration) -> Alpha {
+		            let bravoBuilder = Instantiator<Bravo> {
+		                __safeDI_bravoBuilder(__safeDI_Bravo_configuration: __safeDI_Alpha_configuration.bravoBuilder, __safeDI_Alpha_configuration_nearest: __safeDI_Alpha_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Alpha_configuration.safeDIBuilder { safeDIBuilder(bravoBuilder) } else { Alpha(bravoBuilder: bravoBuilder) }
+		        }
+		        func __safeDI_bravoBuilder(__safeDI_Bravo_configuration: Bravo.SafeDIMockConfiguration, __safeDI_Alpha_configuration_nearest: Alpha.SafeDIMockConfiguration?) -> Bravo {
+		            let alphaBuilder = Instantiator<Alpha> {
+		                __safeDI_alphaBuilder(__safeDI_Alpha_configuration: __safeDI_Alpha_configuration_nearest ?? Alpha.SafeDIMockConfiguration())
+		            }
+		            let badge: Badge = __safeDI_badge(__safeDI_Badge_configuration: __safeDI_Bravo_configuration.badge)
+		            return if let safeDIBuilder = __safeDI_Bravo_configuration.safeDIBuilder { safeDIBuilder(alphaBuilder, badge) } else { Bravo(alphaBuilder: alphaBuilder, badge: badge) }
+		        }
+		        func __safeDI_badge(__safeDI_Badge_configuration: Badge.SafeDIMockConfiguration) -> Badge {
+		            if let safeDIBuilder = __safeDI_Badge_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Badge_configuration.title) } else { Badge(title: __safeDI_Badge_configuration.title) }
+		        }
+		        let alphaBuilder = Instantiator<Alpha> {
+		            __safeDI_alphaBuilder(__safeDI_Alpha_configuration: safeDIOverrides.alphaBuilder)
+		        }
+		        return Root(alphaBuilder: alphaBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
 		for file in ["Alpha+SafeDIMock.swift", "Bravo+SafeDIMock.swift", "Root+SafeDIMock.swift"] {
-			#expect(mocks.laidOut.mockFiles[file] == mocks.walk.mockFiles[file], "\(file)")
+			#expect(mocks.laidOut.mockFiles[file] != mocks.walk.mockFiles[file], "\(file)")
 		}
 		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: Self.mockedLazyCycleFixture, probes: [
 			DifferentialValueProbe("Root.mock().alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(alphaBuilder: .init(bravoBuilder: .init(badge: .init(title: \"root\"))))).alphaBuilder.instantiate().bravoBuilder.instantiate().alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
 			DifferentialValueProbe("Bravo.mock(safeDIOverrides: .init(badge: .init(title: \"bravo\"))).alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
-			DifferentialValueProbe("Alpha.mock(safeDIOverrides: .init(bravoBuilder: .init(badge: .init(title: \"alpha\")))).bravoBuilder.instantiate().badge.title"),
+			DifferentialValueProbe("Alpha.mock(safeDIOverrides: .init(bravoBuilder: .init(badge: .init(title: \"alpha\")))).bravoBuilder.instantiate().alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutRoot_whenRootEntersMockedLazyCycleUnderAnotherLabelThanTheCyclesOwn() async throws {
+		// `Root` holds `Alpha` as `entryBuilder`, which the cycle holds as `alphaBuilder`, so no closer closes on `Root`'s
+		// place: `Bravo` builds `Alpha` again, which reads the configuration of the `Alpha` above, handed down as the nearest.
+		var fixture = Self.mockedLazyCycleFixture
+		fixture["Root.swift"] = """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(entryBuilder: Instantiator<Alpha>) {
+		        self.entryBuilder = entryBuilder
+		    }
+
+		    @Instantiated public let entryBuilder: Instantiator<Alpha>
+		}
+		"""
+		let mocks = try await generatedMocks(of: fixture)
+		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
+
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            entryBuilder: Alpha.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                entryBuilder: entryBuilder
+		            )
+		        }
+
+		        var entryBuilder: Alpha.SafeDIMockConfiguration { __safeDI_storage.entryBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                entryBuilder: Alpha.SafeDIMockConfiguration
+		            ) {
+		                self.entryBuilder = entryBuilder
+		            }
+
+		            let entryBuilder: Alpha.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_entryBuilder(__safeDI_Alpha_configuration: Alpha.SafeDIMockConfiguration, __safeDI_Bravo_configuration_nearest: Bravo.SafeDIMockConfiguration?) -> Alpha {
+		            let bravoBuilder = Instantiator<Bravo> {
+		                __safeDI_bravoBuilder(__safeDI_Bravo_configuration: __safeDI_Bravo_configuration_nearest ?? __safeDI_Alpha_configuration.bravoBuilder, __safeDI_Alpha_configuration_nearest: __safeDI_Alpha_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Alpha_configuration.safeDIBuilder { safeDIBuilder(bravoBuilder) } else { Alpha(bravoBuilder: bravoBuilder) }
+		        }
+		        func __safeDI_bravoBuilder(__safeDI_Bravo_configuration: Bravo.SafeDIMockConfiguration, __safeDI_Alpha_configuration_nearest: Alpha.SafeDIMockConfiguration?) -> Bravo {
+		            let alphaBuilder = Instantiator<Alpha> {
+		                __safeDI_entryBuilder(__safeDI_Alpha_configuration: __safeDI_Alpha_configuration_nearest ?? Alpha.SafeDIMockConfiguration(), __safeDI_Bravo_configuration_nearest: __safeDI_Bravo_configuration)
+		            }
+		            let badge: Badge = __safeDI_badge(__safeDI_Badge_configuration: __safeDI_Bravo_configuration.badge)
+		            return if let safeDIBuilder = __safeDI_Bravo_configuration.safeDIBuilder { safeDIBuilder(alphaBuilder, badge) } else { Bravo(alphaBuilder: alphaBuilder, badge: badge) }
+		        }
+		        func __safeDI_badge(__safeDI_Badge_configuration: Badge.SafeDIMockConfiguration) -> Badge {
+		            if let safeDIBuilder = __safeDI_Badge_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Badge_configuration.title) } else { Badge(title: __safeDI_Badge_configuration.title) }
+		        }
+		        let entryBuilder = Instantiator<Alpha> {
+		            __safeDI_entryBuilder(__safeDI_Alpha_configuration: safeDIOverrides.entryBuilder, __safeDI_Bravo_configuration_nearest: nil)
+		        }
+		        return Root(entryBuilder: entryBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
+		#expect(laidOut != mocks.walk.mockFiles["Root+SafeDIMock.swift"])
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe("Root.mock().entryBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(entryBuilder: .init(bravoBuilder: .init(badge: .init(title: \"root\"))))).entryBuilder.instantiate().bravoBuilder.instantiate().alphaBuilder.instantiate().bravoBuilder.instantiate().alphaBuilder.instantiate().bravoBuilder.instantiate().badge.title"),
+			DifferentialValueProbe(name: "the override of the entry builds the Alpha the cycle builds again", expression: "{ () -> Int in var count = 0; let root = Root.mock(safeDIOverrides: .init(entryBuilder: .init { bravoBuilder in count += 1; return Alpha(bravoBuilder: bravoBuilder) })); _ = root.entryBuilder.instantiate().bravoBuilder.instantiate().alphaBuilder.instantiate(); return count }()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutRoot_whenTypeOfMockedLazyCycleInstantiatesItself() async throws {
+		// The closer is in the function of the type it closes on, so it hands that function its own configuration on.
+		let fixture = [
+			"Node.swift": """
+			@Instantiable(generateMock: true)
+			public final class Node: Instantiable {
+			    public init(nodeBuilder: Instantiator<Node>) {
+			        self.nodeBuilder = nodeBuilder
+			    }
+
+			    @Instantiated public let nodeBuilder: Instantiator<Node>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(nodeBuilder: Instantiator<Node>) {
+			        self.nodeBuilder = nodeBuilder
+			    }
+
+			    @Instantiated public let nodeBuilder: Instantiator<Node>
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixture)
+		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
+
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            nodeBuilder: Node.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                nodeBuilder: nodeBuilder
+		            )
+		        }
+
+		        var nodeBuilder: Node.SafeDIMockConfiguration { __safeDI_storage.nodeBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                nodeBuilder: Node.SafeDIMockConfiguration
+		            ) {
+		                self.nodeBuilder = nodeBuilder
+		            }
+
+		            let nodeBuilder: Node.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_nodeBuilder(__safeDI_Node_configuration: Node.SafeDIMockConfiguration) -> Node {
+		            let nodeBuilder = Instantiator<Node> {
+		                __safeDI_nodeBuilder(__safeDI_Node_configuration: __safeDI_Node_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Node_configuration.safeDIBuilder { safeDIBuilder(nodeBuilder) } else { Node(nodeBuilder: nodeBuilder) }
+		        }
+		        let nodeBuilder = Instantiator<Node> {
+		            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+		        }
+		        return Root(nodeBuilder: nodeBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe(name: "the override of the root's node builds every node beneath it", expression: "{ () -> Int in var count = 0; let root = Root.mock(safeDIOverrides: .init(nodeBuilder: .init { nodeBuilder in count += 1; return Node(nodeBuilder: nodeBuilder) })); _ = root.nodeBuilder.instantiate().nodeBuilder.instantiate().nodeBuilder.instantiate(); return count }()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutRootReturningThePropertysType_whenMockedLazyCycleBuildsItsTypeAgainUnderAProtocol() async throws {
+		// `Bravo` builds `Alpha` again as `AlphaProtocol`, beneath the edge the mock's configurations leave out, so the
+		// override that place tries is the nearest `Alpha`'s, and the function it is built in returns the property's type.
+		let fixture = [
+			"Alpha.swift": """
+			public protocol AlphaProtocol {}
+
+			@Instantiable(generateMock: true)
+			public final class Alpha: Instantiable, AlphaProtocol {
+			    public init(bravoBuilder: Instantiator<Bravo>) {
+			        self.bravoBuilder = bravoBuilder
+			    }
+
+			    @Instantiated public let bravoBuilder: Instantiator<Bravo>
+			}
+			""",
+			"Bravo.swift": """
+			@Instantiable(generateMock: true)
+			public final class Bravo: Instantiable {
+			    public init(alpha: ErasedInstantiator<(), AlphaProtocol>) {
+			        self.alpha = alpha
+			    }
+
+			    @Instantiated(fulfilledByType: "Alpha") public let alpha: ErasedInstantiator<(), AlphaProtocol>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(alphaBuilder: Instantiator<Alpha>) {
+			        self.alphaBuilder = alphaBuilder
+			    }
+
+			    @Instantiated public let alphaBuilder: Instantiator<Alpha>
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixture)
+		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
+
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            alphaBuilder: Alpha.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                alphaBuilder: alphaBuilder
+		            )
+		        }
+
+		        var alphaBuilder: Alpha.SafeDIMockConfiguration { __safeDI_storage.alphaBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                alphaBuilder: Alpha.SafeDIMockConfiguration
+		            ) {
+		                self.alphaBuilder = alphaBuilder
+		            }
+
+		            let alphaBuilder: Alpha.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_bravoBuilder(__safeDI_Bravo_configuration: Bravo.SafeDIMockConfiguration, __safeDI_Alpha_configuration_nearest: Alpha.SafeDIMockConfiguration?) -> Bravo {
+		            let alpha = ErasedInstantiator<(), AlphaProtocol> {
+		                __safeDI_alpha(__safeDI_Alpha_configuration: __safeDI_Alpha_configuration_nearest ?? Alpha.SafeDIMockConfiguration(), __safeDI_Bravo_configuration_nearest: __safeDI_Bravo_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Bravo_configuration.safeDIBuilder { safeDIBuilder(alpha) } else { Bravo(alpha: alpha) }
+		        }
+		        func __safeDI_alpha(__safeDI_Alpha_configuration: Alpha.SafeDIMockConfiguration, __safeDI_Bravo_configuration_nearest: Bravo.SafeDIMockConfiguration?) -> AlphaProtocol {
+		            let bravoBuilder = Instantiator<Bravo> {
+		                __safeDI_bravoBuilder(__safeDI_Bravo_configuration: __safeDI_Bravo_configuration_nearest ?? __safeDI_Alpha_configuration.bravoBuilder, __safeDI_Alpha_configuration_nearest: __safeDI_Alpha_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Alpha_configuration.safeDIBuilder { safeDIBuilder(bravoBuilder) } else { Alpha(bravoBuilder: bravoBuilder) }
+		        }
+		        func __safeDI_alphaBuilder(__safeDI_Alpha_configuration: Alpha.SafeDIMockConfiguration, __safeDI_Bravo_configuration_nearest: Bravo.SafeDIMockConfiguration?) -> Alpha {
+		            let bravoBuilder = Instantiator<Bravo> {
+		                __safeDI_bravoBuilder(__safeDI_Bravo_configuration: __safeDI_Bravo_configuration_nearest ?? __safeDI_Alpha_configuration.bravoBuilder, __safeDI_Alpha_configuration_nearest: __safeDI_Alpha_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Alpha_configuration.safeDIBuilder { safeDIBuilder(bravoBuilder) } else { Alpha(bravoBuilder: bravoBuilder) }
+		        }
+		        let alphaBuilder = Instantiator<Alpha> {
+		            __safeDI_alphaBuilder(__safeDI_Alpha_configuration: safeDIOverrides.alphaBuilder, __safeDI_Bravo_configuration_nearest: nil)
+		        }
+		        return Root(alphaBuilder: alphaBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe(name: "the override of the root's Alpha builds the Alpha the cycle builds again", expression: "{ () -> Int in var count = 0; let root = Root.mock(safeDIOverrides: .init(alphaBuilder: .init { bravoBuilder in count += 1; return Alpha(bravoBuilder: bravoBuilder) })); _ = root.alphaBuilder.instantiate().bravoBuilder.instantiate().alpha.instantiate(); return count }()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutRootReadingTheOverridesTheWalkReads_whenTypeBeneathLeftOutEdgesOfTwoLazyCyclesInstantiatesALabelAgain() async throws {
+		// `W` and `U` instantiate one another, and so do `U` and `P`, and a mock's configurations leave one edge of each
+		// cycle out: `W`'s has no `uBuilder` and `U`'s no `pBuilder`. `P`, built beneath both, has no `P` above it, so it is
+		// handed a configuration built afresh, and the `l` it instantiates again reads no override, as in the walk's body.
+		let fixture = [
+			"L.swift": """
+			@Instantiable
+			public final class L: Instantiable {
+			    public init(title: String = "default") {
+			        self.title = title
+			    }
+
+			    public let title: String
+			}
+			""",
+			"P.swift": """
+			@Instantiable
+			public final class P: Instantiable {
+			    public init(l: L, uBuilder: Instantiator<U>) {
+			        self.l = l
+			        self.uBuilder = uBuilder
+			    }
+
+			    @Instantiated public let l: L
+			    @Instantiated public let uBuilder: Instantiator<U>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(l: L, wBuilder: Instantiator<W>) {
+			        self.l = l
+			        self.wBuilder = wBuilder
+			    }
+
+			    @Instantiated public let l: L
+			    @Instantiated public let wBuilder: Instantiator<W>
+			}
+			""",
+			"U.swift": """
+			@Instantiable
+			public final class U: Instantiable {
+			    public init(pBuilder: Instantiator<P>, wBuilder: Instantiator<W>) {
+			        self.pBuilder = pBuilder
+			        self.wBuilder = wBuilder
+			    }
+
+			    @Instantiated public let pBuilder: Instantiator<P>
+			    @Instantiated public let wBuilder: Instantiator<W>
+			}
+			""",
+			"V.swift": """
+			@Instantiable
+			public final class V: Instantiable {
+			    public init(l: L) {
+			        self.l = l
+			    }
+
+			    @Received public let l: L
+			}
+			""",
+			"W.swift": """
+			@Instantiable
+			public final class W: Instantiable {
+			    public init(uBuilder: Instantiator<U>, vBuilder: Instantiator<V>) {
+			        self.uBuilder = uBuilder
+			        self.vBuilder = vBuilder
+			    }
+
+			    @Instantiated public let uBuilder: Instantiator<U>
+			    @Instantiated public let vBuilder: Instantiator<V>
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixture)
+		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
+
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            l: L.SafeDIMockConfiguration = .init(),
+		            wBuilder: W.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                l: l,
+		                wBuilder: wBuilder
+		            )
+		        }
+
+		        var l: L.SafeDIMockConfiguration { __safeDI_storage.l }
+		        var wBuilder: W.SafeDIMockConfiguration { __safeDI_storage.wBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                l: L.SafeDIMockConfiguration,
+		                wBuilder: W.SafeDIMockConfiguration
+		            ) {
+		                self.l = l
+		                self.wBuilder = wBuilder
+		            }
+
+		            let l: L.SafeDIMockConfiguration
+		            let wBuilder: W.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_l(__safeDI_L_configuration: L.SafeDIMockConfiguration) -> L {
+		            if let safeDIBuilder = __safeDI_L_configuration.safeDIBuilder { safeDIBuilder(__safeDI_L_configuration.title) } else { L(title: __safeDI_L_configuration.title) }
+		        }
+		        let l: L = __safeDI_l(__safeDI_L_configuration: safeDIOverrides.l)
+		        func __safeDI_wBuilder(__safeDI_W_configuration: W.SafeDIMockConfiguration) -> W {
+		            let uBuilder = Instantiator<U> {
+		                __safeDI_uBuilder(__safeDI_U_configuration: U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration)
+		            }
+		            let vBuilder = Instantiator<V> {
+		                __safeDI_vBuilder(__safeDI_V_configuration: __safeDI_W_configuration.vBuilder)
+		            }
+		            return if let safeDIBuilder = __safeDI_W_configuration.safeDIBuilder { safeDIBuilder(uBuilder, vBuilder) } else { W(uBuilder: uBuilder, vBuilder: vBuilder) }
+		        }
+		        func __safeDI_uBuilder(__safeDI_U_configuration: U.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?) -> U {
+		            let pBuilder = Instantiator<P> {
+		                __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest, __safeDI_U_configuration_nearest: __safeDI_U_configuration)
+		            }
+		            let wBuilder = Instantiator<W> {
+		                __safeDI_wBuilder(__safeDI_W_configuration: __safeDI_W_configuration_nearest ?? W.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_U_configuration.safeDIBuilder { safeDIBuilder(pBuilder, wBuilder) } else { U(pBuilder: pBuilder, wBuilder: wBuilder) }
+		        }
+		        func __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?, __safeDI_U_configuration_nearest: U.SafeDIMockConfiguration?) -> P {
+		            let l: L = __safeDI_l(__safeDI_L_configuration: __safeDI_P_configuration.l)
+		            let uBuilder = Instantiator<U> {
+		                __safeDI_uBuilder(__safeDI_U_configuration: __safeDI_U_configuration_nearest ?? U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest)
+		            }
+		            return if let safeDIBuilder = __safeDI_P_configuration.safeDIBuilder { safeDIBuilder(l, uBuilder) } else { P(l: l, uBuilder: uBuilder) }
+		        }
+		        func __safeDI_vBuilder(__safeDI_V_configuration: ((L) -> V)?) -> V {
+		            if let safeDIBuilder = __safeDI_V_configuration { safeDIBuilder(l) } else { V(l: l) }
+		        }
+		        let wBuilder = Instantiator<W> {
+		            __safeDI_wBuilder(__safeDI_W_configuration: safeDIOverrides.wBuilder)
+		        }
+		        return Root(l: l, wBuilder: wBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
+		#expect(laidOut != mocks.walk.mockFiles["Root+SafeDIMock.swift"])
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(l: .init(title: \"root\"))).wBuilder.instantiate().vBuilder.instantiate().l.title"),
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(l: .init(title: \"root\"))).wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().l.title"),
+			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(l: .init(title: \"root\"))).wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate().vBuilder.instantiate().l.title"),
+			DifferentialValueProbe(name: "the override of the root's W builds every W the cycles build again", expression: "{ () -> Int in var count = 0; let root = Root.mock(safeDIOverrides: .init(wBuilder: .init(vBuilder: nil, { uBuilder, vBuilder in count += 1; return W(uBuilder: uBuilder, vBuilder: vBuilder) }))); _ = root.wBuilder.instantiate().uBuilder.instantiate().pBuilder.instantiate().uBuilder.instantiate().wBuilder.instantiate(); return count }()"),
 		])
 	}
 
