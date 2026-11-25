@@ -214,7 +214,9 @@ struct ConstructionMemo {
 					return answer
 				}
 			}
-			for index in candidates.indices(answeredAlikeBy: contextAnswer) {
+			let indices = candidates.indices(answeredAlikeBy: contextAnswer)
+			GenerationWork.record(indices.count, by: .askingMemoCandidates)
+			for index in indices {
 				let candidate = candidates.all[index]
 				if candidate.cycleParameterReads.allSatisfy({ contextAnswer($0.read) == $0.answer }), let reuse = reuse(of: candidate.entry) {
 					return reuse

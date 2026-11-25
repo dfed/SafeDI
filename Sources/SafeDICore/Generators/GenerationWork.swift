@@ -66,6 +66,11 @@ public struct GenerationWork: Sendable {
 		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
 		/// and its levels do not grow with the paths through the tree.
 		case findingRootFunctions
+		/// Looking a place up in the construction memo (`ConstructionMemo.reuse(of:in:besideCallGenerators:drawing:)`): each
+		/// candidate of the place's key whose log the lookup asks. The candidates are found by what their reads of the
+		/// declaration a cycle closes on were answered, so a lookup asks the ones its context answers alike, not every
+		/// candidate a tree with cycles stored for the key.
+		case askingMemoCandidates
 	}
 
 	/// The step that did the work.
