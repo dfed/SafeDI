@@ -4713,7 +4713,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// (`MockLowering.argumentsSurfacedWithoutOverride(of:usesMockInitializer:handWrittenDefaults:)`).
 		let handWrittenMockDefaultParameters: [TypeDescription: [DefaultParameter]]
 		/// The concrete types whose `SafeDIMockConfiguration` is `@Sendable`-typed, from
-		/// `sendableConfigurationTypeNames()` across every root. Such a struct stores each labeled
+		/// `sendableConfigurationTypeNames(ofMockRootOf:)` across every root. Such a struct stores each labeled
 		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
 		/// so the body must know which structs do (`resolveBuilderArguments`).
 		let sendableConfigurationTypeNames: Set<String>
@@ -11291,7 +11291,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// for a property, inside a `Sendable` scope where it or an ancestor builds in a `@Sendable` function, and needs a
 	/// configuration struct where a child of its own is built for a property, its construction has default-valued
 	/// parameters, or it closes a cycle.
-	nonisolated func sendableConfigurationTypeNames() -> Set<String> {
+	nonisolated func sendableConfigurationTypeNames(ofMockRootOf mockedInstantiable: Instantiable) -> Set<String> {
 		var result = Set<String>()
 		var constructions = MockConstructions()
 		// A worklist rather than recursion, since the tree can be as deep as the module has types.
@@ -11299,12 +11299,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// function: such a child reads its overrides as a `@Sendable` builder function does (`isInsideActorArgument`
 		// in `MockLowering+Walk.swift`). A mock root that is an actor takes its level so, in an internal mock and a public one
 		// alike.
-		let rootIsActor = if case let .root(instantiable, _) = scopeData {
-			instantiable.declarationType == .actorType
-		} else {
-			false
-		}
-		var generatorsToVisit = [(generator: self, insideSendableScope: false, insideActorArgument: rootIsActor)]
+		var generatorsToVisit = [(generator: self, insideSendableScope: false, insideActorArgument: mockedInstantiable.declarationType == .actorType)]
 		while let (generator, insideSendableScope, insideActorArgument) = generatorsToVisit.popLast() {
 			for child in generator.propertiesToGenerate {
 				if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
