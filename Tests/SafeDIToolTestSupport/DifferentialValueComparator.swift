@@ -34,6 +34,8 @@ struct DifferentialValueModule {
 	///   - generatedFiles: The files SafeDI generated for the module, by name.
 	///   - mockConditionalCompilation: The condition the module's generated mocks are wrapped in, which the compile
 	///     defines so the mocks compile too. `DEBUG` is always defined.
+	///   - defaultsToMainActor: Whether the module compiles with `-default-isolation MainActor`, as a module whose
+	///     configuration declares the main actor its default isolation does.
 	init(
 		name: String,
 		packageName: String? = nil,
@@ -42,6 +44,7 @@ struct DifferentialValueModule {
 		generatedFiles: [String: String] = [:],
 		activeCompilationConditions: [String] = [],
 		mockConditionalCompilation: String? = nil,
+		defaultsToMainActor: Bool = false,
 	) {
 		self.name = name
 		self.packageName = packageName
@@ -50,6 +53,7 @@ struct DifferentialValueModule {
 		self.generatedFiles = generatedFiles
 		self.activeCompilationConditions = activeCompilationConditions
 		self.mockConditionalCompilation = mockConditionalCompilation
+		self.defaultsToMainActor = defaultsToMainActor
 	}
 
 	var name: String
@@ -59,6 +63,7 @@ struct DifferentialValueModule {
 	var generatedFiles: [String: String]
 	var activeCompilationConditions: [String]
 	var mockConditionalCompilation: String?
+	var defaultsToMainActor: Bool
 
 	/// Everything about the module but its files: the modules of graphs whose paths have one layout compile as one.
 	fileprivate struct Layout: Hashable {
@@ -67,6 +72,7 @@ struct DifferentialValueModule {
 		let dependencyModuleNames: [String]
 		let activeCompilationConditions: [String]
 		let mockConditionalCompilation: String?
+		let defaultsToMainActor: Bool
 	}
 
 	fileprivate var layout: Layout {
@@ -76,6 +82,7 @@ struct DifferentialValueModule {
 			dependencyModuleNames: dependencyModuleNames,
 			activeCompilationConditions: activeCompilationConditions,
 			mockConditionalCompilation: mockConditionalCompilation,
+			defaultsToMainActor: defaultsToMainActor,
 		)
 	}
 }
@@ -174,7 +181,7 @@ enum DifferentialValueCreationStamp {
 		public enum \(counterName) {
 			nonisolated(unsafe) private static var lastStamp = 0
 
-			public static func next() -> Int {
+			nonisolated public static func next() -> Int {
 				lastStamp += 1
 				return lastStamp
 			}
@@ -1130,6 +1137,7 @@ enum DifferentialValueOracle {
 				moduleSearchPaths: path.moduleNames(dependedOnBy: module).compactMap { moduleDirectoriesByName[$0] },
 				enablesTesting: true,
 				parsesAsLibrary: true,
+				defaultIsolation: module.defaultsToMainActor ? "MainActor" : nil,
 			)
 			guard result.exitCode == 0 else {
 				throw DifferentialValueOracleError(
@@ -2423,11 +2431,13 @@ extension DifferentialValuePath {
 				packageName: GraphFuzzerModule.seamModule.packageName,
 				fixtureFiles: Dictionary(uniqueKeysWithValues: zip(fixture.fileNames, fixture.swiftFileContent)),
 				generatedFiles: generatedFiles,
+				defaultsToMainActor: !fixture.modulesDefaultingToMainActor.isEmpty,
 			)])
 			return
 		}
 		let presentModules = Set(fileModules)
 		let modulesWithoutPackage = fixture.modulesOmittingPackageName
+		let modulesDefaultingToMainActor = fixture.modulesDefaultingToMainActor
 		self.init(modules: GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
 			DifferentialValueModule(
 				name: module.name,
@@ -2438,6 +2448,7 @@ extension DifferentialValuePath {
 				generatedFiles: Dictionary(uniqueKeysWithValues: generatedFiles.compactMap { fileName, contents in
 					fileName.hasPrefix(module.name + "/") ? (String(fileName.dropFirst(module.name.count + 1)), contents) : nil
 				}),
+				defaultsToMainActor: modulesDefaultingToMainActor.contains(module),
 			)
 		})
 	}

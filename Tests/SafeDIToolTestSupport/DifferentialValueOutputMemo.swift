@@ -160,6 +160,7 @@ struct DifferentialValueOutputMemo: Sendable {
 				dependencyModuleNames: module.dependencyModuleNames,
 				activeCompilationConditions: module.activeCompilationConditions,
 				mockConditionalCompilation: module.mockConditionalCompilation,
+				defaultIsolation: module.defaultsToMainActor ? "MainActor" : nil,
 				fixtureFiles: files(module.fixtureFiles),
 				generatedFiles: files(module.generatedFiles),
 			))
@@ -270,6 +271,8 @@ private struct ProgramDescription: Encodable {
 		let dependencyModuleNames: [String]
 		let activeCompilationConditions: [String]
 		let mockConditionalCompilation: String?
+		/// Encoded only when set, so that the key of every module compiled without `-default-isolation` is as before.
+		let defaultIsolation: String?
 		let fixtureFiles: [File]
 		let generatedFiles: [File]
 	}

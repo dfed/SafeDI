@@ -83,7 +83,7 @@ struct GraphFuzzerFixture: Equatable {
 	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
 	/// public-mock corpus's graphs are drawn as they are.
 	static func seamCorpusFixture(seed: UInt64, swiftFileContent: [String]) -> GraphFuzzerFixture {
-		GraphFuzzerFixture(seed: seed, swiftFileContent: enablingPlainDependencyTreeInitializers(in: swiftFileContent))
+		GraphFuzzerFixture(seed: seed, swiftFileContent: declaringMainActorDefaultIsolation(seed: seed, in: enablingPlainDependencyTreeInitializers(in: swiftFileContent)))
 	}
 
 	/// `contents` with `generatePlainDependencyTreeInitializers: true` set in each module that declares a seam: added to the
@@ -209,33 +209,51 @@ struct GraphFuzzerFixture: Equatable {
 	/// other draw reads, so every graph it leaves alone is drawn as before.
 	private static let mainActorDefaultIsolationRandomSeedMask: UInt64 = 0x6D61696E41637472
 
-	/// `contents` with its module declaring the main actor its default isolation, for one graph in eight of the base
-	/// corpus: added to the graph's `#SafeDIConfiguration` where it declares one, since a second is an error, and declared
-	/// in the first file otherwise. Two kinds of graph are left as drawn, since under a main-actor default the compile
-	/// rejects their fixture itself (the design's first group of failures, which SafeDI cannot change): one that spells
-	/// `Sendable`, since its types are then main-actor, which a `@Sendable` builder or a `Sendable` conformance cannot
-	/// hold; and one whose hand-written code passes a closure to a wrapper (`Instantiator { … }`), since the wrapper’s
-	/// closure is nonisolated and cannot call the main-actor initializers it builds with (seed 243).
+	/// `contents` with modules declaring the main actor their default isolation, for one graph in eight: a graph in one
+	/// module declares it in that module; a graph split across modules declares it in one module drawn from those it
+	/// spans and in every module that depends on that one, since a module above a declared one calls its `@MainActor`
+	/// generated initializers and mocks, which a caller that is not main-actor itself cannot (the design’s “Other
+	/// modules”). Each module adds the argument to its `#SafeDIConfiguration` where it declares one, since a second is
+	/// an error, and declares one in its first file otherwise. Two kinds of graph are left as drawn, since under a
+	/// main-actor default the compile rejects their fixture itself (the design's first group of failures, which SafeDI
+	/// cannot change): one that spells `Sendable`, since its types are then main-actor, which a `@Sendable` builder or a
+	/// `Sendable` conformance cannot hold; and one whose hand-written code passes a closure to a wrapper
+	/// (`Instantiator { … }`), since the wrapper’s closure is nonisolated and cannot call the main-actor initializers it
+	/// builds with (seed 243).
 	static func declaringMainActorDefaultIsolation(seed: UInt64, in contents: [String]) -> [String] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ mainActorDefaultIsolationRandomSeedMask)
 		guard random.percentChance(12),
 		      !contents.contains(where: { $0.contains("Sendable") || $0.contains("Instantiator {") || $0.contains("Instantiated {") }),
 		      !contents.isEmpty
 		else { return contents }
-		var result = contents
-		if let configurationIndex = contents.firstIndex(where: { $0.contains("#SafeDIConfiguration(") }) {
-			var lines = result[configurationIndex].components(separatedBy: "\n")
-			for lineIndex in lines.indices where lines[lineIndex].contains("#SafeDIConfiguration(") {
-				// `defaultIsolation` is the macro's last parameter, so it goes last.
-				if let closing = lines[lineIndex].range(of: ")", options: .backwards) {
-					let separator = lines[lineIndex][..<closing.lowerBound].hasSuffix("(") ? "" : ", "
-					lines[lineIndex].replaceSubrange(closing, with: separator + mainActorDefaultIsolationArgument + ")")
-				}
-				break
-			}
-			result[configurationIndex] = lines.joined(separator: "\n")
+		let isSplit = contents.contains { GraphFuzzerModule(declaredIn: $0) != nil }
+		let fileModules: [GraphFuzzerModule?] = contents.map { isSplit ? (GraphFuzzerModule(declaredIn: $0) ?? .samePackageCaller) : nil }
+		let presentModules = GraphFuzzerModule.allCases.filter { fileModules.contains($0) }
+		let declaredModules: [GraphFuzzerModule?]
+		if presentModules.isEmpty {
+			declaredModules = [nil]
 		} else {
-			result[0] += "\n\n#SafeDIConfiguration(\(mainActorDefaultIsolationArgument))\n"
+			let drawnModule = random.element(of: presentModules)
+			declaredModules = presentModules.filter { $0 == drawnModule || $0.transitiveDependencies.contains(drawnModule) }
+		}
+		var result = contents
+		for module in declaredModules {
+			let indices = fileModules.indices.filter { fileModules[$0] == module }
+			guard let firstIndex = indices.first else { continue }
+			if let configurationIndex = indices.first(where: { contents[$0].contains("#SafeDIConfiguration(") }) {
+				var lines = result[configurationIndex].components(separatedBy: "\n")
+				for lineIndex in lines.indices where lines[lineIndex].contains("#SafeDIConfiguration(") {
+					// `defaultIsolation` is the macro's last parameter, so it goes last.
+					if let closing = lines[lineIndex].range(of: ")", options: .backwards) {
+						let separator = lines[lineIndex][..<closing.lowerBound].hasSuffix("(") ? "" : ", "
+						lines[lineIndex].replaceSubrange(closing, with: separator + mainActorDefaultIsolationArgument + ")")
+					}
+					break
+				}
+				result[configurationIndex] = lines.joined(separator: "\n")
+			} else {
+				result[firstIndex] += "\n\n#SafeDIConfiguration(\(mainActorDefaultIsolationArgument))\n"
+			}
 		}
 		return result
 	}
@@ -2500,12 +2518,7 @@ enum GraphFuzzerGenerator {
 			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed).swiftFileContent(storingEveryParameter: storingEveryParameter, isKnownRight: false))
 		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: storingEveryParameter)
-		let swiftFileContent = builder.build()
-		// The base corpus's graphs are in one module, which one graph in eight declares main-actor by default.
-		guard features.isEmpty else {
-			return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent)
-		}
-		return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed: seed, in: swiftFileContent))
+		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
 	/// The graph for `seed` and `features` without its second place of a hole – the property a hole draw adds that gives a
