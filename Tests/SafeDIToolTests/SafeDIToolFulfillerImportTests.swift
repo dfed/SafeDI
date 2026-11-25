@@ -153,8 +153,8 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			for layer in 0..<layerCount {
 				for screen in 0..<3 {
 					fixture.append(seamFixtureType(named: "Screen\(layer)x\(screen)", isFinalClass: true, declarations: layer + 1 < layerCount
-						? (0..<3).map { "@Instantiated let screen\(layer + 1)x\($0)Builder: Instantiator<Screen\(layer + 1)x\($0)>" }
-						: []))
+							? (0..<3).map { "@Instantiated let screen\(layer + 1)x\($0)Builder: Instantiator<Screen\(layer + 1)x\($0)>" }
+							: []))
 				}
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
