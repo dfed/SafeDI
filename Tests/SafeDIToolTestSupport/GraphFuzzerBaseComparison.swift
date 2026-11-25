@@ -246,12 +246,12 @@ enum GraphFuzzerBaseComparison {
 			return Record(steps: steps, outputs: try Self.files(in: workDirectory))
 		}
 
-		/// Every file under `directory` but a scan cache, by its path relative to `directory`.
+		/// Every file under `directory` but a scan cache and scan’s record of what it read, which holds modification times, by its path relative to `directory`.
 		private static func files(in directory: URL) throws -> [String: Data] {
 			var files = [String: Data]()
 			guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isRegularFileKey]) else { return files }
 			let prefix = directory.resolvingSymlinksInPath().path + "/"
-			for case let file as URL in enumerator where file.pathExtension != "safediScanCache" {
+			for case let file as URL in enumerator where !["safediScanCache", "safediScanInputs"].contains(file.pathExtension) {
 				guard try file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else { continue }
 				let path = file.resolvingSymlinksInPath().path
 				files[path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path] = try Data(contentsOf: file)
