@@ -1791,7 +1791,7 @@ struct GraphFuzzerValueOraclePlan {
 			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp, isolation: isolation))
 		}
 		if storingEveryParameter {
-			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix, isNonisolated: defaultsToMainActor))
+			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix, defaultsToMainActor: defaultsToMainActor))
 		}
 		return GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: swiftFileContent)
 	}
