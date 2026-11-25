@@ -406,20 +406,20 @@ public struct Generate: AsyncParsableCommand {
 			sourceConfiguration?.defaultIsolation,
 			ofAdditionalMocksToGenerate: manifest?.additionalMocksToGenerate ?? sourceConfiguration?.additionalMocksToGenerate ?? [],
 			in: distinguishingTypesUnnameable(
-			from: ownModuleIdentity,
-			among: normalizingInstantiableTypes(
-				of: unnormalizedInstantiablesReadByThisRun,
-				plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
-				reach: TypeAccessProof.ModuleReach(
-					viewer: ownModuleIdentity,
-					instantiables: unnormalizedInstantiablesReadByThisRun,
+				from: ownModuleIdentity,
+				among: normalizingInstantiableTypes(
+					of: unnormalizedInstantiablesReadByThisRun,
 					plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
-					modulesReadByRunOfModule: modulesRead(byRunOfModuleNamed:),
+					reach: TypeAccessProof.ModuleReach(
+						viewer: ownModuleIdentity,
+						instantiables: unnormalizedInstantiablesReadByThisRun,
+						plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+						modulesReadByRunOfModule: modulesRead(byRunOfModuleNamed:),
+					),
 				),
+				plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+				modulesRead: modulesRead(byRunOfModuleNamed:),
 			),
-			plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
-			modulesRead: modulesRead(byRunOfModuleNamed:),
-		),
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))

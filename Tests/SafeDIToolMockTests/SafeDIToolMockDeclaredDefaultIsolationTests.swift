@@ -209,46 +209,46 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let expectedMock = generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
 
-			#if DEBUG
-			extension Root {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            client: (() -> Client)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                client: client
-			            )
-			        }
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            client: (() -> Client)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                client: client
+		            )
+		        }
 
-			        var client: (() -> Client)? { __safeDI_storage.client }
+		        var client: (() -> Client)? { __safeDI_storage.client }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                client: (() -> Client)?
-			            ) {
-			                self.client = client
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                client: (() -> Client)?
+		            ) {
+		                self.client = client
+		            }
 
-			            let client: (() -> Client)?
-			        }
-			    }
+		            let client: (() -> Client)?
+		        }
+		    }
 
-			    @MainActor static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Root {
-			        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
-			        return Root(client: client)
-			    }
-			}
-			#endif
-			"""
+		    @MainActor static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
+		        return Root(client: client)
+		    }
+		}
+		#endif
+		"""
 		#expect(try #require(output.modules["Tests"]).generatedFiles == (integration == .moduleInfo
 				? ["Tests.swift": expectedMock]
 				: ["Root+SafeDIMock.swift": expectedMock, "SafeDIMockConfiguration.swift": generatedFileHeader]))
@@ -263,46 +263,46 @@ struct SafeDIToolMockDeclaredDefaultIsolationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let expectedMock = generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
 
-			#if DEBUG
-			extension Root {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            client: (() -> Client)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                client: client
-			            )
-			        }
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            client: (() -> Client)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                client: client
+		            )
+		        }
 
-			        var client: (() -> Client)? { __safeDI_storage.client }
+		        var client: (() -> Client)? { __safeDI_storage.client }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                client: (() -> Client)?
-			            ) {
-			                self.client = client
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                client: (() -> Client)?
+		            ) {
+		                self.client = client
+		            }
 
-			            let client: (() -> Client)?
-			        }
-			    }
+		            let client: (() -> Client)?
+		        }
+		    }
 
-			    @MainActor static func mock(
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Root {
-			        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
-			        return Root(client: client)
-			    }
-			}
-			#endif
-			"""
+		    @MainActor static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let client = if let safeDIBuilder = safeDIOverrides.client { safeDIBuilder() } else { Client() }
+		        return Root(client: client)
+		    }
+		}
+		#endif
+		"""
 		#expect(try #require(output.modules["Tests"]).generatedFiles == (integration == .moduleInfo
 				? ["Tests.swift": expectedMock]
 				: ["Root+SafeDIMock.swift": expectedMock, "SafeDIMockConfiguration.swift": generatedFileHeader]))

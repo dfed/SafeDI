@@ -91,7 +91,7 @@ struct SafeDIToolSeamDeclaredDefaultIsolationTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorAtRoot_whenRootStatesNoIsolationAndCallsSeamItsModuleGeneratesMainActor(integration: MultiModuleIntegration) async throws {
+	mutating func generate_throwsErrorAtRoot_whenRootStatesNoIsolationAndCallsSeamItsModuleGeneratesMainActor(integration: MultiModuleIntegration) async {
 		// `App` declares no default isolation, so its root's generated `init()` is nonisolated, and cannot call the
 		// `@MainActor` initializer `Feature` generated for its seam.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
