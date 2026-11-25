@@ -850,9 +850,9 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		// own files import neither `Kit` nor Foundation: `Core`'s do, and the file whose `Vault` names `Window` imports
 		// `Kit` at `kitImportLevel`, through which `Vault`'s initializer of that level names it, so the seam's file imports
 		// Kit `public`, which with `InternalImportsByDefault` an import with no level is too narrow for. The file whose
-		// `Loader` names `URL` also imports Dispatch `public`, which declares no type the seam names: Foundation declares
-		// `URL`, so that file's imports are not consulted for it, and the seam's file imports Dispatch with no level, where
-		// `public` would draw a warning that it is unused.
+		// `Loader` names `URL` also imports Dispatch `public`, which declares no type the seam names: `Loader` spells
+		// `Foundation.URL`, which names its module, so the seam's file imports Dispatch with no level, where `public` would
+		// draw a warning that it is unused.
 		for integration in MultiModuleIntegration.allCases {
 			let output = try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -888,11 +888,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 							@Instantiable
 							public struct Loader: Instantiable {
-							    public init(url: URL) {
+							    public init(url: Foundation.URL) {
 							        self.url = url
 							    }
 
-							    @Received let url: URL
+							    @Received let url: Foundation.URL
 							}
 
 							@Instantiable
@@ -949,6 +949,103 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 					Self.importLine(module: "Kit", spelled: "public import Kit"),
 					Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
 				]), bodies: [Self.sessionTree(integration: integration)]),
+			], "\(integration)")
+		}
+	}
+
+	@Test(arguments: ImportCompileMode.allCases, ["Calendar", "Result"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsPublic_whenSeamNamesUnreadFrameworksTypeThatSharesNameOfStandardType(compileMode: ImportCompileMode, typeName: String) async throws {
+		// `Kit`, which SafeDI does not read, declares its own `Calendar` or `Result`, sharing the name of Foundation's or
+		// the standard library's type. The seam's `public` initializer names it, and the file whose `Vault` names it
+		// imports `Kit` `public`, so the seam's file imports `Kit` `public` too, which with `InternalImportsByDefault` an
+		// import with no level is too narrow for: a type is attributed by the files that name it, never by its name.
+		let label = typeName.lowercased()
+		for integration in MultiModuleIntegration.allCases {
+			let output = try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Kit",
+						packageName: "Toolkit",
+						swiftFileContentByFilePath: ["\(typeName).swift": "public struct \(typeName) {\n    public init() {}\n}"],
+						isCheckoutPackage: true,
+						runsSafeDI: false,
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Vault.swift": """
+							public import SafeDI
+							public import Kit
+
+							@Instantiable
+							public struct Vault: Instantiable {
+							    public init(\(label): \(typeName)) {
+							        self.\(label) = \(label)
+							    }
+
+							    @Received let \(label): \(typeName)
+							}
+							""",
+						],
+						dependencies: ["Kit"],
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							public import SafeDI
+							import Core
+
+							@Instantiable(generateDependencyTree: true)
+							public struct Session: Instantiable {
+							    init(vault: Vault) {
+							        self.vault = vault
+							    }
+
+							    @Instantiated let vault: Vault
+							}
+							""",
+						],
+						dependencies: ["Core"],
+						compilerSettings: compileMode.settings,
+					),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+			let fileName = switch integration {
+			case .moduleInfo:
+				"App.swift"
+			case .swiftPackagePlugin:
+				"Session+SafeDI.swift"
+			}
+			#expect(output.modules["App"]?.generatedFiles == [
+				fileName: Self.file(importing: Self.importBlock([
+					Self.importLine(module: "Core", spelled: "import Core"),
+					Self.importLine(module: "Kit", spelled: "public import Kit"),
+					Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+				]), bodies: [
+					"""
+					extension Session {
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+					    public init(__safeDI_\(label): @autoclosure @escaping () -> \(typeName)) {
+					        let \(label) = LazilyInstantiated<\(typeName)>(__safeDI_\(label))
+					        let vault = Vault(\(label): \(label).instance)
+					        self.init(vault: vault)
+					    }
+					}
+
+					extension Session {
+					    public enum __safeDI_Session_\(typeName == "Calendar" ? "3ECACA8EB3D672B8" : "763511ADB01175A6") {}
+					}
+					""",
+				]),
 			], "\(integration)")
 		}
 	}
@@ -2382,8 +2479,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		extension Session {
 		\(unreadTypeComment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_url: @autoclosure @escaping () -> URL, __safeDI_window: @autoclosure @escaping () -> Window) {
-		        let url = LazilyInstantiated<URL>(__safeDI_url)
+		    public init(__safeDI_url: @autoclosure @escaping () -> Foundation.URL, __safeDI_window: @autoclosure @escaping () -> Window) {
+		        let url = LazilyInstantiated<Foundation.URL>(__safeDI_url)
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        let vault = Vault(window: window.instance)
 		        let loader = Loader(url: url.instance)
@@ -2392,7 +2489,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 
 		extension Session {
-		    public enum __safeDI_Session_602EAC63224D3199 {}
+		    public enum __safeDI_Session_90DD587F25AE6E1E {}
 		}
 		"""
 	}

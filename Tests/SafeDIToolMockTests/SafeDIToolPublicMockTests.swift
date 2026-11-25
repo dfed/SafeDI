@@ -4038,10 +4038,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let mark = Mark()
 		                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(SafeDIMockScope_Api.C_Scope.tBuilder_Values(mark: mark))
 		                func __safeDI_tBuilder() -> T {
-		                    let reader = MarkReader(mark: mark)
+		                    let reader = if let safeDIBuilder = safeDIOverrides.t.reader { safeDIBuilder(mark) } else { MarkReader(mark: mark) }
 		                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(SafeDIMockScope_Api.T_Scope.api_Values(mark: mark, reader: reader, cBuilder: cBuilder))
-		                    return T.__safeDI_init(reader: reader, cBuilder: cBuilder, api: api, safeDIBuilder: nil)
+		                    return T.__safeDI_init(reader: reader, cBuilder: cBuilder, api: api, safeDIBuilder: safeDIOverrides.t.safeDIBuilder)
 		                }
 		                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 		                return C.__safeDI_init(mark: mark, tBuilder: tBuilder, safeDIBuilder: nil)

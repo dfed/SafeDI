@@ -115,3 +115,33 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 	}
 	return (result, disagreements)
 }
+
+/// What `operation` returns, with each key a root reaches root functions of with two texts
+/// (`RootFunctionHoisting.observer`), in the order the tool first reaches them: each root's functions of one key must have
+/// one text, which the generator never compares.
+func collectingRootFunctionKeyDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
+	let (stream, continuation) = AsyncStream.makeStream(of: [RootFunctionHoisting.Occurrence].self)
+	let enclosingObserver = RootFunctionHoisting.observer
+	let result = try await RootFunctionHoisting.$observer.withValue({ occurrences in
+		continuation.yield(occurrences)
+		enclosingObserver?(occurrences)
+	}) {
+		try await operation()
+	}
+	continuation.finish()
+	var disagreements = [String]()
+	for await occurrences in stream {
+		var textByKey = [RootFunctionKey: RootFunctionHoisting.Occurrence]()
+		for occurrence in occurrences {
+			guard let first = textByKey[occurrence.key] else {
+				textByKey[occurrence.key] = occurrence
+				continue
+			}
+			let disagreement = "Root functions \(first.name) and \(occurrence.name) share a key with different text:\n\(first.text)\n---\n\(occurrence.text)"
+			if first.text != occurrence.text, !disagreements.contains(disagreement) {
+				disagreements.append(disagreement)
+			}
+		}
+	}
+	return (result, disagreements)
+}

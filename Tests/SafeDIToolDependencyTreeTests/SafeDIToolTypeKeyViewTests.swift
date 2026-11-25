@@ -103,6 +103,19 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 		#expect(counts == [[133], [1_918]])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsRootFunctionsReadingLevelsThatDoNotGrowWithThePaths_whenScreensOpenTheNextLayerInline() async throws {
+		// The layered screens above, whose last layer's places grow three times with each layer. No place holds a root
+		// function, and each place records so as it is built, so the walk for root functions reads the root's own levels
+		// and no place's tree: its levels are the same at four and six layers. A walk of every place's tree read 3^layers.
+		var counts = [[Int]]()
+		for layerCount in [4, 6] {
+			try await counts.append(workCounts(of: Self.screensOpeningTheNextLayer(layerCount: layerCount), by: .findingRootFunctions))
+		}
+		#expect(counts == [[4], [4]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -118,6 +131,12 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 	/// The views each production root of `fixture` is laid out over, in the order the roots are laid out.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func viewCounts(of fixture: [String]) async throws -> [Int] {
+		try await workCounts(of: fixture, by: .layingOutTypeKeyViews)
+	}
+
+	/// The work `step` did each time it ran while `fixture` was generated, in the order it ran.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func workCounts(of fixture: [String], by step: GenerationWork.Step) async throws -> [Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
 		_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
@@ -130,7 +149,7 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 		}
 		continuation.finish()
 		var counts = [Int]()
-		for await work in stream where work.step == .layingOutTypeKeyViews {
+		for await work in stream where work.step == step {
 			counts.append(work.elementCount)
 		}
 		return counts

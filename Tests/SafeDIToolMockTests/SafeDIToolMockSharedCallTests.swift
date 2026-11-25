@@ -54,19 +54,22 @@ struct SafeDIToolMockSharedCallTests: ~Copyable {
 			Self.mockedType(named: "Root0", declarations: ["@Instantiated let f: F"]),
 			Self.mockedType(named: "Root1", declarations: ["@Instantiated let f: F"]),
 		]
-		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, isFirstPass in
-			guard isFirstPass else { return }
-			continuation.yield(concreteType)
-		}) { [appTypes] in
-			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(appTypes: appTypes), integration: .moduleInfo, filesToDelete: &filesToDelete)
-		}
-		continuation.finish()
-		var reusedTypes = Set<String>()
-		for await reusedType in stream {
-			reusedTypes.insert(reusedType)
-		}
-		#expect(reusedTypes == ["F"])
+		#expect(try await reusedTypesOnFirstPass(appTypes: appTypes) == ["F"])
+		try await expectSameAppFilesInEverySetting(appTypes: appTypes)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_reusesCallOfPublicMock_whenItsFillInstantiatesWhatCallersStackBuildsAboveSecondPlace() async throws {
+		// `Live`, the fill of `F`'s `api`, instantiates `helperBuilder`, which the second root builds above its call. The fill
+		// reads only its own path, so its miss is the call's own, and the second root reuses the call the first root built.
+		let appTypes = [
+			Self.live(declarations: ["@Instantiated let helperBuilder: Instantiator<Helper>"]),
+			seamFixtureType(named: "Helper", isFinalClass: true, declarations: ["@Instantiated let f: F"]),
+			Self.mockedType(named: "Root0", declarations: ["@Instantiated let f: F"]),
+			Self.mockedType(named: "Root1", declarations: ["@Instantiated let helperBuilder: Instantiator<Helper>"]),
+		]
+		#expect(try await reusedTypesOnFirstPass(appTypes: appTypes) == ["F"])
 		try await expectSameAppFilesInEverySetting(appTypes: appTypes)
 	}
 
@@ -191,6 +194,24 @@ struct SafeDIToolMockSharedCallTests: ~Copyable {
 	private static func mockedType(named name: String, declarations: [String]) -> String {
 		seamFixtureType(named: name, isFinalClass: true, declarations: declarations)
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
+	}
+
+	/// The types of the places a mock root of module `App`, with `appTypes`, reuses on its tree's first pass.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func reusedTypesOnFirstPass(appTypes: [String]) async throws -> Set<String> {
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, isFirstPass in
+			guard isFirstPass else { return }
+			continuation.yield(concreteType)
+		}) { [appTypes] in
+			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(appTypes: appTypes), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reusedTypes = Set<String>()
+		for await reusedType in stream {
+			reusedTypes.insert(reusedType)
+		}
+		return reusedTypes
 	}
 
 	/// Expects module `App`'s generated files, with `appTypes`, to be the same in every `MemoSetting`.
