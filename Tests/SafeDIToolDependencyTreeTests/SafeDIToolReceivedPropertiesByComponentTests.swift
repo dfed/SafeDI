@@ -132,6 +132,20 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		#expect(inPasses.collectedScopeCount == alongPaths.collectedScopeCount)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_walksFillOfPublicMockCall_whenFillOpensCycleThatDeclaresOnlyIfAvailableAlias() async throws {
+		// `Root.mock()` calls `F`’s public mock and fills its `api` with `Live`, whose `A` and `B` open each other, and `A`
+		// declares an `onlyIfAvailable` alias. The cycle is left to the walk along its paths, and so is every scope that
+		// reaches it: the fill, and the call that passes it, whose fills that walk then enters after its children.
+		let modules = Self.modulesWhoseCallFillsBuilderWithCycleDeclaringAlias
+		let inPasses = try await run(modules, completingByComponent: true)
+		let alongPaths = try await run(modules, completingByComponent: false)
+		#expect(inPasses.outcome == alongPaths.outcome)
+		#expect(inPasses.outcome.isGenerated)
+		#expect(inPasses.collectedScopeCount == alongPaths.collectedScopeCount)
+	}
+
 	// MARK: Tests – Diagnostics
 
 	@Test(arguments: SafeDIToolReceivedPropertiesByComponentTests.permutations(of: ["b", "e", "pBuilder", "qBuilder"]))
@@ -241,6 +255,114 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let screen0Builder: Instantiator<Screen0>"] + rootDeclarations))
 		return fixture
 	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func run(_ modules: [ModuleFixture], completingByComponent: Bool) async throws -> Run {
+		let (stream, continuation) = AsyncStream.makeStream(of: ValidationWalkObservation.self)
+		let outcome: Outcome
+		do {
+			let output = try await ValidationWalkObservation.$completesReceivedPropertiesByComponent.withValue(completingByComponent) {
+				try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+					try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+				}
+			}
+			outcome = .generated((output.modules["App"]?.generatedFiles ?? [:]).mapValues(Self.withFixtureNames))
+		} catch let error as SafeDIToolTestError {
+			outcome = .error(Self.withFixtureNames(error.description))
+		}
+		continuation.finish()
+		var collectedScopeCount = 0
+		for await observation in stream {
+			switch observation {
+			case .collectedReceivedPropertiesOfScope:
+				collectedScopeCount += 1
+			case .validatedScope,
+			     .skippedCleanSubtree,
+			     .keyedSubtree:
+				break
+			}
+		}
+		return Run(outcome: outcome, collectedScopeCount: collectedScopeCount)
+	}
+
+	/// `F`, a public mock of `Feat`, instantiates an `Api` no declaration of its module fulfills. `App` fulfills it with
+	/// `Live`, whose `A` and `B` open each other, and `A` declares an `onlyIfAvailable` alias of `user`.
+	private static let modulesWhoseCallFillsBuilderWithCycleDeclaringAlias = [
+		ModuleFixture(name: "Base", packageName: "Base", swiftFileContentByFilePath: [
+			"BaseTypes.swift": """
+			import SafeDI
+
+			public protocol Api {}
+
+			@Instantiable
+			public struct User: Instantiable {
+			    public init() {}
+			}
+			""",
+		]),
+		ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+			"FeatTypes.swift": """
+			import Base
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public struct F: Instantiable {
+			    init(user: User, api: any Api) {
+			        self.user = user
+			        self.api = api
+			    }
+
+			    @Received let user: User
+			    @Instantiated let api: any Api
+			}
+			""",
+		], dependencies: ["Base"]),
+		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+			"AppTypes.swift": """
+			import Base
+			import Feat
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public struct Live: Api, Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, renamedUser: User?) {
+			        self.bBuilder = bBuilder
+			        self.renamedUser = renamedUser
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Received(fulfilledByDependencyNamed: "user", ofType: User.self, onlyIfAvailable: true) let renamedUser: User?
+			}
+
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+
+			@Instantiable(generateMock: true)
+			public struct Root: Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated let f: F
+			}
+			""",
+		], dependencies: ["Base", "Feat"]),
+	]
 
 	/// `Root` builds `b`, `e`, `pBuilder` and `qBuilder` in `order`; the builders enter one cycle of `P0`, `P1` and `P2`.
 	private static func siblingsRequiringEachOtherThroughOneCycle(order: [String]) -> [String] {
