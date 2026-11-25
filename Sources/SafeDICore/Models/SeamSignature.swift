@@ -1001,15 +1001,9 @@ public struct SeamSignature: Sendable {
 		func fillPathDeclarationsBeneath(_ declaration: ScopeGenerator.BuiltDeclaration) -> Int? {
 			let propertyStack = fillPropertyStack
 			let concreteTypeStack = fillConcreteTypeStack
-			var declarationsBeneath = 0
-			for (index, property) in propertyStack.enumerated() {
-				if property == declaration.property, concreteTypeStack[index] == declaration.concreteType {
-					return declarationsBeneath
-				} else if index + 1 == propertyStack.count || propertyStack[index + 1].asLazilyInstantiatedInstanceProperty != property {
-					declarationsBeneath += 1
-				}
+			return propertyStack.indices.first { propertyStack[$0] == declaration.property && concreteTypeStack[$0] == declaration.concreteType }.map { declarationIndex in
+				propertyStack[..<declarationIndex].indices.count { propertyStack[$0 + 1].asLazilyInstantiatedInstanceProperty != propertyStack[$0] }
 			}
-			return nil
 		}
 
 		/// The concrete type each entry of `fillPropertyStack` is built for, beside it: a fill's scope closes a cycle only where it

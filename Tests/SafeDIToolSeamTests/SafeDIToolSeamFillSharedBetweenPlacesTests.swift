@@ -291,21 +291,21 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [4, 0])
 	}
 
-	@Test(arguments: [false, true])
+	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_drawsEveryPlaceInDOTTree_whenAnotherPlacesFillStandsForPlace(buildsFillOfEveryPlace: Bool) async throws {
-		// `Second` builds no `token`, so its place is judged with a fill of its own, between `First`'s, which generates
-		// code, and `Third`'s, which stands for `Fourth`'s. The tree draws each of the four places beneath the call, in
-		// the order the call meets them, each with `LiveApi`'s tree, whichever fills the call built.
+	mutating func generate_drawsEveryPlaceInDOTTree_whenAnotherPlacesFillStandsForPlace(buildsFillOfEveryPlace: Bool, placeStoodForIsLast: Bool) async throws {
+		// One parent builds no `token`, so its place is judged with a fill of its own. `First`'s fill generates code, and
+		// of the other two parents' fills the first stands for the second, which the call meets last or before the fill
+		// that parent's place is judged with. The tree draws each of the four places beneath the call, in the order the
+		// call meets them, each with `LiveApi`'s tree, whichever fills the call built.
+		let parentWithoutToken = ["@Instantiated let panel: Panel"]
+		let parentWithToken = ["@Instantiated let token: Token", "@Instantiated let panel: Panel"]
 		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
-					parentDeclarations: [
-						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
-						["@Instantiated let panel: Panel"],
-						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
-						["@Instantiated let token: Token", "@Instantiated let panel: Panel"],
-					],
+					parentDeclarations: placeStoodForIsLast
+						? [parentWithToken, parentWithoutToken, parentWithToken, parentWithToken]
+						: [parentWithToken, parentWithToken, parentWithToken, parentWithoutToken],
 					panelDeclarations: ["@Instantiated let api: any Api"],
 					liveApiDeclarations: ["@Received let token: Token", "@Instantiated let row: Row"],
 					rootDeclarations: ["@Instantiated let token: Token"],
