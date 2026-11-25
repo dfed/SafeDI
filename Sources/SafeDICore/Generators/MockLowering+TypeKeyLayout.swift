@@ -256,6 +256,7 @@ extension MockLowering.Walk {
 				frames[frames.count - 1].visible.insert(closer.property.label)
 			case let .alias(alias):
 				frames[frames.count - 1].visible.insert(alias.property.label)
+				frames[frames.count - 1].visible.formUnion(alias.otherBindings.map(\.label))
 			}
 		}
 		return nil
