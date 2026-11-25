@@ -30,6 +30,10 @@ indirect enum Expression: Hashable, Sendable {
 	/// What a place of a public mock built inline inside a fill is bound to: the value of the builder `mock()` takes for its
 	/// hole type and family, where it is passed or required, and `otherwise` where an optional one is `nil`.
 	case holeBuilderRead(ScopeGenerator.FillPlaceBindings.HoleBuilder, otherwise: Expression)
+	/// A construction the type key spells whole: a construction value, or a call after the closures it tries first.
+	case spelledConstruction(String)
+	/// `expression`, unless the hook's optional builder holds a function, which is called in its place.
+	case hooked(Expression, by: ConstructionHook)
 
 	/// How generated code spells the expression.
 	var spelled: String {
@@ -42,6 +46,10 @@ indirect enum Expression: Hashable, Sendable {
 			"\(erasedType.asSource)(\(expression.spelled))"
 		case let .holeBuilderRead(holeBuilder, otherwise):
 			holeBuilder.inlinePlaceValue(construction: otherwise.spelled, overrideExpression: nil)
+		case let .spelledConstruction(spelled):
+			spelled
+		case let .hooked(expression, hook):
+			"if let \(ReservedName.configurationBuilderPropertyName) = \(hook.builder) { \(hook.call) } else { \(hook.construction ?? expression.spelled) }"
 		}
 	}
 
@@ -49,4 +57,19 @@ indirect enum Expression: Hashable, Sendable {
 	func erased(to erasedType: TypeDescription, where isErased: Bool) -> Expression {
 		isErased ? .erasure(self, as: erasedType) : self
 	}
+}
+
+/// What replaces one place's construction where its optional builder holds a function: the read of the builder, and the
+/// call of it.
+struct ConstructionHook: Hashable, Sendable {
+	let builder: String
+	let call: String
+	/// The construction the place is built with where it is not overridden, where it differs from the production one.
+	var construction: String?
+}
+
+/// The hooks of one place of a configurable body and of the places beneath it, by child index (`OrderedChild.index`).
+struct PlaceHooks: Sendable {
+	var construction: ConstructionHook?
+	var children = [Int: PlaceHooks]()
 }

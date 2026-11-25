@@ -33,10 +33,7 @@ Mock generation follows this pipeline:
 
 1. **`generateMockCode`** builds the mock scope map via `createMockTypeDescriptionToScopeMapping` (includes ALL types, not just reachable from roots)
 2. For each type with `generateMock: true`, **`createMockRootScopeGenerator`** promotes `@Received` dependencies to root-level children (except those `mockCanBuild` rejects and those one of the mocked type's own aliases provides), in the order the mock's tree first receives them (`inOrderTheMockTreeFirstReceives`), and validates for cycles
-3. **`ScopeGenerator.lowerMockRoot(context:)`** builds the mock method (`MockLowering`):
-   - `treeNames(of:readsFills:)` walks the generator tree once, in generation order, recording each node built for a property (`MockTreeNames.propertyNodes`), which `query needs`, promotion and the public mock plan read too
-   - `mockRootParameters(instantiable:mockDefaults:treeNames:)` classifies the flat parameters: `@Forwarded` dependencies, uncovered `@Instantiated` dependencies, `@Received` dependencies not in the tree
-   - `lowerMockRootWithTree(of:context:)` writes `SafeDIOverrides` (if tree children exist), the `mock()` signature and its body
+3. **`ScopeGenerator.lowerMockRoot(context:)`** builds the mock: `treeNames(of:readsFills:)` walks the tree once, recording each property node (`MockTreeNames.propertyNodes`, which `query needs`, promotion and the public mock plan read); `mockRootParameters(instantiable:mockDefaults:treeNames:)` classifies the flat parameters; `lowerMockRootWithTree(of:context:)` writes `SafeDIOverrides`, `mock()` and its body
 
 The production code path (`generatePropertyCode` with `.dependencyTree`) and mock path (`.mock`) share the same `ScopeGenerator` but diverge at `generatePropertyCode`. Mock fields (`mockInitializer`, `mockReturnType`, `customMockName`) are only accessed in mock code paths — never in production paths.
 

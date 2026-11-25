@@ -248,9 +248,12 @@ extension ViewedModule {
 	/// file whose signatures are taken out (`ModuleInfoFile.withoutSeamSignatures`) keeps its references. A view that
 	/// referred to the module graph instead would need this checksum to cover it.
 	var checksum: UInt64 {
-		MergedModuleInfoView.encoded(
-			ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: []),
-		).withUnsafeBytes(BinaryFile.checksum(of:))
+		MergedModuleInfoView.encoded(withoutSeamSignatures).withUnsafeBytes(BinaryFile.checksum(of:))
+	}
+
+	/// This entry with no seam signatures.
+	var withoutSeamSignatures: ViewedModule {
+		ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: [])
 	}
 }
 
@@ -382,11 +385,14 @@ struct MergedModuleInfoView {
 				identities[identity.moduleName] = (identity, path)
 			}
 		}
+		// Two entries of one module are compared without their seam signatures, which follow from what the comparison
+		// covers, as `ViewedModule.checksum` says: a signature is the bulk of an entry, as large as its seam's tree has
+		// paths, and a module above a chain of seams reads each module's entry from every file beneath it.
 		func merge(_ entry: ViewedModule, from path: String) throws(ModuleInfoDisagreementError) {
 			if let existing = declarations[entry.moduleName] {
-				let existingBytes = declarationBytes[entry.moduleName] ?? Self.encoded(existing.entry)
+				let existingBytes = declarationBytes[entry.moduleName] ?? Self.encoded(existing.entry.withoutSeamSignatures)
 				declarationBytes[entry.moduleName] = existingBytes
-				guard existingBytes == Self.encoded(entry) else {
+				guard existingBytes == Self.encoded(entry.withoutSeamSignatures) else {
 					throw ModuleInfoDisagreementError(moduleName: entry.moduleName, filePaths: [existing.path, path])
 				}
 			} else {

@@ -165,6 +165,47 @@ extension MockLowering.Walk {
 		}
 	}
 
+	/// The arguments the record of a node of `instantiable` holds where its construction reads defaults from its
+	/// configuration, and the value of each default by its position, as `constructionArguments(of:…)` passes them: each
+	/// argument a dependency fulfills is the next of `dependencyReads`, in order, and each default is the member of its
+	/// label of the configuration the node's function is handed (`configurationParameter`, `MockLowering+CycleOverrides.swift`),
+	/// called where the field is stored as a closure, read as a read of that parameter (`PlaceSharingFields.argumentValues`).
+	/// `nil` where the record cannot say it yet, and
+	/// the place keeps its text: a public mock's construction function, and a node no override reaches, whose defaults
+	/// are read from a configuration built afresh.
+	mutating func defaultArgumentReads(
+		of instantiable: Instantiable,
+		usesMockInitializer: Bool,
+		dependencyReads: [PlaceRead],
+		configurationParameter: MockLowering.ConfigurationParameter,
+		overrideReachable: Bool,
+	) -> (arguments: [PlaceRead], argumentValues: [Int: ValuePath])? {
+		let construction = mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer)
+		guard Self.readsConfiguration(construction, given: instantiable) else { return (dependencyReads, [:]) }
+		guard !buildsPublicMock, overrideReachable else { return nil }
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
+		let configuration = ValuePath.passedArgument(configurationParameter.name)
+		let configurationProperty = Property(label: configurationParameter.name, typeDescription: configurationParameter.type)
+		var dependencyValues = dependencyReads[...]
+		var arguments = [PlaceRead]()
+		var argumentValues = [Int: ValuePath]()
+		for argument in construction.callSiteArguments {
+			if MockLowering.dependency(passedTo: argument, among: instantiable.dependencies) != nil {
+				guard let read = dependencyValues.popFirst() else { return nil }
+				arguments.append(read)
+				continue
+			}
+			let typeDescription = argument.typeDescription.strippingEscaping
+			let isStoredAsClosure = typeDescription.autoclosureValueType != nil
+				|| (storesDefaultsAsClosures && !typeDescription.isClosure)
+			argumentValues[arguments.count] = isStoredAsClosure
+				? .call(argument.label, of: configuration, arguments: [], argumentsWrapper: nil)
+				: .member(argument.label, of: configuration)
+			arguments.append(PlaceRead(argumentLabel: argument.label, label: configurationParameter.name, property: configurationProperty, source: .binding(label: configurationParameter.name)))
+		}
+		return (arguments, argumentValues)
+	}
+
 	/// The arguments `construction` surfaces where no override reaches its node: each
 	/// dependency, each parameter without a default, and, where the node is built with `init`, each default the type's
 	/// hand-written mock declares too.

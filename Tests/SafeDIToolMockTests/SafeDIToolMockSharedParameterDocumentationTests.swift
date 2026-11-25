@@ -879,6 +879,120 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesOneParameterHandedToBothTypes_whenOneTypeCreatingDependencyIsBeneathDeclarationOfItsLabelAndOtherIsInSendableFunction() async throws {
+		// `Car` and `Truck` each instantiate an `Engine`, which no `@Instantiable` declaration fulfills. `Garage`, which
+		// builds `Car`, instantiates an `engine` of its own, which would hide the parameter from `Car`, and `Truck` is built
+		// inside a `Sendable` wrapper. `mock()` takes one value for both, named apart from `Garage`'s `engine` and taken as
+		// a `@Sendable` autoclosure, which each type calls.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public final class Engine: Sendable {}
+
+				@Instantiable(generateMock: true)
+				public struct Dashboard: Instantiable {
+				    public init(garage: Garage, truckBuilder: SendableInstantiator<Truck>) { self.garage = garage; self.truckBuilder = truckBuilder }
+				    @Instantiated let garage: Garage
+				    @Instantiated let truckBuilder: SendableInstantiator<Truck>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Garage: Instantiable {
+				    public init(engine: Toolbox, car: Car) { self.engine = engine; self.car = car }
+				    @Instantiated let engine: Toolbox
+				    @Instantiated let car: Car
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Car: Instantiable {
+				    public init(engine: Engine) { self.engine = engine }
+				    @Instantiated let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Truck: Instantiable, Sendable {
+				    public init(engine: Engine) { self.engine = engine }
+				    @Instantiated let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Toolbox: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Dashboard+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Dashboard {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            garage: Garage.SafeDIMockConfiguration = .init(),
+		            truckBuilder: (@Sendable (Engine) -> Truck)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                garage: garage,
+		                truckBuilder: truckBuilder
+		            )
+		        }
+
+		        var garage: Garage.SafeDIMockConfiguration { __safeDI_storage.garage }
+		        var truckBuilder: (@Sendable (Engine) -> Truck)? { __safeDI_storage.truckBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                garage: Garage.SafeDIMockConfiguration,
+		                truckBuilder: (@Sendable (Engine) -> Truck)?
+		            ) {
+		                self.garage = garage
+		                self.truckBuilder = truckBuilder
+		            }
+
+		            let garage: Garage.SafeDIMockConfiguration
+		            let truckBuilder: (@Sendable (Engine) -> Truck)?
+		        }
+		    }
+
+		    static func mock(
+		        engine_Engine: @autoclosure @escaping @Sendable () -> Engine,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Dashboard {
+		        let __safeDI_engine_Engine = engine_Engine
+		        func __safeDI_garage() -> Garage {
+		            let engine = if let safeDIBuilder = safeDIOverrides.garage.engine { safeDIBuilder() } else { Toolbox() }
+		            func __safeDI_car() -> Car {
+		                let engine_Engine = __safeDI_engine_Engine()
+		                return if let safeDIBuilder = safeDIOverrides.garage.car { safeDIBuilder(engine_Engine) } else { Car(engine: engine_Engine) }
+		            }
+		            let car: Car = __safeDI_car()
+		            return if let safeDIBuilder = safeDIOverrides.garage.safeDIBuilder { safeDIBuilder(engine, car) } else { Garage(engine: engine, car: car) }
+		        }
+		        let garage: Garage = __safeDI_garage()
+		        let __safeDI_truckBuilder__safeDIBuilder = safeDIOverrides.truckBuilder
+		        @Sendable nonisolated func __safeDI_truckBuilder() -> Truck {
+		            let engine_Engine = __safeDI_engine_Engine()
+		            return if let safeDIBuilder = __safeDI_truckBuilder__safeDIBuilder { safeDIBuilder(engine_Engine) } else { Truck(engine: engine_Engine) }
+		        }
+		        let truckBuilder = SendableInstantiator<Truck>(__safeDI_truckBuilder)
+		        return Dashboard(garage: garage, truckBuilder: truckBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Dashboard+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_spellsKeywordLabelWithoutBackticks_whenSeveralTypesCreateDependencyMockCannotBuildUnderKeywordLabel() async throws {
 		// Swift's documentation parser reads a parameter's name as plain text, and a code span cannot hold a backtick.
 		let output = try await executeSafeDIToolTest(
