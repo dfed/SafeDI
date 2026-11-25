@@ -85,6 +85,12 @@ public struct GenerationWork: Sendable {
 		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
 		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
 		case collectingTypesOfATree
+		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
+		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the smaller of the properties the
+		/// child requires and the scope's carriers. Scanned for, every carrier of the scope was compared for every later
+		/// child of every site, so a seam whose own type builds n children that each hold a place compared n carriers n²
+		/// times.
+		case findingCarrierASiblingRequires
 	}
 
 	/// The step that did the work.
