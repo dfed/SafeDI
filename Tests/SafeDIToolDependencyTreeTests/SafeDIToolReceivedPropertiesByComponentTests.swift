@@ -138,12 +138,24 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		// `Root.mock()` calls `F`’s public mock and fills its `api` with `Live`, whose `A` and `B` open each other, and `A`
 		// declares an `onlyIfAvailable` alias. The cycle is left to the walk along its paths, and so is every scope that
 		// reaches it: the fill, and the call that passes it, whose fills that walk then enters after its children.
-		let modules = Self.modulesWhoseCallFillsBuilderWithCycleDeclaringAlias
+		let modules = Self.modulesWhoseCallFillsBuilderWithCycleDeclaringAlias(fillingSecondBuilder: false)
 		let inPasses = try await run(modules, completingByComponent: true)
 		let alongPaths = try await run(modules, completingByComponent: false)
 		#expect(inPasses.outcome == alongPaths.outcome)
 		#expect(inPasses.outcome.isGenerated)
 		#expect(inPasses.collectedScopeCount == alongPaths.collectedScopeCount)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesCollectedFillOfPublicMockCall_whenAnotherFillOfCallOpensCycleThatDeclaresOnlyIfAvailableAlias() async throws {
+		// `F` instantiates a `Log` too, which `App` fills with `Plain`, a type that receives nothing. The call is left to
+		// the walk for its fill of `api`, and that walk takes what was already collected for `Plain` without walking it.
+		let modules = Self.modulesWhoseCallFillsBuilderWithCycleDeclaringAlias(fillingSecondBuilder: true)
+		let inPasses = try await run(modules, completingByComponent: true)
+		let alongPaths = try await run(modules, completingByComponent: false)
+		#expect(inPasses.outcome == alongPaths.outcome)
+		#expect(inPasses.outcome.isGenerated)
 	}
 
 	// MARK: Tests – Diagnostics
@@ -286,83 +298,95 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 	}
 
 	/// `F`, a public mock of `Feat`, instantiates an `Api` no declaration of its module fulfills. `App` fulfills it with
-	/// `Live`, whose `A` and `B` open each other, and `A` declares an `onlyIfAvailable` alias of `user`.
-	private static let modulesWhoseCallFillsBuilderWithCycleDeclaringAlias = [
-		ModuleFixture(name: "Base", packageName: "Base", swiftFileContentByFilePath: [
-			"BaseTypes.swift": """
-			import SafeDI
+	/// `Live`, whose `A` and `B` open each other, and `A` declares an `onlyIfAvailable` alias of `user`. With
+	/// `fillingSecondBuilder`, `F` instantiates a `Log` too, which `App` fulfills with `Plain`.
+	private static func modulesWhoseCallFillsBuilderWithCycleDeclaringAlias(fillingSecondBuilder: Bool) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Base", packageName: "Base", swiftFileContentByFilePath: [
+				"BaseTypes.swift": """
+				import SafeDI
 
-			public protocol Api {}
+				public protocol Api {}
 
-			@Instantiable
-			public struct User: Instantiable {
-			    public init() {}
-			}
-			""",
-		]),
-		ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
-			"FeatTypes.swift": """
-			import Base
-			import SafeDI
+				public protocol Log {}
 
-			@Instantiable(generateMock: .public)
-			public struct F: Instantiable {
-			    init(user: User, api: any Api) {
-			        self.user = user
-			        self.api = api
-			    }
+				@Instantiable
+				public struct User: Instantiable {
+				    public init() {}
+				}
+				""",
+			]),
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": """
+				import Base
+				import SafeDI
 
-			    @Received let user: User
-			    @Instantiated let api: any Api
-			}
-			""",
-		], dependencies: ["Base"]),
-		ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
-			"AppTypes.swift": """
-			import Base
-			import Feat
-			import SafeDI
+				@Instantiable(generateMock: .public)
+				public struct F: Instantiable {
+				    init(user: User, api: any Api\(fillingSecondBuilder ? ", log: any Log" : "")) {
+				        self.user = user
+				        self.api = api
+				        \(fillingSecondBuilder ? "self.log = log" : "")
+				    }
 
-			@Instantiable(fulfillingAdditionalTypes: [Api.self])
-			public struct Live: Api, Instantiable {
-			    public init(aBuilder: Instantiator<A>) {
-			        self.aBuilder = aBuilder
-			    }
+				    @Received let user: User
+				    @Instantiated let api: any Api
+				    \(fillingSecondBuilder ? "@Instantiated let log: any Log" : "")
+				}
+				""",
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import Base
+				import Feat
+				import SafeDI
 
-			    @Instantiated let aBuilder: Instantiator<A>
-			}
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public struct Live: Api, Instantiable {
+				    public init(aBuilder: Instantiator<A>) {
+				        self.aBuilder = aBuilder
+				    }
 
-			@Instantiable
-			public final class A: Instantiable {
-			    public init(bBuilder: Instantiator<B>, renamedUser: User?) {
-			        self.bBuilder = bBuilder
-			        self.renamedUser = renamedUser
-			    }
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
 
-			    @Instantiated let bBuilder: Instantiator<B>
-			    @Received(fulfilledByDependencyNamed: "user", ofType: User.self, onlyIfAvailable: true) let renamedUser: User?
-			}
+				@Instantiable(fulfillingAdditionalTypes: [Log.self])
+				public struct Plain: Log, Instantiable {
+				    public init() {}
+				}
 
-			@Instantiable
-			public final class B: Instantiable {
-			    public init(aBuilder: Instantiator<A>) {
-			        self.aBuilder = aBuilder
-			    }
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(bBuilder: Instantiator<B>, renamedUser: User?) {
+				        self.bBuilder = bBuilder
+				        self.renamedUser = renamedUser
+				    }
 
-			    @Instantiated let aBuilder: Instantiator<A>
-			}
+				    @Instantiated let bBuilder: Instantiator<B>
+				    @Received(fulfilledByDependencyNamed: "user", ofType: User.self, onlyIfAvailable: true) let renamedUser: User?
+				}
 
-			@Instantiable(generateMock: true)
-			public struct Root: Instantiable {
-			    public init(f: F) {
-			        self.f = f
-			    }
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(aBuilder: Instantiator<A>) {
+				        self.aBuilder = aBuilder
+				    }
 
-			    @Instantiated let f: F
-			}
-			""",
-		], dependencies: ["Base", "Feat"]),
-	]
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
+
+				@Instantiable(generateMock: true)
+				public struct Root: Instantiable {
+				    public init(f: F) {
+				        self.f = f
+				    }
+
+				    @Instantiated let f: F
+				}
+				""",
+			], dependencies: ["Base", "Feat"]),
+		]
+	}
 
 	/// `Root` builds `b`, `e`, `pBuilder` and `qBuilder` in `order`; the builders enter one cycle of `P0`, `P1` and `P2`.
 	private static func siblingsRequiringEachOtherThroughOneCycle(order: [String]) -> [String] {
