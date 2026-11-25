@@ -78,6 +78,8 @@ extension MockLowering {
 		let hasFunction: Bool
 		let readNames: [Property: String]
 		let alternatives: [ConstructionAlternative]
+		/// The construction function a public mock's configured place calls instead (`MockLowering+PublicRecords.swift`).
+		var publicConstruction: PublicConstructionInputs?
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
@@ -184,7 +186,7 @@ extension MockLowering.Walk {
 		// A construction whose reads the record function cannot name (`Initializer.GenerationError`) leaves the place
 		// unrecorded: the walk's own statement is what the mock writes.
 		do {
-			builtRecords[childIndexPath] = try generator.builtPlaceRecord(
+			let record = try generator.builtPlaceRecord(
 				of: property,
 				instantiable: instantiable,
 				forwardedProperties: forwardedProperties,
@@ -198,6 +200,7 @@ extension MockLowering.Walk {
 				readNames: inputs.readNames,
 				alternatives: inputs.alternatives,
 			)
+			builtRecords[childIndexPath] = record.flatMap { publicRecord(of: $0, inputs: inputs) }
 		} catch {
 			unrecordedPlaceErrors[childIndexPath] = error
 		}
