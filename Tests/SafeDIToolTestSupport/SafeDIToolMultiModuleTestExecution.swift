@@ -605,10 +605,7 @@ func executeSafeDIToolMultiModuleTest(
 								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											// Every stored block the run reads must decode (`StoredBlockDecodeChecks`).
-											try await StoredBlockDecodeObservation.$failureObserver.withValue(StoredBlockDecodeChecks.recordingFailures(handingOn: StoredBlockDecodeObservation.failureObserver, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)) {
-												try await tool.generate()
-											}
+											try await tool.generate()
 										}
 									}
 								}
@@ -633,6 +630,10 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		if let generateOutput {
+			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
 			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
