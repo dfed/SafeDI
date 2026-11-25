@@ -892,6 +892,23 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueOracleFixtureFailure_isNil_whenRootsMockMakesDefaultReadIntoLocalAutoclosureCall() async throws {
+		// `S1_Ext`'s `@Sendable` autoclosure default makes `S1_Screen`'s mock read `S1_Ext`'s fields into locals before
+		// the function that builds it. The root's mock builds `S1_Screen` in a `Sendable` builder, which makes `S1_Ext`'s
+		// configuration `@Sendable`-typed, so the value-oracle run calls the local of `retryCount`, which the corpus run
+		// reads as a value (base corpus seed 1029).
+		let runs = try await Self.valueOracleToolRuns(of: Self.sendableRootOfMockedScreenWithAutoclosureDefaultFixture)
+		let drawnMock = try Self.generatedFile("S1_Screen+SafeDIMock.swift", of: runs.firstOutcome)
+		let valueOracleMock = try Self.generatedFile("S1_Screen+SafeDIMock.swift", of: #require(runs.valueOracle?.outcome))
+
+		#expect(drawnMock.contains("S1_Ext.instantiate(retryCount: __safeDI_ext__ext_retryCount, "))
+		#expect(valueOracleMock.contains("S1_Ext.instantiate(retryCount: __safeDI_ext__ext_retryCount(), "))
+		#expect(GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(valueOracleMock) == GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks(drawnMock))
+		#expect(runs.valueOracleFixtureFailure == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueOracleFixtureFailure_isNil_whenMirrorWritesAliasOfOptionalFormWithNonOptionalType() async throws {
 		// Production accepts the retyped alias, and the model agrees with the mock about what it builds.
 		let runs = try await Self.valueOracleToolRuns(of: Self.retypedAliasFixture)
@@ -1345,6 +1362,25 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let detail: S1_Detail"]),
 		type("S1_Detail", properties: ["@Instantiated let leaf: S1_Leaf"]),
 		type("S1_Leaf", properties: []),
+	])
+
+	/// A root that builds a mocked type in a `Sendable` builder, whose extension-based child takes a `@Sendable`
+	/// autoclosure with a default beside a plain default.
+	private static let sendableRootOfMockedScreenWithAutoclosureDefaultFixture = fixture([
+		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screenBuilder: SendableInstantiator<S1_Screen>"]),
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let ext: S1_Ext"]),
+		"""
+		@Instantiable
+		extension S1_Ext: Instantiable {
+			public static func instantiate(retryCount: Int = 3, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3) -> S1_Ext {
+				S1_Ext()
+			}
+		}
+
+		public final class S1_Ext: Sendable {
+			public init() {}
+		}
+		""",
 	])
 
 	private static let rootOfMockedScreenFixture = fixture([
