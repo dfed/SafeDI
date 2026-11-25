@@ -345,10 +345,11 @@ struct SafeDIToolSeamRootFunctionTests: ~Copyable {
 		""")
 	}
 
-	/// A dispatcher reached both inside and outside a `@Sendable` function has two keys, so each call keeps its own, with every dispatcher that calls it; the rest are declared once.
+	/// A dispatcher reached both inside and outside a `@Sendable` function is declared once, `@Sendable nonisolated`, which
+	/// plain code calls as it called the plain one, with every dispatcher it calls.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsADispatcherInEachCall_whenTheRootReachesItInsideAndOutsideASendableFunction() async throws {
+	mutating func generate_declaresADispatcherOnceSendable_whenTheRootReachesItInsideAndOutsideASendableFunction() async throws {
 		let output = try await generate(root: """
 		@Instantiable(isRoot: true)
 		public struct Root: Instantiable {
@@ -368,6 +369,20 @@ struct SafeDIToolSeamRootFunctionTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
+		            .init(
+		                api: { scope_id, scope_model in
+		                    let id = scope_id
+		                    let model = scope_model
+		                    let api: any Api = Impl(id: id, model: model)
+		                    return api
+		                },
+		                detailBuilder: { values_id, values_model, values_api in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) }
+		            )
+		        }
 		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(id: Int, model: Model) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
 		            .init(api: {
 		                let api: any Api = Impl(id: id, model: model)
@@ -382,39 +397,11 @@ struct SafeDIToolSeamRootFunctionTests: ~Copyable {
 		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_4F2020B42ED8EAF2.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
-		            }
-		            func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(
-		                    api: { scope_id, scope_model in
-		                        let id = scope_id
-		                        let model = scope_model
-		                        let api: any Api = Impl(id: id, model: model)
-		                        return api
-		                    },
-		                    detailBuilder: { values_id, values_model, values_api in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) }
-		                )
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
 		        @Sendable nonisolated func __safeDI_homeBuilder() -> Home {
 		            _ = Home.__safeDI_Home_4F2020B42ED8EAF2.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
-		            }
-		            func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(
-		                    api: { scope_id, scope_model in
-		                        let id = scope_id
-		                        let model = scope_model
-		                        let api: any Api = Impl(id: id, model: model)
-		                        return api
-		                    },
-		                    detailBuilder: { values_id, values_model, values_api in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) }
-		                )
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
 		        let homeBuilder = SendableInstantiator<Home>(__safeDI_homeBuilder)

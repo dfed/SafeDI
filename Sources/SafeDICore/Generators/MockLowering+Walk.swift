@@ -74,6 +74,11 @@ extension ScopeGenerator {
 		walk.sendableConfigurationTypeNames = context.sendableConfigurationTypeNames
 		// A public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
+		// The mocked type's own initializer takes the root's level, an actor's into its isolation, so the root's children
+		// read their overrides as a `@Sendable` builder function does. A public mock's configurations are never `Sendable`, so
+		// it reads each field into a local of its own, and its construction functions take an actor's arguments `sending`
+		// (`MockLowering.PublicConstructionRecord.sendsArguments`).
+		walk.isInsideActorArgument = instantiable.declarationType == .actorType
 		// The nodes a public mock promotes, each bound from its caller's value when passed one.
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
 		// Each override binds its receive's label, in the optional form a receive only if available
@@ -432,6 +437,12 @@ extension MockLowering {
 		var levelNames = [GeneratedNameAllocator]()
 		/// Whether the walk is inside a `@Sendable` builder function, whose nodes' override closures are `@Sendable`.
 		var isInsideSendableFunction = false
+		/// Whether the nodes the walk is at build what an actor's initializer is handed, outside every lazy wrapper's builder
+		/// function: the initializer takes each argument into the actor's isolation, so in Swift 6 the argument must share no
+		/// region with `safeDIOverrides`, which `mock()` is handed. Such a node reads its overrides into a local first, as a
+		/// `@Sendable` builder function does, of the `Sendable` form (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so no
+		/// builder function beneath it captures the overrides; capturing them would join the argument to their region.
+		var isInsideActorArgument = false
 		// The loop of builders the node being built is a member of, the members of its level's loops,
 		// the loop being emitted at the level, and how the last member's lines split (`MockLowering+Loops.swift`).
 		var loopMembership: LoopMembership?
@@ -882,6 +893,7 @@ extension MockLowering {
 			let startsExtraction: Bool
 			let enclosingExtractor: ScopeGenerator.SendableOverrideExtractor?
 			let wasInsideSendableFunction: Bool
+			let wasInsideActorArgument: Bool
 			let valuesBindingLines: [String]
 			let declarationIndex: Int
 			let insertedAncestor: Bool
@@ -919,6 +931,7 @@ extension MockLowering {
 				startsExtraction: Bool,
 				enclosingExtractor: ScopeGenerator.SendableOverrideExtractor?,
 				wasInsideSendableFunction: Bool,
+				wasInsideActorArgument: Bool,
 				valuesBindingLines: [String],
 				declarationIndex: Int,
 				insertedAncestor: Bool,
@@ -955,6 +968,7 @@ extension MockLowering {
 				self.startsExtraction = startsExtraction
 				self.enclosingExtractor = enclosingExtractor
 				self.wasInsideSendableFunction = wasInsideSendableFunction
+				self.wasInsideActorArgument = wasInsideActorArgument
 				self.valuesBindingLines = valuesBindingLines
 				self.declarationIndex = declarationIndex
 				self.insertedAncestor = insertedAncestor
@@ -1156,7 +1170,7 @@ extension MockLowering {
 					overrideReachable: overrideReachable,
 				),
 				buildsInSendableFunction: generator.buildsInSendableFunction,
-				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction,
+				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction || isInsideActorArgument,
 				defaultFields: defaultFields,
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
@@ -1179,7 +1193,9 @@ extension MockLowering {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
-			let startsForSendableFunction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			// A node that builds an actor's argument reads its overrides as a `@Sendable` builder function does, so that no builder
+			// function beneath it captures `safeDIOverrides`.
+			let startsForSendableFunction = sendableOverrideExtractor == nil && (generator.buildsInSendableFunction || isInsideActorArgument)
 			// So does one whose construction passes a configuration read to a `@Sendable` autoclosure, which would capture
 			// the overrides the read names; a public mock passes the read to the type's construction function instead. Its
 			// configuration may be the plain form, which is not `Sendable`, so that function reads each field.
@@ -1191,12 +1207,16 @@ extension MockLowering {
 			)
 			// A function that builds a node with a configuration reads that configuration whole into one local: its type is built
 			// in a `@Sendable` function, so the configuration takes the `Sendable` form, and every configuration beneath it
-			// does too (`ScopeGenerator.sendableConfigurationTypeNames()`), so each field is proven `Sendable` and the
+			// does too (`ScopeGenerator.sendableConfigurationTypeNames(ofMockRootOf:)`), so each field is proven `Sendable` and the
 			// configuration is `Sendable`. A public mock's configurations are never `Sendable`, so its functions read each field.
 			let configurationPath = startsForSendableFunction && hasConfiguration && !buildsPublicMock ? nodePath : nil
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName, configurationPath: configurationPath) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
+			let wasInsideActorArgument = isInsideActorArgument
+			// The node's children are its initializer's arguments: an actor's, or, outside a lazy wrapper's builder
+			// function, what an enclosing actor's argument is built from.
+			isInsideActorArgument = (instantiable.declarationType == .actorType && !usesMockInitializer) || (isInsideActorArgument && !isWrapped)
 			// The payloads of the cases nested by type that lead through the node to a place, bound before
 			// its builder function, after a wrapper's override locals and before a constant's, and the members a `@Sendable`
 			// function calls at its top (`MockLowering+PublicMocks.swift`).
@@ -1258,6 +1278,7 @@ extension MockLowering {
 				startsExtraction: startsExtraction,
 				enclosingExtractor: enclosingExtractor,
 				wasInsideSendableFunction: wasInsideSendableFunction,
+				wasInsideActorArgument: wasInsideActorArgument,
 				valuesBindingLines: valuesBindingLines,
 				declarationIndex: declarationIndex,
 				insertedAncestor: insertedAncestor,
@@ -1323,6 +1344,7 @@ extension MockLowering {
 				ancestorTypes.remove(cycleNodeKey)
 			}
 			isInsideSendableFunction = wasInsideSendableFunction
+			isInsideActorArgument = descending.wasInsideActorArgument
 			// The construction is inside the function, so a function that starts the extraction reads its own override
 			// into a local too, after its children's.
 			// Also the defaults it reads from its configuration: an instantiator's before its override, a
@@ -1988,20 +2010,26 @@ extension MockLowering {
 		init(of instantiable: Instantiable, usesMockInitializer: Bool) {
 			arguments = (usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer)?.arguments ?? []
 			dependencies = instantiable.dependencies
+			sendsArguments = instantiable.declarationType == .actorType && !usesMockInitializer
 		}
 
 		/// The parameters' types, spelled as the closure's parameter list.
 		var spelled: String {
 			let dependencyLabels = Set(dependencies.map(\.property.label))
 			return arguments.filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+				let parameter = (argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
 					.asFunctionParameter(amongTypesDeclaredEscaping: [])
 					.asSource
+				return sendsArguments ? "sending \(parameter)" : parameter
 			}.joined(separator: ", ")
 		}
 
 		private let arguments: [Initializer.Argument]
 		private let dependencies: [Dependency]
+		/// Whether the closure hands each value to an actor's initializer, which takes it into the actor's isolation: Swift 6
+		/// lets a closure send only a parameter declared `sending`, so an override written as `{ worker in Store(worker: worker) }`
+		/// compiles only so. Each value the mock hands it is a local nothing else holds.
+		private let sendsArguments: Bool
 	}
 }
 

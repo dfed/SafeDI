@@ -16,6 +16,8 @@ There are a total of five macros in the SafeDI library:
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 | [`#SafeDIConfiguration`](#safediconfiguration) | Freestanding declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
+SafeDI reads its attached macros, its wrappers and `MockGeneration` spelled with its module name (`@SafeDI.Instantiable`, `@SafeDI.Instantiated`, `SafeDI.Instantiator<T>`) as it reads their bare spellings.
+
 Let’s walk through each of these macros in detail.
 
 ### @Instantiable
@@ -309,7 +311,7 @@ extension Root {
 }
 ```
 
-Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`:
+Likewise, if a type is not bound to the main actor, and its own initializer is `@MainActor`, or its tree builds a type whose initializer is, give it `mockAttributes: "@MainActor"`, and do the same for any other global actor, spelled as you spell it:
 
 ```swift
 @Instantiable(mockAttributes: "@MainActor", generateMock: true)
@@ -317,6 +319,8 @@ public final class MyPresenter: Instantiable {
     @MainActor public init() { … }
 }
 ```
+
+A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation. It leaves out `@_spi`, `@backDeployed` and `@objc`, which that function cannot take. An attached macro there expands on that function too; if the macro cannot, give the type a hand-written `mock()` without it, which the public mock then builds the type with.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
@@ -892,6 +896,7 @@ extension Service {
             self.profile = profile
         }
 
+        @_alwaysEmitIntoClient
         public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
             self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
         }
@@ -905,6 +910,7 @@ extension Service {
             self.userService = userService
         }
 
+        @_alwaysEmitIntoClient
         public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
             self.init(userService: { __safeDI_builder() })
         }
@@ -1066,7 +1072,7 @@ A labeled default-valued `@autoclosure` parameter, such as `retries: @autoclosur
 
 Declare a default-valued parameter whose type is a typealias of a function type `@escaping`, as in `onFinish: @escaping Handler = {}`. Where a type beneath the mocked type declares one, its `SafeDIMockConfiguration` stores the value, and SafeDI cannot see that the typealias names a function type, so without `@escaping` the mock does not compile.
 
-Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call.
+Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call. The same holds for a type the mock builds for an argument of an actor’s initializer, down to the first `Instantiator` or `LazilyInstantiated` on the way, in an internal or a public mock: Swift needs that argument to share no state with the mock’s overrides, so the type’s override closures and default-valued parameters are `@Sendable` too, and an override of the actor takes each argument `sending`, which an override written as `{ worker in Store(worker: worker) }` already does.
 
 #### Dependency kinds in the generated mock
 
@@ -1339,8 +1345,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 
 - A non-optional default-valued parameter is `T? = nil`, where `nil` means the declaration’s default. A magic literal such as `#fileID` keeps its default.
 - An `@autoclosure` one, `retries: @autoclosure () -> Int = 3`, becomes `retries: (() -> Int)? = nil`: pass a closure, which the mock calls each time it builds the type. A field of a type’s configuration takes it the same way.
-- An optional-typed default-valued parameter, `note: String? = "x"`, is a parameter of `mock()` with the declaration’s default, as in an internal mock: `Banner.mock(note: "Ends Friday")`. A mock bound to a global actor evaluates the default in its isolation.
-- If a type is on the main actor only through a conformance or superclass, such as a SwiftUI `View` or a `UIViewController` subclass, give it `mockAttributes: "@MainActor"`. SafeDI sees only a global actor the declaration or `mockAttributes` spells. Without it, the type’s optional-typed defaults are evaluated outside the actor, and one that reads the actor’s state does not compile; the comment SafeDI writes there says so. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile either, as in an internal mock.
+- An optional-typed default-valued parameter, `note: String? = "x"`, is a parameter of `mock()` with the declaration’s default, as in an internal mock: `Banner.mock(note: "Ends Friday")`. The default is evaluated in `mock()`’s isolation: the type’s, whether its declaration spells it or it comes from a conformance or a superclass, such as a SwiftUI `View`, or the one `mockAttributes` states. A default in the configuration of a type in the tree that reads global-actor-isolated state does not compile, as in an internal mock.
 
 **Received dependencies.**
 
@@ -1408,7 +1413,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
 ]
 ```
 
@@ -1509,13 +1514,13 @@ targets: [
 
 You can see this integration in practice in the [Example Package Integration](../Examples/Example%20Package%20Integration) package.
 
-Unlike the Xcode project plugin, the Swift package plugin finds the source files of dependent modules itself. It reads the modules of your package and of the packages it depends on by path, but not those of a package it fetches from a URL. To build an `@Instantiable` type a fetched package declares, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration`; SafeDI then knows no module for those types, with the limits [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) lists. If SafeDI’s generated code is missing required imports, list the modules in [`additionalImportedModules`](#safediconfiguration).
+Unlike the Xcode project plugin, the Swift package plugin finds the source files of dependent modules itself. It reads the modules of your package and of the packages it depends on by path, but not those of a package it fetches from a URL or a package registry, as SwiftPM reports each package’s origin, wherever the package is kept. To build an `@Instantiable` type a fetched package declares, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration`; SafeDI then knows no module for those types, with the limits [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) lists. Where the checkout directory is depends on the build folder: `swift build` keeps it at `.build/checkouts/<package>` in your package, or under the folder `--scratch-path` names, and Xcode keeps it in the project’s DerivedData folder, under `SourcePackages/checkouts/<package>`. SafeDI resolves a relative entry against your package’s directory under `swift build`, so `.build/checkouts/<package>` finds the package only in a build that uses the default build folder; a build that keeps its checkouts elsewhere reads nothing from that entry, and SafeDI warns at the configuration that nothing exists at its path. If SafeDI’s generated code is missing required imports, list the modules in [`additionalImportedModules`](#safediconfiguration).
 
 > **Note:** On Swift 6.4 or later, `swift build` can fail for a target with a couple thousand or more input files with `sandbox-exec: data object length … exceeds maximum (65535)`. Xcode is not affected. Build with `swift build --build-system native`, or with `swift build --disable-sandbox`, which turns off sandboxing for every plugin and package manifest in the build.
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.3.4")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.3.5")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1580,7 +1585,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
 ]
 ```
 
@@ -1996,10 +2001,13 @@ internal import Foundation
 To pick a level, SafeDI must know which module declares each type a generated declaration names. For a type whose declaration it does not read, it assumes:
 
 - every module your files import at the level of the declaration that names the type, or wider;
-- Foundation, for Foundation’s common types;
-- for other types, every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
+- every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
 
-This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name. To silence the warning, import that module below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
+The same holds for the standard library’s and Foundation’s types, such as `String` or `URL`: SafeDI never decides which module declares a type from its name, since any module may declare its own `Calendar` or `Result`.
+
+So when a module spells import levels, every module whose types its seams and public mocks name must spell them too. If a dependency’s file writes `import Foundation` and its `public init(url: URL)` reaches a seam’s initializer, the generated file imports Foundation too narrowly, and the compiler reports that the initializer “cannot be declared public because its parameter uses an internal type”. Write `public import Foundation` in that dependency’s file.
+
+This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name (“public import of 'Combine' was not used in public declarations or inlinable code”). To silence the warning, spell the type with its module’s name where your declaration names it (`public init(url: Foundation.URL)`), which tells SafeDI the one module that declares it. For a module only your own files import `public`, you can instead import it below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
@@ -2107,7 +2115,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.3.4"`
+2. Update your SafeDI dependency to `from: "2.3.5"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
