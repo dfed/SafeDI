@@ -102,7 +102,8 @@ extension MockLowering.Walk {
 		var firstReachedIndexByName = [String: Int]()
 		var closedOnParameterByPath = [[Int]: MockLowering.ConfigurationParameter]()
 		for (index, path) in placePathsInWalkOrder.enumerated() {
-			if let call = builtPlaceCalls[path], call.inputs.hasFunction, case let .built(node) = call.treeNode {
+			if let call = builtPlaceCalls[path], call.inputs.hasFunction {
+				let node = call.nodeConfiguration
 				let configurationType = MockLowering.configurationType(of: node)
 				let parameter = MockLowering.ConfigurationParameter(concreteType: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
 				ownParameterByPath[path] = parameter

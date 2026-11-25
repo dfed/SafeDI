@@ -217,7 +217,7 @@ extension MockLowering.Walk {
 
 	/// Records, through production's record function, the built place the walk lowered `node` at.
 	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) {
-		guard case .built = node,
+		guard case let .built(constantNode) = node,
 		      let inputs = builtPlaceInputs.removeValue(forKey: childIndexPath),
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
 		else { return }
@@ -232,7 +232,7 @@ extension MockLowering.Walk {
 			unavailableProperties: unavailableProperties,
 			inputs: inputs,
 			node: PlanNode(),
-			treeNode: node,
+			nodeConfiguration: constantNode.configuration,
 			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
 		)
 		let (isFirstOfNode, first) = planNodes.insert(PlanNodeKey(call: call))
