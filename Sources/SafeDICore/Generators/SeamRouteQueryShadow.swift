@@ -24,10 +24,15 @@
 	import Darwin
 #endif
 
-/// SHADOW EXPERIMENT, never merged: answers each place's question "what is the nearest declaration of this label?" from
-/// one level per type and the route graph between the levels, with a memoized (level, label) query, and compares the
-/// answers with the per-site lists the seam computes today. Nothing generated reads it. Enabled by the environment
-/// variable `SAFEDI_SHADOW_REPORT`, the path of a file each computation appends one JSON line to.
+/// SHADOW, never shipped: asks `SeamPlaceGraph` every question the per-site lists answer today — the nearest
+/// declaration of each label, the declaration a cycle re-entry hands the type built again, the declaration a fill's
+/// field of a seam parameter hides, and the stack the place is built with — and compares the answers with the lists
+/// the per-site walk computed. Nothing generated reads it.
+///
+/// The comparison is per case: today's answer is the union over the case's places, since one emitted fill per case
+/// binds what every route hands it (`SeamPlaceGraph`'s note on cases). Every test runs it, so a place the graph
+/// answers otherwise fails that test (`SeamPlaceLevelChecks`), and the environment variable `SAFEDI_SHADOW_REPORT`
+/// names a file each computation appends one JSON line to.
 public enum SeamRouteQueryShadow {
 	public static let reportPath: String? = {
 		guard let value = getenv("SAFEDI_SHADOW_REPORT") else { return nil }
@@ -36,46 +41,6 @@ public enum SeamRouteQueryShadow {
 
 	public static var isEnabled: Bool {
 		reportPath != nil
-	}
-
-	/// A level as the route graph keys it: the type it builds and the property it leads through, the seam's root apart, a fill
-	/// keyed by the type it builds beneath it.
-	struct NodeKey: Hashable {
-		let builtType: TypeDescription?
-		let nextProperty: Property?
-		let isSeamRoot: Bool
-		let isInFill: Bool
-		let filledType: TypeDescription?
-	}
-
-	/// A level as built: its key, and what one build of it binds, which can differ between builds of one type.
-	struct VariantKey: Hashable {
-		let key: NodeKey
-		let declarations: [SeamPlaceLevels.Level.Declaration]
-		let opensSendableFunction: Bool
-		let reentryDeclarations: [Property]
-		let fillBaseStack: [Property]
-		let fillBaseConcreteTypes: [TypeDescription]
-	}
-
-	/// What a place reads of a label: a field, a declaration it carries no field of, or nothing (the caller's scope).
-	struct Outcome: Hashable {
-		enum Kind: String, Hashable {
-			case field
-			case uncarried
-			case none
-		}
-
-		let property: Property?
-		let kind: Kind
-
-		var description: String {
-			switch kind {
-			case .none: "none"
-			case .field: "field \(property?.asSource ?? "")"
-			case .uncarried: "uncarried \(property?.asSource ?? "")"
-			}
-		}
 	}
 
 	public struct Report: Sendable {
@@ -91,9 +56,9 @@ public enum SeamRouteQueryShadow {
 		public var types = 0
 		public var cases = 0
 		public var queries = 0
-		public var memoEntries = 0
 		public var graphCycles = 0
 		public var mismatches = 0
+		public var labelSetMismatches = 0
 		public var reentryQuestions = 0
 		public var reentryMismatches = 0
 		public var hiddenQuestions = 0
@@ -119,490 +84,214 @@ public enum SeamRouteQueryShadow {
 		report.places = placeLevels.places.count
 		report.perSiteWalkNanoseconds = nanoseconds(placeLevels.perSiteWalkDuration)
 
-		// The graph: one level per key, the first met; parents by key. Built here from the per-site levels, which a real
-		// implementation would read from each type's declarations once.
 		let graphStart = ContinuousClock.now
-		var indexByKey = [NodeKey: Int]()
-		var indexByVariant = [VariantKey: Int]()
-		var levels = [SeamPlaceLevels.Level]()
-		var parents = [Set<Int>]()
-		var placeNodes = [[Int]]()
-		for place in placeLevels.places {
-			var nodes = [Int]()
-			for (index, level) in place.levels.enumerated() {
-				let key = NodeKey(
-					builtType: level.builtType,
-					nextProperty: level.nextProperty,
-					isSeamRoot: index == place.levels.count - 1,
-					isInFill: level.isInFill,
-					filledType: level.builtType == nil && index > 0 ? place.levels[index - 1].builtType : nil,
-				)
-				let variantKey = VariantKey(key: key, declarations: level.declarations, opensSendableFunction: level.opensSendableFunction, reentryDeclarations: level.reentryDeclarations, fillBaseStack: level.fillBaseStack, fillBaseConcreteTypes: level.fillBaseConcreteTypes)
-				if let existing = indexByVariant[variantKey] {
-					nodes.append(existing)
-				} else {
-					if let first = indexByKey[key].map({ levels[$0] }) {
-						// Another build of the type binds otherwise than its first: a variant of the level.
-						report.levelConflicts += 1
-						let functionFacts = { (declarations: [SeamPlaceLevels.Level.Declaration]) in
-							declarations.filter { !$0.isCycleParameter && !$0.isReboundByBuilderFunction }
-						}
-						if level.builtType == nil {
-							report.fillLevelVariants += 1
-						} else if first.declarations == level.declarations {
-							report.sendableOnlyVariants += 1
-						} else if functionFacts(first.declarations) == functionFacts(level.declarations) {
-							report.levelConflictsOnlyInFunctionFacts += 1
-						} else {
-							report.otherVariants += 1
-							if report.conflictSamples.count < 3 {
-								report.conflictSamples.append("level \(level.builtType?.asSource ?? "fill") before \(level.nextProperty?.asSource ?? "-") at \(place.sitePath.map(\.label).joined(separator: ".")): \(describe(first)) vs \(describe(level))")
-							}
-						}
-					} else {
-						indexByKey[key] = levels.count
-					}
-					indexByVariant[variantKey] = levels.count
-					nodes.append(levels.count)
-					levels.append(level)
-					parents.append([])
-				}
-			}
-			for (index, node) in nodes.enumerated() where index + 1 < nodes.count {
-				parents[node].insert(nodes[index + 1])
-			}
-			placeNodes.append(nodes)
-		}
-		report.nodes = levels.count
-		report.types = indexByKey.count
-		report.edges = parents.reduce(0) { $0 + $1.count }
-		// Each level's nearest declaration of each label: within a level, the later one.
-		let declarationByLabelByNode = levels.map { level in
-			var declarationByLabel = [String: SeamPlaceLevels.Level.Declaration]()
-			for declaration in level.declarations {
-				declarationByLabel[declaration.property.label] = declaration
-			}
-			return declarationByLabel
-		}
+		let graph = SeamPlaceGraph(places: placeLevels.places)
 		report.graphNanoseconds = nanoseconds(ContinuousClock.now - graphStart)
+		report.nodes = graph.nodes.count
+		report.edges = graph.nodes.reduce(0) { $0 + $1.parents.count }
+		report.cases = graph.cases.count
+		countVariants(of: graph, into: &report)
 
-		// The cases: places grouped by their owner's level and whether the site opens a `@Sendable` function.
-		struct CaseKey: Hashable {
-			let node: Int
-			let siteOpensSendableFunction: Bool
+		// The places of each case, which hold today's answers.
+		var placeIndicesByCase = [[Int]](repeating: [], count: graph.cases.count)
+		for (placeIndex, caseIndex) in graph.caseIndexByPlace.enumerated() where caseIndex >= 0 {
+			placeIndicesByCase[caseIndex].append(placeIndex)
 		}
-		var placeIndicesByCase = [CaseKey: [Int]]()
-		var caseOrder = [CaseKey]()
-		for (index, place) in placeLevels.places.enumerated() {
-			guard let owner = placeNodes[index].first else { continue }
-			let key = CaseKey(node: owner, siteOpensSendableFunction: place.siteOpensSendableFunction)
-			if placeIndicesByCase[key] == nil {
-				caseOrder.append(key)
-			}
-			placeIndicesByCase[key, default: []].append(index)
-		}
-		report.cases = caseOrder.count
 
-		// Today's answers per case and label, gathered first so the query's time is its own.
-		struct Question: Hashable {
-			let caseKey: CaseKey
-			let label: String
-		}
-		var todaysAnswers = [Question: Set<Outcome>]()
-		var questions = [Question]()
-		for caseKey in caseOrder {
-			let placeIndices = placeIndicesByCase[caseKey] ?? []
+		var query = SeamPlaceGraph.Query(of: graph)
+		let queryStart = ContinuousClock.now
+		for (caseIndex, placeCase) in graph.cases.enumerated() {
+			let placeIndices = placeIndicesByCase[caseIndex]
+			let places = placeIndices.map { placeLevels.places[$0] }
+			let paths = places.prefix(3).map { $0.sitePath.map(\.label).joined(separator: ".") }.joined(separator: " | ")
+
+			// The labels today's lists can hold: every label a level of the case's places binds. The graph's own
+			// enumeration walks up from the owner instead, and the two must agree, since a case is its owner level.
 			var labels = [String]()
 			var seenLabels = Set<String>()
-			for placeIndex in placeIndices {
-				for level in placeLevels.places[placeIndex].levels {
+			for place in places {
+				for level in place.levels {
 					for declaration in level.declarations where seenLabels.insert(declaration.property.label).inserted {
 						labels.append(declaration.property.label)
 					}
 				}
 			}
-			let outcomeByLabelByPlace = placeIndices.map { placeIndex in
-				let place = placeLevels.places[placeIndex]
-				var outcomeByLabel = [String: Outcome]()
+			if Set(graph.labels(reaching: placeCase)) != seenLabels {
+				report.labelSetMismatches += 1
+				report.mismatches += 1
+				appendSample("labels at \(paths): today \(labels.sorted()) graph \(graph.labels(reaching: placeCase).sorted())", to: &report)
+			}
+
+			// The nearest declaration of each label.
+			let answersByLabelByPlace = places.map { place in
+				var answerByLabel = [String: SeamPlaceGraph.Answer]()
 				for uncarried in place.carriedUncarriedProperties {
-					outcomeByLabel[uncarried.label] = Outcome(property: uncarried, kind: .uncarried)
+					answerByLabel[uncarried.label] = SeamPlaceGraph.Answer(property: uncarried, kind: .uncarried)
 				}
 				for field in place.carriedFields {
-					outcomeByLabel[field.label] = Outcome(property: field, kind: .field)
+					answerByLabel[field.label] = SeamPlaceGraph.Answer(property: field, kind: .field)
 				}
-				return outcomeByLabel
+				return answerByLabel
 			}
 			for label in labels {
-				var outcomes = Set<Outcome>()
-				for outcomeByLabel in outcomeByLabelByPlace {
-					outcomes.insert(outcomeByLabel[label] ?? Outcome(property: nil, kind: .none))
+				var today = Set<SeamPlaceGraph.Answer>()
+				for answerByLabel in answersByLabelByPlace {
+					today.insert(answerByLabel[label] ?? SeamPlaceGraph.Answer(property: nil, kind: .none))
 				}
-				let question = Question(caseKey: caseKey, label: label)
-				todaysAnswers[question] = outcomes
-				questions.append(question)
+				let answers = query.answers(ofLabel: label, at: placeCase)
+				report.queries += 1
+				if answers.count > 1 {
+					report.routeDependentAnswers += 1
+				}
+				guard today != answers else { continue }
+				report.mismatches += 1
+				appendSample("label \(label) at \(paths) (\(placeIndices.count) sites): today \(today.map(\.description).sorted()) query \(answers.map(\.description).sorted())", to: &report)
 			}
-		}
 
-		// The query: the outcomes over every route from the seam's root to the level, memoized per (level, label, whether a
-		// `@Sendable` function encloses the place below the level).
-		struct MemoKey: Hashable {
-			let node: Int
-			let label: String
-			let crossed: Bool
-		}
-		var memo = [MemoKey: Set<Outcome>]()
-		var onStack = Set<MemoKey>()
-		var graphCycles = 0
-		// Iterative, since a seam's tree can be deeper than a concurrency thread's stack.
-		func direct(_ key: MemoKey) -> Set<Outcome>? {
-			if let declaration = declarationByLabelByNode[key.node][key.label] {
-				return [outcome(of: declaration, crossed: key.crossed)]
-			}
-			if parents[key.node].isEmpty {
-				return [Outcome(property: nil, kind: .none)]
-			}
-			return nil
-		}
-		func answer(node: Int, label: String, crossed: Bool) -> Set<Outcome> {
-			let start = MemoKey(node: node, label: label, crossed: crossed)
-			if let known = direct(start) ?? memo[start] {
-				return known
-			}
-			var stack = [(key: start, isExpanded: false)]
-			while let (key, isExpanded) = stack.popLast() {
-				let parentCrossed = key.crossed || levels[key.node].opensSendableFunction
-				let parentKeys = parents[key.node].map { MemoKey(node: $0, label: key.label, crossed: parentCrossed) }
-				if isExpanded {
-					var outcomes = Set<Outcome>()
-					for parentKey in parentKeys {
-						if let known = direct(parentKey) ?? memo[parentKey] {
-							outcomes.formUnion(known)
-						} else {
-							graphCycles += 1
-						}
-					}
-					onStack.remove(key)
-					memo[key] = outcomes
-					continue
-				}
-				guard memo[key] == nil, onStack.insert(key).inserted else { continue }
-				stack.append((key, true))
-				for parentKey in parentKeys where direct(parentKey) == nil && memo[parentKey] == nil && !onStack.contains(parentKey) {
-					stack.append((parentKey, false))
-				}
-			}
-			return memo[start] ?? []
-		}
-		var queryAnswers = [Question: Set<Outcome>]()
-		let queryStart = ContinuousClock.now
-		for question in questions {
-			queryAnswers[question] = answer(node: question.caseKey.node, label: question.label, crossed: question.caseKey.siteOpensSendableFunction)
-		}
-		report.queryNanoseconds = nanoseconds(ContinuousClock.now - queryStart)
-		report.queries = questions.count
-		report.memoEntries = memo.count
-		report.graphCycles = graphCycles
-
-		for question in questions {
-			let today = todaysAnswers[question] ?? []
-			let query = queryAnswers[question] ?? []
-			if query.count > 1 {
-				report.routeDependentAnswers += 1
-			}
-			guard today != query else { continue }
-			report.mismatches += 1
-			if report.mismatchSamples.count < 5 {
-				let placeIndices = placeIndicesByCase[question.caseKey] ?? []
-				let paths = placeIndices.prefix(3).map { placeLevels.places[$0].sitePath.map(\.label).joined(separator: ".") }
-				report.mismatchSamples.append("label \(question.label) at \(paths.joined(separator: " | ")) (\(placeIndices.count) sites): today \(today.map(\.description).sorted()) query \(query.map(\.description).sorted())")
-			}
-		}
-
-		// Cycle re-entry: walking up from the place, the outermost level whose function a cycle re-enters, below the nearest
-		// declaration of the label, hands the place that level's declaration between. Memoized per (level, label).
-		let reentryByLabelByNode = levels.map { level in
-			var reentryByLabel = [String: Property]()
-			for property in level.reentryDeclarations where reentryByLabel[property.label] == nil {
-				reentryByLabel[property.label] = property
-			}
-			return reentryByLabel
-		}
-		struct ReentryKey: Hashable {
-			let node: Int
-			let label: String
-		}
-		var reentryMemo = [ReentryKey: Set<Property?>]()
-		var reentryOnStack = Set<ReentryKey>()
-		func reentryAnswer(node: Int, label: String) -> Set<Property?> {
-			let start = ReentryKey(node: node, label: label)
-			var stack = [(key: start, isExpanded: false)]
-			while let (key, isExpanded) = stack.popLast() {
-				guard reentryMemo[key] == nil else { continue }
-				if declarationByLabelByNode[key.node][key.label] != nil {
-					reentryMemo[key] = [nil]
-					continue
-				}
-				let parentKeys = parents[key.node].map { ReentryKey(node: $0, label: key.label) }
-				if isExpanded {
-					var fromAbove = Set<Property?>()
-					if parentKeys.isEmpty {
-						fromAbove.insert(nil)
-					}
-					for parentKey in parentKeys {
-						if let known = reentryMemo[parentKey] {
-							fromAbove.formUnion(known)
-						} else {
-							report.graphCycles += 1
-						}
-					}
-					let own = reentryByLabelByNode[key.node][key.label]
-					reentryMemo[key] = Set(fromAbove.map { $0 ?? own })
-					reentryOnStack.remove(key)
-					continue
-				}
-				guard reentryOnStack.insert(key).inserted else { continue }
-				stack.append((key, true))
-				for parentKey in parentKeys where reentryMemo[parentKey] == nil && !reentryOnStack.contains(parentKey) {
-					stack.append((parentKey, false))
-				}
-			}
-			return reentryMemo[start] ?? []
-		}
-		for caseKey in caseOrder {
-			let placeIndices = placeIndicesByCase[caseKey] ?? []
-			let siteLabel = levels[caseKey.node].nextProperty?.label
-			var labels = [String]()
-			var seenLabels = Set<String>()
-			for placeIndex in placeIndices {
-				for property in placeLevels.places[placeIndex].carriedCycleReentryProperties where seenLabels.insert(property.label).inserted {
-					labels.append(property.label)
-				}
-				for node in placeNodes[placeIndex] {
-					for property in levels[node].reentryDeclarations where seenLabels.insert(property.label).inserted {
-						labels.append(property.label)
-					}
-				}
-			}
-			for label in labels {
-				var today = Set<Property?>()
-				for placeIndex in placeIndices {
-					today.insert(placeLevels.places[placeIndex].carriedCycleReentryProperties.first { $0.label == label })
-				}
-				let query: Set<Property?> = label == siteLabel ? [nil] : reentryAnswer(node: caseKey.node, label: label)
+			// The declarations a cycle re-entry hands the type built again.
+			for label in labelsAsked(of: places, \.carriedCycleReentryProperties, \.reentryDeclarations) {
+				let today = Set(places.map { place in place.carriedCycleReentryProperties.first { $0.label == label } })
+				let answers = query.reentryDeclaration(ofLabel: label, at: placeCase)
 				report.reentryQuestions += 1
-				guard today != query else { continue }
+				guard today != answers else { continue }
 				report.reentryMismatches += 1
 				report.mismatches += 1
-				if report.mismatchSamples.count < 5 {
-					let paths = placeIndices.prefix(3).map { placeLevels.places[$0].sitePath.map(\.label).joined(separator: ".") }
-					func spelled(_ answers: Set<Property?>) -> [String] {
-						answers.map { $0?.asSource ?? "none" }.sorted()
-					}
-					report.mismatchSamples.append("re-entry label \(label) at \(paths.joined(separator: " | ")) (\(placeIndices.count) sites): today \(spelled(today)) query \(spelled(query))")
-				}
+				appendSample("re-entry label \(label) at \(paths) (\(placeIndices.count) sites): today \(spelled(today)) query \(spelled(answers))", to: &report)
 			}
-		}
-		// Declarations a fill's field of a seam parameter hides: where the place's nearest declaration of the label is such a
-		// field, carried, the nearest declaration above that fill of another property.
-		struct HiddenKey: Hashable {
-			let node: Int
-			let label: String
-			let crossed: Bool
-		}
-		var hiddenMemo = [HiddenKey: Set<Property?>]()
-		var hiddenOnStack = Set<HiddenKey>()
-		// Iterative, as `answer` is: a seam's tree can be deeper than a concurrency thread's stack.
-		func hiddenAnswer(node: Int, label: String, crossed: Bool) -> Set<Property?> {
-			let start = HiddenKey(node: node, label: label, crossed: crossed)
-			var stack = [(key: start, isExpanded: false)]
-			while let (key, isExpanded) = stack.popLast() {
-				guard hiddenMemo[key] == nil else { continue }
-				if let declaration = declarationByLabelByNode[key.node][key.label] {
-					var result = Set<Property?>()
-					if levels[key.node].builtType == nil, declaration.isFieldOfSeamParameter, outcome(of: declaration, crossed: key.crossed).kind == .field {
-						// A declaration the fill binds before the field, such as one a passing-up seam binds that the filled seam's struct
-						// does not carry, is the nearest above the field.
-						let earlier = levels[key.node].declarations.prefix { $0 != declaration }.last { $0.property.label == key.label }
-						if let earlier {
-							result.insert(earlier.property == declaration.property ? nil : earlier.property)
-						}
-						for parent in parents[key.node] where earlier == nil {
-							for above in answer(node: parent, label: key.label, crossed: false) {
-								result.insert(above.property == declaration.property ? nil : above.property)
-							}
-						}
-					}
-					if result.isEmpty {
-						result.insert(nil)
-					}
-					hiddenMemo[key] = result
-					continue
+
+			// The declarations a fill's field of a seam parameter hides.
+			var hiddenLabels = [String]()
+			var seenHiddenLabels = Set<String>()
+			for place in places {
+				for property in place.carriedHiddenByFieldProperties where seenHiddenLabels.insert(property.label).inserted {
+					hiddenLabels.append(property.label)
 				}
-				let parentCrossed = key.crossed || levels[key.node].opensSendableFunction
-				let parentKeys = parents[key.node].map { HiddenKey(node: $0, label: key.label, crossed: parentCrossed) }
-				if parentKeys.isEmpty {
-					hiddenMemo[key] = [nil]
-					continue
-				}
-				if isExpanded {
-					var result = Set<Property?>()
-					for parentKey in parentKeys {
-						if let known = hiddenMemo[parentKey] {
-							result.formUnion(known)
-						} else {
-							report.graphCycles += 1
-						}
-					}
-					hiddenMemo[key] = result
-					hiddenOnStack.remove(key)
-					continue
-				}
-				guard hiddenOnStack.insert(key).inserted else { continue }
-				stack.append((key, true))
-				for parentKey in parentKeys where hiddenMemo[parentKey] == nil && !hiddenOnStack.contains(parentKey) {
-					stack.append((parentKey, false))
-				}
-			}
-			return hiddenMemo[start] ?? []
-		}
-		for caseKey in caseOrder {
-			let placeIndices = placeIndicesByCase[caseKey] ?? []
-			var labels = [String]()
-			var seenLabels = Set<String>()
-			for placeIndex in placeIndices {
-				for property in placeLevels.places[placeIndex].carriedHiddenByFieldProperties where seenLabels.insert(property.label).inserted {
-					labels.append(property.label)
-				}
-				for node in placeNodes[placeIndex] {
-					for declaration in levels[node].declarations where declaration.isFieldOfSeamParameter && seenLabels.insert(declaration.property.label).inserted {
-						labels.append(declaration.property.label)
+				for level in place.levels {
+					for declaration in level.declarations where declaration.isFieldOfSeamParameter && seenHiddenLabels.insert(declaration.property.label).inserted {
+						hiddenLabels.append(declaration.property.label)
 					}
 				}
 			}
-			for label in labels {
-				var today = Set<Property?>()
-				for placeIndex in placeIndices {
-					today.insert(placeLevels.places[placeIndex].carriedHiddenByFieldProperties.first { $0.label == label })
-				}
-				let query = hiddenAnswer(node: caseKey.node, label: label, crossed: caseKey.siteOpensSendableFunction)
+			for label in hiddenLabels {
+				let today = Set(places.map { place in place.carriedHiddenByFieldProperties.first { $0.label == label } })
+				let answers = query.declarationHiddenByField(ofLabel: label, at: placeCase)
 				report.hiddenQuestions += 1
-				guard today != query else { continue }
+				guard today != answers else { continue }
 				report.hiddenMismatches += 1
 				report.mismatches += 1
-				if report.mismatchSamples.count < 5 {
-					let paths = placeIndices.prefix(3).map { placeLevels.places[$0].sitePath.map(\.label).joined(separator: ".") }
-					report.mismatchSamples.append("hidden label \(label) at \(paths.joined(separator: " | ")): today \(today.map { $0?.asSource ?? "none" }.sorted()) query \(query.map { $0?.asSource ?? "none" }.sorted())")
-				}
+				appendSample("hidden label \(label) at \(paths): today \(spelled(today)) query \(spelled(answers))", to: &report)
 			}
-		}
 
-		// The stack each place's owner is built with: per place, derived from its own levels; per case, the entries of every
-		// route, from the graph.
-		struct StackEntry: Hashable {
-			let property: Property
-			let concreteType: TypeDescription
-		}
-		func entries(of property: Property, builtAs concreteType: TypeDescription) -> [StackEntry] {
-			var result = [StackEntry]()
-			if let instance = property.asLazilyInstantiatedInstanceProperty {
-				result.append(StackEntry(property: instance, concreteType: concreteType))
-			}
-			result.append(StackEntry(property: property, concreteType: concreteType))
-			return result
-		}
-		func fillBase(of level: SeamPlaceLevels.Level) -> [StackEntry] {
-			zip(level.fillBaseStack, level.fillBaseConcreteTypes).map { StackEntry(property: $0, concreteType: $1) }
-		}
-		var stackMemo = [Int: Set<StackEntry>]()
-		var stackOnStack = Set<Int>()
-		func stackEntries(node: Int) -> Set<StackEntry> {
-			var stack = [(node: node, isExpanded: false)]
-			while let (visited, isExpanded) = stack.popLast() {
-				guard stackMemo[visited] == nil else { continue }
-				guard let builtType = levels[visited].builtType else {
-					stackMemo[visited] = Set(fillBase(of: levels[visited]))
-					continue
-				}
-				if isExpanded {
-					var result = Set<StackEntry>()
-					for parent in parents[visited] {
-						if let property = levels[parent].nextProperty {
-							result.formUnion(entries(of: property, builtAs: builtType))
-						}
-						if let known = stackMemo[parent] {
-							result.formUnion(known)
-						} else {
-							report.graphCycles += 1
-						}
-					}
-					stackMemo[visited] = result
-					stackOnStack.remove(visited)
-					continue
-				}
-				guard stackOnStack.insert(visited).inserted else { continue }
-				stack.append((visited, true))
-				for parent in parents[visited] where stackMemo[parent] == nil && !stackOnStack.contains(parent) {
-					stack.append((parent, false))
-				}
-			}
-			return stackMemo[node] ?? []
-		}
-		for caseKey in caseOrder {
-			let placeIndices = placeIndicesByCase[caseKey] ?? []
-			var today = Set<StackEntry>()
-			var distinctStacks = Set<[StackEntry]>()
-			for placeIndex in placeIndices {
-				let place = placeLevels.places[placeIndex]
-				let carried = zip(place.carriedStack, place.carriedStackConcreteTypes).map { StackEntry(property: $0, concreteType: $1) }
+			// The stack each place is built with, per place from its own levels and per case from the graph.
+			var today = Set<SeamPlaceGraph.StackEntry>()
+			var distinctStacks = Set<[SeamPlaceGraph.StackEntry]>()
+			for place in places {
+				let carried = zip(place.carriedStack, place.carriedStackConcreteTypes).map { SeamPlaceGraph.StackEntry(property: $0, concreteType: $1) }
 				today.formUnion(carried)
 				distinctStacks.insert(carried)
-				var derived = [StackEntry]()
-				for (index, level) in place.levels.enumerated() {
-					guard let builtType = level.builtType else {
-						derived += fillBase(of: level)
-						break
-					}
-					guard index + 1 < place.levels.count else { break }
-					if let property = place.levels[index + 1].nextProperty {
-						derived += entries(of: property, builtAs: builtType)
-					}
-				}
-				if derived != carried {
-					report.stackSiteMismatches += 1
-					report.mismatches += 1
-					if report.mismatchSamples.count < 5 {
-						report.mismatchSamples.append("stack at \(place.sitePath.map(\.label).joined(separator: ".")): today \(carried.map { "\($0.property.asSource)@\($0.concreteType.asSource)" }) derived \(derived.map { "\($0.property.asSource)@\($0.concreteType.asSource)" })")
-					}
-				}
+				let derived = derivedStack(of: place)
+				guard derived != carried else { continue }
+				report.stackSiteMismatches += 1
+				report.mismatches += 1
+				appendSample("stack at \(place.sitePath.map(\.label).joined(separator: ".")): today \(spelled(carried)) derived \(spelled(derived))", to: &report)
 			}
 			if distinctStacks.count > 1 {
 				report.stackRouteDependentCases += 1
 			}
-			if today != stackEntries(node: caseKey.node) {
+			let entries = query.stackEntries(at: placeCase)
+			if today != entries {
 				report.stackCaseMismatches += 1
 				report.mismatches += 1
-				if report.mismatchSamples.count < 5 {
-					report.mismatchSamples.append("stack entries of case at \(placeLevels.places[placeIndices[0]].sitePath.map(\.label).joined(separator: ".")): today \(today.count) query \(stackEntries(node: caseKey.node).count)")
-				}
+				appendSample("stack entries of case at \(paths): today \(today.count) query \(entries.count)", to: &report)
 			}
 		}
+		report.queryNanoseconds = nanoseconds(ContinuousClock.now - queryStart)
+		report.graphCycles = query.graphCycles
 		return report
 	}
 
-	static func outcome(of declaration: SeamPlaceLevels.Level.Declaration, crossed: Bool) -> Outcome {
-		if !declaration.isBoundBeforeNextProperty {
-			Outcome(property: declaration.property, kind: .uncarried)
-		} else if !crossed {
-			Outcome(property: declaration.property, kind: .field)
-		} else if declaration.isSeamParameter {
-			Outcome(property: nil, kind: .none)
-		} else {
-			Outcome(property: declaration.property, kind: .uncarried)
+	/// The labels to ask about: those today's lists hold for the case's places, and those any level on their paths
+	/// records, so a label the graph records and no place carries is asked too.
+	private static func labelsAsked(
+		of places: [SeamPlaceLevels.Place],
+		_ carried: KeyPath<SeamPlaceLevels.Place, [Property]>,
+		_ recorded: KeyPath<SeamPlaceLevels.Level, [Property]>,
+	) -> [String] {
+		var labels = [String]()
+		var seenLabels = Set<String>()
+		for place in places {
+			for property in place[keyPath: carried] where seenLabels.insert(property.label).inserted {
+				labels.append(property.label)
+			}
+			for level in place.levels {
+				for property in level[keyPath: recorded] where seenLabels.insert(property.label).inserted {
+					labels.append(property.label)
+				}
+			}
 		}
+		return labels
 	}
 
-	static func describe(_ level: SeamPlaceLevels.Level) -> String {
-		let declarations = level.declarations.map { declaration in
+	/// The stack `place`'s owner is built with, read from the place's own levels: each level's built type with the next
+	/// level's property, down to a fill, whose tree is built beneath the filled seam's path.
+	private static func derivedStack(of place: SeamPlaceLevels.Place) -> [SeamPlaceGraph.StackEntry] {
+		var derived = [SeamPlaceGraph.StackEntry]()
+		for (index, level) in place.levels.enumerated() {
+			guard let builtType = level.builtType else {
+				derived += zip(level.fillBaseStack, level.fillBaseConcreteTypes).map { SeamPlaceGraph.StackEntry(property: $0, concreteType: $1) }
+				break
+			}
+			guard index + 1 < place.levels.count else { break }
+			if let property = place.levels[index + 1].nextProperty {
+				derived += SeamPlaceGraph.Query.entries(of: property, builtAs: builtType)
+			}
+		}
+		return derived
+	}
+
+	/// How many nodes of one key the graph holds, and in what they differ.
+	private static func countVariants(of graph: SeamPlaceGraph, into report: inout Report) {
+		var firstByKey = [SeamPlaceGraph.NodeKey: SeamPlaceGraph.Node]()
+		for node in graph.nodes {
+			guard let first = firstByKey[node.key] else {
+				firstByKey[node.key] = node
+				continue
+			}
+			report.levelConflicts += 1
+			let functionFacts = { (declarations: [SeamPlaceLevels.Level.Declaration]) in
+				declarations.filter { !$0.isCycleParameter && !$0.isReboundByBuilderFunction }
+			}
+			if node.key.builtType == nil {
+				report.fillLevelVariants += 1
+			} else if first.declarations == node.declarations {
+				report.sendableOnlyVariants += 1
+			} else if functionFacts(first.declarations) == functionFacts(node.declarations) {
+				report.levelConflictsOnlyInFunctionFacts += 1
+			} else {
+				report.otherVariants += 1
+				if report.conflictSamples.count < 3 {
+					report.conflictSamples.append("level \(node.key.builtType?.asSource ?? "fill") before \(node.key.nextProperty?.asSource ?? "-"): \(describe(first)) vs \(describe(node))")
+				}
+			}
+		}
+		report.types = firstByKey.count
+	}
+
+	private static func appendSample(_ sample: String, to report: inout Report) {
+		guard report.mismatchSamples.count < 5 else { return }
+		report.mismatchSamples.append(sample)
+	}
+
+	private static func spelled(_ properties: Set<Property?>) -> [String] {
+		properties.map { $0?.asSource ?? "none" }.sorted()
+	}
+
+	private static func spelled(_ entries: [SeamPlaceGraph.StackEntry]) -> [String] {
+		entries.map { "\($0.property.asSource)@\($0.concreteType.asSource)" }
+	}
+
+	static func describe(_ node: SeamPlaceGraph.Node) -> String {
+		let declarations = node.declarations.map { declaration in
 			var text = declaration.property.asSource
 			if !declaration.isBoundBeforeNextProperty {
 				text += "(after)"
@@ -615,7 +304,7 @@ public enum SeamRouteQueryShadow {
 			}
 			return text
 		}
-		return "[\(declarations.joined(separator: ", "))]\(level.opensSendableFunction ? " @Sendable" : "")"
+		return "[\(declarations.joined(separator: ", "))]\(node.opensSendableFunction ? " @Sendable" : "")"
 	}
 
 	/// Appends the report of `placeLevels` to the report file, when enabled.
@@ -641,10 +330,12 @@ public enum SeamRouteQueryShadow {
 			return "\"" + escaped + "\""
 		}
 		var line = "{"
-		line += "\"seam\":\(quoted(report.seamType)),\"places\":\(report.places),\"nodes\":\(report.nodes),\"edges\":\(report.edges)"
+		line += "\"seam\":\(quoted(report.seamType)),\"places\":\(report.places)"
+		line += ",\"nodes\":\(report.nodes),\"edges\":\(report.edges)"
 		line += ",\"levelConflicts\":\(report.levelConflicts),\"levelConflictsOnlyInFunctionFacts\":\(report.levelConflictsOnlyInFunctionFacts)"
 		line += ",\"fillLevelVariants\":\(report.fillLevelVariants),\"sendableOnlyVariants\":\(report.sendableOnlyVariants),\"otherVariants\":\(report.otherVariants),\"types\":\(report.types)"
-		line += ",\"cases\":\(report.cases),\"queries\":\(report.queries),\"memoEntries\":\(report.memoEntries),\"graphCycles\":\(report.graphCycles)"
+		line += ",\"cases\":\(report.cases),\"queries\":\(report.queries),\"graphCycles\":\(report.graphCycles)"
+		line += ",\"labelSetMismatches\":\(report.labelSetMismatches)"
 		line += ",\"reentryQuestions\":\(report.reentryQuestions),\"reentryMismatches\":\(report.reentryMismatches)"
 		line += ",\"hiddenQuestions\":\(report.hiddenQuestions),\"hiddenMismatches\":\(report.hiddenMismatches)"
 		line += ",\"stackSiteMismatches\":\(report.stackSiteMismatches),\"stackCaseMismatches\":\(report.stackCaseMismatches),\"stackRouteDependentCases\":\(report.stackRouteDependentCases)"
