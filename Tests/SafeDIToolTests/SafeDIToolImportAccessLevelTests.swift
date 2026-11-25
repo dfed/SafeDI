@@ -520,10 +520,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 			#if DEBUG
 			extension Worker {
-			    // These providers evaluate `Worker`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Worker` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_qosClass() -> DispatchQoS.QoSClass? { .utility }
+			    @usableFromInline static func __safeDI_publicMockDefault_qosClass() -> DispatchQoS.QoSClass? { .utility }
 
 			    public static func mock(
 			        qos: Dispatch.DispatchQoS? = nil,
