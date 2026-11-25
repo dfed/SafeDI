@@ -65,7 +65,7 @@ enum TypeKeyBody {
 						textStatements += 1
 					}
 				}
-				let line = "TYPE_KEY_SHADOW \(cause) cyclic=\(closers > 0) seamRoot=\(!outerDeclarations.isEmpty) views=\(layout.bodies.count) closers=\(closers) rootTextStatements=\(textStatements) rootStatements=\(rootBody.count)\n"
+				let line = "TYPE_KEY_SHADOW \(cause) cyclic=\(closers > 0) outer=\(!outerDeclarations.isEmpty) views=\(layout.bodies.count) closers=\(closers) rootTextStatements=\(textStatements) rootStatements=\(rootBody.count)\n"
 				let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
 				if descriptor >= 0 {
 					_ = line.withCString { write(descriptor, $0, strlen($0)) }

@@ -2,7 +2,7 @@
 # Scripts/type-key-shadow-summary.sh FILE
 # MEASUREMENT ONLY, never merged. Summarizes the lines a run wrote under SAFEDI_TYPE_KEY_SHADOW=FILE: per result
 # (laidOut, or the step of TypeKeyBody.statements that gave up), how many roots, split by whether the root holds a
-# cycle and whether it is a seam's root, and how many root statements were kept as text.
+# cycle and whether declarations are in scope before its body (a seam root), and how many root statements were kept as text.
 set -euo pipefail
 awk '$1 == "TYPE_KEY_SHADOW" {
 	key = $2 " " $3 " " $4
