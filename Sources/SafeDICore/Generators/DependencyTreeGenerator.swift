@@ -315,6 +315,16 @@ public actor DependencyTreeGenerator {
 		/// modules that call the seams (`SeamResolution.ForeignSeam.storedSignature`); empty unless the request generates
 		/// dependency trees, so a module info written without them makes its callers compute the signatures.
 		public let storedSeamSignatures: [StoredSeamSignature]
+		/// The signature of each seam this module's trees call that the run read from a module info, by seam, which the
+		/// module's own module info refers to rather than repeating; empty wherever `storedSeamSignatures` is.
+		public let seamSignaturesRead: [TypeDescription: SeamSignatureRead]
+	}
+
+	/// A seam's signature as a module info carried it.
+	public struct SeamSignatureRead: Sendable {
+		/// The module whose module info carried the signature.
+		public let moduleName: String
+		public let signature: SeamSignature
 	}
 
 	/// Generates what `request` asks for, building each layer of the work once, in order, and handing it down as a value:
@@ -345,10 +355,10 @@ public actor DependencyTreeGenerator {
 		// The roots' plans generate in a child task while the warnings and the DOT graph are made from the same trees.
 		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
 		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
-		let storedSeamSignatures = if request.generatesDependencyTrees, let trees {
-			trees.storedSeamSignatures
+		let (storedSeamSignatures, seamSignaturesRead) = if request.generatesDependencyTrees, let trees {
+			(trees.storedSeamSignatures, trees.seamSignaturesRead)
 		} else {
-			[StoredSeamSignature]()
+			([StoredSeamSignature](), [TypeDescription: SeamSignatureRead]())
 		}
 		let plans: [PlannedRoot]
 		let warnings: [SourceDiagnostic]
@@ -395,7 +405,7 @@ public actor DependencyTreeGenerator {
 				publicMockContext: declaresPublicMock ? publicMockContext : nil,
 			)
 		}
-		return await GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: drawnTree, storedSeamSignatures: storedSeamSignatures)
+		return await GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: drawnTree, storedSeamSignatures: storedSeamSignatures, seamSignaturesRead: seamSignaturesRead)
 	}
 
 	/// Runs every whole-module check of `roots`, the trees this module generates, which their code needs to pass.
@@ -620,6 +630,8 @@ public actor DependencyTreeGenerator {
 		let rootsOfOtherModules: [Instantiable]
 		/// See `GenerationResults.storedSeamSignatures`.
 		let storedSeamSignatures: [StoredSeamSignature]
+		/// See `GenerationResults.seamSignaturesRead`.
+		let seamSignaturesRead: [TypeDescription: SeamSignatureRead]
 	}
 
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
@@ -635,6 +647,7 @@ public actor DependencyTreeGenerator {
 		var validatedScopes = Set<Scope>()
 		var rootsOfOtherModules = [Instantiable]()
 		var storedSeamSignatures = [StoredSeamSignature]()
+		var seamSignaturesRead = [TypeDescription: SeamSignatureRead]()
 		let rootScopeGenerators: [RootScopeInfo]
 		do {
 			// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
@@ -648,7 +661,8 @@ public actor DependencyTreeGenerator {
 			try validateCalledSeamModulesShareMockCondition()
 			// A foreign seam's module info this run lacks is reported before the inlined trees, which reach that
 			// module's declarations, are found unfulfillable.
-			let foreignSeamRoots = try await computeForeignSeamRoots()
+			let foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]
+			(foreignSeamRoots, seamSignaturesRead) = try await computeForeignSeamRoots()
 			try validateReachableTypeDescriptions(foreignSeamRoots: foreignSeamRoots)
 
 			let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
@@ -722,7 +736,7 @@ public actor DependencyTreeGenerator {
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
-		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules, storedSeamSignatures: storedSeamSignatures)
+		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules, storedSeamSignatures: storedSeamSignatures, seamSignaturesRead: seamSignaturesRead)
 	}
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms

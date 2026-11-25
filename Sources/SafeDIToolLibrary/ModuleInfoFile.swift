@@ -116,6 +116,19 @@ public struct ModuleInfoFile: Codable, Sendable {
 		view: ModuleInfoView,
 		storesOwnEntryChecksum: Bool = false,
 	) {
+		self.init(module: module, moduleName: moduleName, seamSignatures: ModuleSeamSignatures(seamSignatures), publicMockPlans: publicMockPlans, compilesGeneratedMocks: compilesGeneratedMocks, view: view, storesOwnEntryChecksum: storesOwnEntryChecksum)
+	}
+
+	/// The file of `module`, named `moduleName`, with `seamSignatures`, the signatures of its seams as the file holds them.
+	init(
+		module: ModuleInfo,
+		moduleName: String,
+		seamSignatures: ModuleSeamSignatures,
+		publicMockPlans: [StoredPublicMockPlan],
+		compilesGeneratedMocks: Bool,
+		view: ModuleInfoView,
+		storesOwnEntryChecksum: Bool,
+	) {
 		self.init(
 			moduleName: moduleName,
 			packageName: module.packageName,
@@ -128,7 +141,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: module.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: module.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: module.plainTypeDeclarations,
-			seamSignatures: ModuleSeamSignatures(seamSignatures),
+			seamSignatures: seamSignatures,
 			publicMockPlans: ModulePublicMockPlans(publicMockPlans, compilesGeneratedMocks: compilesGeneratedMocks),
 			view: view,
 		)
@@ -568,18 +581,24 @@ struct UnresolvableModuleReferenceError: Error, CustomStringConvertible {
 }
 
 /// The signatures a module info file holds of its module's seams (`ModuleInfoFile.seamSignatures`): the seams, read with
-/// the file, and their signatures, which the file holds as an encoding of their own (``BinaryWriter/writeEncoding(_:)``)
-/// that a run decodes only when it reaches one of the module's seams. A module's file and every view that copies its
-/// declarations carry its signatures, and the module that reads them calls the seams of few of the modules it reads.
+/// the file, and their signatures, which the file holds as two encodings of their own (``BinaryWriter/writeEncoding(_:)``)
+/// that a run decodes only when it reaches one of the module's seams: the signatures without their places, and the
+/// places (`StoredModulePlaces`), which a run that reads a place passed up through the module reads alone. A module's
+/// file and every view that copies its declarations carry its signatures, and the module that reads them calls the
+/// seams of few of the modules it reads.
 struct ModuleSeamSignatures: Sendable {
-	init(_ signatures: [StoredSeamSignature]) {
+	/// - Parameters:
+	///   - signaturesRead: The signatures the run read of the seams the module calls: a place one of `signatures` passes up
+	///     from one of those seams is written as that seam's record of it (`ModulePlacesEncoder`).
+	///   - lower: What the files the run was given hold of each module's seams, by module name.
+	init(_ signatures: [StoredSeamSignature], signaturesRead: [TypeDescription: DependencyTreeGenerator.SeamSignatureRead] = [:], lower: [String: ModuleSeamSignatures] = [:]) {
 		seamTypes = signatures.map(\.seamType)
-		storage = .decoded(signatures)
+		storage = .decoded(signatures, places: ModulePlacesEncoder.places(of: signatures, signaturesRead: signaturesRead, lower: lower))
 	}
 
-	init(seamTypes: [TypeDescription], encoding: [UInt8]) {
+	init(seamTypes: [TypeDescription], encoding: [UInt8], placesEncoding: [UInt8]) {
 		self.seamTypes = seamTypes
-		storage = .encoded(encoding)
+		storage = .encoded(encoding, places: placesEncoding)
 	}
 
 	static let empty = ModuleSeamSignatures([])
@@ -591,64 +610,154 @@ struct ModuleSeamSignatures: Sendable {
 		seamTypes.isEmpty
 	}
 
-	/// The signatures, decoded each time this is read from a file's encoding.
+	/// The signatures, decoded each time this is read from a file's encoding, for a module none of whose seams passes up
+	/// a place of another module's seam: the places are read from this module's alone.
 	var decoded: [StoredSeamSignature] {
-		get throws(BinaryDecodingError) {
-			switch storage {
-			case let .decoded(signatures):
-				signatures
-			case let .encoded(encoding):
-				try Self.signatures(decodingFrom: encoding)
+		get throws {
+			try decoded(moduleName: "", in: [:])
+		}
+	}
+
+	/// The signatures of the module named `moduleName`, decoded each time this is called on a file's encoding, each
+	/// passed-up place read from the record it names among `signaturesByModuleName`, what the files the run was given
+	/// hold of each module's seams. Throws when those hold other places than the ones this module's were written against.
+	func decoded(moduleName: String, in signaturesByModuleName: [String: ModuleSeamSignatures]) throws -> [StoredSeamSignature] {
+		var resolver = PlaceResolver(signaturesByModuleName: signaturesByModuleName.merging([moduleName: self]) { _, own in own })
+		return try signaturesWithoutPlaces.enumerated().map { index, stored in
+			let places = try resolver.places(ofSeamAt: index, inModuleNamed: moduleName, sharingSitePathsOf: stored.signature)
+			return StoredSeamSignature(seamType: stored.seamType, signature: stored.signature?.holding(places))
+		}
+	}
+
+	/// The signatures as a run that reaches one of the seams of the module, named `moduleName`, reads them. The file's
+	/// body checksum covers the encodings, so only a SafeDITool that wrote a malformed one, or files written against
+	/// other places than the ones given, make the read throw, never trap; a run that throws after reading a stored
+	/// signature runs again computing every signature (`Generate.generate(buildLog:)`).
+	func stored(moduleName: String, in signaturesByModuleName: [String: ModuleSeamSignatures]) -> StoredSeamSignatures {
+		StoredSeamSignatures(
+			read: { try decoded(moduleName: moduleName, in: signaturesByModuleName) },
+			readTogether: { try await Self.decoded(moduleNames: $0, in: signaturesByModuleName) },
+		)
+	}
+
+	/// The signatures of each of the modules named `moduleNames`, as `decoded(moduleName:in:)` reads one module's: what
+	/// the files hold of each is read side by side, and then each passed-up place from its record, each record once
+	/// for all the modules.
+	static func decoded(moduleNames: [String], in signaturesByModuleName: [String: ModuleSeamSignatures]) async throws -> [[StoredSeamSignature]] {
+		let modulesRead = await moduleNames.concurrentlyMapped { moduleName in
+			Result {
+				let signatures = signaturesByModuleName[moduleName] ?? .empty
+				return try ModuleRead(signatures: signatures.signaturesWithoutPlaces, places: PlaceResolver.OpenedModule(reading: signatures, ofModuleNamed: moduleName))
+			}
+		}
+		var signaturesByModule = [[StoredSeamSignature]]()
+		var openedModules = [String: PlaceResolver.OpenedModule]()
+		for (moduleName, moduleRead) in zip(moduleNames, modulesRead) {
+			let moduleRead = try moduleRead.get()
+			signaturesByModule.append(moduleRead.signatures)
+			openedModules[moduleName] = moduleRead.places
+		}
+		var resolver = PlaceResolver(signaturesByModuleName: signaturesByModuleName, openedModules: openedModules)
+		return try zip(moduleNames, signaturesByModule).map { moduleName, signatures in
+			try signatures.enumerated().map { index, stored in
+				let places = try resolver.places(ofSeamAt: index, inModuleNamed: moduleName, sharingSitePathsOf: stored.signature)
+				return StoredSeamSignature(seamType: stored.seamType, signature: stored.signature?.holding(places))
 			}
 		}
 	}
 
-	/// The signatures as a run that reaches one of the module's seams reads them. The file's body checksum covers the
-	/// encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws after
-	/// reading a stored signature runs again computing every signature (`Generate.generate(buildLog:)`).
-	var stored: StoredSeamSignatures {
-		StoredSeamSignatures { try decoded }
+	/// What a file holds of one module's seams, read: the signatures without their places, and the places.
+	private struct ModuleRead: Sendable {
+		let signatures: [StoredSeamSignature]
+		let places: PlaceResolver.OpenedModule
 	}
 
-	/// The encoding the file holds: the bytes read, written back unchanged, or the signatures encoded each type
-	/// description and repeated field once (``BinaryWriter/writeSharingSignatureValues(_:)``), their positions absent when
-	/// `writesPositionsAsAbsent`. Only a run's own signatures hold positions: a file is written with them absent.
+	/// The signatures without their places.
+	private var signaturesWithoutPlaces: [StoredSeamSignature] {
+		get throws(BinaryDecodingError) {
+			switch storage {
+			case let .decoded(signatures, _):
+				signatures.map { StoredSeamSignature(seamType: $0.seamType, signature: $0.signature?.holding([])) }
+			case let .encoded(encoding, _):
+				try Self.signaturesWithoutPlaces(decodingFrom: encoding)
+			}
+		}
+	}
+
+	/// The places the file holds, decoded each time this is read from a file's encoding.
+	var storedPlaces: StoredModulePlaces {
+		get throws(BinaryDecodingError) {
+			switch storage {
+			case let .decoded(_, places):
+				places
+			case let .encoded(_, placesEncoding):
+				try Self.decoding(placesEncoding) { reader throws(BinaryDecodingError) in try reader.read() as StoredModulePlaces }
+			}
+		}
+	}
+
+	/// The checksum of the places as a file holds them, which a place passed up from one of the module's seams is written
+	/// with: a read given a file of this module that holds other places reads none of them.
+	var placesChecksum: UInt64 {
+		placesEncoding(writingPositionsAsAbsent: true).withUnsafeBytes(BinaryFile.checksum(of:))
+	}
+
+	/// The encoding the file holds of the signatures without their places: the bytes read, written back unchanged, or the
+	/// signatures encoded each type description and repeated field once
+	/// (``BinaryWriter/writeSharingSignatureValues(_:)``), their positions absent when `writesPositionsAsAbsent`. Only a
+	/// run's own signatures hold positions: a file is written with them absent.
 	func encoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
 		switch storage {
-		case let .decoded(signatures):
-			var writer = BinaryWriter()
-			if writesPositionsAsAbsent {
-				writer.writingPositionsAsAbsent { writer in
-					writer.writeSharingSignatureValues { $0.write(signatures) }
-				}
-			} else {
-				writer.writeSharingSignatureValues { $0.write(signatures) }
-			}
-			return writer.encoded
-		case let .encoded(encoding):
-			return encoding
+		case let .decoded(signatures, _):
+			Self.encoding(signatures.map { StoredSeamSignature(seamType: $0.seamType, signature: $0.signature?.holding([])) }, writingPositionsAsAbsent: writesPositionsAsAbsent)
+		case let .encoded(encoding, _):
+			encoding
+		}
+	}
+
+	/// The encoding the file holds of the places, as `encoding(writingPositionsAsAbsent:)` holds the signatures.
+	func placesEncoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
+		switch storage {
+		case let .decoded(_, places):
+			Self.encoding(places, writingPositionsAsAbsent: writesPositionsAsAbsent)
+		case let .encoded(_, placesEncoding):
+			placesEncoding
 		}
 	}
 
 	// MARK: Private
 
 	private enum Storage: Sendable {
-		case decoded([StoredSeamSignature])
-		case encoded([UInt8])
+		case decoded([StoredSeamSignature], places: StoredModulePlaces)
+		case encoded([UInt8], places: [UInt8])
 	}
 
 	private let storage: Storage
 
-	private static func signatures(decodingFrom encoding: [UInt8]) throws(BinaryDecodingError) -> [StoredSeamSignature] {
+	private static func encoding(_ value: some BinaryCodable, writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
+		var writer = BinaryWriter()
+		if writesPositionsAsAbsent {
+			writer.writingPositionsAsAbsent { writer in
+				writer.writeSharingSignatureValues { $0.write(value) }
+			}
+		} else {
+			writer.writeSharingSignatureValues { $0.write(value) }
+		}
+		return writer.encoded
+	}
+
+	private static func signaturesWithoutPlaces(decodingFrom encoding: [UInt8]) throws(BinaryDecodingError) -> [StoredSeamSignature] {
+		try decoding(encoding) { reader throws(BinaryDecodingError) in try reader.read() as [StoredSeamSignature] }
+	}
+
+	private static func decoding<Value>(_ encoding: [UInt8], _ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
 		// `withUnsafeBytes` rethrows untyped, so the read is carried out of it as a result.
 		try encoding.withUnsafeBytes { bytes in
 			Result { () throws(BinaryDecodingError) in
 				var reader = try BinaryReader(bytes: bytes)
-				let signatures = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in
-					try reader.read() as [StoredSeamSignature]
-				}
+				let value = try reader.readSharingSignatureValues(read)
 				try reader.finish()
-				return signatures
+				return value
 			}
 		}.get()
 	}
@@ -784,6 +893,13 @@ extension ModulePublicMockPlans: Codable {
 	private enum CodingKeys: String, CodingKey {
 		case compilesGeneratedMocks
 		case plans
+	}
+}
+
+extension SeamSignature {
+	/// The signature with `places` as its places.
+	func holding(_ places: [Hole]) -> SeamSignature {
+		SeamSignature(seamType: seamType, parameters: parameters, tiers: tiers, noTierParameters: noTierParameters, holes: places, builders: builders, scopeEnums: scopeEnums, callRoutes: callRoutes, typesDeclaredEscaping: typesDeclaredEscaping)
 	}
 }
 

@@ -528,6 +528,8 @@ public struct Generate: AsyncParsableCommand {
 		// The signatures of the seams the module generates, from that same call, which its module info carries.
 		var storedSeamSignatures = [StoredSeamSignature]()
 		var storedPublicMockPlans = [StoredPublicMockPlan]()
+		// The signatures that call read of the seams the module calls, which the module info refers to.
+		var seamSignaturesRead = [TypeDescription: DependencyTreeGenerator.SeamSignatureRead]()
 		if manifest != nil || combinedOutput != nil {
 			if !filesWithUnexpectedNodes.isEmpty {
 				// Write `#error(…)` instead of generated Swift so the
@@ -730,6 +732,7 @@ public struct Generate: AsyncParsableCommand {
 				dotGraph = results.dotTree
 				storedSeamSignatures = results.storedSeamSignatures
 				storedPublicMockPlans = results.mocks?.storedPublicMockPlans ?? []
+				seamSignaturesRead = results.seamSignaturesRead
 
 				// Build a map from source file path → the roots whose extension code it holds.
 				var sourceFileToExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
@@ -964,7 +967,9 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures, publicMockPlans: storedPublicMockPlans, compilesGeneratedMocks: evaluator.compilesGeneratedMocks, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
+			// A place a seam passes up is written as the record of the seam it came from, which the run read from the files it was given.
+			let seamSignatures = ModuleSeamSignatures(storedSeamSignatures, signaturesRead: seamSignaturesRead, lower: moduleInfoView.storedSeamSignaturesByModuleName)
+			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: seamSignatures, publicMockPlans: storedPublicMockPlans, compilesGeneratedMocks: evaluator.compilesGeneratedMocks, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
 				.moduleInfoDataWritingSeamSignaturesWithoutPositions
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
@@ -1250,7 +1255,7 @@ public struct Generate: AsyncParsableCommand {
 			      storedSeamTypesByModuleName[moduleName]?.contains(seam) == true,
 			      let signatures = moduleInfoView.storedSeamSignaturesByModuleName[moduleName]
 			else { return nil }
-			return signatures.stored
+			return signatures.stored(moduleName: moduleName, in: moduleInfoView.storedSeamSignaturesByModuleName)
 		}
 		/// The seam `seam` of the module named `moduleName`, whose visible declarations are resolved only when the
 		/// generator computes its signature: a module whose seams no tree reaches, or whose module info carries their
