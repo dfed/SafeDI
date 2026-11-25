@@ -311,6 +311,7 @@ private func kindOfName(_ name: String) -> String {
 
 private let mockOverridesParameterName = "safeDIOverrides"
 private let mockOverridesStructName = "SafeDIOverrides"
+private let mockConfigurationStructName = "SafeDIMockConfiguration"
 /// The property through which a configuration holds the class it keeps its fields in, and that class's name.
 private let configurationStoragePropertyName = "__safeDI_storage"
 private let configurationStorageTypeName = "__safeDI_Storage"
@@ -603,6 +604,8 @@ private struct Rendering {
 			if scope.isConfigurationInitializer, isStorageInitialization(list), let label = argument.label?.text, isDroppedField(labeled: label, in: scope) {
 				// The other outcome's configuration has no such field, so its initializer hands the storage none.
 				nil
+			} else if let text = textReadingNoDroppedField(of: argument, in: list, scope: scope) {
+				Place(text: text, sortedAs: nil)
 			} else if let label = argument.label?.text,
 			          let read = droppedRead(of: overridesRead(by: argument.expression), byNodeAt: Syntax(argument), in: scope),
 			          read.endsIn(label == mockOverridesParameterName ? nil : label)
@@ -779,6 +782,64 @@ private struct Rendering {
 		}
 	}
 
+	/// The text of `argument` as the other outcome writes it, when it hands a hoisted builder function the configuration
+	/// a dropped field holds: `__safeDI_<T>_configuration: <owner>.<label>`, or `<nearest> ?? <owner>.<label>`, where the
+	/// function builds `label` and the field's type is `T.SafeDIMockConfiguration`. The other outcome's configuration has
+	/// no such field, so it hands the function a configuration built afresh, `T.SafeDIMockConfiguration()`. Any other
+	/// argument is `nil`, so its text is compared as it is.
+	private func textReadingNoDroppedField(of argument: LabeledExprSyntax, in list: LabeledExprListSyntax, scope: Scope) -> String? {
+		guard let argumentLabel = argument.label?.text,
+		      argumentLabel.hasPrefix(Self.builderFunctionPrefix),
+		      argumentLabel.hasSuffix(Self.hoistedConfigurationParameterSuffix),
+		      let callee = list.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+		      callee.hasPrefix(Self.builderFunctionPrefix)
+		else { return nil }
+		let nearest: ExprSyntax?
+		let read: ExprSyntax
+		if let sequence = argument.expression.as(SequenceExprSyntax.self) {
+			let elements = Array(sequence.elements)
+			guard elements.count == 3,
+			      elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "??"
+			else { return nil }
+			nearest = elements[0]
+			read = elements[2]
+		} else {
+			nearest = nil
+			read = argument.expression
+		}
+		guard let member = read.as(MemberAccessExprSyntax.self),
+		      let base = member.base?.as(DeclReferenceExprSyntax.self),
+		      let owner = configurationOwnerRead(byName: base.baseName.text, at: Syntax(argument), in: scope)
+		else { return nil }
+		let label = member.declName.baseName.text
+		let builtName = String(callee.dropFirst(Self.builderFunctionPrefix.count))
+		guard builtName == label || builtName.hasPrefix("\(label)_"),
+		      let field = fields[owner]?[label],
+		      droppedFields.contains(field),
+		      "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)" == argumentLabel,
+		      field.type.hasSuffix(".\(mockConfigurationStructName)")
+		else { return nil }
+		return "\(argumentLabel): \(nearest.map { "\($0.trimmedDescription) ?? " } ?? "")\(field.type)()"
+	}
+
+	/// The configuration owner that the value named `name` holds at `position`: the mock's overrides for `safeDIOverrides`,
+	/// or the type of a parameter of a function around `position`.
+	private func configurationOwnerRead(byName name: String, at position: Syntax, in scope: Scope) -> String? {
+		if name == mockOverridesParameterName {
+			return scope.extendedType.map { configurationOwner(named: mockOverridesStructName, extendedType: $0) }
+		}
+		var ancestor = position.parent
+		while let node = ancestor {
+			if let function = node.as(FunctionDeclSyntax.self),
+			   let parameter = function.signature.parameterClause.parameters.first(where: { ($0.secondName ?? $0.firstName).text == name })
+			{
+				return parameter.type.trimmedDescription
+			}
+			ancestor = node.parent
+		}
+		return nil
+	}
+
 	/// The read `read` makes, when it passes a dropped field and begins with the path of the node built at `position`.
 	private func droppedRead(of read: ExprSyntax, byNodeAt position: Syntax, in scope: Scope) -> DroppedRead? {
 		guard let labels = labelsRead(by: read), passesDroppedField(labels, in: scope), let path = pathOfNode(at: position, in: scope), labels.starts(with: path) else { return nil }
@@ -873,6 +934,7 @@ private struct Rendering {
 	}
 
 	private static let builderFunctionPrefix = "__safeDI_"
+	private static let hoistedConfigurationParameterSuffix = "_configuration"
 	private static let lazilyInstantiatedWrapperSuffix = "_lazilyInstantiated"
 	private static let sendableLazilyInstantiatedWrapperSuffix = "_sendableLazilyInstantiated"
 	private static let overrideBuilderName = "safeDIBuilder"

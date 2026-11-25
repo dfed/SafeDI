@@ -4584,7 +4584,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenStatementsThatAreNotParameterBindingsChangePlaces() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
-		let binding = "        let t8Builder = Instantiator<\(Self.mockDifferencePrefix)T8>(__safeDI_t8Builder)"
+		let binding = "        let t8Builder = Instantiator<\(Self.mockDifferencePrefix)T8> {\n            __safeDI_t8Builder(__safeDI_\(Self.mockDifferencePrefix)T8_configuration: safeDIOverrides.t8Builder)\n        }"
 		let construction = "        return \(Self.mockDifferencePrefix)T7(t8Builder: t8Builder)"
 		var originalLines = [Substring]()
 		var editedLines = [Substring]()
@@ -4612,7 +4612,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
-		let condition = "if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.safeDIBuilder { safeDIBuilder(t8Builder) } else"
+		let condition = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.safeDIBuilder { safeDIBuilder(t8Builder) } else"
 		let construction = "\(Self.mockDifferencePrefix)T7(t8Builder: t8Builder)"
 		var editedRenamedFiles = renamedFiles
 		#expect(renamedFiles[fileName]?.contains("\(condition) { \(construction) }") == true)
@@ -4700,7 +4700,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.replacingOccurrences(of: "init(\n            _ safeDIBuilder", with: "init(\n            t7Builder: \(t7Configuration) = .init(),\n            _ safeDIBuilder")
 				.replacingOccurrences(of: "            self.safeDIBuilder = safeDIBuilder\n", with: "            self.t7Builder = t7Builder\n            self.safeDIBuilder = safeDIBuilder\n")
 				.replacingOccurrences(of: "        /// Overrides how this type", with: "        let t7Builder: \(t7Configuration)\n        /// Overrides how this type")
-		}.replacingOccurrences(of: "safeDIOverrides.t7Builder.t8Builder.", with: "safeDIOverrides.t7Builder.renamedLabel.")
+		}.replacingOccurrences(of: "__safeDI_\(Self.mockDifferencePrefix)T7_configuration.t8Builder,", with: "__safeDI_\(Self.mockDifferencePrefix)T7_configuration.renamedLabel,")
 
 		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions, renaming: Self.reversalOfEveryOrder)
 
@@ -4757,8 +4757,8 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 
 		// Beneath the dropped field, an erased node with a configuration struct and an erased leaf.
-		#expect(generatedFiles[fileName]?.contains("safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { \(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(anyT7Builder, anyT4)) }") == true)
-		#expect(generatedFiles[fileName]?.contains("safeDIOverrides.anyT7Builder.anyT8Builder.anyT4 { safeDIBuilder() } else { \(Self.mockDifferencePrefix)AnyT4(\(Self.mockDifferencePrefix)T4()) }") == true)
+		#expect(generatedFiles[fileName]?.contains("__safeDI_\(Self.mockDifferencePrefix)T8_configuration.safeDIBuilder { \(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(anyT7Builder, anyT4)) }") == true)
+		#expect(generatedFiles[fileName]?.contains("__safeDI_\(Self.mockDifferencePrefix)T8_configuration.anyT4 { safeDIBuilder() } else { \(Self.mockDifferencePrefix)AnyT4(\(Self.mockDifferencePrefix)T4()) }") == true)
 		#expect(Set(GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: reversalOfTypeNames.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming).map(\.aspect)) == [.mockConfigurationFieldPresence])
 	}
 
@@ -4772,7 +4772,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		let fileName = "\(Self.mockDifferencePrefix)T8+SafeDIMock.swift"
-		let condition = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { "
+		let condition = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T8_configuration.safeDIBuilder { "
 		var editedFiles = generatedFiles
 		#expect(generatedFiles[fileName]?.contains("\(condition)\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(") == true)
 		editedFiles[fileName] = generatedFiles[fileName]?.replacingOccurrences(of: "\(condition)\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(", with: "\(condition)Other\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(")
@@ -5262,7 +5262,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADiscardedOverrideReadsAnotherFieldPastADroppedField() async throws {
 		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads {
-			Self.replacing("let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t4 {", with: "let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t5 {", in: $0)
+			Self.replacing("let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.t4 {", with: "let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.t5 {", in: $0)
 		}
 
 		#expect(aspects == [.mockCode])
@@ -5272,7 +5272,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADiscardedOverrideReadsAFieldNoStructHolds() async throws {
 		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads {
-			Self.replacing("let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t4 {", with: "let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.noSuchField {", in: $0)
+			Self.replacing("let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.t4 {", with: "let t4 = if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T7_configuration.noSuchField {", in: $0)
 		}
 
 		#expect(aspects == [.mockCode])
@@ -5281,7 +5281,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenADiscardedConstructionPassesOneDefaultTheFieldOfAnother() async throws {
-		let path = "safeDIOverrides.t8Builder.t7Builder"
+		let path = "__safeDI_\(Self.mockDifferencePrefix)T7_configuration"
 		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads { code in
 			Self.replacing("theme: \(path).theme, size: \(path).size", with: "theme: \(path).size, size: \(path).theme", in: Self.replacing("t5, \(path).theme, \(path).size)", with: "t5, \(path).size, \(path).theme)", in: code))
 		}
@@ -5299,9 +5299,9 @@ struct SafeDIToolGraphFuzzerTests {
 		}).filter { $0.fileName == mockFileName(of: "T8") }.map(\.aspect)
 	}
 
-	private static let erasedNodeOverride = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { "
+	private static let erasedNodeOverride = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T8_configuration.safeDIBuilder { "
 
-	private static let erasedLeafOverride = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.anyT4 { "
+	private static let erasedLeafOverride = "if let safeDIBuilder = __safeDI_\(Self.mockDifferencePrefix)T8_configuration.anyT4 { "
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -5352,7 +5352,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenAnExtractedLocalReadsTheFieldOfAnotherDefault() async throws {
 		let differences = try await Self.differences(of: Self.lazyCycleOfSendableBuildersWithDefaultsFixture, under: Self.reversalOfTypeNames, editingOutcome: { files in
 			let fileName = Self.mockFileName(of: "T8")
-			files[fileName] = Self.replacing("count: __safeDI_t7Builder__overrides.t8Builder.count()", with: "count: __safeDI_t7Builder__overrides.t8Builder.size()", in: files[fileName])
+			files[fileName] = Self.replacing("count: __safeDI_\(Self.mockDifferencePrefix)T8_configuration.count()", with: "count: __safeDI_\(Self.mockDifferencePrefix)T8_configuration.size()", in: files[fileName])
 		})
 
 		#expect(differences.filter { $0.fileName == Self.mockFileName(of: "T8") }.map(\.aspect) == [.mockCode])
