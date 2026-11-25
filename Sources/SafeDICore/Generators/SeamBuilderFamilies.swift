@@ -768,20 +768,27 @@ extension DependencyTreeGenerator {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
+		// A builder of a place instantiated only if available returns an optional: its stem is its type's followed by
+		// `Optional` in every seam, so a required builder of the same type added later renames neither.
 		var stems = holeTypes.map { holeType in
-			holeType.instantiatedType == holeType.builtType
+			let stemOfType = holeType.instantiatedType == holeType.builtType.unwrapped
 				? stem(of: holeType.instantiatedType)
-				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
+				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType.unwrapped))"
+			return holeType.builtType.isOptional ? stemOfType + "Optional" : stemOfType
 		}
 		// A stem collides where another stem equals it, or gives its plain label as its own plain or `@Sendable` label: a
 		// stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
 		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems give
 		// equal plain labels, so counting the stems that give each label in each family finds every collision with one pass
 		// over the stems: comparing every pair of stems, and lowering both stems' capitals for each pair, grew with the
-		// square of the hole types.
+		// square of the hole types. An optional builder's stem that collides is named apart first, so a required builder
+		// keeps its name beside it.
 		var labelCounts = BuilderLabelCounts(stems: stems)
-		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
-		if !colliding.isEmpty {
+		for namesApartOptionalStems in [true, false] {
+			let colliding = holeTypes.indices.filter {
+				(!namesApartOptionalStems || holeTypes[$0].builtType.isOptional) && labelCounts.collides(stems[$0])
+			}
+			guard !colliding.isEmpty else { continue }
 			let collidingIndices = Set(colliding)
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
@@ -793,7 +800,7 @@ extension DependencyTreeGenerator {
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
-			for index in stems.indices {
+			for index in namesApartOptionalStems ? colliding : Array(stems.indices) {
 				while labelCounts.collides(stems[index]) {
 					labelCounts.replace(stems[index], with: stems[index] + "_")
 					stems[index] += "_"

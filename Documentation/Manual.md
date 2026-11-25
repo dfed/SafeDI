@@ -341,7 +341,7 @@ Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
-An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
+An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it. A dependency that a parent may not have created is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies), and one whose type only some of your applications declare is instantiated with [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies).
 
 In a SwiftUI `View`, `@Instantiated` objects are re-initialized each time SwiftUI recreates the view; see this [deep dive on SwiftUI view lifecycles](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
@@ -658,6 +658,39 @@ public struct Parent: Instantiable {
 An instantiator received only if available is `nil` only where no instantiator of that name is declared above the receiver, or where a property that is not an instantiator is waiting in the same circle. A type the instantiator builds, and an instantiator beside it that it receives and that receives it back, get the instantiator, as [Dependency cycles](#dependency-cycles) describes.
 
 A renamed dependency follows the same rules; see [Renaming and retyping dependencies](#renaming-and-retyping-dependencies).
+
+## Conditionally instantiating dependencies
+
+Use `@Instantiated(onlyIfAvailable: true)` to instantiate an optional dependency only when the code you build declares a type that fulfills it. This is useful for code shared between applications where only some of them implement a protocol — for example, a `CheckoutView` in a module that two applications use, only one of which detects fraud:
+
+```swift
+public protocol FraudDetector {}
+
+@Instantiable
+public struct CheckoutView: Instantiable {
+    public init(fraudDetector: (any FraudDetector)?) {
+        self.fraudDetector = fraudDetector
+    }
+
+    // Instantiated in an application that declares a type fulfilling `FraudDetector`; `nil` in one that declares none.
+    @Instantiated(onlyIfAvailable: true) private let fraudDetector: (any FraudDetector)?
+}
+```
+
+The first application declares the type, and the second declares nothing:
+
+```swift
+@Instantiable(fulfillingAdditionalTypes: [FraudDetector.self])
+public struct DefaultFraudDetector: FraudDetector, Instantiable {
+    public init() {}
+}
+```
+
+SafeDI instantiates the property wherever an `@Instantiable` declaration it reads fulfills the property’s type, or the type its `fulfilledByType:` names. Where none does, the property is `nil`, with no warning: the second application needs no do-nothing implementation. A declaration that is [`mockOnly`](#the-mockonly-parameter) fulfills the type only for mocks, so it does not make the property available.
+
+The property’s type must be optional, spelled with one `?`, and the macro checks it, with a fix-it. Whether or not SafeDI instantiates the property, it is the [nearest declaration](#received) of its label for the types beneath it, which receive it as the optional it is declared as: with `@Received`, or with `@Received(onlyIfAvailable: true)`. A type beneath it never receives the dependency as a non-optional type, since the same code must build in an application that does not declare the type.
+
+The module of a [seam](#generating-a-dependency-tree-per-module) cannot see what the applications that call it declare. When no declaration the seam’s module reads fulfills such a property in the seam’s tree, the seam’s generated initializer takes a builder that returns the optional type, as it does for [a protocol only the application implements](#generating-a-dependency-tree-per-module): an application that declares a fulfilling type builds it there, and one that declares none passes `nil`, with no error.
 
 ## Renaming and retyping dependencies
 

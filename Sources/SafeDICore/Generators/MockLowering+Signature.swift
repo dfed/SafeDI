@@ -501,7 +501,7 @@ extension ScopeGenerator {
 		/// The generators of the children that build a type, each at its position among them.
 		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], under parentIndex: Int?, insideSendableFunction: Bool) -> [Visit] {
 			generator.orderedChildGenerators.enumerated().compactMap { generationIndex, child in
-				guard case let .property(_, property, _, _, _, _) = child.scopeData else { return nil }
+				guard case let .property(_, property, _, _, _, _) = child.scopeData, !child.isUnavailableDependency else { return nil }
 				let position = Position(declarationIndex: dependencies.firstIndex(where: { $0.property.label == property.label }) ?? Int.max, generationIndex: generationIndex)
 				nodes.append(Node(parentIndex: parentIndex, position: position, namesDeclared: []))
 				return Visit(
@@ -540,12 +540,19 @@ extension ScopeGenerator {
 			}
 		}
 
-		/// The properties the sites of holes among a generator's children bind, which no parameter covers
+		/// The properties the sites of holes among a generator's children bind, and those it binds to `nil` because they are
+		/// instantiated only if available and nothing fulfills their type, neither of which a parameter covers
 		/// (`ScopeGenerator.uncoveredInstantiatedDependencies(ofMockedType:treePropertyNodes:holeSiteProperties:)`).
 		func holeSiteProperties(of generator: ScopeGenerator) -> [Property] {
 			generator.orderedChildGenerators.compactMap { child in
-				guard case let .hole(property, _, .some) = child.scopeData else { return nil }
-				return property
+				switch child.scopeData {
+				case let .hole(property, _, .some):
+					property
+				case let .property(_, property, _, _, _, _):
+					child.isUnavailableDependency ? property : nil
+				case .hole, .alias, .fill, .root:
+					nil
+				}
 			}
 		}
 		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, under: nil, insideSendableFunction: false)

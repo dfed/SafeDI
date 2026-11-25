@@ -236,6 +236,16 @@ extension Dependency.Source {
 }
 
 extension Dependency {
+	/// Whether the dependency is `@Instantiated(onlyIfAvailable: true)`: instantiated where a production declaration the
+	/// module reads fulfills its type (`DependencyTreeGenerator.instantiates(_:)`), and `nil` where none does. Read from
+	/// the property's type, since the macro accepts an optional `@Instantiated` property only with that argument: the
+	/// argument is stored nowhere, so no `.safedi` file or cache carries it.
+	public var isInstantiatedOnlyIfAvailable: Bool {
+		source.isInstantiated && property.typeDescription.isOptional
+	}
+}
+
+extension Dependency {
 	/// Whether the dependency receives an instantiator of any kind, received or through an alias, which a loop of builders
 	/// can rebind (`ReceivedBuilderLoops`).
 	var receivesInstantiator: Bool {

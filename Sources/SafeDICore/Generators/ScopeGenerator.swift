@@ -59,6 +59,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		closedOnDeclaration: BuiltDeclaration? = nil,
 		closedOnFillPathDeclarationsBeneath: Int? = nil,
 		builtInlineSeamComment: String?,
+		isUnavailableDependency: Bool = false,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
 		seamRoot: SeamRoot? = nil,
@@ -93,6 +94,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seamAndFillFields = SeamAndFillFields()
 		self.placeHoldingProperties = placeHoldingProperties
 		seamAndFillFields.builtInlineSeamComment = builtInlineSeamComment
+		seamAndFillFields.isUnavailableDependency = isUnavailableDependency
 		seamAndFillFields.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
@@ -1324,6 +1326,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeProperty: Property,
 		erasedToConcreteExistential: Bool,
 		site: SeamSignature.Hole?,
+		holdsPlace: Bool = true,
 		ownerPropertyStack: [Property],
 		ownerConcreteTypeStack: [TypeDescription],
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
@@ -1385,7 +1388,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
-		containsBuildSite = true
+		containsBuildSite = holdsPlace
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
@@ -1634,6 +1637,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"boxedLoops": .recomputed,
 			"loopLevelsTypesInTree": .recomputed,
 			"builtInlineSeamComment": .copied,
+			"isUnavailableDependency": .copied,
 			"publicMockOverrideBuilders": .copied,
 			"fillFieldSelection": .copied,
 			"siteCarrierUse": .recomputed,
@@ -4764,6 +4768,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var boxedLoops: [Int: String] = [:]
 		var loopLevelsTypesInTree: [String: String] = [:]
 		var builtInlineSeamComment: String?
+		var isUnavailableDependency = false
 		var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
 		var fillFieldSelection: FillFieldSelection?
 		var siteCarrierUse: SeamCarrierValues.Use?
@@ -4803,6 +4808,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				|| !boxedLoops.isEmpty
 				|| !loopLevelsTypesInTree.isEmpty
 				|| builtInlineSeamComment != nil
+				|| isUnavailableDependency
 				|| publicMockOverrideBuilders != nil
 				|| fillFieldSelection != nil
 				|| siteCarrierUse != nil
@@ -5495,6 +5501,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The comment that ends each line that constructs this scope's type (`Scope.builtInlineSeamComment`).
 	nonisolated private var builtInlineSeamComment: String? {
 		seamAndFillFieldsStorage?.fields.builtInlineSeamComment
+	}
+
+	/// Whether this scope stands for an `@Instantiated(onlyIfAvailable: true)` property no production declaration fulfills,
+	/// which it binds to `nil` (`Scope.isUnavailableDependency`).
+	nonisolated var isUnavailableDependency: Bool {
+		seamAndFillFieldsStorage?.fields.isUnavailableDependency ?? false
 	}
 
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
@@ -8013,8 +8025,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 		case let .hole(property, _, site):
-			// A tree built only to compute the seam's signature has no site, and generates nothing.
-			guard let site else { return .empty }
+			// A tree built only to compute the seam's signature has no site, and generates nothing. Nor has a root's tree,
+			// where only a property instantiated only if available is a hole, since validation reports any other: no builder
+			// reaches a root, so the property is `nil` there, as in a module that generates no seam.
+			guard let site else {
+				return property.typeDescription.isOptional ? Self.textPlace("let \(property.asSource) = nil") : .empty
+			}
 			// The seam side of hosting seam code as text, a hole's site here and a seam's root in
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
@@ -8403,7 +8419,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		separatesValuesBindings: Bool,
 	) throws(Initializer.GenerationError) -> PlacePlan {
 		let concreteTypeName = instantiable.concreteInstantiable.asSource
-		let constructionTarget: ConstructionTarget = if let publicMockCall {
+		let constructionTarget: ConstructionTarget = if isUnavailableDependency {
+			.unavailable
+		} else if let publicMockCall {
 			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
 		} else if constructsWithHandWrittenMock {
 			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
@@ -8691,9 +8709,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)).spelled
 			}
 			let value = if !hasGeneratedContent {
-				construction.erased(to: property.typeDescription, where: erasedToConcreteExistential)
+				construction.erased(to: property.typeDescription.unwrapped, where: erasedToConcreteExistential)
 			} else {
-				Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential)
+				Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription.unwrapped, where: erasedToConcreteExistential)
 			}
 			let binding = Statement.binding(
 				propertyDeclaration,
