@@ -57,8 +57,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// then discards, which records or not as tasks are scheduled; `SafeDIToolTypeKeyViewTests` counts it on production
 		// roots, which take one pass, as it does the type key's checks of reads at every member.
 		// A lookup in the construction memo asks the candidates its context answers alike, whatever the shape:
-		// `SafeDIToolConstructionMemoTests` counts them on a tree with cycles.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates])
+		// `SafeDIToolConstructionMemoTests` counts them on a tree with cycles, and the reads it files entries under on a chain.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()

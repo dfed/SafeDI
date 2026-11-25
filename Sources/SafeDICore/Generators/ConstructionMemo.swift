@@ -306,7 +306,9 @@ struct ConstructionMemo {
 		private mutating func file(_ entry: Entry, at index: Int) {
 			var cycleParameterReads = CycleParameterReads()
 			var node = 0
-			for (read, answer) in entry.reads.cycleReads {
+			let cycleReads = entry.reads.cycleReads
+			GenerationWork.record(cycleReads.count, by: .filingMemoEntryReads)
+			for (read, answer) in cycleReads {
 				switch answer {
 				case let .declarationClosedOn(closedOn):
 					if let next = nodes[node].nodeByAnswerByRead[read]?[closedOn] {
