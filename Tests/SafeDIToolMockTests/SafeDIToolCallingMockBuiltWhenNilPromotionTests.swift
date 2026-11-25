@@ -204,6 +204,80 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		""")
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsBothCalledMocksCallingModulesOneFake_whenModuleBetweenCannotConstructWhatTheyBuildWhenNil(integration: MultiModuleIntegration) async throws {
+		let modules = Self.clockChainModules.map { module in
+			guard module.name == "App" else { return module }
+			var files = module.swiftFileContentByFilePath
+			files["FakeClock.swift"] = """
+			import Core
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [Clock.self], mockOnly: true)
+			public final class FakeClock: Clock, Instantiable {
+			    public init() {}
+
+			    public static func mock() -> FakeClock {
+			        FakeClock()
+			    }
+			}
+			"""
+			return ModuleFixture(name: module.name, packageName: module.packageName, swiftFileContentByFilePath: files, dependencies: module.dependencies, activeCompilationConditions: module.activeCompilationConditions)
+		}
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
+
+		let generatedCode = try #require(output.modules["App"]?.generatedFiles.values.sorted().joined(separator: "\n"))
+		let guardComment = switch integration {
+		case .moduleInfo:
+			"compile the code SafeDI generates for module Flow into Flow: under Bazel, add Flow’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+		case .swiftPackagePlugin:
+			"add the SafeDI plugin to the target that declares Step."
+		}
+		#expect(Self.mockFunction(in: generatedCode) == """
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let clock: any Clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { FakeClock.mock() }
+		        _ = Step.__safeDI_Step_mock_8588565361AFA7ED.self // If this line does not compile, \(guardComment)
+		        let step = Step.__safeDI_mock(clock: clock, safeDIOverrides: safeDIOverrides.step)
+		        return Screen(step: step)
+		    }
+		""")
+
+		// The values: one module that declares every type and mocks each internally builds one `FakeClock` for both.
+		let moduleNames = modules.map(\.name)
+		var inlineFiles = [String: String]()
+		for module in modules {
+			for (fileName, content) in module.swiftFileContentByFilePath {
+				inlineFiles["\(module.name)_\(fileName)"] = content
+					.split(separator: "\n", omittingEmptySubsequences: false)
+					.filter { line in !moduleNames.contains { line == "import \($0)" } }
+					.joined(separator: "\n")
+					.replacingOccurrences(of: "generateMock: .public", with: "generateMock: true")
+			}
+		}
+		let inlineModules = [ModuleFixture(name: "App", packageName: "shop", swiftFileContentByFilePath: inlineFiles, activeCompilationConditions: ["DEBUG"])]
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		func path(of modules: [ModuleFixture], output: MultiModuleTestOutput) throws -> DifferentialValuePath {
+			try DifferentialValuePath(modules: modules.map { module in
+				try DifferentialValueModule(
+					name: module.name,
+					packageName: module.packageName,
+					dependencyModuleNames: module.dependencies,
+					fixtureFiles: module.swiftFileContentByFilePath,
+					generatedFiles: #require(output.modules[module.name]).generatedFiles,
+				)
+			})
+		}
+		try await expectDifferentialValuesAgree(
+			feature: path(of: modules, output: output),
+			knownRight: path(of: inlineModules, output: inlineOutput),
+			probes: [DifferentialValueProbe("Screen.mock()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

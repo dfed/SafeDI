@@ -648,9 +648,10 @@ extension ScopeGenerator {
 		// A dependency the mock passes on to a call of another module's public mock that builds it when passed `nil`, which
 		// this module cannot construct and so does not promote, is built when this mock is passed `nil` too: by each such
 		// call. A module that calls this mock and can construct the dependency then builds it once, as it does for a
-		// dependency this mock builds itself (M8.8b).
+		// dependency this mock builds itself (M8.8b). Only an only-if-available override reads it, so a mock without one,
+		// as most are, walks no fill here.
 		var wrapperBuiltByCallsWhenNil = [Property: Property?]()
-		for node in treePropertyNodes {
+		for node in treePropertyNodes where !onlyIfAvailableOverrides.isEmpty {
 			var publicMockCalls = [PublicMockCall]()
 			if let publicMockCall = node.generator.publicMockCall {
 				publicMockCalls.append(publicMockCall)
