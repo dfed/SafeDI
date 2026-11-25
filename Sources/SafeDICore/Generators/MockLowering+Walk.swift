@@ -344,6 +344,7 @@ extension MockLowering {
 		var entersCycleWithEdge: Bool {
 			cycleEdges.contains { builtConcreteTypesBesideCycleEdges.contains($0.parent) && builtConcreteTypesBesideCycleEdges.contains($0.child) }
 		}
+
 		/// The override path each configured type around the node the walk is at read, nearest last, with whether its
 		/// node read its configuration rather than a closure: a node a cycle builds again, which its parent's configuration
 		/// has no field for, reads the nearest one of its type (`MockLowering+CycleOverrides.swift`).
