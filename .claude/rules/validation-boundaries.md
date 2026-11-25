@@ -5,10 +5,7 @@ paths:
   - "Sources/SafeDICore/Visitors/InstantiableVisitor.swift"
   - "Sources/SafeDICore/Generators/**/*"
   - "Tests/SafeDIMacrosTests/**/*"
-  - "Tests/**/*Error*.swift"
-  - "Tests/**/*Diagnostic*.swift"
-  - "Tests/**/*Deprecation*.swift"
-  - "Tests/**/*SourceRule*.swift"
+  - "Tests/**/*{Error,Diagnostic,Deprecation,SourceRule}*.swift"
 ---
 
 # Validation boundaries

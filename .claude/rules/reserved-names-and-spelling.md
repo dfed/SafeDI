@@ -4,11 +4,7 @@ paths:
   - "Sources/SafeDICore/Extensions/IdentifierSpellingExtensions.swift"
   - "Sources/SafeDICore/Generators/**/*"
   - "Sources/SafeDIMacros/**/*"
-  - "Tests/**/*ReservedName*.swift"
-  - "Tests/**/*KeywordLabel*.swift"
-  - "Tests/**/*NestedType*.swift"
-  - "Tests/**/*RenameSpelling*.swift"
-  - "Tests/**/*TypeDescription*.swift"
+  - "Tests/**/*{ReservedName,KeywordLabel,NestedType,RenameSpelling,TypeDescription}*.swift"
 ---
 
 # Reserved names, nested types, and spelling
