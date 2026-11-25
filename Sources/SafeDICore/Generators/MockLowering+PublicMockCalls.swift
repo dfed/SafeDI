@@ -271,7 +271,7 @@ extension MockLowering.Walk {
 		}
 		let innerIndent = filledCall == nil ? indent : "\(indent)\(ScopeGenerator.standardIndent)"
 		let holeBuilders = filledCallBuilders.fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(generator)] ?? [:]
-		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel
+		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel(propertiesGeneratedLater: filledCall?.propertiesGeneratedLater ?? [])
 		let holeArgumentValuesByLabel = generator.holeArgumentValuesByLabel
 		let lazilyInstantiatedInstances = generator.mockLoweringLazilyInstantiatedInstanceProperties
 		let lazilyInstantiatedNamesOfLabels = lazilyInstantiatedNames
