@@ -1284,9 +1284,17 @@ struct TypeDeclarationWords {
 	/// Whether the text holds the word `package`, which every declaration only another module of the package can name
 	/// holds – on itself, on a type enclosing it, or on the extension it is directly inside – wherever comments put it.
 	var holdsPackageWord = false
-	/// Whether the text holds the word `public` or `open`, which every `public` or `open` declaration holds, on itself or
-	/// on the extension it is directly inside.
-	var holdsPublicOrOpenWord = false
+	/// Whether a type keyword inside braces (`holdsTypeKeywordInsideBraces`) may be one a `public` or `open` modifier
+	/// applies to: the word `public` or `open` came before it, and no word that introduces another declaration – `func`,
+	/// `var`, `let`, `init`, `subscript`, `case`, `deinit`, `import`, `extension`, or a type keyword – came between them,
+	/// unless a `"` or `/` did too, since a comment or a literal between a modifier and its keyword can hold such a word.
+	/// Every `public` or `open` type nested in a type declaration holds the modifier on itself, so a file whose only nested
+	/// types are narrower, such as a `private` `CodingKeys`, is not parsed for them.
+	var holdsPublicOrOpenTypeKeywordInsideBraces = false
+	/// Whether the word `public` or `open` came before the word `extension` with no word that introduces another
+	/// declaration between them (`holdsPublicOrOpenTypeKeywordInsideBraces`): a type nested in such an extension is
+	/// `public` without a modifier of its own.
+	var holdsPublicOrOpenExtension = false
 	/// Whether a type keyword may be inside braces, as a nested type's is: a keyword after an opening brace that no
 	/// closing brace has matched. Braces are counted wherever they are, so one in a comment, a string literal or a regular
 	/// expression literal miscounts them. An opening one there only adds depth. A closing one there could hide a nested
@@ -1298,12 +1306,12 @@ struct TypeDeclarationWords {
 	var holdsTypeKeywordInsideBraces = false
 	/// Whether the text may declare a type another module names only through its record
 	/// (`PlainTypeDeclaration.isNamedByOtherModulesThroughItsRecord`): a `package` one, when it holds the word `package`,
-	/// or a `public` or `open` one nested in another type, when it holds the word `public` or `open` and a type keyword
-	/// inside braces. A comment or a string literal can hold the words too, so this is `true` whenever the text declares
+	/// or a `public` or `open` one nested in another type, when a `public` or `open` modifier may apply to a type keyword
+	/// inside braces, or the text holds a `public` or `open` extension and a type keyword inside braces. A comment or a string literal can hold the words too, so this is `true` whenever the text declares
 	/// such a type, a superset that a parse decides. A top-level `public` or `open` declaration needs no record
 	/// (`keepingPlainTypeDeclarations`).
 	var mayDeclareTypeOtherModulesCanName: Bool {
-		holdsPackageWord || (holdsPublicOrOpenWord && holdsTypeKeywordInsideBraces)
+		holdsPackageWord || holdsPublicOrOpenTypeKeywordInsideBraces || (holdsPublicOrOpenExtension && holdsTypeKeywordInsideBraces)
 	}
 }
 
@@ -1367,6 +1375,10 @@ extension UnsafeBufferPointer<UInt8> {
 		var holdsMultilineLiteralOrComment = false
 		var previousByte: UInt8 = 0
 		var quotationMarkRun = 0
+		// Whether a `public` or `open` word may apply to the next type keyword or extension
+		// (`TypeDeclarationWords.holdsPublicOrOpenTypeKeywordInsideBraces`), and whether a `"` or `/` came since it.
+		var followsPublicOrOpenWord = false
+		var followsPublicOrOpenWordAcrossCommentOrLiteral = false
 		while index < endIndex {
 			if self[index].isIdentifierByte {
 				let wordStart = index
@@ -1378,13 +1390,24 @@ extension UnsafeBufferPointer<UInt8> {
 					found.namesFollowingKeywords.insert(String(decoding: word, as: UTF8.self))
 				}
 				followsTypeKeyword = word.isTypeDeclarationKeyword
-				if followsTypeKeyword, braceDepthMayBeLow ? holdsOpeningBrace : braceDepth > 0 {
-					found.holdsTypeKeywordInsideBraces = true
-				}
-				if word.spells("package") {
+				if followsTypeKeyword {
+					if braceDepthMayBeLow ? holdsOpeningBrace : braceDepth > 0 {
+						found.holdsTypeKeywordInsideBraces = true
+						if followsPublicOrOpenWord {
+							found.holdsPublicOrOpenTypeKeywordInsideBraces = true
+						}
+					}
+					followsPublicOrOpenWord = false
+				} else if word.spells("package") {
 					found.holdsPackageWord = true
 				} else if word.spells("public") || word.spells("open") {
-					found.holdsPublicOrOpenWord = true
+					followsPublicOrOpenWord = true
+					followsPublicOrOpenWordAcrossCommentOrLiteral = false
+				} else if followsPublicOrOpenWord, word.spells("extension") {
+					found.holdsPublicOrOpenExtension = true
+					followsPublicOrOpenWord = followsPublicOrOpenWordAcrossCommentOrLiteral
+				} else if followsPublicOrOpenWord, !followsPublicOrOpenWordAcrossCommentOrLiteral, word.introducesDeclarationOtherThanTypeOrExtension {
+					followsPublicOrOpenWord = false
 				}
 				previousByte = 0
 				quotationMarkRun = 0
@@ -1406,6 +1429,9 @@ extension UnsafeBufferPointer<UInt8> {
 				let byte = self[index]
 				followsTypeKeyword = followsTypeKeyword && byte.isWhitespaceByte
 				quotationMarkRun = byte == UInt8(ascii: "\"") ? quotationMarkRun + 1 : 0
+				if byte == UInt8(ascii: "\"") || byte == UInt8(ascii: "/") {
+					followsPublicOrOpenWordAcrossCommentOrLiteral = true
+				}
 				switch byte {
 				case UInt8(ascii: "{"):
 					braceDepth += 1
@@ -1451,6 +1477,24 @@ extension UnsafeBufferPointer<UInt8> {
 			spells("typealias")
 		case 14:
 			spells("associatedtype")
+		default:
+			false
+		}
+	}
+
+	/// Whether these bytes, a word, are a keyword that introduces a declaration that is neither a type's nor an
+	/// extension's, which a `public` or `open` modifier before it applies to instead of to a later type keyword: `func`,
+	/// `var`, `let`, `init`, `subscript`, `case`, `deinit`, or `import`.
+	private var introducesDeclarationOtherThanTypeOrExtension: Bool {
+		switch count {
+		case 3:
+			spells("var") || spells("let")
+		case 4:
+			spells("func") || spells("init") || spells("case")
+		case 6:
+			spells("deinit") || spells("import")
+		case 9:
+			spells("subscript")
 		default:
 			false
 		}
