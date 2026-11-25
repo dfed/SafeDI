@@ -532,7 +532,9 @@ struct KnownRightProductionShape: Sendable, CustomTestStringConvertible {
 		// A20, swapped for its nearest valid neighbor: a received property that is not an instantiator cannot close a cycle,
 		// a `LazilyInstantiated` one included, so the cycle is closed by the type that holds the lazy wrapper:
 		// `A20A` builds `A20B` through an instantiator, and `A20B` instantiates `A20A` again lazily. Each `A20B`'s wrapper
-		// yields a new `A20A`, built when its instance is first read, and every lap shares the root's `shared`.
+		// yields a new `A20A`, built when its instance is first read, and every lap shares the root's `shared`. The second
+		// probe's value is an `A20B`, so a wrapper whose instance is read before that `A20B` is built is marked as built
+		// before the probe's value; under `A20Root()` alone, that read happens inside an instantiator and passes.
 		KnownRightProductionShape(
 			"A20",
 			fixture: [
@@ -553,6 +555,10 @@ struct KnownRightProductionShape: Sendable, CustomTestStringConvertible {
 			    return A20Root(shared: shared, entry: a())
 			}
 			""",
+			probePairs: [
+				("A20Root()", "expectedA20Root()"),
+				("A20Root().entry.bBuilder.instantiate()", "expectedA20Root().entry.bBuilder.instantiate()"),
+			],
 		),
 		// A21: two instantiators at the root receive each other: walking a, b, a alternates the types, and each step holds
 		// its own forwarded id.
