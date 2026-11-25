@@ -227,7 +227,9 @@ extension DependencyTreeGenerator {
 	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
 		var constructionMemo = ConstructionMemo()
 		var generators = [ScopeGenerator]()
-		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) {
+		// A tree no scope of which receives, in two forms, a label a scope of it declares holds no label to report, so its
+		// generators, one per path through a lazy cycle, are not built (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`).
+		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) where Self.canHoldUnpassableCycleLabel(inTreeRootedAt: scope) {
 			let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
 			try generators.append(record.createScopeGenerator(
 				in: table,
