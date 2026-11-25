@@ -161,15 +161,6 @@ extension MockLowering {
 		.rootDeclaration(ReservedName.mockOverridesParameterName)
 	}
 
-	/// The read, inside its own function, of the configuration parameter of a place that builds `node`'s type, which the
-	/// places beneath it read their fields of; `nil` where the place reads no configuration struct.
-	static func ownConfigurationRead(of node: ConstantNode) -> ValuePath? {
-		guard node.hasConfiguration,
-		      let parameter = configurationParameter(ofPlaceOf: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType(of: node))
-		else { return nil }
-		return parameter.read(isProvided: true)
-	}
-
 	/// The type key's form of a built place's configuration: what its call hands its function (`passedArguments(ofBuiltPlaceOf:…)`),
 	/// and the alternatives its construction tries, each override read at an absolute path (`overrideReadPath`) replaced by
 	/// a read of the place's own parameter (its `safeDIBuilder` member, or the parameter itself where it is the override
@@ -199,7 +190,7 @@ extension MockLowering {
 			nearestIsProvided: context.nearestIsProvided,
 			staysOutsideSendableFunctions: staysOutsideSendableFunctions,
 		)
-		let ownRead = parameter.read(isProvided: true)
+		let ownRead = ValuePath.passedArgument(parameter.name)
 		let overrideRead: ValuePath = node.hasConfiguration ? .member(ReservedName.configurationBuilderPropertyName, of: ownRead) : ownRead
 		let relativeAlternatives = alternatives.map { alternative in
 			ConstructionAlternative(
@@ -258,18 +249,25 @@ extension MockLowering.Walk {
 			return resolve(base, at: path).map { .member(member, of: $0) }
 		case let .read(read):
 			guard case .binding = read.source else { return nil }
-			var ancestor = path
-			while !ancestor.isEmpty {
-				ancestor.removeLast()
-				if let context = builtPlaceConfigurationContexts[ancestor], context.ownParameterName == read.label {
-					return context.pathKeyConfiguration
-				}
-			}
-			return nil
-		case .passedArgument, .optionalMember, .call, .emptyInitialization:
+			return nearestConfiguration(takingParameterNamed: read.label, around: path)
+		case let .passedArgument(name):
+			return nearestConfiguration(takingParameterNamed: name, around: path)
+		case .optionalMember, .call, .emptyInitialization:
 			// A fresh configuration, or anything but a configuration, reads no override.
 			return nil
 		}
+	}
+
+	/// The configuration the path key reads at the nearest place around `path` whose own parameter is named `name`.
+	private func nearestConfiguration(takingParameterNamed name: String, around path: [Int]) -> ValuePath? {
+		var ancestor = path
+		while !ancestor.isEmpty {
+			ancestor.removeLast()
+			if let context = builtPlaceConfigurationContexts[ancestor], context.ownParameterName == name {
+				return context.pathKeyConfiguration
+			}
+		}
+		return nil
 	}
 
 	/// The alternatives of the built place at `path`, with each read of the place's own configuration parameter replaced by
