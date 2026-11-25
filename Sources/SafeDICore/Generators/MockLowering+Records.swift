@@ -25,6 +25,18 @@ extension MockLowering {
 		let text: String
 		let path: ValuePath?
 	}
+
+	/// The value path of an override read spelled `safeDIOverrides.<member>.<member>…`, or `nil` for any other read, such
+	/// as a local a `@Sendable` function's extractor bound it to.
+	static func overrideReadPath(_ read: String) -> ValuePath? {
+		let parts = read.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+		guard parts.count > 1, parts[0] == ReservedName.mockOverridesParameterName, !parts.contains(where: \.isEmpty) else { return nil }
+		var path = ValuePath.rootDeclaration(parts[0])
+		for member in parts.dropFirst() {
+			path = .member(member, of: path)
+		}
+		return path
+	}
 }
 
 extension MockLowering {
@@ -167,6 +179,12 @@ extension MockLowering.Walk {
 		guard recordsPlaces else { return }
 		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
 		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
+		// A place of another module's public mock built inline reads the builder `mock()` takes for its hole first
+		// (`HoleBuilder.inlinePlaceValue`), which no alternative records.
+		guard node.inlinePlace == nil else {
+			unrecordedReasons[childIndexPath] = "inlinePlaceBuilder"
+			return
+		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		guard configuredConstruction != .unrecorded else {
 			unrecordedReasons[childIndexPath] = "configuredUnrecorded"

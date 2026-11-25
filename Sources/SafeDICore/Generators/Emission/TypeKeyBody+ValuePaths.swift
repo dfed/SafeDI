@@ -94,9 +94,9 @@ extension ValuePath {
 			[]
 		case let .read(read):
 			[read]
-		case let .member(_, value),
-		     let .optionalMember(_, value):
-			value.reads
+		case let .memberRead(_, base),
+		     let .optionalMemberRead(_, base):
+			base.value.reads
 		case let .call(_, value, arguments, _):
 			value.reads + arguments
 		case let .spliced(segments):
@@ -113,9 +113,10 @@ extension ValuePath {
 		     .passedArgument,
 		     .emptyInitialization:
 			[]
-		case let .member(_, value),
-		     let .optionalMember(_, value),
-		     let .call(_, value, _, _):
+		case let .memberRead(_, base),
+		     let .optionalMemberRead(_, base):
+			base.value.declaredFunctionNames
+		case let .call(_, value, _, _):
 			value.declaredFunctionNames
 		case let .spliced(segments):
 			segments.flatMap { segment -> [String] in
@@ -140,9 +141,9 @@ extension ValuePath {
 			[]
 		case let .passedArgument(name):
 			[name]
-		case let .member(_, value),
-		     let .optionalMember(_, value):
-			value.passedArgumentNames
+		case let .memberRead(_, base),
+		     let .optionalMemberRead(_, base):
+			base.value.passedArgumentNames
 		case let .call(_, value, _, _):
 			value.passedArgumentNames
 		case let .spliced(segments):
@@ -162,10 +163,10 @@ extension ValuePath {
 			"read:\(read.shape)"
 		case let .passedArgument(name):
 			"passed:\(name)"
-		case let .member(name, value):
-			"\(value.shape).\(name)"
-		case let .optionalMember(name, value):
-			"\(value.shape)?.\(name)"
+		case let .memberRead(name, base):
+			"\(base.value.shape).\(name)"
+		case let .optionalMemberRead(name, base):
+			"\(base.value.shape)?.\(name)"
 		case let .call(name, value, arguments, argumentsWrapper):
 			"\(value.shape).\(name)(\(argumentsWrapper?.asSource ?? "")|\(arguments.map(\.shape).joined(separator: ",")))"
 		case let .emptyInitialization(type):
@@ -227,8 +228,8 @@ extension PassedArgument {
 			"passed|\(parameterName)|\(type.asSource)|read:\(read.label)|\(bindsBeforeCall)"
 		case .rootDeclaration,
 		     .passedArgument,
-		     .member,
-		     .optionalMember,
+		     .memberRead,
+		     .optionalMemberRead,
 		     .call,
 		     .emptyInitialization,
 		     .spliced:
@@ -338,10 +339,10 @@ extension TypeKeyLayout {
 			return spelledValue(of: read, inClass: owner, before: index)
 		case let .emptyInitialization(type):
 			return "\(type.asSource)()"
-		case let .member(name, value):
-			return spelledValuePath(value, inClass: owner, before: index).map { "\($0).\(name)" }
-		case let .optionalMember(name, value):
-			return spelledValuePath(value, inClass: owner, before: index).map { "\($0)?.\(name)" }
+		case let .memberRead(name, base):
+			return spelledValuePath(base.value, inClass: owner, before: index).map { "\($0).\(name)" }
+		case let .optionalMemberRead(name, base):
+			return spelledValuePath(base.value, inClass: owner, before: index).map { "\($0)?.\(name)" }
 		case let .call(name, value, arguments, argumentsWrapper):
 			guard let receiver = spelledValuePath(value, inClass: owner, before: index) else { return nil }
 			var spelledArguments = [String]()
@@ -374,7 +375,7 @@ extension TypeKeyLayout {
 
 	/// The value `read` passes where a statement before `index` of `owner`'s body makes it.
 	func spelledValue(of read: PlaceRead, inClass owner: Int, before index: Int) -> String? {
-		guard read.source != .nil, let declaredType = type(of: typeLookUp(read.label, inClass: owner, before: index)) else { return "nil" }
+		guard read.source != .nil, let declaredType = type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label) else { return "nil" }
 		return Self.spelledRead(read, declaredAs: declaredType)
 	}
 

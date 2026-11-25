@@ -461,7 +461,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let seeds = GraphFuzzerCallingMockCell.all.compactMap { cell in
 			draws.first { $0.cell == cell && $0.valueProbes != nil }?.seed
 		}
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 737, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1_030, 1_031, 1_032, 1_033, 1_034, 1_035, 1_090, 1_091, 1_092, 1_120, 1_121, 1_122, 1_123, 1_124, 1_125, 1_180, 1_181, 1_182, 1_183, 1_184, 1_185])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 737, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1_030, 1_031, 1_032, 1_033, 1_034, 1_035, 1_090, 1_091, 1_092, 1_120, 1_121, 1_122, 1_123, 1_124, 1_125, 1_180, 1_181, 1_182, 1_183, 1_184, 1_185, 1_240, 1_241, 1_242])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1479,6 +1479,73 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).forwardedValue == nil)
 	}
 
+	/// Seed 1240 draws the first graph of `placeInstantiatedOnlyIfAvailable/internal/plain`, the first of its block: an
+	/// internal calling mock whose called type instantiates its place only if available, with a type of the caller's
+	/// module that fulfills it. Its twin fills the place, and so does the mock, which the probe compares with the twin's.
+	/// It fails with the called public mock binding the place `nil` rather than taking a builder for it
+	/// (`createMockTypeDescriptionToScopeMapping` lowering it as `unavailableDependency` where the map builds holes), when
+	/// the mock's place is `nil` where the twin's holds the fill.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsPlace_whenDrawnPlaceInstantiatedOnlyIfAvailableWithVisibleImplementation() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 1_240)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1_240)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .placeInstantiatedOnlyIfAvailable, caller: .internal, place: .plain))
+		#expect(draw.optionalPlace?.implementationIsVisible == true)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// Seed 1243 draws the second graph of the same cell, in which no type of the caller's module fulfills the place: the
+	/// twin takes the place's optional builder, and the mock passes up exactly that builder, which defaults to `{ nil }`,
+	/// so the mock called with no argument holds what the twin handed `{ nil }` holds. It fails with that same change, when
+	/// the mock passes nothing up.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_passesUpOptionalBuilder_whenDrawnPlaceInstantiatedOnlyIfAvailableWithoutVisibleImplementation() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 1_243)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1_243)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .placeInstantiatedOnlyIfAvailable, caller: .internal, place: .plain))
+		#expect(draw.optionalPlace?.implementationIsVisible == false)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == draw.graph.expectedPassUpLabels)
+		#expect(result.passUps.allSatisfy { $0.reason == .noVisibleImplementation })
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose called type instantiates its place only if available draw a caller's module with and
+	/// without a type that fulfills the place, and each caller kind, in the pinned number of graphs, each at least ten. The
+	/// block draws only a plain place.
+	@Test
+	func placeInstantiatedOnlyIfAvailableDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .placeInstantiatedOnlyIfAvailable }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts[draw.optionalPlace?.implementationIsVisible == true ? "visible" : "invisible", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock places instantiated only if available \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"visible": 15,
+			"invisible": 15,
+			"internal": 10,
+			"public": 10,
+			"listed": 10,
+			"plain": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).optionalPlace == nil)
+	}
+
 	/// Seed 970 draws the first graph of `fillConstructsTypeCallerModuleCannotReach/internal/plain`, the first of its block:
 	/// an internal calling mock whose fill instantiates a protocol only a type of the outer module fulfills, which the
 	/// caller's module cannot reach, in a build that compiles the generated mocks. Its twin reports the access error, and
@@ -2142,6 +2209,47 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(firstCalledSeed == 751)
 	}
 
+	/// The caller's own value's graphs whose probe hands `mock()` the filled hole type's builder also build `Dock` inline
+	/// (`buildsDockInlineBesideBuilder`) in the pinned number of graphs, so the probe judges the inline-built place of
+	/// another module's public mock whose hole type's builder is handed to `mock()`, by value or in an
+	/// `ErasedInstantiator`.
+	@Test
+	func callersOwnValueDraw_buildsDockInlineBesideBuilder_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .callersOwnValue }
+		let counts = [
+			"graphs": draws.count,
+			"eligible": draws.count { $0.filledHoleBuilderPass?.passesBuilder == true },
+			"plain": draws.count { $0.buildsDockInlineBesideBuilder && $0.cell.place == .plain },
+			"deferred": draws.count { $0.buildsDockInlineBesideBuilder && $0.cell.place == .deferred },
+		]
+		let firstSeed = draws.first(where: \.buildsDockInlineBesideBuilder)?.seed
+		print("calling-mock Dock built inline beside a builder counts=\(counts.sorted { $0.key < $1.key }) firstSeed=\(firstSeed.map(String.init) ?? "none")")
+
+		#expect(counts == ["graphs": 60, "eligible": 26, "plain": 5, "deferred": 7])
+		#expect(firstSeed == 44)
+	}
+
+	/// Seeds 44 and 45 draw the first graphs that build `Dock` inline beside the builder a probe hands `mock()`
+	/// (`buildsDockInlineBesideBuilder`), with a plain place and a deferred one, each the first of its cell, so compared:
+	/// the place of `Dock`, a hole of `Dock`'s module, holds what that builder builds, as the called type's place does.
+	/// With the type key's layout on (`MockLowering.laysOutWithTypeKey`), each fails with the type key laying the inline-built place out
+	/// from its fill, which the place reads only where `mock()` is handed no builder (`HoleBuilder.inlinePlaceValue`), in
+	/// place of the root falling back (`unrecordedReasons`' `inlinePlaceBuilder`).
+	@Test(arguments: [UInt64(44), 45])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_handsPassedBuilderToInlineBuiltPlace_whenDrawnGraphBuildsDockInlineBesideBuilder(seed: UInt64) async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: seed)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: seed)
+
+		#expect(draw.buildsDockInlineBesideBuilder)
+		#expect(Self.comparesValues(ofSeed: seed))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+		#expect(result.comparedValues == compileVerificationIsEnabled)
+	}
+
 	/// Seed 751 draws the first graph that joins a filled call (`joinsFilledCall`) and calls `Dock`'s mock: its mock passes
 	/// the hole type of the called type up whole, and its call of `Dock`, which fills a place of that hole type, reads the
 	/// required builder, so `Dock`'s place holds what that builder builds. It fails with the joined call reading the fill
@@ -2311,10 +2419,13 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		for cell in GraphFuzzerCallingMockCell.drawnCells {
 			// A graph of the shape that draws a call whose mock passes its place up whole states no probes.
 			let cellDraws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell == cell }
-			// A graph that joins a filled call is compared on its own: the first of its cell.
+			// A graph that joins a filled call, or builds `Dock` inline beside a passed builder, is compared on its own: the first of its
+			// cell.
 			let joinedDraws = cellDraws.filter(\.joinsFilledCall)
 			#expect(joinedDraws.filter { Self.comparesValues(ofSeed: $0.seed) }.map(\.seed) == joinedDraws.prefix(1).map(\.seed), "\(cell)")
-			let draws = cellDraws.filter { !$0.joinsFilledCall && ($0.valueProbes != nil || $0.callerLazyValue == nil) }
+			let inlineDockDraws = cellDraws.filter(\.buildsDockInlineBesideBuilder)
+			#expect(inlineDockDraws.filter { Self.comparesValues(ofSeed: $0.seed) }.map(\.seed) == inlineDockDraws.prefix(1).map(\.seed), "\(cell)")
+			let draws = cellDraws.filter { !$0.joinsFilledCall && !$0.buildsDockInlineBesideBuilder && ($0.valueProbes != nil || $0.callerLazyValue == nil) }
 			guard draws.first?.valueProbes != nil else { continue }
 			let compared = draws.filter { Self.comparesValues(ofSeed: $0.seed) }
 			let calls = draws.compactMap { $0.callerLazyValue?.call.rawValue }
@@ -2407,7 +2518,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 124)
+		#expect(GraphFuzzerCallingMockCell.all.count == 127)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
@@ -2755,8 +2866,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// of that shape whose enclosing called type receives the caller's value in each wrapper; and, keyed by shape rather
 	/// than by cell, since the cell's leaf position already varies the caller, the first that draws each wrapper with and
 	/// without a place by value beside it, of the shape whose called type holds its place lazily; each place, fill and
-	/// position of the second hole type, of the shape whose called type holds one; and each place and read, of the shape
-	/// whose caller forwards the value its fill reads; and the first of each
+	/// position of the second hole type, of the shape whose called type holds one; each place and read, of the shape
+	/// whose caller forwards the value its fill reads; with and without a type that fulfills the place, of the shape whose
+	/// called type instantiates it only if available; and the first of each
 	/// cell of the caller's own value's shape and what a probe hands its mock (`filledHoleBuilderPass`).
 	static let comparedSeeds: Set<UInt64> = {
 		var seenCellsAndPositions = Set<String>()
@@ -2768,6 +2880,14 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			// the first of each cell, so the graphs compared before it was drawn stay compared.
 			if draw.joinsFilledCall {
 				if seenCellsAndCalls.insert("\(draw.cell) joinsFilledCall").inserted {
+					seeds.insert(seed)
+				}
+				continue
+			}
+			// A graph that builds `Dock` inline beside a passed builder is compared on its own, the first of each cell, so the graphs compared before
+			// it was drawn stay compared.
+			if draw.buildsDockInlineBesideBuilder {
+				if seenCellsAndCalls.insert("\(draw.cell) buildsDockInlineBesideBuilder").inserted {
 					seeds.insert(seed)
 				}
 				continue
@@ -2802,8 +2922,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		return seeds
 	}()
 
-	/// The variation `draw` draws of the shapes whose called type holds its place lazily or a place of a second hole type,
-	/// and whose caller forwards the value its fill reads, keyed by shape rather than by cell, since the cell's leaf
+	/// The variation `draw` draws of the shapes whose called type holds its place lazily, a place of a second hole type, or
+	/// a place instantiated only if available, and whose caller forwards the value its fill reads, keyed by shape rather than by cell, since the cell's leaf
 	/// position already varies the caller; `nil` for a draw of another shape.
 	static func shapeVariation(of draw: GraphFuzzerCallingMockDraw) -> String? {
 		if let lazyPlace = draw.lazyPlace {
@@ -2812,6 +2932,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"\(draw.cell.shape) \(draw.cell.place) \(secondHole.fill) \(secondHole.isBeforeFirstPlace)"
 		} else if let forwardedValue = draw.forwardedValue {
 			"\(draw.cell.shape) \(draw.cell.place) \(forwardedValue.fillReceivesOnlyIfAvailable)"
+		} else if let optionalPlace = draw.optionalPlace {
+			"\(draw.cell.shape) \(optionalPlace.implementationIsVisible)"
 		} else {
 			nil
 		}

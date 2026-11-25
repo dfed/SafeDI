@@ -597,6 +597,80 @@ struct TypeKeyBodyValuePathTests {
 		""")
 	}
 
+	@Test
+	func statements_readsAnotherBindingOfATextPlaceAtItsOwnType_whenAPlaceInsideAFunctionCapturesIt() throws {
+		let d = Self.builtRecord(label: "d", typeName: "D", hasFunction: false) { d in
+			d.argumentValues = [0: .read(Self.idRead)]
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.textPlaceBindingIDBesidePair + [
+			.place(PlacePlan(code: .text("let b = B()"), record: .built(Self.bRecord(children: [.place(PlacePlan(code: .text("let d = D(id: id)"), record: .built(d)))])))),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let pair = Pair()
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            let d = D(id: id)
+		            return B()
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_passesAnotherBindingOfATextPlaceAtItsOwnType_whenANestedCallsPassedArgumentReadsIt() throws {
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true) { c in
+			c.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false)]
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.textPlaceBindingIDBesidePair + [
+			.place(PlacePlan(code: .text("let b = B()"), record: .built(Self.bRecord(arguments: [Self.cRead], children: [.place(PlacePlan(code: .text("let c = C()"), record: .built(c)))])))),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let pair = Pair()
+		        let id = 1
+		        func __safeDI_c(cfg: Int) -> C {
+		            C()
+		        }
+		        func __safeDI_b() -> B {
+		            let c: C = __safeDI_c(cfg: id)
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	/// A place written as text that binds `pair: Pair` and, besides it, `id: Int`.
+	private static let textPlaceBindingIDBesidePair: [GeneratedCode] = [
+		.place(PlacePlan(code: .text("let pair = Pair()\nlet id = 1"), record: .alias(AliasPlaceRecord(
+			property: Property(label: "pair", typeDescription: .simple(name: "Pair")),
+			fulfillingProperty: nil,
+			text: "let pair = Pair()\nlet id = 1",
+			reads: [],
+			otherBindings: [Property(label: "id", typeDescription: .simple(name: "Int"))],
+		)))),
+	]
+
+	/// A place that builds `b: B` in a function of its own, taking `arguments`, whose body builds `children`.
+	private static func bRecord(arguments: [PlaceRead] = [], children: [GeneratedCode]) -> BuiltPlaceRecord {
+		BuiltPlaceRecord(
+			property: Property(label: "b", typeDescription: .simple(name: "B")),
+			isErased: false,
+			concreteType: .simple(name: "B"),
+			isExtension: false,
+			target: .initializer(.simple(name: "B")),
+			arguments: arguments,
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: "__safeDI_b",
+			isSendable: false,
+			typesDeclaredEscaping: [],
+			lineEnd: "",
+			hasFunction: true,
+			children: children,
+			node: PlanNode(),
+		)
+	}
+
 	private static let idRead = PlaceRead(
 		argumentLabel: "id",
 		label: "id",

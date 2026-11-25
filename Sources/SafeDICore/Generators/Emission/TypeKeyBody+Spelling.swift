@@ -155,7 +155,7 @@ extension TypeKeyLayout {
 					isExtension: record.isExtension,
 				),
 			)
-			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription, where: record.isErased).spelled
+			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription.unwrapped, where: record.isErased).spelled
 			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
 			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
@@ -227,7 +227,7 @@ extension TypeKeyLayout {
 					isExtension: isExtension,
 				),
 			)
-			return "\(declaration.spelled) = \(Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription, where: isErased).spelled)"
+			return "\(declaration.spelled) = \(Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription.unwrapped, where: isErased).spelled)"
 		}
 	}
 
@@ -235,7 +235,7 @@ extension TypeKeyLayout {
 	/// `parameterType`: its nearest declaration, `nil`, or a wrapper made of a value where the parameter takes a wrapper.
 	func spelledArgument(_ label: String, passedTo parameterType: TypeDescription, inClass owner: Int, before index: Int) -> String? {
 		let declaration = typeLookUp(label, inClass: owner, before: index)
-		guard let declaredType = type(of: declaration) else {
+		guard let declaredType = type(of: declaration, label: label) else {
 			return parameterType.isOptional ? "nil" : nil
 		}
 		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
@@ -263,7 +263,7 @@ extension TypeKeyLayout {
 				value = "nil"
 			} else {
 				let declaration = typeLookUp(read.label, inClass: owner, before: index)
-				if let declaredType = type(of: declaration) {
+				if let declaredType = type(of: declaration, label: read.label) {
 					guard let spelled = Self.spelledRead(read, declaredAs: declaredType) else { return nil }
 					value = spelled
 				} else {

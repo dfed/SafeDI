@@ -634,6 +634,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
@@ -694,6 +695,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.renderer = renderer
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(renderer: { _ in __safeDI_builder() })
 			        }
@@ -1643,12 +1645,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingEnclosingInstantiable_whenParameterNamesTypeNestedInItThatNoModuleInfoRecords() async {
-		// N4: `Base`'s `.safedi` records no declaration of `Shelf.Label`, whose file holds no SafeDI marker and no `package`:
-		// it counts as the `package` `@Instantiable` `Shelf` that encloses it does.
+	mutating func generate_throwsErrorNamingEnclosingInstantiable_whenParameterNamesPublicTypeNestedInItsExtensionInFileWithoutMarker() async {
+		// N4: `Base`'s `.safedi` records `Shelf.Label`, a `public` type nested in an extension of `Shelf` in a file that holds
+		// no SafeDI marker and no `package`, as it records every `public` nested type: it is as `package` as the
+		// `@Instantiable` `Shelf` its extension extends.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is nested in `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is `package`: it is declared inside an extension of `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `label: Shelf.Label` here.
 			"""
 		}) {
@@ -2736,7 +2739,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.brush = { _ in __safeDI_builder() }
+		                    self.init(brush: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -2750,7 +2753,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.badgeBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(badgeBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2945,10 +2948,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    // SafeDI counts `Palette` and `Window` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
+		    @usableFromInline static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
 
 		    public static func mock(
 		        tint: Palette? = Screen.__safeDI_publicMockDefault_tint(),
@@ -6004,6 +6004,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
+			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
@@ -6080,7 +6081,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesBuilderTypeQualifiedBySafeDIOnPublicTierWithoutComment_whenSeamReceivesIt() async throws {
-		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too.
+		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too, read as the bare `Instantiator<Badge>.Builder`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(
 				receives: ["@Received let badgeBuilder: SafeDI.Instantiator<Badge>.Builder"],
@@ -6103,14 +6104,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping SafeDI.Instantiator<Badge>.Builder) {
+			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder) {
 			        let cache = Cache()
 			        self.init(badgeBuilder: badgeBuilder, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C97EBD6D04347108 {}
+			    public enum __safeDI_Screen_879C7A483E974080 {}
 			}
 			""",
 		])

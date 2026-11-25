@@ -168,7 +168,7 @@ extension GraphFuzzerBuilderSurface {
 	/// Each builder parameter of a readable initializer or a `mock()` in `generatedFiles` whose label is not the one contract
 	/// rule 8 gives it, read from the surface alone: `<fillingType>Builder` when its filling type is its returned type, else
 	/// `<fillingType>_<ReturnedType>Builder`, the filling type's leading capitals lowered, with `Sendable` before `Builder`
-	/// for a builder of the `@Sendable` family. A builder handed a scope names its filling type in the scope's name; one that
+	/// for a builder of the `@Sendable` family, and `Optional` ending the stem of one that returns an optional. A builder handed a scope names its filling type in the scope's name; one that
 	/// takes no scope names only its returned type, so its label must name the returned type where the filling type is
 	/// expected to be it, or after `_` where the label names another filling type.
 	static func labelFindings(in generatedFiles: [String: String]) -> [Finding] {
@@ -188,10 +188,14 @@ extension GraphFuzzerBuilderSurface {
 	/// for some filling type the surface does not name.
 	static func expectedLabel(of label: String, facts: BuilderFacts) -> String? {
 		let suffix = facts.isSendable ? "SendableBuilder" : "Builder"
-		let returnedName = BuilderFacts.typeName(facts.returnedType)
-		let returnedStem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: returnedName).dropLast("Builder".count))
+		// A builder of a property instantiated only if available returns the optional, and its stem ends `Optional`
+		// (`DependencyTreeGenerator.stems(of:)`).
+		let optionalWrapped = facts.returnedType.hasSuffix("?") ? String(facts.returnedType.dropLast()) : nil
+		let optionalStemSuffix = optionalWrapped == nil ? "" : "Optional"
+		let returnedName = BuilderFacts.typeName(optionalWrapped.map(Self.droppingEnclosingParentheses) ?? facts.returnedType)
+		let returnedStem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: returnedName).dropLast("Builder".count)) + optionalStemSuffix
 		guard facts.surfaceLabel != nil else {
-			let fillingStem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: facts.fillingType).dropLast("Builder".count))
+			let fillingStem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: facts.fillingType).dropLast("Builder".count)) + optionalStemSuffix
 			return fillingStem + (facts.fillingType == returnedName ? "" : "_\(returnedName)") + suffix
 		}
 		// A builder that takes no scope: its filling type is its returned type, or another type its label names before
@@ -201,6 +205,11 @@ extension GraphFuzzerBuilderSurface {
 		guard stem != returnedStem else { return nil }
 		let fillingStem = stem.hasSuffix("_" + returnedName) ? stem.dropLast(returnedName.count + 1) : ""
 		return fillingStem.isEmpty || fillingStem == returnedStem ? returnedStem + suffix : nil
+	}
+
+	/// `type` without the parentheses that enclose all of it, as `(any P)` spells `any P` for an optional.
+	private static func droppingEnclosingParentheses(_ type: String) -> String {
+		type.hasPrefix("(") && type.hasSuffix(")") ? String(type.dropFirst().dropLast()) : type
 	}
 }
 

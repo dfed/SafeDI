@@ -117,8 +117,8 @@ extension TypeKeyLayout {
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
 					guard normalized(evaluate(declaration, inBody: body)) == expected,
-					      let typeModeType = type(of: declaration),
-					      let pathType = type(of: expected),
+					      let typeModeType = type(of: declaration, label: fulfillingProperty.label),
+					      let pathType = type(of: expected, label: fulfillingProperty.label),
 					      typeModeType.asSource == pathType.asSource
 					else { return false }
 				case let .built(child):
@@ -150,6 +150,7 @@ extension TypeKeyLayout {
 
 	func isNilAtEveryMember(owner: Int, read: (BuiltPlaceRecord) -> PlaceRead) -> Bool {
 		guard owner != 0 else { return false }
+		GenerationWork.record(membersByClass[owner].count, by: .checkingReadsAtEveryMember)
 		return membersByClass[owner].allSatisfy { member in
 			bodies[member].record.map { read($0).source == .nil } ?? false
 		}
@@ -176,7 +177,9 @@ extension TypeKeyLayout {
 
 	/// The statement at `index` of each member of `owner`'s class, or of the root's body.
 	func statements(at index: Int, ofEveryMemberOf owner: Int) -> LazyMapSequence<[Int], Statement> {
-		(owner == 0 ? [0] : membersByClass[owner]).lazy.map { bodies[$0].statements[index] }
+		let members = owner == 0 ? [0] : membersByClass[owner]
+		GenerationWork.record(members.count, by: .checkingReadsAtEveryMember)
+		return members.lazy.map { bodies[$0].statements[index] }
 	}
 
 	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {
@@ -192,7 +195,7 @@ extension TypeKeyLayout {
 	/// The types are compared by exact spelling (`any P` and `P`, `Optional<X>` and `X?`, differ), which is what text
 	/// copied as written needs: a looser match would only share more places, never one the copy reads alike.
 	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
-		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
+		type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label)?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)), label: read.label)?.asSource
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path

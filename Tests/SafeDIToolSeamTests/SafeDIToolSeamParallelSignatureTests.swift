@@ -56,7 +56,69 @@ struct SafeDIToolSeamParallelSignatureTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_settlesEachLevelOnSeveralTasks_whenItsSeamsReachTypesOfTheirOwn() async throws {
+		// Each of the eighteen inner seams reaches its own leaf, and each of the six middle seams three inner seams of its
+		// own: every type a level reaches is reached by one component.
+		let levels = try await Self.observedLevels {
+			try await generated(taskCount: 4, verifiesCompilation: false)
+		}
+		#expect(levels == [
+			SeamSignatureLevel(componentCount: 18, taskCount: 4),
+			SeamSignatureLevel(componentCount: 6, taskCount: 4),
+			SeamSignatureLevel(componentCount: 1, taskCount: 1),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_settlesLevelOnOneTask_whenItsSeamsReachMostlyTheSameTypes() async throws {
+		// Three layers of three seams, each seam opening every seam of the layer beneath it. The bottom layer's seams each
+		// reach their own leaf (six distinct types of six); the middle layer's each reach the bottom layer and its leaves
+		// (nine of twenty-one), and the top layer's both layers beneath (twelve of thirty), so only the bottom layer is
+		// settled on several tasks.
+		let leaves = (0..<3).map { seamFixtureType(named: "Leaf\($0)", declarations: []) }
+		let bottom = (0..<3).map { seamFixtureType(named: "Bottom\($0)", isSeam: true, declarations: ["@Instantiated let leaf\($0): Leaf\($0)"]) }
+		let middle = (0..<3).map { index in
+			seamFixtureType(named: "Middle\(index)", isSeam: true, declarations: (0..<3).map { "@Instantiated let bottom\($0): Bottom\($0)" })
+		}
+		let top = (0..<3).map { index in
+			seamFixtureType(named: "Top\(index)", isSeam: true, declarations: (0..<3).map { "@Instantiated let middle\($0): Middle\($0)" })
+		}
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: (0..<3).map { "@Instantiated let top\($0): Top\($0)" })
+		let levels = try await Self.observedLevels {
+			try await SeamSignatureObservation.$width.withValue(4) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: [root] + top + middle + bottom + leaves,
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					moduleMembershipArguments: ["--module-name", "App"],
+				)
+			}
+		}
+		#expect(levels == [
+			SeamSignatureLevel(componentCount: 3, taskCount: 3),
+			SeamSignatureLevel(componentCount: 3, taskCount: 1),
+			SeamSignatureLevel(componentCount: 3, taskCount: 1),
+		])
+	}
+
 	// MARK: Private
+
+	/// The levels of seam components the module's own signature computation settles while `body` runs, in level order.
+	private static func observedLevels(_ body: () async throws -> some Any) async throws -> [SeamSignatureLevel] {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignatureLevel.self)
+		_ = try await SeamSignatureObservation.$observesLevels.withValue({ continuation.yield($0) }) {
+			try await body()
+		}
+		continuation.finish()
+		var levels = [SeamSignatureLevel]()
+		for await level in stream {
+			levels.append(level)
+		}
+		return levels
+	}
 
 	private var filesToDelete: [URL]
 
@@ -97,7 +159,7 @@ struct SafeDIToolSeamParallelSignatureTests: ~Copyable {
 		}
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
-		let seamSignatures = try #require(output.moduleInfoFile?.seamSignatures)
+		let seamSignatures = try #require(output.moduleInfoFile?.seamSignatures).decoded
 		#expect(seamSignatures.count == 25)
 		let fixtureDirectory = URL(fileURLWithPath: output.fixtures["Token.swift"]).deletingLastPathComponent().path
 		return try Generated(

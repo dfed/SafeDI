@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// How SafeDITool decides from a file's text whether to parse it: only a file whose bytes contain `@Instantiable`
-/// or `#SafeDIConfiguration` can declare SafeDI content.
+/// How SafeDITool decides from a file's text whether to parse it: only a file whose bytes contain `Instantiable`
+/// (in `@Instantiable` or `@SafeDI.Instantiable`) or `#SafeDIConfiguration` can declare SafeDI content.
 struct SafeDIToolMarkerSearchTests: ~Copyable {
 	// MARK: Initialization
 
@@ -58,6 +58,24 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		)
 
 		#expect(output.generateOutput.module.instantiables.map(\.concreteInstantiable) == [.simple(name: "Service")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_readsAndPlansEveryFile_whenFilesSpellMacroOnlyQualifiedBySafeDI() async throws {
+		// No file contains `@Instantiable`: each spells `@SafeDI.Instantiable`. `scan` plans the root's and the mock's
+		// outputs, which `executeSafeDIToolTest` checks are the files `generate` writes, and `generate` reads every file.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: SafeDIToolQualifiedSpellingFixtures.fixtures(rootArguments: "isRoot: true, generateMock: SafeDI.MockGeneration.internal"),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?.keys.sorted() == ["Root+SafeDI.swift", "Root+SafeDIMock.swift", "SafeDIMockConfiguration.swift"])
+		#expect(output.generateOutput.module.instantiables.map(\.concreteInstantiable).sorted() == [
+			.simple(name: "Profile"), .simple(name: "Root"), .simple(name: "Screen"), .simple(name: "Session"), .simple(name: "Settings"),
+		])
 	}
 
 	@Test
@@ -212,6 +230,71 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 	func typeDeclarationWords_findsNoPackageModifier_whenPackageIsInBackticks() {
 		// `package` in backticks is a name, never the access modifier.
 		#expect(!Self.typeDeclarationWords(of: "let `package` = Package()").mayDeclareTypeOtherModulesCanName)
+	}
+
+	@Test(arguments: [
+		// A type keyword inside the braces of a type declaration or an extension.
+		(text: "public enum Namespace {\n    public struct Config {}\n}", findsKeyword: true),
+		(text: "extension Namespace {\n    class Config {}\n}", findsKeyword: true),
+		// Type keywords after braces that closed: one top-level type after another.
+		(text: "public struct First {}\npublic struct Second {\n}", findsKeyword: false),
+		// A type keyword before every brace.
+		(text: "public typealias Config = Int\nlet value = { 1 }()", findsKeyword: false),
+	] as [(text: String, findsKeyword: Bool)])
+	func typeDeclarationWords_findsTypeKeywordInsideBraces_onlyWhenAnOpeningBraceBeforeItIsUnclosed(text: String, findsKeyword: Bool) {
+		#expect(Self.typeDeclarationWords(of: text).holdsTypeKeywordInsideBraces == findsKeyword)
+	}
+
+	@Test(arguments: [
+		// A string literal.
+		"public enum Namespace {\n    static let brace = \"}\"\n    public struct Config {}\n}",
+		// A line comment.
+		"public enum Namespace { // }\n    public struct Config {}\n}",
+		// A block comment, whose closing brace is on a line of its own.
+		"public enum Namespace {\n    /*\n    }\n    */\n    public struct Config {}\n}",
+		// A multi-line string literal.
+		"public enum Namespace {\n    static let text = \"\"\"\n    }\n    \"\"\"\n    public struct Config {}\n}",
+		// An extended regular expression literal.
+		"public enum Namespace {\n    static let pattern = #/\n    }\n    /#\n    public struct Config {}\n}",
+		// Backticks string literals hold, which enclose the namespace's opening brace.
+		"let tick = \"`\"; public enum Namespace { let other = \"`\"\n    public struct Config {}\n}",
+	])
+	func typeDeclarationWords_findsTypeKeywordInsideBraces_whenCommentOrLiteralMayHideBraceBeforeIt(text: String) {
+		// Counted as written, no brace is open before `struct`, so only a count that distrusts them finds it inside braces.
+		#expect(Self.typeDeclarationWords(of: text).holdsTypeKeywordInsideBraces)
+	}
+
+	@Test(arguments: [
+		(text: "public enum Namespace {\n    public struct Config {}\n}", mayDeclare: true),
+		(text: "extension Namespace {\n    open class Config {}\n}", mayDeclare: true),
+		(text: "public extension Namespace {\n    struct Config {}\n}", mayDeclare: true),
+		// Neither `public` nor `open`: a nested type of no wider access needs no record.
+		(text: "enum Namespace {\n    struct Config {}\n}", mayDeclare: false),
+		(text: "enum Namespace {\n    struct Config { let isPublicly = true }\n}", mayDeclare: false),
+		// `public` without a nested type: a top-level type needs no record.
+		(text: "public struct Config {}", mayDeclare: false),
+		// Modifiers and attributes between `public` and the nested type's keyword.
+		(text: "public enum Namespace {\n    public final class Config {}\n}", mayDeclare: true),
+		(text: "enum Namespace {\n    @MainActor\n    public\n    struct Config {}\n}", mayDeclare: true),
+		// A comment between `public` and the keyword that holds a word introducing another declaration.
+		(text: "enum Namespace {\n    public /* func */ struct Config {}\n}", mayDeclare: true),
+		(text: "enum Namespace {\n    public // var\n    struct Config {}\n}", mayDeclare: true),
+		(text: "enum Namespace {\n    public /* extension */ struct Config {}\n}", mayDeclare: true),
+		// A nested type narrower than its `public` enclosing type: its `public` applies to the enclosing type.
+		(text: "public struct Model: Codable {\n    private enum CodingKeys: CodingKey {}\n}", mayDeclare: false),
+		(text: "public struct Model {\n    struct Inner {}\n}", mayDeclare: false),
+		// `public` members before a narrower nested type: each `public` applies to its own member.
+		(text: "public struct Model {\n    public var name: String\n    public let count: Int\n    public init() {}\n    public func run() {}\n    public subscript(index: Int) -> Int { index }\n    struct Inner {}\n}", mayDeclare: false),
+		(text: "public enum Kind {\n    case first\n}\nextension Kind {\n    struct Inner {}\n}", mayDeclare: false),
+		(text: "import Foundation\npublic import Other\nenum Namespace {\n    struct Config {}\n}", mayDeclare: false),
+		(text: "public final class Helper {\n    public static var shared: Helper { Helper() }\n    deinit {}\n    enum State {}\n}", mayDeclare: false),
+		// A `public` extension makes the types nested in it `public` without a modifier of their own.
+		(text: "public extension Namespace {\n    enum Config {}\n}", mayDeclare: true),
+		(text: "public /* func */ extension Namespace {\n    enum Config {}\n}", mayDeclare: true),
+	] as [(text: String, mayDeclare: Bool)])
+	func typeDeclarationWords_mayDeclareTypeOtherModulesCanName_onlyWhenPublicWordMayApplyToTypeKeywordInsideBraces(text: String, mayDeclare: Bool) {
+		// A `public` or `open` type nested in another is one another module names only through its record.
+		#expect(Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName == mayDeclare)
 	}
 
 	// MARK: Private

@@ -20,13 +20,12 @@
 
 import Foundation
 
-/// The type key's layout of an internal mock's body (`TypeKeyBody`), behind a switch tests turn on: the walk's places, each
-/// with the record production's record function makes of it, laid out as production's are. A root any place of which has
+/// The type key's layout of an internal mock's body (`TypeKeyBody`): the walk's places, each with the record production's
+/// record function makes of it, laid out as production's are. A root any place of which has
 /// no record, or reads a value the records cannot name, keeps the walk's body.
 extension MockLowering {
-	/// Whether internal mocks' bodies are laid out by the type key: set by a test, or by `SAFEDI_MOCK_TYPE_KEY=1` for a run
-	/// of the graph fuzzer's corpora.
-	@TaskLocal static var laysOutWithTypeKey = ProcessInfo.processInfo.environment["SAFEDI_MOCK_TYPE_KEY"] == "1"
+	/// Whether internal mocks' bodies are laid out by the type key. A test that compares the walk's body sets it off.
+	@TaskLocal static var laysOutWithTypeKey = true
 
 	/// Called with each internal mock root's layout outcome while the switch is on: `laidOut`, or why the root keeps the walk's
 	/// body, as `unrecorded:threw:<error case>` where production's record function threw at one of its places. Set by the
@@ -165,7 +164,7 @@ extension MockLowering.Walk {
 			defer {
 				builtPlaceCalls[path] = nil
 				builtPlaceConfigurationContexts[path] = nil
-				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil {
+				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil, loopUnitRecords[path] == nil, !pathsCoveredByLoopUnits.contains(path) {
 					firstUnrecordedPath = path
 					for depth in 1..<max(path.count, 1) {
 						pathsAboveUnrecordedPlace.insert(Array(path.prefix(depth)))
@@ -191,8 +190,13 @@ extension MockLowering.Walk {
 				closerAndDefaultRecords[path] = .closer(record)
 				closerParentFieldReads[path] = nil
 			}
-			guard let call = builtPlaceCalls[path] else { continue }
-			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
+			// A place a loop of builders' text holds is that text's, which records it whole.
+			guard let call = builtPlaceCalls[path], !pathsCoveredByLoopUnits.contains(path), loopUnitRecords[path] == nil else { continue }
+			guard !pathsNamedApart.contains(path) else {
+				unrecordedReasons[path] = "namedApart"
+				continue
+			}
+			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:)) : []
 			// The record made below holds its children's, so the walk's tables let go of them, and of what the walk kept to
 			// record this place, as soon as they are read: the tables then hold the places still waiting for their parents,
 			// never every place of the tree at once.
@@ -255,7 +259,8 @@ extension MockLowering.Walk {
 				if record == nil, unrecordedReasons[path] == nil {
 					unrecordedReasons[path] = "noRecord"
 				}
-				builtRecords[path] = record
+				// A public mock's configured place calls its type's construction function (`MockLowering+PublicRecords.swift`).
+				builtRecords[path] = record.flatMap { publicRecord(of: $0, at: path) }
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.nodeConfiguration)
 				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
 					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
@@ -310,6 +315,8 @@ extension MockLowering.Walk {
 		closedOnPlacesByLabel = [:]
 		builtPlaceConfigurationContexts = [:]
 		closerParentFieldReads = [:]
+		publicMockCallPlanNodes = [:]
+		publicConstructionInputs = [:]
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
@@ -322,7 +329,7 @@ extension MockLowering.Walk {
 			// A read of the nearest place of its type above, which the function it is called in was handed, or `nil`.
 			// A configuration struct is taken non-optional, and the nearest is set wherever a read of it resolved.
 			own.readsConfigurationStruct ? .spliced([.value(nearestRead), .text(" ?? "), .value(.emptyInitialization(own.type))]) : nearestRead
-		case .emptyInitialization, .member, .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
+		case .emptyInitialization, .memberRead, .rootDeclaration, .passedArgument, .optionalMemberRead, .call, .spliced:
 			.spliced([.value(nearestRead), .text(" ?? "), .value(value)])
 		}
 	}
@@ -338,10 +345,10 @@ extension MockLowering.Walk {
 			switch value {
 			case let .passedArgument(name):
 				valueByName[name] ?? value
-			case let .member(member, of: base):
-				.member(member, of: substituting(base))
-			case let .optionalMember(member, of: base):
-				.optionalMember(member, of: substituting(base))
+			case let .memberRead(member, of: base):
+				.member(member, of: substituting(base.value))
+			case let .optionalMemberRead(member, of: base):
+				.optionalMember(member, of: substituting(base.value))
 			case let .call(member, of: base, arguments: arguments, argumentsWrapper: wrapper):
 				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
 			case let .spliced(segments):
@@ -367,7 +374,9 @@ extension MockLowering.Walk {
 	}
 
 	func placeCode(at path: [Int]) -> GeneratedCode {
-		let record: PlaceRecord? = if let built = builtRecords[path] {
+		let record: PlaceRecord? = if let loopUnit = loopUnitRecords[path] {
+			loopUnit
+		} else if let built = builtRecords[path] {
 			built
 		} else if case let .closer(closer) = closerAndDefaultRecords[path] {
 			.closer(closer)
@@ -389,7 +398,7 @@ extension MockLowering.Walk {
 		for property in rootDeclarations {
 			rootBody.append(.place(PlacePlan(code: .empty, record: .alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))))
 		}
-		for path in placePathsInWalkOrder where path.count == 1 {
+		for path in placePathsInWalkOrder where path.count == 1 && !pathsCoveredByLoopUnits.contains(path) {
 			rootBody.append(placeCode(at: path))
 		}
 		if let path = firstUnrecordedPath {
@@ -459,6 +468,7 @@ extension MockLowering.Walk {
 					return fulfillingProperty.label
 				}
 				frames[frames.count - 1].visible.insert(alias.property.label)
+				frames[frames.count - 1].visible.formUnion(alias.otherBindings.map(\.label))
 			}
 		}
 		return nil

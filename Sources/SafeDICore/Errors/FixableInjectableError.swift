@@ -29,6 +29,9 @@ public enum FixableInjectableError: DiagnosticError {
 	/// An `@Instantiated` property's type, or the type a SafeDI wrapper in it builds, is optional.
 	/// `nonOptionalDeclaration` is the property declared without the optionality, such as `service: Service`.
 	case instantiatedPropertyTypeIsOptional(nonOptionalDeclaration: String)
+	/// The type of an `@Instantiated` property declared with `onlyIfAvailable: true` is not optional exactly once,
+	/// spelled with `?`. `optionalDeclaration` is the property declared so, such as `service: Service?`.
+	case instantiatedOnlyIfAvailablePropertyTypeIsNotOptionalOnce(optionalDeclaration: String)
 	/// A property declared with `erasedToConcreteExistential: true` whose value would be passed to a no-label initializer
 	/// of an existential spelled with `any` or as a composition (`P & Q`), which has none: the property's type, or the
 	/// type its SafeDI wrapper builds.
@@ -44,6 +47,8 @@ public enum FixableInjectableError: DiagnosticError {
 			"`ofType:` names an optional dependency, so a property that receives it with `erasedToConcreteExistential: true` is `nil` where the dependency is. Its type must be optional, spelled with `?`."
 		case let .instantiatedPropertyTypeIsOptional(nonOptionalDeclaration):
 			"SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `\(nonOptionalDeclaration)`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent."
+		case let .instantiatedOnlyIfAvailablePropertyTypeIsNotOptionalOnce(optionalDeclaration):
+			"An @Instantiated property declared with `onlyIfAvailable: true` is `nil` where no type that fulfills it is available, so its type must be optional, spelled with one `?`. Declare `\(optionalDeclaration)`."
 		case .erasedToConcreteExistentialOnExistentialWithoutInitializer:
 			"`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential."
 		}
@@ -67,6 +72,7 @@ public enum FixableInjectableError: DiagnosticError {
 			     .onlyIfAvailableNotOptionalSpelledWithQuestionMark,
 			     .erasedRenameOfOptionalDependencyNotOptionalSpelledWithQuestionMark,
 			     .instantiatedPropertyTypeIsOptional,
+			     .instantiatedOnlyIfAvailablePropertyTypeIsNotOptionalOnce,
 			     .erasedToConcreteExistentialOnExistentialWithoutInitializer:
 				.error
 			}
@@ -90,6 +96,8 @@ public enum FixableInjectableError: DiagnosticError {
 				"Mark the type as optional using `?`"
 			case let .instantiatedPropertyTypeIsOptional(nonOptionalDeclaration):
 				"Declare `\(nonOptionalDeclaration)`"
+			case let .instantiatedOnlyIfAvailablePropertyTypeIsNotOptionalOnce(optionalDeclaration):
+				"Declare `\(optionalDeclaration)`"
 			case .erasedToConcreteExistentialOnExistentialWithoutInitializer:
 				"Remove `erasedToConcreteExistential: true`"
 			}

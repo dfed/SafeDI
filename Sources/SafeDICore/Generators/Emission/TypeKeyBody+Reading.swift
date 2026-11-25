@@ -24,7 +24,7 @@ extension TypeKeyLayout {
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
 	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
 	mutating func declareOuter(_ properties: [Property]) {
-		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameterLabels: []))
+		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], outerView: [:], forwardedLabels: [], cycleParameterLabels: []))
 		for property in properties {
 			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
 			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
@@ -95,6 +95,7 @@ extension TypeKeyLayout {
 							record: built,
 							isInSendableFamily: isInSendableFamily,
 							domainLabels: labels,
+							outerView: outerView,
 							forwardedLabels: Set(built.parameterProperties.map(\.label)),
 							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
 						))
@@ -117,16 +118,19 @@ extension TypeKeyLayout {
 				statement = .closer(closer, target: target)
 				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .alias(alias):
-				// A place written as text whose reads are not listed, that binds labels besides its own, or that calls or
-				// refers to a function it does not declare, is never laid out by the type key: two such places of one text can
-				// name different functions, which no read tells apart.
-				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
+				// A place written as text whose reads are not listed is never laid out by the type key, nor one that calls or
+				// refers to a function it does not declare: two such places of one text can name different functions, which
+				// no read tells apart. The labels it binds besides its own are declarations of its position, as its own is.
+				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
 				label = alias.property.label
 				namesInScope.formUnion(alias.declaredFunctionNames)
 				for name in alias.declaredFunctionNames {
 					bodies[body].positionsByDeclaredFunction[name, default: []].append(position)
 				}
 				statement = .alias(alias)
+				for binding in alias.otherBindings {
+					bodies[body].positionsByLabel[binding.label, default: []].append(position)
+				}
 			}
 			bodies[body].statements.append(statement)
 			bodies[body].positionsByLabel[label, default: []].append(position)
@@ -197,6 +201,7 @@ extension TypeKeyLayout {
 					}
 					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
+					boundBefore.formUnion(alias.otherBindings.map(\.label))
 				}
 			}
 			current.constructionReads.forEach(lookUp)
@@ -220,11 +225,11 @@ extension TypeKeyLayout {
 		case nil:
 			false
 		case let .built(built):
-			statementCodes(of: built.children).allSatisfy(laysOut)
+			built.children.allSatisfy(\.statementsAreLaidOutByTypeKey)
 		case .closer:
 			true
 		case let .alias(alias):
-			alias.listsItsReads && alias.otherBindings.isEmpty && alias.calledFunctionNames.isEmpty
+			alias.listsItsReads && alias.calledFunctionNames.isEmpty
 		}
 	}
 
@@ -239,6 +244,8 @@ extension TypeKeyLayout {
 	/// another, as a scope's payload bindings precede its place (`ScopeGenerator.valuesBindingPlaces`), each indented as
 	/// the child is.
 	static func statementCodes(of codes: [GeneratedCode]) -> [GeneratedCode] {
+		// Most bodies hold no sequence of places, and keep their children as they are, with no copy.
+		guard codes.contains(where: isSequenceOfPlaces) else { return codes }
 		var statements = [GeneratedCode]()
 		for code in codes {
 			var indentations = [String]()
@@ -256,6 +263,16 @@ extension TypeKeyLayout {
 			}
 		}
 		return statements
+	}
+
+	/// Whether `code`, under its indentations, is pieces one after another, each a place (`statementCodes(of:)`).
+	private static func isSequenceOfPlaces(_ code: GeneratedCode) -> Bool {
+		var inner = code
+		while case let .indented(wrapped, _) = inner.node {
+			inner = wrapped
+		}
+		guard case let .sequence(pieces) = inner.node else { return false }
+		return pieces.allSatisfy { record(of: $0) != nil }
 	}
 
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.
@@ -281,8 +298,8 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// The property `statement` declares.
-	func property(of statement: Statement) -> Property? {
+	/// The property `statement` declares under `label`: its own, or, for a place written as text, one of the others it binds.
+	func property(of statement: Statement, label: String) -> Property? {
 		switch statement {
 		case let .built(body):
 			bodies[body].record?.property
@@ -291,7 +308,7 @@ extension TypeKeyLayout {
 		case let .closer(record, _):
 			record.property
 		case let .alias(record):
-			record.property
+			record.property.label == label ? record.property : record.otherBindings.first { $0.label == label }
 		}
 	}
 
@@ -306,6 +323,10 @@ extension TypeKeyLayout {
 		      !bodies[body].forwardedLabels.contains(label),
 		      !bodies[body].cycleParameterLabels.contains(label)
 		{
+			// The body's view resolved its domain's labels outside it when the walk reached it.
+			if let resolved = bodies[body].outerView[label] {
+				return resolved
+			}
 			index = bodies[body].position
 			body = bodies[body].parent
 		}

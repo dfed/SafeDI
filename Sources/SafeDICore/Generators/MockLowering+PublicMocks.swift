@@ -140,6 +140,8 @@ extension ScopeGenerator {
 				typesDeclaredEscaping: signature.typesDeclaredEscaping,
 				unreadTypeComment: publicMockContext.unreadTypeComment,
 				namesForwardedTypes: true,
+				// A public mock's type may be narrower than its `public` tier, which does not say how visible the type is.
+				emitsFallbackIntoClient: false,
 			) {
 				lines.append(declaration)
 				lines.append("")
@@ -351,15 +353,14 @@ extension MockLowering.Walk {
 		pendingRenamedFunctionName = nil
 		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as a
 		// seam's site does.
-		lines.append(GeneratedCodeText.indentingNonEmptyLines(
-			of: ScopeGenerator.buildSiteCode(
-				of: property,
-				at: site,
-				functionName: holeFunctionName,
-				readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
-			),
-			by: indent,
-		))
+		let siteCode = ScopeGenerator.buildSiteCode(
+			of: property,
+			at: site,
+			functionName: holeFunctionName,
+			readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
+		)
+		lines.append(GeneratedCodeText.indentingNonEmptyLines(of: siteCode, by: indent))
+		recordPublicHoleSite(text: siteCode, of: property, at: site, functionName: holeFunctionName, readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties)
 		// The site binds its property from the builder, as an alias binds its own: no override reads it.
 		return .alias(MockLowering.AliasBinding(
 			property: property,

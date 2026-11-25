@@ -45,10 +45,9 @@ struct ModuleFixture {
 	///     SwiftPM's `sourceModuleRecursiveDependencies` does. The module's compile can import the transitive
 	///     closure, as rules_swift propagates module visibility.
 	///   - isCheckoutPackage: Whether the module's package is one SwiftPM fetched, laid out under
-	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when the one
-	///     path component above its package directory is `checkouts` (a checkout target nested deeper slips
-	///     past that check, as the example builds showed) and leaves its files out of the CSV of a consumer in another
-	///     package, so such a consumer reads its declarations only through a configuration's
+	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when SwiftPM reports
+	///     its package's origin as a repository or a registry, and leaves its files out of the CSV of a consumer in
+	///     another package, so such a consumer reads its declarations only through a configuration's
 	///     `additionalDirectoriesToInclude`; a consumer that is a module of the same checkout package reads them.
 	///     The harness lays such a module out to match and applies the rule by this flag. Bazel knows no
 	///     checkouts: `.moduleInfo` reads the module's `.safedi` as it does any dependency's.
@@ -525,8 +524,8 @@ func executeSafeDIToolMultiModuleTest(
 			}
 			inputSwiftFilePaths = module.swiftFiles.map(csvEntry(of:))
 			compilerSwiftFilePaths = scansDuringGenerate ? inputSwiftFilePaths : inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
-			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`,
-			// and every one of the module's own package, which is under `checkouts` when that package is fetched.
+			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency of a package that is not
+			// fetched, and every one of the module's own package, which can be fetched.
 			let firstPartyDependencies = module.transitiveDependencies
 				.map { writtenModulesByName[$0]! }
 				.filter { !$0.fixture.isCheckoutPackage || $0.packageDirectory.path == module.packageDirectory.path }

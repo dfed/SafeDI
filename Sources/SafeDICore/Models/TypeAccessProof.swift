@@ -778,17 +778,17 @@ public struct TypeAccessProof: Sendable {
 	private static let allowlistedNames = WellKnownTypeNames.swift.union(WellKnownTypeNames.foundation).union(WellKnownTypeNames.safeDI)
 
 	/// Whether `type`, spelled without generic arguments, is one of the standard types `allowlistedNames` names, spelled
-	/// alone or qualified by its module's name, or the `Builder` a SafeDI wrapper declares (`Instantiator.Builder`,
-	/// `SafeDI.Instantiator.Builder`), which the same comment would otherwise name.
+	/// alone or qualified by its module's name, or the `Builder` a SafeDI wrapper declares (`Instantiator.Builder`), which
+	/// the same comment would otherwise name. A SafeDI wrapper qualified by its module's name is read as the wrapper alone
+	/// (`TypeDescription.member(named:of:generics:)`).
 	private static func isAllowlisted(_ type: TypeDescription) -> Bool {
 		switch type {
 		case let .simple(name, _):
 			allowlistedNames.contains(name)
-		case let .nested("Builder", .simple(wrapperName, []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName),
-		     .nested("Builder", .nested(let wrapperName, .simple("SafeDI", []), []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName):
+		case let .nested("Builder", .simple(wrapperName, []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName):
 			true
 		case let .nested(name, .simple(moduleName, []), _):
-			(moduleName == "Swift" || moduleName == "Foundation" || moduleName == "Dispatch" || moduleName == "SafeDI") && allowlistedNames.contains(name)
+			(moduleName == "Swift" || moduleName == "Foundation" || moduleName == "Dispatch") && allowlistedNames.contains(name)
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .variadic, .void:
 			false
 		}
@@ -1047,11 +1047,15 @@ extension TypeAccessProof {
 		/// normalization runs before the run knows its own files, and such a declaration is in one of them, or in a
 		/// directory a configuration adds. A declaration of a module the mentioning module cannot name (`reach`) qualifies
 		/// nothing there.
+		///
+		/// A module's own `@Instantiable` type shadows every other module's type of its name there, as its own plain
+		/// declaration does, so the type declarations of `instantiables` are read beside the plain ones
+		/// (`[Instantiable].ownTypeDeclarations`): a type another module nests in a type of that name is no option.
 		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: ModuleReach) {
 			let instantiableTypes = Set(instantiables.flatMap(\.instantiableTypes))
 			self.instantiableTypes = instantiableTypes
 			let plainTypeDeclarations = PlainTypeDeclarations(
-				plainTypeDeclarations,
+				plainTypeDeclarations + instantiables.ownTypeDeclarations,
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: { _ in true },
@@ -1290,6 +1294,27 @@ extension TypeAccessProof {
 	}
 }
 
+// MARK: - Instantiable type declarations
+
+extension [Instantiable] {
+	/// The declaration of the type each of these declares, as a plain declaration records a type: an extension declares no
+	/// type, and a `mockOnly` declaration names one declared elsewhere.
+	fileprivate var ownTypeDeclarations: [PlainTypeDeclaration] {
+		filter { !$0.mockOnly && !$0.declarationType.isExtension }
+			.map {
+				PlainTypeDeclaration(
+					typeDescription: $0.concreteInstantiable,
+					access: $0.access,
+					enclosingTypeAccess: $0.enclosingTypeAccess,
+					enclosingExtensionAccess: $0.enclosingExtensionAccess,
+					moduleName: $0.moduleName,
+					packageName: $0.packageName,
+					sourceFilePath: $0.sourceFilePath,
+				)
+			}
+	}
+}
+
 // MARK: - TypeAccessProof.MentionedDeclarations
 
 extension TypeAccessProof {
@@ -1302,21 +1327,8 @@ extension TypeAccessProof {
 		///   - plainTypeDeclarations: The plain declarations of the run, each with its module.
 		///   - reach: Which declarations a mention in each module can name.
 		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: ModuleReach) {
-			let instantiableTypeDeclarations = instantiables
-				.filter { !$0.mockOnly && !$0.declarationType.isExtension }
-				.map {
-					PlainTypeDeclaration(
-						typeDescription: $0.concreteInstantiable,
-						access: $0.access,
-						enclosingTypeAccess: $0.enclosingTypeAccess,
-						enclosingExtensionAccess: $0.enclosingExtensionAccess,
-						moduleName: $0.moduleName,
-						packageName: $0.packageName,
-						sourceFilePath: $0.sourceFilePath,
-					)
-				}
 			declarations = PlainTypeDeclarations(
-				plainTypeDeclarations + instantiableTypeDeclarations,
+				plainTypeDeclarations + instantiables.ownTypeDeclarations,
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: nil,

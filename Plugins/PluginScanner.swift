@@ -118,7 +118,8 @@ enum PluginScanner {
 
 	// MARK: - Private
 
-	/// Checks whether a file likely contains `@Instantiable(isRoot: true)`.
+	/// Checks whether a file likely contains `@Instantiable(isRoot: true)`, the macro's name spelled alone or qualified
+	/// by its module's (`@SafeDI.Instantiable`), as every check of this scanner reads it.
 	/// Comments and string literals are stripped before matching so a mention
 	/// of `@Instantiable(isRoot: true)` in a doc comment or string doesn't
 	/// false-positive — the real parser in SafeDITool is authoritative, but
@@ -129,26 +130,26 @@ enum PluginScanner {
 	/// string literal arguments (e.g. `mockAttributes: "@available(iOS 17, *)"`).
 	private static func fileContainsRoot(at fileURL: URL) -> Bool {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
-		      content.contains("@Instantiable")
+		      content.contains("Instantiable")
 		else { return false }
 		let stripped = stripSwiftCommentsAndStrings(from: content)
-		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
+		return stripped.range(of: #"@(SafeDI\s*\.\s*)?Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	/// Checks whether a file likely contains `@Instantiable(generateDependencyTree: true)`.
 	private static func fileContainsGenerateDependencyTreeTrue(at fileURL: URL) -> Bool {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
-		      content.contains("@Instantiable")
+		      content.contains("Instantiable")
 		else { return false }
 		let stripped = stripSwiftCommentsAndStrings(from: content)
-		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#, options: .regularExpression) != nil
+		return stripped.range(of: #"@(SafeDI\s*\.\s*)?Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	/// Checks whether a file likely contains an `@Instantiable` whose `generateMock:` argument enables mock generation:
 	/// `true`, `.internal`, `.public`, or `MockGeneration.` followed by either case.
 	private static func fileContainsGenerateMockTrue(at fileURL: URL) -> Bool {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
-		      content.contains("@Instantiable")
+		      content.contains("Instantiable")
 		else { return false }
 		let stripped = stripSwiftCommentsAndStrings(from: content)
 		return stripped.range(of: generateMockEnablingPattern, options: .regularExpression) != nil

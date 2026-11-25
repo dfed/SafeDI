@@ -197,10 +197,10 @@ indirect enum ValuePath: Hashable, Sendable {
 	case read(PlaceRead)
 	/// A passed argument of the enclosing function, by its parameter's name, which the function is handed on every call.
 	case passedArgument(String)
-	/// The member `name` of a value.
-	case member(String, of: ValuePath)
-	/// The member `name` of an optional value, read through the optional.
-	case optionalMember(String, of: ValuePath)
+	/// The member `name` of a value (`member(_:of:)`).
+	case memberRead(String, of: ValuePathBase)
+	/// The member `name` of an optional value, read through the optional (`optionalMember(_:of:)`).
+	case optionalMemberRead(String, of: ValuePathBase)
 	/// A call of the member `name` of a value, spelled `<value>.<name>(<argumentsWrapper>(<label>: <source>, …))`, or
 	/// `<value>.<name>(<label>: <source>, …)` where `argumentsWrapper` is `nil`: each argument a read the engine checks.
 	case call(String, of: ValuePath, arguments: [PlaceRead], argumentsWrapper: TypeDescription?)
@@ -211,6 +211,44 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// otherwise model: each value a read the engine checks, each text as written, and each function one a statement
 	/// before the value's in the same body declares (`ValueSegment.declaredFunction`).
 	case spliced([ValueSegment])
+}
+
+extension ValuePath {
+	/// The member `name` of `base`.
+	static func member(_ name: String, of base: ValuePath) -> ValuePath {
+		.memberRead(name, of: ValuePathBase(base))
+	}
+
+	/// The member `name` of the optional `base`, read through the optional.
+	static func optionalMember(_ name: String, of base: ValuePath) -> ValuePath {
+		.optionalMemberRead(name, of: ValuePathBase(base))
+	}
+}
+
+/// The value a member of a value path is read from. A mock's override of a node reads a member of its parent's, so a
+/// path is as deep as the mock's tree, and an indirect case would release each level from within the release of the one
+/// above it, which a concurrency thread's stack cannot hold for a tree thousands of types deep: the base holds its value in
+/// a `DeferredReleaseSlot`, which releases one level at a time.
+final class ValuePathBase: Hashable, Sendable {
+	init(_ value: ValuePath) {
+		slot = DeferredReleaseSlot([value])
+	}
+
+	/// The value the member is read from.
+	var value: ValuePath {
+		// The slot holds the one value `init` stores until the base is released.
+		slot.value[0]
+	}
+
+	static func == (lhs: ValuePathBase, rhs: ValuePathBase) -> Bool {
+		lhs === rhs || lhs.value == rhs.value
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(value)
+	}
+
+	private let slot: DeferredReleaseSlot<[ValuePath]>
 }
 
 /// A segment of a spliced value (`ValuePath.spliced`).

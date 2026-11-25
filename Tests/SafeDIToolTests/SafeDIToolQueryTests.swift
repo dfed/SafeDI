@@ -3559,6 +3559,57 @@ struct SafeDIToolQueryTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_listsNoRequirement_whenTypeInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("FeatureModule", [
+					"""
+					public protocol Analytics {}
+
+					@Instantiable
+					public final class Screen: Instantiable {
+					    public init(analytics: (any Analytics)?) {
+					        self.analytics = analytics
+					    }
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`Screen` is built from declarations in 1 module:
+
+		FeatureModule
+		  @Instantiable Screen
+
+		@Forwarded parameters of `Screen`:
+		  (none)
+
+		Dependencies of `Screen` no @Instantiable declaration fulfills:
+		  (none)
+
+		No module generates `Screen.mock()`; a #SafeDIConfiguration that lists `Screen` in `additionalMocksToGenerate` would generate it from the same declarations.
+
+		Required @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Defaulted @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Required parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""", "Unexpected output \(output.formatted)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

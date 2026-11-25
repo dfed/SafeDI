@@ -737,10 +737,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    // These providers evaluate `Service`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
+			    @usableFromInline static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
 
 			    public static func mock(
 			        name: String? = Service.__safeDI_publicMockDefault_name(),
@@ -919,10 +916,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Dashboard+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Dashboard {
-			    // These providers evaluate `Dashboard`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Dashboard` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    nonisolated static func __safeDI_publicMockDefault_label() -> Label? { defaultLabel }
+			    static func __safeDI_publicMockDefault_label() -> Label? { defaultLabel }
 
 			    public static func mock() -> Dashboard {
 			        Dashboard.__safeDI_mock()
@@ -2573,10 +2567,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    // These providers evaluate `Service`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
+			    @usableFromInline static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
 
 			    nonisolated public enum SafeDIMockScope_Thing {
 			        nonisolated public struct thing_Values {
@@ -2597,7 +2588,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.thing = { _ in __safeDI_builder() }
+			                self.init(thing: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -3552,10 +3543,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"A+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension A {
-			    // These providers evaluate `A`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `A` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
+			    @usableFromInline static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -3758,7 +3746,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.thing = { _ in __safeDI_builder() }
+			                    self.init(thing: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3776,7 +3764,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.childBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(childBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -3907,8 +3895,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -3927,7 +3914,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -3945,9 +3932,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.tBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.cBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.t = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, t: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -4274,7 +4259,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -4295,7 +4280,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4309,7 +4294,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(a_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -4559,7 +4544,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -4580,7 +4565,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.c_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(c_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4597,7 +4582,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4611,7 +4596,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(a_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -4899,7 +4884,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -4920,7 +4905,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -4934,7 +4919,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.a_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(a_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -5266,7 +5251,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			#if DEBUG
 			extension Dashboard {
-			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { Defaults.label }
+			    @usableFromInline static func __safeDI_publicMockDefault_label() -> String? { Defaults.label }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -5320,11 +5305,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			#if DEBUG
 			extension Service {
-			    // These providers evaluate `Service`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
-			    nonisolated static func __safeDI_publicMockDefault_policy() -> Policy? { Defaults.policy }
+			    @usableFromInline static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
+			    static func __safeDI_publicMockDefault_policy() -> Policy? { Defaults.policy }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -6041,7 +6023,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Dashboard+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Dashboard {
-			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
+			    @usableFromInline static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -6190,10 +6172,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"ProfileView+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension ProfileView {
-			    // These providers evaluate `ProfileView`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-			    // reads the state of an actor `ProfileView` takes from a conformance or a superclass and does not compile, give its
-			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> String? { "label" }
+			    @usableFromInline static func __safeDI_publicMockDefault_label() -> String? { "label" }
 
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
@@ -6584,10 +6563,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Service {
-		    // These providers evaluate `Service`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_title() -> String? { "service" }
+		    @usableFromInline static func __safeDI_publicMockDefault_title() -> String? { "service" }
 
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
@@ -6901,7 +6877,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Dashboard {
-		    @MainActor static func __safeDI_publicMockDefault_label() -> Label? { defaultLabel }
+		    static func __safeDI_publicMockDefault_label() -> Label? { defaultLabel }
 
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
@@ -7027,7 +7003,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.userService = { _ in __safeDI_builder() }
+			                self.init(userService: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -7339,7 +7315,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.userService = { _ in __safeDI_builder() }
+		                self.init(userService: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -7468,7 +7444,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.held = { _ in __safeDI_builder() }
+			                self.init(held: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -7550,7 +7526,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<UserService.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.userServiceBuilder = { _ in __safeDI_builder }
+			                self.init(userServiceBuilder: { _ in __safeDI_builder })
 			            }
 			        }
 			    }
@@ -7649,7 +7625,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.clock = { _ in __safeDI_builder() }
+			                    self.init(clock: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -7663,7 +7639,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.settings = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(settings: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -7683,7 +7659,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.userService = { _ in __safeDI_builder() }
+			                    self.init(userService: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -7697,7 +7673,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.profileBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -7829,7 +7805,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.scores = { _ in __safeDI_builder() }
+			                self.init(scores: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -7846,7 +7822,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.userService = { _ in __safeDI_builder() }
+			                self.init(userService: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -8189,7 +8165,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.userService = { _ in __safeDI_builder() }
+		                self.init(userService: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -11116,7 +11092,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(service: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -11232,12 +11208,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service0 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service1 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service2 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service3 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service4 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                self.service5 = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(service0: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service1: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service2: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service3: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service4: { _ in .init(__safeDI_noScope: __safeDI_builder) }, service5: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -15403,6 +15374,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15439,7 +15411,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
@@ -15536,6 +15508,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15577,7 +15550,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
@@ -15683,6 +15656,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15719,7 +15693,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
@@ -15816,6 +15790,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
+				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15857,7 +15832,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
+				                self.init(service: { _ in __safeDI_builder() })
 				            }
 				        }
 				    }
