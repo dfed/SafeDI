@@ -16,7 +16,7 @@ from pathlib import Path
 
 # The most rules one file may load, in characters. Lower it when a change brings
 # the largest load down, so that the gain is kept.
-BUDGET = 432_000
+BUDGET = 424_000
 
 
 def braces_expanded(pattern):
