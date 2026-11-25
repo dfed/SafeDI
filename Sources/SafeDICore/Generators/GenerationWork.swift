@@ -71,6 +71,11 @@ public struct GenerationWork: Sendable {
 		/// declaration a cycle closes on were answered, so a lookup asks the ones its context answers alike, not every
 		/// candidate a tree with cycles stored for the key.
 		case askingMemoCandidates
+		/// Asking whether a read of a type key class's statement is `nil` in every member of the class
+		/// (`TypeKeyLayout.checkEveryRead`): each member's statement read. The answer is the class's, so each read is asked
+		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
+		/// n² times.
+		case checkingReadsAtEveryMember
 	}
 
 	/// The step that did the work.
