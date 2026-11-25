@@ -165,11 +165,17 @@ extension MockLowering.Walk {
 		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
 		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, readsOverride: overrideRead != nil, usesMockInitializer: usesMockInitializer)
-		guard configuredConstruction != .unrecorded else { return }
+		guard configuredConstruction != .unrecorded else {
+			unrecordedReasons[childIndexPath] = "configuredUnrecorded"
+			return
+		}
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
 			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded.
-			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper) else { return }
+			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper) else {
+				unrecordedReasons[childIndexPath] = "overrideLocal"
+				return
+			}
 			alternatives.append(alternative)
 		}
 		builtPlaceInputs[childIndexPath] = MockLowering.BuiltPlaceInputs(

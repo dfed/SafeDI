@@ -18,6 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if canImport(Glibc)
+	import Glibc
+#elseif canImport(Darwin)
+	import Darwin
+#endif
 import Foundation
 
 /// The type key's layout of an internal mock's body (`TypeKeyBody`), behind a switch tests turn on: the walk's places, each
@@ -27,6 +32,13 @@ extension MockLowering {
 	/// Whether internal mocks' bodies are laid out by the type key: set by a test, or by `SAFEDI_MOCK_TYPE_KEY=1` for a run
 	/// of the graph fuzzer's corpora.
 	@TaskLocal static var laysOutWithTypeKey = ProcessInfo.processInfo.environment["SAFEDI_MOCK_TYPE_KEY"] == "1"
+
+	/// SPIKE: appends whether the type key laid `instantiable`'s mock out, or why not, to `SAFEDI_MOCK_TYPE_KEY_LOG`.
+	static func logTypeKeyLayout(of instantiable: Instantiable, outcome: String) {
+		guard let logPath = ProcessInfo.processInfo.environment["SAFEDI_MOCK_TYPE_KEY_LOG"], let file = fopen(logPath, "a") else { return }
+		fputs("TYPEKEY\t\(instantiable.concreteInstantiable.asSource)\t\(outcome)\n", file)
+		fclose(file)
+	}
 
 	/// What the walk hands production's record function at a built place.
 	struct BuiltPlaceCall {
@@ -58,10 +70,17 @@ extension MockLowering.Walk {
 			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
 			// An erased place the mock can override is built from a closure that returns the erased type, where the type
 			// key's function returns the concrete one: it keeps the walk's body.
-			// So is a place whose property is another type than the one it builds (`fulfilledByType:`, a wrapper's erased
-			// type), whose override returns the property's type.
-			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable)
+			// So is a place built in a function whose property is another type than the one it builds (`fulfilledByType:`,
+			// a protocol), whose override returns the property's type.
+			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable))
 			let isPlanned = call.isPlannedAtPlace && !overrideReturnsAnotherType
+			if overrideReturnsAnotherType {
+				unrecordedReasons[path] = "overrideReturnsAnotherType"
+			} else if pathsWithUnplannedLines.contains(path) {
+				unrecordedReasons[path] = "unplannedLines"
+			} else if !call.isPlannedAtPlace {
+				unrecordedReasons[path] = "notPlannedAtPlace"
+			}
 			do {
 				let productionRecord = try call.generator.builtPlaceRecord(
 					of: call.property,
@@ -90,11 +109,16 @@ extension MockLowering.Walk {
 				if case let .built(built)? = record, built.arguments.contains(where: { argument in
 					argument.source == .nil ? call.inputs.labelsPassedValue.contains(argument.argumentLabel) : call.inputs.labelsPassedNil.contains(argument.argumentLabel)
 				}) {
+					unrecordedReasons[path] = "nilDisagrees"
 					continue
+				}
+				if record == nil, unrecordedReasons[path] == nil {
+					unrecordedReasons[path] = "noRecord"
 				}
 				builtRecords[path] = record
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
 			} catch {
+				unrecordedReasons[path] = "threw"
 				unrecordedPlaceErrors[path] = error
 			}
 		}
@@ -116,7 +140,7 @@ extension MockLowering.Walk {
 	/// The root's statements in the type key's layout, each line indented as the root's are, or `nil` where the root keeps
 	/// the walk's: a place records nothing, a read names a value no record or root declaration binds, or the type key cannot
 	/// lay the body out.
-	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> [String]? {
+	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> (lines: [String]?, fallback: String) {
 		var rootBody = [GeneratedCode]()
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
 		for property in rootDeclarations {
@@ -125,41 +149,45 @@ extension MockLowering.Walk {
 		for path in placePathsInWalkOrder where path.count == 1 {
 			rootBody.append(placeCode(at: path))
 		}
-		guard Self.readsResolve(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))),
-		      let statements = TypeKeyBody.statements(ofRootBody: rootBody)
-		else { return nil }
+		if let path = placePathsInWalkOrder.first(where: { builtRecords[$0] == nil && closerAndDefaultRecords[$0] == nil }) {
+			return (nil, "unrecorded:\(unrecordedReasons[path] ?? "closerOrOther")")
+		}
+		if let label = Self.unresolvedRead(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))) {
+			return (nil, "readUnresolved:\(label)")
+		}
+		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody) else { return (nil, "engineRefused") }
 		var lines = [String]()
 		for statement in statements {
 			let spelled = statement.spelled()
 			guard !spelled.allSatisfy(\.isWhitespace) else { continue }
 			lines.append(contentsOf: spelled.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
 		}
-		return lines
+		return (lines, "laidOut")
 	}
 
-	/// Whether every read the places of `rootBody` make, other than of `nil`, is of a label a declaration visible where it
+	/// The label of the first read the places of `rootBody` make, other than of `nil`, that no declaration visible where it
 	/// is made binds (a statement before it in its body or one enclosing it, a function's parameter, or a root declaration):
 	/// a value the records do not see, such as one `mock()` binds under a name of its own, keeps the walk's body, since the
 	/// type key would read it as `nil`.
-	static func readsResolve(in rootBody: [GeneratedCode], declaredAtRoot rootLabels: Set<String>) -> Bool {
+	static func unresolvedRead(in rootBody: [GeneratedCode], declaredAtRoot rootLabels: Set<String>) -> String? {
 		// Each frame is a body: the labels visible in it so far, the frames around it holding theirs.
 		var frames: [(children: [GeneratedCode], next: Int, visible: Set<String>, functionReads: [PlaceRead])] = [(rootBody, 0, rootLabels, [])]
-		func resolves(_ reads: [PlaceRead], in visible: Set<String>) -> Bool {
-			reads.allSatisfy { $0.source == .nil || visible.contains($0.label) }
+		func resolves(_ reads: [PlaceRead], in visible: Set<String>) -> String? {
+			reads.first { $0.source != .nil && !visible.contains($0.label) }.map(\.label)
 		}
 		while let frame = frames.last {
 			guard frame.next < frame.children.count else {
 				// A function's construction reads what its body binds.
-				guard resolves(frame.functionReads, in: frame.visible) else { return false }
+				if let label = resolves(frame.functionReads, in: frame.visible) { return label }
 				frames.removeLast()
 				continue
 			}
 			frames[frames.count - 1].next += 1
-			guard let record = TypeKeyLayout.record(of: frame.children[frame.next]) else { return false }
+			guard let record = TypeKeyLayout.record(of: frame.children[frame.next]) else { return "" }
 			let visible = frame.visible
 			switch record {
 			case let .built(built):
-				guard resolves(built.callSiteReads, in: visible) else { return false }
+				if let label = resolves(built.callSiteReads, in: visible) { return label }
 				if built.hasFunction {
 					var inner = visible
 					inner.formUnion(built.parameterProperties.map(\.label))
@@ -167,17 +195,17 @@ extension MockLowering.Walk {
 					frames[frames.count - 1].visible.insert(built.property.label)
 					frames.append((built.children, 0, inner, built.constructionReads))
 				} else {
-					guard resolves(built.constructionReads, in: visible) else { return false }
+					if let label = resolves(built.constructionReads, in: visible) { return label }
 					frames[frames.count - 1].visible.insert(built.property.label)
 				}
 			case let .closer(closer):
-				guard resolves(closer.callSiteReads, in: visible) else { return false }
+				if let label = resolves(closer.callSiteReads, in: visible) { return label }
 				frames[frames.count - 1].visible.insert(closer.property.label)
 			case let .alias(alias):
 				frames[frames.count - 1].visible.insert(alias.property.label)
 			}
 		}
-		return true
+		return nil
 	}
 }
 

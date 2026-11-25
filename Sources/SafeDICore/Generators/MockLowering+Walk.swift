@@ -162,8 +162,12 @@ extension ScopeGenerator {
 		if laysOutWithTypeKey || SpikeShadow.logPath != nil {
 			walk.recordBuiltPlaces()
 		}
-		if laysOutWithTypeKey, let typeKeyLines = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations) {
-			bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
+		if laysOutWithTypeKey {
+			let layout = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations)
+			if let typeKeyLines = layout.lines {
+				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
+			}
+			MockLowering.logTypeKeyLayout(of: instantiable, outcome: layout.fallback)
 		}
 		if SpikeShadow.logPath != nil {
 			await spikeCompare(instantiable: instantiable, mockLines: Array(bindingLines[rootReceiverBindingIndex...]), hooks: walk.placeHooks, indent: bodyIndent, flatRenames: !signature.renamesByLabelAndType.isEmpty, walk: walk)
@@ -477,6 +481,8 @@ extension MockLowering {
 		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
 		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
 		var pathsWithUnplannedLines = Set<[Int]>()
+		/// SPIKE: why each place has no record, for the switch's log.
+		var unrecordedReasons = [[Int]: String]()
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
 		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
@@ -599,6 +605,16 @@ extension MockLowering {
 				}
 				if let node {
 					recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
+					if builtPlaceCalls[childIndexPath] == nil, unrecordedReasons[childIndexPath] == nil {
+						unrecordedReasons[childIndexPath] = switch node {
+						case .built: "builtWithoutInputs"
+						case .alias: "alias"
+						case .publicMockCall: "publicMockCall"
+						case .cycleClosing: closerAndDefaultRecords[childIndexPath] == nil ? "closerUnrecorded" : "closer"
+						}
+					}
+				} else {
+					unrecordedReasons[childIndexPath] = "noNode"
 				}
 				childIndexPath.removeLast()
 				loopMembership = nil
