@@ -1858,6 +1858,24 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
+		        func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
+		            .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		            .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		            .init(thing: { _ in
+		                let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
+		                return thing
+		            })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
+		        }
 		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
@@ -1888,29 +1906,11 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            func __safeDI_thingImpl_ThingServiceBuilder_Mid_HoleImpl_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingImpl_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
 		                .init(thingBuilder: { _ in __safeDI_thingImpl_ThingServiceBuilder_Mid_HoleImpl_Scope_thingBuilder(chainToken: chainToken) })
 		            }
-		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
-		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
-		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: SendableLazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
-		                .init(thing: { _ in
-		                    let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
-		                    return thing
-		                })
-		            }
 		            func __safeDI_thingImpl_ThingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingImpl_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
 		                .init(seam: __safeDI_thingImpl_ThingServiceBuilder_Mid_Seam())
 		            }
 		            func __safeDI_thingImpl_ThingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingImpl_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
 		                .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingImpl_ThingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
 		            }
 		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_gadgetImpl_GadgetServiceSendableBuilder: __safeDI_gadgetImpl_GadgetServiceSendableBuilder_Mid(), __safeDI_thingImpl_ThingServiceBuilder: __safeDI_thingImpl_ThingServiceBuilder_Mid(), __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
 		        }
@@ -2447,6 +2447,27 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
+		        func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		            .init(thing: { _ in
+		                let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
+		                return thing
+		            })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		            .init(
+		                workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) },
+		                thing: { _ in
+		                    let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
+		                    return thing
+		                }
+		            )
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
+		        }
 		        func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
@@ -2455,27 +2476,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_4FDD8EBCB5AEED20.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(worker: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken.instance })) }, outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
-		                .init(thing: { _ in
-		                    let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
-		                    return thing
-		                })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
-		                .init(
-		                    workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) },
-		                    thing: { _ in
-		                        let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
-		                        return thing
-		                    }
-		                )
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
 		            }
 		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
 		        }
@@ -2722,6 +2722,21 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
+		        func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		            .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		            .init(thing: { _ in
+		                let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
+		                return thing
+		            })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
+		        }
 		        func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
@@ -2730,21 +2745,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_8DAE0459B0327243.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken.instance })) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
-		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
-		                .init(thing: { _ in
-		                    let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
-		                    return thing
-		                })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
 		            }
 		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
 		        }
@@ -3296,27 +3296,27 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
+		        func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
+		            .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken })) })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		            .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		            .init(thing: { _ in
+		                let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
+		                return thing
+		            })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
+		        }
 		        let chainToken = ChainToken()
 		        func __safeDI_mid() -> Mid {
 		            _ = Mid.__safeDI_Mid_8DAE0459B0327243.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
-		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken })) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
-		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
-		                .init(thing: { _ in
-		                    let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
-		                    return thing
-		                })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: values_chainToken) })
-		            }
 		            return Mid(__safeDI_chainToken: chainToken, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
 		        }
 		        let mid: Mid = __safeDI_mid()
@@ -3570,6 +3570,21 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
+		        func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken?>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
+		            .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken?>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
+		            .init(thing: { _ in
+		                let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
+		                return thing
+		            })
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
+		        }
+		        func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
+		            .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken?>({ [handed = values_chainToken] in handed.instance })) })
+		        }
 		        func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
@@ -3578,21 +3593,6 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_8DAE0459B0327243.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken?>({ chainToken.instance })) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken?>) -> Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService> {
-		                .init(workerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: chainToken) })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken?>) -> Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<any ThingService> {
-		                .init(thing: { _ in
-		                    let thing: any ThingService = ThingImpl(chainToken: chainToken.instance)
-		                    return thing
-		                })
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Outer() -> Outer.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(seam: __safeDI_thingServiceBuilder_Mid_Seam())
-		            }
-		            func __safeDI_thingServiceBuilder_Mid_Seam() -> Seam.__safeDI_HoleServiceCarrier<Mid.SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>> {
-		                .init(holeService: { values_chainToken, values_leafBuilder in __safeDI_thingServiceBuilder_Mid_HoleImpl_Scope(chainToken: LazilyInstantiated<ChainToken?>({ [handed = values_chainToken] in handed.instance })) })
 		            }
 		            return Mid(__safeDI_chainToken: chainToken.instance, __safeDI_thingServiceBuilder: __safeDI_thingServiceBuilder_Mid())
 		        }
