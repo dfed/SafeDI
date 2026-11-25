@@ -227,6 +227,14 @@ extension MockLowering.Walk {
 		else { return }
 		let relative = MockLowering.relativeConfiguration(of: constantNode, context: context, alternatives: record.alternatives, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
 		record.passedArguments = relative.passedArguments
+		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
+		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the
+		// function, so no `@Sendable` closure around the call captures the configuration.
+		if pathsStartingExtraction.contains(path) {
+			for index in record.passedArguments.indices where !record.passedArguments[index].staysOutsideSendableFunctions {
+				record.passedArguments[index].bindsBeforeCall = true
+			}
+		}
 		record.alternatives = relative.alternatives
 		builtRecords[path] = .built(record)
 	}

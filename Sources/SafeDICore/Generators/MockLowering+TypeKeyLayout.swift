@@ -64,8 +64,18 @@ extension MockLowering.Walk {
 		for path in placePathsInWalkOrder {
 			childPathsByParent[Array(path.dropLast()), default: []].append(path)
 		}
+		// The places with a place beneath them left unrecorded, which a place whose function reads overrides into locals
+		// keeps the walk's body for.
+		var pathsAboveUnrecordedPlace = Set<[Int]>()
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
+			defer {
+				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil {
+					for depth in 1..<max(path.count, 1) {
+						pathsAboveUnrecordedPlace.insert(Array(path.prefix(depth)))
+					}
+				}
+			}
 			guard let call = builtPlaceCalls[path] else { continue }
 			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
 			// An erased place the mock can override is built from a closure that returns the erased type, where the type
@@ -73,11 +83,16 @@ extension MockLowering.Walk {
 			// So is a place built in a function whose property is another type than the one it builds (`fulfilledByType:`,
 			// a protocol), whose override returns the property's type.
 			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable))
-			let isPlanned = call.isPlannedAtPlace && !overrideReturnsAnotherType
+			// A function that reads the overrides beneath it into locals keeps them where a place beneath it keeps the walk's
+			// body, which reads those locals.
+			let keepsOverrideLocals = pathsStartingExtraction.contains(path) && pathsAboveUnrecordedPlace.contains(path)
+			let isPlanned = call.isPlannedAtPlace && !overrideReturnsAnotherType && !keepsOverrideLocals
 			if overrideReturnsAnotherType {
 				unrecordedReasons[path] = "overrideReturnsAnotherType"
 			} else if pathsWithUnplannedLines.contains(path) {
-				unrecordedReasons[path] = "unplannedLines:" + (unplannedLineKinds[path] ?? "")
+				unrecordedReasons[path] = "unplannedLines:" + ([unplannedLineKinds[path]] + (keepsOverrideLocals ? ["overrideExtraction"] : [])).compactMap(\.self).joined(separator: "+")
+			} else if keepsOverrideLocals {
+				unrecordedReasons[path] = "unplannedLines:overrideExtraction"
 			} else if !call.isPlannedAtPlace {
 				unrecordedReasons[path] = "notPlannedAtPlace"
 			}
