@@ -271,9 +271,6 @@ struct ConstructionMemo {
 		keyedScopes.append(scope)
 	}
 
-	/// The reads of what a cycle passes that a lookup asks of an entry before its log (`ConstructionLog.cycleReads`).
-	private typealias CycleParameterReads = [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
-
 	/// The entries of one key in the order they were stored. Once a key holds two, each is also filed under what its reads
 	/// of the declaration a cycle closes on were answered, in the order its log asks them: most candidates of one key differ
 	/// in those answers alone, and a tree with cycles stores a candidate for each set of declarations its place is built
@@ -282,69 +279,107 @@ struct ConstructionMemo {
 	/// A key's only entry is filed nowhere, since a lookup asks its log either way, and filing an entry lists every cycle
 	/// read of its subtree: in a chain of places with one entry each, the lists grew with the square of the chain's length.
 	private struct Candidates {
-		/// A set of candidates whose first reads were answered alike: the candidates with no further read, and for each
-		/// read a candidate asks next, the node of each answer recorded for it.
+		/// A set of candidates whose first reads were answered alike: the candidates with no further read, and the nodes of
+		/// the candidates that ask one.
 		private struct Node {
 			var candidates = [Int]()
-			var nodeByAnswerByRead = [ConstructionLog.Read: [PropertyID?: Int]]()
+			var next = Next.none
+		}
+
+		/// For each read a node's candidates ask next, the node of each answer recorded for it. Most nodes are followed by
+		/// one read with one answer, which is held without a dictionary: a tree with cycles files a node for each read of
+		/// each set of declarations a place is built inside.
+		private enum Next {
+			case none
+			case one(read: ConstructionLog.Read, closedOn: PropertyID?, node: Int)
+			case several([ConstructionLog.Read: [PropertyID?: Int]])
 		}
 
 		private(set) var entries = [Entry]()
-		/// The cycle parameter reads of each entry filed so far: of none while the key holds one entry, of all after.
-		private var cycleParameterReadsOfFiledEntries = [CycleParameterReads]()
+		/// How many of `entries` are filed: none while the key holds one entry, all after.
+		private var filedEntryCount = 0
 		/// The first node holds every filed candidate before any read.
 		private var nodes = [Node()]
 
 		mutating func append(_ entry: Entry) {
 			entries.append(entry)
 			guard entries.count > 1 else { return }
-			for index in cycleParameterReadsOfFiledEntries.count..<entries.count {
-				file(entries[index], at: index)
+			while filedEntryCount < entries.count {
+				file(entries[filedEntryCount], at: filedEntryCount)
+				filedEntryCount += 1
 			}
 		}
 
 		private mutating func file(_ entry: Entry, at index: Int) {
-			var cycleParameterReads = CycleParameterReads()
 			var node = 0
-			let cycleReads = entry.reads.cycleReads
-			GenerationWork.record(cycleReads.count, by: .filingMemoEntryReads)
-			for (read, answer) in cycleReads {
+			var readCount = 0
+			_ = entry.reads.forEachCycleRead { read, answer in
+				readCount += 1
 				switch answer {
 				case let .declarationClosedOn(closedOn):
-					if let next = nodes[node].nodeByAnswerByRead[read]?[closedOn] {
-						node = next
-					} else {
-						nodes[node].nodeByAnswerByRead[read, default: [:]][closedOn] = nodes.count
-						node = nodes.count
-						nodes.append(Node())
-					}
+					node = nodeFollowing(node, at: read, answered: closedOn)
 				case .cycleParameterContext, .nearestDeclaration, .binding, .passesNil:
-					cycleParameterReads.append((read, answer))
+					break
 				}
+				return true
 			}
+			GenerationWork.record(readCount, by: .filingMemoEntryReads)
 			nodes[node].candidates.append(index)
-			cycleParameterReadsOfFiledEntries.append(cycleParameterReads)
 		}
 
-		/// The entries, in the order they were stored, whose every cycle read `contextAnswer` answers as recorded; a key's
-		/// only entry, whose reads are filed nowhere, whatever it answers.
+		/// The node of the candidates of `node` that ask `read` next and were answered `closedOn`, added when no candidate
+		/// was yet.
+		private mutating func nodeFollowing(_ node: Int, at read: ConstructionLog.Read, answered closedOn: PropertyID?) -> Int {
+			switch nodes[node].next {
+			case .none:
+				nodes[node].next = .one(read: read, closedOn: closedOn, node: nodes.count)
+			case let .one(onlyRead, onlyClosedOn, onlyNode):
+				if onlyRead == read, onlyClosedOn == closedOn {
+					return onlyNode
+				} else {
+					var nodeByAnswerByRead = [onlyRead: [onlyClosedOn: onlyNode]]
+					nodeByAnswerByRead[read, default: [:]][closedOn] = nodes.count
+					nodes[node].next = .several(nodeByAnswerByRead)
+				}
+			case var .several(nodeByAnswerByRead):
+				if let next = nodeByAnswerByRead[read]?[closedOn] {
+					return next
+				} else {
+					nodes[node].next = .none
+					nodeByAnswerByRead[read, default: [:]][closedOn] = nodes.count
+					nodes[node].next = .several(nodeByAnswerByRead)
+				}
+			}
+			nodes.append(Node())
+			return nodes.count - 1
+		}
+
+		/// The entries, in the order they were stored, whose every read of the declaration a cycle closes on `contextAnswer`
+		/// answers as recorded; a key's only entry, whose reads are filed nowhere, whatever it answers.
 		func entries(answeredAlikeBy contextAnswer: (ConstructionLog.Read) -> ConstructionLog.Answer) -> [Entry] {
-			guard !cycleParameterReadsOfFiledEntries.isEmpty else { return entries }
+			guard filedEntryCount > 0 else { return entries }
 			var indices = [Int]()
 			// Candidates can ask their reads in different orders, so a node can hold several next reads, each followed: the
 			// indices found are sorted, so the order the reads are followed in reaches nothing.
 			var nodesToVisit = [0]
 			while let node = nodesToVisit.popLast() {
 				indices.append(contentsOf: nodes[node].candidates)
-				for (read, nodeByAnswer) in nodes[node].nodeByAnswerByRead {
-					if case let .declarationClosedOn(closedOn) = contextAnswer(read), let next = nodeByAnswer[closedOn] {
+				switch nodes[node].next {
+				case .none:
+					break
+				case let .one(read, closedOn, next):
+					if contextAnswer(read) == .declarationClosedOn(closedOn) {
 						nodesToVisit.append(next)
+					}
+				case let .several(nodeByAnswerByRead):
+					for (read, nodeByAnswer) in nodeByAnswerByRead {
+						if case let .declarationClosedOn(closedOn) = contextAnswer(read), let next = nodeByAnswer[closedOn] {
+							nodesToVisit.append(next)
+						}
 					}
 				}
 			}
-			return indices.sorted().compactMap { index in
-				cycleParameterReadsOfFiledEntries[index].allSatisfy { contextAnswer($0.read) == $0.answer } ? entries[index] : nil
-			}
+			return indices.sorted().map { entries[$0] }
 		}
 	}
 
@@ -584,16 +619,12 @@ struct ConstructionLog {
 		return Self(reads: answers.filter { readsKept.insert($0.read).inserted })
 	}
 
-	/// The reads of what a cycle closes on or passes that `answeredAlike(in:)` asks first, in the order it asks them, each
-	/// with its recorded answer. A context whose answer to one is not `==` the recorded one answers the log otherwise
-	/// (`Answer.isAlike` requires `==`).
-	var cycleReads: [(read: Read, answer: Answer)] {
-		var cycleReads = [(read: Read, answer: Answer)]()
-		_ = forEachRead(where: \.isCycleRead) { recorded in
-			cycleReads.append((recorded.read.read, recorded.answer))
-			return true
-		}
-		return cycleReads
+	/// Calls `body` with each read of what a cycle closes on or passes, the reads `answeredAlike(in:)` asks first, in the
+	/// order it asks them, each with its recorded answer, until `body` returns `false`. A context whose answer to one is
+	/// not `==` the recorded one answers the log otherwise (`Answer.isAlike` requires `==`).
+	/// - Returns: Whether `body` returned `true` for every read.
+	func forEachCycleRead(_ body: (Read, Answer) -> Bool) -> Bool {
+		forEachRead(where: \.isCycleRead) { body($0.read.read, $0.answer) }
 	}
 
 	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read
