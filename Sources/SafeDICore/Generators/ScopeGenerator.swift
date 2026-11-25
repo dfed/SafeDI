@@ -7340,7 +7340,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		   !body.fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
 		{
 			body.inlinedFills[key] = inlinedFill
-			let handedLabels = Set((child.generator.fillFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
+			// A fill reads a field bound from a deferred parameter from the caller's scope, not from what it is handed
+			// (`fillBoundFields`), so such a read captures the caller's declaration.
+			let handedLabels = Set((child.generator.fillBoundFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
 			if !child.generator.receivedProperties.allSatisfy({ handedLabels.contains($0.label) }) {
 				body.inlinedFillKeysReadingCallersDeclarations.insert(key)
 			}
