@@ -127,6 +127,9 @@ struct TypeKeyLayout {
 		let domainLabels: Set<String>
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
+		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
+		/// apart from the labels the statements bind, so no read of a label resolves to a function.
+		var positionsByDeclaredFunction = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
 
@@ -206,6 +209,9 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
+	/// The local each call binds a passed argument to before it calls (`PassedArgument.bindsBeforeCall`), by the call's
+	/// site and the parameter's name.
+	var boundArgumentNames = [CallSite: [String: String]]()
 }
 
 extension AliasPlaceRecord {

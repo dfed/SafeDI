@@ -145,6 +145,11 @@ extension MockLowering.Walk {
 				.optionalMember(member, of: substituting(base))
 			case let .call(member, of: base, arguments: arguments, argumentsWrapper: wrapper):
 				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
+			case let .spliced(segments):
+				.spliced(segments.map { segment in
+					guard case let .value(value) = segment else { return segment }
+					return .value(substituting(value))
+				})
 			case .rootDeclaration, .read, .emptyInitialization:
 				value
 			}

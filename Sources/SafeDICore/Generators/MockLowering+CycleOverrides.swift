@@ -260,7 +260,7 @@ extension MockLowering.Walk {
 			return nearestConfiguration(takingParameterNamed: read.label, around: path)
 		case let .passedArgument(name):
 			return nearestConfiguration(takingParameterNamed: name, around: path)
-		case .optionalMember, .call, .emptyInitialization:
+		case .optionalMember, .call, .emptyInitialization, .spliced:
 			// A fresh configuration, or anything but a configuration, reads no override.
 			return nil
 		}
