@@ -4713,7 +4713,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// (`MockLowering.argumentsSurfacedWithoutOverride(of:usesMockInitializer:handWrittenDefaults:)`).
 		let handWrittenMockDefaultParameters: [TypeDescription: [DefaultParameter]]
 		/// The concrete types whose `SafeDIMockConfiguration` is `@Sendable`-typed, from
-		/// `sendableConfigurationTypeNames()` across every root. Such a struct stores each labeled
+		/// `sendableConfigurationTypeNames(ofMockRootOf:)` across every root. Such a struct stores each labeled
 		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
 		/// so the body must know which structs do (`resolveBuilderArguments`).
 		let sendableConfigurationTypeNames: Set<String>
@@ -11285,15 +11285,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// for a property, inside a `Sendable` scope where it or an ancestor builds in a `@Sendable` function, and needs a
 	/// configuration struct where a child of its own is built for a property, its construction has default-valued
 	/// parameters, or it closes a cycle.
-	nonisolated func sendableConfigurationTypeNames() -> Set<String> {
+	nonisolated func sendableConfigurationTypeNames(ofMockRootOf mockedInstantiable: Instantiable) -> Set<String> {
 		var result = Set<String>()
 		var constructions = MockConstructions()
 		// A worklist rather than recursion, since the tree can be as deep as the module has types.
-		var generatorsToVisit = [(generator: self, insideSendableScope: false)]
-		while let (generator, insideSendableScope) = generatorsToVisit.popLast() {
+		// Whether a generator's children build what an actor's initializer is handed, outside every lazy wrapper's builder
+		// function: such a child reads its overrides as a `@Sendable` builder function does (`isInsideActorArgument`
+		// in `MockLowering+Walk.swift`). A mock root that is an actor takes its level so, in an internal mock and a public one
+		// alike.
+		var generatorsToVisit = [(generator: self, insideSendableScope: false, insideActorArgument: mockedInstantiable.declarationType == .actorType)]
+		while let (generator, insideSendableScope, insideActorArgument) = generatorsToVisit.popLast() {
 			for child in generator.propertiesToGenerate {
 				if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
-					let childInsideSendableScope = insideSendableScope || child.buildsInSendableFunction
+					let isWrapped = !childProperty.propertyType.isConstant
+					let childInsideSendableScope = insideSendableScope || child.buildsInSendableFunction || insideActorArgument
 					if childInsideSendableScope {
 						let needsConfigurationStruct = isPropertyCycle
 							|| child.propertiesToGenerate.contains(where: \.isBuiltForProperty)
@@ -11306,7 +11311,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							result.insert(childInstantiable.concreteInstantiable.asSource)
 						}
 					}
-					generatorsToVisit.append((generator: child, insideSendableScope: childInsideSendableScope))
+					let usesMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType)
+					let childInsideActorArgument = (childInstantiable.declarationType == .actorType && !usesMockInitializer) || (insideActorArgument && !isWrapped)
+					generatorsToVisit.append((generator: child, insideSendableScope: childInsideSendableScope, insideActorArgument: childInsideActorArgument))
 				}
 			}
 		}
