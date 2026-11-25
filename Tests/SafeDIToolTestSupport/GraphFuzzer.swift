@@ -10000,9 +10000,9 @@ enum GraphFuzzerGenerator {
 		/// the protocol, and the root fills the builder with it; otherwise the root fills it with `nil`, as inline binds the
 		/// property `nil`. Where it is fulfilled, a third of the time the holder also instantiates the protocol required, so
 		/// that the optional builder is named apart beside a required one of its type. A third of the time
-		/// `OptionalPlaceOuter`, a seam of the same module, builds the seam and passes the builder up, and three in ten the
-		/// seam generates its mock, which binds the property `nil` and takes no builder for it. The value comparator judges
-		/// the seam against its inline build and its visible build.
+		/// `OptionalPlaceOuter`, a seam of the same module, builds the seam and passes the builder up, and where nothing fulfills
+		/// the protocol, three in ten the seam generates its mock, which binds the property `nil` and takes no builder for it.
+		/// The value comparator judges the seam against its inline build and its visible build.
 		///
 		/// `optionalPlaceRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. Every roll
@@ -10017,8 +10017,13 @@ enum GraphFuzzerGenerator {
 			let leafRequires = optionalPlaceRandom.percentChance(40)
 			let besideRequiredRoll = optionalPlaceRandom.percentChance(35)
 			let passedUp = optionalPlaceRandom.percentChance(35)
-			let seamMocked = optionalPlaceRandom.percentChance(30)
+			let seamMockedRoll = optionalPlaceRandom.percentChance(30)
 			let besideRequired = besideRequiredRoll && isFulfilled
+			// The seam's own mock is internal to the seam's module, which sees no fulfilling type, so it binds the property
+			// from an override that defaults to `nil`, while the visible build, which declares the fillers in the seam's
+			// module, builds `OptionalPlaceAnalyticsImpl`: a stated difference, not a defect (seam smoke seeds 59 and 277).
+			// So the seam generates its mock only where nothing fulfills the protocol.
+			let seamMocked = seamMockedRoll && !isFulfilled
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
 			let protocolName = "\(prefix)OptionalPlaceAnalytics"
