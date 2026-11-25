@@ -3001,8 +3001,12 @@ jobs:
         with:
           pattern: graph-fuzzer-report-*
           path: reports
+      # `reports/report.txt` is where the one report lies when one shard alone
+      # uploaded: a pattern that matches one artifact unpacks it into the path
+      # itself. The script keeps the paths that exist, and names the shards
+      # whose reports are absent.
       - name: Combine Shard Reports
-        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt reports/report.txt
       # Judges the shards' comparisons with the base's SafeDITool: a pull
       # request whose description holds the line `Generated output:
       # unchanged` fails on any difference; any other pull request gets the
@@ -3098,14 +3102,40 @@ jobs:
       - name: Check the Value Comparison Outputs Script Against Its Fixtures
         run: .github/scripts/keep-value-outputs-used-in-run.sh --self-test "$RUNNER_TEMP/keep-value-outputs-self-test"
       # A test job that failed, was cancelled or could not export uploads no
-      # report, and the next step names the report that is missing, so a
-      # download that finds nothing is not this step's failure.
-      - name: Download Coverage Reports
+      # report, and "Find Lines No Test Executes" names the report that is
+      # missing, so a download that finds nothing is not its step's failure.
+      # Each report is downloaded by name into a directory of its own, never
+      # by a pattern: a pattern that matches one artifact unpacks it into the
+      # path itself, without the directory named after it that two matches
+      # get, so with the Xcode 26 job's report absent the Linux job's was
+      # reported missing too.
+      - name: Download the Linux Coverage Report
         continue-on-error: true
         uses: ./.github/actions/download-artifact
         with:
-          pattern: line-coverage-*
-          path: ${{ runner.temp }}/line-coverage
+          name: line-coverage-linux
+          path: ${{ runner.temp }}/line-coverage/line-coverage-linux
+      - name: Download the Xcode 26 Coverage Report
+        if: ${{ needs.spm-plan.outputs.split != 'true' }}
+        continue-on-error: true
+        uses: ./.github/actions/download-artifact
+        with:
+          name: line-coverage-macos
+          path: ${{ runner.temp }}/line-coverage/line-coverage-macos
+      - name: Download the Xcode 26 Coverage Report of the Seams and Mocks Part
+        if: ${{ needs.spm-plan.outputs.split == 'true' }}
+        continue-on-error: true
+        uses: ./.github/actions/download-artifact
+        with:
+          name: line-coverage-macos-seams-and-mocks
+          path: ${{ runner.temp }}/line-coverage/line-coverage-macos-seams-and-mocks
+      - name: Download the Xcode 26 Coverage Report of the Rest
+        if: ${{ needs.spm-plan.outputs.split == 'true' }}
+        continue-on-error: true
+        uses: ./.github/actions/download-artifact
+        with:
+          name: line-coverage-macos-the-rest
+          path: ${{ runner.temp }}/line-coverage/line-coverage-macos-the-rest
       # When the Xcode 26 tests ran as two jobs, each uploaded the report of
       # its part, and the script sums the two. It refuses a part without the
       # other, whichever directories this step names, since each report says
