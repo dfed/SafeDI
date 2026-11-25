@@ -357,7 +357,7 @@ struct BinaryWriter {
 	/// written whole would read back, whatever the elements are. An element is written once, where the list would have
 	/// written it, and only its bytes are compared and moved: nothing is written twice to compare, since a signature's
 	/// lists hold millions of elements. An empty list is never one a later list differs from.
-	mutating func writeDifference<Element: BinaryCodable>(of list: [Element], in slot: BinaryDifferenceSlot) {
+	mutating func writeDifference(of list: [some BinaryCodable], in slot: BinaryDifferenceSlot) {
 		guard sharesSignatureValues else {
 			write(list)
 			return

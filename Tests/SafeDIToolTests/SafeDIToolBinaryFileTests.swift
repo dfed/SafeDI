@@ -1658,14 +1658,14 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	func binaryWriter_readsBackEachList_whenListsAreWrittenAsDifferencesFromOneAnother() throws {
 		// Every list of up to eight of three strings, three thousand of them in an order a fixed generator draws, so that
 		// a list follows one it extends, one it is the start or the end of, one it shares nothing with, and itself.
-		var state: UInt64 = 0x9E37_79B9_7F4A_7C15
+		var state: UInt64 = 0x9E3779B97F4A7C15
 		func next(below bound: UInt64) -> Int {
 			state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
 			return Int((state >> 33) % bound)
 		}
 		let strings = ["first", "second", "third"]
 		var lists = [ListWrittenAsDifference]()
-		for _ in 0..<3000 {
+		for _ in 0..<3_000 {
 			lists.append(ListWrittenAsDifference(list: (0..<next(below: 9)).map { _ in strings[next(below: 3)] }))
 		}
 		// A chain as a public mock's places write: each list the one before plus an element, then each less its first.
