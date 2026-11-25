@@ -509,6 +509,60 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – A receive inside a cycle of instantiators
+
+	@Test(arguments: ReceiveInsideCycle.allCases, DeclarationOrder.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenTypeInsideCycleOfInstantiatorsReceivesWhatOnlySomePathsToCycleDeclare(graph: ReceiveInsideCycle, order: DeclarationOrder) async throws {
+		// A type on a cycle of instantiators receives a property, so every type of the cycle reads that label from above
+		// wherever the cycle is entered: the key of each holds the label's closest declaration. The paths into the cycle
+		// declare the label, declare it with another type, or do not declare it, so a walk of the cycle found clean beneath
+		// one must not be skipped beneath another, whichever type of the cycle a path enters at and whatever order the
+		// declarations are in. With the labels a type on a cycle reads taken from a walk that stops at a type whose own
+		// walk is in progress, a type's key lacked the label and the error of a path was lost.
+		let fixture = graph.fixture(order: order)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		switch walking.outcome {
+		case .generated:
+			#expect(!graph.isInvalid)
+		case .error:
+			#expect(graph.isInvalid)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenRingOfBuildersWithReceiveInsideIsDrawnFromEachSeed() async throws {
+		// A draw of the shape the handwritten graphs above take four orders of: types that build each other in a ring, some
+		// of which receive, rename, declare or forward one label, entered at any of them by paths that declare the label,
+		// declare it with another type or declare nothing, with every type's declarations and the files in a drawn order.
+		// Every graph is run with the skip and without it. The counts show the draw reaches what it is for: graphs the tool
+		// accepts, graphs it rejects, and graphs whose walk skipped a subtree. With a cycle's types answered one at a time
+		// from a walk in progress, the two runs of seeds 27 and 65 differ.
+		var acceptedCount = 0
+		var rejectedCount = 0
+		var skippingCount = 0
+		for seed in 0..<Self.ringDrawSeedCount {
+			let fixture = Self.ringOfBuildersWithReceiveInside(seed: seed)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome, "seed \(seed)")
+			switch walking.outcome {
+			case .generated:
+				acceptedCount += 1
+			case .error:
+				rejectedCount += 1
+			}
+			if skipping.skippedSubtreeCount > 0 {
+				skippingCount += 1
+			}
+		}
+		let counts = [acceptedCount, rejectedCount, skippingCount]
+		#expect(counts == [72, 128, 149])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -905,6 +959,225 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			}
 		}
 		return (skippedSubtreeCounts[LabelBeneath.allCases.firstIndex(of: beneath) ?? 0], error)
+	}
+
+	/// The order each type of a graph declares its properties in: the walk takes a scope's children last first, so which
+	/// path reaches a shared scope first follows it.
+	enum DeclarationOrder: CaseIterable {
+		case written
+		case reversed
+		case rootRotated
+		case rootRotatedAndOthersReversed
+
+		func ordered(_ declarations: [String], ofRoot isRoot: Bool) -> [String] {
+			switch self {
+			case .written:
+				declarations
+			case .reversed:
+				declarations.reversed()
+			case .rootRotated:
+				isRoot ? Array(declarations.dropFirst() + declarations.prefix(1)) : declarations
+			case .rootRotatedAndOthersReversed:
+				isRoot ? Array(declarations.dropFirst() + declarations.prefix(1)) : declarations.reversed()
+			}
+		}
+	}
+
+	/// Graphs in which a type on a cycle of instantiators receives a property that the paths into the cycle declare
+	/// differently.
+	enum ReceiveInsideCycle: CaseIterable {
+		/// `A` and `B` build each other; `B` receives `y: Y`. `One` and `Third` declare `y` and enter the cycle at `A` and at
+		/// `B`; `Two` enters at `A` and declares nothing.
+		case requiredAndOnePathDeclaresNothing
+		/// The same, with `B` receiving `y` only if available: `nil` beneath `Two`.
+		case onlyIfAvailableAndOnePathDeclaresNothing
+		/// The same, with `B` renaming `y`.
+		case renamedAndOnePathDeclaresNothing
+		/// `A` and `B` build each other; `A` receives `x: X`, and `B` builds `C`, which forwards `x`. `Flow` and `Flow2`
+		/// declare `x` and enter at `A`; `Middle` enters at `B` and declares nothing.
+		case requiredBesideForwarderAndOnePathDeclaresNothing
+		/// `A` and `B` build each other; `A` receives `x: X`, which `Root` declares. `P` and `Q` each declare `x: Y` and
+		/// build, for one label, a type that enters the cycle at `B`: `N`, which declares `x: X` again, and `M`, which
+		/// declares `x: Y`, which hides `Root`'s.
+		case requiredAndOnePathHides
+		/// The same, with `A` receiving `x` only if available.
+		case onlyIfAvailableAndOnePathHides
+		/// `Screen1`, `Screen3` and `Screen4` build each other, one through an erased instantiator; `Screen1` receives
+		/// `y: X`, which `Root` declares. `Root` enters the cycle at `Screen1` and, through `Screen2`, at `Screen4`; `Screen0`
+		/// declares `y: Y`, which hides `Root`'s, and enters through `Screen2` too.
+		case requiredInsideCycleThroughErasedInstantiatorAndOnePathHides
+
+		var isInvalid: Bool {
+			switch self {
+			case .requiredAndOnePathDeclaresNothing, .renamedAndOnePathDeclaresNothing, .requiredBesideForwarderAndOnePathDeclaresNothing, .requiredAndOnePathHides, .onlyIfAvailableAndOnePathHides, .requiredInsideCycleThroughErasedInstantiatorAndOnePathHides:
+				true
+			case .onlyIfAvailableAndOnePathDeclaresNothing:
+				false
+			}
+		}
+
+		private var types: [(name: String, declarations: [String])] {
+			switch self {
+			case .requiredAndOnePathDeclaresNothing, .onlyIfAvailableAndOnePathDeclaresNothing, .renamedAndOnePathDeclaresNothing:
+				let receive = switch self {
+				case .onlyIfAvailableAndOnePathDeclaresNothing:
+					"@Received(onlyIfAvailable: true) let y: Y?"
+				case .renamedAndOnePathDeclaresNothing:
+					"@Received(fulfilledByDependencyNamed: \"y\", ofType: Y.self) let renamed: Y"
+				case .requiredAndOnePathDeclaresNothing, .requiredBesideForwarderAndOnePathDeclaresNothing, .requiredAndOnePathHides, .onlyIfAvailableAndOnePathHides, .requiredInsideCycleThroughErasedInstantiatorAndOnePathHides:
+					"@Received let y: Y"
+				}
+				return [
+					("Root", ["@Instantiated let one: Instantiator<One>", "@Instantiated let two: Instantiator<Two>", "@Instantiated let third: Instantiator<Third>"]),
+					("One", ["@Instantiated let y: Y", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Two", ["@Instantiated let aBuilder: Instantiator<A>"]),
+					("Third", ["@Instantiated let y: Y", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("A", ["@Instantiated let bBuilder: Instantiator<B>"]),
+					("B", [receive, "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Y", []),
+				]
+			case .requiredBesideForwarderAndOnePathDeclaresNothing:
+				return [
+					("Root", ["@Instantiated let flow: Flow", "@Instantiated let middle: Middle", "@Instantiated let flow2: Flow2"]),
+					("Flow", ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Flow2", ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("Middle", ["@Instantiated let bBuilder: Instantiator<B>"]),
+					("A", ["@Received let x: X", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("B", ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let cBuilder: Instantiator<C>"]),
+					("C", ["@Forwarded let x: X"]),
+					("X", []),
+				]
+			case .requiredAndOnePathHides, .onlyIfAvailableAndOnePathHides:
+				return [
+					("Root", ["@Instantiated let x: X", "@Instantiated let p: P", "@Instantiated let q: Q", "@Instantiated let aBuilder: Instantiator<A>"]),
+					("P", ["@Instantiated let x: Y", "@Instantiated let link: N"]),
+					("Q", ["@Instantiated let link: M"]),
+					("N", ["@Instantiated let x: X", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("M", ["@Instantiated let x: Y", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("A", [self == .requiredAndOnePathHides ? "@Received let x: X" : "@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let link: Leaf", "@Instantiated let bBuilder: Instantiator<B>"]),
+					("B", ["@Instantiated let aBuilder: Instantiator<A>"]),
+					("Leaf", []),
+					("X", []),
+					("Y", []),
+				]
+			case .requiredInsideCycleThroughErasedInstantiatorAndOnePathHides:
+				return [
+					("Root", ["@Instantiated let y: X", "@Instantiated(fulfilledByType: \"Screen2\", erasedToConcreteExistential: true) let root2: ErasedInstantiator<(), AnyScreen>", "@Instantiated let root0: Instantiator<Screen0>", "@Instantiated let root1: Instantiator<Screen1>"]),
+					("Screen0", ["@Instantiated let y: Y", "@Instantiated let builder0: Instantiator<Screen2>"]),
+					("Screen1", ["@Instantiated(fulfilledByType: \"Screen3\", erasedToConcreteExistential: true) let builder0: ErasedInstantiator<(), AnyScreen>", "@Received let y: X"]),
+					("Screen2", ["@Instantiated let builder0: Instantiator<Screen4>"]),
+					("Screen3", ["@Instantiated let builder0: Instantiator<Screen4>"]),
+					("Screen4", ["@Instantiated let builder1: Instantiator<Screen1>"]),
+					("X", []),
+					("Y", []),
+				]
+			}
+		}
+
+		func fixture(order: DeclarationOrder) -> [String] {
+			types.map { name, declarations in
+				seamFixtureType(named: name, isRoot: name == "Root", isFinalClass: true, declarations: order.ordered(declarations, ofRoot: name == "Root"))
+			} + [
+				"""
+				public final class AnyScreen {
+				    public init(_ screen: AnyObject) {
+				        self.screen = screen
+				    }
+
+				    public let screen: AnyObject
+				}
+				""",
+			]
+		}
+	}
+
+	private static let ringDrawSeedCount: UInt64 = 200
+
+	/// The graph of `seed`: two to four `Ring` types that each build the next through an `Instantiator`, now and then with
+	/// one more builder across the ring. One drawn type of the ring receives `mark` (required, only if available, or
+	/// renamed); each other now and then receives it too, declares it, or builds a leaf that forwards or receives it. One
+	/// to three roots, which may declare `mark`, each build one to three entries by value or through an `Instantiator`; an
+	/// entry declares `mark`, declares it with another type, or declares nothing, and builds one type of the ring. A root
+	/// may build a type of the ring itself. Each type's declarations and the files are shuffled.
+	private static func ringOfBuildersWithReceiveInside(seed: UInt64) -> [String] {
+		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x52696E6752656376)
+		func shuffled<Element>(_ elements: [Element]) -> [Element] {
+			var elements = elements
+			for index in elements.indices.dropLast() {
+				elements.swapAt(index, random.integer(in: index...elements.count - 1))
+			}
+			return elements
+		}
+		let receives = [
+			"@Received let mark: Mark",
+			"@Received(onlyIfAvailable: true) let mark: Mark?",
+			"@Received(fulfilledByDependencyNamed: \"mark\", ofType: Mark.self) let renamedMark: Mark",
+		]
+		let ringCount = random.integer(in: 2...4)
+		let receiverIndex = random.integer(in: 0...ringCount - 1)
+		func ringBuilder(_ index: Int) -> String {
+			"@Instantiated let ring\(index)Builder: Instantiator<Ring\(index)>"
+		}
+		var types = [(name: String, isRoot: Bool, declarations: [String])]()
+		for index in 0..<ringCount {
+			var declarations = [ringBuilder((index + 1) % ringCount)]
+			if ringCount > 2, random.percentChance(25) {
+				declarations.append(ringBuilder((index + 2) % ringCount))
+			}
+			if index == receiverIndex {
+				declarations.append(random.element(of: receives))
+			} else {
+				switch random.integer(in: 0...9) {
+				case 0:
+					declarations.append(random.element(of: receives))
+				case 1:
+					declarations.append("@Instantiated let mark: Mark")
+				case 2:
+					declarations.append("@Instantiated let forwarderBuilder: Instantiator<Forwarder>")
+				case 3:
+					declarations.append("@Instantiated let leaf: Leaf")
+				default:
+					break
+				}
+			}
+			types.append(("Ring\(index)", false, declarations))
+		}
+		var entryCount = 0
+		for rootIndex in 0..<random.integer(in: 1...3) {
+			var rootDeclarations = [String]()
+			if random.percentChance(50) {
+				rootDeclarations.append("@Instantiated let mark: Mark")
+			}
+			if random.percentChance(30) {
+				rootDeclarations.append(ringBuilder(random.integer(in: 0...ringCount - 1)))
+			}
+			for _ in 0..<random.integer(in: 1...3) {
+				var entryDeclarations = [ringBuilder(random.integer(in: 0...ringCount - 1))]
+				switch random.integer(in: 0...9) {
+				case 0...4:
+					entryDeclarations.append("@Instantiated let mark: Mark")
+				case 5:
+					entryDeclarations.append("@Instantiated let mark: OtherMark")
+				default:
+					break
+				}
+				types.append(("Entry\(entryCount)", false, entryDeclarations))
+				rootDeclarations.append(random.percentChance(50)
+					? "@Instantiated let entry\(entryCount): Entry\(entryCount)"
+					: "@Instantiated let entry\(entryCount)Builder: Instantiator<Entry\(entryCount)>")
+				entryCount += 1
+			}
+			types.append(("Root\(rootIndex)", true, rootDeclarations))
+		}
+		types += [
+			("Forwarder", false, ["@Forwarded let mark: Mark"]),
+			("Leaf", false, ["@Received let mark: Mark"]),
+			("Mark", false, []),
+			("OtherMark", false, []),
+		]
+		return shuffled(types).map { name, isRoot, declarations in
+			seamFixtureType(named: name, isRoot: isRoot, isFinalClass: true, declarations: shuffled(declarations))
+		}
 	}
 
 	/// `Shared` beneath `A`, `B`, `C` and `D`, which `Root` builds in `order`: only `B` declares `x: Y`, which hides the `x: X`
