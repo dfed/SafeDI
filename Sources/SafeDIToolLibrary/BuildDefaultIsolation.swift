@@ -57,4 +57,40 @@ enum BuildDefaultIsolation: Equatable {
 	) -> BuildDefaultIsolation? {
 		expandedBuildSettings?.defaultIsolation ?? option.flatMap(BuildDefaultIsolation.init)
 	}
+
+	/// A warning when the module's configuration declares another default isolation than this one, the build's. The
+	/// generated code follows the configuration either way.
+	func mismatchWarning(declaredBy configuration: SafeDIConfiguration?) -> SourceDiagnostic? {
+		switch self {
+		case .mainActor:
+			guard let configuration else {
+				return SourceDiagnostic(
+					severity: .warning,
+					location: nil,
+					message: "This module is compiled with `-default-isolation MainActor`, but it declares no `#\(SafeDIConfigurationVisitor.macroName)`, so SafeDI generates code for a nonisolated module. Add `#\(SafeDIConfigurationVisitor.macroName)(defaultIsolation: MainActor.self)` to a file named `\(SafeDIConfiguration.conventionalFileName)` in this module.",
+				)
+			}
+			switch configuration.defaultIsolation {
+			case .mainActor:
+				return nil
+			case nil:
+				return SourceDiagnostic(
+					severity: .warning,
+					location: configuration.declarationLocation,
+					message: "This module is compiled with `-default-isolation MainActor`, but `#\(SafeDIConfigurationVisitor.macroName)` doesn’t declare `defaultIsolation: MainActor.self`, so SafeDI generates code for a nonisolated module.",
+				)
+			}
+		case .nonisolated:
+			switch configuration?.defaultIsolation {
+			case .mainActor:
+				return SourceDiagnostic(
+					severity: .warning,
+					location: configuration?.declarationLocation,
+					message: "This module is compiled with `-default-isolation nonisolated`, but `#\(SafeDIConfigurationVisitor.macroName)` declares `defaultIsolation: MainActor.self`, so SafeDI generates code for a main-actor module.",
+				)
+			case nil:
+				return nil
+			}
+		}
+	}
 }

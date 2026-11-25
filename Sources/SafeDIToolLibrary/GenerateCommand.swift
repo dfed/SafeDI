@@ -328,6 +328,8 @@ public struct Generate: AsyncParsableCommand {
 			// Judged at the paths the module's additional files were found at: as scan resolved them when the module
 			// comes from scan's cache, and as this run resolved them otherwise.
 			+ (sourceConfiguration?.unreadableAdditionalDirectoryWarnings(for: parsed.module.additionalDirectories) ?? [])
+			// The build's default isolation never changes the generated code, which follows the configuration.
+			+ [BuildDefaultIsolation.reported(option: buildDefaultIsolation, expandedBuildSettings: expandedBuildSettings)?.mismatchWarning(declaredBy: sourceConfiguration)].compactMap(\.self)
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
