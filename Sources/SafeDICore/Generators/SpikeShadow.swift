@@ -131,7 +131,10 @@ extension ScopeGenerator {
 				break
 			case let .sequence(codes), let .lines(codes):
 				stack += codes
-			case let .indented(inner, _), let .rootFunction(_, inner), let .sendableFunction(inner), let .omittingRootFunctions(inner, _):
+			case let .indented(inner, _),
+			     let .rootFunction(_, inPlace: inner),
+			     let .sendableFunction(inner),
+			     let .omittingRootFunctions(inner, _):
 				stack.append(inner)
 			case let .place(plan):
 				places += 1
@@ -166,7 +169,10 @@ extension ScopeGenerator {
 				break
 			case let .sequence(codes), let .lines(codes):
 				stack += codes.reversed()
-			case let .indented(inner, _), let .rootFunction(_, inner), let .sendableFunction(inner), let .omittingRootFunctions(inner, _):
+			case let .indented(inner, _),
+			     let .rootFunction(_, inPlace: inner),
+			     let .sendableFunction(inner),
+			     let .omittingRootFunctions(inner, _):
 				stack.append(inner)
 			case let .place(plan):
 				if case let .built(record) = plan.record {

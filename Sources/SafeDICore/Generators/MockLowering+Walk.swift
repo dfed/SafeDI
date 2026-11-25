@@ -154,6 +154,7 @@ extension ScopeGenerator {
 			loops: mockLoweringLoopMemberships,
 			inScope: signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties),
 			path: ReservedName.mockOverridesParameterName,
+			pathValue: .rootDeclaration(ReservedName.mockOverridesParameterName),
 			indent: bodyIndent,
 			lines: &bindingLines,
 		)
@@ -336,6 +337,13 @@ extension MockLowering {
 		/// node read its configuration rather than a closure: a node a cycle builds again, which its parent's configuration
 		/// has no field for, reads the nearest one of its type (`MockLowering+CycleOverrides.swift`).
 		var overridePathsByType = [String: [MockLowering.AncestorOverridePath]]()
+		/// The configuration each type around the node the walk is at declares in the type key's form, nearest last, whether
+		/// or not an override reaches it: whether its place reads a configuration struct, and whether it is built with its
+		/// hand-written mock. A node a cycle builds again reads the nearest one of its type built the same way, which, beneath
+		/// the edge of a mocked lazy cycle `computeCycleEdges` leaves out, no override reaches either.
+		var relativeConfigurationsByType = [String: [MockLowering.RelativeConfiguration]]()
+		/// Whether each built node around the walk pushed onto `relativeConfigurationsByType`, nearest last.
+		var pushedRelativeConfigurations = [Bool]()
 		/// The configuration each built place around the walk reads its children's fields of, in the type key's form, nearest
 		/// last: `mock()`'s `safeDIOverrides` at the root, then each place's own parameter, `nil` for a place that reads no
 		/// configuration struct (`MockLowering.relativeConfiguration(of:…)`).
@@ -492,6 +500,17 @@ extension MockLowering {
 		/// The places whose builder functions write statements no record holds (payload bindings, member calls, receivers
 		/// bound again, `@Sendable` autoclosures' values, override locals), which the type key cannot lay out yet.
 		var pathsWithUnplannedLines = Set<[Int]>()
+		/// SPIKE: which kinds of unplanned statements each such place writes, for the fallback log.
+		var unplannedLineKinds = [[Int]: String]()
+		/// The places whose `@Sendable` builder functions read the overrides beneath them into locals before the function
+		/// (`SendableOverrideExtractor`). The type key lays such a place out where every place beneath it is recorded: its call
+		/// binds what it hands the function before it calls (`PassedArgument.bindsBeforeCall`), as the locals are bound
+		/// (`recordBuiltPlaces()`).
+		var pathsStartingExtraction = Set<[Int]>()
+		/// The statements each place's builder function begins with before its children's, as places the type key reads: each
+		/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the
+		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:sendableAutoclosureBindings:)`).
+		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
 		/// SPIKE: why each place has no record, for the switch's log.
 		var unrecordedReasons = [[Int]: String]()
 		/// The reads of the call of another module's public mock the walk is lowering, or `nil` where the call keeps the walk's
@@ -503,6 +522,10 @@ extension MockLowering {
 		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
 		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
 		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
+		/// The field of each closer's parent's configuration named as the closer is bound, read where the closer's call is
+		/// made, by the closer's path, where its parent reads a configuration: a built place of its type and label hands it
+		/// that field, and the closer hands it the same where no place of its type is above.
+		var closerParentFieldReads = [[Int]: (parentConfiguration: ValuePath, fieldName: String)]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.
@@ -511,6 +534,7 @@ extension MockLowering {
 			loops: [LoopMembership?] = [],
 			inScope scope: Set<Property>,
 			path: String,
+			pathValue: ValuePath,
 			indent: String,
 			lines: inout [String],
 		) async throws -> [TreeNode] {
@@ -604,18 +628,18 @@ extension MockLowering {
 				let node: TreeNode?
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
-					node = try await self.node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
+					node = try await self.node(of: generator, bindingName: bindingName, inScope: scope, path: path, pathValue: pathValue, indent: indent, lines: &lines)
 				} else if case .alias = generator.scopeData {
 					// A rename the level declares of a member is bound with the loop's wrappers, after
 					// them, and its members' functions bind it again (`MockLowering.loopMembers`).
-					node = try await self.node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
+					node = try await self.node(of: generator, bindingName: bindingName, inScope: scope, path: path, pathValue: pathValue, indent: indent, lines: &memberLines)
 					lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: 0, binding: memberLines.count)
 				} else {
 					// A call of another module's public mock on a loop reads in its function the members it
 					// rebinds there, and names its guard where its level makes it, before the loop's unit, as the emitter names it.
 					// A call that fills a builder names its guard inside its function, after its fills.
 					let memberScope = generator.publicMockCall == nil ? scope : scope.union(generator.reboundProperties)
-					node = try await self.node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, indent: indent, lines: &memberLines)
+					node = try await self.node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, pathValue: pathValue, indent: indent, lines: &memberLines)
 					if generator.publicMockCall != nil, !generator.fillsABuilder {
 						lines.append(memberLines.removeFirst())
 					}
@@ -732,6 +756,7 @@ extension MockLowering {
 			bindingName: String?,
 			inScope scope: Set<Property>,
 			path: String,
+			pathValue: ValuePath,
 			indent: String,
 			lines: inout [String],
 		) async throws -> TreeNode? {
@@ -763,6 +788,7 @@ extension MockLowering {
 					boundAs: bindingName,
 					inScope: scope,
 					path: path,
+					pathValue: pathValue,
 					indent: indent,
 					lines: &lines,
 				))
@@ -827,6 +853,22 @@ extension MockLowering {
 				declarationReference: declarationReference,
 			)
 			lines.append(alias.bindingLines(indent: indent))
+			// The type key lays the alias out as a place written as text whose one read is the name it reads: the property in
+			// scope, or the wrapper whose instance it reads. A rename a loop's members bind again keeps the walk's body.
+			if loopMembership == nil {
+				let read: Property? = if alias.isBoundToNil {
+					nil
+				} else if let instanceWrapper {
+					Property(label: String(alias.fulfillingName.prefix { $0 != "." }), typeDescription: instanceWrapper.typeDescription)
+				} else {
+					Property(label: alias.fulfillingName, typeDescription: scopeFulfillingProperty.typeDescription)
+				}
+				closerAndDefaultRecords[childIndexPath] = .alias(AliasPlaceRecord(
+					property: Property(label: aliasBindingName, typeDescription: property.typeDescription),
+					fulfillingProperty: read,
+					text: alias.bindingLines(indent: ""),
+				))
+			}
 			return .alias(alias)
 		}
 
@@ -837,6 +879,12 @@ extension MockLowering {
 			// Nearly every mock graph has no cycle edge, and spelling the type is most of the question's cost.
 			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
 			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteType.asSource))
+		}
+
+		/// `isPruned(_:beneath:)` for a type already spelled as `cycleEdges` spells it.
+		func isPruned(spelled concreteTypeSource: String, beneath parentConcreteType: String?) -> Bool {
+			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
+			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteTypeSource))
 		}
 
 		/// The node of `generator`, which closes a cycle on a node around it of `property`, built as `instantiable`, whose
@@ -887,6 +935,9 @@ extension MockLowering {
 			   let record = closerRecord(of: generator, instantiable: instantiable, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, closedOnFunctionName: closedOnFunctionName)
 			{
 				recordCloser(record, of: generator)
+				if case let parentConfiguration?? = configurationReads.last {
+					closerParentFieldReads[childIndexPath] = (parentConfiguration, bindingName)
+				}
 			}
 			lines.append(contentsOf: MockLowering.bindingLines(
 				of: property,
@@ -910,11 +961,12 @@ extension MockLowering {
 			boundAs bindingName: String,
 			inScope scope: Set<Property>,
 			path: String,
+			pathValue: ValuePath,
 			indent: String,
 			lines: inout [String],
 		) async throws -> ConstantNode {
 			let descending: DescendingBuiltNode
-			switch startBuiltNode(of: generator, building: built, boundAs: bindingName, inScope: scope, path: path, indent: indent, lines: &lines) {
+			switch startBuiltNode(of: generator, building: built, boundAs: bindingName, inScope: scope, path: path, pathValue: pathValue, indent: indent, lines: &lines) {
 			case let .finished(node):
 				return node
 			case let .descending(started):
@@ -925,6 +977,7 @@ extension MockLowering {
 				loops: descending.generator.mockLoweringLoopMemberships,
 				inScope: descending.scope.union(descending.forwarded),
 				path: descending.nodePath,
+				pathValue: descending.nodePathValue,
 				indent: "\(descending.indent)\(ScopeGenerator.standardIndent)",
 				lines: &lines,
 			)
@@ -950,8 +1003,9 @@ extension MockLowering {
 			let cycleParameterArguments: [String]
 			let builder: String
 			let nodePath: String
+			let nodePathValue: ValuePath
 			let overrideReachable: Bool
-			let overrideRead: String?
+			let overrideRead: MockLowering.OverrideRead?
 			let dependencyArguments: [(label: String, value: String)]
 			let lazilyInstantiatedInstanceProperties: Set<Property>
 			let startsExtraction: Bool
@@ -987,8 +1041,9 @@ extension MockLowering {
 				cycleParameterArguments: [String],
 				builder: String,
 				nodePath: String,
+				nodePathValue: ValuePath,
 				overrideReachable: Bool,
-				overrideRead: String?,
+				overrideRead: MockLowering.OverrideRead?,
 				dependencyArguments: [(label: String, value: String)],
 				lazilyInstantiatedInstanceProperties: Set<Property>,
 				startsExtraction: Bool,
@@ -1023,6 +1078,7 @@ extension MockLowering {
 				self.cycleParameterArguments = cycleParameterArguments
 				self.builder = builder
 				self.nodePath = nodePath
+				self.nodePathValue = nodePathValue
 				self.overrideReachable = overrideReachable
 				self.overrideRead = overrideRead
 				self.dependencyArguments = dependencyArguments
@@ -1059,6 +1115,7 @@ extension MockLowering {
 			boundAs bindingName: String,
 			inScope scope: Set<Property>,
 			path: String,
+			pathValue: ValuePath,
 			indent: String,
 			lines: inout [String],
 		) -> BuiltNodeStart {
@@ -1069,7 +1126,9 @@ extension MockLowering {
 			// A node that repeats a node around it reads no override of its own, and one beneath an edge in `cycleEdges`
 			// reads none of its own or beneath it: its parent's configuration has no field for it.
 			let isCycleNode = ancestorTypes.contains(cycleNodeKey)
-			let ownFieldReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
+			// Spelling the type is most of what the questions below cost, so it is spelled once.
+			let concreteTypeSource = instantiable.concreteInstantiable.asSource
+			let ownFieldReachable = overridePathReachable && !isPruned(spelled: concreteTypeSource, beneath: parentConcreteType)
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
 			// Every wrapper kind builds its type in a builder function, as an `Instantiator` does,
@@ -1133,24 +1192,37 @@ extension MockLowering {
 			// (`MockLowering+CycleOverrides.swift`).
 			let ownOverridePath = MockLowering.AncestorOverridePath.own(
 				path: "\(path).\(bindingName)",
+				value: .member(bindingName, of: pathValue),
 				hasConfiguration: hasConfiguration,
 				builtWithHandWrittenMock: usesMockInitializer,
 				isReachable: !isCycleNode && ownFieldReachable,
-				nearest: overridePathsByType[instantiable.concreteInstantiable.asSource]?.last,
+				nearest: overridePathsByType[concreteTypeSource]?.last,
 			)
 			let nodePath = ownOverridePath?.path ?? "\(path).\(bindingName)"
+			let nodePathValue = ownOverridePath?.value ?? .member(bindingName, of: pathValue)
 			let overrideReachable = ownOverridePath != nil
 			let ownFieldIsRead = !isCycleNode && ownFieldReachable
+			let ownRelativeConfiguration = MockLowering.RelativeConfiguration(hasConfiguration: hasConfiguration, builtWithHandWrittenMock: usesMockInitializer)
+			let nearestRelativeConfiguration = relativeConfigurationsByType[concreteTypeSource]?.last
+			// The nearest place of its type around it built the same way, which a node its parent's configuration has no
+			// field for reads, as `AncestorOverridePath.own(…)` reads it where an override reaches the nodes.
+			let nearestConfigurationIsDeclared = nearestRelativeConfiguration == ownRelativeConfiguration
+			let relativeConfiguration: MockLowering.RelativeConfiguration? = !isCycleNode || nearestConfigurationIsDeclared ? ownRelativeConfiguration : nil
+			// A node beneath a node no override reaches, beneath the edge of a mocked lazy cycle `computeCycleEdges` leaves out,
+			// reads its configuration of its parent's, as where an override reaches it: that parent is handed a configuration
+			// built afresh (`MockLowering.relativeConfiguration(of:…)`), so the node's record is the same whichever edge the
+			// order of type names leaves out.
+			let readsParentConfiguration = !isCycleNode && !isPruned(spelled: concreteTypeSource, beneath: parentConcreteType)
 			builtPlaceConfigurationContexts[childIndexPath] = MockLowering.BuiltPlaceConfigurationContext(
 				fieldName: bindingName,
-				parentConfiguration: ownFieldIsRead ? configurationReads.last ?? nil : nil,
-				nearestIsProvided: !ownFieldIsRead && overrideReachable,
+				parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
+				nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
 				ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
 					concreteType: instantiable.concreteInstantiable,
 					builtWithHandWrittenMock: usesMockInitializer,
 					configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
 				).name : nil,
-				pathKeyConfiguration: overrideReachable ? MockLowering.overrideReadPath(nodePath) : nil,
+				pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
 			)
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
@@ -1209,10 +1281,17 @@ extension MockLowering {
 				}
 				receiverBindings.removeAll { bindingNamesPassedByName[$0.property.label] != nil }
 			}
-			let overrideRead: String? = !overrideReachable ? nil : readingOverride(
-				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
-				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
-			)
+			let overrideRead: MockLowering.OverrideRead? = if overrideReachable {
+				readingOverride(
+					MockLowering.OverrideRead(
+						text: hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
+						path: hasConfiguration ? .member(builder, of: nodePathValue) : nodePathValue,
+					),
+					localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
+				)
+			} else {
+				nil
+			}
 			let dependencyArguments = MockLowering.argumentValues(
 				of: initializer,
 				given: instantiable.dependencies,
@@ -1257,15 +1336,15 @@ extension MockLowering {
 			// A place of another module's public mock the tree builds inline reads the builder `mock()`
 			// takes for its hole type and family (`MockLowering+PublicMockCalls.swift`).
 			if let inlinePlaceBuilder = filledCallBuilders.holeBuildersByInlinePlace[childIndexPath] {
-				node.inlinePlace = InlinePlace(builder: inlinePlaceBuilder, overrideRead: overrideRead)
+				node.inlinePlace = InlinePlace(builder: inlinePlaceBuilder, overrideRead: overrideRead?.text)
 			}
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// A node whose configuration holds its default-valued parameters is built in a builder
 			// function.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
-				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
+				lines.append(node.constantBindingLine(overrideRead: overrideRead?.text, indent: indent))
 				if let overrideRead {
-					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead, call: node.spikeHookCall, construction: node.spikeConstruction)
+					placeHooks[childIndexPath] = ConstructionHook(builder: overrideRead.text, call: node.spikeHookCall, construction: node.spikeConstruction)
 				}
 				recordInputs(of: node, hasFunction: false, overrideRead: overrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 				return .finished(node)
@@ -1299,7 +1378,31 @@ extension MockLowering {
 			if isWrapped {
 				lines.append(contentsOf: valuesBindingLines)
 			}
-			if !valuesBindingLines.isEmpty || !generator.memberCallsInsideBuilderFunction.isEmpty || !rebindingLines.isEmpty || !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty || startsExtraction {
+			var unplannedKinds = [String]()
+			if !valuesBindingLines.isEmpty {
+				unplannedKinds.append("payloadBindings")
+			}
+			if !generator.memberCallsInsideBuilderFunction.isEmpty {
+				unplannedKinds.append("memberCalls")
+			}
+			if !rebindingLines.isEmpty {
+				unplannedKinds.append("rebindings")
+			}
+			if !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty {
+				leadingBodyPlaces[childIndexPath] = MockLowering.receiverBindingPlaces(
+					receiverBindings: receiverBindings,
+					sendableAutoclosureBindings: uncoveredInstantiatedProperties.compactMap { property in sendableAutoclosureBindings[property].map { (property, $0) } },
+				)
+			}
+			// A function that reads overrides into locals because its construction hands a configuration read to a `@Sendable`
+			// autoclosure keeps the walk's body: the record would read the configuration inside the autoclosure.
+			if startsForSendableFunction {
+				pathsStartingExtraction.insert(childIndexPath)
+			} else if startsExtraction {
+				unplannedKinds.append("overrideExtraction")
+			}
+			if !unplannedKinds.isEmpty {
+				unplannedLineKinds[childIndexPath] = unplannedKinds.joined(separator: "+")
 				pathsWithUnplannedLines.insert(childIndexPath)
 			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
@@ -1322,11 +1425,15 @@ extension MockLowering {
 			lazilyInstantiatedNames = functionLazilyInstantiatedNames
 			let bindingNamesPassedByNameAround = enclosingBindingNamesPassedByName
 			enclosingBindingNamesPassedByName = bindingNamesPassedByName
-			parentConcreteType = instantiable.concreteInstantiable.asSource
+			parentConcreteType = concreteTypeSource
 			overridePathReachable = overrideReachable
 			if let ownOverridePath {
-				overridePathsByType[instantiable.concreteInstantiable.asSource, default: []].append(ownOverridePath)
+				overridePathsByType[concreteTypeSource, default: []].append(ownOverridePath)
 			}
+			if let relativeConfiguration {
+				relativeConfigurationsByType[concreteTypeSource, default: []].append(relativeConfiguration)
+			}
+			pushedRelativeConfigurations.append(relativeConfiguration != nil)
 			configurationReads.append(hasConfiguration ? .passedArgument(MockLowering.ConfigurationParameter(
 				concreteType: instantiable.concreteInstantiable,
 				builtWithHandWrittenMock: usesMockInitializer,
@@ -1351,6 +1458,7 @@ extension MockLowering {
 				cycleParameterArguments: cycleParameterArguments,
 				builder: builder,
 				nodePath: nodePath,
+				nodePathValue: nodePathValue,
 				overrideReachable: overrideReachable,
 				overrideRead: overrideRead,
 				dependencyArguments: dependencyArguments,
@@ -1407,8 +1515,16 @@ extension MockLowering {
 			let configurationEntry = descending.configurationEntry
 			var node = descending.node
 			let finishedChildren = leavingConfiguredNode(configurationEntry)
-			if overrideReachable {
-				overridePathsByType[instantiable.concreteInstantiable.asSource]?.removeLast()
+			let pushedRelativeConfiguration = pushedRelativeConfigurations.removeLast()
+			if overrideReachable || pushedRelativeConfiguration {
+				// Spelling the type is most of the cost here, so it is spelled once.
+				let concreteTypeSource = instantiable.concreteInstantiable.asSource
+				if overrideReachable {
+					overridePathsByType[concreteTypeSource]?.removeLast()
+				}
+				if pushedRelativeConfiguration {
+					relativeConfigurationsByType[concreteTypeSource]?.removeLast()
+				}
 			}
 			configurationReads.removeLast()
 			parentConcreteType = enclosingParentConcreteType
@@ -1443,10 +1559,10 @@ extension MockLowering {
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
 			if let functionOverrideRead {
-				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
+				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead.text, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
 			}
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
-			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead)
+			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead?.text)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			leaveClosedOnPlace(of: configuredNode, readsOverride: overrideRead != nil)
@@ -1494,9 +1610,9 @@ extension MockLowering {
 			}
 			// A public mock's configured node calls its type's construction function.
 			var endLines: [String] = if buildsPublicMock, configuredNode.hasConfiguration {
-				configuredNode.publicBuilderFunctionEndLines(children: children, overrideRead: functionOverrideRead, indent: indent)
+				configuredNode.publicBuilderFunctionEndLines(children: children, overrideRead: functionOverrideRead?.text, indent: indent)
 			} else {
-				configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
+				configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead?.text, indent: indent)
 			}
 			if let loopMembership = ownLoopMembership, let member = loopMembers[property] {
 				// The construction and the function's closing brace, then the member's `_received` function, then its binding,

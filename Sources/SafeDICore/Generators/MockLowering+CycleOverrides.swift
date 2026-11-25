@@ -33,6 +33,9 @@ extension MockLowering {
 	/// The override path a place reads, and whether it reads a configuration rather than a closure.
 	struct AncestorOverridePath: Equatable {
 		let path: String
+		/// `path` as the value path the place's record reads, built a member at a time beside the text, since reading it
+		/// again from the text would cost each place the length of its path.
+		let value: ValuePath
 		let hasConfiguration: Bool
 		/// Whether the place is built with its type's hand-written mock, whose configuration has another shape.
 		let builtWithHandWrittenMock: Bool
@@ -40,15 +43,22 @@ extension MockLowering {
 		/// The override path the place reads: `path` where its parent's configuration has a field for it
 		/// (`isReachable`), else the path of the nearest place of its type above it where both read a configuration or
 		/// both a closure and both are built the same way, else `nil`, and the place reads no override.
-		static func own(path: String, hasConfiguration: Bool, builtWithHandWrittenMock: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
+		static func own(path: String, value: ValuePath, hasConfiguration: Bool, builtWithHandWrittenMock: Bool, isReachable: Bool, nearest: AncestorOverridePath?) -> AncestorOverridePath? {
 			if isReachable {
-				AncestorOverridePath(path: path, hasConfiguration: hasConfiguration, builtWithHandWrittenMock: builtWithHandWrittenMock)
+				AncestorOverridePath(path: path, value: value, hasConfiguration: hasConfiguration, builtWithHandWrittenMock: builtWithHandWrittenMock)
 			} else if let nearest, nearest.hasConfiguration == hasConfiguration, nearest.builtWithHandWrittenMock == builtWithHandWrittenMock {
 				nearest
 			} else {
 				nil
 			}
 		}
+	}
+
+	/// A configuration a place declares in the type key's form, which a node a cycle builds again of its type, built the
+	/// same way, reads (`Walk.relativeConfigurationsByType`).
+	struct RelativeConfiguration: Equatable {
+		let hasConfiguration: Bool
+		let builtWithHandWrittenMock: Bool
 	}
 
 	/// The passed argument through which a type key function of `concreteType` takes the configuration its place reads.
@@ -73,6 +83,13 @@ extension MockLowering {
 			name = ReservedName.builderFunctionNamePrefix + concreteType.asIdentifier + (builtWithHandWrittenMock ? "_mockConfiguration" : "_configuration")
 			readsConfigurationStruct = !configurationType.isClosure && !configurationType.isOptional
 			type = readsConfigurationStruct || configurationType.isOptional ? configurationType : .optional(configurationType)
+		}
+
+		/// The parameter a call hands `type` under `name`, as a closer's passed argument names it.
+		init(name: String, type: TypeDescription) {
+			self.name = name
+			self.type = type
+			readsConfigurationStruct = !type.isOptional
 		}
 
 		/// A read of this parameter where a call is made: the nearest place of the type's configuration where the path
@@ -178,6 +195,7 @@ extension MockLowering {
 		of node: ConstantNode,
 		context: BuiltPlaceConfigurationContext,
 		alternatives: [ConstructionAlternative],
+		hasFunction: Bool,
 		sendableConfigurationTypeNames: Set<String>,
 	) -> (passedArguments: [PassedArgument], alternatives: [ConstructionAlternative]) {
 		let configurationType = configurationType(of: node)
@@ -200,7 +218,7 @@ extension MockLowering {
 		)
 		let ownRead = ValuePath.passedArgument(parameter.name)
 		let overrideRead: ValuePath = node.hasConfiguration ? .member(ReservedName.configurationBuilderPropertyName, of: ownRead) : ownRead
-		let relativeAlternatives = alternatives.map { alternative in
+		var relativeAlternatives = alternatives.map { alternative in
 			ConstructionAlternative(
 				closure: overrideRead,
 				bindingName: alternative.bindingName,
@@ -208,6 +226,18 @@ extension MockLowering {
 				use: alternative.use,
 				resultWrapper: alternative.resultWrapper,
 			)
+		}
+		// A place no override reaches, at or beneath the edge of a mocked lazy cycle `computeCycleEdges` leaves out, tries
+		// the override a reached place of its type tries, of its own parameter, which its call hands a configuration built
+		// afresh, `nil`, or its parent's field of it: so its record, and the function places of its type share, is the same
+		// whichever edge the order of type names leaves out, and only what its call hands it differs. A place built in its
+		// parent's body reads what it is handed in place (`readPassedConfigurationInPlace(ofBuiltPlaceAt:)`): its parent's
+		// field, or the configuration of the nearest place of its type, where there is one, else nothing, since `nil` is no
+		// override to try.
+		if relativeAlternatives.isEmpty, hasFunction || context.parentConfiguration != nil || context.nearestIsProvided,
+		   let alternative = overrideAlternative(reading: overrideRead, resultWrapper: node.overrideResultWrapper)
+		{
+			relativeAlternatives.append(alternative)
 		}
 		return (passedArguments: passedArguments, alternatives: relativeAlternatives)
 	}
@@ -222,8 +252,16 @@ extension MockLowering.Walk {
 		      case var .built(record) = builtRecords[path],
 		      let context = builtPlaceConfigurationContexts[path]
 		else { return }
-		let relative = MockLowering.relativeConfiguration(of: constantNode, context: context, alternatives: record.alternatives, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
+		let relative = MockLowering.relativeConfiguration(of: constantNode, context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
 		record.passedArguments = relative.passedArguments
+		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
+		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the
+		// function, so no `@Sendable` closure around the call captures the configuration.
+		if pathsStartingExtraction.contains(path) {
+			for index in record.passedArguments.indices where !record.passedArguments[index].staysOutsideSendableFunctions {
+				record.passedArguments[index].bindsBeforeCall = true
+			}
+		}
 		record.alternatives = relative.alternatives
 		builtRecords[path] = .built(record)
 	}

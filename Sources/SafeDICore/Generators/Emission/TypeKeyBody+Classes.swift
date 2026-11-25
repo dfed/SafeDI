@@ -90,6 +90,10 @@ extension TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
+		// Every lookup in a class's body asks whether its function is handed a label, so each class's labels are kept once.
+		parameterLabelsByClass = membersByClass.map { members in
+			members.first.flatMap { bodies[$0].record }.map { Set($0.parameterProperties.map(\.label)) } ?? []
+		}
 	}
 
 	func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {
@@ -117,7 +121,7 @@ extension TypeKeyLayout {
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
 			key.append("passedArguments|\(passedArguments.count)")
 			if case .closer = statement {
-				key.append(contentsOf: passedArguments.map { $0.closerShape ?? $0.shape })
+				key.append(contentsOf: passedArguments.map(\.closerShape))
 			} else {
 				key.append(contentsOf: passedArguments.map(\.shape))
 			}

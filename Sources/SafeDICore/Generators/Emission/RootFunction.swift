@@ -118,7 +118,9 @@ public enum RootFunctionHoisting {
 		var conflictingNames = Set<String>()
 		var records = [RootFunctionRecord]()
 		var work = codes.reversed().map { (code: $0, isInsideSendableFunction: false) }
+		var levelsRead = 0
 		while let (code, isInsideSendableFunction) = work.popLast() {
+			levelsRead += 1
 			switch code.node {
 			case .text:
 				break
@@ -127,8 +129,11 @@ public enum RootFunctionHoisting {
 			case let .indented(inner, _),
 			     let .omittingRootFunctions(inner, _):
 				work.append((inner, isInsideSendableFunction))
-			case let .place(plan):
+			case let .place(plan) where plan.code.holdsRootFunction:
 				work.append((plan.code, isInsideSendableFunction))
+			case .place:
+				// A place records whether a root function is beneath it, so the walk reads no other place's tree.
+				break
 			case let .sendableFunction(inner):
 				work.append((inner, true))
 			case let .rootFunction(record, _):
@@ -155,6 +160,7 @@ public enum RootFunctionHoisting {
 				}
 			}
 		}
+		GenerationWork.record(levelsRead, by: .findingRootFunctions)
 		observer?(occurrences)
 		return (records, conflictingNames)
 	}

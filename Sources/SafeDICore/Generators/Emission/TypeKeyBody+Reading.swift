@@ -210,23 +210,26 @@ extension TypeKeyLayout {
 	}
 
 	/// Whether the type key can lay out every place of `code`'s tree: each records what it builds, and each written as text
-	/// lists its reads, binds no other label and names no function. A plan can be as deep as the module has types, so the
-	/// walk keeps a stack of its own.
+	/// lists its reads, binds no other label and names no function. Each place records it as it is built
+	/// (`laysOut(placeRecordedAs:)`), so asking it reads no level beneath: a scope's code is shared by every place that
+	/// holds it, so a walk of the tree read each level once per path to it.
 	static func laysOut(_ code: GeneratedCode) -> Bool {
-		var stack = [code]
-		while let current = stack.popLast() {
-			switch record(of: current) {
-			case nil:
-				return false
-			case let .built(built):
-				stack.append(contentsOf: statementCodes(of: built.children))
-			case .closer:
-				break
-			case let .alias(alias):
-				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
-			}
+		code.isPlaceTheTypeKeyLaysOut
+	}
+
+	/// Whether the type key can lay out a place recorded as `record` and every place beneath it, from what each statement
+	/// of its function's body recorded when it was built.
+	static func laysOut(placeRecordedAs record: PlaceRecord?) -> Bool {
+		switch record {
+		case nil:
+			false
+		case let .built(built):
+			statementCodes(of: built.children).allSatisfy(laysOut)
+		case .closer:
+			true
+		case let .alias(alias):
+			alias.listsItsReads && alias.calledFunctionNames.isEmpty
 		}
-		return true
 	}
 
 	/// The text of a statement of the root's body without the indentation the root gives it, which the type key's spelling
@@ -267,14 +270,6 @@ extension TypeKeyLayout {
 		}
 		guard case let .place(plan) = code.node else { return nil }
 		return plan.record
-	}
-
-	/// Whether `statement` declares `label`: its own, or, for a place written as text, one of the others it binds.
-	func declares(_ statement: Statement, _ label: String) -> Bool {
-		if case let .alias(record) = statement, record.otherBindings.contains(where: { $0.label == label }) {
-			return true
-		}
-		return self.label(of: statement) == label
 	}
 
 	func label(of statement: Statement) -> String {

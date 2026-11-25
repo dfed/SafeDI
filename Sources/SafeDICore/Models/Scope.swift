@@ -2602,8 +2602,7 @@ struct SeamHoles: Sendable {
 	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
-		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
-		let parameterTypeByEnum = Dictionary(builders.map { ($0.enumKey, $0.parameterType) }, uniquingKeysWith: { first, _ in first })
+		let builderByEnum = Dictionary(builders.map { ($0.enumKey, $0) }, uniquingKeysWith: { first, _ in first })
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
 		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none. A call's
 		// case for a builder it fills carries the scope value the inner seam handed the fill, which the fill takes.
@@ -2643,7 +2642,8 @@ struct SeamHoles: Sendable {
 			}
 		}
 		for callRoute in callRoutes {
-			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
+			guard let builder = builderByEnum[callRoute.rootKey] else { continue }
+			let builderName = builder.internalName
 			bindValues(of: callRoute.route, rootBuilderName: builderName)
 			// A call that re-enters an enclosing call's fill hands up nothing: it passes the enclosing call's level function the
 			// struct its last case's member returns (`carriedStruct(at:innerKey:carrying:)`).
@@ -2662,10 +2662,8 @@ struct SeamHoles: Sendable {
 				nil
 			} else if let member = parentStep?.member {
 				.init(name: member.bindingName, type: member.levelType)
-			} else if let builderType = parameterTypeByEnum[callRoute.rootKey] {
-				.init(name: builderName, type: builderType)
 			} else {
-				nil
+				.init(name: builderName, type: builder.parameterType)
 			}
 			let memberCall = if callRoute.handsFillLevelStruct {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }

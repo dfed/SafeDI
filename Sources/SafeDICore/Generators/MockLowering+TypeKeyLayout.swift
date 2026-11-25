@@ -64,29 +64,99 @@ extension MockLowering.Walk {
 		for path in placePathsInWalkOrder {
 			childPathsByParent[Array(path.dropLast()), default: []].append(path)
 		}
+		// The places with a place beneath them left unrecorded, which a place whose function reads overrides into locals
+		// keeps the walk's body for.
+		var pathsAboveUnrecordedPlace = Set<[Int]>()
+		// Every function of a type takes the nearest configurations of the places closers beneath it close on, one list
+		// for the type, so no function's parameters follow the path that reaches it.
+		// A tree no closer closes hands no nearest configuration: a place a cycle builds again has a closer beneath it.
+		let closesCycle = closerAndDefaultRecords.values.contains { record in
+			if case .closer = record {
+				true
+			} else {
+				false
+			}
+		}
+		let nearest: MockLowering.NearestConfigurations? = buildsPublicMock || !closesCycle ? nil : nearestConfigurations(childPathsByParent: childPathsByParent)
+		var parentFieldsReadByBuiltPlaces = Set<ParentFieldRead>()
+		if nearest != nil {
+			for context in builtPlaceConfigurationContexts.values {
+				if let parentConfiguration = context.parentConfiguration {
+					parentFieldsReadByBuiltPlaces.insert(ParentFieldRead(parentConfiguration: parentConfiguration, fieldName: context.fieldName))
+				}
+			}
+		}
+		if let nearest {
+			for path in placePathsInWalkOrder {
+				guard case var .closer(record)? = closerAndDefaultRecords[path], let argument = record.passedArguments.first else { continue }
+				let closedOn = MockLowering.ConfigurationParameter(name: argument.parameterName, type: argument.type)
+				// Where a built place of the closed-on type and the closer's label reads its parent's field, the closer hands
+				// the same expression that place hands, `nearest ?? parent.field`: the nearest is set exactly where a place
+				// of its type is above, so both read what they read before, and both are one call of the type's function.
+				let parentField = closerParentFieldReads[path].flatMap { read in
+					parentFieldsReadByBuiltPlaces.contains(ParentFieldRead(parentConfiguration: read.parentConfiguration, fieldName: read.fieldName))
+						? ValuePath.member(read.fieldName, of: read.parentConfiguration)
+						: nil
+				}
+				let value = nearest.closedOnValue(of: closedOn, at: path, parentField: parentField) ?? argument.value
+				record.passedArguments = [PassedArgument(parameterName: argument.parameterName, type: argument.type, value: value, staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)]
+					+ nearest.nearestArguments(ofCallTo: closedOn, at: path)
+				closerAndDefaultRecords[path] = .closer(record)
+			}
+		}
+		// What each generator's construction reads in each context it is written in, which reads only the generator and its
+		// unavailable properties (`ScopeGenerator.constructionReads(of:unavailableProperties:)`), computed once for the places
+		// that share them, many thousands in a wide mock, and kept only while the records are made. A plan node is no such
+		// context: it also keys what the walk reads at the place, such as the override's path, which differs at every place.
+		struct ConstructionContext: Hashable {
+			let generator: ObjectIdentifier
+			let unavailableProperties: Set<Property>
+		}
+		var constructionReadsByContext = [ConstructionContext: Result<[PlaceRead]?, Initializer.GenerationError>]()
+		for call in builtPlaceCalls.values where call.isPlannedAtPlace {
+			let context = ConstructionContext(generator: ObjectIdentifier(call.generator), unavailableProperties: call.unavailableProperties)
+			if constructionReadsByContext[context] == nil {
+				constructionReadsByContext[context] = call.generator.isPlannedByGenerator
+					? Result { () throws(Initializer.GenerationError) in try call.generator.constructionReads(of: call.instantiable, unavailableProperties: call.unavailableProperties) }
+					: .success(nil)
+			}
+		}
+		// The first record made of each key, whose node every alike place takes (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`).
+		var sharedRecordsByKey = [MockLowering.SharedRecordKey: BuiltPlaceRecord]()
 		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
 		for path in placePathsInWalkOrder.reversed() {
+			defer {
+				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil, loopUnitRecords[path] == nil, !pathsCoveredByLoopUnits.contains(path) {
+					for depth in 1..<max(path.count, 1) {
+						pathsAboveUnrecordedPlace.insert(Array(path.prefix(depth)))
+					}
+				}
+			}
 			// A place a loop of builders' text holds is that text's, which records it whole.
 			guard let call = builtPlaceCalls[path], !pathsCoveredByLoopUnits.contains(path), loopUnitRecords[path] == nil else { continue }
 			guard !pathsNamedApart.contains(path) else {
 				unrecordedReasons[path] = "namedApart"
 				continue
 			}
-			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:)) : []
-			// An erased place the mock can override is built from a closure that returns the erased type, where the type
-			// key's function returns the concrete one: it keeps the walk's body.
-			// So is a place built in a function whose property is another type than the one it builds (`fulfilledByType:`,
-			// a protocol), whose override returns the property's type.
-			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable))
-			let isPlanned = call.isPlannedAtPlace && !overrideReturnsAnotherType
-			if overrideReturnsAnotherType {
-				unrecordedReasons[path] = "overrideReturnsAnotherType"
-			} else if pathsWithUnplannedLines.contains(path) {
-				unrecordedReasons[path] = "unplannedLines"
+			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:)) : []
+			// An erased place the mock can override is built from a closure that returns the erased type, and a place built in
+			// a function whose property is another type than the one it builds (`fulfilledByType:`, a protocol) from an
+			// override that returns the property's type: its function returns the property's type (`functionReturnType`).
+			// It is decided once the record holds every alternative it tries, the one `relateConfiguration(ofBuiltPlaceAt:of:)`
+			// adds beneath the left-out edge of a mocked lazy cycle included.
+			let overrideCanReturnAnotherType = call.erasedToConcreteExistential || (call.inputs.hasFunction && call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable)
+			// A function that reads the overrides beneath it into locals keeps them where a place beneath it keeps the walk's
+			// body, which reads those locals.
+			let keepsOverrideLocals = pathsStartingExtraction.contains(path) && pathsAboveUnrecordedPlace.contains(path)
+			let isPlanned = call.isPlannedAtPlace && !keepsOverrideLocals
+			if pathsWithUnplannedLines.contains(path) {
+				unrecordedReasons[path] = "unplannedLines:" + ([unplannedLineKinds[path]] + (keepsOverrideLocals ? ["overrideExtraction"] : [])).compactMap(\.self).joined(separator: "+")
+			} else if keepsOverrideLocals {
+				unrecordedReasons[path] = "unplannedLines:overrideExtraction"
 			} else if !call.isPlannedAtPlace {
 				unrecordedReasons[path] = "notPlannedAtPlace"
 			}
-			do {
+			do throws(Initializer.GenerationError) {
 				let productionRecord = try call.generator.builtPlaceRecord(
 					of: call.property,
 					instantiable: call.instantiable,
@@ -100,6 +170,7 @@ extension MockLowering.Walk {
 					isPlannedAtPlace: isPlanned,
 					readNames: call.inputs.readNames,
 					alternatives: call.inputs.alternatives,
+					constructionReads: constructionReadsByContext[ConstructionContext(generator: ObjectIdentifier(call.generator), unavailableProperties: call.unavailableProperties)],
 				)
 				// A construction that reads defaults or calls a hand-written mock records it in place of production's call
 				// (`MockLowering+ClosersAndDefaults.swift`).
@@ -123,13 +194,48 @@ extension MockLowering.Walk {
 				// A public mock's configured place calls its type's construction function (`MockLowering+PublicRecords.swift`).
 				builtRecords[path] = record.flatMap { publicRecord(of: $0, inputs: call.inputs) }
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
+				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
+					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
+					builtRecords[path] = .built(built)
+				}
+				if let nearest, let own = nearest.ownParameterByPath[path], case var .built(built)? = builtRecords[path] {
+					// A place that reads its parent's field of it, or a configuration of its own, reads the nearest place of
+					// its type's configuration first, as a closer of its type hands it, where its parent's function takes
+					// that nearest one: it is set exactly where a place of its type is above, which no built place has.
+					if let first = built.passedArguments.first, first.parameterName == own.name,
+					   let nearestRead = nearest.nearestRead(of: own, calledFrom: Array(path.dropLast()))
+					{
+						let value = Self.nearestFirst(nearestRead, orElse: first.value, own: own)
+						var handed = PassedArgument(parameterName: first.parameterName, type: first.type, value: value, staysOutsideSendableFunctions: first.staysOutsideSendableFunctions)
+						handed.bindsBeforeCall = first.bindsBeforeCall
+						built.passedArguments[0] = handed
+					}
+					built.passedArguments += nearest.nearestArguments(ofCallTo: own, at: path)
+					builtRecords[path] = .built(built)
+				}
 				if !call.inputs.hasFunction {
 					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
 				}
+				sharingNode(ofBuiltPlaceAt: path, nodesByKey: &sharedRecordsByKey)
 			} catch {
 				unrecordedReasons[path] = "threw"
 				unrecordedPlaceErrors[path] = error
 			}
+		}
+	}
+
+	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
+	/// its type, `nearestRead`: that, else what it hands now. `value` is what `MockLowering.passedArguments(ofBuiltPlaceOf:…)`
+	/// hands, one of four forms: its parent's field of it, a configuration built afresh, a read of its own type's parameter,
+	/// or `nil`.
+	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, own: MockLowering.ConfigurationParameter) -> ValuePath {
+		switch value {
+		case .read:
+			// A read of the nearest place of its type above, which the function it is called in was handed, or `nil`.
+			// A configuration struct is taken non-optional, and the nearest is set wherever a read of it resolved.
+			own.readsConfigurationStruct ? .spliced([.value(nearestRead), .text(" ?? "), .value(.emptyInitialization(own.type))]) : nearestRead
+		case .emptyInitialization, .member, .rootDeclaration, .passedArgument, .optionalMember, .call, .spliced:
+			.spliced([.value(nearestRead), .text(" ?? "), .value(value)])
 		}
 	}
 
@@ -152,8 +258,12 @@ extension MockLowering.Walk {
 				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
 			case let .spliced(segments):
 				.spliced(segments.map { segment in
-					guard case let .value(value) = segment else { return segment }
-					return .value(substituting(value))
+					switch segment {
+					case let .value(value):
+						.value(substituting(value))
+					case .text, .declaredFunction:
+						segment
+					}
 				})
 			case .rootDeclaration, .read, .emptyInitialization:
 				value
@@ -175,6 +285,8 @@ extension MockLowering.Walk {
 			built
 		} else if case let .closer(closer) = closerAndDefaultRecords[path] {
 			.closer(closer)
+		} else if case let .alias(alias) = closerAndDefaultRecords[path] {
+			.alias(alias)
 		} else {
 			nil
 		}
@@ -183,8 +295,8 @@ extension MockLowering.Walk {
 	}
 
 	/// The root's statements in the type key's layout, each line indented as the root's are, or `nil` where the root keeps
-	/// the walk's: a place records nothing, a read names a value no record or root declaration binds, or the type key cannot
-	/// lay the body out.
+	/// the walk's: a place records nothing, a read names a value no record or root declaration binds, or the type key
+	/// cannot lay the body out.
 	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> (lines: [String]?, fallback: String) {
 		var rootBody = [GeneratedCode]()
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
@@ -255,6 +367,11 @@ extension MockLowering.Walk {
 				}
 				frames[frames.count - 1].visible.insert(closer.property.label)
 			case let .alias(alias):
+				// A rename of a name `mock()` binds apart, such as a sibling its root names apart, reads no declaration the
+				// records name.
+				if let fulfillingProperty = alias.fulfillingProperty, !visible.contains(fulfillingProperty.label) {
+					return fulfillingProperty.label
+				}
 				frames[frames.count - 1].visible.insert(alias.property.label)
 				frames[frames.count - 1].visible.formUnion(alias.otherBindings.map(\.label))
 			}
@@ -276,6 +393,16 @@ extension MockLowering.RootSignature {
 		for override in onlyIfAvailableOverrides {
 			declarations.append(Property(label: override.name, typeDescription: override.typeDescription))
 		}
+		// The local `mock()` reads each `@Sendable` autoclosure parameter into, which the bindings of its value read.
+		for (property, parameter) in sendableAutoclosureBindings.sorted(by: { $0.value.localName < $1.value.localName }) {
+			declarations.append(MockLowering.sendableAutoclosureLocalProperty(of: parameter, builds: property))
+		}
 		return declarations
 	}
+}
+
+/// A field of a parent's configuration a place reads, by the parent's configuration read and the field's name.
+struct ParentFieldRead: Hashable {
+	let parentConfiguration: ValuePath
+	let fieldName: String
 }

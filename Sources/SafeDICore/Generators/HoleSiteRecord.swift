@@ -19,11 +19,13 @@
 // SOFTWARE.
 
 extension ScopeGenerator {
-	/// The place of a hole's site in a seam's tree, written as `text`: `buildSiteCode`'s code, after the payloads bound at
-	/// its path (`valuesBindings`) where `bindsValuesBindings`, which is where a loop's box holds them and they are no places
-	/// of their own (`valuesBindingPlaces`). It is recorded as a place the type key copies as written (`AliasPlaceRecord`):
-	/// it binds the hole's property, and each payload it binds, declares the function it builds a wrapper around, and reads
-	/// the builder struct or level it calls a member of and each value it hands that member, as the path key resolves them.
+	/// The place of a hole's site in a seam's tree, written as `text`: `buildSiteCode`'s code. The payloads bound at its path
+	/// (`valuesBindings`) are places of their own, before it, which type the names it reads; where a loop's box holds them
+	/// instead, the text binds them too, and the record lists none of them, since a body a loop's levels are bound in is
+	/// one the type key does not plan (`isPlannedByTypeKey`), so it is written per path whatever the site records. It is
+	/// recorded as a place the type key copies as written (`AliasPlaceRecord`): it binds the hole's property, declares the
+	/// function it builds a wrapper around, and reads the builder struct or level it calls a member of and each value it
+	/// hands that member, as the path key resolves them.
 	/// Where a read is of a value no binding of the seam's tree types – the struct a fill is handed, or a level bound by a
 	/// call's route from another builder – it records no reads, which keeps the place and the bodies enclosing it one per
 	/// path.
@@ -35,17 +37,12 @@ extension ScopeGenerator {
 		at site: SeamSignature.Hole,
 		functionName: String?,
 		valuesBindings: [SeamHoles.ValuesBinding],
-		bindsValuesBindings: Bool,
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>,
 		carrierUse: SeamCarrierValues.Use?,
 	) -> GeneratedCode {
 		var recorder = HoleSiteReads(site: site, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, carrierUse: carrierUse)
 		for binding in valuesBindings {
-			if bindsValuesBindings {
-				recorder.record(binding)
-			} else {
-				recorder.type(binding)
-			}
+			recorder.type(binding)
 		}
 		let wrapperFunction = recorder.recordSite(of: property, functionName: functionName)
 		let record = AliasPlaceRecord(
@@ -53,7 +50,6 @@ extension ScopeGenerator {
 			fulfillingProperty: nil,
 			text: text,
 			reads: recorder.reads,
-			otherBindings: recorder.otherBindings,
 			calledFunctionNames: [],
 			declaredFunctionNames: wrapperFunction.map { [$0] } ?? [],
 		)
@@ -64,8 +60,7 @@ extension ScopeGenerator {
 	}
 }
 
-/// The reads a hole's site makes, as `holeSitePlace` records them, in the order its text makes them, each name once: a name
-/// the site's own text binds before reading it is no read.
+/// The reads a hole's site makes, as `holeSitePlace` records them, in the order its text makes them, each name once.
 private struct HoleSiteReads {
 	init(site: SeamSignature.Hole, lazilyInstantiatedInstanceProperties: Set<Property>, carrierUse: SeamCarrierValues.Use?) {
 		self.site = site
@@ -75,7 +70,8 @@ private struct HoleSiteReads {
 		// level's type is spelled over the type the builder builds, which is the root's too.
 		guard let enumPlace = site.enumPlace else { return }
 		let members = enumPlace.route.compactMap(\.member)
-		let builtType = members.lazy.compactMap { Self.builtType(ofLevel: $0.levelType) }.first ?? site.builtType
+		// A level is spelled over the type the builder builds, its innermost generic argument (`ReservedName.levelType(ofEnum:built:)`).
+		let builtType = members.lazy.compactMap(\.levelType.genericArgumentsOfThisAndEnclosingTypes.last).first ?? site.builtType
 		let rootEnumType = TypeDescription.simple(name: enumPlace.rootEnumTypeName ?? enumPlace.enumTypeName, generics: [])
 		levelTypesByName[site.internalName] = ReservedName.levelType(ofEnum: rootEnumType, built: builtType)
 		for member in members {
@@ -86,42 +82,17 @@ private struct HoleSiteReads {
 
 	/// What the site reads, or `nil` once a read is of a value no binding of the seam's tree types.
 	private(set) var reads: [PlaceRead]? = []
-	/// The payloads the site binds besides its property.
-	private(set) var otherBindings = [Property]()
-
 	/// Types `binding`'s name, bound by a place before the site's.
 	mutating func type(_ binding: SeamHoles.ValuesBinding) {
 		levelTypesByName[binding.bindingName] = binding.boundType
 	}
 
-	/// Records `binding`, bound before the site's own code.
-	mutating func record(_ binding: SeamHoles.ValuesBinding) {
-		if binding.formsRunAfter != nil {
-			// A run's struct reads the run before it, bound at this path or at another of the body that binds the level.
-			if let previousName = binding.formsRunAfter ?? nil {
-				readStruct(named: previousName, ofType: previousRunType(of: binding))
-			}
-			readFields(binding.fields)
-		} else if case let .nested(_, enumType, _) = binding.type, ReservedName.seamCarrier(ofEnum: enumType) != nil {
-			readStruct(named: binding.memberCall.parentName, ofType: levelTypesByName[binding.memberCall.parentName])
-			if !binding.isLetChild {
-				readCarrierArguments(of: binding.fields, use: binding.carrierUse)
-			}
-		} else {
-			readStruct(named: binding.memberCall.parentName, ofType: levelTypesByName[binding.memberCall.parentName])
-			readFields(binding.fields)
-		}
-		bind(Property(label: binding.bindingName, typeDescription: binding.boundType))
-	}
-
 	/// Records the site's own code, as `ScopeGenerator.buildSiteCode` writes it, and returns the name of the function it
 	/// declares to build the wrapper the property is held in, where it declares one.
 	mutating func recordSite(of property: Property, functionName: String?) -> String? {
-		guard let enumPlace = site.enumPlace, enumPlace.memberValuesTypeName != nil else {
-			// The site writes nothing (`buildSiteCode`), so it reads nothing.
-			reads = []
-			return nil
-		}
+		// Every site has its place's case before code is generated, so `buildSiteCode` writes the member call this records;
+		// where it has none, the site writes nothing and reads nothing, as `reads` starts.
+		guard let enumPlace = site.enumPlace, enumPlace.memberValuesTypeName != nil else { return nil }
 		let fields = enumPlace.values
 		let lastStep = enumPlace.route.last
 		if lastStep?.member != nil, lastStep?.innerScope != nil {
@@ -148,27 +119,17 @@ private struct HoleSiteReads {
 	private let carrierUse: SeamCarrierValues.Use?
 	private var levelTypesByName = [String: TypeDescription]()
 	private var structStaysOutsideSendableFunctions = true
-	private var boundNames = Set<String>()
 	private var readNames = Set<String>()
 
-	private mutating func bind(_ property: Property) {
-		boundNames.insert(property.label)
-		otherBindings.append(property)
-		levelTypesByName[property.label] = property.typeDescription
-	}
-
 	private mutating func read(_ read: PlaceRead) {
-		guard !boundNames.contains(read.label), readNames.insert(read.label).inserted else { return }
+		guard readNames.insert(read.label).inserted else { return }
 		reads?.append(read)
 	}
 
 	/// A read of the struct bound as `name`, a builder, a level or a run, of `type`; `nil` where no binding types it.
 	private mutating func readStruct(named name: String, ofType type: TypeDescription?) {
-		guard !boundNames.contains(name) else { return }
-		guard let type else {
-			reads = nil
-			return
-		}
+		// Every struct a site calls a member of is typed: the builder and each level of its route in `init`, a run by its use.
+		guard let type else { return reads = nil }
 		read(PlaceRead(
 			argumentLabel: name,
 			label: name,
@@ -202,26 +163,6 @@ private struct HoleSiteReads {
 			readStruct(named: name, ofType: use.structType(qualifiedBy: nil))
 		}
 		readFields(fields[(use?.extras ?? 0..<fields.count).clamped(to: 0..<fields.count)])
-	}
-
-	/// The type of the run before the one `binding` forms, of the level the site's carrier takes its values from.
-	private func previousRunType(of binding: SeamHoles.ValuesBinding) -> TypeDescription? {
-		guard let carrierUse,
-		      let end = carrierUse.ends.first(where: { SeamCarrierValues.structType(ofLevel: carrierUse.level, end: $0, qualifiedBy: nil) == binding.type }),
-		      let previousEnd = carrierUse.ends.last(where: { $0 < end })
-		else { return nil }
-		return SeamCarrierValues.structType(ofLevel: carrierUse.level, end: previousEnd, qualifiedBy: nil)
-	}
-
-	/// The type a level's struct or carrier is spelled over (`ReservedName.levelType(ofEnum:built:)`).
-	private static func builtType(ofLevel levelType: TypeDescription) -> TypeDescription? {
-		switch levelType {
-		case let .nested(_, _, generics),
-		     let .simple(_, generics):
-			generics.first
-		case .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .variadic, .unknown:
-			nil
-		}
 	}
 }
 

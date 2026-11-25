@@ -126,7 +126,7 @@ public struct InstantiableMacro: MemberMacro {
 			if mustExtendInstantiable, !extendsInstantiable {
 				var modifiedDeclaration = concreteDeclaration
 				var inheritedType = InheritedTypeSyntax(
-					type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
+					type: Self.instantiableConformance(spelledLike: node),
 				)
 				if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
 					inheritedType.trailingTrivia = .space
@@ -143,7 +143,7 @@ public struct InstantiableMacro: MemberMacro {
 					modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
 						colon: .colonToken(trailingTrivia: .space),
 						inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
-							type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
+							type: Self.instantiableConformance(spelledLike: node),
 						)),
 						trailingTrivia: .space,
 					)
@@ -162,6 +162,7 @@ public struct InstantiableMacro: MemberMacro {
 
 			let visitor = InstantiableVisitor(declarationType: .concreteDecl)
 			visitor.walk(concreteDeclaration)
+			lazy var spellings = DependencyTypeSpellings(of: declaration)
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
 			}
@@ -269,7 +270,7 @@ public struct InstantiableMacro: MemberMacro {
 					changes: Self.generateCustomMockStub(
 						named: expectedMethodName,
 						typeName: concreteDeclaration.name.text,
-						dependencies: visitor.dependencies,
+						dependencies: spellings.spelled(visitor.dependencies),
 						accessModifier: accessModifier,
 						on: declaration,
 					),
@@ -449,7 +450,7 @@ public struct InstantiableMacro: MemberMacro {
 								)
 							} else {
 								fixedSyntax.signature.parameterClause.parameters.append(
-									normalizeFunctionParameter(property.asFunctionParamterSyntax, for: functionParameterProperty),
+									normalizeFunctionParameter(spellings.spelled(property).asFunctionParamterSyntax, for: functionParameterProperty),
 								)
 							}
 							existingParameters[functionParameterProperty] = nil
@@ -532,7 +533,7 @@ public struct InstantiableMacro: MemberMacro {
 
 						context.diagnose(Diagnostic(
 							node: Syntax(syntaxToFix),
-							error: FixableInstantiableError.missingRequiredInitializer(.missingArguments(missingArguments)),
+							error: FixableInstantiableError.missingRequiredInitializer(.missingArguments(spellings.spelled(missingArguments))),
 							changes: [
 								.replace(
 									oldNode: Syntax(syntaxToFix),
@@ -560,7 +561,7 @@ public struct InstantiableMacro: MemberMacro {
 						MemberBlockItemSyntax(
 							leadingTrivia: .newline,
 							decl: Initializer.generateRequiredInitializer(
-								for: visitor.dependencies,
+								for: spellings.spelled(visitor.dependencies),
 								accessLevel: Self.accessModifierOfDeclarationAdded(to: concreteDeclaration, takingParametersOf: visitor.dependencies, context: context),
 								andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames,
 							),
@@ -662,7 +663,7 @@ public struct InstantiableMacro: MemberMacro {
 						changes: Self.generateCustomMockStub(
 							named: customMockNameValue,
 							typeName: concreteDeclaration.name.text,
-							dependencies: visitor.dependencies,
+							dependencies: spellings.spelled(visitor.dependencies),
 							accessModifier: accessModifier,
 							on: declaration,
 						),
@@ -782,10 +783,11 @@ public struct InstantiableMacro: MemberMacro {
 							fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
 								from: mockSyntax.signature.parameterClause,
 								requiredProperties: visitor.dependencies.map(\.property),
+								spellings: spellings,
 							)
 							context.diagnose(Diagnostic(
 								node: Syntax(mockSyntax),
-								error: FixableInstantiableError.mockMethodMissingArguments(methodName: mockSyntax.name.text, missingArguments),
+								error: FixableInstantiableError.mockMethodMissingArguments(methodName: mockSyntax.name.text, spellings.spelled(missingArguments)),
 								changes: [
 									.replace(
 										oldNode: Syntax(mockSyntax),
@@ -817,7 +819,7 @@ public struct InstantiableMacro: MemberMacro {
 			if mustExtendInstantiable, !extendsInstantiable {
 				var modifiedDeclaration = extensionDeclaration
 				var inheritedType = InheritedTypeSyntax(
-					type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
+					type: Self.instantiableConformance(spelledLike: node),
 				)
 				if let existingInheritanceClause = modifiedDeclaration.inheritanceClause {
 					inheritedType.trailingTrivia = .space
@@ -834,7 +836,7 @@ public struct InstantiableMacro: MemberMacro {
 					modifiedDeclaration.inheritanceClause = InheritanceClauseSyntax(
 						colon: .colonToken(trailingTrivia: .space),
 						inheritedTypes: InheritedTypeListSyntax(arrayLiteral: InheritedTypeSyntax(
-							type: IdentifierTypeSyntax(name: .identifier("Instantiable")),
+							type: Self.instantiableConformance(spelledLike: node),
 						)),
 						trailingTrivia: .space,
 					)
@@ -867,6 +869,7 @@ public struct InstantiableMacro: MemberMacro {
 
 			let visitor = InstantiableVisitor(declarationType: .extensionDecl)
 			visitor.walk(extensionDeclaration)
+			lazy var spellings = DependencyTypeSpellings(of: declaration)
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
 			}
@@ -1027,7 +1030,7 @@ public struct InstantiableMacro: MemberMacro {
 						changes: Self.generateCustomMockStub(
 							named: customMockNameValue,
 							typeName: extendedTypeName,
-							dependencies: extensionDependencies,
+							dependencies: spellings.spelled(extensionDependencies),
 							accessModifier: accessModifier,
 							isExtension: true,
 							on: declaration,
@@ -1209,10 +1212,11 @@ public struct InstantiableMacro: MemberMacro {
 							fixedSyntax.signature.parameterClause = Self.buildFixedParameterClause(
 								from: mockFunction.signature.parameterClause,
 								requiredProperties: matchingInstantiable.dependencies.map(\.property),
+								spellings: spellings,
 							)
 							context.diagnose(Diagnostic(
 								node: Syntax(mockFunction),
-								error: FixableInstantiableError.mockMethodMissingArguments(methodName: mockFunction.name.text, missingArguments),
+								error: FixableInstantiableError.mockMethodMissingArguments(methodName: mockFunction.name.text, spellings.spelled(missingArguments)),
 								changes: [
 									.replace(
 										oldNode: Syntax(mockFunction),
@@ -1857,6 +1861,7 @@ public struct InstantiableMacro: MemberMacro {
 	private static func buildFixedParameterClause(
 		from original: FunctionParameterClauseSyntax,
 		requiredProperties: [Property],
+		spellings: DependencyTypeSpellings,
 	) -> FunctionParameterClauseSyntax {
 		var result = original
 		let existingArgumentCount = original.parameters.count
@@ -1868,7 +1873,7 @@ public struct InstantiableMacro: MemberMacro {
 			if let existingParameter = existingParameters.removeValue(forKey: property) {
 				result.parameters.append(existingParameter)
 			} else {
-				result.parameters.append(property.asFunctionParamterSyntax)
+				result.parameters.append(spellings.spelled(property).asFunctionParamterSyntax)
 			}
 		}
 		// Append remaining non-required parameters (e.g., extra parameters with defaults), in source order.
@@ -2102,6 +2107,17 @@ public struct InstantiableMacro: MemberMacro {
 			.replace(oldNode: Syntax(mockSyntax), newNode: Syntax(renamedMock)),
 			.replace(oldNode: Syntax(declaration), newNode: fixedDeclaration),
 		]
+	}
+
+	/// The `Instantiable` conformance a fix-it adds, spelled as `attribute` spells the macro: `SafeDI.Instantiable`
+	/// beside `@SafeDI.Instantiable`, so the fix-it keeps the spelling the person chose.
+	private static func instantiableConformance(spelledLike attribute: AttributeSyntax) -> TypeSyntax {
+		let instantiable = TokenSyntax.identifier(InstantiableVisitor.macroName)
+		return if let qualifiedAttribute = MemberTypeSyntax(attribute.attributeName), qualifiedAttribute.baseType.namesSafeDIModule {
+			TypeSyntax(MemberTypeSyntax(baseType: IdentifierTypeSyntax(name: .identifier(Dependency.safeDIModuleName)), name: instantiable))
+		} else {
+			TypeSyntax(IdentifierTypeSyntax(name: instantiable))
+		}
 	}
 
 	/// Builds fix-it changes that generate a stub custom mock method below the initializer.

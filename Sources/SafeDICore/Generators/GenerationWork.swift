@@ -62,6 +62,10 @@ public struct GenerationWork: Sendable {
 		/// Laying a production root's body out by the type key (`TypeKeyBody`): each view of the plan, one for all of a
 		/// plan node's places that agree on what they read outside it, is laid out once, so the views count, not the places.
 		case layingOutTypeKeyViews
+		/// Finding the root functions a root's body holds (`RootFunctionHoisting`): each level of the plan the walk reads.
+		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
+		/// and its levels do not grow with the paths through the tree.
+		case findingRootFunctions
 	}
 
 	/// The step that did the work.
