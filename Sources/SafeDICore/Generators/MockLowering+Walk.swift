@@ -453,6 +453,9 @@ extension MockLowering {
 		var unrecordedPlaceErrors = [[Int]: Initializer.GenerationError]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
 		var planNodes = [PlanNodeKey: PlanNode]()
+		/// The places around the walk, by their properties' labels, nearest last, with the closers beneath each that close on
+		/// it, whose records take the configuration the place is handed once it is known (`MockLowering+ClosersAndDefaults.swift`).
+		var closedOnPlacesByLabel = [String: [ClosedOnPlace]]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.
@@ -814,7 +817,7 @@ extension MockLowering {
 			if case let .property(_, _, _, erasedToConcreteExistential, _, _) = generator.scopeData,
 			   let record = closerRecord(of: generator, instantiable: instantiable, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, closedOnFunctionName: closedOnFunctionName)
 			{
-				closerAndDefaultRecords[childIndexPath] = record
+				recordCloser(record, of: generator)
 			}
 			lines.append(contentsOf: MockLowering.bindingLines(
 				of: property,
@@ -1197,6 +1200,7 @@ extension MockLowering {
 			lines.append(contentsOf: node.receiverBindingLines(indent: indent))
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
 			ancestorDeclarationsByLabel[property.label, default: []].append((ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), functionName: node.functionName, bodyLevel: bodyLabels.count))
+			enterClosedOnPlace(declaring: ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable))
 			bodyLabels.append(Set(childGenerators.compactMap(\.property?.label)))
 			// The level's names are known once `children(of:…)` names its nodes, which fills this.
 			bodyFunctionNames.append([])
@@ -1324,6 +1328,7 @@ extension MockLowering {
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
+			leaveClosedOnPlace(of: configuredNode, readsOverride: overrideRead != nil)
 			let oneWayParentConcreteType = parentConcreteType
 			// A node whose type repeats a configured node around it, or beneath one, records nothing.
 			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration {
@@ -1481,6 +1486,18 @@ extension MockLowering {
 		/// The type of the closure that overrides how the node is built, handed the values its initializer takes.
 		var builderClosureType: String {
 			"(\(builderParameterTypes)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
+		}
+
+		/// The type of the closure that overrides how the node is built, `@Sendable` where `isSendable`, as `builderClosureType`
+		/// spells it.
+		func builderClosureTypeDescription(isSendable: Bool) -> TypeDescription {
+			let closure = TypeDescription.closure(
+				arguments: MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesMockInitializer).types,
+				isAsync: false,
+				doesThrow: false,
+				returnType: property.typeDescription.asInstantiatedTypeSpelledAsDeclared,
+			)
+			return isSendable ? .attributed(closure, specifiers: [], attributes: ["Sendable"]) : closure
 		}
 
 		/// The types of the values the node's override is handed, joined: one per argument its construction is passed, which
@@ -1991,12 +2008,16 @@ extension MockLowering {
 
 		/// The parameters' types, spelled as the closure's parameter list.
 		var spelled: String {
+			types.map(\.asSource).joined(separator: ", ")
+		}
+
+		/// The parameters' types, as the closure's parameter list declares them.
+		var types: [TypeDescription] {
 			let dependencyLabels = Set(dependencies.map(\.property.label))
 			return arguments.filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
 					.asFunctionParameter(amongTypesDeclaredEscaping: [])
-					.asSource
-			}.joined(separator: ", ")
+			}
 		}
 
 		private let arguments: [Initializer.Argument]
