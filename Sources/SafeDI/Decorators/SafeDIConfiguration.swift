@@ -38,7 +38,7 @@
 ///   - additionalMocksToGenerate: Type names from dependent modules to generate `mock()` methods for in this module. The types must be decorated with `@Instantiable` in their home module. Generation fails for an entry that names no `@Instantiable` type. See the "Cross-module mock generation" section of the manual.
 ///   - mockConditionalCompilation: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation.
 ///   - generatePlainDependencyTreeInitializers: For each type this module declares with `generateDependencyTree: true`, whether SafeDI pairs each initializer whose labels start with `__safeDI_` with one that has readable labels, for code you write. Generated code calls the `__safeDI_` initializer whether this is `true` or `false`. Set it to `true` while code that does not use SafeDI yet calls such a type.
-///   - defaultIsolation: The isolation this module's declarations default to. Set it to the same value as the module's `defaultIsolation` build setting. SafeDI spells it on the code it generates for each type whose `generatedAttributes`, `generatedInitializerAttributes` and `mockAttributes` are empty.
+///   - defaultIsolation: The isolation this module's declarations default to. Set it to the same value as the module's `defaultIsolation` build setting. SafeDI spells it as a type's `generatedInitializerAttributes` when that is empty, and as its `mockAttributes` when that is empty. `generatedAttributes` fills both.
 ///
 /// Example:
 ///

@@ -456,15 +456,17 @@ When a module’s declarations default to the main actor (SwiftPM’s `.defaultI
 )
 ```
 
-SafeDI cannot read the build setting itself, so the two lines must agree. In such a module, each `@Instantiable` type whose `generatedAttributes`, `generatedInitializerAttributes` and `mockAttributes` are all empty is generated as if it spelled `generatedAttributes: "@MainActor"`: its root `init()`, its [seam’s initializers](#generating-a-dependency-tree-per-module) and its `mock()` are `@MainActor`. A module that reads this module’s `.safedi` file, or its files under the SwiftPM plugin, calls them as this module generated them.
+SafeDI cannot read the build setting itself, so the two lines must agree. In such a module, SafeDI supplies `@MainActor` for each attribute field an `@Instantiable` type leaves empty, each field on its own: an empty `generatedInitializerAttributes` makes its root `init()` and its [seam’s initializers](#generating-a-dependency-tree-per-module) `@MainActor`, and an empty `mockAttributes` makes its `mock()` `@MainActor`. `generatedAttributes` fills both fields. Text written as `""` counts as empty. A mock generated through `additionalMocksToGenerate` is main-actor when either the type’s module or the generating module declares the setting.
 
-Text you write wins, and SafeDI never reads it: any text replaces the default rather than adding to it. So text that states no isolation, such as `generatedAttributes: "@available(iOS 17, *)"`, drops the main actor; write `"@MainActor @available(iOS 17, *)"`. To opt one type’s mock out, write `mockAttributes: "nonisolated"`.
+A seam this module generates as `@MainActor` can only be built from main-actor code. When another module’s root that states no isolation builds it, `generate` reports an error at that root: declare `defaultIsolation: MainActor.self` in that module too, or write `generatedAttributes: "@MainActor"` on the root.
+
+Text you write in a field wins for that field, and SafeDI never reads it: any text replaces the default rather than adding to it. So text that states no isolation, such as `generatedAttributes: "@available(iOS 17, *)"`, drops the main actor; write `"@MainActor @available(iOS 17, *)"`. To opt one type’s mock out, write `mockAttributes: "nonisolated"`; its initializers stay `@MainActor`.
 
 | Build setting | `defaultIsolation` | Result |
 |---|---|---|
 | main actor | `MainActor.self` | Generated code matches the module. |
 | nonisolated | `nil` | Generated code matches the module. |
-| nonisolated | `MainActor.self` | As if every type without attribute text spelled `generatedAttributes: "@MainActor"`. Code that calls these mocks runs on the main actor. |
+| nonisolated | `MainActor.self` | As if each empty attribute field held `"@MainActor"`. Code that calls these initializers and mocks runs on the main actor. |
 | main actor | `nil` | Generated code is inferred `nonisolated` where it spells nothing, and fails to compile where it builds a main-actor type. Declare the setting. |
 
 <!-- Mismatch warning: one paragraph about the warning `generate` reports when the build setting it can see disagrees with `defaultIsolation` goes here. -->
@@ -472,6 +474,7 @@ Text you write wins, and SafeDI never reads it: any text replaces the default ra
 What the setting cannot fix:
 - A `Sendable` wrapper (`SendableInstantiator`, `SendableErasedInstantiator`) cannot build a main-actor type: its builder runs off the main actor.
 - A type bound to a custom global actor spells that actor in `generatedAttributes`, but its mock’s other generated types follow the module default. If code on that actor builds the mock’s overrides, write `mockAttributes: "nonisolated"` on the type, or do not declare the module default.
+- A type bound to another global actor through a protocol or superclass: write that actor in `generatedAttributes`.
 
 ## Delayed instantiation
 
