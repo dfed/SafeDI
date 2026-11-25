@@ -19,45 +19,8 @@
 // SOFTWARE.
 
 extension MockLowering {
-	/// The alternative a built place's record tries before its construction, where the mock walk hooked the construction
-	/// (`ConstructionHook`) with a read of the place's override, or `nil` where the hook says something the record cannot:
-	/// a read the walk cannot name as a value path, another construction, or a call of the builder other than with the
-	/// construction's arguments.
-	/// - Parameters:
-	///   - hook: The walk's hook of the place.
-	///   - construction: The construction the record calls, spelled.
-	///   - argumentValues: The values the construction passes, spelled, in its order.
-	///   - erasedType: The type the place's value is erased to, where the property is erased.
-	static func constructionAlternative(
-		of hook: ConstructionHook,
-		construction: String,
-		argumentValues: [String],
-		erasedType: TypeDescription?,
-	) -> ConstructionAlternative? {
-		guard hook.construction == nil || hook.construction == construction,
-		      let closure = overrideReadPath(hook.builder)
-		else { return nil }
-		let bindingName = ReservedName.configurationBuilderPropertyName
-		let call = "\(bindingName)(\(argumentValues.joined(separator: ", ")))"
-		let resultWrapper: TypeDescription?
-		if hook.call == call {
-			resultWrapper = nil
-		} else if let erasedType, hook.call == "\(erasedType.asSource)(\(call))" {
-			resultWrapper = erasedType
-		} else {
-			return nil
-		}
-		return ConstructionAlternative(
-			closure: closure,
-			bindingName: bindingName,
-			requiresAbsent: [],
-			use: .calledWithConstructionArguments,
-			resultWrapper: resultWrapper,
-		)
-	}
-
 	/// An override read a place's construction makes: its text, and the value path it reads where it names the overrides'
-	/// members (`overrideReadPath(_:)`), `nil` where it reads a local a `@Sendable` function's extractor bound it to.
+	/// members, `nil` where it reads a local a `@Sendable` function's extractor bound it to.
 	struct OverrideRead {
 		let text: String
 		let path: ValuePath?
@@ -205,6 +168,12 @@ extension MockLowering.Walk {
 	) {
 		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
 		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
+		// A place of another module's public mock built inline reads the builder `mock()` takes for its hole first
+		// (`HoleBuilder.inlinePlaceValue`), which no alternative records.
+		guard node.inlinePlace == nil else {
+			unrecordedReasons[childIndexPath] = "inlinePlaceBuilder"
+			return
+		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		guard configuredConstruction != .unrecorded else {
 			unrecordedReasons[childIndexPath] = "configuredUnrecorded"

@@ -187,7 +187,7 @@ extension MockLowering {
 	}
 
 	/// The type key's form of a built place's configuration: what its call hands its function (`passedArguments(ofBuiltPlaceOf:…)`),
-	/// and the alternatives its construction tries, each override read at an absolute path (`overrideReadPath`) replaced by
+	/// and the alternatives its construction tries, each override read at an absolute path (`OverrideRead.path`) replaced by
 	/// a read of the place's own parameter (its `safeDIBuilder` member, or the parameter itself where it is the override
 	/// closure). So alike places of one type that read their configurations at different paths record alike, and a place a
 	/// cycle builds again reads the configuration of the nearest place of its type built the same way, as the path key reads it.
