@@ -388,9 +388,22 @@ struct BinaryWriter {
 		elementEnds.reserveCapacity(list.count)
 		for element in list {
 			let elementStart = bytes.count
+			let sharedValueCountBefore = sharedValueCount
 			writeElement(element, &self)
-			elements.append(bytes.withUnsafeBytes { history.identifier(ofElementWrittenAs: UnsafeRawBufferPointer(rebasing: $0[elementStart...])) })
-			elementEnds.append(bytes.count)
+			let elementEnd = bytes.count
+			elementEnds.append(elementEnd)
+			if sharedValueCount == sharedValueCountBefore {
+				elements.append(bytes.withUnsafeBytes { history.identifier(ofElementWrittenAs: UnsafeRawBufferPointer(rebasing: $0[elementStart...])) })
+			} else {
+				// The element wrote a shared value for the first time, in full, and is written as a reference to it from
+				// now on: it is the same element then, so it is known by those bytes, which writing it once more gives.
+				// Every shared value it holds at its outermost level is written by now, and nothing is shared inside a
+				// value written in full, so this second writing writes no value for the first time, and removing its
+				// bytes leaves every table as it was. Only an element's first writing pays for it.
+				writeElement(element, &self)
+				elements.append(bytes.withUnsafeBytes { history.identifier(ofElementWrittenAs: UnsafeRawBufferPointer(rebasing: $0[elementEnd...])) })
+				bytes.removeSubrange(elementEnd...)
+			}
 		}
 		var wholeHeader = BinaryWriter()
 		wholeHeader.writeUnsigned(UInt64(list.count) << 1)
