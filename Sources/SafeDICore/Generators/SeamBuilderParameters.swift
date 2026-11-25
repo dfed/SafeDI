@@ -50,7 +50,6 @@ extension DependencyTreeGenerator {
 		instantiables: [TypeDescription: Instantiable],
 	) -> [SeamSignature.Hole] {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
-		let shadowWalkStart = ContinuousClock.now
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let sites = buildSites(in: generator)
 		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
@@ -110,9 +109,8 @@ extension DependencyTreeGenerator {
 			)
 		}
 		// The levels of each place, beside its fields, for the tests and the graph fuzzer: generated code reads none yet.
-		let shadowWalkDuration = ContinuousClock.now - shadowWalkStart
-		if SeamPlaceLevels.observer != nil || SeamRouteQueryShadow.isEnabled {
-			var placeLevels = SeamPlaceLevels(
+		if SeamPlaceLevels.observer != nil {
+			let placeLevels = SeamPlaceLevels(
 				seamType: seam.concreteInstantiable,
 				places: siteContents.map { content in
 					var place = SeamPlaceLevels.Place(
@@ -131,9 +129,7 @@ extension DependencyTreeGenerator {
 					return place
 				},
 			)
-			placeLevels.perSiteWalkDuration = shadowWalkDuration
 			SeamPlaceLevels.observer?(placeLevels)
-			SeamRouteQueryShadow.record(placeLevels)
 		}
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter

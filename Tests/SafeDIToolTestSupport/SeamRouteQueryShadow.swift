@@ -18,31 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#if canImport(Glibc)
-	import Glibc
-#elseif canImport(Darwin)
-	import Darwin
-#endif
+import SafeDICore
 
-/// SHADOW, never shipped: asks `SeamPlaceGraph` every question the per-site lists answer today — the nearest
+/// A check of the tests, which no shipped code holds: asks `SeamPlaceGraph` every question the per-site lists answer today — the nearest
 /// declaration of each label, the declaration a cycle re-entry hands the type built again, the declaration a fill's
 /// field of a seam parameter hides, and the stack the place is built with — and compares the answers with the lists
 /// the per-site walk computed. Nothing generated reads it.
 ///
 /// The comparison is per case: today's answer is the union over the case's places, since one emitted fill per case
 /// binds what every route hands it (`SeamPlaceGraph`'s note on cases). Every test runs it, so a place the graph
-/// answers otherwise fails that test (`SeamPlaceLevelChecks`), and the environment variable `SAFEDI_SHADOW_REPORT`
-/// names a file each computation appends one JSON line to.
+/// answers otherwise fails that test (`SeamPlaceLevelChecks`).
 public enum SeamRouteQueryShadow {
-	public static let reportPath: String? = {
-		guard let value = getenv("SAFEDI_SHADOW_REPORT") else { return nil }
-		return String(cString: value)
-	}()
-
-	public static var isEnabled: Bool {
-		reportPath != nil
-	}
-
 	public struct Report: Sendable {
 		public var seamType = ""
 		public var places = 0
@@ -71,7 +57,6 @@ public enum SeamRouteQueryShadow {
 		public var conflictSamples = [String]()
 		public var queryNanoseconds: Int64 = 0
 		public var graphNanoseconds: Int64 = 0
-		public var perSiteWalkNanoseconds: Int64 = 0
 	}
 
 	static func nanoseconds(_ duration: Duration) -> Int64 {
@@ -82,7 +67,6 @@ public enum SeamRouteQueryShadow {
 		var report = Report()
 		report.seamType = placeLevels.seamType.asSource
 		report.places = placeLevels.places.count
-		report.perSiteWalkNanoseconds = nanoseconds(placeLevels.perSiteWalkDuration)
 
 		let graphStart = ContinuousClock.now
 		let graph = SeamPlaceGraph(places: placeLevels.places)
@@ -306,52 +290,4 @@ public enum SeamRouteQueryShadow {
 		}
 		return "[\(declarations.joined(separator: ", "))]\(node.opensSendableFunction ? " @Sendable" : "")"
 	}
-
-	/// Appends the report of `placeLevels` to the report file, when enabled.
-	public static func record(_ placeLevels: SeamPlaceLevels) {
-		guard let reportPath else { return }
-		let report = report(of: placeLevels)
-		func quoted(_ text: String) -> String {
-			var escaped = ""
-			for scalar in text.unicodeScalars {
-				switch scalar {
-				case "\"": escaped += "\\\""
-				case "\\": escaped += "\\\\"
-				case "\n": escaped += "\\n"
-				case "\t": escaped += "\\t"
-				default:
-					if scalar.value < 0x20 {
-						escaped += " "
-					} else {
-						escaped.unicodeScalars.append(scalar)
-					}
-				}
-			}
-			return "\"" + escaped + "\""
-		}
-		var line = "{"
-		line += "\"seam\":\(quoted(report.seamType)),\"places\":\(report.places)"
-		line += ",\"nodes\":\(report.nodes),\"edges\":\(report.edges)"
-		line += ",\"levelConflicts\":\(report.levelConflicts),\"levelConflictsOnlyInFunctionFacts\":\(report.levelConflictsOnlyInFunctionFacts)"
-		line += ",\"fillLevelVariants\":\(report.fillLevelVariants),\"sendableOnlyVariants\":\(report.sendableOnlyVariants),\"otherVariants\":\(report.otherVariants),\"types\":\(report.types)"
-		line += ",\"cases\":\(report.cases),\"queries\":\(report.queries),\"graphCycles\":\(report.graphCycles)"
-		line += ",\"labelSetMismatches\":\(report.labelSetMismatches)"
-		line += ",\"reentryQuestions\":\(report.reentryQuestions),\"reentryMismatches\":\(report.reentryMismatches)"
-		line += ",\"hiddenQuestions\":\(report.hiddenQuestions),\"hiddenMismatches\":\(report.hiddenMismatches)"
-		line += ",\"stackSiteMismatches\":\(report.stackSiteMismatches),\"stackCaseMismatches\":\(report.stackCaseMismatches),\"stackRouteDependentCases\":\(report.stackRouteDependentCases)"
-		line += ",\"mismatches\":\(report.mismatches),\"routeDependentAnswers\":\(report.routeDependentAnswers)"
-		line += ",\"queryNs\":\(report.queryNanoseconds),\"graphNs\":\(report.graphNanoseconds),\"perSiteWalkNs\":\(report.perSiteWalkNanoseconds)"
-		line += ",\"testName\":\(quoted(SeamRouteQueryShadow.context ?? ""))"
-		line += ",\"mismatchSamples\":[\(report.mismatchSamples.map(quoted).joined(separator: ","))]"
-		line += ",\"conflictSamples\":[\(report.conflictSamples.map(quoted).joined(separator: ","))]"
-		line += "}\n"
-		let descriptor = open(reportPath, O_WRONLY | O_APPEND | O_CREAT, 0o644)
-		guard descriptor >= 0 else { return }
-		var bytes = Array(line.utf8)
-		_ = bytes.withUnsafeMutableBytes { write(descriptor, $0.baseAddress, $0.count) }
-		close(descriptor)
-	}
-
-	/// A name for the run the reports come from, such as a test's.
-	@TaskLocal public static var context: String?
 }

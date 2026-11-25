@@ -100,7 +100,6 @@ let package = Package(
 				"SafeDICore/Models/ImportStatement.swift",
 				"SafeDICore/Models/SafeDIToolManifest.swift",
 				"SafeDICore/Models/Scope.swift",
-				"SafeDICore/Models/SeamPlaceGraph.swift",
 				"SafeDICore/Models/SeamPlaceLevels.swift",
 				"SafeDICore/Models/SeamSignature.swift",
 				"SafeDICore/Models/SourceDiagnostic.swift",

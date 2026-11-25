@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SafeDICore
+
 /// The places of a seam's holes as a graph of one node per level, in place of one list per place: what each scope on
 /// the way to a place binds, keyed by the scope and not by the path it is reached along, with an edge from each level
 /// to the levels that can enclose it.

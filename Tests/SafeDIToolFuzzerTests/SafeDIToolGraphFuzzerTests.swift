@@ -7392,7 +7392,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x3595E52A4D6009B6
+	static let seamCorpusFixtureHash: UInt64 = 0x19F3A77DA162E650
 	static let seamCorpusAcceptedSeedCount = 623
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x48072926F71AC583
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7535,6 +7535,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.wrapperMix: 92,
 		.wrapperMixValueAndSendableWrapper: 82,
 		.wrapperMixWrapperReadInSendableFunction: 44,
+		.placesOfOneCase: 0,
+		.placesOfOneCaseHandFillsOtherValues: 0,
+		.placesOfOneCaseFillReadsOnlyIfAvailable: 0,
 		.reenteredFillCallThroughSeamPassingPlaceUpInSendableFill: 14,
 		.reenteredFillReadsPlaceFieldDeclaredInFill: 42,
 		.reenteredFillReadsPlaceFieldRemedied: 75,
@@ -7999,6 +8002,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.wrapperMixSendableWrapperBesidePlainMemo: 40,
 		.wrapperMixWrapperDeclaredAboveCall: 13,
 		.wrapperMixWrapperReadInSendableFunction: 249,
+		.placesOfOneCase: 556,
+		.placesOfOneCaseHandFillsOtherValues: 447,
+		.placesOfOneCaseFillReadsOnlyIfAvailable: 165,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,

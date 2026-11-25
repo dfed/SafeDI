@@ -26,6 +26,8 @@ public enum SeamFillSharing {
 
 	/// What one call of a seam or of another module's public mock built to fill its places, in one pass of its tree.
 	public struct FillsOfCall: Sendable {
+		/// The type the call builds, as its declaration spells it.
+		public let calledType: String
 		/// The fills the call built: the one of each case that generates code, and one for each set of a case's places
 		/// whose fills would be built alike.
 		public let builtFillCount: Int

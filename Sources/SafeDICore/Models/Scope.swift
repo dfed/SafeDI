@@ -2374,7 +2374,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let builderCallArguments = builderCallArguments(fillNames: fillNames)
 		let enclosingLevelCalls = scope.publicMockCall == nil ? [:] : enclosingLevelCalls()
 		if builtFillCount > 0, let observer = SeamFillSharing.observer {
-			observer(SeamFillSharing.FillsOfCall(builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count))
+			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count))
 		}
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
