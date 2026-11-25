@@ -11506,7 +11506,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// Records that `expression` is read into a local named after the
 		/// outermost `@Sendable` function, and returns that local's name, or the member of the configuration's local
-		/// that `expression` reads.
+		/// that `expression` reads. An expression read before, as the override path of a type a cycle builds again is
+		/// the path of the nearest same-type place above it, returns the local that read it, so one override is read
+		/// into one local.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
 			if let configurationPath, expression.hasPrefix("\(configurationPath).") {
 				let localName: String
@@ -11518,12 +11520,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					extractions.append((localName: localName, expression: configurationPath))
 				}
 				return localName + expression.dropFirst(configurationPath.count)
+			} else if let localName = localNameByExpression[expression] {
+				return localName
 			} else {
 				let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
 				extractions.append((localName: localName, expression: expression))
+				localNameByExpression[expression] = localName
 				return localName
 			}
 		}
+
+		/// The local each expression extracted so far was read into.
+		private var localNameByExpression = [String: String]()
 
 		/// Keeps every later local apart from `names`, which a scope inside the function declares: a local named as one
 		/// would be hidden by it where it is read.
