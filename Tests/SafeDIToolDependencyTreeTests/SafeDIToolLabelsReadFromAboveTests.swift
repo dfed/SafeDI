@@ -43,7 +43,7 @@ struct SafeDIToolLabelsReadFromAboveTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_findsLabelReadAroundCycle_whenWalkEntersCycleAtTheScopeThatReadsIt() async throws {
+	mutating func generate_findsLabelReadAroundCycle_whenWalkEntersCycleAtTheScopeThatReadsIt() async {
 		// `A` and `B` open each other and `B` receives `y`, so `A`'s tree reads `y` through `B`. `Third`, which declares
 		// `y`, enters the cycle at `B`: a walk from there finishes `A` while `B` is still in progress. `One` declares `y`
 		// above `A` and `Two` does not, so `Two`'s tree reads `y` from above it, where nothing declares it.
