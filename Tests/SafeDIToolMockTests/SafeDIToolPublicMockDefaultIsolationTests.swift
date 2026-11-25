@@ -672,6 +672,66 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: DefaultIsolationCase.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_publicMockWithOwnOptionalDefaultCompilesForCallerInAnotherPackage_whenEitherModuleDefaultsToMainActor(isolation: DefaultIsolationCase) async throws {
+		// The provider of `Badge`'s own optional default is declared beside `mock()` with `mock()`'s attributes, none here,
+		// so it has `mock()`'s isolation in each module, whatever that module defaults to.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Core",
+					packageName: "pkg",
+					swiftFileContentByFilePath: ["Badge.swift": Self.badge],
+					compilerSettings: isolation.declaringModuleSettings,
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "app",
+					swiftFileContentByFilePath: ["Caller.swift": Self.badgeCaller],
+					dependencies: ["Core"],
+					compilerSettings: isolation.callingModuleSettings,
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["Core"]?.generatedFiles == [
+			"Core.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Badge {
+			    @usableFromInline static func __safeDI_publicMockDefault_note() -> String? { "x" }
+
+			    public static func mock(
+			        title: String? = nil,
+			        note: String? = Badge.__safeDI_publicMockDefault_note()
+			    ) -> Badge {
+			        Badge.__safeDI_mock(title: title, note: note)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        title: String? = nil,
+			        note: String? = Badge.__safeDI_publicMockDefault_note()
+			    ) -> Badge {
+			        let title = title ?? ("badge")
+			        return Badge(title: title, note: note)
+			    }
+			}
+
+			extension Badge {
+			    public enum __safeDI_Badge_mock_4BBE6BDEBF1855D9 {}
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Isolation cases
 
 	/// The isolation each of the two modules' declarations default to: the main actor, or none.
@@ -732,6 +792,37 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 	    @Instantiated let service: Service
 	    @Instantiated let leaf: Leaf
 	}
+	"""
+
+	private static let badge = """
+	import SafeDI
+
+	@Instantiable(generateMock: .public)
+	public final class Badge: Instantiable {
+	    public init(title: String = "badge", note: String? = "x") {
+	        self.title = title
+	        self.note = note
+	    }
+
+	    public let title: String
+	    public let note: String?
+	}
+	"""
+
+	/// Calls `Badge.mock()` with and without its own optional default, from the main actor and, in a module that does
+	/// not default to it, from outside any actor.
+	private static let badgeCaller = """
+	import Core
+
+	#if DEBUG
+	@MainActor func makeBadgesOnTheMainActor() -> [Badge] {
+	    [Badge.mock(), Badge.mock(note: "custom")]
+	}
+
+	func makeBadges() -> [Badge] {
+	    [Badge.mock(), Badge.mock(note: "custom")]
+	}
+	#endif
 	"""
 
 	/// Calls `Screen.mock()` from the main actor and, in a module that does not default to it, from outside any actor.

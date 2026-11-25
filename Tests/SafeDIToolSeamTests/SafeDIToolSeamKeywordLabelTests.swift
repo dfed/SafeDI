@@ -74,6 +74,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() }, Protocol: { __safeDI_builder() })
 		        }
@@ -154,6 +155,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() })
 		        }
@@ -215,6 +217,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Type = Type
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -232,6 +235,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`my leaf` = `my leaf`
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Self: { __safeDI_builder() }, init: { _ in __safeDI_builder() }, `my leaf`: { _, _ in __safeDI_builder() })
 		        }
@@ -245,6 +249,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Protocol: { __safeDI_builder() })
 		        }
@@ -258,6 +263,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(Protocol: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -369,6 +375,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.`default` = `default`
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Type: { __safeDI_builder() }, default: { _ in __safeDI_builder() })
 		        }
@@ -401,6 +408,7 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		            self.Protocol = Protocol
 		        }
 
+		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(Protocol: .init(__safeDI_noScope: __safeDI_builder))
 		        }
