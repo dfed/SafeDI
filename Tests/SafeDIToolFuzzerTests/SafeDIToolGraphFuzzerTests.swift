@@ -8805,8 +8805,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// base corpus only. Seed 1329 failed the remedy oracle's seam fill shape that forwards a value into a lazy wrapper's type
 	/// instead, which the fill error's advice to declare that wrapper as an instantiator fixed. The hole draw's value outside a `@Sendable` function lands
 	/// in 338, 1042, 1072 and 1492, which the tool rejects, 338 and 1072 with that draw's error: 338 failed its inherited
-	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer. Seed 1649 fails the compile-time
-	/// assertions' shape in the base corpus only, whose partition no other corpus runs.
+	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer.
 	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [
 		7, 14, 21, 27, 35, 45, 51, 107, 114, 116, 157, 167, 204, 264, 265, 272, 281, 300, 309, 323, 338, 342, 364,
 		371, 381, 383, 431, 434, 455, 461, 476, 508, 525, 527, 545, 548, 567, 577, 593, 595, 617, 624, 628, 632, 634,
@@ -8814,7 +8813,7 @@ struct SafeDIToolGraphFuzzerTests {
 		948, 953, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_081, 1_084, 1_092, 1_139, 1_145, 1_147,
 		1_149, 1_163, 1_300, 1_301, 1_322, 1_329, 1_335, 1_352, 1_362, 1_366, 1_369, 1_372, 1_432, 1_433, 1_434, 1_436,
 		1_447, 1_464, 1_483, 1_492, 1_504, 1_521, 1_524, 1_525, 1_531, 1_559, 1_561, 1_563, 1_567, 1_572, 1_580, 1_602,
-		1_633, 1_646, 1_649, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
+		1_633, 1_646, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
 		1_898, 1_935, 1_959, 1_970,
 	]
 
@@ -9643,7 +9642,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [1_649, 2_787, 4_622],
+			seeds: [2_787, 4_622, 4_839],
 		),
 	]
 
