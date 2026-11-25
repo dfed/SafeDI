@@ -1965,10 +1965,11 @@ internal import Foundation
 To pick a level, SafeDI must know which module declares each type a generated declaration names. For a type whose declaration it does not read, it assumes:
 
 - every module your files import at the level of the declaration that names the type, or wider;
-- Foundation, for Foundation’s common types;
-- for other types, every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
+- every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
 
-This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name. To silence the warning, import that module below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
+The same holds for the standard library’s and Foundation’s types, such as `String` or `URL`: SafeDI never decides which module declares a type from its name, since any module may declare its own `Calendar` or `Result`.
+
+This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name (“public import of 'Combine' was not used in public declarations or inlinable code”). To silence the warning, spell the type with its module’s name where your declaration names it (`public init(url: Foundation.URL)`), which tells SafeDI the one module that declares it. For a module only your own files import `public`, you can instead import it below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
