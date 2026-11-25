@@ -596,6 +596,10 @@ extension ScopeRecord {
 		if sharesMemo, let previousPassMemo {
 			constructionMemo.keepEntries(ofLastPass: previousPassMemo)
 		}
+		// A production tree's plan must detect every finding of today's tree it stands for, checked only where a test reads it.
+		if !forMockGeneration {
+			PerTypePlanDetectorObservation.observeDetectors(of: root, against: scopeGenerator)
+		}
 		return scopeGenerator
 	}
 

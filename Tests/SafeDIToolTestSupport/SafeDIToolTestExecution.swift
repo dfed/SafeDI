@@ -347,7 +347,10 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+										// Every production tree's plan must detect each finding its tree holds (`PerTypePlanDetectorChecks`).
+										try await PerTypePlanDetectorObservation.$observer.withValue(PerTypePlanDetectorChecks.recordingMisses(handingOn: PerTypePlanDetectorObservation.observer)) {
+											try await tool.generate()
+										}
 									}
 								}
 							}
