@@ -1,0 +1,65 @@
+no overrides: left: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+no overrides: left: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+no overrides: left: each A's leaf reads that A's stamp: true
+no overrides: left: each B's leaf reads the stamp of the A that built it: true
+no overrides: left: every leaf reads the entry's token: true
+no overrides: right: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+no overrides: right: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+no overrides: right: each A's leaf reads that A's stamp: true
+no overrides: right: each B's leaf reads the stamp of the A that built it: true
+no overrides: right: every leaf reads the entry's token: true
+no overrides: top: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+no overrides: top: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+no overrides: top: each A's leaf reads that A's stamp: true
+no overrides: top: each B's leaf reads the stamp of the A that built it: true
+no overrides: top: every leaf reads the entry's token: true
+no overrides: distinct stamps among twelve constructions of A: 12
+names per entry: left: stamps (A1, A2, A3, another A1): ["left stamp", "left stamp", "left stamp", "left stamp"]
+names per entry: left: leaves (A1, B1, A2, B2, A3): ["left A leaf", "left B leaf", "left A leaf", "left B leaf", "left A leaf"]
+names per entry: left: each A's leaf reads that A's stamp: true
+names per entry: left: each B's leaf reads the stamp of the A that built it: true
+names per entry: left: every leaf reads the entry's token: true
+names per entry: right: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+names per entry: right: leaves (A1, B1, A2, B2, A3): ["built", "right B leaf", "built", "right B leaf", "built"]
+names per entry: right: each A's leaf reads that A's stamp: true
+names per entry: right: each B's leaf reads the stamp of the A that built it: true
+names per entry: right: every leaf reads the entry's token: true
+names per entry: top: stamps (A1, A2, A3, another A1): ["top stamp", "top stamp", "top stamp", "top stamp"]
+names per entry: top: leaves (A1, B1, A2, B2, A3): ["top A leaf", "built", "top A leaf", "built", "top A leaf"]
+names per entry: top: each A's leaf reads that A's stamp: true
+names per entry: top: each B's leaf reads the stamp of the A that built it: true
+names per entry: top: every leaf reads the entry's token: true
+names per entry: distinct stamps among twelve constructions of A: 12
+a counting builder at the right entry: left: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+a counting builder at the right entry: left: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+a counting builder at the right entry: left: each A's leaf reads that A's stamp: true
+a counting builder at the right entry: left: each B's leaf reads the stamp of the A that built it: true
+a counting builder at the right entry: left: every leaf reads the entry's token: true
+a counting builder at the right entry: right: stamps (A1, A2, A3, another A1): ["right stamp 1", "right stamp 2", "right stamp 3", "right stamp 4"]
+a counting builder at the right entry: right: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+a counting builder at the right entry: right: each A's leaf reads that A's stamp: true
+a counting builder at the right entry: right: each B's leaf reads the stamp of the A that built it: true
+a counting builder at the right entry: right: every leaf reads the entry's token: true
+a counting builder at the right entry: top: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+a counting builder at the right entry: top: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+a counting builder at the right entry: top: each A's leaf reads that A's stamp: true
+a counting builder at the right entry: top: each B's leaf reads the stamp of the A that built it: true
+a counting builder at the right entry: top: every leaf reads the entry's token: true
+a counting builder at the right entry: distinct stamps among twelve constructions of A: 12
+stamps the right entry's builder made: 4
+production: left: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+production: left: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+production: left: each A's leaf reads that A's stamp: true
+production: left: each B's leaf reads the stamp of the A that built it: true
+production: left: every leaf reads the entry's token: true
+production: right: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+production: right: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+production: right: each A's leaf reads that A's stamp: true
+production: right: each B's leaf reads the stamp of the A that built it: true
+production: right: every leaf reads the entry's token: true
+production: top: stamps (A1, A2, A3, another A1): ["built", "built", "built", "built"]
+production: top: leaves (A1, B1, A2, B2, A3): ["built", "built", "built", "built", "built"]
+production: top: each A's leaf reads that A's stamp: true
+production: top: each B's leaf reads the stamp of the A that built it: true
+production: top: every leaf reads the entry's token: true
+production: distinct stamps among twelve constructions of A: 12

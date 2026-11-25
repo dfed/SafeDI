@@ -1,0 +1,40 @@
+no overrides: left: stamps (one, two): ["built", "built"]
+no overrides: left: headers (one, one built, one built again, two, two built): ["built", "built", "built", "built", "built"]
+no overrides: left: ids (one, one built, two, two built): ["left one", "left one", "left two", "left two"]
+no overrides: left: a screen's headers read that screen's stamp and clock: true
+no overrides: right: stamps (one, two): ["built", "built"]
+no overrides: right: headers (one, one built, one built again, two, two built): ["built", "built", "built", "built", "built"]
+no overrides: right: ids (one, one built, two, two built): ["right one", "right one", "right two", "right two"]
+no overrides: right: a screen's headers read that screen's stamp and clock: true
+no overrides: top: stamps (one, two): ["built", "built"]
+no overrides: top: headers (one, one built, one built again, two, two built): ["built", "built", "built", "built", "built"]
+no overrides: top: ids (one, one built, two, two built): ["top one", "top one", "top two", "top two"]
+no overrides: top: a screen's headers read that screen's stamp and clock: true
+no overrides: distinct stamps and clocks among six screens: 6 6
+names per entry: left: stamps (one, two): ["left stamp", "left stamp"]
+names per entry: left: headers (one, one built, one built again, two, two built): ["left header", "left built header", "left built header", "left header", "left built header"]
+names per entry: left: ids (one, one built, two, two built): ["left one", "left one", "left two", "left two"]
+names per entry: left: a screen's headers read that screen's stamp and clock: true
+names per entry: right: stamps (one, two): ["built", "built"]
+names per entry: right: headers (one, one built, one built again, two, two built): ["built", "right built header", "right built header", "built", "right built header"]
+names per entry: right: ids (one, one built, two, two built): ["right one", "right one", "right two", "right two"]
+names per entry: right: a screen's headers read that screen's stamp and clock: true
+names per entry: top: stamps (one, two): ["top stamp", "top stamp"]
+names per entry: top: headers (one, one built, one built again, two, two built): ["top header", "built", "built", "top header", "built"]
+names per entry: top: ids (one, one built, two, two built): ["top one", "top one", "top two", "top two"]
+names per entry: top: a screen's headers read that screen's stamp and clock: true
+names per entry: distinct stamps and clocks among six screens: 6 6
+names asked for at each construction, and builders: left: stamps (one, two): ["left stamp 1", "left stamp 2"]
+names asked for at each construction, and builders: left: headers (one, one built, one built again, two, two built): ["built", "left built header 1", "left built header 2", "built", "left built header 3"]
+names asked for at each construction, and builders: left: ids (one, one built, two, two built): ["left one", "left one", "left two", "left two"]
+names asked for at each construction, and builders: left: a screen's headers read that screen's stamp and clock: true
+names asked for at each construction, and builders: right: stamps (one, two): ["built", "built"]
+names asked for at each construction, and builders: right: headers (one, one built, one built again, two, two built): ["right header from a builder", "built", "built", "right header from a builder", "built"]
+names asked for at each construction, and builders: right: ids (one, one built, two, two built): ["right one", "right one", "right two", "right two"]
+names asked for at each construction, and builders: right: a screen's headers read that screen's stamp and clock: true
+names asked for at each construction, and builders: top: stamps (one, two): ["built", "built"]
+names asked for at each construction, and builders: top: headers (one, one built, one built again, two, two built): ["built", "built", "built", "built", "built"]
+names asked for at each construction, and builders: top: ids (one, one built, two, two built): ["top one", "top one", "top two", "top two"]
+names asked for at each construction, and builders: top: a screen's headers read that screen's stamp and clock: true
+names asked for at each construction, and builders: distinct stamps and clocks among six screens: 6 6
+times each name was asked for: ["left built header: 3", "left stamp: 2"]
