@@ -39,6 +39,8 @@ extension MockLowering {
 		let unavailableProperties: Set<Property>
 		let inputs: BuiltPlaceInputs
 		let node: PlanNode
+		/// The node the walk lowered the place to, whose configuration the record reads (`relateConfiguration(ofBuiltPlaceAt:…)`).
+		let treeNode: TreeNode
 		let isPlannedAtPlace: Bool
 	}
 }
@@ -57,7 +59,10 @@ extension MockLowering.Walk {
 			let children = call.inputs.hasFunction ? (childPathsByParent[path] ?? []).map(placeCode(at:)) : []
 			// An erased place the mock can override is built from a closure that returns the erased type, where the type
 			// key's function returns the concrete one: it keeps the walk's body.
-			let isPlanned = call.isPlannedAtPlace && !(call.erasedToConcreteExistential && !call.inputs.alternatives.isEmpty)
+			// So is a place whose property is another type than the one it builds (`fulfilledByType:`, a wrapper's erased
+			// type), whose override returns the property's type.
+			let overrideReturnsAnotherType = !call.inputs.alternatives.isEmpty && (call.erasedToConcreteExistential || call.property.typeDescription.asInstantiatedType != call.instantiable.concreteInstantiable)
+			let isPlanned = call.isPlannedAtPlace && !overrideReturnsAnotherType
 			do {
 				let productionRecord = try call.generator.builtPlaceRecord(
 					of: call.property,
@@ -83,13 +88,13 @@ extension MockLowering.Walk {
 				// A record whose construction passes `nil` where the walk passes a value, or the other way, as for an
 				// `@Instantiated` dependency the mock takes as a parameter where production builds nothing, keeps the walk's
 				// body.
-				if ProcessInfo.processInfo.environment["SAFEDI_DEBUG_TK"] != nil, case let .built(built)? = record { FileHandle.standardError.write("TKDEBUG \(built.property.label) args=\(built.arguments.map { "\($0.argumentLabel)=\($0.source)" }) nil=\(call.inputs.labelsPassedNil) value=\(call.inputs.labelsPassedValue)\n".data(using: .utf8)!) }
 				if case let .built(built)? = record, built.arguments.contains(where: { argument in
 					argument.source == .nil ? call.inputs.labelsPassedValue.contains(argument.argumentLabel) : call.inputs.labelsPassedNil.contains(argument.argumentLabel)
 				}) {
 					continue
 				}
 				builtRecords[path] = record
+				relateConfiguration(ofBuiltPlaceAt: path, of: call.treeNode)
 			} catch {
 				unrecordedPlaceErrors[path] = error
 			}
@@ -114,7 +119,6 @@ extension MockLowering.Walk {
 	/// lay the body out.
 	func typeKeyRootLines(declaredAtRoot rootDeclarations: [Property]) -> [String]? {
 		var rootBody = [GeneratedCode]()
-		if ProcessInfo.processInfo.environment["SAFEDI_DEBUG_TK"] != nil { FileHandle.standardError.write("TKROOT \(rootDeclarations.map { "\($0.label): \($0.typeDescription.asSource)" })\n".data(using: .utf8)!) }
 		// The values `mock()` declares before the tree, as renames the type key copies as empty text, which it drops below.
 		for property in rootDeclarations {
 			rootBody.append(.place(PlacePlan(code: .empty, record: .alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))))

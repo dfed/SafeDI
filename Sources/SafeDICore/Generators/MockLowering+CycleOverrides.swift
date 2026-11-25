@@ -136,3 +136,154 @@ extension MockLowering {
 		configurationType.map { ConfigurationParameter(concreteType: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: $0) }
 	}
 }
+
+extension MockLowering {
+	/// What the mock walk knows, where it starts a built place, about where the type key's form of the place reads its
+	/// configuration: the configuration of its parent where the parent's configuration has a field for it, and whether
+	/// the path key's place reads the overrides of the nearest place of its type built the same way (`AncestorOverridePath`).
+	struct BuiltPlaceConfigurationContext {
+		/// The name of the place's field in its parent's configuration, which can be named apart from its label.
+		let fieldName: String
+		/// The parent's configuration, read where the place's call is made: the parent's own parameter, or `mock()`'s
+		/// `safeDIOverrides` at the root; `nil` where the parent's configuration has no field for the place.
+		let parentConfiguration: ValuePath?
+		/// Whether the place, with no field in its parent's configuration, reads the overrides of the nearest place of its
+		/// type around it built the same way.
+		let nearestIsProvided: Bool
+		/// The name of the place's own parameter in the type key's form, where it reads a configuration struct.
+		let ownParameterName: String?
+		/// The configuration the path key's place reads, `safeDIOverrides.<member>…`, or `nil` where it reads none.
+		let pathKeyConfiguration: ValuePath?
+	}
+
+	/// The read of `mock()`'s `safeDIOverrides`, the configuration of the mock root's children.
+	static var mockOverridesRead: ValuePath {
+		.rootDeclaration(ReservedName.mockOverridesParameterName)
+	}
+
+	/// The read, inside its own function, of the configuration parameter of a place that builds `node`'s type, which the
+	/// places beneath it read their fields of; `nil` where the place reads no configuration struct.
+	static func ownConfigurationRead(of node: ConstantNode) -> ValuePath? {
+		guard node.hasConfiguration,
+		      let parameter = configurationParameter(ofPlaceOf: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType(of: node))
+		else { return nil }
+		return parameter.read(isProvided: true)
+	}
+
+	/// The type key's form of a built place's configuration: what its call hands its function (`passedArguments(ofBuiltPlaceOf:…)`),
+	/// and the alternatives its construction tries, each override read at an absolute path (`overrideReadPath`) replaced by
+	/// a read of the place's own parameter (its `safeDIBuilder` member, or the parameter itself where it is the override
+	/// closure). So alike places of one type that read their configurations at different paths record alike, and a place a
+	/// cycle builds again reads the configuration of the nearest place of its type built the same way, as the path key reads it.
+	static func relativeConfiguration(
+		of node: ConstantNode,
+		context: BuiltPlaceConfigurationContext,
+		alternatives: [ConstructionAlternative],
+		sendableConfigurationTypeNames: Set<String>,
+	) -> (passedArguments: [PassedArgument], alternatives: [ConstructionAlternative]) {
+		let configurationType = configurationType(of: node)
+		guard let parameter = configurationParameter(ofPlaceOf: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType) else {
+			return (passedArguments: [], alternatives: alternatives)
+		}
+		let staysOutsideSendableFunctions = if node.hasConfiguration {
+			!sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
+		} else {
+			!node.requiresSendable
+		}
+		let passedArguments = passedArguments(
+			ofBuiltPlaceOf: node.instantiable.concreteInstantiable,
+			label: context.fieldName,
+			builtWithHandWrittenMock: node.usesMockInitializer,
+			configurationType: configurationType,
+			parentConfiguration: context.parentConfiguration,
+			nearestIsProvided: context.nearestIsProvided,
+			staysOutsideSendableFunctions: staysOutsideSendableFunctions,
+		)
+		let ownRead = parameter.read(isProvided: true)
+		let overrideRead: ValuePath = node.hasConfiguration ? .member(ReservedName.configurationBuilderPropertyName, of: ownRead) : ownRead
+		let relativeAlternatives = alternatives.map { alternative in
+			ConstructionAlternative(
+				closure: overrideRead,
+				bindingName: alternative.bindingName,
+				requiresAbsent: alternative.requiresAbsent,
+				use: alternative.use,
+				resultWrapper: alternative.resultWrapper,
+			)
+		}
+		return (passedArguments: passedArguments, alternatives: relativeAlternatives)
+	}
+}
+
+extension MockLowering.Walk {
+	/// Puts the built place recorded at the walk's place in the type key's form of its configuration
+	/// (`MockLowering.relativeConfiguration(of:…)`). A public mock's places take another configuration, which its own records hand.
+	mutating func relateConfiguration(ofBuiltPlaceAt path: [Int], of node: MockLowering.TreeNode) {
+		guard !buildsPublicMock,
+		      case let .built(constantNode) = node,
+		      case var .built(record) = builtRecords[path],
+		      let context = builtPlaceConfigurationContexts[path]
+		else { return }
+		let relative = MockLowering.relativeConfiguration(of: constantNode, context: context, alternatives: record.alternatives, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
+		record.passedArguments = relative.passedArguments
+		record.alternatives = relative.alternatives
+		builtRecords[path] = .built(record)
+	}
+}
+
+extension MockLowering.Walk {
+	/// The override each built place the walk recorded reads in the type key's form, resolved back to the absolute read the
+	/// path key makes (`safeDIOverrides.<member>…`), by the place's path of child indices: each place's configuration is what
+	/// its call hands it (`BuiltPlaceRecord.passedArguments`), read of its parent's configuration, of the nearest place
+	/// around it with the same parameter, or of nothing. A place beneath a place left unrecorded resolves to nothing. What the
+	/// shadow comparison holds the relative form to: it must read what the path key reads, at every place.
+	func absoluteConfigurationReads() -> [[Int]: ValuePath] {
+		var configurationByPath = [[Int]: ValuePath]()
+		for path in placePathsInWalkOrder {
+			guard case let .built(record) = builtRecords[path], let argument = record.passedArguments.first else { continue }
+			if let resolved = resolve(argument.value, at: path) {
+				configurationByPath[path] = resolved
+			}
+		}
+		return configurationByPath
+	}
+
+	/// The absolute read `value`, handed at the place at `path`, resolves to, or `nil` where it reads nothing: a read of a
+	/// parameter is of the nearest place around `path` that takes it, which reads the configuration the path key's place
+	/// reads there, so each place is checked against its ancestors as the path key spells them.
+	private func resolve(_ value: ValuePath, at path: [Int]) -> ValuePath? {
+		switch value {
+		case .rootDeclaration:
+			return value
+		case let .member(member, of: base):
+			return resolve(base, at: path).map { .member(member, of: $0) }
+		case let .read(read):
+			guard case .binding = read.source else { return nil }
+			var ancestor = path
+			while !ancestor.isEmpty {
+				ancestor.removeLast()
+				if let context = builtPlaceConfigurationContexts[ancestor], context.ownParameterName == read.label {
+					return context.pathKeyConfiguration
+				}
+			}
+			return nil
+		case .passedArgument, .optionalMember, .call, .emptyInitialization:
+			// A fresh configuration, or anything but a configuration, reads no override.
+			return nil
+		}
+	}
+
+	/// The alternatives of the built place at `path`, with each read of the place's own configuration parameter replaced by
+	/// the absolute read it resolves to (`absoluteConfigurationReads()`).
+	func alternativesReadAbsolutely(at path: [Int], configurationReads: [[Int]: ValuePath]) -> [ConstructionAlternative] {
+		guard case let .built(record) = builtRecords[path] else { return [] }
+		guard let configuration = configurationReads[path] else { return record.passedArguments.isEmpty ? record.alternatives : [] }
+		return record.alternatives.map { alternative in
+			let closure: ValuePath = if case let .member(member, of: _) = alternative.closure {
+				.member(member, of: configuration)
+			} else {
+				configuration
+			}
+			return ConstructionAlternative(closure: closure, bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent, use: alternative.use, resultWrapper: alternative.resultWrapper)
+		}
+	}
+}

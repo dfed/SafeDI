@@ -203,6 +203,7 @@ extension MockLowering.Walk {
 			unavailableProperties: unavailableProperties,
 			inputs: inputs,
 			node: planNode,
+			treeNode: node,
 			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
 		)
 	}
