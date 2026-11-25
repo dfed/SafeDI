@@ -189,6 +189,7 @@ struct GraphFuzzerMockMirrorModel {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	init(fixture: GraphFuzzerFixture, readsExistentialAndQualifiedSpellings: Bool = false) {
 		self.readsExistentialAndQualifiedSpellings = readsExistentialAndQualifiedSpellings
+		actorTypeNames = GraphFuzzerSourceLine.actorTypeNames(in: fixture.swiftFileContent)
 		var types = [String: TypeDeclaration]()
 		var typeOrder = [String]()
 		var pendingArguments: String?
@@ -399,6 +400,9 @@ struct GraphFuzzerMockMirrorModel {
 	/// module's `erasedToConcreteExistential` declarations erase to it, keyed by both forms of a lazily instantiated one.
 	let erasedToConcreteType: [String: String]
 	let readsExistentialAndQualifiedSpellings: Bool
+	/// The graph's `actor` types, whose mirrors hand their initializers values a region check cannot follow
+	/// (`GraphFuzzerMockMirror.argumentBindings`).
+	let actorTypeNames: Set<String>
 
 	/// The concrete type whose scope builds `type`, or `nil` when no declaration fulfills it.
 	func scopeTypeName(of type: String) -> String? {
@@ -927,6 +931,11 @@ struct GraphFuzzerMockMirror: Equatable {
 	let declarations: [Declaration]
 	/// The expression building the mocked type from the declarations.
 	let construction: String
+	/// The locals the construction reads for an actor's arguments, each declared `nonisolated(unsafe)` before it: the
+	/// mirror's values are in its initializer's region, which Swift 6 does not let it send to an actor's initializer,
+	/// though the mirror, as production, hands the actor each value and keeps none it uses afterwards. Empty for a type
+	/// that is no actor.
+	var argumentBindings = [String]()
 	let shapes: Set<GraphFuzzerValueOracleShape>
 	/// The arguments of the mock's required parameters, each a sample value, in the mock's order: empty for a mock that
 	/// takes none.
@@ -983,7 +992,15 @@ struct GraphFuzzerMockMirror: Equatable {
 		}
 		lines.append("\tpublic init(\(declarations.map { "\($0.property.label): \(GraphFuzzerSpelling.escapingType(of: $0.property.type))" }.joined(separator: ", "))) {")
 		lines += declarations.map { "\t\tself.\($0.property.label) = \($0.property.label)" }
-		lines.append("\t\t\(Self.valueLabel) = \(construction)")
+		if argumentBindings.isEmpty {
+			lines.append("\t\t\(Self.valueLabel) = \(construction)")
+		} else {
+			lines.append("\t\t// Swift 6 does not let the mirror send the actor values in its initializer’s region, so each argument is a local.")
+			lines.append("\t\tdo {")
+			lines += argumentBindings.map { "\t\t\tnonisolated(unsafe) let \($0)" }
+			lines.append("\t\t\t\(Self.valueLabel) = \(construction)")
+			lines.append("\t\t}")
+		}
 		lines.append("\t}")
 		lines.append("")
 		lines += declarations.map { "\t\($0.attribute) let \($0.property.label): \($0.property.type)" }
@@ -1169,7 +1186,9 @@ extension GraphFuzzerMockMirrorModel {
 		for dependency in mockedType.dependencies {
 			let argument: String? = switch dependency.source {
 			case .instantiated:
-				Self.argument(for: dependency.property, isRequired: true, from: declarations)
+				// An optional instantiated property is instantiated only if available, since the macro rejects every other
+				// one: where nothing the mock builds fulfills it, the mock binds `nil`, as production does.
+				Self.argument(for: dependency.property, isRequired: !dependency.property.isOptional, from: declarations)
 			case let .aliased(_, onlyIfAvailable):
 				Self.argument(for: dependency.property, isRequired: !onlyIfAvailable, from: declarations)
 			case let .received(onlyIfAvailable):
@@ -1181,6 +1200,15 @@ extension GraphFuzzerMockMirrorModel {
 				return .failure(.modelDisagrees("The mirror declares nothing it can pass `\(typeName)` for `\(dependency.property)`, which the mock passes without a required parameter."))
 			}
 			arguments.append("\(dependency.property.label): \(argument)")
+		}
+		// An actor's initializer is handed each argument through a local of its own (`argumentBindings`).
+		var argumentBindings = [String]()
+		if actorTypeNames.contains(typeName) {
+			for (index, dependency) in mockedType.dependencies.enumerated() {
+				let local = "mirrorArgument\(index)"
+				argumentBindings.append("\(local): \(dependency.property.type) = \(arguments[index].dropFirst(dependency.property.label.count + 2))")
+				arguments[index] = "\(dependency.property.label): \(local)"
+			}
 		}
 		// A mocked type's generated `mock()` calls through to its hand-written mock, passing what that mock takes, so the
 		// mirror calls the same method.
@@ -1201,6 +1229,7 @@ extension GraphFuzzerMockMirrorModel {
 			name: name,
 			declarations: declarations,
 			construction: construction,
+			argumentBindings: argumentBindings,
 			shapes: shapes(of: mockRoot, mockedTypeName: typeName),
 		))
 	}
@@ -1438,6 +1467,37 @@ extension GraphFuzzerMockMirrorModel {
 		{
 			overrideCount += 1
 		}
+		// As `mockRootParameters`: an override too for each property a type of the tree instantiates only if available that
+		// nothing fulfills, outside every `@Sendable` builder function, but one of the label and type of a value `mock()`
+		// already takes. An optional instantiated property is instantiated only if available, since the macro rejects every
+		// other one.
+		var unavailableProperties = Set<GraphFuzzerMirrorProperty>()
+		var visitedTypes = Set<String>()
+		var typesToVisit = [(typeName: mockedTypeName, children: mockRoot.children, isInsideSendableFunction: false)]
+		while let visit = typesToVisit.popLast() {
+			guard visitedTypes.insert("\(visit.typeName) \(visit.isInsideSendableFunction)").inserted else { continue }
+			if !visit.isInsideSendableFunction {
+				let builtProperties = propertiesToGenerate(ofTypeNamed: visit.typeName).map(\.property)
+				for dependency in types[visit.typeName]?.dependencies ?? [] {
+					guard case .instantiated = dependency.source, dependency.property.isOptional, !builtProperties.contains(dependency.property) else { continue }
+					unavailableProperties.insert(dependency.property)
+				}
+			}
+			for case let .instantiated(property, scopeTypeName, _) in visit.children {
+				typesToVisit.append((
+					typeName: scopeTypeName,
+					children: propertiesToGenerate(ofTypeNamed: scopeTypeName),
+					isInsideSendableFunction: visit.isInsideSendableFunction || property.unwrapped.type.hasPrefix("Sendable"),
+				))
+			}
+		}
+		for property in unavailableProperties
+			where !receivedParameterProperties.contains(property)
+			&& !receivedParameterProperties.contains(property.unwrapped)
+			&& !isFulfilledByForwardedProperty(property)
+		{
+			overrideCount += 1
+		}
 		return overrideCount
 	}
 
@@ -1629,6 +1689,7 @@ struct GraphFuzzerValueOraclePlan {
 		self.fixture = fixture
 		self.storingFixture = storingFixture ?? GraphFuzzerGenerator.fixture(forSeed: fixture.seed, storingEveryParameter: true)
 		rootTypeNames = model.typeOrder.filter { model.types[$0]?.isRoot == true }
+		actorTypeNames = model.actorTypeNames
 		let mockFileSuffix = "+SafeDIMock.swift"
 		var mirrors = [GraphFuzzerMockMirror]()
 		var skips = [(typeName: String, skip: GraphFuzzerMirrorSkip)]()
@@ -1729,6 +1790,8 @@ struct GraphFuzzerValueOraclePlan {
 	let storingFixture: GraphFuzzerFixture
 	/// The graph's roots, in declaration order.
 	let rootTypeNames: [String]
+	/// The graph's `actor` types, which no override sentinel builds.
+	let actorTypeNames: Set<String>
 	/// The mock files the tool generated for the graph as drawn, by name, which the value-oracle run must generate alike
 	/// (R6).
 	let drawnMockFiles: [String: String]

@@ -153,7 +153,7 @@ extension FileScan: BinarySchemaMember {
 				BinaryLayoutField("reservedTypeNameDeclarations", \.reservedTypeNameDeclarations),
 			],
 			// A cached scan is one whose module kept its plain type declarations
-			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`),
+			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)`),
 			// which leaves no block undecided.
 			unwrittenProperties: ["plainTypeDeclarationDecisions"],
 		)
@@ -1390,6 +1390,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
 				BinaryLayoutField("seamSignatures", \.seamSignatures),
+				BinaryLayoutField("publicMockPlans", \.publicMockPlans),
 				BinaryLayoutField("view", \.view),
 			],
 			unwrittenProperties: [],
@@ -1412,6 +1413,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			instantiableTypeNamesInAnyClause: fileWithoutView.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: fileWithoutView.plainTypeDeclarations,
 			seamSignatures: fileWithoutView.seamSignatures,
+			publicMockPlans: fileWithoutView.publicMockPlans,
 			view: reader.read(),
 		)
 	}
@@ -1433,15 +1435,19 @@ extension ModuleInfoFile: BinarySchemaMember {
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
 			seamSignatures: reader.read() as ModuleSeamSignatures,
+			publicMockPlans: reader.read() as ModulePublicMockPlans,
 			view: .empty,
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		write(to: &writer) { writer in writer.write(seamSignatures) }
+		write(to: &writer) { writer in
+			writer.write(seamSignatures)
+			writer.write(publicMockPlans)
+		}
 	}
 
-	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures`.
+	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures` and `publicMockPlans`.
 	func write(to writer: inout BinaryWriter, writingSeamSignatures writeSeamSignatures: (inout BinaryWriter) -> Void) {
 		writer.write(moduleName)
 		writer.write(ownEntryChecksum)
@@ -1580,6 +1586,7 @@ extension ViewedModule: BinarySchemaMember {
 				BinaryLayoutField("instantiables", \.instantiables),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
 				BinaryLayoutField("seamSignatures", \.seamSignatures),
+				BinaryLayoutField("publicMockPlans", \.publicMockPlans),
 			],
 			unwrittenProperties: [],
 		)
@@ -1593,6 +1600,7 @@ extension ViewedModule: BinarySchemaMember {
 			instantiables: reader.read(),
 			plainTypeDeclarations: reader.read(),
 			seamSignatures: reader.read() as ModuleSeamSignatures,
+			publicMockPlans: reader.read() as ModulePublicMockPlans,
 		)
 	}
 
@@ -1603,5 +1611,6 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(instantiables)
 		writer.write(plainTypeDeclarations)
 		writer.write(seamSignatures)
+		writer.write(publicMockPlans)
 	}
 }

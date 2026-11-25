@@ -133,7 +133,7 @@ extension TypeKeyLayout {
 					isExtension: record.isExtension,
 				),
 			)
-			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription, where: record.isErased).spelled
+			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription.unwrapped, where: record.isErased).spelled
 			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
 			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
@@ -192,7 +192,7 @@ extension TypeKeyLayout {
 					isExtension: isExtension,
 				),
 			)
-			return "\(declaration.spelled) = \(Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription, where: isErased).spelled)"
+			return "\(declaration.spelled) = \(Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription.unwrapped, where: isErased).spelled)"
 		}
 	}
 
