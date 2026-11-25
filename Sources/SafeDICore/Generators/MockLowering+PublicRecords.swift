@@ -153,7 +153,6 @@ extension MockLowering.Walk {
 			at: site,
 			functionName: functionName,
 			valuesBindings: [],
-			bindsValuesBindings: false,
 			readingInstancesOf: lazilyInstantiatedInstanceProperties,
 			carrierUse: nil,
 		)

@@ -1520,7 +1520,7 @@ extension MockLowering {
 				placeHooks[childIndexPath] = ConstructionHook(builder: functionOverrideRead.text, call: node.configured(byChildren: children).spikeHookCall, construction: node.spikeConstruction)
 			}
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
-			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead)
+			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead?.text)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			leaveClosedOnPlace(of: configuredNode, readsOverride: overrideRead != nil)
