@@ -106,4 +106,9 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 
 	/// Shadow only: how long the per-site walk of this computation took (`buildSites`, `holesPassedUp`, `fields(of:)`).
 	public var perSiteWalkDuration: Duration = .zero
+
+	/// Shadow only: the levels compared without the walk's duration.
+	public static func == (lhs: SeamPlaceLevels, rhs: SeamPlaceLevels) -> Bool {
+		lhs.seamType == rhs.seamType && lhs.places == rhs.places
+	}
 }

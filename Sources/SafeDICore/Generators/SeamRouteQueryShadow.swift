@@ -48,6 +48,13 @@ public enum SeamRouteQueryShadow {
 		let filledType: TypeDescription?
 	}
 
+	/// A level as built: its key, and what one build of it binds, which can differ between builds of one type.
+	struct VariantKey: Hashable {
+		let key: NodeKey
+		let declarations: [SeamPlaceLevels.Level.Declaration]
+		let opensSendableFunction: Bool
+	}
+
 	/// What a place reads of a label: a field, a declaration it carries no field of, or nothing (the caller's scope).
 	struct Outcome: Hashable {
 		enum Kind: String, Hashable {
@@ -75,6 +82,10 @@ public enum SeamRouteQueryShadow {
 		public var edges = 0
 		public var levelConflicts = 0
 		public var levelConflictsOnlyInFunctionFacts = 0
+		public var fillLevelVariants = 0
+		public var sendableOnlyVariants = 0
+		public var otherVariants = 0
+		public var types = 0
 		public var cases = 0
 		public var queries = 0
 		public var memoEntries = 0
@@ -102,6 +113,7 @@ public enum SeamRouteQueryShadow {
 		// implementation would read from each type's declarations once.
 		let graphStart = ContinuousClock.now
 		var indexByKey = [NodeKey: Int]()
+		var indexByVariant = [VariantKey: Int]()
 		var levels = [SeamPlaceLevels.Level]()
 		var parents = [Set<Int>]()
 		var placeNodes = [[Int]]()
@@ -115,22 +127,32 @@ public enum SeamRouteQueryShadow {
 					isInFill: level.isInFill,
 					filledType: level.builtType == nil && index > 0 ? place.levels[index - 1].builtType : nil,
 				)
-				if let existing = indexByKey[key] {
-					let first = levels[existing]
-					if first.declarations != level.declarations || first.opensSendableFunction != level.opensSendableFunction {
+				let variantKey = VariantKey(key: key, declarations: level.declarations, opensSendableFunction: level.opensSendableFunction)
+				if let existing = indexByVariant[variantKey] {
+					nodes.append(existing)
+				} else {
+					if let first = indexByKey[key].map({ levels[$0] }) {
+						// Another build of the type binds otherwise than its first: a variant of the level.
 						report.levelConflicts += 1
 						let functionFacts = { (declarations: [SeamPlaceLevels.Level.Declaration]) in
 							declarations.filter { !$0.isCycleParameter && !$0.isReboundByBuilderFunction }
 						}
-						if functionFacts(first.declarations) == functionFacts(level.declarations), first.opensSendableFunction == level.opensSendableFunction {
+						if level.builtType == nil {
+							report.fillLevelVariants += 1
+						} else if first.declarations == level.declarations {
+							report.sendableOnlyVariants += 1
+						} else if functionFacts(first.declarations) == functionFacts(level.declarations) {
 							report.levelConflictsOnlyInFunctionFacts += 1
-						} else if report.conflictSamples.count < 3 {
-							report.conflictSamples.append("level \(level.builtType?.asSource ?? "fill") before \(level.nextProperty?.asSource ?? "-") at \(place.sitePath.map(\.label).joined(separator: ".")): \(describe(first)) vs \(describe(level))")
+						} else {
+							report.otherVariants += 1
+							if report.conflictSamples.count < 3 {
+								report.conflictSamples.append("level \(level.builtType?.asSource ?? "fill") before \(level.nextProperty?.asSource ?? "-") at \(place.sitePath.map(\.label).joined(separator: ".")): \(describe(first)) vs \(describe(level))")
+							}
 						}
+					} else {
+						indexByKey[key] = levels.count
 					}
-					nodes.append(existing)
-				} else {
-					indexByKey[key] = levels.count
+					indexByVariant[variantKey] = levels.count
 					nodes.append(levels.count)
 					levels.append(level)
 					parents.append([])
@@ -142,6 +164,7 @@ public enum SeamRouteQueryShadow {
 			placeNodes.append(nodes)
 		}
 		report.nodes = levels.count
+		report.types = indexByKey.count
 		report.edges = parents.reduce(0) { $0 + $1.count }
 		// Each level's nearest declaration of each label: within a level, the later one.
 		let declarationByLabelByNode = levels.map { level in
@@ -188,17 +211,21 @@ public enum SeamRouteQueryShadow {
 					}
 				}
 			}
+			let outcomeByLabelByPlace = placeIndices.map { placeIndex in
+				let place = placeLevels.places[placeIndex]
+				var outcomeByLabel = [String: Outcome]()
+				for uncarried in place.carriedUncarriedProperties {
+					outcomeByLabel[uncarried.label] = Outcome(property: uncarried, kind: .uncarried)
+				}
+				for field in place.carriedFields {
+					outcomeByLabel[field.label] = Outcome(property: field, kind: .field)
+				}
+				return outcomeByLabel
+			}
 			for label in labels {
 				var outcomes = Set<Outcome>()
-				for placeIndex in placeIndices {
-					let place = placeLevels.places[placeIndex]
-					if let field = place.carriedFields.last(where: { $0.label == label }) {
-						outcomes.insert(Outcome(property: field, kind: .field))
-					} else if let uncarried = place.carriedUncarriedProperties.last(where: { $0.label == label }) {
-						outcomes.insert(Outcome(property: uncarried, kind: .uncarried))
-					} else {
-						outcomes.insert(Outcome(property: nil, kind: .none))
-					}
+				for outcomeByLabel in outcomeByLabelByPlace {
+					outcomes.insert(outcomeByLabel[label] ?? Outcome(property: nil, kind: .none))
 				}
 				let question = Question(caseKey: caseKey, label: label)
 				todaysAnswers[question] = outcomes
@@ -216,27 +243,45 @@ public enum SeamRouteQueryShadow {
 		var memo = [MemoKey: Set<Outcome>]()
 		var onStack = Set<MemoKey>()
 		var graphCycles = 0
-		func answer(node: Int, label: String, crossed: Bool) -> Set<Outcome> {
-			if let declaration = declarationByLabelByNode[node][label] {
-				return [outcome(of: declaration, crossed: crossed)]
+		// Iterative, since a seam's tree can be deeper than a concurrency thread's stack.
+		func direct(_ key: MemoKey) -> Set<Outcome>? {
+			if let declaration = declarationByLabelByNode[key.node][key.label] {
+				return [outcome(of: declaration, crossed: key.crossed)]
 			}
-			guard !parents[node].isEmpty else { return [Outcome(property: nil, kind: .none)] }
-			let key = MemoKey(node: node, label: label, crossed: crossed)
-			if let known = memo[key] {
+			if parents[key.node].isEmpty {
+				return [Outcome(property: nil, kind: .none)]
+			}
+			return nil
+		}
+		func answer(node: Int, label: String, crossed: Bool) -> Set<Outcome> {
+			let start = MemoKey(node: node, label: label, crossed: crossed)
+			if let known = direct(start) ?? memo[start] {
 				return known
 			}
-			guard onStack.insert(key).inserted else {
-				graphCycles += 1
-				return []
+			var stack = [(key: start, isExpanded: false)]
+			while let (key, isExpanded) = stack.popLast() {
+				let parentCrossed = key.crossed || levels[key.node].opensSendableFunction
+				let parentKeys = parents[key.node].map { MemoKey(node: $0, label: key.label, crossed: parentCrossed) }
+				if isExpanded {
+					var outcomes = Set<Outcome>()
+					for parentKey in parentKeys {
+						if let known = direct(parentKey) ?? memo[parentKey] {
+							outcomes.formUnion(known)
+						} else {
+							graphCycles += 1
+						}
+					}
+					onStack.remove(key)
+					memo[key] = outcomes
+					continue
+				}
+				guard memo[key] == nil, onStack.insert(key).inserted else { continue }
+				stack.append((key, true))
+				for parentKey in parentKeys where direct(parentKey) == nil && memo[parentKey] == nil && !onStack.contains(parentKey) {
+					stack.append((parentKey, false))
+				}
 			}
-			let parentCrossed = crossed || levels[node].opensSendableFunction
-			var outcomes = Set<Outcome>()
-			for parent in parents[node] {
-				outcomes.formUnion(answer(node: parent, label: label, crossed: parentCrossed))
-			}
-			onStack.remove(key)
-			memo[key] = outcomes
-			return outcomes
+			return memo[start] ?? []
 		}
 		var queryAnswers = [Question: Set<Outcome>]()
 		let queryStart = ContinuousClock.now
@@ -319,6 +364,7 @@ public enum SeamRouteQueryShadow {
 		var line = "{"
 		line += "\"seam\":\(quoted(report.seamType)),\"places\":\(report.places),\"nodes\":\(report.nodes),\"edges\":\(report.edges)"
 		line += ",\"levelConflicts\":\(report.levelConflicts),\"levelConflictsOnlyInFunctionFacts\":\(report.levelConflictsOnlyInFunctionFacts)"
+		line += ",\"fillLevelVariants\":\(report.fillLevelVariants),\"sendableOnlyVariants\":\(report.sendableOnlyVariants),\"otherVariants\":\(report.otherVariants),\"types\":\(report.types)"
 		line += ",\"cases\":\(report.cases),\"queries\":\(report.queries),\"memoEntries\":\(report.memoEntries),\"graphCycles\":\(report.graphCycles)"
 		line += ",\"mismatches\":\(report.mismatches),\"routeDependentAnswers\":\(report.routeDependentAnswers)"
 		line += ",\"queryNs\":\(report.queryNanoseconds),\"graphNs\":\(report.graphNanoseconds),\"perSiteWalkNs\":\(report.perSiteWalkNanoseconds)"
