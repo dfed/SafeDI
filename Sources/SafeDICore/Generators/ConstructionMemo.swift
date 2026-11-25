@@ -201,7 +201,7 @@ struct ConstructionMemo {
 		guard let draw else {
 			// The places of one key differ mostly in what a cycle closes on or passes, the reads `answeredAlike(in:)` asks first,
 			// which `context` answers the same for every candidate: so each is answered once per lookup, and the candidates
-			// are found by following those answers (`Candidates.indices(answeredAlikeBy:)`) rather than by asking each one. A
+			// are found by following those answers (`Candidates.entries(answeredAlikeBy:)`) rather than by asking each one. A
 			// candidate whose recorded answer to one differs is never asked, as `answeredAlike(in:)` would set it aside at that
 			// read. The first candidate in the order they were stored that `context` answers alike is reused, as before.
 			var contextAnswers = [ConstructionLog.Read: ConstructionLog.Answer]()
@@ -214,17 +214,16 @@ struct ConstructionMemo {
 					return answer
 				}
 			}
-			let indices = candidates.indices(answeredAlikeBy: contextAnswer)
-			GenerationWork.record(indices.count, by: .askingMemoCandidates)
-			for index in indices {
-				let candidate = candidates.all[index]
-				if candidate.cycleParameterReads.allSatisfy({ contextAnswer($0.read) == $0.answer }), let reuse = reuse(of: candidate.entry) {
+			let entries = candidates.entries(answeredAlikeBy: contextAnswer)
+			GenerationWork.record(entries.count, by: .askingMemoCandidates)
+			for entry in entries {
+				if let reuse = reuse(of: entry) {
 					return reuse
 				}
 			}
 			return nil
 		}
-		return draw.reuse(among: candidates.all.map(\.entry), reuse)
+		return draw.reuse(among: candidates.entries, reuse)
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -272,17 +271,16 @@ struct ConstructionMemo {
 		keyedScopes.append(scope)
 	}
 
-	/// An entry of a key, with the reads of what a cycle passes that a lookup asks of it before its log
-	/// (`ConstructionLog.cycleReads`).
-	private struct Candidate {
-		let entry: Entry
-		let cycleParameterReads: [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
-	}
+	/// The reads of what a cycle passes that a lookup asks of an entry before its log (`ConstructionLog.cycleReads`).
+	private typealias CycleParameterReads = [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]
 
-	/// The entries of one key in the order they were stored, each also filed under what its reads of the declaration a
-	/// cycle closes on were answered, in the order its log asks them: most candidates of one key differ in those answers
-	/// alone, and a tree with cycles stores a candidate for each set of declarations its place is built inside, so asking
-	/// each candidate in turn made a lookup's work grow with the number stored.
+	/// The entries of one key in the order they were stored. Once a key holds two, each is also filed under what its reads
+	/// of the declaration a cycle closes on were answered, in the order its log asks them: most candidates of one key differ
+	/// in those answers alone, and a tree with cycles stores a candidate for each set of declarations its place is built
+	/// inside, so asking each candidate in turn made a lookup's work grow with the number stored.
+	///
+	/// A key's only entry is filed nowhere, since a lookup asks its log either way, and filing an entry lists every cycle
+	/// read of its subtree: in a chain of places with one entry each, the lists grew with the square of the chain's length.
 	private struct Candidates {
 		/// A set of candidates whose first reads were answered alike: the candidates with no further read, and for each
 		/// read a candidate asks next, the node of each answer recorded for it.
@@ -291,14 +289,26 @@ struct ConstructionMemo {
 			var nodeByAnswerByRead = [ConstructionLog.Read: [PropertyID?: Int]]()
 		}
 
-		private(set) var all = [Candidate]()
-		/// The first node holds every candidate before any read.
+		private(set) var entries = [Entry]()
+		/// The cycle parameter reads of each entry filed so far: of none while the key holds one entry, of all after.
+		private var cycleParameterReadsOfFiledEntries = [CycleParameterReads]()
+		/// The first node holds every filed candidate before any read.
 		private var nodes = [Node()]
 
 		mutating func append(_ entry: Entry) {
-			var cycleParameterReads = [(read: ConstructionLog.Read, answer: ConstructionLog.Answer)]()
+			entries.append(entry)
+			guard entries.count > 1 else { return }
+			for index in cycleParameterReadsOfFiledEntries.count..<entries.count {
+				file(entries[index], at: index)
+			}
+		}
+
+		private mutating func file(_ entry: Entry, at index: Int) {
+			var cycleParameterReads = CycleParameterReads()
 			var node = 0
-			for (read, answer) in entry.reads.cycleReads {
+			let cycleReads = entry.reads.cycleReads
+			GenerationWork.record(cycleReads.count, by: .filingMemoEntryReads)
+			for (read, answer) in cycleReads {
 				switch answer {
 				case let .declarationClosedOn(closedOn):
 					if let next = nodes[node].nodeByAnswerByRead[read]?[closedOn] {
@@ -312,13 +322,14 @@ struct ConstructionMemo {
 					cycleParameterReads.append((read, answer))
 				}
 			}
-			nodes[node].candidates.append(all.count)
-			all.append(Candidate(entry: entry, cycleParameterReads: cycleParameterReads))
+			nodes[node].candidates.append(index)
+			cycleParameterReadsOfFiledEntries.append(cycleParameterReads)
 		}
 
-		/// The indices in `all`, in order, of the candidates whose every read of the declaration a cycle closes on
-		/// `contextAnswer` answers as recorded.
-		func indices(answeredAlikeBy contextAnswer: (ConstructionLog.Read) -> ConstructionLog.Answer) -> [Int] {
+		/// The entries, in the order they were stored, whose every cycle read `contextAnswer` answers as recorded; a key's
+		/// only entry, whose reads are filed nowhere, whatever it answers.
+		func entries(answeredAlikeBy contextAnswer: (ConstructionLog.Read) -> ConstructionLog.Answer) -> [Entry] {
+			guard !cycleParameterReadsOfFiledEntries.isEmpty else { return entries }
 			var indices = [Int]()
 			// Candidates can ask their reads in different orders, so a node can hold several next reads, each followed: the
 			// indices found are sorted, so the order the reads are followed in reaches nothing.
@@ -331,7 +342,9 @@ struct ConstructionMemo {
 					}
 				}
 			}
-			return indices.sorted()
+			return indices.sorted().compactMap { index in
+				cycleParameterReadsOfFiledEntries[index].allSatisfy { contextAnswer($0.read) == $0.answer } ? entries[index] : nil
+			}
 		}
 	}
 

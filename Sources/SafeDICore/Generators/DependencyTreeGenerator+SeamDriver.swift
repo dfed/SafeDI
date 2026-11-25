@@ -862,7 +862,18 @@ extension DependencyTreeGenerator {
 				}
 				return SeamComponentInput(plan: plan, knownSeamRoots: reachedSeamRoots, ownScopeEnums: reachedScopeEnums)
 			}
-			let taskCount = min(width, inputs.count)
+			// A level runs on more than one task only where its components reach mostly types of their own: at least half
+			// of the types they reach, counted once per component, are distinct. Components that reach the same types run
+			// several times slower side by side than one after another, all reading the same scopes and records, so they gain
+			// no wall time and spend the processor time of every task. Measured on Linux with four processors: a module of
+			// ten layers of four seams, each reaching the layers beneath it (N5i-10, whose first level reaches 75% distinct
+			// types and every level after it 47% down to 28%), took 1.39 s of CPU in parallel and 0.73 s in turn, at the same wall
+			// time; 1,200 seams that each reach a leaf of their own (E6d-1200, one level of 67% distinct types) settle in
+			// parallel 21% faster in wall time than in turn, at the same CPU. The sets are the plans' own, so this adds no walk.
+			let reachedTypeCount = inputs.reduce(0) { $0 + $1.plan.reachableTypeDescriptions.count }
+			let distinctReachedTypeCount = inputs.reduce(into: Set<TypeDescription>()) { $0.formUnion($1.plan.reachableTypeDescriptions) }.count
+			let taskCount = 2 * distinctReachedTypeCount >= reachedTypeCount ? min(width, inputs.count) : 1
+			SeamSignatureObservation.observesLevels?(SeamSignatureLevel(componentCount: inputs.count, taskCount: taskCount))
 			let settledInputs: [SettledSeamComponent]
 			if taskCount <= 1 {
 				settledInputs = try inputs.map { try Self.settle($0, context: context, baseFrozenScopeMap: baseFrozenScopeMap) }
@@ -2373,6 +2384,21 @@ public enum SeamSignatureObservation {
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
+	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
+	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+}
+
+/// One level of a module's seam components, as `seamSignatures` settles it.
+public struct SeamSignatureLevel: Equatable, Sendable {
+	/// How many components the level holds.
+	public let componentCount: Int
+	/// How many tasks settle them.
+	public let taskCount: Int
+
+	public init(componentCount: Int, taskCount: Int) {
+		self.componentCount = componentCount
+		self.taskCount = taskCount
+	}
 }
 
 /// Observes the trees of the seams this module generates that emission makes again from their first signature pass's
