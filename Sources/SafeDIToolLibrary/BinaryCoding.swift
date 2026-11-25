@@ -313,8 +313,9 @@ struct BinaryWriter {
 		// each string where it is named, and again in place only when it is new.
 		var valueWriter = BinaryWriter.writingStringsInline()
 		valueWriter.write(value)
+		let valueType = ObjectIdentifier(Value.self)
 		let index: UInt64
-		if let writtenIndex = valueWriter.bytes.withUnsafeBytes({ sharedValueIndicesByOwnBytes.index(of: $0) }) {
+		if let writtenIndex = valueWriter.bytes.withUnsafeBytes({ sharedValueIndicesByOwnBytes[valueType]?.index(of: $0) }) {
 			index = writtenIndex
 			writeUnsigned(index + 1)
 		} else {
@@ -322,7 +323,7 @@ struct BinaryWriter {
 			write(value)
 			// After the value, as the reader appends it after reading it: a shared value the value holds takes its index first.
 			index = sharedValueCount
-			valueWriter.bytes.withUnsafeBytes { sharedValueIndicesByOwnBytes.insert(index, for: $0) }
+			valueWriter.bytes.withUnsafeBytes { sharedValueIndicesByOwnBytes[valueType, default: SharedValueIndicesByBytes()].insert(index, for: $0) }
 			sharedValueCount += 1
 		}
 		if let storage {
@@ -459,8 +460,10 @@ struct BinaryWriter {
 
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
-	/// The index of each value written through ``writeShared(_:)``, by the bytes it is written as by itself.
-	private var sharedValueIndicesByOwnBytes = SharedValueIndicesByBytes()
+	/// The index of each value written through ``writeShared(_:)``, by its type and the bytes it is written as by itself:
+	/// values of two types can be written as the same bytes, as every empty collection is, and a reader hands a
+	/// reference back only as the type that was read.
+	private var sharedValueIndicesByOwnBytes = [ObjectIdentifier: SharedValueIndicesByBytes]()
 	/// Where a value written through ``writeShared(_:)`` keeps its elements: with its type and count, since every empty
 	/// collection of every type can share one address.
 	private struct SharedValueStorage: Hashable {
