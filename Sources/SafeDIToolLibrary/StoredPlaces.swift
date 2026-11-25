@@ -677,10 +677,13 @@ enum ModulePlacesEncoder {
 			guard place.typesToOwner.count > record.typesToOwner.count, place.passedUpRoute.count > record.passedUpRoute.count else {
 				return .written(place)
 			}
-			// The same site as the other seams the place's seam calls hold it.
+			// The same site as the other seams the place's seam calls hold it, where their route is shorter than the place's,
+			// as the record's is: every record a place names then has a shorter route than the place, so no read follows
+			// records in a circle. A seam that builds itself again is among the seams it calls, and its record of the site
+			// is the place being written, whose route is no shorter than its own.
 			var candidates = [(seamType: TypeDescription, index: Int, place: SeamSignature.Hole)]()
 			for otherSeamType in innerSeamTypes where otherSeamType != innerSeamType {
-				if let otherRecords = self.records(of: otherSeamType), let index = otherRecords.indicesBySite[place.site] {
+				if let otherRecords = self.records(of: otherSeamType), let index = otherRecords.indicesBySite[place.site], otherRecords.places[index].typesToOwner.count < place.typesToOwner.count {
 					candidates.append((otherSeamType, index, otherRecords.places[index]))
 				}
 			}
