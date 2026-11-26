@@ -94,7 +94,6 @@ extension DependencyTreeGenerator {
 		/// - Parameters:
 		///   - rootScope: The scope `todaysTree` was built from.
 		///   - nearestDeclarations: The declarations `todaysTree` was built beneath, with their lazily instantiated instances.
-		///   - isInSendableFamily: Whether `todaysTree` is built inside a `@Sendable` function.
 		///   - parameterLabelsByCallPlace: Where `todaysTree` is a body holding call places, the labels each call place's
 		///     function can take as parameters (`CallPlaceShadow.parameterLabelsByCallPlace`).
 		init(
@@ -104,7 +103,6 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: Set<Property> = [],
 			twinValues: Set<TwinValue>,
 			twinsBeingBuilt: [TwinValue: Property] = [:],
-			isInSendableFamily: Bool = false,
 			parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>] = [:],
 		) {
 			self.twinValues = twinValues
@@ -121,7 +119,9 @@ extension DependencyTreeGenerator {
 				path: [],
 				propertiesGeneratedLater: [],
 				labelsBuiltAfter: [],
-				isInSendableFunction: isInSendableFamily,
+				// A body's function is plain until some call of it is made in the `@Sendable` family
+				// (`VariantBodies.isSendable(_:)`), so the calls it makes are judged as a plain function's.
+				isInSendableFunction: false,
 			)]
 		}
 

@@ -52,9 +52,6 @@ extension DependencyTreeGenerator {
 		/// The twin a path is building of each value two properties build (`CallPlaceShadow.twinValues`): a call of the
 		/// value beneath closes the cycle on that property's function, whichever property makes the call.
 		let twinsBeingBuilt: [TwinValue: Property]
-		/// Whether the body is built inside a `@Sendable` function (`VariantAnswers.isInSendableFamily(calledInSendableFunction:property:)`):
-		/// its function is then `@Sendable`, and so is every body it calls.
-		let isInSendableFamily: Bool
 	}
 
 	/// A type on a cycle and a property that builds it, as cycle validation sees the property: what a cycle closes on.
@@ -97,9 +94,6 @@ extension DependencyTreeGenerator {
 				for twin in key.twinsBeingBuilt.values.map(\.asSource).sorted() {
 					description.append(" [building \(twin)]")
 				}
-				if key.isInSendableFamily {
-					description.append(" [@Sendable]")
-				}
 				return description
 			}
 
@@ -137,6 +131,10 @@ extension DependencyTreeGenerator {
 			/// in declaration order, then its children's trees, depth first). The order follows where the labels are
 			/// received, never how they are named, so renaming a graph reorders no function's parameters.
 			let argumentOrder: [Int]
+			/// Whether the call is made in the `@Sendable` family where the calling body's function is plain
+			/// (`VariantAnswers.isInSendableFamily(calledInSendableFunction:property:)`): inside a `@Sendable` function on the
+			/// path to its call place, or of a property held in a `Sendable` wrapper.
+			let isInSendableFamily: Bool
 		}
 
 		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames) {
@@ -150,6 +148,22 @@ extension DependencyTreeGenerator {
 		/// place, and nothing closes on a stack.
 		func generator(of body: Int) -> ScopeGenerator {
 			bodies[body].generator
+		}
+
+		/// The body's type and property, each label with what answers it, and ` [@Sendable]` where its function is
+		/// (`isSendable(_:)`).
+		func description(of body: Int) -> String {
+			bodies[body].description + (isSendable(body) ? " [@Sendable]" : "")
+		}
+
+		/// Whether the function of the body at a position of `bodies` is `@Sendable`: where some call of it is made in the
+		/// `@Sendable` family, or by a body whose function is. One function serves the calls of both families, as today's
+		/// tree marks a builder function `@Sendable` for every caller once a `@Sendable` function calls it
+		/// (`buildsInSendableFunction`): a plain caller can call a `@Sendable` function, and no `@Sendable` one can call a
+		/// plain local function, so a plain body beside it would serve no call today's tree compiles without. `false` for a
+		/// body `plan(ofRoot:shadow:cache:)` did not reach.
+		func isSendable(_ body: Int) -> Bool {
+			sendableBodies.contains(body)
 		}
 
 		/// A line per call of `body` (`PlanCallsObservation`).
@@ -183,7 +197,7 @@ extension DependencyTreeGenerator {
 			guard let rootCopy = shadow.copy(of: scope) else { return nil }
 			let rootBody = try body(
 				of: rootCopy,
-				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:], isInSendableFamily: false),
+				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
 				keyedBy: [],
 				answering: [],
 				beneath: NearestDeclarations(),
@@ -201,7 +215,6 @@ extension DependencyTreeGenerator {
 					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
 					twinValues: shadow.twinValues,
 					twinsBeingBuilt: body.key.twinsBeingBuilt,
-					isInSendableFamily: body.key.isInSendableFamily,
 					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
 				)
 				while let (context, _) = bodyWalk.next() {
@@ -221,7 +234,7 @@ extension DependencyTreeGenerator {
 						}
 						let calledBody = try self.body(
 							of: calledCopy,
-							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily),
+							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
 							keyedBy: labels,
 							answering: VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter),
 							beneath: calledNearestDeclarations,
@@ -237,6 +250,7 @@ extension DependencyTreeGenerator {
 							arguments: bodies[calledBody].planAnswers,
 							// A label no receive of the walk names keeps its sorted place after the others.
 							argumentOrder: argumentOrder + bodies[calledBody].labels.indices.filter { !argumentOrder.contains($0) },
+							isInSendableFamily: context.isInSendableFamily,
 						))
 						if !bodiesOfPlan.contains(calledBody) {
 							bodiesOfPlan.append(calledBody)
@@ -245,6 +259,17 @@ extension DependencyTreeGenerator {
 					}
 				}
 				callsByBody[bodyToWalk] = calls.sorted { $0.path.lexicographicallyPrecedes($1.path) }
+			}
+			// Each pass only marks bodies `@Sendable`, so the passes end within a pass per body.
+			var changed = true
+			while changed {
+				changed = false
+				for body in [rootBody] + bodiesOfPlan {
+					for call in calls(of: body) where !sendableBodies.contains(call.calledBody) && (call.isInSendableFamily || sendableBodies.contains(body)) {
+						sendableBodies.insert(call.calledBody)
+						changed = true
+					}
+				}
 			}
 			return (rootBody, bodiesOfPlan)
 		}
@@ -369,5 +394,6 @@ extension DependencyTreeGenerator {
 		private let declaredTypeNames: DeclaredTypeNames
 		private var positionsByKey = [VariantBodyKey: [Int]]()
 		private var callsByBody = [Int: [Call]]()
+		private var sendableBodies = Set<Int>()
 	}
 }

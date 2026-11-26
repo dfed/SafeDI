@@ -24,9 +24,9 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// The judgements a body's key needs beyond the nearest declaration of each label (`VariantAnswers`): the order the
-/// scope that makes a call builds its children in, the `@Sendable` family a call is made in, and which function a call
-/// of a twin value runs.
+/// The judgements a body needs beyond the nearest declaration of each label (`VariantAnswers`): the order the scope that
+/// makes a call builds its children in, whether its function is `@Sendable`, and which function a call of a twin value
+/// runs.
 struct SafeDIToolVariantAnswersTests: ~Copyable {
 	// MARK: Initialization
 
@@ -101,10 +101,11 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsBodyPerFamily_whenTypeOnCycleIsBuiltInsideAndOutsideSendableFunction() async throws {
+	mutating func generate_marksBodySendable_whenOneCallOfItIsMadeInsideSendableFunction() async throws {
 		// `A` is built in the `@Sendable` function of a `SendableInstantiator` and `B` in a plain one; each builds
-		// `cBuilder`, on a cycle through `D`. A plain function takes the isolation of the root's initializer and a
-		// `@Sendable` one is nonisolated, so the bodies of `C` and `D` built in each are bodies of their own.
+		// `cBuilder`, on a cycle through `D`. As today's tree writes one `@Sendable` function for both, the plan builds one
+		// body of `C`, `@Sendable` since `A`'s call of it is made inside a `@Sendable` function, and one of `D`, which that
+		// body calls.
 		let plans = try await plans(of:
 			"""
 			@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -138,10 +139,8 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 			Plan(
 				root: "Root",
 				bodiesOfPlan: [
-					"C as cBuilder: Instantiator<C> [cBuilder = cBuilder: Instantiator<C>, being built]",
 					"C as cBuilder: Instantiator<C> [cBuilder = cBuilder: Instantiator<C>, being built] [@Sendable]",
 					"D as dBuilder: Instantiator<D> [dBuilder = dBuilder: Instantiator<D>, being built] [@Sendable]",
-					"D as dBuilder: Instantiator<D> [dBuilder = dBuilder: Instantiator<D>, being built]",
 				],
 				todaysBodiesPlanLacks: [],
 			),
