@@ -90,9 +90,11 @@ extension DependencyTreeGenerator {
 			}
 		}
 
-		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames) {
+		/// - Parameter forMockGeneration: Whether each body is built as a place of a mock's tree is.
+		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames, forMockGeneration: Bool = false) {
 			self.frozenScopeMap = frozenScopeMap
 			self.declaredTypeNames = declaredTypeNames
+			self.forMockGeneration = forMockGeneration
 		}
 
 		private(set) var bodies = [Body]()
@@ -127,6 +129,7 @@ extension DependencyTreeGenerator {
 						nearestDeclarations: keptNearestDeclarations,
 						lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 						erasedToConcreteExistential: false,
+						forMockGeneration: forMockGeneration,
 						declaredTypeNames: declaredTypeNames,
 						constructionMemo: &memo,
 					),
@@ -138,6 +141,7 @@ extension DependencyTreeGenerator {
 
 		private let frozenScopeMap: FrozenScopeMap
 		private let declaredTypeNames: DeclaredTypeNames
+		private let forMockGeneration: Bool
 		private var positionsByKey = [VariantBodyKey: [Int]]()
 	}
 }

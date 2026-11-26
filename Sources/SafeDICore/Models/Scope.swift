@@ -3343,6 +3343,11 @@ struct NearestDeclarations: Sendable {
 				kept.set(nearestDeclaration, for: label)
 			}
 		}
+		// A mock root's declarations pass `nil` to the receives its bindings say production passes `nil`, wherever they
+		// are kept. A production root's declarations hold none of the three, so nothing kept of them moves.
+		kept.holdsReceivesPassedNil = holdsReceivesPassedNil
+		kept.judgesPlacesPinnedFromAbove = judgesPlacesPinnedFromAbove
+		kept.mockRootPromotedProperties = mockRootPromotedProperties
 		return kept
 	}
 
@@ -3415,7 +3420,13 @@ extension NearestDeclarations {
 	/// before any change: a construction memo logs each, since a declaration this changes is made at the scope's depth, inside
 	/// its subtree, from one above it.
 	mutating func recordRequiredReceives(of scope: ConstructionScope, reading: (_ label: String, _ declaration: NearestDeclaration?, _ depth: Int) -> Void) {
-		for (label, propertiesRead) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope) {
+		recordRequiredReceives(of: scope.instantiable, publicMockCall: scope.publicMockCall, reading: reading)
+	}
+
+	/// Records what each required receive of `instantiable`, built as `publicMockCall` where it is one, reads, as
+	/// `recordRequiredReceives(of:reading:)` does for a scope of a frozen table.
+	mutating func recordRequiredReceives(of instantiable: Instantiable, publicMockCall: PublicMockCall?, reading: (_ label: String, _ declaration: NearestDeclaration?, _ depth: Int) -> Void = { _, _, _ in }) {
+		for (label, propertiesRead) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: instantiable, publicMockCall: publicMockCall) {
 			let (declaration, depth) = resolving(label)
 			reading(label, declaration, depth)
 			if var nearestDeclaration = declaration,

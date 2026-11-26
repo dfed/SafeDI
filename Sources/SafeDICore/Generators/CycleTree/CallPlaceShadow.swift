@@ -70,6 +70,9 @@ extension DependencyTreeGenerator {
 		/// - Parameters:
 		///   - rootScope: The scope `todaysTree` was built from.
 		///   - nearestDeclarations: The declarations `todaysTree` was built beneath, with their lazily instantiated instances.
+		///   - isMockRoot: Whether `todaysTree` is a mock root's, whose declarations join the bindings it is given and
+		///     whose required receives pin none in the trees of the dependencies it promotes, as `Scope.createScopeGenerator`
+		///     builds a root built for a mock.
 		init(
 			ofTodaysTree todaysTree: ScopeGenerator,
 			builtFrom rootScope: Scope,
@@ -77,6 +80,7 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: Set<Property> = [],
 			twinValues: Set<TwinValue>,
 			twinsBeingBuilt: [TwinValue: Property] = [:],
+			isMockRoot: Bool = false,
 		) {
 			self.twinValues = twinValues
 			places = [Place(
@@ -88,6 +92,7 @@ extension DependencyTreeGenerator {
 				functions: [:],
 				callDescription: nil,
 				twinsBeingBuilt: twinsBeingBuilt,
+				isMockRoot: isMockRoot,
 			)]
 		}
 
@@ -123,6 +128,7 @@ extension DependencyTreeGenerator {
 			let functions: [ScopeGenerator.BuiltDeclaration: FunctionPlace]
 			let callDescription: String?
 			let twinsBeingBuilt: [TwinValue: Property]
+			var isMockRoot = false
 		}
 
 		private let twinValues: Set<TwinValue>
@@ -135,12 +141,41 @@ extension DependencyTreeGenerator {
 			var childPlaces = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
 			let childLabelsPassedNil = place.labelsPassedNil.subtracting(scope.declaredLabels)
 			var childNearestDeclarations = place.nearestDeclarations
-			childNearestDeclarations.replaceLabels(of: scope.sortedDeclaredPropertyForms)
-			let childLazilyInstantiatedInstanceProperties = place.lazilyInstantiatedInstanceProperties
-				.filter { !scope.declaredLabels.contains($0.label) }
-				.union(scope.declaredLazilyInstantiatedInstanceProperties)
+			let childLazilyInstantiatedInstanceProperties: Set<Property>
+			if place.isMockRoot {
+				// A mock root's declarations join the bindings it is given, and one it binds under its label is no longer
+				// one the mock names apart, as `Scope.createScopeGenerator` declares them for a root.
+				let declaredPropertyForms = scope.sortedDeclaredPropertyForms
+				for (declaredProperty, forms) in declaredPropertyForms {
+					childNearestDeclarations.join(declaredProperty, providing: forms)
+				}
+				let labelsMockParametersKeep = Set(ScopeGenerator.defaultValuedMockParameterArguments(of: scope.instantiable).map(\.argument.label))
+				for (declaredProperty, forms) in declaredPropertyForms where !labelsMockParametersKeep.contains(declaredProperty.label) {
+					childNearestDeclarations.markBoundUnderLabelByRoot(declaredProperty.label, providing: forms)
+				}
+				childLazilyInstantiatedInstanceProperties = place.lazilyInstantiatedInstanceProperties.union(scope.declaredLazilyInstantiatedInstanceProperties)
+			} else {
+				childNearestDeclarations.replaceLabels(of: scope.sortedDeclaredPropertyForms)
+				childLazilyInstantiatedInstanceProperties = place.lazilyInstantiatedInstanceProperties
+					.filter { !scope.declaredLabels.contains($0.label) }
+					.union(scope.declaredLazilyInstantiatedInstanceProperties)
+			}
+			// In a mock, a required receive of the scope's type pins the declaration of its label the scopes beneath read;
+			// a mock root's own receives pin none in the trees of the dependencies it promotes.
+			var promotedChildNearestDeclarations: NearestDeclarations?
+			if childNearestDeclarations.judgesPlacesPinnedFromAbove {
+				if place.isMockRoot {
+					promotedChildNearestDeclarations = childNearestDeclarations
+				}
+				childNearestDeclarations.recordRequiredReceives(of: scope.instantiable, publicMockCall: scope.publicMockCall)
+			}
 			for child in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) where scope.propertiesToGenerate.indices.contains(child.index) {
 				if case let .instantiated(property, childScope, _) = scope.propertiesToGenerate[child.index] {
+					let childNearestDeclarations = if let promotedChildNearestDeclarations, childNearestDeclarations.isPromotedByMockRoot(property) {
+						promotedChildNearestDeclarations
+					} else {
+						childNearestDeclarations
+					}
 					// What the place of `function`, built by `child`'s call of it, is given: a member of a loop of builders
 					// makes each wrapper its tree receives inside the loop again at the top of its function, its own included,
 					// so that rebinding is the nearest declaration beneath it, and is not being built.
