@@ -153,6 +153,10 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                public mocks that instantiate `any Api`, which only module `App` fulfills, and every
                                seam of the next module both as itself and as an `Instantiator`; module `App`: the
                                mocked root, which builds the first seam.
+  H-seam-holes-in-cycles       module `Feature`: layers of two screens, each instantiating `any Tracker`, which only
+                               module `App` fulfills, and holding `Instantiator`s of the next layer's screens and of
+                               a screen of the layer before, the last layer's of a first-layer screen instead; every
+                               first-layer screen is a seam, so the seams' own trees hold cycles.
   O-only-if-available-at-every-screen, R-received-instantiator-at-every-screen, N-rename-at-every-screen
                                one module (`shape_census`): layers of three screens, each holding `Instantiator`s of
                                every screen of the next layer and receiving `service`, with, at every screen, an
@@ -497,6 +501,27 @@ def shape_b(layers, mocks, width=3):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + root)]
 
 
+def shape_seam_holes_in_cycles(layers, width=2):
+    """Module `Feature`: `layers` layers of `width` screens, each instantiating `any Tracker`, which no type of the
+    module fulfills, receiving `service`, and holding `Instantiator`s of three screens of the next layer (fewer where
+    the layer has fewer) and, past the first layer, of the screen at its own position in the layer before; a screen of
+    the last layer holds one of a first-layer screen instead. Every first-layer screen is a seam, so the seams reach
+    one another and their own trees hold cycles. Module `App`: the root and the only `Tracker`."""
+    feature = "import SafeDI\n\npublic protocol Tracker: AnyObject {}\n\n" + declaration("@Instantiable", "Service", [])
+    for layer in range(layers):
+        for position in range(width):
+            children = [f"{layer + 1}x{(position + offset) % width}" for offset in range(3)] if layer + 1 < layers else []
+            if layer > 0:
+                children.append(f"0x{(position + 1) % width}" if layer == layers - 1 else f"{layer - 1}x{position}")
+            properties = [("@Instantiated", "tracker", "any Tracker"), ("@Received", "service", "Service")]
+            properties += [("@Instantiated", f"screen{child}Builder", f"Instantiator<Screen{child}>") for child in dict.fromkeys(children)]
+            attribute = "@Instantiable(generateDependencyTree: true)" if layer == 0 else "@Instantiable"
+            feature += declaration(attribute, f"Screen{layer}x{position}", properties)
+    app = declaration("@Instantiable(fulfillingAdditionalTypes: [(any Tracker).self])", "LiveTracker", [("@Received", "service", "Service")], conformances="Instantiable, Tracker")
+    app += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Screen0x0")])
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+
+
 def shape_census(layers, variant, width=3):
     """The growth census's graph: `layers` layers of `width` screens, each holding `Instantiator`s of every screen of
     the next layer and receiving `service`, which the root instantiates, so width^(layers - 1) paths reach the last
@@ -627,6 +652,9 @@ GROWTH_ROWS = {
     # four's time). 0.26 s and 3.17 s (12.4), 42 MB and 199 MB (4.7), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
     # 282,609 and 4,967,332 bytes of code (17.6).
     "F9-public-mock-seam-chain": (lambda layers: shape_public_mock_seam_chain(layers), 3, {"time": 16.0, "memory": 6.0, "size": 36.0, "code": 19.0}),
+    # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 39 MB and 78 MB (2.00), 25,811 and 1,406,899 bytes of `.safedi`
+    # (54.5), 31,432 and 126,780 bytes of code (4.03). Starts at three layers: at six, Feature alone takes 9.8 s.
+    "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {"code": 10.5}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
