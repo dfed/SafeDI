@@ -729,6 +729,11 @@ extension DependencyTreeGenerator {
 		return mockDeclarationLocations
 	}
 
+	/// The name `computeCycleEdges` orders each type by in place of its spelling, or `nil` to order by spelling. Only a test
+	/// sets it, to a renaming's inverse, so that a renamed graph's walk meets its types in the original graph's order and
+	/// leaves out the same back-edges: the renamed graph's mocks then show what follows from anything but that choice.
+	@TaskLocal public static var cycleEdgeOrderingName: (@Sendable (String) -> String)?
+
 	/// Computes the set of `(parent, child)` type-reference edges that, when removed,
 	/// makes the global type graph acyclic. Walks the graph with a DFS, starting from
 	/// each node in alphabetical order; any edge into a node already on the active DFS
@@ -738,6 +743,8 @@ extension DependencyTreeGenerator {
 	private static func computeCycleEdges(
 		in scopeMap: [TypeDescription: Scope],
 	) -> Set<ScopeGenerator.CycleEdge> {
+		let orderingName = cycleEdgeOrderingName
+		let orderingKey: (TypeDescription) -> String = { type in orderingName?(type.asSource) ?? type.asSource }
 		var adjacency = [TypeDescription: [TypeDescription]]()
 		for scope in Set(scopeMap.values) {
 			let parent = scope.instantiable.concreteInstantiable
@@ -748,12 +755,12 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for key in adjacency.keys {
-			adjacency[key]?.sort { $0.asSource < $1.asSource }
+			adjacency[key]?.sort { orderingKey($0) < orderingKey($1) }
 		}
 
 		let allNodes = Set(adjacency.keys)
 			.union(adjacency.values.flatMap(\.self))
-			.sorted { $0.asSource < $1.asSource }
+			.sorted { orderingKey($0) < orderingKey($1) }
 
 		var visited = Set<TypeDescription>()
 		var onStack = Set<TypeDescription>()
