@@ -32,7 +32,7 @@ public enum PlanCodeObservation {
 public enum RootTreeChoiceObservation {
 	/// Why a root that reaches a cycle has its tree built per path.
 	public enum PerPathReason: String, Sendable {
-		/// A type of the root's tree holds a `LazilyInstantiated` or a `SendableLazilyInstantiated`.
+		/// A type of the root’s tree holds a `SendableLazilyInstantiated`.
 		case holdsLazilyInstantiated
 		/// A type of the root's tree receives, renames or instantiates a value only if available, or holds an optional one.
 		case holdsValueOnlyIfAvailable
@@ -57,8 +57,6 @@ public enum RootTreeChoiceObservation {
 		case noPlan
 		/// A call of the plan passes a member of a loop of builders made again at the call.
 		case passesLoopMemberMadeAgainAtCall
-		/// A call of the plan passes the instance of a lazily instantiated declaration, read at the call.
-		case passesLazilyInstantiatedInstanceAtCall
 		/// The type key lays out none of the plan.
 		case noLayout
 		/// Planning the root threw an error, which is discarded: today's tree reports what a build with no plan reports.
@@ -129,8 +127,8 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 
 		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
 		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
-		/// write; or the instance of a lazily instantiated declaration (`Answer.instance`), which the layout reads at the
-		/// call, where today's function takes the wrapper and creates the instance where its body first reads it.
+		/// write. The instance of a lazily instantiated declaration (`Answer.instance`) is no reason: the function takes
+		/// the wrapper (`Answer.parameter(labeled:)`) and creates the instance where its body first reads it.
 		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
 			for callsOfBody in calls {
 				for call in callsOfBody {
@@ -138,9 +136,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 						switch argument {
 						case .declaredMadeAgainAtCall:
 							return .passesLoopMemberMadeAgainAtCall
-						case .instance:
-							return .passesLazilyInstantiatedInstanceAtCall
-						case .none, .declared:
+						case .none, .declared, .instance:
 							continue
 						}
 					}
