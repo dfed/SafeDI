@@ -1897,6 +1897,19 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// That tree with one parent building, after its place, a value the fill reads only if available: the tool rejects
 	/// that one place by design.
 	case placesOfOneCaseValueBoundAfterOnePlace
+	/// `addingNestedFillHoleShapes`' tree: `NestedFillHome`, a seam of the seam's module, holds a place of
+	/// `NestedFillPanel`, which `NestedFillPanelImpl`, a seam of the roots' module, fills, so the root's call of
+	/// `NestedFillHome` fills a place with a call of a seam; that seam instantiates `NestedFillGadget`, which
+	/// `NestedFillGadgetImpl` fulfills in its own module.
+	case nestedFillHole
+	/// `NestedFillHome` builds the panel's place beneath `NestedFillOwner`, through an instantiator.
+	case nestedFillHoleBeneathInstantiator
+	/// `NestedFillPanelImpl` holds its place beneath `NestedFillScreen`, through an instantiator.
+	case nestedFillHoleInnerPlaceBeneathInstantiator
+	/// Nothing fulfills `NestedFillGadget`, so `NestedFillPanelImpl` takes a builder for it, and the root's fill is a call
+	/// with a place no one fills, which the tool rejects by design at `NestedFillRoot`'s property, as it rejects a place of
+	/// `NestedFillHome`'s own that no one fills.
+	case nestedFillHoleUnfilled
 	/// `addingCarrierShapes`' sibling places with unequal read sets: `UnequalHome`, a seam, binds `unequalFirst` and
 	/// `unequalSecond` and then holds places of `Unequal1Api1` and `Unequal1Api2`, whose fills read one value each, so each
 	/// carrier member captures only what its own fill reads.
@@ -2080,10 +2093,11 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		     .reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField,
 		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives,
 		     .reenteredFillReadsLabelPassingUpSeamBinds, .wrapperMixSendableWrapperBesidePlainMemo, .wrapperMixWrapperDeclaredAboveCall,
-		     .placesOfOneCaseFillClosesCycleAtTwoDepths, .placesOfOneCaseFillCapturesWrapperOfEveryPlace, .placesOfOneCaseValueBoundAfterOnePlace:
+		     .placesOfOneCaseFillClosesCycleAtTwoDepths, .placesOfOneCaseFillCapturesWrapperOfEveryPlace, .placesOfOneCaseValueBoundAfterOnePlace,
+		     .nestedFillHoleUnfilled:
 			false
 		default:
-			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix", "placesOfOneCase"].contains { rawValue.hasPrefix($0) }
+			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix", "placesOfOneCase", "nestedFillHole"].contains { rawValue.hasPrefix($0) }
 		}
 	}
 
@@ -2914,6 +2928,7 @@ enum GraphFuzzerGenerator {
 			carrierDrawRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.carrierDrawRandomSeedMask)
 			placesOfOneCaseRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placesOfOneCaseRandomSeedMask)
 			placeStoodForRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.placeStoodForRandomSeedMask)
+			nestedFillHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedFillHoleRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
@@ -3050,6 +3065,8 @@ enum GraphFuzzerGenerator {
 				if !omitsDrawsOlderReleasesReject {
 					finalDeclarations = addingPlaceStoodForShapes(to: finalDeclarations)
 				}
+				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
+				finalDeclarations = addingNestedFillHoleShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3459,6 +3476,8 @@ enum GraphFuzzerGenerator {
 		private var placesOfOneCaseRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingPlaceStoodForShapes`' choices.
 		private var placeStoodForRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingNestedFillHoleShapes`' choices.
+		private var nestedFillHoleRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
@@ -10104,6 +10123,94 @@ enum GraphFuzzerGenerator {
 
 		private static let placeStoodForRandomSeedMask: UInt64 = 0x73746E656D6D6F72
 
+		// MARK: A fill whose call takes a builder
+
+		/// With the `generateDependencyTree` feature on, six in ten graphs already split across modules gain a place filled
+		/// by a call of a seam: `NestedFillHome`, a seam of the seam's module, holds a place of `NestedFillPanel`, by value or
+		/// now and then beneath `NestedFillOwner`'s instantiator; `NestedFillPanelImpl`, a seam of the roots' module, fills it,
+		/// and instantiates `NestedFillGadget`, by value or now and then beneath `NestedFillScreen`'s instantiator, which
+		/// `NestedFillGadgetImpl` fulfills in its module; `NestedFillRoot` builds `NestedFillHome`. In one in five of
+		/// those graphs nothing fulfills `NestedFillGadget`, so `NestedFillPanelImpl` takes a builder for it and the root's
+		/// fill is a call with a place no one fills, which the tool once accepted, generating a call that passes no builder,
+		/// and now rejects at the root's property, as it rejects a place of `NestedFillHome`'s own that no one fills
+		/// (`nestedFillHoleUnfilled`, never drawn in a graph with a hole, which draws the fulfilled tree instead, so that the
+		/// hole draws keep their graphs).
+		///
+		/// `nestedFillHoleRandom` draws only for this pass, which runs after every other pass and only in a graph another
+		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. A
+		/// graph whose seam's module has no package gains none, as for `addingFillCallShapes`.
+		private mutating func addingNestedFillHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), nestedFillHoleRandom.percentChance(60) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let ownerRoll = nestedFillHoleRandom.percentChance(35)
+			let screenRoll = nestedFillHoleRandom.percentChance(35)
+			let unfilledRoll = nestedFillHoleRandom.percentChance(20)
+			let ownerSendableRoll = nestedFillHoleRandom.percentChance(50)
+			let screenSendableRoll = nestedFillHoleRandom.percentChance(50)
+			let prefix = prefix
+			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
+			let declaresHole = declarations.contains { $0.name == "\(prefix)HoleSeam" || $0.name == prefix + GraphFuzzerCycleNames.seam }
+			// Release acceptance draws the fulfilled tree too: every release before the fix wrote a call that does not compile.
+			let leavesGadgetUnfilled = unfilledRoll && !declaresHole && !omitsDrawsOlderReleasesReject
+			func instantiator(sendableRoll: Bool) -> String {
+				switch sendability {
+				case .nonSendable: "Instantiator"
+				case .sendable: "SendableInstantiator"
+				case .mixed: sendableRoll ? "SendableInstantiator" : "Instantiator"
+				}
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			let sendableSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			let panelName = "\(prefix)NestedFillPanel"
+			let gadgetName = "\(prefix)NestedFillGadget"
+			var added = [TypeDeclaration]()
+			let panelProperty = PropertyDeclaration(attribute: "@Instantiated", label: "nestedFillPanel", type: "any \(panelName)")
+			var homeProperties = [panelProperty]
+			if ownerRoll {
+				let owner = instantiable("NestedFillOwner", module: .seamModule, properties: [panelProperty])
+				added.append(owner)
+				homeProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "nestedFillOwnerBuilder", type: "\(instantiator(sendableRoll: ownerSendableRoll))<\(owner.name)>")]
+			}
+			var home = instantiable("NestedFillHome", module: .seamModule, properties: homeProperties)
+			home.instantiableArguments = ["generateDependencyTree: true"]
+			// Both protocols are the seam's module's, so the visible build, which declares the fillers there, sees them too.
+			home.additionalDeclarations.append("public protocol \(panelName)\(sendableSuffix) {}")
+			home.additionalDeclarations.append("public protocol \(gadgetName)\(sendableSuffix) {}")
+			let gadgetProperty = PropertyDeclaration(attribute: "@Instantiated", label: "nestedFillGadget", type: "any \(gadgetName)")
+			var panelImplementationProperties = [gadgetProperty]
+			var callerDeclarations = [TypeDeclaration]()
+			if screenRoll {
+				var screen = instantiable("NestedFillScreen", module: .samePackageCaller, properties: [gadgetProperty])
+				// The visible build declares the fill's types in the seam's module, the type the fill builds with them.
+				screen.fillsHole = true
+				callerDeclarations.append(screen)
+				panelImplementationProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "nestedFillScreenBuilder", type: "\(instantiator(sendableRoll: screenSendableRoll))<\(screen.name)>")]
+			}
+			var panelImplementation = instantiable("NestedFillPanelImpl", module: .samePackageCaller, properties: panelImplementationProperties)
+			panelImplementation.instantiableArguments = ["generateDependencyTree: true", "fulfillingAdditionalTypes: [\(panelName).self]"]
+			panelImplementation.additionalConformances.append(panelName)
+			panelImplementation.fillsHole = true
+			callerDeclarations.append(panelImplementation)
+			if !leavesGadgetUnfilled {
+				var gadgetImplementation = instantiable("NestedFillGadgetImpl", module: .samePackageCaller)
+				gadgetImplementation.instantiableArguments = ["fulfillingAdditionalTypes: [\(gadgetName).self]"]
+				gadgetImplementation.additionalConformances.append(gadgetName)
+				gadgetImplementation.fillsHole = true
+				callerDeclarations.append(gadgetImplementation)
+			}
+			var root = instantiable("NestedFillRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "nestedFillHome", type: home.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + added + [home] + callerDeclarations + [root]
+		}
+
+		private static let nestedFillHoleRandomSeedMask: UInt64 = 0x6E65737446696C6C
+
 		// MARK: Carriers
 
 		/// With the `generateDependencyTree` feature on, graphs already split across modules gain the six shapes a seam's
@@ -12083,6 +12190,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if liveProperties.contains(where: { $0.attribute.contains("onlyIfAvailable") }) {
 				features.insert(.placesOfOneCaseFillReadsOnlyIfAvailable)
+			}
+		}
+		if let homeProperties = propertiesByType[prefix + "NestedFillHome"] {
+			features.insert(.nestedFillHole)
+			if homeProperties.contains(where: { $0.label == "nestedFillOwnerBuilder" }) {
+				features.insert(.nestedFillHoleBeneathInstantiator)
+			}
+			if propertiesByType[prefix + "NestedFillPanelImpl"]?.contains(where: { $0.label == "nestedFillScreenBuilder" }) == true {
+				features.insert(.nestedFillHoleInnerPlaceBeneathInstantiator)
+			}
+			if propertiesByType[prefix + "NestedFillGadgetImpl"] == nil {
+				features.insert(.nestedFillHoleUnfilled)
 			}
 		}
 		if let liveProperties = propertiesByType[prefix + "StoodForLive"] {
