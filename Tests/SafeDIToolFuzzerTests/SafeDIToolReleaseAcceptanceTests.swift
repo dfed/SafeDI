@@ -187,11 +187,12 @@ struct SafeDIToolReleaseAcceptanceTests {
 	@Test(arguments: GraphFuzzerReleaseAcceptanceCorpus.allCases)
 	func releaseAcceptanceFixture_drawsTheCorpusGraphWithoutFeaturesOlderReleaseRejects_whenDrawnForComparison(corpus: GraphFuzzerReleaseAcceptanceCorpus) {
 		// 2.3.0 rejects `@Instantiated(onlyIfAvailable: true)` and the `@Instantiable` actors `addingActorArgumentShapes`
-		// draws, and every release rejects the shapes `addingPlaceStoodForShapes` draws, so a graph drawing any of them
+		// draws, every release rejects the shapes `addingPlaceStoodForShapes` draws, and every release before the fix wrote
+		// a call that does not compile for `addingNestedFillHoleShapes`' unfilled gadget, so a graph drawing any of them
 		// would be class A, compared by nothing.
 		func drawsFeatureOlderReleaseRejects(_ fixture: GraphFuzzerFixture) -> Bool {
 			let text = fixture.swiftFileContent.joined(separator: "\n")
-			return text.contains("@Instantiated(onlyIfAvailable: true") || text.range(of: #"actor \w+: Instantiable"#, options: .regularExpression) != nil || text.contains("_StoodForHome: Instantiable")
+			return text.contains("@Instantiated(onlyIfAvailable: true") || text.range(of: #"actor \w+: Instantiable"#, options: .regularExpression) != nil || text.contains("_StoodForHome: Instantiable") || text.contains("_NestedFillPanelImpl: Instantiable") && !text.contains("_NestedFillGadgetImpl: Instantiable")
 		}
 		var corpusGraphsDrawingOne = 0
 		for seed in UInt64(0)..<300 {
