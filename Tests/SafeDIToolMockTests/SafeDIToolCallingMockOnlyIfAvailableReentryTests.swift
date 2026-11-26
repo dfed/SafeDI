@@ -412,14 +412,17 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
-			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-			                    func __safeDI_screenBuilder() -> Screen {
-			                        Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                func __safeDI_fillBody_57FA06A6623931CE(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
+			                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+			                        func __safeDI_screenBuilder() -> Screen {
+			                            Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                        }
+			                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			                        return Fill(ticket: ticket, screenBuilder: screenBuilder)
 			                    }
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			                    return Fill(ticket: ticket, screenBuilder: screenBuilder)
+			                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 			                }
-			                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+			                return __safeDI_fillBody_57FA06A6623931CE(session: session)
 			            }
 			            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
@@ -493,14 +496,17 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
-			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-			                    func __safeDI_screenBuilder() -> Screen {
-			                        Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                func __safeDI_fillBody_CD70B5AD18243FFD(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
+			                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+			                        func __safeDI_screenBuilder() -> Screen {
+			                            Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                        }
+			                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			                        return Fill(ticket: ticket, screenBuilder: screenBuilder)
 			                    }
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			                    return Fill(ticket: ticket, screenBuilder: screenBuilder)
+			                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 			                }
-			                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+			                return __safeDI_fillBody_CD70B5AD18243FFD(session: session)
 			            }
 			            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
@@ -571,14 +577,17 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: SendableLazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
-			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-			                    func __safeDI_screenBuilder() -> Screen {
-			                        Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                func __safeDI_fillBody_F94ADBFC1EBFD0C8(session: SendableLazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
+			                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+			                        func __safeDI_screenBuilder() -> Screen {
+			                            Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                        }
+			                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			                        return Fill(ticket: ticket, screenBuilder: screenBuilder)
 			                    }
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			                    return Fill(ticket: ticket, screenBuilder: screenBuilder)
+			                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 			                }
-			                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+			                return __safeDI_fillBody_F94ADBFC1EBFD0C8(session: session)
 			            }
 			            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
@@ -653,14 +662,17 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: SendableLazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
-			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-			                    func __safeDI_screenBuilder() -> Screen {
-			                        Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                func __safeDI_fillBody_58496FCF371AB30F(session: SendableLazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
+			                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+			                        func __safeDI_screenBuilder() -> Screen {
+			                            Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                        }
+			                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			                        return Fill(ticket: ticket, screenBuilder: screenBuilder)
 			                    }
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			                    return Fill(ticket: ticket, screenBuilder: screenBuilder)
+			                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 			                }
-			                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+			                return __safeDI_fillBody_58496FCF371AB30F(session: session)
 			            }
 			            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
@@ -727,14 +739,17 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
-			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-			                    func __safeDI_screenBuilder() -> Screen {
-			                        Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                func __safeDI_fillBody_DA9B3EBC29003647(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
+			                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+			                        func __safeDI_screenBuilder() -> Screen {
+			                            Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                        }
+			                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			                        return Fill(ticket: ticket, screenBuilder: screenBuilder)
 			                    }
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			                    return Fill(ticket: ticket, screenBuilder: screenBuilder)
+			                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 			                }
-			                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+			                return __safeDI_fillBody_DA9B3EBC29003647(session: session)
 			            }
 			            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
@@ -805,14 +820,17 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
-			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-			                    func __safeDI_screenBuilder() -> Screen {
-			                        Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                func __safeDI_fillBody_030E67498E4CD466(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
+			                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+			                        func __safeDI_screenBuilder() -> Screen {
+			                            Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+			                        }
+			                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			                        return Fill(ticket: ticket, screenBuilder: screenBuilder)
 			                    }
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			                    return Fill(ticket: ticket, screenBuilder: screenBuilder)
+			                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 			                }
-			                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+			                return __safeDI_fillBody_030E67498E4CD466(session: session)
 			            }
 			            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })

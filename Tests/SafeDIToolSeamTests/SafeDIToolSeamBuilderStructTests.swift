@@ -1114,23 +1114,26 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_livePanel_PanelBuilder_Home_panelBuilder() -> ErasedInstantiator<String, any Panel>.Builder {
+		            return __safeDI_fillBody_BDEDBAEE5FA5B0CC()
+		        }
+		        func __safeDI_fillBody_BDEDBAEE5FA5B0CC() -> ErasedInstantiator<String, any Panel>.Builder {
+		            func __safeDI_panelBuilder(title: String) -> LivePanel {
+		                LivePanel(title: title)
+		            }
+		            return { forwarded in __safeDI_panelBuilder(title: forwarded) }
+		        }
 		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
 		            .init(api: {
 		                let api: any Api = LiveApi()
 		                return api
 		            })
 		        }
+		        func __safeDI_livePanel_PanelBuilder_Home() -> Home.__safeDI_LivePanel_PanelCarrier<any Panel> {
+		            .init(panelBuilder: { values_api in __safeDI_livePanel_PanelBuilder_Home_panelBuilder() })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_D6805EB8C483DFEA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_livePanel_PanelBuilder_Home_panelBuilder() -> ErasedInstantiator<String, any Panel>.Builder {
-		                func __safeDI_panelBuilder(title: String) -> LivePanel {
-		                    LivePanel(title: title)
-		                }
-		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
-		            }
-		            func __safeDI_livePanel_PanelBuilder_Home() -> Home.__safeDI_LivePanel_PanelCarrier<any Panel> {
-		                .init(panelBuilder: { values_api in __safeDI_livePanel_PanelBuilder_Home_panelBuilder() })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_livePanel_PanelBuilder: __safeDI_livePanel_PanelBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -1753,29 +1756,32 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope_holeService(holeAnalytics: HoleAnalytics) -> any HoleService {
+		            return __safeDI_fillBody_E25464D6E84F8AA8(holeAnalytics: holeAnalytics)
+		        }
+		        func __safeDI_fillBody_E25464D6E84F8AA8(holeAnalytics: HoleAnalytics) -> any HoleService {
+		            func __safeDI_holeService() -> HoleImpl {
+		                func __safeDI_holeRelayBuilder() -> HoleRelay {
+		                    _ = HoleRelay.__safeDI_HoleRelay_635E3D11CE7DF41B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                    return HoleRelay(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleRelay())
+		                }
+		                let holeRelayBuilder = Instantiator<HoleRelay>(__safeDI_holeRelayBuilder)
+		                return HoleImpl(holeAnalytics: holeAnalytics, holeRelayBuilder: holeRelayBuilder)
+		            }
+		            let holeService: any HoleService = __safeDI_holeService()
+		            return holeService
+		        }
+		        func __safeDI_holeServiceBuilder_HoleRelay() -> HoleRelay.__safeDI_HoleServiceCarrier<any HoleService> {
+		            .init(holeSeamBuilder: __safeDI_holeServiceBuilder_HoleSeam())
+		        }
+		        func __safeDI_holeServiceBuilder_HoleSeam() -> HoleSeam.__safeDI_HoleServiceCarrier<any HoleService> {
+		            .init(holeOwnerBuilder: { values_holeAnalytics in __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope(holeAnalytics: values_holeAnalytics) })
+		        }
+		        func __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope(holeAnalytics: HoleAnalytics) -> HoleSeam.__safeDI_HoleServiceCarrier_HoleOwner<any HoleService> {
+		            .init(holeService: { __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope_holeService(holeAnalytics: holeAnalytics) })
+		        }
 		        func __safeDI_holeSeam() -> HoleSeam {
 		            _ = HoleSeam.__safeDI_HoleSeam_5FD372FEB0CFA415.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope_holeService(holeAnalytics: HoleAnalytics) -> any HoleService {
-		                func __safeDI_holeService() -> HoleImpl {
-		                    func __safeDI_holeRelayBuilder() -> HoleRelay {
-		                        _ = HoleRelay.__safeDI_HoleRelay_635E3D11CE7DF41B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                        func __safeDI_holeServiceBuilder_HoleRelay() -> HoleRelay.__safeDI_HoleServiceCarrier<any HoleService> {
-		                            .init(holeSeamBuilder: __safeDI_holeServiceBuilder_HoleSeam())
-		                        }
-		                        return HoleRelay(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleRelay())
-		                    }
-		                    let holeRelayBuilder = Instantiator<HoleRelay>(__safeDI_holeRelayBuilder)
-		                    return HoleImpl(holeAnalytics: holeAnalytics, holeRelayBuilder: holeRelayBuilder)
-		                }
-		                let holeService: any HoleService = __safeDI_holeService()
-		                return holeService
-		            }
-		            func __safeDI_holeServiceBuilder_HoleSeam() -> HoleSeam.__safeDI_HoleServiceCarrier<any HoleService> {
-		                .init(holeOwnerBuilder: { values_holeAnalytics in __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope(holeAnalytics: values_holeAnalytics) })
-		            }
-		            func __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope(holeAnalytics: HoleAnalytics) -> HoleSeam.__safeDI_HoleServiceCarrier_HoleOwner<any HoleService> {
-		                .init(holeService: { __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope_holeService(holeAnalytics: holeAnalytics) })
-		            }
 		            return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleSeam())
 		        }
 		        let holeSeam: HoleSeam = __safeDI_holeSeam()
@@ -2409,27 +2415,30 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_holeServiceBuilder_HoleSeam_holeService() -> any HoleService {
+		            return __safeDI_fillBody_BFF0C45440BBA73E()
+		        }
+		        func __safeDI_fillBody_BFF0C45440BBA73E() -> any HoleService {
+		            func __safeDI_holeService() -> HoleImpl {
+		                func __safeDI_holeServiceBuilder_HoleSeam_Wrapper() -> Wrapper {
+		                    func __safeDI_holeSeam() -> HoleSeam {
+		                        _ = HoleSeam.__safeDI_HoleSeam_43CD0988574C83D1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleSeam())
+		                    }
+		                    let holeSeam: HoleSeam = __safeDI_holeSeam()
+		                    return Wrapper(holeSeam: holeSeam)
+		                }
+		                let holeServiceBuilder_HoleSeam = Instantiator<Wrapper>(__safeDI_holeServiceBuilder_HoleSeam_Wrapper)
+		                return HoleImpl(holeServiceBuilder_HoleSeam: holeServiceBuilder_HoleSeam)
+		            }
+		            let holeService: any HoleService = __safeDI_holeService()
+		            return holeService
+		        }
+		        func __safeDI_holeServiceBuilder_HoleSeam() -> HoleSeam.__safeDI_HoleServiceCarrier<any HoleService> {
+		            .init(holeService: { __safeDI_holeServiceBuilder_HoleSeam_holeService() })
+		        }
 		        func __safeDI_holeSeam() -> HoleSeam {
 		            _ = HoleSeam.__safeDI_HoleSeam_43CD0988574C83D1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_holeServiceBuilder_HoleSeam_holeService() -> any HoleService {
-		                func __safeDI_holeService() -> HoleImpl {
-		                    func __safeDI_holeServiceBuilder_HoleSeam_Wrapper() -> Wrapper {
-		                        func __safeDI_holeSeam() -> HoleSeam {
-		                            _ = HoleSeam.__safeDI_HoleSeam_43CD0988574C83D1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleSeam())
-		                        }
-		                        let holeSeam: HoleSeam = __safeDI_holeSeam()
-		                        return Wrapper(holeSeam: holeSeam)
-		                    }
-		                    let holeServiceBuilder_HoleSeam = Instantiator<Wrapper>(__safeDI_holeServiceBuilder_HoleSeam_Wrapper)
-		                    return HoleImpl(holeServiceBuilder_HoleSeam: holeServiceBuilder_HoleSeam)
-		                }
-		                let holeService: any HoleService = __safeDI_holeService()
-		                return holeService
-		            }
-		            func __safeDI_holeServiceBuilder_HoleSeam() -> HoleSeam.__safeDI_HoleServiceCarrier<any HoleService> {
-		                .init(holeService: { __safeDI_holeServiceBuilder_HoleSeam_holeService() })
-		            }
 		            return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleSeam())
 		        }
 		        let holeSeam: HoleSeam = __safeDI_holeSeam()

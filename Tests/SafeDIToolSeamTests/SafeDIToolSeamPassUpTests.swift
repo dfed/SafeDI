@@ -804,28 +804,31 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_apiBuilder_Inner_Detail_Scope_api(_ scope_readerBuilder: Instantiator<Reader>, logger: LazilyInstantiated<Logger>) -> any Api {
+				            return __safeDI_fillBody_B445A709CD95B397(logger: logger)
+				        }
+				        func __safeDI_fillBody_B445A709CD95B397(logger: LazilyInstantiated<Logger>) -> any Api {
+				            func __safeDI_jobBuilder() -> Job {
+				                Job(logger: logger.instance)
+				            }
+				            func __safeDI_api() -> LiveApi {
+				                let jobBuilder = Instantiator<Job>(__safeDI_jobBuilder)
+				                return LiveApi(jobBuilder: jobBuilder)
+				            }
+				            let api: any Api = __safeDI_api()
+				            return api
+				        }
+				        func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+				            .init(inner: __safeDI_apiBuilder_Inner())
+				        }
+				        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+				            .init(detail: { values_logger in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values_logger) })
+				        }
+				        func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.__safeDI_ApiCarrier_Detail<any Api> {
+				            .init(api: { scope_readerBuilder in __safeDI_apiBuilder_Inner_Detail_Scope_api(scope_readerBuilder, logger: logger) })
+				        }
 				        func __safeDI_outer() -> Outer {
 				            _ = Outer.__safeDI_Outer_596630904AB994DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_apiBuilder_Inner_Detail_Scope_api(_ scope_readerBuilder: Instantiator<Reader>, logger: LazilyInstantiated<Logger>) -> any Api {
-				                func __safeDI_api() -> LiveApi {
-				                    func __safeDI_jobBuilder() -> Job {
-				                        Job(logger: logger.instance)
-				                    }
-				                    let jobBuilder = Instantiator<Job>(__safeDI_jobBuilder)
-				                    return LiveApi(jobBuilder: jobBuilder)
-				                }
-				                let api: any Api = __safeDI_api()
-				                return api
-				            }
-				            func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
-				                .init(inner: __safeDI_apiBuilder_Inner())
-				            }
-				            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
-				                .init(detail: { values_logger in __safeDI_apiBuilder_Inner_Detail_Scope(logger: values_logger) })
-				            }
-				            func __safeDI_apiBuilder_Inner_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Inner.__safeDI_ApiCarrier_Detail<any Api> {
-				                .init(api: { scope_readerBuilder in __safeDI_apiBuilder_Inner_Detail_Scope_api(scope_readerBuilder, logger: logger) })
-				            }
 				            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
 				        }
 				        let outer: Outer = __safeDI_outer()
@@ -2223,20 +2226,23 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 
 				extension Root {
 				    public convenience init() {
+				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
+				            return __safeDI_fillBody_150ACE2CF9F52F50()
+				        }
+				        @Sendable nonisolated func __safeDI_fillBody_150ACE2CF9F52F50() -> any Gadget {
+				            @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
+				                LiveGadget()
+				            }
+				            return __safeDI_gadget()
+				        }
+				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Feature() -> Feature.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
+				            .init(inner_serviceBuilder_Sendable: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam() })
+				        }
+				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam() -> GadgetSeam.__safeDI_GadgetSendableCarrier<any Gadget> {
+				            .init(gadget: { __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() })
+				        }
 				        func __safeDI_feature() -> Feature {
 				            _ = Feature.__safeDI_Feature_5C1A0D75D74A217D.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
-				                @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
-				                    LiveGadget()
-				                }
-				                return __safeDI_gadget()
-				            }
-				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Feature() -> Feature.SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget> {
-				                .init(inner_serviceBuilder_Sendable: { _ in __safeDI_gadgetSendableBuilder_GadgetSeam() })
-				            }
-				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam() -> GadgetSeam.__safeDI_GadgetSendableCarrier<any Gadget> {
-				                .init(gadget: { __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() })
-				            }
 				            return Feature(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Feature())
 				        }
 				        let feature: Feature = __safeDI_feature()

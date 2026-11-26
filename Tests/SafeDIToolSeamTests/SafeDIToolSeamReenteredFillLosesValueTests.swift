@@ -78,40 +78,44 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_paymentsBuilder_Checkout_payments(_ scope_cart: Cart?) -> any Payments {
+			            return __safeDI_fillBody_2DA04EAD8C7332EE(cart: scope_cart)
+			        }
+			        func __safeDI_fillBody_2DA04EAD8C7332EE(cart: Cart?) -> any Payments {
+			            func __safeDI_payments() -> LivePayments {
+			                func __safeDI_retryBuilder() -> Checkout {
+			                    _ = Checkout.__safeDI_Checkout_33255AC374F2EE36.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                    return Checkout(__safeDI_cart: cart, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
+			                }
+			                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			            }
+			            let payments: any Payments = __safeDI_payments()
+			            return payments
+			        }
+			        func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(_ scope_cart: Cart) -> any Payments {
+			            return __safeDI_fillBody_E2C1CDB8E44998B3(cart: scope_cart)
+			        }
+			        func __safeDI_fillBody_E2C1CDB8E44998B3(cart: Cart) -> any Payments {
+			            func __safeDI_payments() -> LivePayments {
+			                func __safeDI_retryBuilder() -> Checkout {
+			                    _ = Checkout.__safeDI_Checkout_33255AC374F2EE36.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                    return Checkout(__safeDI_cart: cart, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
+			                }
+			                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			            }
+			            let payments: any Payments = __safeDI_payments()
+			            return payments
+			        }
+			        func __safeDI_paymentsBuilder_Checkout() -> Checkout.__safeDI_PaymentsCarrier<any Payments> {
+			            .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_payments(scope_cart) }, cartScreenBuilder: { values_cart, values_payments in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() })
+			        }
+			        func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() -> Checkout.__safeDI_PaymentsCarrier_CartScreen<any Payments> {
+			            .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(scope_cart) })
+			        }
 			        func __safeDI_checkout() -> Checkout {
 			            _ = Checkout.__safeDI_Checkout_33255AC374F2EE36.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope_cart: Cart?) -> any Payments {
-			                let cart = scope_cart
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_33255AC374F2EE36.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                        return Checkout(__safeDI_cart: cart, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
-			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
-			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
-			            }
-			            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(_ scope_cart: Cart) -> any Payments {
-			                let cart = scope_cart
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_33255AC374F2EE36.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                        return Checkout(__safeDI_cart: cart, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
-			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
-			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
-			            }
-			            func __safeDI_paymentsBuilder_Checkout() -> Checkout.__safeDI_PaymentsCarrier<any Payments> {
-			                .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_payments(scope_cart) }, cartScreenBuilder: { values_cart, values_payments in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() })
-			            }
-			            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() -> Checkout.__safeDI_PaymentsCarrier_CartScreen<any Payments> {
-			                .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(scope_cart) })
-			            }
 			            return Checkout(__safeDI_cart: nil, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
 			        }
 			        let checkout: Checkout = __safeDI_checkout()
@@ -301,24 +305,26 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_paymentsBuilder_Checkout_payments(_ scope_cart: Cart) -> any Payments {
+			            return __safeDI_fillBody_D7D89B714F6A8764(cart: scope_cart)
+			        }
+			        func __safeDI_fillBody_D7D89B714F6A8764(cart: Cart) -> any Payments {
+			            func __safeDI_payments() -> LivePayments {
+			                func __safeDI_retryBuilder() -> Checkout {
+			                    _ = Checkout.__safeDI_Checkout_6D6E4A1CDFCA32AA.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                    return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
+			                }
+			                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			            }
+			            let payments: any Payments = __safeDI_payments()
+			            return payments
+			        }
+			        func __safeDI_paymentsBuilder_Checkout() -> Checkout.__safeDI_PaymentsCarrier<any Payments> {
+			            .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_payments(scope_cart) })
+			        }
 			        func __safeDI_checkout() -> Checkout {
 			            _ = Checkout.__safeDI_Checkout_6D6E4A1CDFCA32AA.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope_cart: Cart) -> any Payments {
-			                let cart = scope_cart
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_6D6E4A1CDFCA32AA.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                        return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
-			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
-			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
-			            }
-			            func __safeDI_paymentsBuilder_Checkout() -> Checkout.__safeDI_PaymentsCarrier<any Payments> {
-			                .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_payments(scope_cart) })
-			            }
 			            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
 			        }
 			        let checkout: Checkout = __safeDI_checkout()
@@ -354,27 +360,29 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope_payments(_ scope_cart: Cart) -> any Payments {
+			            return __safeDI_fillBody_803A48B6A861E4AA(cart: scope_cart)
+			        }
+			        func __safeDI_fillBody_803A48B6A861E4AA(cart: Cart) -> any Payments {
+			            func __safeDI_payments() -> LivePayments {
+			                func __safeDI_retryBuilder() -> Checkout {
+			                    _ = Checkout.__safeDI_Checkout_719E400D45B54856.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                    return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
+			                }
+			                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			            }
+			            let payments: any Payments = __safeDI_payments()
+			            return payments
+			        }
+			        func __safeDI_paymentsBuilder_Checkout() -> Checkout.__safeDI_PaymentsCarrier<any Payments> {
+			            .init(screen: __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope())
+			        }
+			        func __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope() -> Checkout.__safeDI_PaymentsCarrier_CheckoutScreen<any Payments> {
+			            .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope_payments(scope_cart) })
+			        }
 			        func __safeDI_checkout() -> Checkout {
 			            _ = Checkout.__safeDI_Checkout_719E400D45B54856.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope_payments(_ scope_cart: Cart) -> any Payments {
-			                let cart = scope_cart
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_719E400D45B54856.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                        return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
-			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
-			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
-			            }
-			            func __safeDI_paymentsBuilder_Checkout() -> Checkout.__safeDI_PaymentsCarrier<any Payments> {
-			                .init(screen: __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope())
-			            }
-			            func __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope() -> Checkout.__safeDI_PaymentsCarrier_CheckoutScreen<any Payments> {
-			                .init(payments: { scope_cart in __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope_payments(scope_cart) })
-			            }
 			            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
 			        }
 			        let checkout: Checkout = __safeDI_checkout()
@@ -409,32 +417,35 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope_payments(_ scope: Checkout.SafeDIScope_Payments.CartItemImpl_Scope.payments_Values, cart: Cart) -> any Payments {
+			            return __safeDI_fillBody_B77150633C4C1E3F(cart: cart)
+			        }
+			        func __safeDI_fillBody_B77150633C4C1E3F(cart: Cart) -> any Payments {
+			            func __safeDI_payments() -> LivePayments {
+			                func __safeDI_retryBuilder() -> Checkout {
+			                    _ = Checkout.__safeDI_Checkout_700C42C38E35C4CC.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                    return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
+			                }
+			                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			            }
+			            let payments: any Payments = __safeDI_payments()
+			            return payments
+			        }
+			        func __safeDI_paymentsBuilder_Checkout() -> Checkout.SafeDIScope_Payments.__safeDI_Builder<any Payments> {
+			            .init(cartFlow_cartItemBuilder: { _ in __safeDI_paymentsBuilder_Checkout_CartFlow() })
+			        }
+			        func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope(cart: Cart) -> Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Builder<any Payments> {
+			            .init(payments: { scope in __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope_payments(scope, cart: cart) })
+			        }
+			        func __safeDI_paymentsBuilder_Checkout_CartFlow() -> CartFlow.__safeDI_CartItemCarrier<Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Builder<any Payments>> {
+			            .init(screenBuilder: __safeDI_paymentsBuilder_Checkout_CartFlow_CartScreen_Scope())
+			        }
+			        func __safeDI_paymentsBuilder_Checkout_CartFlow_CartScreen_Scope() -> CartFlow.__safeDI_CartItemCarrier_CartScreen<Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Builder<any Payments>> {
+			            .init(item: { values_cart in __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope(cart: values_cart) })
+			        }
 			        func __safeDI_checkout() -> Checkout {
 			            _ = Checkout.__safeDI_Checkout_700C42C38E35C4CC.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope_payments(_ scope: Checkout.SafeDIScope_Payments.CartItemImpl_Scope.payments_Values, cart: Cart) -> any Payments {
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_700C42C38E35C4CC.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                        return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
-			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
-			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
-			            }
-			            func __safeDI_paymentsBuilder_Checkout() -> Checkout.SafeDIScope_Payments.__safeDI_Builder<any Payments> {
-			                .init(cartFlow_cartItemBuilder: { _ in __safeDI_paymentsBuilder_Checkout_CartFlow() })
-			            }
-			            func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope(cart: Cart) -> Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Builder<any Payments> {
-			                .init(payments: { scope in __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope_payments(scope, cart: cart) })
-			            }
-			            func __safeDI_paymentsBuilder_Checkout_CartFlow() -> CartFlow.__safeDI_CartItemCarrier<Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Builder<any Payments>> {
-			                .init(screenBuilder: __safeDI_paymentsBuilder_Checkout_CartFlow_CartScreen_Scope())
-			            }
-			            func __safeDI_paymentsBuilder_Checkout_CartFlow_CartScreen_Scope() -> CartFlow.__safeDI_CartItemCarrier_CartScreen<Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Builder<any Payments>> {
-			                .init(item: { values_cart in __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope(cart: values_cart) })
-			            }
 			            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
 			        }
 			        let checkout: Checkout = __safeDI_checkout()
@@ -637,27 +648,32 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			        let cart: Cart? = safeDIOverrides.cart
 			        func __safeDI_checkout() -> Checkout {
 			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope: Checkout.SafeDIMockScope_Payments.payments_Values, cart: Cart?) -> any Payments {
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        Checkout.__safeDI_mock(paymentsBuilder: paymentsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                func __safeDI_fillBody_AC0AD4FB3F98AE33(cart: Cart?) -> any Payments {
+			                    func __safeDI_payments() -> LivePayments {
+			                        func __safeDI_retryBuilder() -> Checkout {
+			                            Checkout.__safeDI_mock(paymentsBuilder: paymentsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                        }
+			                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
 			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			                    let payments: any Payments = __safeDI_payments()
+			                    return payments
 			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
+			                return __safeDI_fillBody_AC0AD4FB3F98AE33(cart: cart)
 			            }
 			            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(_ scope: Checkout.SafeDIMockScope_Payments.CartScreen_Scope.payments_Values) -> any Payments {
-			                let cart = scope.cart
-			                func __safeDI_payments() -> LivePayments {
-			                    func __safeDI_retryBuilder() -> Checkout {
-			                        Checkout.__safeDI_mock(paymentsBuilder: paymentsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                func __safeDI_fillBody_5A983D6B90FDA658(cart: Cart) -> any Payments {
+			                    func __safeDI_payments() -> LivePayments {
+			                        func __safeDI_retryBuilder() -> Checkout {
+			                            Checkout.__safeDI_mock(paymentsBuilder: paymentsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                        }
+			                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+			                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
 			                    }
-			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
+			                    let payments: any Payments = __safeDI_payments()
+			                    return payments
 			                }
-			                let payments: any Payments = __safeDI_payments()
-			                return payments
+			                return __safeDI_fillBody_5A983D6B90FDA658(cart: scope.cart)
 			            }
 			            func __safeDI_paymentsBuilder_Checkout(cart: Cart?) -> Checkout.SafeDIMockScope_Payments.__safeDI_Builder<any Payments> {
 			                .init(payments: { scope in __safeDI_paymentsBuilder_Checkout_payments(scope, cart: cart) }, cartScreenBuilder: { _ in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() })

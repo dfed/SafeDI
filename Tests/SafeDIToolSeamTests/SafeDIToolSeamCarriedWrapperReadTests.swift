@@ -67,23 +67,25 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Top {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
+		            func __safeDI_service() -> ServiceImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(inner: __safeDI_serviceBuilder_Inner())
+		        }
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_430D5A4F72A74753.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		                let token = scope_token
-		                func __safeDI_service() -> ServiceImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(inner: __safeDI_serviceBuilder_Inner())
-		            }
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -141,23 +143,25 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Top {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
+		            func __safeDI_service() -> ServiceImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(inner: __safeDI_serviceBuilder_Inner())
+		        }
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_430D5A4F72A74753.self // If this line does not compile, add the SafeDI plugin to the target that declares Outer.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		                let token = scope_token
-		                func __safeDI_service() -> ServiceImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(inner: __safeDI_serviceBuilder_Inner())
-		            }
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -215,23 +219,25 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Top {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Service {
+		            return __safeDI_fillBody_E17ECDEA093583B7(token: scope_token)
+		        }
+		        func __safeDI_fillBody_E17ECDEA093583B7(token: LazilyInstantiated<Token>) -> any Service {
+		            func __safeDI_service() -> ServiceImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(inner: __safeDI_serviceBuilder_Inner())
+		        }
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_B6721A51D223D491.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Service {
-		                let token = scope_token
-		                func __safeDI_service() -> ServiceImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(inner: __safeDI_serviceBuilder_Inner())
-		            }
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -359,23 +365,25 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Top {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
+		            func __safeDI_service() -> ServiceImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(inner: __safeDI_serviceBuilder_Inner())
+		        }
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_430D5A4F72A74753.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		                let token = scope_token
-		                func __safeDI_service() -> ServiceImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(inner: __safeDI_serviceBuilder_Inner())
-		            }
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -437,26 +445,28 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Top {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
+		            return __safeDI_fillBody_AB21BC287196C9D2(token: scope_token)
+		        }
+		        func __safeDI_fillBody_AB21BC287196C9D2(token: SendableLazilyInstantiated<Token>) -> any Service {
+		            @Sendable nonisolated func __safeDI_wrapperReader() -> WrapperReader {
+		                WrapperReader(token: token)
+		            }
+		            func __safeDI_service() -> ServiceImpl {
+		                let wrapperReader = SendableInstantiator<WrapperReader>(__safeDI_wrapperReader)
+		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(inner: __safeDI_serviceBuilder_Inner())
+		        }
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_430D5A4F72A74753.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		                let token = scope_token
-		                func __safeDI_service() -> ServiceImpl {
-		                    @Sendable nonisolated func __safeDI_wrapperReader() -> WrapperReader {
-		                        WrapperReader(token: token)
-		                    }
-		                    let wrapperReader = SendableInstantiator<WrapperReader>(__safeDI_wrapperReader)
-		                    return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(inner: __safeDI_serviceBuilder_Inner())
-		            }
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -515,23 +525,25 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Top {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
+		            func __safeDI_service() -> ServiceImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let service: any Service = __safeDI_service()
+		            return service
+		        }
+		        func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
+		            .init(inner: __safeDI_serviceBuilder_Inner())
+		        }
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_430D5A4F72A74753.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		                let token = scope_token
-		                func __safeDI_service() -> ServiceImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let service: any Service = __safeDI_service()
-		                return service
-		            }
-		            func __safeDI_serviceBuilder_Outer() -> Outer.__safeDI_ServiceCarrier<any Service> {
-		                .init(inner: __safeDI_serviceBuilder_Inner())
-		            }
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(service: { scope_token, scope_leafBuilder in __safeDI_serviceBuilder_Inner_service(scope_token, scope_leafBuilder) })
-		            }
 		            return Outer(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1503,25 +1515,28 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		            return __safeDI_fillBody_63A49411F7AF521F(token: token)
+		        }
+		        func __safeDI_fillBody_63A49411F7AF521F(token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		            func __safeDI_gizmo() -> GizmoImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let gizmo: any Gizmo = __safeDI_gizmo()
+		            return gizmo
+		        }
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { _ in __safeDI_gizmoBuilder_Outer_Inner() })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { scope in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(scope, token: token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: values_token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7C664E6434832B43.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
-		                func __safeDI_gizmo() -> GizmoImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let gizmo: any Gizmo = __safeDI_gizmo()
-		                return gizmo
-		            }
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { _ in __safeDI_gizmoBuilder_Outer_Inner() })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { scope in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(scope, token: token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: values_token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1552,25 +1567,28 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Hub {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		            return __safeDI_fillBody_63A49411F7AF521F(token: token)
+		        }
+		        func __safeDI_fillBody_63A49411F7AF521F(token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		            func __safeDI_gizmo() -> GizmoImpl {
+		                let wrapperReader = WrapperReader(token: token)
+		                return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
+		            }
+		            let gizmo: any Gizmo = __safeDI_gizmo()
+		            return gizmo
+		        }
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { _ in __safeDI_gizmoBuilder_Outer_Inner() })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { scope in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(scope, token: token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: values_token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7C664E6434832B43.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
-		                func __safeDI_gizmo() -> GizmoImpl {
-		                    let wrapperReader = WrapperReader(token: token)
-		                    return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
-		                }
-		                let gizmo: any Gizmo = __safeDI_gizmo()
-		                return gizmo
-		            }
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { _ in __safeDI_gizmoBuilder_Outer_Inner() })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { scope in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(scope, token: token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: values_token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
