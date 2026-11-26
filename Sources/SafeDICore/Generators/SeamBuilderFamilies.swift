@@ -226,8 +226,19 @@ extension DependencyTreeGenerator {
 			widestTier: seamTypeAccess,
 		)
 		let stemByHoleType = tierNames.stemByHoleType
+		// Each tier's two labels of each hole type, spelled once: spelled at each use, a label was spelled again for every
+		// comparison of the sort below and for every place, case and route that names it.
+		var labelsByTier = [AccessLevel: [SeamSignature.HoleType: (plain: String, sendable: String)]]()
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool, in names: TierNames) -> String {
-			names.label(ofStem: stemByHoleType[holeType, default: ""], isSendable: isSendable)
+			let labels: (plain: String, sendable: String)
+			if let spelledLabels = labelsByTier[names.tier]?[holeType] {
+				labels = spelledLabels
+			} else {
+				let stem = stemByHoleType[holeType, default: ""]
+				labels = (plain: names.label(ofStem: stem, isSendable: false), sendable: names.label(ofStem: stem, isSendable: true))
+				labelsByTier[names.tier, default: [:]][holeType] = labels
+			}
+			return isSendable ? labels.sendable : labels.plain
 		}
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool) -> String {
 			label(of: holeType, isSendable: isSendable, in: tierNames.tiers[0])
@@ -844,14 +855,32 @@ extension DependencyTreeGenerator {
 	}
 
 	private static func loweredLeadingCapitals(of stem: String) -> String {
-		let characters = Array(stem)
+		// An ASCII stem, as nearly every identifier is, is read by its bytes: each is one `Character`, upper or lowercase
+		// exactly where it is a Latin letter of that case, and lowered by its letter alone, so the result is the one the
+		// reading by `Character` gives, without decoding a grapheme per letter.
+		if stem.utf8.allSatisfy({ $0 < 0x80 }) {
+			var bytes = Array(stem.utf8)
+			let lowerCount = countOfLeadingCapitalsToLower(in: bytes, isUppercase: { $0 >= 0x41 && $0 <= 0x5A }, isLowercase: { $0 >= 0x61 && $0 <= 0x7A })
+			for index in 0..<lowerCount {
+				bytes[index] += 0x20
+			}
+			return lowerCount > 0 ? String(decoding: bytes, as: UTF8.self) : stem
+		} else {
+			let characters = Array(stem)
+			let lowerCount = countOfLeadingCapitalsToLower(in: characters, isUppercase: \.isUppercase, isLowercase: \.isLowercase)
+			return lowerCount > 0 ? String(characters[..<lowerCount]).lowercased() + String(characters[lowerCount...]) : stem
+		}
+	}
+
+	/// How many of `elements`' leading capitals `loweredLeadingCapitals(of:)` lowers: every one, but the last when a
+	/// lowercase letter follows it and it is not the first.
+	private static func countOfLeadingCapitalsToLower<Element>(in elements: [Element], isUppercase: (Element) -> Bool, isLowercase: (Element) -> Bool) -> Int {
 		var capitalCount = 0
-		while capitalCount < characters.count, characters[capitalCount].isUppercase {
+		while capitalCount < elements.count, isUppercase(elements[capitalCount]) {
 			capitalCount += 1
 		}
-		guard capitalCount > 0 else { return stem }
-		let lowerCount = capitalCount < characters.count && characters[capitalCount].isLowercase ? max(capitalCount - 1, 1) : capitalCount
-		return String(characters[..<lowerCount]).lowercased() + String(characters[lowerCount...])
+		guard capitalCount > 0 else { return 0 }
+		return capitalCount < elements.count && isLowercase(elements[capitalCount]) ? max(capitalCount - 1, 1) : capitalCount
 	}
 
 	/// The identifier a seam is named by inside a fill's or a dispatcher's name.
