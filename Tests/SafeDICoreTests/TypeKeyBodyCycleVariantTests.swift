@@ -539,7 +539,7 @@ struct TypeKeyBodyCycleVariantTests {
 	}
 
 	@Test
-	func statementsOfPlan_keepsThePathKeysBody_whenTheLayoutKeepsIt() {
+	func statementsOfPlan_throwsVariantReadsLabelItTakesNoParameterOf_whenAVariantReadsALabelItTakesNoParameterOf() {
 		let plan = FakePlan(
 			rootStatements: [Self.alias("q", "Q"), Self.leaf("aBuilder", building: "A")],
 			records: [1: Self.variant("aBuilder", building: "A", reading: [], children: [Self.leaf("aBuilder", building: "A"), Self.inline("k", "K", reading: "q", "Q")]).record],
@@ -550,7 +550,7 @@ struct TypeKeyBodyCycleVariantTests {
 			],
 			labels: [1: []],
 		)
-		#expect(throws: TypeKeyRefusal.layoutKeepsPathKeysBody) {
+		#expect(throws: TypeKeyRefusal.variantReadsLabelItTakesNoParameterOf) {
 			try TypeKeyBody.statements(ofPlan: plan)
 		}
 	}

@@ -90,8 +90,31 @@ enum TypeKeyRefusal: Error, Hashable, Sendable {
 	case passedArgumentsDifferFromParameters(body: Int, path: [Int])
 	/// The call at `path` in `body` names no place of the body.
 	case callNamesNoPlace(body: Int, path: [Int])
-	/// The layout of the root's body and its variants kept the path key's body.
-	case layoutKeepsPathKeysBody
+
+	// The layout of the root's body and its variants, in the order of its stages (`TypeKeyBody.layOut`).
+
+	/// A root function a place calls is declared in place, where the type key spells no place written as text.
+	case rootFunctionKeptInPlace
+	/// A place is not one the walk of the bodies reads (`TypeKeyLayout.read(_:)`).
+	case placeNotRead
+	/// A view's reads from outside it do not resolve (`computeReads`).
+	case readsNotResolved
+	/// A variant's body reads a label it takes no cycle parameter of.
+	case variantReadsLabelItTakesNoParameterOf
+	/// A loop of builders the path key writes once (`laysOutLoops`).
+	case loopWrittenOnce
+	/// A function has no place every call of it sees (`computePlacement`).
+	case functionNotPlaced
+	/// No one type takes what every call of a function passes for a label (`computeParameterTypes`).
+	case parameterHasNoType
+	/// A read resolves at a place to another declaration than its view's (`checkEveryRead`).
+	case readResolvesOtherwise
+	/// A value path resolves at a place to another declaration than its view's (`checkValuePaths`).
+	case valuePathResolvesOtherwise
+	/// A function's `@Sendable` mark differs from the path key's (`checkSendableMarks`).
+	case sendableMarkDiffers
+	/// A statement is not spelled (`spelledRootStatements`).
+	case statementNotSpelled
 }
 
 extension TypeKeyBody {
@@ -111,10 +134,7 @@ extension TypeKeyBody {
 				answers: plan.answers(of: body),
 			))
 		}
-		guard let statements = statements(ofRootBody: rootStatements, variants: variants, outerDeclarations: outerDeclarations, namesInScope: namesInScope) else {
-			throw .layoutKeepsPathKeysBody
-		}
-		return statements
+		return try layOut(rootStatements, variants: variants, outerDeclarations: outerDeclarations, namesInScope: namesInScope).get()
 	}
 
 	/// `statements`, the places of body `body`'s root, with each call place `plan` gives the body a closing record of the
