@@ -561,18 +561,19 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_drawsCaseOnceInDOTTree_whenSeamReachesItsPlaceAlongFourPaths(buildsFillOfEveryPlace: Bool, parentBuildingNoTokenIsLast: Bool) async throws {
-		// Four parents build `Panel`, whose `api` is one case of `Home`'s places, and one of them builds no `token`. The
-		// call holds one place of the case, so the tree draws the case once beneath the call, with `LiveApi`'s tree,
-		// wherever the parent that builds no `token` stands and whichever fills the call built.
+	mutating func generate_drawsEveryPlaceInDOTTree_whenAnotherPlacesFillStandsForPlace(buildsFillOfEveryPlace: Bool, placeStoodForIsLast: Bool) async throws {
+		// One parent builds no `token`, so its place is judged with a fill of its own. `First`'s fill generates code, and
+		// of the other two parents' fills the first stands for the second, which the call meets last or before the fill
+		// that parent's place is judged with. The tree draws each of the four places beneath the call, in the order the
+		// call meets them, each with `LiveApi`'s tree, whichever fills the call built.
 		let parentWithoutToken = ["@Instantiated let panel: Panel"]
 		let parentWithToken = ["@Instantiated let token: Token", "@Instantiated let panel: Panel"]
 		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
-					parentDeclarations: parentBuildingNoTokenIsLast
-						? [parentWithToken, parentWithToken, parentWithToken, parentWithoutToken]
-						: [parentWithToken, parentWithoutToken, parentWithToken, parentWithToken],
+					parentDeclarations: placeStoodForIsLast
+						? [parentWithToken, parentWithoutToken, parentWithToken, parentWithToken]
+						: [parentWithToken, parentWithToken, parentWithToken, parentWithoutToken],
 					panelDeclarations: ["@Instantiated let api: any Api"],
 					liveApiDeclarations: ["@Received let token: Token", "@Instantiated let row: Row"],
 					rootDeclarations: ["@Instantiated let token: Token"],
@@ -589,6 +590,12 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		    Root -- "token: Token"
 		    Root -- "home: Home"
 		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
 		    "api: any Api" -- "row: Row"
 		}
 		""")
@@ -596,12 +603,12 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_drawsCaseAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool, buildsFillAfterCase: Bool) async throws {
+	mutating func generate_drawsPlaceStoodForAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool, buildsFillAfterPlaceStoodFor: Bool) async throws {
 		// `MidSeam` calls `Home` and fills `agent` with `LiveAgent`, which holds a place of its own, `leaf`, so that fill
-		// is drawn after the fills that hold none, though the call builds it first. `api` is one case, which `Home`
-		// reaches through `First`, `Second` and `Third`: it is drawn once, before `zed`'s where `Home` has a `zed`, and
-		// before `agent`'s.
-		let zedDeclarations = buildsFillAfterCase ? ["@Instantiated let zed: any Zed"] : []
+		// is drawn after the fills that hold none, though the call builds it first. `Second`'s fill of `api` stands for
+		// `Third`'s, which is drawn after it and before `zed`'s, as its own fill would be, or, where `Home` has no `zed`
+		// and the call builds no fill after it, before `agent`'s.
+		let zedDeclarations = buildsFillAfterPlaceStoodFor ? ["@Instantiated let zed: any Zed"] : []
 		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: SafeDIToolSeamBuilderParameterTests.modules(
@@ -638,10 +645,66 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		graph SafeDI {
 		    ranksep=2
 		    MidSeam -- "home: Home"
-		    "home: Home" -- "api: any Api"\(buildsFillAfterCase ? "\n    \"home: Home\" -- \"zed: any Zed\"" : "")
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"
+		    "home: Home" -- "api: any Api"\(buildsFillAfterPlaceStoodFor ? "\n    \"home: Home\" -- \"zed: any Zed\"" : "")
 		    "home: Home" -- "agent: any Agent"
 		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
+		    "api: any Api" -- "row: Row"
 		    "agent: any Agent" -- "leaf: any Leaf"
+		}
+		""")
+	}
+
+	@Test(arguments: [false, true], [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_drawsEveryPlaceAmongFillsThatHoldPlaces_whenFillOfCaseReachedAlongTwoPathsHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool, caseOfTwoPlacesIsFirst: Bool) async throws {
+		// `MidSeam` calls `Home`, which reaches `Panel`'s place through `First` and through `Second`: one case with two
+		// places. Its fill holds a place of its own, `leaf`, as the fill of `Home`'s own place does, so both start after
+		// the fills that hold none, in the order of the call's arguments, `agent` before `broker`. The second place of the
+		// case is drawn where its own fill would be: after the first and before `broker`'s where the case is `agent`,
+		// and last where the case is `broker`.
+		let placeOfPanel = caseOfTwoPlacesIsFirst ? "agent: any Agent" : "broker: any Broker"
+		let placeOfHome = caseOfTwoPlacesIsFirst ? "broker: any Broker" : "agent: any Agent"
+		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: [
+						"public protocol Agent {}",
+						"public protocol Broker {}",
+						"public protocol Leaf {}",
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let \(placeOfPanel)"]),
+						seamFixtureType(named: "First", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Second", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Home", isSeam: true, declarations: [
+							"@Instantiated let first: First",
+							"@Instantiated let second: Second",
+							"@Instantiated let \(placeOfHome)",
+						]),
+					],
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveAgent", fulfilling: "Agent", declarations: ["@Instantiated let leaf: any Leaf"]),
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveBroker", fulfilling: "Broker", declarations: ["@Instantiated let leaf: any Leaf"]),
+						seamFixtureType(named: "MidSeam", isSeam: true, declarations: ["@Instantiated let home: Home"]),
+					],
+				),
+				integration: .moduleInfo,
+				writesDOTTrees: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		let placeDrawnTwice = caseOfTwoPlacesIsFirst ? "agent: any Agent" : "broker: any Broker"
+		#expect(output.modules["App"]?.dotTree == """
+		graph SafeDI {
+		    ranksep=2
+		    MidSeam -- "home: Home"
+		    "home: Home" -- "agent: any Agent"
+		    "home: Home" -- "\(placeDrawnTwice)"
+		    "home: Home" -- "broker: any Broker"
+		    "agent: any Agent" -- "leaf: any Leaf"
+		    "\(placeDrawnTwice)" -- "leaf: any Leaf"
+		    "broker: any Broker" -- "leaf: any Leaf"
 		}
 		""")
 	}

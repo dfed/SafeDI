@@ -1537,10 +1537,11 @@ public struct SeamSignature: Sendable {
 	/// place cases that list it. A caller generates one function per case and reads what differs between a case's routes
 	/// from `places`, so it never holds a place per path. A place case of an enum another seam declares lists that
 	/// seam's sites, which are none of this signature's holes and stay. A signature with one place per case already, as
-	/// one whose graph was not built is, hands what it holds.
-	var placesHandedToCallers: (holes: [Hole], scopeEnums: [ScopeEnum], caseIndexByHole: [Int]) {
+	/// one whose graph was not built is, hands what it holds. `everyPlace` is this signature's own lists, for the one
+	/// reader that lists a place per path, the drawing of the caller's tree, or `nil` where the caller holds every place.
+	var placesHandedToCallers: (holes: [Hole], scopeEnums: [ScopeEnum], caseIndexByHole: [Int], everyPlace: SeamCall.EveryPlace?) {
 		let casePlaces = casePlaces
-		guard casePlaces.count < holes.count else { return (holes, scopeEnums, caseIndexByHole) }
+		guard casePlaces.count < holes.count else { return (holes, scopeEnums, caseIndexByHole, nil) }
 		let droppedSites = Set(holes.map(\.site)).subtracting(casePlaces.map(\.hole.site))
 		var handedEnums = scopeEnums
 		for enumIndex in handedEnums.indices {
@@ -1550,7 +1551,7 @@ public struct SeamSignature: Sendable {
 				}
 			}
 		}
-		return (casePlaces.map(\.hole), handedEnums, casePlaces.map { $0.caseIndex ?? -1 })
+		return (casePlaces.map(\.hole), handedEnums, casePlaces.map { $0.caseIndex ?? -1 }, SeamCall.EveryPlace(holes: holes, caseIndexByHole: caseIndexByHole))
 	}
 
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
@@ -2331,9 +2332,10 @@ public struct SeamCall: Sendable {
 		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
 		caseIndexByHole: [Int] = [],
 		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places?,
+		everyPlace: SeamCall.EveryPlace? = nil,
 	) {
 		self.parameters = parameters
-		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole, placesOfSeamsBeneath: placesOfSeamsBeneath)
+		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole, placesOfSeamsBeneath: placesOfSeamsBeneath, everyPlace: everyPlace)
 		self.guardTypeName = guardTypeName
 		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -2389,6 +2391,17 @@ public struct SeamCall: Sendable {
 
 	/// The builders the call passes, built once with the call.
 	let calledBuilders: CalledBuilders
+
+	/// The places of a called seam, one per path, in the order of the seam's holes, each with its case: what the drawing
+	/// of the calling tree lists (`ScopeGenerator.generateDOT()`), which draws a place per path by Dan's ruling, and
+	/// nothing else reads. Memory: the signature's own two lists, shared with it, never a copy per call. Once a signature
+	/// stores one hole per case, the drawing lists a case's routes from the place graph in their place, and only a run
+	/// that draws the tree walks them.
+	public struct EveryPlace: Sendable {
+		let holes: [SeamSignature.Hole]
+		/// `SeamSignature.caseIndexByHole` of `holes`.
+		let caseIndexByHole: [Int]
+	}
 }
 
 /// The builders a call passes another module's seam or public mock: the builders, every enum they reach, and every place
@@ -2401,12 +2414,14 @@ struct CalledBuilders: Sendable {
 		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
 		caseIndexByHole: [Int] = [],
 		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places?,
+		everyPlace: SeamCall.EveryPlace? = nil,
 	) {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
 		self.places = places
 		self.placesOfSeamsBeneath = placesOfSeamsBeneath
+		self.everyPlace = everyPlace
 		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		for (index, hole) in holes.enumerated() where holeBySite[hole.site] == nil {
@@ -2435,6 +2450,10 @@ struct CalledBuilders: Sendable {
 	let holes: [SeamSignature.Hole]
 	let builders: [SeamSignature.Builder]
 	let scopeEnums: [SeamSignature.ScopeEnum]
+	/// Every place of the called seam, where the call holds one place per case (`SeamSignature.placesHandedToCallers`),
+	/// or `nil` where `holes` is every place.
+	let everyPlace: SeamCall.EveryPlace?
+
 	/// Each enum by its key.
 	let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
 	/// How each seam's carriers among the enums hand a level's values (`SeamCarrierValues`), by seam; a seam none of whose

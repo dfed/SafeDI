@@ -3388,42 +3388,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return await child.generateDOT()
 		} else {
 			let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
-			// A place whose fill another place's stands for (`FillStoodFor`) is drawn where its own fill would be, among
-			// the call's fills in the order the call met their places, with the tree of the fill that stands for it: the
-			// tree its own fill would build. So the drawing does not depend on which fills the call built.
+			// A place with no fill of its own among the call's (`placesDrawnWithAnotherFill`) is drawn where its own fill
+			// would be, among the call's fills in the order the call met their places, with the tree of the fill drawn for
+			// it: the tree its own fill would build. So the drawing does not depend on which fills the call built, and a
+			// seam reached along many paths is drawn with a place per path.
 			var fillsByKey = [String: ScopeGenerator]()
-			if !fillsStoodFor.isEmpty {
-				for child in orderedPropertiesToGenerate {
-					if let fillKey = child.fillKey {
-						fillsByKey[fillKey] = child
-					}
-				}
-			}
-			// The fills count in the order the call built them, which `FillStoodFor.builtFillCountBefore` counts in. The fill
-			// of a place stood for would hold no place (`Scope.nextFill()`), so it would be drawn among the fills that start
-			// with their siblings, before the first of them built after it and before every fill that starts last
-			// (`startsAsCarrier(_:)`).
+			// The fills count in the order the call built them, which `PlaceDrawnWithAnotherFill.builtFillCountBefore` counts
+			// in.
 			var builtFillIndexByKey = [String: Int]()
-			if !fillsStoodFor.isEmpty {
+			var placesToDraw = [PlaceDrawnWithAnotherFill]()[...]
+			var placesToDrawLast = [PlaceDrawnWithAnotherFill]()[...]
+			if !fillsStoodFor.isEmpty || calledBuilders?.everyPlace != nil {
 				for child in propertiesToGenerate {
 					if let fillKey = child.fillKey {
+						fillsByKey[fillKey] = child
 						builtFillIndexByKey[fillKey] = builtFillIndexByKey.count
 					}
 				}
+				// A fill that holds no place would be drawn among the fills that start with their siblings, before the first
+				// of them built after it and before every fill that starts last (`startsAsCarrier(_:)`); one that holds a
+				// place, among those, before the first of them built after it.
+				let places = placesDrawnWithAnotherFill()
+				placesToDraw = places.filter { place in fillsByKey[place.fillKey].map(startsAsCarrier) != true }[...]
+				placesToDrawLast = places.filter { place in fillsByKey[place.fillKey].map(startsAsCarrier) == true }[...]
 			}
 			var drawn = [(node: String, generator: ScopeGenerator?)]()
-			var fillsStoodForToDraw = fillsStoodFor[...]
 			for orderedPropertyToGenerate in orderedPropertiesToGenerate {
 				if let builtFillIndex = orderedPropertyToGenerate.fillKey.flatMap({ builtFillIndexByKey[$0] }) {
-					while let fillStoodFor = fillsStoodForToDraw.first, startsAsCarrier(orderedPropertyToGenerate) || fillStoodFor.builtFillCountBefore <= builtFillIndex {
-						fillsStoodForToDraw.removeFirst()
-						drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
+					let startsLast = startsAsCarrier(orderedPropertyToGenerate)
+					while let place = placesToDraw.first, startsLast || place.builtFillCountBefore <= builtFillIndex {
+						placesToDraw.removeFirst()
+						drawn.append(("\"\(place.property.asSource)\"", fillsByKey[place.fillKey]))
+					}
+					while startsLast, let place = placesToDrawLast.first, place.builtFillCountBefore <= builtFillIndex {
+						placesToDrawLast.removeFirst()
+						drawn.append(("\"\(place.property.asSource)\"", fillsByKey[place.fillKey]))
 					}
 				}
 				drawn.append((orderedPropertyToGenerate.scopeData.asDOTNode, orderedPropertyToGenerate))
 			}
-			for fillStoodFor in fillsStoodForToDraw {
-				drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
+			for place in placesToDraw + placesToDrawLast {
+				drawn.append(("\"\(place.property.asSource)\"", fillsByKey[place.fillKey]))
 			}
 			let instantiatedProperties = drawn.map(\.node)
 			var childDOTs = [String]()
@@ -3439,6 +3444,59 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"    \(root) -- \($0)"
 			} + childDOTs).joined(separator: "\n")
 		}
+	}
+
+	/// A place of this scope's seam call with no fill of its own among the call's children, as the drawing of the tree
+	/// lists it (`generateDOT()`).
+	private struct PlaceDrawnWithAnotherFill {
+		/// The place's property, which its edge names.
+		let property: Property
+		/// The key of the fill among the call's children whose tree is drawn for it.
+		let fillKey: String
+		/// How many fills the call built before the place, in the order of the call's arguments.
+		let builtFillCountBefore: Int
+	}
+
+	/// The places of this scope's seam call with no fill of their own among its children, in the order of the call's
+	/// arguments: a place another place's fill stands for (`FillStoodFor`), drawn with that fill, and a place the call
+	/// was not handed, because it holds one place per case (`SeamCall.EveryPlace`), drawn with the fill its
+	/// case's place is drawn with. A place of a case the call fills no place of, which it passes up, is not drawn.
+	///
+	/// Work and memory: one entry per place of the called seam, so per path to its places, made only where a run draws
+	/// the tree and dropped with the drawing.
+	private func placesDrawnWithAnotherFill() -> [PlaceDrawnWithAnotherFill] {
+		let fillsStoodFor = fillsStoodFor
+		guard let everyPlace = calledBuilders?.everyPlace else {
+			return fillsStoodFor.map { PlaceDrawnWithAnotherFill(property: $0.hole.property, fillKey: $0.standInKey, builtFillCountBefore: $0.builtFillCountBefore) }
+		}
+		// The fills the call built, in the order it built them, each by its place.
+		var builtFillBySite = [SeamSignature.Hole.Site: (key: String, index: Int)]()
+		for child in propertiesToGenerate {
+			if let site = child.fillHole?.site, let fillKey = child.fillKey {
+				builtFillBySite[site] = (fillKey, builtFillBySite.count)
+			}
+		}
+		let fillStoodForBySite = Dictionary(fillsStoodFor.map { ($0.hole.site, $0) }, uniquingKeysWith: { first, _ in first })
+		var places = [PlaceDrawnWithAnotherFill]()
+		var builtFillCount = 0
+		var casesMet = Set<Int>()
+		// The key of the fill drawn for the place the call holds of each case; none where the call fills no place of it.
+		var drawnFillKeyByCase = [Int: String]()
+		for (hole, caseIndex) in zip(everyPlace.holes, everyPlace.caseIndexByHole) {
+			if caseIndex >= 0, !casesMet.insert(caseIndex).inserted {
+				// A place the call was not handed: its case's place came before it.
+				if let drawnFillKey = drawnFillKeyByCase[caseIndex] {
+					places.append(PlaceDrawnWithAnotherFill(property: hole.property, fillKey: drawnFillKey, builtFillCountBefore: builtFillCount))
+				}
+			} else if let builtFill = builtFillBySite[hole.site] {
+				builtFillCount = builtFill.index + 1
+				drawnFillKeyByCase[caseIndex] = builtFill.key
+			} else if let fillStoodFor = fillStoodForBySite[hole.site] {
+				places.append(PlaceDrawnWithAnotherFill(property: hole.property, fillKey: fillStoodFor.standInKey, builtFillCountBefore: fillStoodFor.builtFillCountBefore))
+				drawnFillKeyByCase[caseIndex] = fillStoodFor.standInKey
+			}
+		}
+		return places
 	}
 
 	/// A dependency that a type receives inside a `@Sendable` builder function from an `Instantiator`,

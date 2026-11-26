@@ -1537,6 +1537,7 @@ extension DependencyTreeGenerator {
 						places: signature.places,
 						caseIndexByHole: handed.caseIndexByHole,
 						placesOfSeamsBeneath: { placesBySeam[$0.seamType] },
+						everyPlace: handed.everyPlace,
 					),
 				)
 			} else {
