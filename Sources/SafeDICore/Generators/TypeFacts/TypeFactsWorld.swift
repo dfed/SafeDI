@@ -34,6 +34,14 @@
 // twin a path builds is an argument, never a key: when the `madeAgain` producer lands, its key projects that choice to
 // one key, as rule 1 does. Owed with the cycles producer: per identity, its declarations in first-reach order; per node,
 // the twinned identities its subtree can close on, a union fact like the reads.
+//
+// Rule 3 (ruling of 2026-11-26, 3:56 PM PT; section 17, "Rule 3") is staged, and both keys are planned states. Stage 1,
+// today: an only-if-available read keys a lazy wrapper by its kind (-3, -4) and `nil` apart from it, so a lazy answer
+// beside none is two bodies. Stage 2, required, after track A's replay: where a value and a lazy wrapper both reach one
+// declaration for one read, the parameter is the wrapper and their keys project to one. "Both reach" is a fact per
+// (declaration, read) over the whole world, a union over the answers bound for that read at every call into the node,
+// computed before the variants fold so that `key` can ask it, never decided per call or by arrival order. Where one form
+// alone reaches, stage 1's key stands. Read neither stage's count of bodies as permanent.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
