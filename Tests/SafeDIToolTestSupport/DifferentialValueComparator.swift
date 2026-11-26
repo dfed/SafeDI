@@ -2700,7 +2700,11 @@ extension GraphFuzzerFixture {
 			nil
 		}
 		let entry = "unavailableApiIsUnavailable: true"
-		let nodeOverrides = if let leafLabel { "\(leafLabel): .init(\(entry))" } else { entry }
+		let nodeOverrides = if let leafLabel {
+			"\(leafLabel): .init(\(entry))"
+		} else {
+			entry
+		}
 		return [
 			DifferentialValueProbe("\(nodeName).mock(safeDIOverrides: .init(\(nodeOverrides)))"),
 			DifferentialValueProbe("\(screenName).mock(safeDIOverrides: .init(unavailableNode: .init(\(nodeOverrides))))"),
