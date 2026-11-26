@@ -3629,37 +3629,38 @@ struct SafeDIToolGraphFuzzerTests {
 		    ) -> S2420_T0 {
 		        let t6 = if let safeDIBuilder = safeDIOverrides.t6 { safeDIBuilder() } else { S2420_T6() }
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { S2420_Service.preview() }
-		        func __safeDI_t2() -> S2420_T2 {
-		            func __safeDI_t1Builder() -> S2420_T1 {
-		                if let safeDIBuilder = safeDIOverrides.t2.t1Builder { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
+		        func __safeDI_t1Builder(__safeDI_S2420_T1_mockConfiguration: ((S2420_Service) -> S2420_T1)?) -> S2420_T1 {
+		            if let safeDIBuilder = __safeDI_S2420_T1_mockConfiguration { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
+		        }
+		        func __safeDI_link0(t6Alias: S2420_T6?, __safeDI_S2420_Link0_configuration: S2420_Link0.SafeDIMockConfiguration) -> S2420_Link0 {
+		            #sourceLocation(file: "S2420_Link0.swift", line: 8)
+		            let t6AliasAlias: S2420_T6? = t6Alias
+		            #sourceLocation()
+		            let link1: S2420_Link1 = __safeDI_link1(t6AliasAlias: t6AliasAlias, __safeDI_S2420_Link1_configuration: __safeDI_S2420_Link0_configuration.link1)
+		            return if let safeDIBuilder = __safeDI_S2420_Link0_configuration.safeDIBuilder { safeDIBuilder(t6AliasAlias, link1) } else { S2420_Link0(t6AliasAlias: t6AliasAlias, link1: link1) }
+		        }
+		        func __safeDI_link1(t6AliasAlias: S2420_T6?, __safeDI_S2420_Link1_configuration: S2420_Link1.SafeDIMockConfiguration) -> S2420_Link1 {
+		            #sourceLocation(file: "S2420_Link1.swift", line: 8)
+		            let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
+		            #sourceLocation()
+		            let link2 = if let safeDIBuilder = __safeDI_S2420_Link1_configuration.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
+		            return if let safeDIBuilder = __safeDI_S2420_Link1_configuration.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
+		        }
+		        func __safeDI_t2(__safeDI_S2420_T2_configuration: S2420_T2.SafeDIMockConfiguration) -> S2420_T2 {
+		            let t1Builder = Instantiator<S2420_T1> {
+		                __safeDI_t1Builder(__safeDI_S2420_T1_mockConfiguration: __safeDI_S2420_T2_configuration.t1Builder)
 		            }
-		            let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
 		            #sourceLocation(file: "S2420_T2.swift", line: 10)
 		            let t6Alias: S2420_T6? = t6
 		            #sourceLocation()
-		            func __safeDI_link0() -> S2420_Link0 {
-		                #sourceLocation(file: "S2420_Link0.swift", line: 8)
-		                let t6AliasAlias: S2420_T6? = t6Alias
-		                #sourceLocation()
-		                func __safeDI_link1() -> S2420_Link1 {
-		                    #sourceLocation(file: "S2420_Link1.swift", line: 8)
-		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
-		                    #sourceLocation()
-		                    let link2 = if let safeDIBuilder = safeDIOverrides.t2.link0.link1.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
-		                    return if let safeDIBuilder = safeDIOverrides.t2.link0.link1.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
-		                }
-		                let link1: S2420_Link1 = __safeDI_link1()
-		                return if let safeDIBuilder = safeDIOverrides.t2.link0.safeDIBuilder { safeDIBuilder(t6AliasAlias, link1) } else { S2420_Link0(t6AliasAlias: t6AliasAlias, link1: link1) }
-		            }
-		            let link0: S2420_Link0 = __safeDI_link0()
-		            return if let safeDIBuilder = safeDIOverrides.t2.safeDIBuilder { safeDIBuilder(t1Builder, t6Alias, link0) } else { S2420_T2(t1Builder: t1Builder, t6Alias: t6Alias, link0: link0) }
+		            let link0: S2420_Link0 = __safeDI_link0(t6Alias: t6Alias, __safeDI_S2420_Link0_configuration: __safeDI_S2420_T2_configuration.link0)
+		            return if let safeDIBuilder = __safeDI_S2420_T2_configuration.safeDIBuilder { safeDIBuilder(t1Builder, t6Alias, link0) } else { S2420_T2(t1Builder: t1Builder, t6Alias: t6Alias, link0: link0) }
 		        }
-		        let t2: S2420_T2 = __safeDI_t2()
+		        let t2: S2420_T2 = __safeDI_t2(__safeDI_S2420_T2_configuration: safeDIOverrides.t2)
 		        let anyT1 = if let safeDIBuilder = safeDIOverrides.anyT1 { safeDIBuilder(service) } else { S2420_AnyT1(S2420_T1.customMock(service: service)) }
-		        func __safeDI_t1Builder() -> S2420_T1 {
-		            if let safeDIBuilder = safeDIOverrides.t1Builder { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
+		        let t1Builder = Instantiator<S2420_T1> {
+		            __safeDI_t1Builder(__safeDI_S2420_T1_mockConfiguration: safeDIOverrides.t1Builder)
 		        }
-		        let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
 		        return S2420_T0(t6: t6, t2: t2, anyT1: anyT1, t1Builder: t1Builder, service: service)
 		    }
 		}

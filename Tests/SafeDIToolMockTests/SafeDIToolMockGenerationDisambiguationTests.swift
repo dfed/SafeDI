@@ -6081,22 +6081,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        let sessionBuilder = Instantiator<Session> {
 		            __safeDI_sessionBuilder(editor: $0)
 		        }
-		        func __safeDI_editor() -> Editor {
-		            let service = if let safeDIBuilder = safeDIOverrides.editor.service { safeDIBuilder() } else { Service() }
+		        func __safeDI_editor(__safeDI_Editor_configuration: Editor.SafeDIMockConfiguration) -> Editor {
+		            let service = if let safeDIBuilder = __safeDI_Editor_configuration.service { safeDIBuilder() } else { Service() }
 		            #sourceLocation(file: "\(output.fixtures["Editor.swift"])", line: 5)
 		            let sessionBuilderAlias: Instantiator<Session> = sessionBuilder
 		            #sourceLocation()
-		            return if let safeDIBuilder = safeDIOverrides.editor.safeDIBuilder { safeDIBuilder(service, sessionBuilderAlias, renamedService, sessionBuilder) } else { Editor(service: service, sessionBuilderAlias: sessionBuilderAlias, renamedService: renamedService, sessionBuilder: sessionBuilder) }
+		            return if let safeDIBuilder = __safeDI_Editor_configuration.safeDIBuilder { safeDIBuilder(service, sessionBuilderAlias, renamedService, sessionBuilder) } else { Editor(service: service, sessionBuilderAlias: sessionBuilderAlias, renamedService: renamedService, sessionBuilder: sessionBuilder) }
 		        }
-		        let editor: Editor = __safeDI_editor()
-		        func __safeDI_profileViewBuilder() -> ProfileView {
-		            let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
+		        let editor: Editor? = __safeDI_editor(__safeDI_Editor_configuration: safeDIOverrides.editor)
+		        func __safeDI_profileViewBuilder(__safeDI_ProfileView_configuration: ProfileView.SafeDIMockConfiguration) -> ProfileView {
+		            let profileViewBuilder = Instantiator<ProfileView> {
+		                __safeDI_profileViewBuilder(__safeDI_ProfileView_configuration: __safeDI_ProfileView_configuration)
+		            }
 		            #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
 		            let renamedService: ServiceProtocol? = service
 		            #sourceLocation()
-		            return if let safeDIBuilder = safeDIOverrides.profileViewBuilder.safeDIBuilder { safeDIBuilder(profileViewBuilder, renamedService, editor, sessionBuilder) } else { ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder) }
+		            return if let safeDIBuilder = __safeDI_ProfileView_configuration.safeDIBuilder { safeDIBuilder(profileViewBuilder, renamedService, editor, sessionBuilder) } else { ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder) }
 		        }
-		        let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
+		        let profileViewBuilder = Instantiator<ProfileView> {
+		            __safeDI_profileViewBuilder(__safeDI_ProfileView_configuration: safeDIOverrides.profileViewBuilder)
+		        }
 		        #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
 		        let renamedService_ServiceProtocol: ServiceProtocol? = service
 		        #sourceLocation()
