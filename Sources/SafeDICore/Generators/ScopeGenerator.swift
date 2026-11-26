@@ -75,7 +75,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isBuiltByFill: Bool = false,
 		fillReturnsWrapperBuilder: Bool = false,
 		innerScopesCalledWithForwardedValue: [String] = [],
-		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], caseHoles: [SeamSignature.Hole], emitsCode: Bool, callerReads: FillCallerReads, labelsHandedAsMemo: Set<String>, plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]], memoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]], carrierUse: SeamCarrierValues.Use?)? = nil,
+		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], caseHoles: [SeamSignature.Hole], emitsCode: Bool, callerReads: FillCallerReads, labelsHandedAsMemo: Set<String>, plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]], memoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]], carrierUse: SeamCarrierValues.Use?, judgementTree: ScopeGenerator?)? = nil,
 		constructsWithHandWrittenMock: Bool = false,
 		cycleParameters: [CycleParameter] = [],
 		builtCycleParameters: [CycleParameter] = [],
@@ -118,6 +118,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFields.fillMemoOriginsByLabel = fill?.memoOriginsByLabel ?? [:]
 		seamAndFillFields.fillFields = fill?.fields ?? []
 		seamAndFillFields.fillCarrierUse = fill?.carrierUse
+		seamAndFillFields.fillJudgementTree = fill?.judgementTree
 		seamAndFillFields.fillCaseHoles = fill?.caseHoles ?? []
 		fillEmitsCode = fill?.emitsCode ?? true
 		seamAndFillFields.fillCallerReads = fill?.callerReads
@@ -1668,6 +1669,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"fillFieldSelection": .copied,
 			"siteCarrierUse": .recomputed,
 			"fillCarrierUse": .copied,
+			"fillJudgementTree": .copied,
 			"fillsStoodFor": .copied,
 			"buildsFillOfEveryPlace": .copied,
 		]
@@ -1696,6 +1698,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]] = [:],
 		memoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]] = [:],
 		carrierUse: SeamCarrierValues.Use? = nil,
+		judgementTree: ScopeGenerator? = nil,
 		child: ScopeGenerator,
 		cycleClosingRedeclaredLabels: inout CycleClosingRedeclaredLabels,
 	) {
@@ -1721,7 +1724,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			isPropertyCycle: false,
 			builtInlineSeamComment: nil,
 			fillReturnsWrapperBuilder: returnsWrapperBuilder,
-			fill: (hole, key, functionName, boundLabels, fields, caseHoles, emitsCode, callerReads, labelsHandedAsMemo, plainMemoRoutesOfSendableWrapperReads, memoOriginsByLabel, carrierUse),
+			fill: (hole, key, functionName, boundLabels, fields, caseHoles, emitsCode, callerReads, labelsHandedAsMemo, plainMemoRoutesOfSendableWrapperReads, memoOriginsByLabel, carrierUse, judgementTree),
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
 	}
@@ -4884,6 +4887,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var fillFieldSelection: FillFieldSelection?
 		var siteCarrierUse: SeamCarrierValues.Use?
 		var fillCarrierUse: SeamCarrierValues.Use?
+		var fillJudgementTree: ScopeGenerator?
 		var fillsStoodFor: [FillStoodFor] = []
 		var buildsFillOfEveryPlace = false
 
@@ -4928,6 +4932,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				|| fillFieldSelection != nil
 				|| siteCarrierUse != nil
 				|| fillCarrierUse != nil
+				|| fillJudgementTree != nil
 		}
 	}
 
@@ -5206,6 +5211,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// How many fills the call built before this place, in the order of the call's arguments, which the judgement of a
 		/// call's places follows.
 		let builtFillCountBefore: Int
+	}
+
+	/// For a fill that generates its case's code and whose tree closes a cycle on an entry of the path of the seam whose
+	/// hole it fills (`closesCycleOnFillPath`), the fill built again beneath the same path with no scope closing on an
+	/// entry of it, or `nil` for every other fill: what the judgement of the case's routes walks, since a route whose
+	/// path lacks the entry builds the tree beneath the scope that closes on it here. The code is generated from the
+	/// fill's own tree. Only a graph validation rejects has one (a fill that closes on its seam's path is an error), so
+	/// no accepted graph pays for it. A scope inside it closes on what the tree itself builds, so it is finite.
+	nonisolated var fillJudgementTree: ScopeGenerator? {
+		seamAndFillFieldsStorage?.fields.fillJudgementTree
 	}
 
 	/// The places of this scope's seam call whose fills other places' stand for, in the order of the call's arguments.

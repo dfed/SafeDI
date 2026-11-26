@@ -247,6 +247,69 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillAgainToBeJudged_whenTreeOfFillThatGeneratesCodeClosesCycleOnSeamsPath() async {
+		// `LiveApi` builds `shellBuilder` again beneath `Home`'s own, so the tree of the one fill stops at it. The call builds
+		// the fill once more with that declaration closing no cycle (`ScopeGenerator.fillJudgementTree`).
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+						seamFixtureType(named: "Shell", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+					],
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
+		#expect(fills.last.map { [$0.builtFillCount, $0.fillJudgementTreeCount] } == [1, 1])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoFillAgain_whenNoFillsTreeClosesCycleOnSeamsPath() async {
+		// `LiveApi` builds a `Row`, which no declaration of `Home`'s path to the place is.
+		let (fills, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "Row", declarations: []),
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+						seamFixtureType(named: "Shell", declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+					],
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let rowBuilder: Instantiator<Row>"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(error == nil)
+		#expect(fills.last.map { [$0.builtFillCount, $0.fillJudgementTreeCount] } == [1, 0])
+	}
+
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsFillOfItsOwnForPlace_whenItHandsItsFillOptionalOfValueOtherPlacesHand(buildsFillOfEveryPlace: Bool) async {

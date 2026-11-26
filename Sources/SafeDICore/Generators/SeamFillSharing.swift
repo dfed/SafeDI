@@ -36,6 +36,8 @@ public enum SeamFillSharing {
 		public let builtFillCount: Int
 		/// The places another place's fill stands for.
 		public let placeStoodForCount: Int
+		/// The fills the call built a second time, only to be judged (`ScopeGenerator.fillJudgementTree`).
+		public let fillJudgementTreeCount: Int
 	}
 
 	/// Called with what each call that fills a place built, when set: by the tests, never by the tool.

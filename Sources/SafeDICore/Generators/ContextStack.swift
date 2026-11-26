@@ -110,18 +110,29 @@ struct ContextStack: Sendable {
 		}
 	}
 
+	/// This stack, with no scope closing a cycle on an entry it holds now: a scope built beneath it that repeats one of
+	/// them is built as it is where nothing above it builds that declaration, and closes only on what is pushed from here
+	/// on. Every other read of the stack answers alike.
+	var closingNoCycleOnItsEntries: ContextStack {
+		var stack = self
+		stack.outermostEntryCountClosingNoCycle = count
+		return stack
+	}
+
 	/// The entry a scope that builds the property `propertyID` names for the concrete type `concreteTypeID` names repeats,
 	/// when it closes a cycle, with its index: the innermost entry of the same property as cycle validation sees it, built
 	/// for the same concrete type, and, where that entry is a lazily instantiated declaration's instance, the declaration,
-	/// which the same scope put on the stack just outside it.
+	/// which the same scope put on the stack just outside it. Never one of the outermost entries no scope closes on
+	/// (`closingNoCycleOnItsEntries`).
 	func entryClosedOn(byPropertyID propertyID: PropertyID, concreteTypeID: TypeID, interner: ConstructionInterner) -> (entry: Entry, index: Int)? {
 		let validatedPropertyClass = interner.classID(of: interner.asValidatedForDependencyCycles(propertyID))
 		let concreteTypeClass = interner.classID(of: concreteTypeID)
 		var node = innermost
-		while let current = node, current.entry.validatedPropertyClass != validatedPropertyClass || current.entry.concreteTypeClass != concreteTypeClass {
+		while let current = node, current.count > outermostEntryCountClosingNoCycle, current.entry.validatedPropertyClass != validatedPropertyClass || current.entry.concreteTypeClass != concreteTypeClass {
 			node = current.outer
 		}
-		guard let found = node else { return nil }
+		// An entry and its instance are pushed together, so the declaration outside a found instance closes cycles too.
+		guard let found = node, found.count > outermostEntryCountClosingNoCycle else { return nil }
 		guard found.entry.isInstanceOfEntryOutside, let outer = found.outer else {
 			return (found.entry, found.count - 1)
 		}
@@ -179,4 +190,6 @@ struct ContextStack: Sendable {
 	}
 
 	private var innermost: Node?
+	/// How many of the outermost entries no scope closes a cycle on (`closingNoCycleOnItsEntries`): none, nearly always.
+	private var outermostEntryCountClosingNoCycle = 0
 }
