@@ -5223,17 +5223,6 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		"""
 	}
 
-	/// The expression a mock of `Root` reads the override at `path` beneath `safeDIOverrides.aBuilder` with: the override
-	/// itself, or, where `wrapper` is `Sendable`, a member of the local a `@Sendable` builder function reads `aBuilder`'s
-	/// whole configuration from, bound before the function.
-	private static func mockOverride(_ path: String, wrapper: CycleClosingWrapper) -> String {
-		if wrapper.isSendable {
-			"__safeDI_aBuilder__overrides.\(path)"
-		} else {
-			"safeDIOverrides.aBuilder.\(path)"
-		}
-	}
-
 	/// `Root`, which generates its mock, declares `rootDeclares` and instantiates `aBuilder`, which builds `A`; `A` declares
 	/// `aReceives`, a receive of `renamed`, and instantiates `midBuilder`; `Mid` declares `midDeclares` and the `aBuilder`
 	/// that builds `A` again; `X` declares `xDeclares`. Each type is `@unchecked Sendable` where `wrapper` is `Sendable`.
@@ -5333,19 +5322,21 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		\(wrapper.isSendable ? "        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder\n" : "")        \(sendable)func __safeDI_aBuilder(renamed: \(parameterType)) -> \(wrapper.isErased ? "AnyA" : "A") {
-		            \(sendable)func __safeDI_midBuilder() -> Mid {
-		                let renamed = if let safeDIBuilder = \(mockOverride("midBuilder.renamed", wrapper: wrapper)) { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                let aBuilder = \(wrapper.generatedType) {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return if let safeDIBuilder = \(mockOverride("midBuilder.safeDIBuilder", wrapper: wrapper)) { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        \(sendable)func __safeDI_aBuilder(renamed: \(parameterType), __safeDI_A_configuration: A.SafeDIMockConfiguration) -> \(wrapper.isErased ? "AnyA" : "A") {
+		            let midBuilder = \(wrapper.hopWrapper)<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = \(mockOverride("safeDIBuilder", wrapper: wrapper)) { \(aConstruction("safeDIBuilder(renamed, midBuilder)")) } else { \(aConstruction("A(renamed: renamed, midBuilder: midBuilder)")) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { \(aConstruction("safeDIBuilder(renamed, midBuilder)")) } else { \(aConstruction("A(renamed: renamed, midBuilder: midBuilder)")) }
 		        }
-		        let aBuilder = \(wrapper.generatedType) {
-		            __safeDI_aBuilder(renamed: renamed)
+		        \(sendable)func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let renamed = if let safeDIBuilder = __safeDI_Mid_configuration.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            let aBuilder = \(wrapper.generatedType) {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        }
+		\(wrapper.isSendable ? "        let __safeDI_aBuilder____safeDI_A_configuration: A.SafeDIMockConfiguration = safeDIOverrides.aBuilder\n" : "")        let aBuilder = \(wrapper.generatedType) {
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: \(wrapper.isSendable ? "__safeDI_aBuilder____safeDI_A_configuration" : "safeDIOverrides.aBuilder"))
 		        }
 		        return Root(renamed: renamed, aBuilder: aBuilder)
 		    }
@@ -5470,22 +5461,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed: \(type)? = safeDIOverrides.renamed
-		        func __safeDI_aBuilder(renamed: \(type)?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x\(xAnnotation) = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { \(spelling.constructedType)(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: \(type)? = x
-		                #sourceLocation()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+		        func __safeDI_aBuilder(renamed: \(type)?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let x\(xAnnotation) = if let safeDIBuilder = __safeDI_Mid_configuration.x { safeDIBuilder(nil) } else { \(spelling.constructedType)(renamed: nil) }
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: \(type)? = x
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(aBuilder: aBuilder)
 		    }
@@ -5551,25 +5544,28 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// `renamed` to an override, which `A`'s builder function is passed where it is declared.
 	private static func expectedAliasOfParameterLabelMock(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
 		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
-		let override = { (path: String) in mockOverride(path, wrapper: wrapper) }
 		let midConstruction = switch aliasPosition {
 		case .besideCycleClosingScope:
 			"""
-			                let aBuilder = \(wrapper.generatedType) {
-			                    __safeDI_aBuilder(renamed: renamed)
-			                }
-			                return if let safeDIBuilder = \(override("midBuilder.safeDIBuilder")) { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+			            let aBuilder = \(wrapper.generatedType) {
+			                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+			        }
 			"""
 		case .aboveCycleClosingScopesType:
 			"""
-			                \(sendable)func __safeDI_innerBuilder() -> Inner {
-			                    let aBuilder = \(wrapper.generatedType) {
-			                        __safeDI_aBuilder(renamed: renamed)
-			                    }
-			                    return if let safeDIBuilder = \(override("midBuilder.innerBuilder.safeDIBuilder")) { safeDIBuilder(aBuilder) } else { Inner(aBuilder: aBuilder) }
-			                }
-			                let innerBuilder = \(wrapper.hopWrapper)<Inner>(__safeDI_innerBuilder)
-			                return if let safeDIBuilder = \(override("midBuilder.safeDIBuilder")) { safeDIBuilder(x, renamed, innerBuilder) } else { Mid(x: x, renamed: renamed, innerBuilder: innerBuilder) }
+			            let innerBuilder = \(wrapper.hopWrapper)<Inner> {
+			                __safeDI_innerBuilder(renamed: renamed, __safeDI_Inner_configuration: __safeDI_Mid_configuration.innerBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			            }
+			            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(x, renamed, innerBuilder) } else { Mid(x: x, renamed: renamed, innerBuilder: innerBuilder) }
+			        }
+			        \(sendable)func __safeDI_innerBuilder(renamed: X?, __safeDI_Inner_configuration: Inner.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Inner {
+			            let aBuilder = \(wrapper.generatedType) {
+			                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_Inner_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { Inner(aBuilder: aBuilder) }
+			        }
 			"""
 		}
 		let aConstruction = { (construction: String) in wrapper.isErased ? "AnyA(\(construction))" : construction }
@@ -5608,19 +5604,20 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed: X? = safeDIOverrides.renamed
-		\(wrapper.isSendable ? "        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder\n" : "")        \(sendable)func __safeDI_aBuilder(renamed: X?) -> \(wrapper.isErased ? "AnyA" : "A") {
-		            \(sendable)func __safeDI_midBuilder() -> Mid {
-		                let x = if let safeDIBuilder = \(override("midBuilder.x")) { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
-		\(midConstruction)
+		        \(sendable)func __safeDI_aBuilder(renamed: X?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> \(wrapper.isErased ? "AnyA" : "A") {
+		            let midBuilder = \(wrapper.hopWrapper)<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = \(override("safeDIBuilder")) { \(aConstruction("safeDIBuilder(renamed, midBuilder)")) } else { \(aConstruction("A(renamed: renamed, midBuilder: midBuilder)")) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { \(aConstruction("safeDIBuilder(renamed, midBuilder)")) } else { \(aConstruction("A(renamed: renamed, midBuilder: midBuilder)")) }
 		        }
-		        let aBuilder = \(wrapper.generatedType) {
-		            __safeDI_aBuilder(renamed: renamed)
+		        \(sendable)func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let x = if let safeDIBuilder = __safeDI_Mid_configuration.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: X? = x
+		            #sourceLocation()
+		\(midConstruction)
+		\(wrapper.isSendable ? "        let __safeDI_aBuilder____safeDI_A_configuration: A.SafeDIMockConfiguration = safeDIOverrides.aBuilder\n" : "")        let aBuilder = \(wrapper.generatedType) {
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: \(wrapper.isSendable ? "__safeDI_aBuilder____safeDI_A_configuration" : "safeDIOverrides.aBuilder"))
 		        }
 		        return Root(aBuilder: aBuilder)
 		    }

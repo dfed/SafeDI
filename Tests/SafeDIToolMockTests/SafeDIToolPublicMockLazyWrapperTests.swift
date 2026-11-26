@@ -342,13 +342,15 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> MidInternal {
-			        func __safeDI_session() -> Session {
-			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        func __safeDI_session(__safeDI_Session_configuration: (() -> Session)?) -> Session {
+			            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session.instantiate() }
 			        }
-			        let session = LazilyInstantiated<Session>(__safeDI_session)
-			        _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self\(pluginComment)
+			        let session = LazilyInstantiated<Session> {
+			            __safeDI_session(__safeDI_Session_configuration: safeDIOverrides.session)
+			        }
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
+			            _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self\(pluginComment)
+			            return if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
