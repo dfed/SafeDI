@@ -304,6 +304,66 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		#expect(counts == [8, 12])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsOneBodyPerTypeOnCycle_whenEachMemberDeclaresLabelHubReceivesOnlyIfAvailable() async throws {
+		// A hub opens n members, each of which declares its own label and opens the hub again, and the hub's leaf receives
+		// every member's label only if available. A path around the cycle can declare any subset of the labels, so a body
+		// per set of answers would be 2^n hubs and n·2^(n-1) members. Today's tree writes one function per type, which takes
+		// each label as an optional parameter, so the plan builds one body per type: n + 1.
+		var counts = [Int]()
+		for memberCount in [8, 16] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+			}) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.hubOpeningMembers(count: memberCount),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// This test counts the bodies of the plan; the code is today's.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			for await plan in stream {
+				#expect(plan.todaysBodiesPlanLacks.isEmpty)
+				counts.append(plan.bodiesOfPlan.count)
+			}
+		}
+		#expect(counts == [9, 17])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootPerPath_whenBodiesOfOneDeclarationPassTheirBound() async throws {
+		// The hub's members declare their labels lazily, which a receive only if available reads through the wrapper's
+		// instance, so no optional parameter takes them and the hub's bodies double with each member: 8 at three members,
+		// which the plan builds, and 16 at four, past the bound, where the root keeps today's tree and builds no plan.
+		var hubBodyCounts = [Int?]()
+		for memberCount in [3, 4] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+			try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+				continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+			}) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.hubOpeningMembers(count: memberCount, declaringLabelsLazily: true),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// This test counts the bodies of the plan; the code is today's.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			var hubBodyCount: Int?
+			for await plan in stream {
+				hubBodyCount = plan.bodiesOfPlan.count { $0.hasPrefix("Hub ") }
+			}
+			hubBodyCounts.append(hubBodyCount)
+		}
+		#expect(hubBodyCounts == [8, nil])
+	}
+
 	// MARK: Private
 
 	/// How a screen of `screensOpeningEachOther(roles:targets:)` takes the root's `Context`.
@@ -337,6 +397,22 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 			}
 			declarations += targets[screen].map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }
 			files.append(seamFixtureType(named: "Screen\(screen)", isFinalClass: true, declarations: declarations))
+		}
+		return files
+	}
+
+	/// A root that opens a hub, which opens `count` members and builds a leaf that receives each member's label only if
+	/// available; each member declares its own label, lazily where `declaringLabelsLazily`, and opens the hub again.
+	private static func hubOpeningMembers(count: Int, declaringLabelsLazily: Bool = false) -> [String] {
+		var files = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let hubBuilder: Instantiator<Hub>"]),
+			seamFixtureType(named: "Hub", isFinalClass: true, declarations: (0..<count).map { "@Instantiated let member\($0)Builder: Instantiator<Member\($0)>" } + ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: (0..<count).map { "@Received(onlyIfAvailable: true) let label\($0): Label\($0)?" }),
+		]
+		for member in 0..<count {
+			let label = declaringLabelsLazily ? "LazilyInstantiated<Label\(member)>" : "Label\(member)"
+			files.append(seamFixtureType(named: "Member\(member)", isFinalClass: true, declarations: ["@Instantiated let label\(member): \(label)", "@Instantiated let hubBuilder: Instantiator<Hub>"]))
+			files.append(seamFixtureType(named: "Label\(member)", isFinalClass: true, declarations: []))
 		}
 		return files
 	}
