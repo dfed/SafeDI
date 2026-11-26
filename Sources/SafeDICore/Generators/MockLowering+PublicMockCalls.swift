@@ -242,17 +242,11 @@ extension MockLowering.Walk {
 		return names
 	}
 
-	/// Whether `record` is a shared fill body `mock()` may declare once (`declareFillBodies(of:isInsideSendableFunction:)`).
+	/// Whether `record` is a shared fill body `mock()` may declare once (`declareFillBodies(of:isInsideSendableFunction:)`):
+	/// only a shared body's record (`ScopeGenerator.sharedFillBodyFunction`) is declared so, never a fill or a dispatcher.
 	private static func isDeclaredOnce(_ record: RootFunctionRecord, insideSendableFunction: Bool) -> Bool {
-		guard record.name.hasPrefix(ReservedName.fillBodyFunctionNamePrefix), record.calls.isEmpty, record.isSendable || !insideSendableFunction else { return false }
-		switch record.declaration {
-		case let .code(code, _):
-			return !code.holdsRootFunction
-		case let .fillBody(function, _):
-			return !function.pathCode.holdsRootFunction
-		case .text:
-			return false
-		}
+		guard case let .fillBody(function, _) = record.declaration, record.calls.isEmpty, record.isSendable || !insideSendableFunction else { return false }
+		return !function.pathCode.holdsRootFunction
 	}
 
 	/// The node of `generator`, `publicMockCall` of another module's public mock building `built`, whose statements are
