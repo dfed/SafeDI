@@ -278,6 +278,38 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenAnotherRootOfModuleHoldsSendableWrapper() async throws {
+		// The module names a `SendableInstantiator` beside the screens' `Instantiator`s, which once kept every root of it on
+		// today's tree; `Root`'s own tree holds no `Sendable` wrapper, so it builds nothing in a `@Sendable` function.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable(isRoot: true) public final class Worker: Instantiable {
+		    @Instantiated let jobBuilder: SendableInstantiator<Job>
+		    public init(jobBuilder: SendableInstantiator<Job>) { self.jobBuilder = jobBuilder }
+		}
+
+		@Instantiable public final class Job: Instantiable, Sendable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsSendableWrapper() async throws {
 		// A screen holds a `SendableInstantiator`.
 		let choices = try await choicesGeneratingTodaysCode(of: """
@@ -296,6 +328,54 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		    public init(s0Builder: SendableInstantiator<S0>) { self.s0Builder = s0Builder }
 		}
 		""")
+
+		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderInBodyOfCycleCapturesInstantiatorDeclaredBesideIt() async {
+		// `S1`, on the cycle, declares `xBuilder` outside the `@Sendable` builder function of `wBuilder`, which builds `W`,
+		// which receives it.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let s1Builder: Instantiator<S1>
+				    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    @Instantiated let xBuilder: Instantiator<X>
+				    @Instantiated let wBuilder: SendableInstantiator<W>
+				    public init(s0Builder: Instantiator<S0>, xBuilder: Instantiator<X>, wBuilder: SendableInstantiator<W>) { self.s0Builder = s0Builder; self.xBuilder = xBuilder; self.wBuilder = wBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class W: Instantiable {
+				    @Received let xBuilder: Instantiator<X>
+				    public init(xBuilder: Instantiator<X>) { self.xBuilder = xBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class X: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["W.swift"]):2:5: error: @Received property `xBuilder: Instantiator<X>` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1 -> W. SafeDI builds `wBuilder: SendableInstantiator<W>` on `S1` in a `@Sendable` function, which cannot capture `xBuilder: Instantiator<X>` on `S1`, because `Instantiator<X>` is not `Sendable`. Declare `xBuilder` on `S1`, and this property, as `SendableInstantiator<X>` to fix. `SendableInstantiator<X>` builds `X` in a `@Sendable` function, so what the tree of `X` receives from outside that function must be `Sendable` too.
+				\(fixtures["S1.swift"]):3:5: note: `xBuilder: Instantiator<X>` is declared here
+				"""
+			},
+		)
 
 		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
 	}
@@ -1172,6 +1252,44 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	private static func withoutSourceLocations(_ file: String) -> String {
 		file.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains("#sourceLocation(file:") }.joined(separator: "\n")
+	}
+
+	/// Why each root of `swiftFileContent` that reaches a cycle is kept on today's tree, `nil` for one laid out from its
+	/// plan, where every root's tree per path is abandoned at once. Records an issue unless that run, and a run with every
+	/// root kept on today's tree, each report `diagnostics`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func choicesThrowingTodaysError(
+		of swiftFileContent: [String],
+		diagnostics: @escaping (_ fixtures: FixturePaths) -> String,
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async -> [String: RootTreeChoiceObservation.PerPathReason?] {
+		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
+		await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
+			await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+				continuation.yield((root, perPathReason))
+			}) {
+				await assertThrowsError(diagnostics: diagnostics, sourceLocation: sourceLocation) {
+					try await executeSafeDIToolTest(
+						swiftFileContent: swiftFileContent,
+						buildSwiftOutputDirectory: true,
+						filesToDelete: &filesToDelete,
+					)
+				}
+			}
+		}
+		continuation.finish()
+		var choices = [String: RootTreeChoiceObservation.PerPathReason?]()
+		for await (root, perPathReason) in stream {
+			choices[root] = perPathReason
+		}
+		await assertThrowsError(diagnostics: diagnostics, sourceLocation: sourceLocation) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: swiftFileContent,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		return choices
 	}
 
 	/// Why each root of `swiftFileContent` that reaches a cycle is kept on today's tree, `nil` for one laid out from its

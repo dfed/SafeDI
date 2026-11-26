@@ -32,9 +32,6 @@ public enum PlanCodeObservation {
 public enum RootTreeChoiceObservation {
 	/// Why a root that reaches a cycle has its tree built per path.
 	public enum PerPathReason: String, Sendable {
-		/// The module's types name both a wrapper that is not `Sendable` and a `Sendable` one, so the `@Sendable` capture
-		/// walk reads its trees.
-		case moduleNamesNonSendableWrapperAndSendableBuilder
 		/// A type of the root's tree holds a `LazilyInstantiated` or a `SendableLazilyInstantiated`.
 		case holdsLazilyInstantiated
 		/// A type of the root's tree receives, renames or instantiates a value only if available, or holds an optional one.
@@ -86,6 +83,15 @@ public enum RootTreeChoiceObservation {
 /// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks
 /// `@Sendable` (`VariantBodies.isSendable(_:)`) with which the type key lays out as `@Sendable` (`WrittenVariantPlan`'s
 /// family), each body at its position in the plan, the root's own first. Test only, until one of the two is removed.
+/// Lets a test see, for each production root whose code is laid out from its per-type plan, whether the `@Sendable`
+/// capture walk of the root's tree per path finds a capture (`ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`).
+/// The walk reads no root laid out from its plan, so it must find none. Test only.
+public enum PlanCaptureObservation {
+	/// Called once per such root, where today's tree is built too, with the root's type and whether today's walk finds a
+	/// capture.
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void)?
+}
+
 public enum PlanSendableObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void)?
 }

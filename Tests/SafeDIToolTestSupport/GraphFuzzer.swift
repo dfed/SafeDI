@@ -3037,7 +3037,7 @@ enum GraphFuzzerGenerator {
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
-			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations, extensionSource: extensionSource)
+			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -8406,21 +8406,9 @@ enum GraphFuzzerGenerator {
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
-		/// Whether any declaration, or the extension-based type, names a `Sendable` wrapper.
-		private static func namesSendableWrapper(_ declarations: [TypeDeclaration], extensionSource: String?) -> Bool {
-			let sendableWrapperNames = ["SendableInstantiator<", "SendableErasedInstantiator<", "SendableLazilyInstantiated<"]
-			func names(_ text: String) -> Bool {
-				sendableWrapperNames.contains { text.contains($0) }
-			}
-			return declarations.contains { declaration in
-				declaration.properties.contains { names($0.type) } || declaration.additionalDeclarations.contains(where: names)
-			} || extensionSource.map(names) ?? false
-		}
-
 		// MARK: Screens laid out from the per-type plan
 
-		/// Adds, to one base corpus graph in twenty whose wrappers are all plain and that names no `Sendable` wrapper,
-		/// `PlanRoot`'s tree: screens that open one another, in the shape the tool lays out from a root's per-type plan rather than per path
+		/// Adds, to one base corpus graph in twenty, `PlanRoot`'s tree: screens that open one another, in the shape the tool lays out from a root's per-type plan rather than per path
 		/// (`DependencyTreeGenerator.shapeOutsidePerTypePlan(inTreeOf:cache:)` finds nothing in it), which the corpus's other
 		/// draws almost never are. `PlanRoot` instantiates one or two services by value and opens `PlanScreen0` through an
 		/// instantiator. Three to five screens open the next one around a ring through instantiators, and now and then
@@ -8435,14 +8423,10 @@ enum GraphFuzzerGenerator {
 		/// in two forms, tree outside the cycles built twice, or label a screen receives that another type of the root's tree
 		/// declares outside its cycle. `perTypePlanRandom` draws only for this pass, after every other, and only in the base
 		/// corpus, whose value oracle compares `PlanRoot()` with its mock.
-		private mutating func addingScreensLaidOutFromPerTypePlan(to declarations: [TypeDeclaration], extensionSource: String?) -> [TypeDeclaration] {
-			// A graph that names a `Sendable` wrapper and a plain one plans no root per type (`moduleNamesNonSendableWrapperAndSendableBuilder`),
-			// and one whose wrappers are all `Sendable` keeps every root holding one on today's tree (`holdsSendableWrapperOrFunction`).
-			// A graph whose wrappers are plain still names a `Sendable` one where another pass draws it, such as the mock vocabulary.
+		private mutating func addingScreensLaidOutFromPerTypePlan(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `PlanRoot`'s tree holds no `Sendable` wrapper of its own, whatever the graph's other types hold.
 			guard features.isEmpty,
-			      sendability == .nonSendable,
-			      perTypePlanRandom.percentChance(5),
-			      !Self.namesSendableWrapper(declarations, extensionSource: extensionSource)
+			      perTypePlanRandom.percentChance(5)
 			else { return declarations }
 			var declarations = declarations
 			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
