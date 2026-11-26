@@ -35,34 +35,38 @@
 /// Everything here is a 32-bit ID or a flag in a flat array: no file of the fold names a model of the source.
 struct TypeFactsOutcomes: Sendable {
 	init(_ input: Input) {
-		let variantCount = input.isInline.count
+		let variantCount = input.readOffsets.count - 1
 		let readOffsets = input.readOffsets
 		let callOffsets = input.callOffsets
 		let sourceOffsets = input.sourceOffsets
 		let callees = input.callees
 
-		// Which variants’ bodies are the root’s: the root’s, and an inline variant’s whose every caller’s body is the root’s.
-		var bodyIsRoot = input.isInline
-		bodyIsRoot[0] = true
+		// Which variants’ bodies are the root’s: the root’s, and the body of a variant every call of which builds it in the
+		// body of a caller whose body is the root’s.
+		var bodyIsRoot = [Bool](repeating: true, count: variantCount)
 		var outsideRoot = [Int32]()
-		for variant in 1..<variantCount where !input.isInline[variant] {
-			outsideRoot.append(Int32(variant))
+		for call in callees.indices where !input.buildsInCallersBody[call] && callees[call] != 0 && bodyIsRoot[Int(callees[call])] {
+			bodyIsRoot[Int(callees[call])] = false
+			outsideRoot.append(callees[call])
 		}
 		while let caller = outsideRoot.popLast() {
 			for callee in callees[Int(callOffsets[Int(caller)])..<Int(callOffsets[Int(caller) + 1])]
-				where input.isInline[Int(callee)] && bodyIsRoot[Int(callee)]
+				where callee != 0 && bodyIsRoot[Int(callee)]
 			{
 				bodyIsRoot[Int(callee)] = false
 				outsideRoot.append(callee)
 			}
 		}
 
-		/// Each call with its caller, callee and sources: first the root’s call of itself with the world’s sources.
-		func forEachCall(_ body: (_ caller: Int, _ callee: Int, _ sources: ArraySlice<AnswerSource>) -> Void) {
-			body(0, 0, input.rootSources[...])
+		/// Each call with its caller, callee and the run of its sources: first the root’s call of itself with the world’s
+		/// sources, which are never still being built.
+		let rootSourcesAreBeingBuilt = [Bool](repeating: false, count: input.rootSources.count)
+		func forEachCall(_ body: (_ caller: Int, _ callee: Int, _ sources: ArraySlice<AnswerSource>, _ isBeingBuilt: ArraySlice<Bool>) -> Void) {
+			body(0, 0, input.rootSources[...], rootSourcesAreBeingBuilt[...])
 			for caller in 0..<variantCount {
 				for call in Int(callOffsets[caller])..<Int(callOffsets[caller + 1]) {
-					body(caller, Int(callees[call]), input.sources[Int(sourceOffsets[call])..<Int(sourceOffsets[call + 1])])
+					let run = Int(sourceOffsets[call])..<Int(sourceOffsets[call + 1])
+					body(caller, Int(callees[call]), input.sources[run], input.sourceIsBeingBuilt[run])
 				}
 			}
 		}
@@ -71,7 +75,7 @@ struct TypeFactsOutcomes: Sendable {
 
 		// The callee cells that each caller cell feeds through a source that passes it through, as runs per caller cell.
 		var dependentOffsets = [Int32](repeating: 0, count: cells.count + 1)
-		forEachCall { caller, _, sources in
+		forEachCall { caller, _, sources, _ in
 			for source in sources where source.kind == .passedThrough {
 				dependentOffsets[Int(readOffsets[caller] + source.payload) + 1] += 1
 			}
@@ -81,14 +85,14 @@ struct TypeFactsOutcomes: Sendable {
 		}
 		var dependents = [Int32](repeating: 0, count: Int(dependentOffsets[cells.count]))
 		var nextDependent = dependentOffsets
-		forEachCall { caller, callee, sources in
-			for (read, source) in sources.enumerated() {
+		forEachCall { caller, callee, sources, isBeingBuilt in
+			for (read, (source, isBeingBuilt)) in zip(sources, isBeingBuilt).enumerated() {
 				let cell = Int(readOffsets[callee]) + read
 				switch source.kind {
 				case .none:
 					cells.join(.none, into: cell)
 				case .bound:
-					cells.join(bodyIsRoot[caller] ? .statement(source.payload) : .parameter, into: cell)
+					cells.join(bodyIsRoot[caller] && !isBeingBuilt ? .statement(source.payload) : .parameter, into: cell)
 				case .passedThrough:
 					let callerCell = Int(readOffsets[caller] + source.payload)
 					dependents[Int(nextDependent[callerCell])] = Int32(cell)
@@ -111,52 +115,67 @@ struct TypeFactsOutcomes: Sendable {
 
 	/// The columns of a world’s variants that the fold reads.
 	struct Input: Sendable {
-		/// The columns of `variants`, with each cell’s rule from `cellRule`, given the variant, the read’s position in the
-		/// variant’s reads, and the answer the variant was made with for it.
-		init(variants: TypeFactsVariants, cellRule: (_ variant: Int, _ position: Int, _ answer: Int32) -> CellRule) {
+		/// The columns of `variants`. `cellRule` gives the rule of each read of a variant, given the variant and the read’s
+		/// position in its reads; `isBeingBuilt` whether an answer a call binds is still being built where its callee
+		/// reads it; and `buildsInCallersBody` whether a variant’s call at an edge, given by its index among the variant’s
+		/// calls, builds the callee in line in the caller’s own body, with no function of its own and none opened around it,
+		/// which must be false wherever the layout gives the callee a function.
+		init(
+			variants: TypeFactsVariants,
+			cellRule: (_ variant: Int, _ position: Int) -> CellRule,
+			isBeingBuilt: (_ answer: Int32) -> Bool,
+			buildsInCallersBody: (_ variant: Int, _ edgeIndex: Int) -> Bool,
+		) {
 			readOffsets = [0]
 			cellRules = []
 			families = []
 			callOffsets = [0]
 			callees = []
+			self.buildsInCallersBody = []
 			sourceOffsets = [0]
 			sources = []
+			sourceIsBeingBuilt = []
 			for variant in 0..<variants.count {
-				for (position, answer) in variants.answers(of: variant).enumerated() {
-					cellRules.append(cellRule(variant, position, answer))
+				for position in 0..<variants.keys(of: variant).count {
+					cellRules.append(cellRule(variant, position))
 				}
 				readOffsets.append(Int32(cellRules.count))
 				families.append(variants.family(of: variant))
-				for (index, callee) in variants.callees(of: variant).enumerated() {
+				for (edgeIndex, callee) in variants.callees(of: variant).enumerated() {
 					callees.append(callee)
-					sources += variants.sources(ofCall: variants.callOffset(of: variant) + index)
+					self.buildsInCallersBody.append(buildsInCallersBody(variant, edgeIndex))
+					for source in variants.sources(ofCall: variants.callOffset(of: variant) + edgeIndex) {
+						sources.append(source)
+						sourceIsBeingBuilt.append(source.kind == .bound && isBeingBuilt(source.answer))
+					}
 					sourceOffsets.append(Int32(sources.count))
 				}
 				callOffsets.append(Int32(callees.count))
 			}
-			isInline = variants.isInline
 			rootSources = variants.rootSources
 		}
 
 		init(
 			readOffsets: [Int32],
 			cellRules: [CellRule],
-			isInline: [Bool],
 			families: [VariantFamily],
 			callOffsets: [Int32],
 			callees: [Int32],
+			buildsInCallersBody: [Bool],
 			sourceOffsets: [Int32],
 			sources: [AnswerSource],
+			sourceIsBeingBuilt: [Bool],
 			rootSources: [AnswerSource],
 		) {
 			self.readOffsets = readOffsets
 			self.cellRules = cellRules
-			self.isInline = isInline
 			self.families = families
 			self.callOffsets = callOffsets
 			self.callees = callees
+			self.buildsInCallersBody = buildsInCallersBody
 			self.sourceOffsets = sourceOffsets
 			self.sources = sources
+			self.sourceIsBeingBuilt = sourceIsBeingBuilt
 			self.rootSources = rootSources
 		}
 
@@ -164,21 +183,16 @@ struct TypeFactsOutcomes: Sendable {
 		enum CellRule: UInt8, Sendable {
 			/// The read carries a value, which a function captures when every call passes one statement of the root’s body.
 			case value
-			/// The read carries a value that is still being built where the variant reads it, which no function can capture,
-			/// so it is passed as an argument (rule 2).
-			case valueBeingBuilt
 			/// The read carries a value that is not `Sendable`, such as a mock’s configuration: a `@Sendable` function can
 			/// neither capture it nor be passed it, so the statement is read into a local before the function.
 			case valueOutsideSendableFunctions
 			/// The read keys the variant (its channel does not carry a value), so every call answers it alike.
 			case keysVariant
 
-			/// The rule of a read of `channel` whose answer is or is not still being built.
-			init(channel: ReadChannel, isBeingBuilt: Bool) {
+			/// The rule of a read of `channel`.
+			init(channel: ReadChannel) {
 				self = if !channel.carriesValue {
 					.keysVariant
-				} else if isBeingBuilt {
-					.valueBeingBuilt
 				} else if channel == .override {
 					.valueOutsideSendableFunctions
 				} else {
@@ -191,18 +205,21 @@ struct TypeFactsOutcomes: Sendable {
 		var readOffsets: [Int32]
 		/// Per (variant, read), how its outcome is decided.
 		var cellRules: [CellRule]
-		/// Per variant, whether its caller builds it in line in its own body rather than calling a function.
-		var isInline: [Bool]
 		/// Per variant, whether it is built inside a `@Sendable` function.
 		var families: [VariantFamily]
 		/// Per variant, where its call edges begin in `callees`, with one more entry for the end.
 		var callOffsets: [Int32]
 		/// Per call edge, the variant it calls.
 		var callees: [Int32]
+		/// Per call edge, whether it builds its callee in line in the caller’s own body.
+		var buildsInCallersBody: [Bool]
 		/// Per call edge, where its sources begin in `sources`, with one more entry for the end. A call edge has one
 		/// source per read of its callee, in the callee’s read order.
 		var sourceOffsets: [Int32]
 		var sources: [AnswerSource]
+		/// Per source, whether it binds an answer still being built where the callee reads it, which no function can
+		/// capture, so it is passed as an argument (rule 2).
+		var sourceIsBeingBuilt: [Bool]
 		/// Per read of the root, what the world binds for it: a seam root’s parameter, or none.
 		var rootSources: [AnswerSource]
 	}
@@ -274,15 +291,13 @@ struct TypeFactsOutcomes: Sendable {
 		private(set) var outcomes: [Outcome]
 		private(set) var joins = 0
 
-		/// Joins `offered` into the cell. A statement the cell’s variant cannot capture becomes a parameter, or a read
-		/// before the `@Sendable` function, as the cell’s rule says.
+		/// Joins `offered` into the cell. A statement a `@Sendable` function cannot capture is read before it, as the cell’s
+		/// rule says.
 		mutating func join(_ offered: Outcome, into cell: Int) {
 			joins += 1
 			let candidate: Outcome = switch offered.form {
 			case .captured, .readBeforeSendableFunction:
-				if rules[cell] == .valueBeingBuilt {
-					.parameter
-				} else if readsBeforeFunction[cell] {
+				if readsBeforeFunction[cell] {
 					Outcome(form: .readBeforeSendableFunction, declaration: offered.declaration)
 				} else {
 					Outcome(form: .captured, declaration: offered.declaration)

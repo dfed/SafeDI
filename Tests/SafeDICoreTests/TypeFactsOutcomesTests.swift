@@ -108,8 +108,8 @@ struct TypeFactsOutcomesTests {
 	func outcomes_passesValueBeingBuilt_whenEveryCallPassesOneStatementOfRootBody() {
 		let outcomes = World(
 			variants: [
-				.init(reads: [], calls: [.init(callee: 1, sources: [.bound(2), .bound(2)])]),
-				.init(reads: [.valueBeingBuilt, .value]),
+				.init(reads: [], calls: [.init(callee: 1, sources: [.bound(2), .bound(2)], isBeingBuilt: [true, false])]),
+				.init(reads: [.value, .value]),
 			],
 		).outcomes
 
@@ -177,13 +177,12 @@ struct TypeFactsOutcomesTests {
 	}
 
 	@Test
-	func cellRule_followsChannelAndWhetherAnswerIsBeingBuilt_whenMadeFromRead() {
+	func cellRule_followsChannel_whenMadeFromRead() {
 		let rules = [ReadChannel.value, .optional, .alias, .madeAgain, .override, .fill, .family, .carrier, .mock].map {
-			TypeFactsOutcomes.Input.CellRule(channel: $0, isBeingBuilt: false)
+			TypeFactsOutcomes.Input.CellRule(channel: $0)
 		}
 
 		#expect(rules == [.value, .value, .value, .value, .valueOutsideSendableFunctions, .value, .keysVariant, .keysVariant, .keysVariant])
-		#expect(TypeFactsOutcomes.Input.CellRule(channel: .value, isBeingBuilt: true) == .valueBeingBuilt)
 	}
 
 	@Test
@@ -209,7 +208,12 @@ struct TypeFactsOutcomesTests {
 			family: { _, family in family },
 			key: { _, answer in answer },
 		)
-		let outcomes = TypeFactsOutcomes(.init(variants: variants) { _, _, _ in .value })
+		let outcomes = TypeFactsOutcomes(.init(
+			variants: variants,
+			cellRule: { _, _ in .value },
+			isBeingBuilt: { _ in false },
+			buildsInCallersBody: { variant, _ in variant == 0 },
+		))
 
 		#expect(variants.count == 4)
 		#expect(Array(outcomes.outcomes(of: variants.callees(of: 1).first ?? -1)) == [.parameter])
@@ -263,8 +267,16 @@ struct TypeFactsOutcomesTests {
 /// A world's variants written out per variant, packed into the fold's columns.
 private struct World {
 	struct Call {
+		init(callee: Int32, sources: [AnswerSource], isBeingBuilt: [Bool]? = nil) {
+			self.callee = callee
+			self.sources = sources
+			self.isBeingBuilt = isBeingBuilt ?? sources.map { _ in false }
+		}
+
 		let callee: Int32
 		let sources: [AnswerSource]
+		/// Per source, whether the answer it binds is still being built.
+		let isBeingBuilt: [Bool]
 	}
 
 	struct Variant {
@@ -277,6 +289,7 @@ private struct World {
 		}
 
 		let reads: [TypeFactsOutcomes.Input.CellRule]
+		/// Whether every call of the variant builds it in line in its caller’s body.
 		let isInline: Bool
 		let family: VariantFamily
 		let calls: [Call]
@@ -287,15 +300,16 @@ private struct World {
 	let variants: [Variant]
 
 	var input: TypeFactsOutcomes.Input {
-		var input = TypeFactsOutcomes.Input(readOffsets: [0], cellRules: [], isInline: [], families: [], callOffsets: [0], callees: [], sourceOffsets: [0], sources: [], rootSources: variants[0].rootSources.map { $0.map(AnswerSource.bound) ?? .none })
+		var input = TypeFactsOutcomes.Input(readOffsets: [0], cellRules: [], families: [], callOffsets: [0], callees: [], buildsInCallersBody: [], sourceOffsets: [0], sources: [], sourceIsBeingBuilt: [], rootSources: variants[0].rootSources.map { $0.map { AnswerSource.bound($0, answer: 0) } ?? .none })
 		for variant in variants {
 			input.cellRules += variant.reads
 			input.readOffsets.append(Int32(input.cellRules.count))
-			input.isInline.append(variant.isInline)
 			input.families.append(variant.family)
 			for call in variant.calls {
 				input.callees.append(call.callee)
+				input.buildsInCallersBody.append(variants[Int(call.callee)].isInline)
 				input.sources += call.sources
+				input.sourceIsBeingBuilt += call.isBeingBuilt
 				input.sourceOffsets.append(Int32(input.sources.count))
 			}
 			input.callOffsets.append(Int32(input.callees.count))
@@ -311,5 +325,12 @@ private struct World {
 extension TypeFactsOutcomes.Outcome {
 	static func captured(_ declaration: Int32) -> Self {
 		.init(form: .captured, declaration: declaration)
+	}
+}
+
+extension AnswerSource {
+	/// A source that binds `declaration`, whose answer the fold does not read.
+	static func bound(_ declaration: Int32) -> Self {
+		.bound(declaration, answer: 0)
 	}
 }
