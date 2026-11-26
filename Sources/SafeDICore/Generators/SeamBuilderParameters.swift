@@ -2237,7 +2237,24 @@ extension DependencyTreeGenerator {
 		// The findings of each key, in the order the keys are first met, those that differ only in the places they name merged.
 		var keys = [String]()
 		var findingsByKey = [String: [DependencyTreeGeneratorError.FillFinding]]()
+		// Of the findings of a cycle a fill closes on the seam's path, one per case, closer, declaration closed on and depth beneath
+		// it (`FillFinding.closer`): the one whose route to the place comes first in source order, by where the declarations
+		// along it are, never by a name. The places of a case that reach the declaration at one depth differ only in the route
+		// the message names, and one fix clears them all; a place that reaches it at another depth keeps a finding of its own,
+		// whose remedy can differ. Kept apart until every fill is judged, so the route kept never follows the order they come in.
+		var leastFindingByCloser = [DependencyTreeGeneratorError.FillFinding.Closer: DependencyTreeGeneratorError.FillFinding]()
 		func record(_ finding: DependencyTreeGeneratorError.FillFinding) {
+			if let closer = finding.closer {
+				if let least = leastFindingByCloser[closer], least.precedesInSourceOrder(finding) {
+					return
+				} else {
+					leastFindingByCloser[closer] = finding
+				}
+			} else {
+				recordMerging(finding)
+			}
+		}
+		func recordMerging(_ finding: DependencyTreeGeneratorError.FillFinding) {
 			if let findings = findingsByKey[finding.key] {
 				findingsByKey[finding.key] = DependencyTreeGeneratorError.FillFinding.adding(finding, to: findings)
 			} else {
@@ -2344,6 +2361,9 @@ extension DependencyTreeGenerator {
 					(child, hiddenOf(child, stoodFor), generator, generator.publicMockCall != nil && child.fillHole != nil, childInheritedCalledCopyDeclarations, stoodFor?.hole)
 				})
 			}
+		}
+		for finding in leastFindingByCloser.values.sorted(by: { $0.precedesInSourceOrder($1) }) {
+			recordMerging(finding)
 		}
 		// Every finding of a key that differs from the others in more than the places it names: each is a fact of its own, with
 		// a remedy of its own, so none is picked.
@@ -2964,6 +2984,13 @@ extension DependencyTreeGenerator {
 						closedOnDeclaration: hole.declaredSitePath.dropLast(declarationsBeneath + 1).last,
 						closesOnOwnerOfHole: declarationsBeneath == 0,
 						seamModule: seamModule,
+					), closer: .init(
+						caseKey: ScopeGenerator.fillCaseKey(of: hole),
+						closingProperty: closer.property,
+						closingType: closer.closingType,
+						declarationLocation: closer.declarationLocation,
+						closedOnDeclaration: closer.closedOnDeclaration,
+						declarationsBeneath: declarationsBeneath,
 					)))
 				}
 			}
@@ -3308,6 +3335,20 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// Every place the finding holds for, which its message names, where the fills of several places give it (`merged(with:)`),
 		/// or `nil` for the one place it names of its own (`ownPlace`).
 		var mergedPlaces: [SeamSignature.Hole.UncarriedDeclaration.PresentedPlace]?
+		/// For a cycle a fill closes on the seam's path, what makes two such findings one fix: the case, the closer, the
+		/// declaration it closes on, and how many declarations of the path lie beneath that declaration. The places of one
+		/// case reach the declaration along routes of their own, which only name a path; of those at one depth only the
+		/// least route in source order is reported (`DependencyTreeGenerator.fillFindings`).
+		var closer: Closer?
+
+		struct Closer: Hashable {
+			let caseKey: String
+			let closingProperty: Property
+			let closingType: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
+			let closedOnDeclaration: ScopeGenerator.BuiltDeclaration
+			let declarationsBeneath: Int
+		}
 
 		/// The place the message names of its own: for a declaration a seam binds on its path to a call whose builder it
 		/// passes up, the place that call presents; for a declaration on the path to a call that builds a seam again, or a field
