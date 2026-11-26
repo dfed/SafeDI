@@ -73,8 +73,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleReceivesValueRootDeclares() async throws {
-		// A screen receives a value the root declares, which today's function captures.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesValueRootDeclares() async throws {
+		// A screen receives a value the root declares, which today's function captures, and so does the plan's.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let leaf: Leaf
@@ -96,7 +96,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .receivesLabelDeclaredOutsideItsCycle])
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
@@ -398,9 +398,85 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		#expect(choices == ["Root": .buildsTreeOutsideCyclesTwice])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenLayersOfScreensReceiveServiceRootDeclares() async throws {
+		// Three layers of two screens, each opening the next layer's and the last opening the first's, every screen
+		// receiving the root's service.
+		let choices = try await choicesGeneratingTodaysCode(of: Self.layersOfScreens(layers: 3, width: 2))
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleReceivesValueAnotherTypeDeclaresToo() async throws {
+		// The root and a feature above the cycle each declare `leaf`, which a screen receives from the feature.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let feature: Feature
+		    public init(leaf: Leaf, feature: Feature) { self.leaf = leaf; self.feature = feature }
+		}
+
+		@Instantiable public final class Feature: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .receivesLabelDeclaredOutsideItsCycle])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `layers` layers of `width` screens: each screen receives the root's service and opens every screen of the next
+	/// layer, and the last layer's open the first's.
+	private static func layersOfScreens(layers: Int, width: Int) -> String {
+		var declarations = ["""
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let home: S0_0
+		    public init(service: Service, home: S0_0) { self.service = service; self.home = home }
+		}
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+		"""]
+		for layer in 0..<layers {
+			for screen in 0..<width {
+				let next = (layer + 1) % layers
+				let builders = (0..<width).map { "s\(next)_\($0)Builder" }
+				let types = (0..<width).map { "S\(next)_\($0)" }
+				let properties = zip(builders, types).map { "    @Instantiated let \($0): Instantiator<\($1)>" }.joined(separator: "\n")
+				let parameters = zip(builders, types).map { "\($0): Instantiator<\($1)>" }.joined(separator: ", ")
+				let assignments = builders.map { "self.\($0) = \($0)" }.joined(separator: "; ")
+				declarations.append("""
+				@Instantiable public final class S\(layer)_\(screen): Instantiable {
+				    @Received let service: Service
+				\(properties)
+				    public init(service: Service, \(parameters)) { self.service = service; \(assignments) }
+				}
+				""")
+			}
+		}
+		return declarations.joined(separator: "\n\n")
+	}
 
 	private static func withoutSourceLocations(_ file: String) -> String {
 		file.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains("#sourceLocation(file:") }.joined(separator: "\n")

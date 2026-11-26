@@ -134,7 +134,10 @@ extension DependencyTreeGenerator {
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
 		// are named apart by their owner, their declared type simplified, their declared type, and their site path, a
-		// parameter keeping its label. A scope struct is named after the owner and the property, with the site path
+		// parameter keeping its label. A hole a call passes up starts from the label the seam that declares it gives it,
+		// its own root enum's builder for the hole's type and family, never the label a seam that passes it up in turn
+		// gave it, which that seam named apart from its own holes: around a ring of seams whose signatures settle
+		// together, such a label carried each seam's names into the next, and changed on every pass. A scope struct is named after the owner and the property, with the site path
 		// appended for a property built at several sites, and an underscore appended while it equals an earlier one.
 		struct Candidate {
 			let label: String
@@ -152,7 +155,7 @@ extension DependencyTreeGenerator {
 			)
 		} + passedUpHoles.map { passedUp in
 			Candidate(
-				label: passedUp.hole.builderLabel,
+				label: passedUp.declaringSeamLabel,
 				suffixTypes: [
 					passedUp.hole.ownerType,
 					passedUp.hole.property.typeDescription.simplified,
@@ -453,8 +456,8 @@ extension DependencyTreeGenerator {
 		seamModule: ModuleIdentity,
 		ownSitePaths: [[Property]],
 		hiddenByCall: inout [ObjectIdentifier: [String: FillReentryHidings]],
-	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions]) {
-		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)]()
+	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole, declaringSeamLabel: String)], ownSiteAdditions: [[Property]: SiteAdditions]) {
+		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole, declaringSeamLabel: String)]()
 		var takenSites = Set(ownSitePaths.map { SeamSignature.Hole.Site(seamType: seamType, path: $0) })
 		var additionsBySite = [SeamSignature.Hole.Site: SiteAdditions]()
 		var generatorsToVisit = [(generator: generator, typesToCall: [SeamSignature.Hole.PathType](), route: [SeamSignature.Hole.DeclaredProperty](), pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration](), isInSendableFunction: false, fillContexts: [FillContext]())]
@@ -470,7 +473,11 @@ extension DependencyTreeGenerator {
 			if let innerSeamType = visited.builtInstantiable?.concreteInstantiable {
 				for hole in visited.passedUpHoles {
 					if takenSites.insert(hole.site).inserted {
-						passedUpHoles.append((innerSeamType, typesToCall, route, hole))
+						// The seam that declares the place labels it: its own root enum's builder for the place's hole type and family,
+						// which the called seam's signature carries, since a builder of the called seam reaches the place from it. That
+						// label follows only from the declaring seam's hole types and parameters, so no passed-up label feeds another.
+						let declaringSeamLabel = visited.calledBuilders?.enumsByKey[SeamSignature.ScopeEnum.rootKey(of: hole)]?.builderLabel ?? hole.builderLabel
+						passedUpHoles.append((innerSeamType, typesToCall, route, hole, declaringSeamLabel))
 					}
 					// The call captures the builder when it is made in a `@Sendable` builder function, and takes it `@Sendable`
 					// when the presented copy is.
@@ -505,12 +512,12 @@ extension DependencyTreeGenerator {
 			ownSiteAdditions[path] = additionsBySite[SeamSignature.Hole.Site(seamType: seamType, path: path)]
 		}
 		return (
-			passedUpHoles.map { innerSeamType, typesToCall, route, hole in
+			passedUpHoles.map { innerSeamType, typesToCall, route, hole, declaringSeamLabel in
 				let additions = additionsBySite[hole.site, default: SiteAdditions()]
 				var passedUpHole = additions.presenting(hole)
 				passedUpHole.reenteringCallDeclarations = additions.reenteringCallDeclarations
 				passedUpHole.reenteringPlaceFields = additions.reenteringPlaceFields
-				return (innerSeamType, typesToCall, route, passedUpHole)
+				return (innerSeamType, typesToCall, route, passedUpHole, declaringSeamLabel)
 			},
 			ownSiteAdditions,
 		)
@@ -878,15 +885,23 @@ extension DependencyTreeGenerator {
 
 	/// The names of the builder functions the properties of the tree `generator` roots would have, which a builder's
 	/// name inside the generated initializer must not equal.
+	///
+	/// The walk visits each generator once: several places of the tree can share one generator (see `ConstructionMemo`),
+	/// whose property and children are the same at each, so a name is a fact of the generator, not of the path to it.
+	/// Visited at every place, a seam whose screens each open three screens of the next layer was walked once per path.
+	/// The set of generators visited dies with the walk.
 	static func builderFunctionNamesOfProperties(in generator: ScopeGenerator, includingHoleSites: Bool = true) -> Set<String> {
 		var names = Set<String>()
 		var generatorsToVisit = [generator]
+		var visitedGenerators = Set<ObjectIdentifier>()
 		while let visited = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(ObjectIdentifier(visited)).inserted else { continue }
 			if let property = visited.property, includingHoleSites || visited.holeSite == nil {
 				names.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
 			}
 			generatorsToVisit.append(contentsOf: visited.children)
 		}
+		GenerationWork.record(visitedGenerators.count, by: .collectingBuilderFunctionNames)
 		return names
 	}
 
@@ -1608,18 +1623,27 @@ extension DependencyTreeGenerator {
 	/// the root's module sees fulfills it, or the one that does is out of the tree's reach because the root's module does
 	/// not list a module on the way to the hole, so the seam call would pass the builder up, which a root cannot – once
 	/// per declaration of the hole's property per root, naming the first chain a declaration-order walk of the root's
-	/// tree meets, the fills the root's module generates included.
-	/// - Parameter viewInstantiablesByModuleName: The declarations of the modules the root's module reads only through
-	///   module info views, by module, among which a module on the way to the hole may fulfill it.
+	/// tree meets, the fills the root's module generates included. A fill that is itself a call of a seam hands that
+	/// call's holes to the root too, at every depth: the walk judges them when it reaches the fill, depth first, in the
+	/// order each call takes its builders, so a hole the root's own seam calls leave unfilled keeps the property and
+	/// chain it was reported at before.
+	/// - Parameters:
+	///   - viewInstantiablesByModuleName: The declarations of the modules the root's module reads only through
+	///     module info views, by module, among which a module on the way to the hole may fulfill it.
+	///   - isOwnFile: Whether a file is one of the module's own files, `nil` when every root is the module's own. Only
+	///     a root the module generates has the calls of its fills judged: another module's root was judged by its own
+	///     module, whose run fills what this run's view of it may not see.
 	static func validateRootsFillEveryHole(
 		roots: [Scope],
 		callerModuleName: String?,
 		instantiables: [TypeDescription: Instantiable],
 		viewInstantiablesByModuleName: [String: [Instantiable]],
 		isReadableFile: (@Sendable (String) -> Bool)?,
+		isOwnFile: (@Sendable (String) -> Bool)?,
 	) throws {
 		var unfilledHoles = [DependencyTreeGeneratorError.UnfilledHole]()
 		for root in roots {
+			let judgesCallsOfFills = isOwnFile.map { isOwnFile in root.instantiable.sourceFilePath.map(isOwnFile) == true } ?? true
 			var reportedDeclarations = Set<HoleDeclaration>()
 			var visitedScopes = Set<ObjectIdentifier>()
 			// Each scope to visit with the chain of types to it and the root's dependency through which the tree reaches it.
@@ -1627,16 +1651,16 @@ extension DependencyTreeGenerator {
 			while let (scope, chain, rootDependency) = scopesToVisit.popLast() {
 				guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
 				var childrenToVisit = [(scope: Scope, chain: [TypeDescription], rootDependency: Dependency?)]()
-				for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
-					let childRootDependency = rootDependency ?? root.instantiable.dependencies.first { $0.property == property }
-					let childChain = chain + [childScope.instantiable.concreteInstantiable]
-					for holeArgument in childScope.holeArguments {
+				/// Judges each hole `call` takes, reached along `callChain` through `callRootDependency`: a fill's scope is
+				/// visited after the call's, and a hole passed up is reported.
+				func judgeHoles(of call: Scope, callChain: [TypeDescription], callRootDependency: Dependency?) {
+					for holeArgument in call.holeArguments {
 						let hole = holeArgument.hole
-						// The first property on the way is the called seam's, which `childChain` ends with.
-						let holeChain = childChain + (hole.passedUpRoute + hole.declaredSitePath).dropFirst().compactMap(\.declaringType)
+						// The first property on the way is the called seam's, which `callChain` ends with.
+						let holeChain = callChain + (hole.passedUpRoute + hole.declaredSitePath).dropFirst().compactMap(\.declaringType)
 						switch holeArgument {
 						case let .fill(_, fulfillingScope):
-							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], childRootDependency))
+							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], callRootDependency))
 						case .passUp:
 							guard !hole.builtType.isOptional, reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
 							// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
@@ -1649,7 +1673,7 @@ extension DependencyTreeGenerator {
 								hole: hole,
 								rootType: root.instantiable.concreteInstantiable,
 								chain: holeChain,
-								location: childRootDependency?.declarationLocation,
+								location: callRootDependency?.declarationLocation,
 								noteLocation: hole.declarationLocation.flatMap { location in isReadableFile.map { $0(location.filePath) } ?? true ? location : nil },
 								callerModuleName: callerModuleName,
 								unlistedModuleNames: unlistedModuleNames,
@@ -1658,6 +1682,16 @@ extension DependencyTreeGenerator {
 							))
 						}
 					}
+				}
+				// A scope this walk visits that is a seam call is a fill, since a call reached as a child is judged, never
+				// visited: the fill's call takes holes of its own, which the root fills or reports.
+				if judgesCallsOfFills, scope.seamCall != nil {
+					judgeHoles(of: scope, callChain: chain, callRootDependency: rootDependency)
+				}
+				for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+					let childRootDependency = rootDependency ?? root.instantiable.dependencies.first { $0.property == property }
+					let childChain = chain + [childScope.instantiable.concreteInstantiable]
+					judgeHoles(of: childScope, callChain: childChain, callRootDependency: childRootDependency)
 					if childScope.seamCall == nil {
 						childrenToVisit.append((childScope, childChain, childRootDependency))
 					}

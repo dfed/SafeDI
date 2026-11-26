@@ -889,12 +889,12 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_t1Builder() -> T1 {
 		            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-		            func __safeDI_t2Builder() -> T2 {
-		                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-		                return T2(t1Builder: t1Builder)
-		            }
 		            let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
 		            return T1(t1Builder: t1Builder, t2Builder: t2Builder)
+		        }
+		        func __safeDI_t2Builder() -> T2 {
+		            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+		            return T2(t1Builder: t1Builder)
 		        }
 		        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 		        self.init(t1Builder: t1Builder)
@@ -4422,22 +4422,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        func __safeDI_hostBuilder(t1Builder: Instantiator<T1>) -> Host {
-			            func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
-			                func __safeDI_t0Builder() -> T0 {
-			                    func __safeDI_t1Builder() -> T1 {
-			                        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			                        let t3Builder = Instantiator<T3> {
-			                            __safeDI_t3Builder(t1Builder: t1Builder)
-			                        }
-			                        return T1(t3Builder: t3Builder)
-			                    }
-			                    let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			                    return T0(t1Builder: t1Builder)
-			                }
-			                let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-			                return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			        func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
+			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+			            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			        }
+			        func __safeDI_t0Builder() -> T0 {
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            return T0(t1Builder: t1Builder)
+			        }
+			        func __safeDI_t1Builder() -> T1 {
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            let t3Builder = Instantiator<T3> {
+			                __safeDI_t3Builder(t1Builder: t1Builder)
 			            }
+			            return T1(t3Builder: t3Builder)
+			        }
+			        func __safeDI_hostBuilder(t1Builder: Instantiator<T1>) -> Host {
 			            let t3Builder = Instantiator<T3> {
 			                __safeDI_t3Builder(t1Builder: t1Builder)
 			            }

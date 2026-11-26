@@ -33,6 +33,20 @@ enum PlaceRecord: Sendable {
 	case alias(AliasPlaceRecord)
 }
 
+extension PlaceRecord {
+	/// The property the place binds.
+	var boundProperty: Property {
+		switch self {
+		case let .built(record):
+			record.property
+		case let .closer(record):
+			record.property
+		case let .alias(record):
+			record.property
+		}
+	}
+}
+
 /// A read a construction or a call makes: the argument it passes, the label it reads, the property its receiver declares,
 /// and where the path key reads it from.
 struct PlaceRead: Hashable, Sendable {

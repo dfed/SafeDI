@@ -147,11 +147,12 @@ struct CallSite: Hashable {
 
 struct TypeKeyLayout {
 	/// A body of the path key's walk, laid out once for each view (R1b §2a): the root's (body 0), or the builder function
-	/// of the places of one plan node, in one family, whose look-ups outside it resolve to the same declarations and whose
-	/// cycle parameters are passed the same declarations. Every step asks a view what it would ask each of its places, and
-	/// asks it through the view's first place only, since every place answers alike: the key holds what each look-up
-	/// outside the view resolves to (`ViewKey.outerView`), and each place's call is checked where its parent makes it
-	/// (`checkEveryRead`'s `.built` case, run for every body that holds a place of the view).
+	/// of the places of one plan node, in one family, whose look-ups outside it resolve to declarations alike and whose
+	/// cycle parameters are passed declarations alike (`KeyedDeclaration`). Every step asks a view what it would ask each of
+	/// its places through the view's first place, since every place answers alike inside the view, but asks what the view
+	/// resolves a label to outside it at each of its edges (`resolution(of:atPlace:edge:)`): the outcome of each read takes
+	/// every edge, and each place's call is checked where its parent makes it (`checkEveryRead`'s `.built` case, run for
+	/// every body that holds a place of the view).
 	struct Body {
 		/// The body holding the view's first place, which the walk reached it through.
 		let parent: Int
@@ -165,9 +166,10 @@ struct TypeKeyLayout {
 		/// The labels the body looks up outside it: its plan node's `Domain`, and the domains of the functions its closers
 		/// call.
 		let domainLabels: Set<String>
-		/// What each label of `domainLabels` resolves to where the walk first reached the view: the nearest declaration
-		/// outside the body (`lookUp(_:inBody:before:)` from `parent` before `position`), which the view's key holds, so
-		/// that a look-up climbing out of the body stops here rather than walking every body above it.
+		/// What each label of `domainLabels` resolves to at the view's first place, where the walk first reached the view:
+		/// the nearest declaration outside the body (`lookUp(_:inBody:before:)` from `parent` before `position`), so that a
+		/// look-up climbing out of the body, which climbs through that place, stops here rather than walking every body
+		/// above it. The view's key holds each one as `keyed(_:label:byKind:)` gives it.
 		let outerView: [String: PathValue]
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
@@ -192,14 +194,55 @@ struct TypeKeyLayout {
 	struct Domain {
 		var labels = Set<String>()
 		var closedOnFunctionNames = Set<String>()
+		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
+		/// outside it.
+		var closesBeneathItsBody = false
 	}
 
 	/// What tells two places of one plan node apart (`Body`).
 	struct ViewKey: Hashable {
 		let node: PlanNode
 		let isInSendableFamily: Bool
-		let outerView: [String: PathValue]
-		let cycleArguments: [PathValue]
+		let outerView: [String: KeyedDeclaration]
+		let cycleArguments: [KeyedDeclaration]
+		/// The statements of enclosing bodies whose functions the view's closers call, a loop of builders' members, in the order
+		/// the walk of the names first reaches them (`closedOnFunctions(named:from:closesBeneathItsBody:)`).
+		let closedOnStatements: [ClosedOnStatementKey]
+		/// The statement each name of that walk resolves to, by its position in `closedOnStatements`, in the walk's order, so
+		/// two views share only where their closers' names resolve alike.
+		let closedOnResolutions: [Int]
+	}
+
+	/// What a view's key holds of a declaration outside it. Nothing inside a view depends on which body declares a value it
+	/// reads outside it, only on whether there is one, what kind it is and its type, so places whose reads resolve to
+	/// declarations alike in those share a view, wherever the declarations are: each call of the view's function is
+	/// checked where its parent makes it (`checkCall`), and each read the view's function takes from its callers is passed by
+	/// each call (`computeOutcomes` reads every edge). A statement of the root's body stays itself, since a function can
+	/// capture it. A view whose closers call a function declared outside it keeps the declarations themselves (`absolute`):
+	/// the closer calls the function its own place's path declares, which a view standing for several paths could not tell.
+	/// A member of a loop of builders whose own statements call only its siblings' functions, declared in the body that
+	/// declares it, and whose siblings do the same, is keyed by kind: each of its places' calls is checked against the
+	/// siblings of that place's own body (`checkCall`).
+	enum KeyedDeclaration: Hashable {
+		case absolute(PathValue)
+		case none
+		case root(index: Int)
+		case outside(kind: Kind, type: String?)
+
+		enum Kind: Hashable {
+			case statement
+			case forwarded
+			case cycleParameter
+		}
+	}
+
+	/// What tells apart two statements of enclosing bodies whose functions a view's closers call: the view key of the place
+	/// the statement is, its outer view over every label the functions called read, keyed as the view's own.
+	struct ClosedOnStatementKey: Hashable {
+		let node: PlanNode
+		let isInSendableFamily: Bool
+		let outerView: [String: KeyedDeclaration]
+		let cycleArguments: [KeyedDeclaration]
 	}
 
 	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, or a
@@ -223,14 +266,19 @@ struct TypeKeyLayout {
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
 	var domainsByNode = [PlanNode: Domain]()
+	/// The functions the statements of each body the walk has reached declare, by name, the first of each name: where a
+	/// closer's function is resolved (`resolvedFunction(named:from:)`), in one look-up per enclosing body rather than a scan
+	/// of its statements, which a wide body of a cycle would repeat for each of its statements.
+	var declaredFunctionsByBody = [Int: [String: DeclaredFunction]]()
 	/// The closing statements that call each body's function: their body and their index in it.
 	var closersByTarget = [Int: [(body: Int, index: Int)]]()
 	/// The labels each body's function reads and does not bind, in the order it first reads them.
 	var reads = [[String]]()
 	/// The labels of each body's reads that some read inside it requires a value of.
 	var requiredReads = [Set<String>]()
-	/// For each body, the first declaration outside it each label it reads resolves to, `.none` where every such read is
-	/// `nil`.
+	/// For each body, a declaration outside it each label it reads resolves to, `.none` where every such read is `nil`:
+	/// only which labels are `.none` is read (`resolution(of:atPlace:edge:)`), since a view a body holds can stand for
+	/// places beneath other bodies, whose declarations it holds alike, not the same.
 	var escapingReads = [[String: PathValue]]()
 	/// Each body's class, numbered from 1 in the order the walk first reaches a member; the root is class 0.
 	var classByBody = [Int]()
@@ -251,6 +299,10 @@ struct TypeKeyLayout {
 	var hoistedFunctions = [CallSite: [Int]]()
 	var attachedFunction = [CallSite: Int]()
 	var outcomes = [[String: ReadOutcome]]()
+	/// For each variant body of the per-type plan, the labels of its cycle parameters that every call passes one
+	/// statement of the root's body, by that statement's position: its function captures the statement, as today's does
+	/// (`rootStatementsCapturedByVariants()`).
+	var rootStatementsCapturedByVariant = [Int: [String: Int]]()
 	var parameterTypes = [[String: TypeDescription]]()
 	/// The value each cycle parameter of a place holds at every call of its function, where every call passes one.
 	var normalizedCycleParameters = [Int: [String: PathValue]]()

@@ -7646,9 +7646,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNearestRebindingToOnlyIfAvailableReceiver_whenReceiverReceivesInstantiatorThatBuildsItAndEnclosingScopeAlsoProvidesIt() async throws {
-		// C, built by B's `cBuilder`, receives `cBuilder` only if available. Root's
-		// `cBuilder` is not the one in lexical scope: B's function wraps itself again, and C
-		// gets that wrapper.
+		// C, built by B's `cBuilder`, receives `cBuilder` only if available. The nearest is B's
+		// own `cBuilder`, which wraps C's function again, and C gets that wrapper: the function is
+		// laid out once, since both its places read alike.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7688,10 +7688,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        func __safeDI_b() -> B {
-			            func __safeDI_cBuilder() -> C {
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return C(cBuilder: cBuilder)
-			            }
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
@@ -12928,20 +12924,26 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            return A(bBuilder: bBuilder)
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            func __safeDI_innerCBuilder() -> C {
-			                func __safeDI_innerBBuilder() -> B {
-			                    let innerCBuilder = Instantiator<C>(__safeDI_innerCBuilder)
-			                    return B(innerCBuilder: innerCBuilder)
-			                }
-			                let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
-			                return C(innerBBuilder: innerBBuilder, aBuilder: aBuilder)
+			            let innerCBuilder = Instantiator<C> {
+			                __safeDI_innerCBuilder(aBuilder: aBuilder)
 			            }
-			            let innerCBuilder = Instantiator<C>(__safeDI_innerCBuilder)
 			            return B(innerCBuilder: innerCBuilder)
 			        }
+			        func __safeDI_innerCBuilder(aBuilder: Instantiator<A>?) -> C {
+			            let innerBBuilder = Instantiator<B> {
+			                __safeDI_innerBBuilder(aBuilder: aBuilder)
+			            }
+			            return C(innerBBuilder: innerBBuilder, aBuilder: aBuilder)
+			        }
+			        func __safeDI_innerBBuilder(aBuilder: Instantiator<A>?) -> B {
+			            let innerCBuilder = Instantiator<C> {
+			                __safeDI_innerCBuilder(aBuilder: aBuilder)
+			            }
+			            return B(innerCBuilder: innerCBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }
