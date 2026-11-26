@@ -1875,8 +1875,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				fieldInstanceProperties.insert(instanceProperty)
 			}
 		}
-		// The pass before built the judgement tree beneath the same stack, where it built one.
-		let previousPassFillGenerator = previousPassFillGenerator(keyed: fill.key)
 		var underConstruction = ScopeGeneratorUnderConstruction(
 			scope: scope,
 			property: (hole.property, fillContext.propertyID),
@@ -1905,7 +1903,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// function of its own, declared where the seam is called, so no function enclosing the call that a lazy cycle
 			// closes on encloses a cycle-closing scope in the fill. The fill's own built scope takes the parameters the
 			// pass before found for it as any scope does, when a lazy cycle inside the fill closes on its property.
-			previousPassGenerator: (isJudgementTree ? previousPassFillGenerator?.fillJudgementTree : previousPassFillGenerator)?.children.first,
+			// A judgement tree is built as a first pass builds it: what a pass finds for the next decides generated code
+			// alone, of which the judgement tree has none.
+			previousPassGenerator: isJudgementTree ? nil : previousPassFillGenerator(keyed: fill.key)?.children.first,
 			cycleParameterContexts: [:],
 			// A place inside the fill is a place of the type the fill builds, whose builds start their children in its order.
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
