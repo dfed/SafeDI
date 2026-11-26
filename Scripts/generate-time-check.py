@@ -684,8 +684,7 @@ GROWTH_ROWS = {
     # path its walk reads; 2.47 and 3.26 while it holds the whole path.
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {}),
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {}),
-    # PR 0.33 s and 3.0 s (9.1), 52 MB and 179 MB (3.5); its code grows with the graph.
-    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {"time": 12.0, "memory": 4.5}),
+    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3

@@ -477,6 +477,7 @@ extension DependencyTreeGenerator {
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
 			viewInstantiablesByModuleName: viewInstantiablesByModuleName,
 			isReadableFile: emittingModule?.isReadableFile,
+			isOwnFile: emittingModule?.isOwnFile,
 		)
 		// Every tree of the seam world reads its scopes frozen, once.
 		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
@@ -1010,7 +1011,12 @@ extension DependencyTreeGenerator {
 		// or at the limit, which no input reaches by the argument above and which reports the component if one does. The
 		// argument needs each pass to read the component's other seams as one pass left them: an enum a seam's builders
 		// reach is read from the seam that declares it (`ownScopeEnums`), since copies of different ages, each carried
-		// by a different neighbor, would differ on every pass around a cycle of four seams.
+		// by a different neighbor, would differ on every pass around a cycle of four seams. For the same reason a place
+		// a seam passes up is labeled by the seam that declares it, with that seam's own builder label for the place's
+		// hole type and family (`holes(of:…)`), which follows only from that seam's hole types and parameters, both of
+		// which only grow: a label is a function of the places a pass settles, and never an input to another seam's
+		// label. A label a passing seam named apart from its own holes would carry each seam's names into the next
+		// around a ring, and change on every pass.
 		var errorsOfLastPass = [DependencyTreeGeneratorError]()
 		var failedSeamsOfLastPass = Set<TypeDescription>()
 		var settled = false
@@ -1085,7 +1091,6 @@ extension DependencyTreeGenerator {
 						ownScopeEnums: ownScopeEnums,
 						generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
 						declaredTypeNames: declaredTypeNames,
-						unsettledSeams: component,
 					)
 					if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 						changed = true
@@ -1701,23 +1706,23 @@ extension DependencyTreeGenerator {
 		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, declaredLabels: [], fillsBindingLabels: [:])]
 		// Several places of the tree can share one generator (see `ConstructionMemo`), so a seam whose screens each open
 		// three screens of the next layer reaches the last layer's along a number of paths that grows with the layers'
-		// power. A visit reads its frame only through the labels its generator's subtree reads (`LabelsReadBeneath`), and
-		// what it hands each child is made of its frame label by label, so two visits of one generator whose frames agree
-		// on those labels find the same receivers and record the same reads; the later one is not made. The labels and
+		// power. A visit reads its frame only through what its generator's subtree reads from above it (`ReadsFromAbove`),
+		// and what it hands each child is made of its frame label by label, so two visits of one generator whose frames
+		// agree on those reads find the same receivers and record the same reads; the later one is not made. The reads and
 		// the visits made die with the walk.
-		let labelsReadBeneath = LabelsReadBeneath(treeRootedAt: generator)
+		let readsFromAbove = ReadsFromAbove(treeRootedAt: generator)
 		var visitsMade = Set<ReceiversVisit>()
 		var framesTaken = 0
 		while let frame = generatorsToVisit.popLast() {
 			framesTaken += 1
 			let visited = frame.generator
-			if let labelsRead = labelsReadBeneath.labels(readBeneath: visited) {
+			if let readsOfSubtree = readsFromAbove.projection(readBy: visited) {
 				let visit = ReceiversVisit(
 					generator: ObjectIdentifier(visited),
 					insideSendable: frame.insideSendable,
-					declaredLabels: frame.declaredLabels.intersection(labelsRead),
-					providedProperties: frame.providedProperties.filter { labelsRead.contains($0.label) },
-					fillsBindingLabels: frame.fillsBindingLabels.filter { labelsRead.contains($0.key) }.mapValues(ObjectIdentifier.init),
+					declaredLabels: frame.declaredLabels.intersection(readsOfSubtree.labels),
+					providedProperties: frame.providedProperties.filter(readsOfSubtree.formsProviding.contains),
+					fillsBindingLabels: frame.fillsBindingLabels.filter { readsOfSubtree.labels.contains($0.key) }.mapValues(ObjectIdentifier.init),
 				)
 				guard visitsMade.insert(visit).inserted else { continue }
 			}
@@ -1862,11 +1867,13 @@ extension DependencyTreeGenerator {
 		return (receivers, parameterReads)
 	}
 
-	/// A visit `receivers(in:of:instantiables:)` made: a generator, with its frame projected to the labels its subtree
-	/// reads. Each part is a part of the frame some judgement of the visit, or of a visit beneath it, reads by label:
-	/// whether the scope is built inside a `@Sendable` function (each read), the labels declared above it (each read
-	/// that reaches a parameter), what the scopes above provide (each receive's and alias's provider), and the fill
-	/// nearest it that binds a label (a wrapper read the fill's memo serves).
+	/// A visit `receivers(in:of:instantiables:)` made: a generator, with its frame projected to what its subtree reads from
+	/// above it. Each part is a part of the frame some judgement of the visit, or of a visit beneath it, reads: whether the
+	/// scope is built inside a `@Sendable` function (each read), the labels declared above it (each read that reaches a
+	/// parameter), what the scopes above provide of the forms that would provide a receive or an alias's fulfilling
+	/// property (its provider), and the fill nearest it that binds a label (a wrapper read the fill's memo serves).
+	/// `visitsMade` holds one per visit made, each holding a set of labels and one of properties no larger than what the
+	/// visited subtree reads from above, until the walk returns.
 	private struct ReceiversVisit: Hashable {
 		let generator: ObjectIdentifier
 		let insideSendable: Bool
@@ -1875,11 +1882,16 @@ extension DependencyTreeGenerator {
 		let fillsBindingLabels: [String: ObjectIdentifier]
 	}
 
-	/// The labels each generator's subtree in a seam's tree reads from the scopes above it, as `receivers(in:of:instantiables:)`
-	/// reads them: each label received, each label an alias is fulfilled by, each parameter label of a nested seam the
-	/// scope calls, and each parameter label of the function a cycle-closing scope calls. Built once per walk, from the
-	/// leaves up, visiting each generator once; it dies with the walk.
-	private struct LabelsReadBeneath {
+	/// What each generator's subtree in a seam's tree reads from the scopes above it, as `receivers(in:of:instantiables:)`
+	/// reads it: by label, each label received, each label an alias is fulfilled by, each parameter label of a nested seam
+	/// the scope calls, and each parameter label of the function a cycle-closing scope calls; and by form, each property
+	/// received and each property an alias is fulfilled by, whose provider the walk looks for. What a scope provides is
+	/// nearer its subtree than anything above it: its labels are declared, and no fill above binds them, wherever its
+	/// subtree reads them, and a form it provides provides every read of that form. So a scope's reads from above are
+	/// its own, and its children's less what it provides. Built once per walk, from the leaves up, visiting each generator
+	/// once; it holds a set of labels and one of properties per generator, each no larger than what its subtree reads,
+	/// and dies with the walk.
+	private struct ReadsFromAbove {
 		init(treeRootedAt root: ScopeGenerator) {
 			var generatorsToVisit = [(generator: root, childrenAreRead: false)]
 			while let (visited, childrenAreRead) = generatorsToVisit.popLast() {
@@ -1894,7 +1906,17 @@ extension DependencyTreeGenerator {
 				}
 				// A site reads every parameter whose label no scope enclosing it declares, so the subtree that holds one reads
 				// every label.
-				var reads = Reads(labels: [], readsEveryLabel: visited.holeSite != nil)
+				var reads = Reads(labels: [], requests: [], readsEveryLabel: visited.holeSite != nil)
+				let providedLabels = Set(visited.providedProperties.map(\.label))
+				for child in visited.children {
+					if let childReads = readsByGenerator[ObjectIdentifier(child)] {
+						reads.labels.formUnion(childReads.labels.subtracting(providedLabels))
+						for request in childReads.requests where !Self.isProvided(request, by: visited.providedProperties) {
+							reads.requests.insert(request)
+						}
+						reads.readsEveryLabel = reads.readsEveryLabel || childReads.readsEveryLabel
+					}
+				}
 				for parameter in visited.seamCallParameters ?? [] {
 					reads.labels.insert(parameter.property.label)
 				}
@@ -1907,30 +1929,45 @@ extension DependencyTreeGenerator {
 					switch dependency.source {
 					case .received:
 						reads.labels.insert(dependency.property.label)
+						reads.requests.insert(dependency.property)
 					case let .aliased(fulfillingProperty, _, _):
 						reads.labels.insert(fulfillingProperty.label)
+						reads.requests.insert(fulfillingProperty)
 					case .instantiated, .forwarded:
 						continue
-					}
-				}
-				for child in visited.children {
-					if let childReads = readsByGenerator[ObjectIdentifier(child)] {
-						reads.labels.formUnion(childReads.labels)
-						reads.readsEveryLabel = reads.readsEveryLabel || childReads.readsEveryLabel
 					}
 				}
 				readsByGenerator[identifier] = reads
 			}
 		}
 
-		/// The labels the subtree `generator` roots reads, or `nil` where it holds a site, which reads every label.
-		func labels(readBeneath generator: ScopeGenerator) -> Set<String>? {
+		/// What the subtree `generator` roots reads from above it, or `nil` where it holds a site, which reads every label.
+		func projection(readBy generator: ScopeGenerator) -> Projection? {
 			guard let reads = readsByGenerator[ObjectIdentifier(generator)], !reads.readsEveryLabel else { return nil }
-			return reads.labels
+			var formsProviding = reads.requests
+			for request in reads.requests where request.typeDescription.isOptional {
+				formsProviding.insert(request.asUnwrappedProperty)
+			}
+			return Projection(labels: reads.labels, formsProviding: formsProviding)
+		}
+
+		/// What a subtree reads from above it: the labels it reads, and each form of a property that would provide one of
+		/// its receives or aliases' fulfilling properties.
+		struct Projection {
+			let labels: Set<String>
+			let formsProviding: Set<Property>
+		}
+
+		/// Whether `providedProperties` provides a read of `property`, as the walk's own check finds it but for a fill's memo,
+		/// which a scope never provides.
+		private static func isProvided(_ property: Property, by providedProperties: Set<Property>) -> Bool {
+			providedProperties.contains(property)
+				|| (property.typeDescription.isOptional && providedProperties.contains(property.asUnwrappedProperty))
 		}
 
 		private struct Reads {
 			var labels: Set<String>
+			var requests: Set<Property>
 			var readsEveryLabel: Bool
 		}
 
@@ -1969,9 +2006,7 @@ extension DependencyTreeGenerator {
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
 	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
 	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
-	/// - Parameter unsettledSeams: The seams whose signatures are computed beside this one's, the seams of its component,
-	///   whose holes this seam names from their sites when it passes them up (`holes(of:…)`).
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames, unsettledSeams: Set<TypeDescription>) throws -> ScopeGenerator.SeamRoot? {
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -2163,7 +2198,7 @@ extension DependencyTreeGenerator {
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,
-			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables, unsettledSeams: unsettledSeams),
+			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables),
 			parameters: parameters,
 			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
 			proof: proof,
