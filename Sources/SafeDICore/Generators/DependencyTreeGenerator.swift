@@ -336,7 +336,7 @@ public actor DependencyTreeGenerator {
 		} else {
 			nil
 		}
-		let trees = try await buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof, plansCyclesPerType: !request.generatesDOTTree) : nil
+		let trees = try await buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof, plansCyclesPerType: request.generatesDependencyTrees, drawsTrees: request.generatesDOTTree) : nil
 		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
 		// frees the memory its frames took when it ends, which on a deep module took as long as releasing the trees.
 		if request.generatesDependencyTrees, let trees {
@@ -373,7 +373,7 @@ public actor DependencyTreeGenerator {
 				}
 				// Drawn from the trees the code is generated from, before any mock is built. Drawing a tree throws nothing.
 				let drawnTree: String? = if let trees, request.generatesDOTTree {
-					await generateDOTTree(of: trees.roots.compactMap(\.scopeGenerator))
+					await generateDOTTree(of: trees.roots.compactMap { $0.scopeGenerator ?? $0.drawnTree })
 				} else {
 					nil
 				}
@@ -581,6 +581,8 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let tree: Tree
+		/// The root's tree per path where its code is laid out from its plan by type and the caller draws the trees.
+		var drawnTree: ScopeGenerator?
 
 		/// How a root's tree is built: once per path, as every tree was before a cyclic tree was planned per type, or once
 		/// per type.
@@ -664,6 +666,11 @@ public actor DependencyTreeGenerator {
 		let storedSeamSignatures: [StoredSeamSignature]
 	}
 
+	/// The number of places a production root's tree per path may hold before it is abandoned and the root is laid out
+	/// from its plan by type, where it has one. A root within the limit is built, checked and generated as before any
+	/// root was planned by type, at the same cost; only a tree that grows with its paths passes it.
+	static let scopeGeneratorLimitOfTodaysTree = 1_500
+
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
 	/// this module calls or generates once, here, and handing them down.
 	/// - Parameters:
@@ -671,10 +678,12 @@ public actor DependencyTreeGenerator {
 	///     (`PublicMockContext.unreadTypeComment`).
 	///   - ownAccessProof: The proof of every type's access over the module's declarations, which the signatures of the
 	///     seams this module generates read (`ownAccessProof()`).
-	///   - plansCyclesPerType: Whether a root whose tree holds a cycle may be planned once per type
-	///     (`RootScopeInfo.Tree.perType`). `false` where the caller reads the trees per path: to draw the DOT graph, or
-	///     to list what each receive is handed.
-	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, plansCyclesPerType: Bool) async throws -> DependencyTrees {
+	///   - plansCyclesPerType: Whether a root whose tree per path passes `scopeGeneratorLimitOfTodaysTree` may be laid
+	///     out from its plan by type (`RootScopeInfo.Tree.perType`). `false` where the caller generates no code from
+	///     the trees: to draw the DOT graph alone, or to list what each receive is handed.
+	///   - drawsTrees: Whether the caller draws the trees, so a root laid out from its plan also keeps a tree per path
+	///     (`RootScopeInfo.drawnTree`). It decides nothing about any root's code.
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, plansCyclesPerType: Bool, drawsTrees: Bool = false) async throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -740,54 +749,117 @@ public actor DependencyTreeGenerator {
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
 				var constructionMemo = ConstructionMemo()
 				var roots = [RootScopeInfo]()
-				// Why no root of this run is planned per type, where none is: the caller reads the trees per path, a test
-				// forces it, or the `@Sendable` capture walk reads a tree per path, so a module it runs in plans no root per
-				// type, a deliberate gap until the walk reads a plan's bodies.
-				let perPathReasonOfRun: RootTreeChoiceObservation.PerPathReason? = if !plansCyclesPerType {
-					.treesReadPerPath
-				} else if RootTreeChoiceObservation.forcesPerPath {
-					.forcedPerPath
-				} else if namesNonSendableWrapperAndSendableBuilder {
-					.moduleNamesNonSendableWrapperAndSendableBuilder
-				} else {
-					nil
-				}
-				// A test that compares a root's plan with today's tree has today's tree built too.
+				// A test that compares a root's plan with today's tree has both built for every root that reaches a cycle.
 				let comparesWithTodaysTree = Self.observesPerTypePlan
+				// The `@Sendable` capture walk reads a tree per path, so a module it runs in plans no root per type, a
+				// deliberate gap until the walk reads a plan's bodies.
+				let perPathReasonOfRun: RootTreeChoiceObservation.PerPathReason? = namesNonSendableWrapperAndSendableBuilder ? .moduleNamesNonSendableWrapperAndSendableBuilder : nil
+				// How many places today's tree of a root may hold before it is abandoned for the root's plan by type, or
+				// `nil` where every root keeps today's tree: the caller generates no code from the trees, or the module
+				// plans none.
+				let scopeGeneratorLimit: Int? = plansCyclesPerType && perPathReasonOfRun == nil
+					? RootTreeChoiceObservation.scopeGeneratorLimitOverride ?? Self.scopeGeneratorLimitOfTodaysTree
+					: nil
 				let rootTreeChoiceObserver = RootTreeChoiceObservation.observer
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
-					// The root's code laid out from the per-type plan of its cycles, where it has one and the type key lays it
-					// out; otherwise its tree is built per path.
+					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+					// Today's tree, one generator per place, or `nil` where it passed the limit and was abandoned. A root within
+					// the limit is built, checked and generated exactly as before any root was planned by type. So is a root
+					// past it whose tree reaches no cycle or holds a shape outside the plan: the tree is built on, and nothing
+					// built is thrown away, so only a root the plan can take pays for a tree abandoned.
+					var todaysTree: ScopeGenerator?
+					do {
+						todaysTree = try record.createScopeGenerator(
+							in: table,
+							lazilyInstantiatedInstanceProperties: [],
+							erasedToConcreteExistential: false,
+							declaredTypeNames: declaredTypeNames,
+							constructionMemo: &constructionMemo,
+							scopeGeneratorLimit: scopeGeneratorLimit.map { places in
+								ScopeGeneratorLimit(places: places) {
+									guard let shapeOutsidePlan = Self.shapeOutsidePerTypePlan(inTreeOf: scope, cache: &receivedPropertiesCache) else { return false }
+									if let reason = shapeOutsidePlan.reason {
+										rootTreeChoiceObserver?(scope.instantiable.concreteInstantiable.asSource, reason)
+										return false
+									} else {
+										return true
+									}
+								}
+							},
+						)
+					} catch is ScopeGeneratorLimitExceeded {
+						todaysTree = nil
+					}
+					let passedLimit = todaysTree == nil
+					if passedLimit, comparesWithTodaysTree {
+						// A test that compares the plan with today's tree has the tree built whatever its size.
+						todaysTree = try record.createScopeGenerator(
+							in: table,
+							lazilyInstantiatedInstanceProperties: [],
+							erasedToConcreteExistential: false,
+							declaredTypeNames: declaredTypeNames,
+							constructionMemo: &constructionMemo,
+						)
+					}
+					// The root's code laid out from the per-type plan of its cycles, where today's tree was abandoned, the root
+					// has a plan and the type key lays it out.
 					var perTypeTree: RootScopeInfo.Tree?
-					if perPathReasonOfRun == nil || rootTreeChoiceObserver != nil,
-					   let choice = try Self.perTypePlan(
-					   	ofRoot: scope,
-					   	frozenScopeMap: validatedWorld.frozenScopeMap,
-					   	declaredTypeNames: declaredTypeNames,
-					   	cache: &receivedPropertiesCache,
-					   )
-					{
+					if passedLimit || comparesWithTodaysTree {
 						var perPathReason = perPathReasonOfRun
-						switch choice {
-						case let .perType(unplanned):
-							if perPathReason == nil {
-								if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
-									perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
-								} else {
-									perPathReason = .noLayout
+						var reachesCycle = false
+						do {
+							if let choice = try Self.perTypePlan(
+								ofRoot: scope,
+								frozenScopeMap: validatedWorld.frozenScopeMap,
+								declaredTypeNames: declaredTypeNames,
+								cache: &receivedPropertiesCache,
+							) {
+								reachesCycle = true
+								switch choice {
+								case let .perType(unplanned):
+									if perPathReason == nil {
+										if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
+											perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
+										} else {
+											perPathReason = .noLayout
+										}
+									}
+								case let .perPath(reason):
+									perPathReason = perPathReason ?? reason
 								}
 							}
-						case let .perPath(reason):
-							perPathReason = perPathReason ?? reason
+						} catch {
+							// Whatever planning reports, today's tree reports first or does not report: the plan is discarded, and
+							// the tree built below throws the error a build with no plan throws. A root within the limit is planned
+							// only for a test that compares the two, which is handed the error.
+							guard passedLimit else { throw error }
+							reachesCycle = true
+							perTypeTree = nil
+							perPathReason = .planningThrew
 						}
-						rootTreeChoiceObserver?(scope.instantiable.concreteInstantiable.asSource, perPathReason)
+						if reachesCycle, passedLimit {
+							rootTreeChoiceObserver?(scope.instantiable.concreteInstantiable.asSource, perPathReason)
+						}
 					}
-					var todaysTree: ScopeGenerator?
 					let tree: RootScopeInfo.Tree
-					if let perTypeTree, !comparesWithTodaysTree {
+					var drawnTree: ScopeGenerator?
+					if passedLimit, let perTypeTree {
 						tree = perTypeTree
+						if drawsTrees {
+							// The graph is drawn from a tree per path, whatever the root's code is laid out from, so the code is
+							// the same with and without a graph.
+							drawnTree = try todaysTree ?? record.createScopeGenerator(
+								in: table,
+								lazilyInstantiatedInstanceProperties: [],
+								erasedToConcreteExistential: false,
+								declaredTypeNames: declaredTypeNames,
+								constructionMemo: &constructionMemo,
+							)
+						}
+					} else if let todaysTree {
+						tree = .perPath(todaysTree)
 					} else {
-						let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+						// Abandoned, and not laid out from a plan: today's tree, whatever its size.
 						let scopeGenerator = try record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
@@ -796,13 +868,14 @@ public actor DependencyTreeGenerator {
 							constructionMemo: &constructionMemo,
 						)
 						todaysTree = scopeGenerator
-						tree = perTypeTree ?? .perPath(scopeGenerator)
+						tree = .perPath(scopeGenerator)
 					}
 					roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						tree: tree,
+						drawnTree: drawnTree,
 					))
 					// Each scope the root reaches with its children on a cycle as call places, built only where a test compares
 					// the order it gives the scope's children with today's. A tree with a label no one parameter can pass,

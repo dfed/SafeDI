@@ -364,10 +364,10 @@ struct TypeKeyBodyCycleVariantTests {
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let x = X()
 		        func __safeDI_aBuilder() -> A {
-		            let b: B = __safeDI_b(x: x)
+		            let b: B = __safeDI_b()
 		            return A(b: b)
 		        }
-		        func __safeDI_b(x: X) -> B {
+		        func __safeDI_b() -> B {
 		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            return B(aBuilder: aBuilder)
 		        }

@@ -68,64 +68,74 @@ extension TypeKeyLayout {
 		case let .forwarded(body, label):
 			.forwarded(owner: classByBody[body], label: label)
 		case let .cycleParameter(body, label):
-			// A function reads its cycle parameter from its caller, whatever the outcome of its label: no graph of the
-			// fuzzer's corpora settles one as captured or none, and a layout that reads it so is still checked against the
-			// path key read by read (`checkEveryRead`).
-			.read(owner: classByBody[body], label: label)
+			// A variant of the per-type plan whose function captures the root's statement every call passes it holds that
+			// statement throughout its body, so a function built inside the body reads the statement, as today's function
+			// captures it. The variants' outcomes are settled before any other class asks (`computeOutcomes`).
+			if let position = rootStatementsCapturedByVariant[body]?[label],
+			   outcomes[classByBody[body]][label] == .captured(.statement(owner: 0, index: position))
+			{
+				.statement(owner: 0, index: position)
+			} else {
+				// Any other function reads its cycle parameter from its caller, whatever the outcome of its label: no graph
+				// of the fuzzer's corpora settles one as captured or none, and a layout that reads it so is still checked
+				// against the path key read by read (`checkEveryRead`).
+				.read(owner: classByBody[body], label: label)
+			}
 		}
 	}
 
 	/// What each class's function does with each label it reads. Every function is declared in the root's body
-	/// (`computePlacement`), and a cycle parameter is always read from the caller, so no outcome depends on another: one
-	/// pass settles them.
+	/// (`computePlacement`), and a cycle parameter is read from the caller, or, where a variant captures it, is the
+	/// root's statement, so the variants' classes are settled first and every other class in one pass after them.
 	mutating func computeOutcomes() {
 		rootStatementsCapturedByVariant = rootStatementsCapturedByVariants()
-		var outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
+		outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
 		for owner in membersByClass.indices.dropFirst() {
+			guard let variant = membersByClass[owner].first(where: { variantBodies.contains($0) }) else { continue }
 			for label in reads[membersByClass[owner][0]] {
 				// Every label a variant of the per-type plan reads from above is a parameter of its body
 				// (`CycleVariantRecord.parameters`), or one its body was built with `nil` for, which it reads as `nil`
 				// (`variantsReadOnlyTheirCycleParameters`). Its function captures a parameter every call passes one statement of
 				// the root's body, declared before the function, and takes every other one.
-				if let variant = membersByClass[owner].first(where: { variantBodies.contains($0) }) {
-					let capturedPositions = Set(membersByClass[owner].map { rootStatementsCapturedByVariant[$0]?[label] })
-					if !bodies[variant].cycleParameterLabels.contains(label) {
-						outcomes[owner][label] = ReadOutcome.none
-					} else if capturedPositions.count == 1,
-					          let position = capturedPositions.first ?? nil,
-					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == .statement(owner: 0, index: position)
-					{
-						outcomes[owner][label] = .captured(.statement(owner: 0, index: position))
-					} else {
-						outcomes[owner][label] = .passed
-					}
+				let capturedPositions = Set(membersByClass[owner].map { rootStatementsCapturedByVariant[$0]?[label] })
+				if !bodies[variant].cycleParameterLabels.contains(label) {
+					outcomes[owner][label] = ReadOutcome.none
+				} else if capturedPositions.count == 1,
+				          let position = capturedPositions.first ?? nil,
+				          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == .statement(owner: 0, index: position)
+				{
+					outcomes[owner][label] = .captured(.statement(owner: 0, index: position))
 				} else {
-					var declarations = [TypeDeclaration]()
-					for member in membersByClass[owner] {
-						// A view's places can resolve a label to other declarations outside it, alike in kind and type, each of
-						// which its call passes.
-						for edge in bodies[member].edges {
-							declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member, edge: edge)))
-						}
-						for closer in closersByTarget[member] ?? [] {
-							declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
-						}
-					}
-					let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
-						.none
-					} else if let first = declarations.first,
-					          declarations.allSatisfy({ $0 == first }),
-					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
-					{
-						.captured(first)
-					} else {
-						.passed
-					}
-					outcomes[owner][label] = outcome
+					outcomes[owner][label] = .passed
 				}
 			}
 		}
-		self.outcomes = outcomes
+		for owner in membersByClass.indices.dropFirst() where !membersByClass[owner].contains(where: { variantBodies.contains($0) }) {
+			for label in reads[membersByClass[owner][0]] {
+				var declarations = [TypeDeclaration]()
+				for member in membersByClass[owner] {
+					// A view's places can resolve a label to other declarations outside it, alike in kind and type, each of
+					// which its call passes.
+					for edge in bodies[member].edges {
+						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member, edge: edge)))
+					}
+					for closer in closersByTarget[member] ?? [] {
+						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
+					}
+				}
+				let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
+					.none
+				} else if let first = declarations.first,
+				          declarations.allSatisfy({ $0 == first }),
+				          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
+				{
+					.captured(first)
+				} else {
+					.passed
+				}
+				outcomes[owner][label] = outcome
+			}
+		}
 	}
 
 	/// For each variant body, the cycle parameters every call passes one statement of the root's body, by its position:
