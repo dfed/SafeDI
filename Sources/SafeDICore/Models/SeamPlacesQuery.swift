@@ -697,15 +697,15 @@ extension SeamSignature.Places {
 			return routes.sorted { precedesInSourceOrder($0.leastRoute, $1.leastRoute) }
 		}
 
-		/// Whether `lhs` precedes `rhs` by the source locations of the properties the code declares along each, root first:
-		/// a route whose locations are a prefix of the other's first, a location-less declaration after every located one.
+		/// Whether `lhs` precedes `rhs` by the properties the code declares along each, root first (`precedesOnRoute`): a route
+		/// whose properties are a prefix of the other's first, a location-less declaration after every located one.
 		private func precedesInSourceOrder(_ lhs: Route, _ rhs: Route) -> Bool {
-			let lhsLocations = declaredPathToOwner(along: lhs).map(\.declarationLocation)
-			let rhsLocations = declaredPathToOwner(along: rhs).map(\.declarationLocation)
-			for (lhsLocation, rhsLocation) in zip(lhsLocations, rhsLocations) where lhsLocation != rhsLocation {
-				return Dependency.DeclarationLocation.precedesInSourceOrder(lhsLocation, rhsLocation)
+			let lhsProperties = declaredPathToOwner(along: lhs)
+			let rhsProperties = declaredPathToOwner(along: rhs)
+			for (lhsProperty, rhsProperty) in zip(lhsProperties, rhsProperties) where lhsProperty.declarationLocation != rhsProperty.declarationLocation || lhsProperty.property.label != rhsProperty.property.label {
+				return Self.precedesOnRoute(lhsProperty, rhsProperty)
 			}
-			return lhsLocations.count < rhsLocations.count
+			return lhsProperties.count < rhsProperties.count
 		}
 
 		/// The least route, by the source locations of the properties the code declares along it, root first (a route whose
@@ -746,12 +746,14 @@ extension SeamSignature.Places {
 				toMark += (childrenByNode[node] ?? []).map(\.node)
 			}
 			guard onRoute.contains(startNode) else { return nil }
-			// From the ends down, one location at a time: every walk in `frontier` has read the same locations, and a walk
-			// holds the locations of the edge it is on that it has not read yet.
-			typealias Walk = (levels: [Int], node: Node, pending: ArraySlice<Dependency.DeclarationLocation?>)
+			// From the ends down, one declared property at a time: every walk in `frontier` has read the same properties, and a
+			// walk holds the properties of the edge it is on that it has not read yet. Properties are read by their locations,
+			// then, where those are equal (a module's view of another reads none), by their labels, as a message spelling the
+			// route from its root would sort.
+			typealias Walk = (levels: [Int], node: Node, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>)
 			// A node is entered by the first walk to read every location on the way to it, which is the least walk there.
 			var entered = Set<Node>()
-			var frontier = ends.map { (levels: [level($0)], node: $0, pending: ArraySlice<Dependency.DeclarationLocation?>()) }
+			var frontier = ends.map { (levels: [level($0)], node: $0, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>()) }
 			while !frontier.isEmpty {
 				// Each walk with nothing pending goes on down each of its steps; a step that stays at its level reads nothing.
 				var expanded = [Walk]()
@@ -771,23 +773,30 @@ extension SeamSignature.Places {
 						if isEdge {
 							let childLevel = level(child)
 							let parentPosition = places.levels[childLevel].parents.firstIndex(of: level(walk.node)) ?? 0
-							let segment = places.levels[childLevel].declaredSegmentByParent[parentPosition].map(\.declarationLocation)
-							frontier.append((levels: walk.levels + [childLevel], node: child, pending: segment[...]))
+							frontier.append((levels: walk.levels + [childLevel], node: child, pending: places.levels[childLevel].declaredSegmentByParent[parentPosition][...]))
 						} else {
 							frontier.append((levels: walk.levels, node: child, pending: []))
 						}
 					}
 				}
-				// Keep the walks whose next location sorts first.
-				guard let least = expanded.lazy.compactMap(\.pending.first).min(by: Dependency.DeclarationLocation.precedesInSourceOrder) else { return nil }
+				// Keep the walks whose next declared property sorts first.
+				guard let least = expanded.lazy.compactMap(\.pending.first).min(by: Self.precedesOnRoute) else { return nil }
 				frontier = expanded.compactMap { walk in
-					guard let next = walk.pending.first, next == least else { return nil }
+					guard let next = walk.pending.first, next.declarationLocation == least.declarationLocation, next.property.label == least.property.label else { return nil }
 					var advanced = walk
 					advanced.pending = walk.pending.dropFirst()
 					return advanced
 				}
 			}
 			return nil
+		}
+
+		/// Whether `lhs` sorts before `rhs` on a route: by location, then, where the locations are equal, by label.
+		private static func precedesOnRoute(_ lhs: SeamSignature.Hole.DeclaredProperty, _ rhs: SeamSignature.Hole.DeclaredProperty) -> Bool {
+			guard lhs.declarationLocation == rhs.declarationLocation else {
+				return Dependency.DeclarationLocation.precedesInSourceOrder(lhs.declarationLocation, rhs.declarationLocation)
+			}
+			return lhs.property.label < rhs.property.label
 		}
 
 		/// The answer the declaration of `label` at `level` gives a walk that reached it in `state`, having crossed `function`
