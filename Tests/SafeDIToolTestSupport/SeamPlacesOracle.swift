@@ -196,11 +196,11 @@ public enum SeamPlacesOracle {
 				let graph = Set(query.answers(ofLabel: label, at: caseIndex).map { answer -> String in
 					switch answer {
 					case let .field(level, declaration):
-						return json(places.declaration(level: level, declaration: declaration).field)
+						json(places.declaration(level: level, declaration: declaration).field)
 					case .callersOwn:
-						return "none"
+						"none"
 					case .uncarried, .boundOutsideSendableFunction:
-						return query.uncarriedDeclaration(of: answer, at: caseIndex).map { uncarriedJSON($0) } ?? "none"
+						query.uncarriedDeclaration(of: answer, at: caseIndex).map { uncarriedJSON($0) } ?? "none"
 					}
 				})
 				compare("answers of \(label)", at: path, today: today.sorted(), graph: graph.sorted(), into: &report)
