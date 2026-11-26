@@ -63,7 +63,7 @@ extension SeamSignature.Places {
 		public let places: SeamSignature.Places
 		/// How often a walk met a level it was still walking: a cycle in the graph.
 		public var cycleRevisits: Int {
-			answerFold.revisits + hiddenFold.revisits + nearestFold.revisits + reentryFold.revisits
+			answerFold.revisits + hiddenFold.revisits + nearestFold.revisits + reentryFold.revisits + variantFold.revisits
 		}
 
 		// MARK: Answers
@@ -202,20 +202,23 @@ extension SeamSignature.Places {
 					}
 				},
 			)
-			return reached.map { element in
-				guard case let .reentry(level, index, declaringParent) = element else { return nil }
-				let reentry = places.levels[level].cycleReentries[index]
-				return SeamSignature.Hole.CycleReentryDeclaration(
-					property: reentry.property,
-					declaringType: reentry.declaringType,
-					declarationLocation: reentry.declarationLocation,
-					parameterTakingType: reentry.parameterTakingType,
-					closedOnProperty: reentry.closedOnProperty,
-					closedOnBuiltType: reentry.closedOnBuiltType,
-					closedOnDeclaringType: declaringType(ofPropertyAfter: declaringParent),
-					reenteringType: reentry.reenteringType,
-				)
-			}
+			return reached.map(cycleReentryDeclaration(of:))
+		}
+
+		/// The declaration a re-entry hands the type built again, or `nil` for a route on which none does.
+		private func cycleReentryDeclaration(of element: ReentryElement) -> SeamSignature.Hole.CycleReentryDeclaration? {
+			guard case let .reentry(level, index, declaringParent) = element else { return nil }
+			let reentry = places.levels[level].cycleReentries[index]
+			return SeamSignature.Hole.CycleReentryDeclaration(
+				property: reentry.property,
+				declaringType: reentry.declaringType,
+				declarationLocation: reentry.declarationLocation,
+				parameterTakingType: reentry.parameterTakingType,
+				closedOnProperty: reentry.closedOnProperty,
+				closedOnBuiltType: reentry.closedOnBuiltType,
+				closedOnDeclaringType: declaringType(ofPropertyAfter: declaringParent),
+				reenteringType: reentry.reenteringType,
+			)
 		}
 
 		/// The cycle re-entry declarations of the case at `caseIndex`, every distinct one per label, labels in the order the
@@ -273,22 +276,25 @@ extension SeamSignature.Places {
 					}
 				},
 			)
-			return hidden.map { element in
-				let declaration = places.declaration(level: element.fieldLevel, declaration: element.fieldIndex)
-				let hiddenDeclaration = places.declaration(level: element.hiddenLevel, declaration: element.hiddenIndex)
-				let calledSeam = if case let .boundByPassingUpSeam(_, _, place) = hiddenDeclaration.reason {
-					place.seamType
-				} else {
-					element.hiding
-				}
-				return SeamSignature.Hole.DeclarationHiddenByField(
-					property: hiddenDeclaration.field.property,
-					declaringType: hiddenDeclaration.field.declaringType,
-					declarationLocation: hiddenDeclaration.field.declarationLocation,
-					calledSeam: calledSeam,
-					receivingSeam: declaration.fillFieldHiding?.receivingSeam ?? calledSeam,
-				)
+			return hidden.map(declarationHiddenByField(of:))
+		}
+
+		/// The declaration `element`'s field hides, as a place reads it.
+		private func declarationHiddenByField(of element: HiddenElement) -> SeamSignature.Hole.DeclarationHiddenByField {
+			let declaration = places.declaration(level: element.fieldLevel, declaration: element.fieldIndex)
+			let hiddenDeclaration = places.declaration(level: element.hiddenLevel, declaration: element.hiddenIndex)
+			let calledSeam = if case let .boundByPassingUpSeam(_, _, place) = hiddenDeclaration.reason {
+				place.seamType
+			} else {
+				element.hiding
 			}
+			return SeamSignature.Hole.DeclarationHiddenByField(
+				property: hiddenDeclaration.field.property,
+				declaringType: hiddenDeclaration.field.declaringType,
+				declarationLocation: hiddenDeclaration.field.declarationLocation,
+				calledSeam: calledSeam,
+				receivingSeam: declaration.fillFieldHiding?.receivingSeam ?? calledSeam,
+			)
 		}
 
 		/// The declarations hidden by fields of the case at `caseIndex`, in the order of its fields' labels.
@@ -418,66 +424,323 @@ extension SeamSignature.Places {
 				let function: Int?
 			}
 			let startNode = Node(level: placeCase.ownerLevel, state: start, isPastDeclaration: false, function: placeCase.siteOpensSendableFunction ? SeamSignature.Places.Answer.siteFunction : nil)
-			// The walk up, each node with the nodes it leads up to; a node that decides the answer leads to the same level past
-			// the declaration, when the answer is `answer`.
-			var parentsByNode = [Node: [Node]]()
-			var nodesInOrderReached = [startNode]
-			var roots = [Node]()
-			var toVisit = [startNode]
-			var seen: Set<Node> = [startNode]
-			while let node = toVisit.popLast() {
-				var next = [Node]()
-				if !node.isPastDeclaration, let decided = decidedAnswer(at: node.level, label: label, state: node.state, function: node.function) {
-					if decided == answer {
-						next.append(Node(level: node.level, state: node.state, isPastDeclaration: true, function: nil))
+			return leastRoute(
+				from: startNode,
+				level: \.level,
+				next: { [unowned self] node in
+					// A node that decides the answer leads to the same level past the declaration, when the answer is `answer`.
+					if !node.isPastDeclaration, let decided = decidedAnswer(at: node.level, label: label, state: node.state, function: node.function) {
+						return decided == answer ? [(Node(level: node.level, state: node.state, isPastDeclaration: true, function: nil), false)] : []
 					}
-				} else if places.levels[node.level].parents.isEmpty {
-					if isValid(node.level, node.state) {
-						roots.append(node)
-					}
-				} else {
 					let opens = places.levels[node.level].opensSendableFunction.isPresent
-					for (parent, state) in transitions(from: node.level, state: node.state) {
+					return transitions(from: node.level, state: node.state).map { parent, state in
 						let function = node.isPastDeclaration ? nil : node.function ?? (opens ? node.level : nil)
-						next.append(Node(level: parent, state: state, isPastDeclaration: node.isPastDeclaration, function: function))
+						return (Node(level: parent, state: state, isPastDeclaration: node.isPastDeclaration, function: function), true)
+					}
+				},
+				isEnd: { [unowned self] node in
+					node.isPastDeclaration && places.levels[node.level].parents.isEmpty && isValid(node.level, node.state)
+				},
+			)
+		}
+
+		/// One joint value the places of a case read of a label over some of its routes: the answer, the scope a cycle
+		/// re-enters between the place and the label's nearest declaration, and the declaration a fill's field hides there,
+		/// with the least of those routes in source order.
+		public struct LabelVariant: Sendable {
+			public let answer: SeamSignature.Places.Answer
+			public let cycleReentry: SeamSignature.Hole.CycleReentryDeclaration?
+			public let hiddenByField: SeamSignature.Hole.DeclarationHiddenByField?
+			/// The least route reading this value, as `representativeRoute(of:ofLabel:answer:)` orders routes.
+			public let leastRoute: Route
+		}
+
+		/// Every distinct joint value the places of the case at `caseIndex` read of `label` over its routes, each with its
+		/// least route, in the order of those routes. A route reads one answer, at most one re-entry and at most one hidden
+		/// declaration, which `answers(ofLabel:at:)`, `cycleReentryDeclarations(ofLabel:at:)` and
+		/// `declarationsHiddenByFields(ofLabel:at:)` list apart; routes that share an answer can differ in the other two.
+		public func labelVariants(ofLabel label: String, at caseIndex: Int) -> [LabelVariant] {
+			let placeCase = places.cases[caseIndex]
+			guard let start = startState(of: placeCase) else { return [] }
+			// The place's own label is never re-entered: every call is made inside a tree that builds a declaration of it.
+			let tracksReentry = places.levels[placeCase.ownerLevel].key.nextProperty?.label != label
+			let crossedAtSite = placeCase.siteOpensSendableFunction
+			let elements = variantFold.value(
+				of: AnswerKey(level: placeCase.ownerLevel, label: label, state: start, crossed: crossedAtSite),
+				direct: { [unowned self] key in
+					guard let answers = directAnswers(of: key) else { return nil }
+					return answers.flatMap { answer in
+						hiddenElements(of: answer, crossed: key.crossed, state: key.state).map { VariantElement(answer: answer, reentry: .none, hidden: $0) }
+					}
+				},
+				children: { [unowned self] key in
+					let opens = places.levels[key.level].opensSendableFunction.isPresent
+					let crossesHere = opens && !key.crossed
+					let own = tracksReentry ? firstReentryIndexByLabel[key.level][key.label] : nil
+					let level = key.level
+					return transitions(from: key.level, state: key.state).map { parent, state in
+						(AnswerKey(level: parent, label: key.label, state: state, crossed: key.crossed || opens), { element in
+							var element = element
+							if crossesHere {
+								element.answer = element.answer.crossingFunction(at: level)
+							}
+							if case .none = element.reentry, let own {
+								element.reentry = .reentry(level: level, index: own, declaringParent: parent)
+							}
+							// Past a `@Sendable` function, the fill's field is no field of the place.
+							if opens {
+								element.hidden = nil
+							}
+							return element
+						})
+					}
+				},
+			)
+			let variants = elements.compactMap { element -> LabelVariant? in
+				let answer = crossedAtSite ? element.answer.crossingFunction(at: SeamSignature.Places.Answer.siteFunction) : element.answer
+				guard let route = leastRoute(reading: element, ofLabel: label, at: caseIndex, tracksReentry: tracksReentry) else { return nil }
+				return LabelVariant(
+					answer: answer,
+					cycleReentry: cycleReentryDeclaration(of: element.reentry),
+					hiddenByField: element.hidden.map(declarationHiddenByField(of:)),
+					leastRoute: route,
+				)
+			}
+			return variants.sorted { precedesInSourceOrder($0.leastRoute, $1.leastRoute) }
+		}
+
+		/// The declarations a fill's field hides from a place that reads `answer`: none past a `@Sendable` function, and
+		/// `nil` alone where the answer's declaration hides nothing.
+		private func hiddenElements(of answer: SeamSignature.Places.Answer, crossed: Bool, state: RouteState) -> [HiddenElement?] {
+			guard !crossed, case let .field(level, index) = answer, let hiding = places.declaration(level: level, declaration: index).fillFieldHiding else { return [nil] }
+			let property = places.declaration(level: level, declaration: index).field.property
+			var elements = [HiddenElement?]()
+			var seen = Set<HiddenElement?>()
+			for reached in reached(before: index, at: level, state: state) {
+				let element: HiddenElement? = if case let .declaration(hiddenLevel, hiddenIndex) = reached, places.declaration(level: hiddenLevel, declaration: hiddenIndex).field.property != property {
+					HiddenElement(fieldLevel: level, fieldIndex: index, hiddenLevel: hiddenLevel, hiddenIndex: hiddenIndex, hiding: hiding.calledSeam)
+				} else {
+					nil
+				}
+				if seen.insert(element).inserted {
+					elements.append(element)
+				}
+			}
+			return elements
+		}
+
+		/// The least route of the case at `caseIndex` on which its places read `element` of `label`.
+		private func leastRoute(reading element: VariantElement, ofLabel label: String, at caseIndex: Int, tracksReentry: Bool) -> Route? {
+			let placeCase = places.cases[caseIndex]
+			guard let start = startState(of: placeCase) else { return nil }
+			enum Phase: Hashable {
+				/// Below the label's nearest declaration, with the innermost function crossed and the re-entry nearest the
+				/// declaration so far.
+				case beforeDeclaration(function: Int?, reentry: ReentryElement)
+				/// Above a fill's field that hides a declaration, looking for the nearest declaration of its label.
+				case seekingHidden(fieldLevel: Int, fieldIndex: Int)
+				/// Past every declaration the value depends on.
+				case past
+			}
+			struct Node: Hashable {
+				let level: Int
+				let state: RouteState
+				let phase: Phase
+			}
+			let startNode = Node(level: placeCase.ownerLevel, state: start, phase: .beforeDeclaration(function: placeCase.siteOpensSendableFunction ? SeamSignature.Places.Answer.siteFunction : nil, reentry: .none))
+			return leastRoute(
+				from: startNode,
+				level: \.level,
+				next: { [unowned self] node in
+					let past = [(Node(level: node.level, state: node.state, phase: .past), false)]
+					switch node.phase {
+					case let .beforeDeclaration(function, reentry):
+						if let decided = decidedAnswer(at: node.level, label: label, state: node.state, function: function) {
+							let answer = function == SeamSignature.Places.Answer.siteFunction ? element.answer.crossingFunction(at: SeamSignature.Places.Answer.siteFunction) : element.answer
+							guard decided == answer, reentry == element.reentry else { return [] }
+							guard function == nil, case let .field(level, index) = decided, let hiding = places.declaration(level: level, declaration: index).fillFieldHiding else {
+								return element.hidden == nil ? past : []
+							}
+							let declarations = places.levels[level].declarations
+							if let earlier = declarations[..<index].lastIndex(where: { $0.field.property.label == label }) {
+								return hidden(level: level, index: index, hiddenLevel: level, hiddenIndex: earlier, hiding: hiding.calledSeam) == element.hidden ? past : []
+							}
+							if places.levels[level].parents.isEmpty {
+								return element.hidden == nil ? past : []
+							}
+							return transitions(from: level, state: node.state).map { parent, state in
+								(Node(level: parent, state: state, phase: .seekingHidden(fieldLevel: level, fieldIndex: index)), true)
+							}
+						}
+						let opens = places.levels[node.level].opensSendableFunction.isPresent
+						let own = tracksReentry ? firstReentryIndexByLabel[node.level][label] : nil
+						return transitions(from: node.level, state: node.state).map { parent, state in
+							let nextReentry: ReentryElement = own.map { .reentry(level: node.level, index: $0, declaringParent: parent) } ?? reentry
+							return (Node(level: parent, state: state, phase: .beforeDeclaration(function: function ?? (opens ? node.level : nil), reentry: nextReentry)), true)
+						}
+					case let .seekingHidden(fieldLevel, fieldIndex):
+						if let index = lastDeclarationIndexByLabel[node.level][label] {
+							guard isValid(node.level, node.state), let hiding = places.declaration(level: fieldLevel, declaration: fieldIndex).fillFieldHiding else { return [] }
+							return hidden(level: fieldLevel, index: fieldIndex, hiddenLevel: node.level, hiddenIndex: index, hiding: hiding.calledSeam) == element.hidden ? past : []
+						}
+						if places.levels[node.level].parents.isEmpty {
+							return element.hidden == nil ? past : []
+						}
+						return transitions(from: node.level, state: node.state).map { parent, state in
+							(Node(level: parent, state: state, phase: node.phase), true)
+						}
+					case .past:
+						return transitions(from: node.level, state: node.state).map { parent, state in
+							(Node(level: parent, state: state, phase: .past), true)
+						}
+					}
+				},
+				isEnd: { [unowned self] node in
+					node.phase == .past && places.levels[node.level].parents.isEmpty && isValid(node.level, node.state)
+				},
+			)
+		}
+
+		/// The declaration at `hiddenIndex` of `hiddenLevel` as the field at `index` of `level` hides it, or `nil` where it is a
+		/// declaration of the field's own property.
+		private func hidden(level: Int, index: Int, hiddenLevel: Int, hiddenIndex: Int, hiding: TypeDescription) -> HiddenElement? {
+			guard places.declaration(level: hiddenLevel, declaration: hiddenIndex).field.property != places.declaration(level: level, declaration: index).field.property else { return nil }
+			return HiddenElement(fieldLevel: level, fieldIndex: index, hiddenLevel: hiddenLevel, hiddenIndex: hiddenIndex, hiding: hiding)
+		}
+
+		/// The distinct depths below the owner of the case at `caseIndex` at which the stack its places are built with holds
+		/// `property` built for `concreteType`, over the case's routes, each with its least route among those whose stack
+		/// holds it there, in the order of those routes. The depth counts the declarations beneath the innermost such entry
+		/// (`Hole.fillPathDeclarationsBeneath`): a lazily instantiated property's instance is no declaration of its own.
+		public func depthsBelowOwner(ofProperty property: Property, builtAs concreteType: TypeDescription, at caseIndex: Int) -> [(depth: Int, leastRoute: Route)] {
+			let placeCase = places.cases[caseIndex]
+			guard let start = startState(of: placeCase) else { return [] }
+			let target = SeamSignature.Places.StackEntry(property: property, concreteType: concreteType)
+			enum Phase: Hashable {
+				/// Below the entry, with the declarations counted beneath the last entry stacked so far, whose own count waits on
+				/// the entry above it.
+				case searching(depth: Int, last: Property?)
+				case found(depth: Int)
+			}
+			struct Node: Hashable {
+				let level: Int
+				let state: RouteState
+				let phase: Phase
+			}
+			/// The phase after stacking `entries` above the last entry, innermost first.
+			func stacking(_ entries: [SeamSignature.Places.StackEntry], depth: Int, last: Property?) -> Phase {
+				var depth = depth
+				var last = last
+				for entry in entries {
+					if let previous = last, entry.property.asLazilyInstantiatedInstanceProperty != previous {
+						depth += 1
+					}
+					if entry == target {
+						return .found(depth: depth)
+					}
+					last = entry.property
+				}
+				return .searching(depth: depth, last: last)
+			}
+			let startNode = Node(level: placeCase.ownerLevel, state: start, phase: .searching(depth: 0, last: nil))
+			let next = { [unowned self] (node: Node) -> [(Node, Bool)] in
+				switch node.phase {
+				case let .searching(depth, last):
+					let level = places.levels[node.level]
+					guard let builtType = level.key.builtType else {
+						// A fill's base stack ends the stack.
+						guard case let .found(depth) = stacking(level.fillBaseStack, depth: depth, last: last) else { return [] }
+						return [(Node(level: node.level, state: node.state, phase: .found(depth: depth)), false)]
+					}
+					return transitions(from: node.level, state: node.state).map { parent, state in
+						guard let property = places.levels[parent].key.nextProperty else {
+							return (Node(level: parent, state: state, phase: node.phase), true)
+						}
+						return (Node(level: parent, state: state, phase: stacking(Self.entries(of: property, builtAs: builtType), depth: depth, last: last)), true)
+					}
+				case .found:
+					return transitions(from: node.level, state: node.state).map { parent, state in
+						(Node(level: parent, state: state, phase: node.phase), true)
 					}
 				}
-				parentsByNode[node] = next
-				for parent in next where seen.insert(parent).inserted {
-					nodesInOrderReached.append(parent)
+			}
+			// The depths some route reaches, in the order the walk finds them.
+			var depths = [Int]()
+			var seen: Set<Node> = [startNode]
+			var toVisit = [startNode]
+			while let node = toVisit.popLast() {
+				if case let .found(depth) = node.phase, places.levels[node.level].parents.isEmpty, isValid(node.level, node.state), !depths.contains(depth) {
+					depths.append(depth)
+				}
+				for (parent, _) in next(node) where seen.insert(parent).inserted {
 					toVisit.append(parent)
 				}
 			}
-			// The nodes that lead up to a root reached past the answer's declaration, or that are such a root: only they are
-			// on a route that reads `answer`.
-			var childrenByNode = [Node: [Node]]()
+			let routes = depths.compactMap { depth -> (depth: Int, leastRoute: Route)? in
+				leastRoute(from: startNode, level: \.level, next: next, isEnd: { [unowned self] node in
+					node.phase == .found(depth: depth) && places.levels[node.level].parents.isEmpty && isValid(node.level, node.state)
+				}).map { (depth, $0) }
+			}
+			return routes.sorted { precedesInSourceOrder($0.leastRoute, $1.leastRoute) }
+		}
+
+		/// Whether `lhs` precedes `rhs` by the source locations of the properties the code declares along each, root first:
+		/// a route whose locations are a prefix of the other's first, a location-less declaration after every located one.
+		private func precedesInSourceOrder(_ lhs: Route, _ rhs: Route) -> Bool {
+			let lhsLocations = declaredPathToOwner(along: lhs).map(\.declarationLocation)
+			let rhsLocations = declaredPathToOwner(along: rhs).map(\.declarationLocation)
+			for (lhsLocation, rhsLocation) in zip(lhsLocations, rhsLocations) where lhsLocation != rhsLocation {
+				return Dependency.DeclarationLocation.precedesInSourceOrder(lhsLocation, rhsLocation)
+			}
+			return lhsLocations.count < rhsLocations.count
+		}
+
+		/// The least route, by the source locations of the properties the code declares along it, root first (a route whose
+		/// locations are a prefix of another's first, a location-less declaration after every located one), among the routes
+		/// of a walk up from `startNode` that reach a node `isEnd` accepts, so neither a name nor the order in which the places
+		/// were reached decides it. `next` gives each node the nodes it leads up to, each with whether the step goes up an edge
+		/// of the graph or stays at its level. Found from the ends down, one location at a time, over the nodes that lead to an
+		/// end, so no route is listed; a node a route has already passed is not entered again. `nil` when no route reaches one.
+		private func leastRoute<Node: Hashable>(from startNode: Node, level: (Node) -> Int, next: (Node) -> [(Node, Bool)], isEnd: (Node) -> Bool) -> Route? {
+			// The walk up, each node with the nodes it leads up to.
+			var parentsByNode = [Node: [(node: Node, isEdge: Bool)]]()
+			var nodesInOrderReached = [startNode]
+			var ends = [Node]()
+			var toVisit = [startNode]
+			var seen: Set<Node> = [startNode]
+			while let node = toVisit.popLast() {
+				if isEnd(node) {
+					ends.append(node)
+				}
+				let parents = next(node).map { (node: $0.0, isEdge: $0.1) }
+				parentsByNode[node] = parents
+				for parent in parents where seen.insert(parent.node).inserted {
+					nodesInOrderReached.append(parent.node)
+					toVisit.append(parent.node)
+				}
+			}
+			// The nodes that lead up to an end, or that are one: only they are on a route the walk accepts.
+			var childrenByNode = [Node: [(node: Node, isEdge: Bool)]]()
 			for node in nodesInOrderReached {
 				for parent in parentsByNode[node] ?? [] {
-					childrenByNode[parent, default: []].append(node)
+					childrenByNode[parent.node, default: []].append((node, parent.isEdge))
 				}
 			}
 			var onRoute = Set<Node>()
-			var toMark = roots.filter(\.isPastDeclaration)
+			var toMark = ends
 			while let node = toMark.popLast() {
 				guard onRoute.insert(node).inserted else { continue }
-				toMark += childrenByNode[node] ?? []
+				toMark += (childrenByNode[node] ?? []).map(\.node)
 			}
 			guard onRoute.contains(startNode) else { return nil }
-			// From the roots down, one location at a time: every walk in `frontier` has read the same locations, and a walk
+			// From the ends down, one location at a time: every walk in `frontier` has read the same locations, and a walk
 			// holds the locations of the edge it is on that it has not read yet.
-			struct Walk {
-				var levels: [Int]
-				var node: Node
-				var pending: ArraySlice<Dependency.DeclarationLocation?>
-			}
+			typealias Walk = (levels: [Int], node: Node, pending: ArraySlice<Dependency.DeclarationLocation?>)
+			// A node is entered by the first walk to read every location on the way to it, which is the least walk there.
 			var entered = Set<Node>()
-			var frontier = [Walk]()
-			for root in roots where onRoute.contains(root) && entered.insert(root).inserted {
-				frontier.append(Walk(levels: [root.level], node: root, pending: []))
-			}
+			var frontier = ends.map { (levels: [level($0)], node: $0, pending: ArraySlice<Dependency.DeclarationLocation?>()) }
 			while !frontier.isEmpty {
-				// Each walk with nothing pending goes on down each of its edges; a step to the same level past or before the
-				// declaration reads nothing.
+				// Each walk with nothing pending goes on down each of its steps; a step that stays at its level reads nothing.
 				var expanded = [Walk]()
 				var index = 0
 				while index < frontier.count {
@@ -487,16 +750,18 @@ extension SeamSignature.Places {
 						expanded.append(walk)
 						continue
 					}
+					guard entered.insert(walk.node).inserted else { continue }
 					if walk.node == startNode {
 						return Route(levels: walk.levels)
 					}
-					for child in childrenByNode[walk.node] ?? [] where onRoute.contains(child) && entered.insert(child).inserted {
-						if child.level == walk.node.level, child.isPastDeclaration != walk.node.isPastDeclaration {
-							frontier.append(Walk(levels: walk.levels, node: child, pending: []))
+					for (child, isEdge) in childrenByNode[walk.node] ?? [] where onRoute.contains(child) && !entered.contains(child) {
+						if isEdge {
+							let childLevel = level(child)
+							let parentPosition = places.levels[childLevel].parents.firstIndex(of: level(walk.node)) ?? 0
+							let segment = places.levels[childLevel].declaredSegmentByParent[parentPosition].map(\.declarationLocation)
+							frontier.append((levels: walk.levels + [childLevel], node: child, pending: segment[...]))
 						} else {
-							let parentPosition = places.levels[child.level].parents.firstIndex(of: walk.node.level) ?? 0
-							let segment = places.levels[child.level].declaredSegmentByParent[parentPosition].map(\.declarationLocation)
-							frontier.append(Walk(levels: walk.levels + [child.level], node: child, pending: segment[...]))
+							frontier.append((levels: walk.levels, node: child, pending: []))
 						}
 					}
 				}
@@ -561,6 +826,7 @@ extension SeamSignature.Places {
 		private var hiddenFold = Fold<AnswerKey, HiddenElement>()
 		private var nearestFold = Fold<StateKey, SeamSignature.Places.Reached>()
 		private var reentryFold = Fold<StateKey, ReentryElement>()
+		private var variantFold = Fold<AnswerKey, VariantElement>()
 
 		/// What a walk up from a case's owner still requires of the rest of its route to keep it in the case's family.
 		private enum RouteState: Hashable {
@@ -597,6 +863,13 @@ extension SeamSignature.Places {
 		private enum ReentryElement: Hashable {
 			case none
 			case reentry(level: Int, index: Int, declaringParent: Int)
+		}
+
+		/// What one route reads of a label (`LabelVariant`).
+		private struct VariantElement: Hashable {
+			var answer: SeamSignature.Places.Answer
+			var reentry: ReentryElement
+			var hidden: HiddenElement?
 		}
 
 		private func startState(of placeCase: SeamSignature.Places.Case) -> RouteState? {
