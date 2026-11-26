@@ -9553,6 +9553,12 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let lazyCycleConfigurationFieldReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
 
+	/// The same cause as `lazyCycleConfigurationFieldReason`, where the configuration field the back-edge drops also decides
+	/// which of the laid-out mock's calls share a hoisted builder function, so the layout writes one function more or fewer,
+	/// with its `_` name. With `computeCycleEdges` made to pick the same edges under both namings, both namings of every
+	/// listed seed generated the same mock code, so the difference is the edge choice, not the layout.
+	private static let lazyCycleBackEdgeSharesBuilderFunctionsReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, and so which calls of the laid-out mock share a builder function: one field of a configuration struct is present under one naming and absent under another, and the mock declares one builder function more or fewer"
+
 	private static let mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason = "\(mockParameterAndFieldOrderReason), and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another"
 
 	// The remedy oracle's shapes: advice an error states that does not fix it. Each names its minimal graph, a test in
@@ -9639,26 +9645,32 @@ struct SafeDIToolGraphFuzzerTests {
 			],
 		),
 		GraphFuzzerKnownIssue(
+			reason: lazyCycleBackEdgeSharesBuilderFunctionsReason,
+			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
+			seeds: [
+				311, 525, 991, 1_075, 1_857, 2_013, 3_180, 3_215, 3_221, 3_584, 3_832, 4_776,
+			],
+		),
+		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 35, 107, 114, 116, 131, 168, 204, 223, 241, 264, 265, 311, 323, 338, 364, 383, 390, 431, 448, 450,
-				473, 508, 515, 525, 527, 545, 567, 595, 617, 628, 630, 644, 680, 714, 728, 732, 735, 742, 749, 751, 768,
-				785, 786, 836, 847, 886, 912, 940, 948, 953, 975, 987, 991, 993, 1_004, 1_029, 1_044, 1_051, 1_061,
-				1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_149, 1_172, 1_236, 1_244, 1_322, 1_329, 1_352,
-				1_362, 1_372, 1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_559, 1_567, 1_580, 1_602,
-				1_633, 1_708, 1_758, 1_781, 1_784, 1_804, 1_857, 1_896, 1_926, 1_938, 1_972, 2_009, 2_013, 2_017, 2_084,
-				2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403,
-				2_430, 2_432, 2_437, 2_444, 2_456, 2_529, 2_555, 2_577, 2_630, 2_633, 2_637, 2_669, 2_682, 2_732, 2_808,
-				2_835, 2_845, 2_874, 2_914, 2_972, 3_004, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_196, 3_215,
-				3_221, 3_232, 3_241, 3_250, 3_252, 3_298, 3_306, 3_329, 3_344, 3_345, 3_359, 3_361, 3_430, 3_504, 3_506,
-				3_522, 3_526, 3_533, 3_541, 3_567, 3_577, 3_579, 3_582, 3_584, 3_588, 3_594, 3_596, 3_602, 3_648, 3_699,
-				3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_832, 3_850, 3_858, 3_879,
-				3_885, 3_894, 3_915, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213,
-				4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428,
-				4_515, 4_534, 4_545, 4_549, 4_567, 4_603, 4_619, 4_637, 4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716,
-				4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859, 4_904, 4_918, 4_921, 4_922, 4_944, 4_963, 4_964,
-				4_996,
+				3, 35, 107, 114, 116, 131, 168, 204, 223, 241, 264, 265, 323, 338, 364, 383, 390, 431, 448, 450,
+				473, 508, 515, 527, 545, 567, 595, 617, 628, 630, 644, 680, 714, 728, 732, 735, 742, 749, 751, 768, 785,
+				786, 836, 847, 886, 912, 940, 948, 953, 975, 987, 993, 1_004, 1_029, 1_044, 1_051, 1_061, 1_064, 1_072,
+				1_084, 1_092, 1_139, 1_145, 1_147, 1_149, 1_172, 1_236, 1_244, 1_322, 1_329, 1_352, 1_362, 1_372,
+				1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_559, 1_567, 1_580, 1_602, 1_633, 1_708,
+				1_758, 1_781, 1_784, 1_804, 1_896, 1_926, 1_938, 1_972, 2_009, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234,
+				2_249, 2_270, 2_277, 2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444,
+				2_456, 2_529, 2_555, 2_577, 2_630, 2_633, 2_637, 2_669, 2_682, 2_732, 2_808, 2_835, 2_845, 2_874, 2_914,
+				2_972, 3_004, 3_064, 3_074, 3_075, 3_091, 3_134, 3_183, 3_196, 3_232, 3_241, 3_250, 3_252, 3_298, 3_306,
+				3_329, 3_344, 3_345, 3_359, 3_361, 3_430, 3_504, 3_506, 3_522, 3_526, 3_533, 3_541, 3_567, 3_577, 3_579, 3_582,
+				3_588, 3_594, 3_596, 3_602, 3_648, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805,
+				3_820, 3_823, 3_826, 3_850, 3_858, 3_879, 3_885, 3_894, 3_915, 4_044, 4_068, 4_102, 4_107, 4_110,
+				4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304,
+				4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549, 4_567, 4_603, 4_619, 4_637,
+				4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716, 4_717, 4_775, 4_781, 4_783, 4_786, 4_795, 4_859,
+				4_904, 4_918, 4_921, 4_922, 4_944, 4_963, 4_964, 4_996,
 			],
 		),
 		// A graph that shows both reasons, under one renaming or across them, is documented only by the shape that names both.
