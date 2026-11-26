@@ -295,7 +295,8 @@ enum GraphFuzzerAPIVersionAgreement {
 		let v3Fixture = (judgesUnbuildableBuilders ? v2Fixture.declaringUnbuildableBuilderCalls : v2Fixture).selectingAPIVersion(.v3Unstable)
 		let v2Run = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: v2Fixture, filesToDelete: &filesToDelete)
 		let v3Run = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: v3Fixture, filesToDelete: &filesToDelete)
-		let classification = GraphFuzzerReleaseAcceptance.classify(older: v2Run, current: v3Run) { v2Fixture.differentialValueProbes(generatedFiles: $0.filter { !$0.key.hasSuffix("+SafeDIMock.swift") || $0.value.contains("static func mock(") }).map(Self.callingV3Mock(_:)) }
+		let v3GeneratedFiles: [String: String] = if case let .compiled(generatedFiles, _, _) = v3Run.outcome { generatedFiles } else { [:] }
+		let classification = GraphFuzzerReleaseAcceptance.classify(older: v2Run, current: v3Run) { v2Fixture.differentialValueProbes(generatedFiles: $0.filter { !$0.key.hasSuffix("+SafeDIMock.swift") || $0.value.contains("static func mock(") }).map { Self.callingV3Mock($0, v3GeneratedFiles: v3GeneratedFiles) } }
 		// `SAFEDI_API_VERSION_AGREEMENT_DUMP` names a directory to write each seed's `.v3Unstable` fixture, both sides'
 		// generated files and their compiles' output into, to read a disagreement by hand.
 		if let dump = ProcessInfo.processInfo.environment["SAFEDI_API_VERSION_AGREEMENT_DUMP"] {
@@ -357,9 +358,11 @@ enum GraphFuzzerAPIVersionAgreement {
 
 	/// `probe` with its `.v3Unstable` side passing what a `.v2` probe hands a mock as `.v3Unstable` takes it: a mock's own
 	/// optional default, `T.mock(name: v)`, in its overrides, `T.mock(safeDIOverrides: .init(name: v))`, and a value the
-	/// mock cannot build, `T.mock(label: v)`, as a builder, `T.mock(label: { v })` (D12). Every other probe calls `mock()`
-	/// with no argument, or a root, and is left as it is. The `.v2` side calls the mock as the probe does.
-	static func callingV3Mock(_ probe: DifferentialValueProbe) -> DifferentialValueProbe {
+	/// mock's tree creates and cannot build, `T.mock(label: v)`, as a builder, `T.mock(label: { v })` (D12), where the
+	/// `.v3Unstable` mock in `v3GeneratedFiles` takes the label as a function. A value the tree receives from outside stays a
+	/// value (D12), as does any label of a mock `v3GeneratedFiles` does not declare. Every other probe calls `mock()` with no
+	/// argument, or a root, and is left as it is. The `.v2` side calls the mock as the probe does.
+	static func callingV3Mock(_ probe: DifferentialValueProbe, v3GeneratedFiles: [String: String]) -> DifferentialValueProbe {
 		let expression = probe.expression
 		guard probe.knownRightExpression == nil,
 		      expression.hasSuffix(")"),
@@ -370,8 +373,30 @@ enum GraphFuzzerAPIVersionAgreement {
 		guard !label.isEmpty, label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { return probe }
 		let value = expression[colon.upperBound..<expression.index(before: expression.endIndex)]
 		let callee = expression[..<call.upperBound]
-		let v3Expression = label == "name" ? "\(callee)safeDIOverrides: .init(name: \(value)))" : "\(callee)\(label): { \(value) })"
+		let v3Expression: String
+		if label == "name" {
+			v3Expression = "\(callee)safeDIOverrides: .init(name: \(value)))"
+		} else if mockTakesFunction(labeled: String(label), ofType: String(expression[..<call.lowerBound]), in: v3GeneratedFiles) {
+			v3Expression = "\(callee)\(label): { \(value) })"
+		} else {
+			return probe
+		}
 		return DifferentialValueProbe(name: probe.name, expression: v3Expression, knownRightExpression: expression)
+	}
+
+	/// Whether the `mock()` an extension of `type` in `generatedFiles` declares takes `label` as a function – a builder,
+	/// `@escaping () -> T` – rather than as the value.
+	private static func mockTakesFunction(labeled label: String, ofType type: String, in generatedFiles: [String: String]) -> Bool {
+		for content in generatedFiles.values {
+			guard let extensionRange = content.range(of: "extension \(type) {\n"),
+			      let mockRange = content[extensionRange.upperBound...].range(of: "func mock(\n"),
+			      let signatureEnd = content[mockRange.upperBound...].range(of: ") -> ")
+			else { continue }
+			for parameter in content[mockRange.upperBound..<signatureEnd.lowerBound].split(separator: "\n").map({ $0.drop { $0 == " " } }) where parameter.hasPrefix("\(label): ") {
+				return parameter.dropFirst(label.count + 2).hasPrefix("@escaping")
+			}
+		}
+		return false
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -471,7 +496,7 @@ extension GraphFuzzerAPIVersionAgreement {
 
 	/// The public mock corpus's smoke seeds: graphs whose `.v2` and `.v3Unstable` public mocks agree, together holding at
 	/// least ten compared graphs, among them seeds whose probes pass a leaf its own `name` (31) or a consumer a value its mock
-	/// cannot build (6, 9), each spelled the `.v3Unstable` way by `callingV3Mock(_:)`.
+	/// cannot build (6, 9), each spelled the `.v3Unstable` way by `callingV3Mock(_:v3GeneratedFiles:)`.
 	/// A hand mutation that has a `.v3Unstable` public mock ignore `safeDIOverrides` for its type's own optional-typed default
 	/// (`PublicMockGeneration`'s `v3RootDefaultMembers`, binding the default provider in place of the member) fails seeds 31
 	/// and 440 as values that differ and seed 329 as generated code that does not compile.

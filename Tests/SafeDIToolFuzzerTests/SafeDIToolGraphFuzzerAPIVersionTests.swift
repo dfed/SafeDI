@@ -196,28 +196,54 @@ struct SafeDIToolGraphFuzzerAPIVersionTests {
 	}
 
 	@Test
-	func callingV3Mock_passesOwnDefaultInOverridesAndUnbuildableValueAsBuilder_whenProbePassesArgument() {
+	func callingV3Mock_passesOwnDefaultInOverridesAndCreatedUnbuildableValueAsBuilder_whenProbePassesArgument() {
+		let v3GeneratedFiles = [
+			"S7_UnbuildableScreen+SafeDIMock.swift": """
+			extension S7_UnbuildableScreen {
+			    static func mock(
+			        unbuildableFilter: @escaping () -> S7_UnbuildableFilter,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> S7_UnbuildableScreen {
+			        S7_UnbuildableScreen(unbuildableFilter: unbuildableFilter())
+			    }
+			}
+			""",
+			"S7_OuterScreen+SafeDIMock.swift": """
+			extension S7_OuterScreen {
+			    public static func mock(
+			        outerLabel: String,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> S7_OuterScreen {
+			        S7_OuterScreen(outerLabel: outerLabel)
+			    }
+			}
+			""",
+		]
 		let probes = [
 			DifferentialValueProbe("S7_T0.mock(name: \"probe\")"),
 			DifferentialValueProbe("S7_UnbuildableScreen.mock(unbuildableFilter: S7_UnbuildableFilter())"),
+			DifferentialValueProbe("S7_OuterScreen.mock(outerLabel: \"probe\")"),
 			DifferentialValueProbe("S7_T1.mock()"),
 			DifferentialValueProbe("S7_Root0()"),
-		].map(GraphFuzzerAPIVersionAgreement.callingV3Mock(_:))
+		].map { GraphFuzzerAPIVersionAgreement.callingV3Mock($0, v3GeneratedFiles: v3GeneratedFiles) }
 		#expect(probes.map(\.name) == [
 			"S7_T0.mock(name: \"probe\")",
 			"S7_UnbuildableScreen.mock(unbuildableFilter: S7_UnbuildableFilter())",
+			"S7_OuterScreen.mock(outerLabel: \"probe\")",
 			"S7_T1.mock()",
 			"S7_Root0()",
 		])
 		#expect(probes.map(\.expression) == [
 			"S7_T0.mock(safeDIOverrides: .init(name: \"probe\"))",
 			"S7_UnbuildableScreen.mock(unbuildableFilter: { S7_UnbuildableFilter() })",
+			"S7_OuterScreen.mock(outerLabel: \"probe\")",
 			"S7_T1.mock()",
 			"S7_Root0()",
 		])
 		#expect(probes.map(\.knownRightExpression) == [
 			"S7_T0.mock(name: \"probe\")",
 			"S7_UnbuildableScreen.mock(unbuildableFilter: S7_UnbuildableFilter())",
+			nil,
 			nil,
 			nil,
 		])

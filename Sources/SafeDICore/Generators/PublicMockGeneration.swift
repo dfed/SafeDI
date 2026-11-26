@@ -631,8 +631,9 @@ extension ScopeGenerator {
 				v3RootDefaultMembers.append(member(typeSource: rootDefault.typeSource, defaultExpression: rootDefault.defaultExpression, documentation: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set."))
 				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read)")
 			} else if let valueType = type.autoclosureValueType {
-				// An `@autoclosure` parameter is held as a closure that returns the value, which the construction calls.
-				let closureType = TypeDescription.optional(.closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType))
+				// An `@autoclosure` parameter is held as a closure that returns the value, which the construction calls:
+				// `@Sendable` where the autoclosure is, which captures it.
+				let closureType = TypeDescription.optional(MockLowering.closureTaken(forAutoclosureReturning: valueType, isSendable: MockLowering.isSendableAutoclosure(type)))
 				v3RootDefaultMembers.append(member(typeSource: closureType.asSource, defaultExpression: "nil", documentation: documentation))
 				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read) ?? { \(rootDefault.defaultExpression) }")
 			} else if type.isOptional {

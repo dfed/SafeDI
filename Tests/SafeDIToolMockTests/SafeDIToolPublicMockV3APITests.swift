@@ -1715,6 +1715,137 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesFilledBuilderToCalledMock_whenCalledMockTakesReceivedValueBesideHole() async throws {
+		// `Screen`’s mock takes `api`’s builder under the property’s label, which differs from the stem label its plan keys the
+		// builder by. `Home`’s mock fills it, and passes the fill to `Screen.__safeDI_mock` beside the session it promotes.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n",
+				"FeatTypes.swift": """
+					import SafeDI
+
+					public protocol Api {}
+
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(generateMock: .public)
+					public final class Screen: Instantiable {
+					    init(session: Session, api: any Api) {
+					        self.session = session
+					        self.api = api
+					    }
+
+					    @Received let session: Session
+					    @Instantiated public let api: any Api
+					}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n",
+				"AppTypes.swift": """
+					import Feat
+					import SafeDI
+
+					@Instantiable(fulfillingAdditionalTypes: [Api.self])
+					public final class Live: Api, Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(generateMock: true)
+					public final class Home: Instantiable {
+					    public init(session: Session, screen: Screen) {
+					        self.session = session
+					        self.screen = screen
+					    }
+
+					    @Instantiated let session: Session
+					    @Instantiated let screen: Screen
+					}
+				""",
+			], dependencies: ["Feat"]),
+		], integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Home {
+		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Home {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        func __safeDI_screen() -> Screen {
+		            func __safeDI_apiBuilder_Screen() -> Screen.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live()
+		                    return api
+		                })
+		            }
+		            _ = Screen.__safeDI_Screen_mock_5191B75849735ECB.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Screen.__safeDI_mock(api: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Screen(), session: session, safeDIOverrides: safeDIOverrides.screen ?? .init())
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(session, screen) } else { Home(session: session, screen: screen) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Home {
+		    /// Configures `Home` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screen: Screen.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Session, Screen) -> Home)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                session: session,
+		                screen: screen,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var session: (() -> Session)? { __safeDI_storage.session }
+		        var screen: Screen.SafeDIOverrides? { __safeDI_storage.screen }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Session, Screen) -> Home)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                session: (() -> Session)?,
+		                screen: Screen.SafeDIOverrides?,
+		                safeDIBuilder: ((Session, Screen) -> Home)?
+		            ) {
+		                self.session = session
+		                self.screen = screen
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let session: (() -> Session)?
+		            let screen: Screen.SafeDIOverrides?
+		            let safeDIBuilder: ((Session, Screen) -> Home)?
+		        }
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_readsCycleTargetsConfigurationBeforeSendableClosure_whenSendableWrappersCloseCycle() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -2015,6 +2146,91 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		            let safeDIBuilder: ((LiveService, any Service, Child) -> Root)?
 		        }
 		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_holdsSendableClosureForDefault_whenPublicMockTypeTakesSendableAutoclosure() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Poller: Instantiable {
+				    public init(pollInterval: @autoclosure @escaping @Sendable () -> Int = 3) {
+				        self.pollInterval = pollInterval
+				    }
+
+				    let pollInterval: @Sendable () -> Int
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Poller+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Poller {
+		    /// Configures `Poller` wherever a mock builds it: as the mocked type, or inside another module’s mock that calls this
+		    /// one. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its path, or that
+		    /// type’s defaults where there is none.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            pollInterval: (@Sendable () -> Int)? = nil,
+		            _ safeDIBuilder: ((Int) -> Poller)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                pollInterval: pollInterval,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        /// `nil` keeps the default of `Poller`’s `pollInterval`.
+		        public var pollInterval: (@Sendable () -> Int)? { __safeDI_storage.pollInterval }
+		        /// Overrides how `Poller` is constructed. Parameters match the type’s initializer or custom mock method.
+		        public var safeDIBuilder: ((Int) -> Poller)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                pollInterval: (@Sendable () -> Int)?,
+		                safeDIBuilder: ((Int) -> Poller)?
+		            ) {
+		                self.pollInterval = pollInterval
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let pollInterval: (@Sendable () -> Int)?
+		            let safeDIBuilder: ((Int) -> Poller)?
+		        }
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Poller {
+		        Poller.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Poller {
+		        let pollInterval = safeDIOverrides.pollInterval ?? { 3 }
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(pollInterval()) } else { Poller(pollInterval: pollInterval()) }
+		    }
+		}
+
+		extension Poller {
+		    public enum __safeDI_Poller_mock_51799E6AA5E7B634 {}
 		}
 		#endif
 		""")

@@ -290,7 +290,16 @@ extension MockLowering.Walk {
 			argumentTexts.append((argument, value))
 			return argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}
+		// The call's struct values, hole arguments, hole builders and override builders are keyed by the called builder's
+		// label, which `.v3Unstable` names the parameter, and so the leaf's argument, apart from.
+		var builderLabelsByArgumentLabel = [String: String]()
+		for parameter in publicMockCall.passedParameters {
+			if let builder = parameter.builder, builderLabelsByArgumentLabel[parameter.dependency.property.label] == nil {
+				builderLabelsByArgumentLabel[parameter.dependency.property.label] = builder.label
+			}
+		}
 		for argument in initializer.arguments {
+			let builderLabel = builderLabelsByArgumentLabel[argument.innerLabel] ?? argument.innerLabel
 			if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
 			   let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
 			{
@@ -306,14 +315,14 @@ extension MockLowering.Walk {
 				}
 				arguments.append(labeled(".init(\(ReservedName.noScopeArgumentLabel): \(dependency.property.label))", as: argument))
 				passesOnlyReads = false
-			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
+			} else if let builderStruct = structValuesByLabel[builderLabel] {
 				passesOnlyReads = false
 				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
-				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
+				arguments.append(labeled(holeBuilders[builderLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
 				if overrideBuilders != nil {
 					overrideArguments.append(argument.innerLabel)
 				}
-			} else if overrideBuilders == nil, let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
+			} else if overrideBuilders == nil, let holeValue = holeArgumentValuesByLabel[builderLabel] {
 				// A builder a `.public` caller's call passes up, as its own struct's member.
 				arguments.append(labeled(holeValue, as: argument))
 				passesOnlyReads = false
@@ -417,7 +426,8 @@ extension MockLowering.Walk {
 		if readsOverride, let overrideBuilders {
 			// A builder's slot holds its label until here, so that each builder reads every value the call passes.
 			let handed = zip(initializer.arguments, overrideArguments).map { argument, value in
-				overrideBuilders[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel, holeBuilder: holeBuilders[argument.innerLabel]) ?? value
+				let builderLabel = builderLabelsByArgumentLabel[argument.innerLabel] ?? argument.innerLabel
+				return overrideBuilders[builderLabel]?.expression(argumentByLabel: argumentByLabel, holeBuilder: holeBuilders[builderLabel]) ?? value
 			}
 			let overrideName = ReservedName.configurationBuilderPropertyName
 			call = "if let \(overrideName) = \(overrideRead) { \(overrideName)(\(handed.joined(separator: ", "))) } else { \(defaultCall) }"
