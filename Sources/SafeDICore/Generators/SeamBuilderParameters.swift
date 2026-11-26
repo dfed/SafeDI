@@ -152,6 +152,7 @@ extension DependencyTreeGenerator {
 			let label: String
 			let suffixTypes: [TypeDescription]
 		}
+		let (passedUpNamingCandidates, namingCandidateByPassedUpHole) = Self.namingCandidates(amongPassedUpHoles: passedUpHoles.map(\.hole))
 		let candidates = siteContents.map { content in
 			Candidate(
 				label: "\(content.site.property.label)Builder".spelledAsJoinedIdentifier,
@@ -162,8 +163,9 @@ extension DependencyTreeGenerator {
 					.simple(name: content.site.pathLabels, generics: []),
 				],
 			)
-		} + passedUpHoles.map { passedUp in
-			Candidate(
+		} + passedUpNamingCandidates.map { passedUpIndex in
+			let passedUp = passedUpHoles[passedUpIndex]
+			return Candidate(
 				label: passedUp.hole.builderLabel,
 				suffixTypes: [
 					passedUp.hole.ownerType,
@@ -381,7 +383,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for (offset, passedUp) in passedUpHoles.enumerated() {
-			let builderLabel = builderLabels[siteContents.count + offset]
+			let builderLabel = builderLabels[siteContents.count + namingCandidateByPassedUpHole[offset]]
 			let inner = passedUp.hole
 			let builderAccess = accessOfBuilder(passingUp: inner)
 			var passedUpHole = SeamSignature.Hole(
@@ -628,6 +630,36 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+
+	/// The passed-up holes that name this seam's builders for the places it passes up, as indices into `passedUpHoles`, and,
+	/// by each passed-up hole, the index among those candidates of the one whose name its builder takes.
+	///
+	/// RULING OPEN (lead, 2026-11-26): one candidate per case of the called seam, the first hole of each case
+	/// (`ScopeGenerator.fillCaseKey(of:)`), so a label is named apart only from builders of other cases, whatever number of
+	/// places the called seam hands, and a run that is handed one place per case names as one handed every place. Main
+	/// names apart one candidate per place: that body returns every index for both lists. A swap is an edit of this
+	/// function alone.
+	private static func namingCandidates(amongPassedUpHoles passedUpHoles: [SeamSignature.Hole]) -> (candidates: [Int], candidateByHole: [Int]) {
+		var candidates = [Int]()
+		var candidateByCaseKey = [String: Int]()
+		var candidateByHole = [Int]()
+		for (index, hole) in passedUpHoles.enumerated() {
+			guard hole.enumPlace != nil else {
+				candidateByHole.append(candidates.count)
+				candidates.append(index)
+				continue
+			}
+			let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+			if let candidate = candidateByCaseKey[caseKey] {
+				candidateByHole.append(candidate)
+			} else {
+				candidateByCaseKey[caseKey] = candidates.count
+				candidateByHole.append(candidates.count)
+				candidates.append(index)
+			}
+		}
+		return (candidates, candidateByHole)
+	}
 	/// The holes of the seams the tree `generator` roots calls whose builders it passes up, one per site whatever route
 	/// presents it, each with the seam whose call presented it first, in the order the tree first presents the site, and
 	/// what the calls that present each site of the seam's own tree add to its builder. A site is never passed up twice,

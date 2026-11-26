@@ -465,7 +465,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `token: Token?`, which `Second` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder_second_panel`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `Api` in module `Inner` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `token: Token?`, which `Second` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `Api` in module `Inner` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Inner"]!["Second.swift"]):9:5: note: `Second` declares `token: Token` here.
 			"""
 		}) {
