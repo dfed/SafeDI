@@ -291,7 +291,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 			}
 		}
 		let counts = [acceptedCount, rejectedCount, dependencyCycleCount, inPassesCount]
-		#expect(counts == [29, 121, 59, 48])
+		#expect(counts == [28, 122, 59, 47])
 	}
 
 	// MARK: Tests – Diagnostics
@@ -711,7 +711,9 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let shape = cycleRandom.integer(in: 0...9)
 		if shape >= 2 {
 			for index in types.indices {
-				types[index].declarations.removeAll { $0 == service || $0 == "@Received let service: Service" }
+				// A root that no longer declares `service` cannot rename it: nothing passes a root a dependency.
+				let isRoot = types[index].isRoot
+				types[index].declarations.removeAll { $0 == service || $0 == "@Received let service: Service" || (isRoot && $0 == rename) }
 			}
 		}
 		switch shape {

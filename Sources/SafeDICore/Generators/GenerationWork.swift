@@ -109,13 +109,13 @@ public struct GenerationWork: Sendable {
 		/// share them.
 		case collectingBuilderFunctionNames
 		/// Finding a seam's receivers and the reads of its parameters (`DependencyTreeGenerator.receivers(in:of:instantiables:)`):
-		/// each place of the seam's tree the walk visits. A place whose generator the walk already visited with the same
-		/// context, as far as the generator's subtree reads it, is not visited again, so the generators and the contexts
-		/// they are reached in count, not the paths to them.
+		/// each place of the seam's tree the walk reaches, a place it then skips included. A place whose generator the walk
+		/// already visited with the same context, as far as the generator's subtree reads it, is skipped and its children
+		/// are not reached, so the generators and the contexts their parents are visited in count, not the paths to them.
 		case findingSeamReceivers
 		/// Finding the values a seam tier a tree calls omits (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`):
-		/// each place the walk visits. The walk enters only a place whose subtree holds a call of a seam tier that omits a
-		/// parameter, or a scope that closes a lazy cycle, so a tree without either is not walked at all.
+		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
+		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
 		case findingSeamTierOmissions
 	}
 

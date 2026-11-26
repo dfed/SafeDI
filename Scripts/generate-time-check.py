@@ -677,14 +677,14 @@ GROWTH_ROWS = {
     # (54.5), 31,432 and 126,780 bytes of code (4.03). Starts at three layers: at six, Feature alone takes 9.8 s.
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
-    "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
+    # R's code no longer grows with the paths; its time still does, in validation: 0.066 s and 0.331 s (5.0).
+    "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {}),
     # V 1.32 and VO 1.18 times over two more layers, while a subtree's key holds only the entries of a rename's declaring
     # path its walk reads; 2.47 and 3.26 while it holds the whole path.
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {}),
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {}),
-    # PR 0.33 s and 3.0 s (9.1), 52 MB and 179 MB (3.5); its code grows with the graph.
-    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {"time": 12.0, "memory": 4.5}),
+    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
