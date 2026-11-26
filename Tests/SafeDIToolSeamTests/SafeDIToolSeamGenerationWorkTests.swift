@@ -58,7 +58,11 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// roots, which take one pass, as it does the type key's checks of reads at every member.
 		// A lookup in the construction memo asks the candidates its context answers alike, whatever the shape:
 		// `SafeDIToolConstructionMemoTests` counts them on a tree with cycles, and the reads it files entries under on a chain.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads])
+		// The walk that collects the types a tree builds visits each generator once, and places of a seam's tree with
+		// holes share none: `SafeDIToolFulfillerImportTests` counts it on a production root whose places share generators.
+		// Finding the carrier a sibling requires grows with the children of one scope, which shape E does not grow: the test
+		// below counts it on a seam whose own type builds many children.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -85,6 +89,42 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			}
 		}
 		#expect(seamSteps.subtracting(countedSteps).isEmpty, "No shape counts work for \(seamSteps.subtracting(countedSteps).map(\.rawValue).sorted())")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_looksUpEachPropertyASiblingRequiresOnce_whenSeamsOwnTypeBuildsManyChildrenThatEachHoldAPlace() async throws {
+		// A seam whose own type builds n children, each holding a place and receiving one value. Each child after the one
+		// that leads to a site is asked, in each of the two passes over the sites, for the first carrier among its
+		// siblings that it requires: scanned for, the n carriers were compared for each of them at each site, 48
+		// comparisons at four children and 448 at eight; looked up, the one property each requires is, 12 lookups and 56.
+		var lookups = [Int]()
+		for childCount in [4, 8] {
+			var fixture = [
+				"public protocol Gizmo {}",
+				seamFixtureType(named: "Service", declarations: []),
+				seamFixtureType(named: "Entry", isSeam: true, declarations: (0..<childCount).map { "@Instantiated let child\($0): Child\($0)" }),
+			]
+			for child in 0..<childCount {
+				fixture.append(seamFixtureType(named: "Child\(child)", declarations: ["@Received let service: Service", "@Instantiated let gizmo: any Gizmo"]))
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
+					integration: .moduleInfo,
+					compileVerification: childCount == 4 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var count = 0
+			for await work in stream where work.step == .findingCarrierASiblingRequires {
+				count += work.elementCount
+			}
+			lookups.append(count)
+		}
+		#expect(lookups == [12, 56])
 	}
 
 	// MARK: Private
