@@ -108,23 +108,31 @@ extension DependencyTreeGenerator {
 			answering answeredLabels: [String],
 			beneath nearestDeclarations: NearestDeclarations,
 			lazilyInstantiatedInstanceProperties: Set<Property>,
+			builtBy builder: (scope: Scope, erasedToConcreteExistential: Bool)? = nil,
 		) throws -> Int {
 			let answers = labels.map { answeredLabels.contains($0) ? nearestDeclarations[$0] : nil }
 			let lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties.filter { answeredLabels.contains($0.label) }
 			if let position = positionsByKey[key]?.first(where: { bodies[$0].answers == answers && bodies[$0].lazilyInstantiatedInstanceProperties == lazilyInstantiatedInstanceProperties }) {
 				return position
 			} else {
-				let (table, record) = frozenScopeMap.freezing(rootScope: copy)
 				let keptNearestDeclarations = nearestDeclarations.keeping(labels: answeredLabels)
 				var memo = ConstructionMemo()
-				try bodies.append(Body(
-					key: key,
-					copy: copy,
-					labels: labels,
-					answers: answers,
-					nearestDeclarations: keptNearestDeclarations,
-					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-					generator: record.createScopeGenerator(
+				let generator: ScopeGenerator
+				if let builder, let dependency = builder.scope.instantiable.dependencies.first(where: { $0.property == key.property }) {
+					// Built as its property: the one child of a scope that declares nothing else, so the body is built as
+					// a place builds it, and every child on a cycle, a repeat of the body's own declaration included, is a
+					// call place, which closes on nothing. A dependency a mock root promotes is one its type receives,
+					// which the mock instantiates: the holder instantiates it too.
+					let heldDependency = switch dependency.source {
+					case .instantiated:
+						dependency
+					case .received, .forwarded, .aliased:
+						Dependency(property: dependency.property, source: .instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: builder.erasedToConcreteExistential), declarationLocation: dependency.declarationLocation)
+					}
+					let holder = Scope(instantiable: Self.holderInstantiable(of: builder.scope.instantiable, declaring: heldDependency))
+					holder.propertiesToGenerate = [.instantiated(dependency.property, copy, erasedToConcreteExistential: builder.erasedToConcreteExistential)]
+					let (table, record) = frozenScopeMap.freezing(rootScope: holder)
+					let holderGenerator = try record.createScopeGenerator(
 						in: table,
 						nearestDeclarations: keptNearestDeclarations,
 						lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -132,11 +140,57 @@ extension DependencyTreeGenerator {
 						forMockGeneration: forMockGeneration,
 						declaredTypeNames: declaredTypeNames,
 						constructionMemo: &memo,
-					),
+					)
+					generator = holderGenerator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).first?.generator ?? holderGenerator
+				} else {
+					let (table, record) = frozenScopeMap.freezing(rootScope: copy)
+					generator = try record.createScopeGenerator(
+						in: table,
+						nearestDeclarations: keptNearestDeclarations,
+						lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+						erasedToConcreteExistential: false,
+						forMockGeneration: forMockGeneration,
+						declaredTypeNames: declaredTypeNames,
+						constructionMemo: &memo,
+					)
+				}
+				bodies.append(Body(
+					key: key,
+					copy: copy,
+					labels: labels,
+					answers: answers,
+					nearestDeclarations: keptNearestDeclarations,
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+					generator: generator,
 				))
 				positionsByKey[key, default: []].append(bodies.count - 1)
 				return bodies.count - 1
 			}
+		}
+
+		/// The type of a scope whose one declaration is `dependency` of `builder`: what a body built as its property is the
+		/// child of.
+		private static func holderInstantiable(of builder: Instantiable, declaring dependency: Dependency) -> Instantiable {
+			var holder = Instantiable(
+				instantiableType: builder.concreteInstantiable,
+				isRoot: false,
+				initializer: Initializer(arguments: [Initializer.Argument(
+					innerLabel: dependency.property.label,
+					typeDescription: dependency.property.typeDescription,
+					defaultValueExpression: nil,
+				)]),
+				additionalInstantiables: nil,
+				dependencies: [dependency],
+				declarationType: builder.declarationType,
+				access: builder.access,
+				enclosingTypeAccess: builder.enclosingTypeAccess,
+				enclosingExtensionAccess: builder.enclosingExtensionAccess,
+				declarationLocation: builder.declarationLocation,
+				moduleName: builder.moduleName,
+				packageName: builder.packageName,
+			)
+			holder.sourceFilePath = builder.sourceFilePath
+			return holder
 		}
 
 		private let frozenScopeMap: FrozenScopeMap

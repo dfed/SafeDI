@@ -68,6 +68,8 @@ final class ScopeRecord: Sendable {
 	let builtInlineSeamComment: String?
 	/// See `Scope.isUnavailableDependency`.
 	let isUnavailableDependency: Bool
+	/// See `Scope.isCallPlace`.
+	let isCallPlace: Bool
 	/// See `Scope.seamCall`.
 	let seamCall: SeamCall?
 	/// See `Scope.publicMockCall`.
@@ -119,6 +121,7 @@ final class ScopeRecord: Sendable {
 		self.concreteTypeID = concreteTypeID
 		builtInlineSeamComment = scope.builtInlineSeamComment
 		isUnavailableDependency = scope.isUnavailableDependency
+		isCallPlace = scope.isCallPlace
 		seamCall = scope.seamCall
 		publicMockCall = scope.publicMockCall
 		self.propertiesToGenerate = propertiesToGenerate

@@ -91,6 +91,7 @@ extension DependencyTreeGenerator {
 					answering: labels,
 					beneath: context.nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+					builtBy: (context.builder, context.erasedToConcreteExistential),
 				)
 				// Today's place reads a parameter of a function it is built in where the call's path declares the label,
 				// and the parameter is `nil` where the call passes `nil`: every receive of that label is then `nil`, as in
@@ -105,6 +106,7 @@ extension DependencyTreeGenerator {
 						answering: labels.filter { !labelsPassedNil.contains($0) },
 						beneath: context.nearestDeclarations,
 						lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+						builtBy: (context.builder, context.erasedToConcreteExistential),
 					)
 					todaysUnavailableOptionalProperties = todaysUnavailableOptionalProperties
 						.filter { !labelsPassedNil.contains($0.label) }
@@ -175,6 +177,7 @@ extension DependencyTreeGenerator {
 							answering: labels,
 							beneath: calledNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+							builtBy: (context.builder, context.erasedToConcreteExistential),
 						)
 						if !bodiesOfPlan.contains(calledBody) {
 							bodiesOfPlan.append(calledBody)

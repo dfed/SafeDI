@@ -79,6 +79,51 @@ struct SafeDIToolPlaceReadsTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsOnlyLabelsThePlanKeysBodyBy_whenCycleParameterIsHiddenByNearerDeclarationOfAnotherForm() async throws {
+		// `Detail` receives `mark: Stamp?` only if available beneath `Flow`, which forwards `mark: Mark?`: the nearest
+		// declaration of the label provides no form `Detail` reads, so `Detail` is passed `nil` on every path. Today's
+		// tree still gives the function `Detail` closes the cycle on a parameter `mark: Stamp?`, which nothing in the
+		// function reads, and `Screen`'s place asks the declarations above it for the argument. That read is of what a
+		// cycle passes, so it is none of the reads the plan's labels are compared with: the plan keys `Screen`'s body by
+		// no label, and `Detail`'s by `mark`, which `Flow` answers.
+		let reads = try await reads(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+			}
+
+			@Instantiable public final class Screen: Instantiable {
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Flow: Instantiable {
+			    @Forwarded let mark: Mark?
+			    @Instantiated let detailBuilder: Instantiator<Detail>
+			    public init(mark: Mark?, detailBuilder: Instantiator<Detail>) { self.mark = mark; self.detailBuilder = detailBuilder }
+			}
+
+			@Instantiable public final class Detail: Instantiable {
+			    @Received(onlyIfAvailable: true) let mark: Stamp?
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    public init(mark: Stamp?, screenBuilder: Instantiator<Screen>) { self.mark = mark; self.screenBuilder = screenBuilder }
+			}
+
+			public final class Mark {}
+
+			public final class Stamp {}
+			""")
+
+		#expect(reads == [
+			Reads(type: "Screen", property: "screenBuilder: Instantiator<Screen>", labelsRead: [], labelsPlanned: []),
+			Reads(type: "Detail", property: "detailBuilder: Instantiator<Detail>", labelsRead: ["mark"], labelsPlanned: ["mark"]),
+			Reads(type: "Flow", property: "flowBuilder: Instantiator<Flow>", labelsRead: [], labelsPlanned: []),
+		])
+	}
+
 	// MARK: Private
 
 	private struct Reads: Equatable {
