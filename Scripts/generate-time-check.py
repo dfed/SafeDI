@@ -148,6 +148,11 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                of cycles through `Instantiator`s that grows with the width, not the depth.
   BM-mocks-of-cycles-through-instantiators
                                the same graph with `generateMock: true` on every screen and on the root.
+  F9-public-mock-seam-chain
+                               a chain of modules, the row's number its length, each declaring three seams with
+                               public mocks that instantiate `any Api`, which only module `App` fulfills, and every
+                               seam of the next module both as itself and as an `Instantiator`; module `App`: the
+                               mocked root, which builds the first seam.
   O-only-if-available-at-every-screen, R-received-instantiator-at-every-screen, N-rename-at-every-screen
                                one module (`shape_census`): layers of three screens, each holding `Instantiator`s of
                                every screen of the next layer and receiving `service`, with, at every screen, an
@@ -421,6 +426,35 @@ def shape_public_mock_layers(layers, hole, width=4):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
 
 
+def shape_public_mock_seam_chain(depth, fan=3):
+    """Modules `M{depth-1}` up to `M0`, then `App`, each depending on every module beneath it. Each module declares
+    `fan` seams with public mocks, `F{k}_{j}`, each receiving `service`, instantiating `any Api` (which only `LiveApi`
+    in `App` fulfills) and, below the last module, every seam of the next module both as itself and as an
+    `Instantiator`. `App`'s mocked root builds `F0_0`. Without the public mocks every module generates in time linear
+    in the chain; with them each module up the chain multiplies its generate time, memory and `.safedi` by about
+    seven (the red team's F9)."""
+    modules = []
+    names = [f"M{k}" for k in range(depth)]
+    for k in reversed(range(depth)):
+        dependencies = names[k + 1:]
+        source = "import SafeDI\n" + "".join(f"import {dependency}\n" for dependency in dependencies) + "\n"
+        if k == depth - 1:
+            source += "public protocol Api: AnyObject {}\n\n" + declaration("@Instantiable", "Service", [])
+        for j in range(fan):
+            properties = [("@Received", "service", "Service"), ("@Instantiated", "api", "any Api")]
+            if k + 1 < depth:
+                for child in range(fan):
+                    properties.append(("@Instantiated", f"f{k + 1}_{child}", f"F{k + 1}_{child}"))
+                    properties.append(("@Instantiated", f"f{k + 1}_{child}Builder", f"Instantiator<F{k + 1}_{child}>"))
+            source += declaration("@Instantiable(generateDependencyTree: true, generateMock: .public)", f"F{k}_{j}", properties)
+        modules.append((names[k], dependencies, source))
+    app = "import SafeDI\n" + "".join(f"import {name}\n" for name in names) + "\n"
+    app += declaration("@Instantiable(fulfillingAdditionalTypes: [(any Api).self])", "LiveApi", [("@Received", "service", "Service")], conformances="Instantiable, Api")
+    app += declaration("@Instantiable(isRoot: true, generateMock: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "f", "F0_0")])
+    modules.append(("App", names, app))
+    return modules
+
+
 def shape_q(layers, width=4, received=True):
     """Module `Feature`: `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the next
     layer; every screen of the first layer is a seam, and, with `received`, every screen receives `service`. No hole:
@@ -556,6 +590,10 @@ GROWTH_ROWS = {
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
     "W-ring-of-screens-that-open-each-other": (lambda width: shape_w(width), 10, {"time": 4.0}),
     "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 3.0, "code": 275.0}),
+    # Three and five modules, not four and six: at six this row alone takes 21 s and 1.2 GB on main today (30 times
+    # four's time). 0.26 s and 3.17 s (12.4), 42 MB and 199 MB (4.7), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
+    # 282,609 and 4,967,332 bytes of code (17.6).
+    "F9-public-mock-seam-chain": (lambda layers: shape_public_mock_seam_chain(layers), 3, {"time": 16.0, "memory": 6.0, "size": 36.0, "code": 19.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {"code": 10.5}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
