@@ -260,12 +260,14 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	/// The code each root of `swiftFileContent` that reaches a cycle lays out of its plan, by root, `nil` where the type
 	/// key keeps the path key's body.
+	/// The code the type key lays out of each root's plan, compiled in place of the root's generated extension with the
+	/// fixtures beside it, as every test's generated code is compiled.
 	private mutating func planCodes(of swiftFileContent: String) async throws -> [String: String?] {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, String?).self)
-		try await PlanCodeObservation.$observer.withValue({ root, code in
+		let output = try await PlanCodeObservation.$observer.withValue({ root, code in
 			continuation.yield((root, code))
 		}) {
-			_ = try await executeSafeDIToolTest(
+			try await executeSafeDIToolTest(
 				swiftFileContent: [swiftFileContent],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -275,6 +277,23 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		var codes = [String: String?]()
 		for await (root, code) in stream {
 			codes[root] = code
+		}
+		for (root, code) in codes.sorted(by: { $0.key < $1.key }) {
+			guard let code else { continue }
+			var generatedFiles = output.generatedFiles ?? [:]
+			// Each root's extension ends the file generated for it, after the file's header and imports.
+			let rootExtension = "extension \(root) {"
+			let fileName = try #require(generatedFiles.keys.sorted().first { generatedFiles[$0]?.contains(rootExtension) == true })
+			let generatedFile = try #require(generatedFiles[fileName])
+			let start = try #require(generatedFile.range(of: rootExtension))
+			generatedFiles[fileName] = String(generatedFile[..<start.lowerBound]) + code + "\n"
+			try await verifyGeneratedCodeCompiles(
+				inputSwiftFiles: output.fixtures.writtenPaths.map(URL.init(fileURLWithPath:)),
+				additionalDirectorySwiftFiles: [],
+				generatedFiles: generatedFiles,
+				mockConditionalCompilation: nil,
+				filesToDelete: &filesToDelete,
+			)
 		}
 		return codes
 	}
