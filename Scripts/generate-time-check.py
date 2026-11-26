@@ -127,6 +127,12 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                declared again beneath every screen with another type.
   K-mock-at-every-screen       one module: layers of four screens, each holding `Instantiator`s of three screens of
                                the next layer, every screen with `generateMock: true`.
+  M-public-mock-layers         module `Feature`: layers of four screens, each holding `Instantiator`s of three screens
+                               of the next layer and receiving `service`, the first a public mock
+                               (`generateMock: .public`); module `App`: a root whose generated mock calls it.
+  MH-public-mock-hole-at-every-screen
+                               the same, with every screen also instantiating `any Tracker`, which only `LiveTracker`
+                               in `App` fulfills, so every screen is a place of the mock's builder.
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -374,6 +380,27 @@ def shape_k(layers, width=4):
     return [("Feature", [], source)]
 
 
+def shape_public_mock_layers(layers, hole, width=4):
+    """Module `Feature`: a public mock over `layers` layers of `width` screens, each holding `Instantiator`s of three
+    screens of the next layer and receiving `service`; with `hole`, every screen also instantiates `any Tracker`, which
+    only `LiveTracker` in module `App` fulfills, so every screen is a place of the mock's builder. Module `App`: the
+    root, whose generated mock calls the public mock. 3^(layers - 1) paths reach the last layer."""
+    feature = "import SafeDI\n\npublic protocol Tracker: AnyObject {}\n\n" + declaration("@Instantiable", "Service", [])
+    for layer in range(layers):
+        for position in range(width):
+            children = [f"Screen{layer + 1}x{(position + offset) % width}" for offset in range(3)] if layer + 1 < layers else []
+            properties = [("@Instantiated", "tracker", "any Tracker")] if hole else []
+            properties += [("@Received", "service", "Service")]
+            properties += [("@Instantiated", f"screen{child[6:]}Builder", f"Instantiator<{child}>") for child in children]
+            attribute = "@Instantiable(generateMock: .public)" if (layer, position) == (0, 0) else "@Instantiable"
+            feature += declaration(attribute, f"Screen{layer}x{position}", properties)
+    app = ""
+    if hole:
+        app += declaration("@Instantiable(fulfillingAdditionalTypes: [(any Tracker).self])", "LiveTracker", [("@Received", "service", "Service")], conformances="Instantiable, Tracker")
+    app += declaration("@Instantiable(isRoot: true, generateMock: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Screen0x0")])
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+
+
 SHAPES = {
     "E16-seam": lambda: shape_e(16, seam=True),
     "E24-seam": lambda: shape_e(24, seam=True),
@@ -405,11 +432,15 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 #
 # Measured on a four-core Linux machine with a release build of the tool, the smaller graph's figure first:
 # P 0.376 s and 3.313 s (8.82), 57.0 MB and 220.2 MB (3.86), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
-# L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85).
+# L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85);
+# M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 51.2 MB and
+# 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26).
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
     "K-mock-at-every-screen": (lambda layers: shape_k(layers), 6, {"time": 6.5, "code": 10.5}),
+    "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
+    "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
