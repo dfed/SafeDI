@@ -463,7 +463,8 @@ public struct SeamSignature: Sendable {
 					self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
 				}
 
-				init(_ hole: Hole) {
+				/// The place as the seam that holds `hole` presents it to a call.
+				public init(_ hole: Hole) {
 					seamType = hole.scopeSeamType
 					ownerType = hole.ownerType
 					property = hole.property
@@ -991,6 +992,19 @@ public struct SeamSignature: Sendable {
 		/// `Scope.createScopeGenerator` stacks them.
 		public var fillPropertyStack: [Property] {
 			storage.fields.fillPropertyStack
+		}
+
+		/// How many declarations of the path this place's fill is built beneath lie beneath `declaration`, which a scope of
+		/// the fill's tree closes a cycle on: `0` when it is the property whose type declares the hole, and `nil` when the path
+		/// holds no such declaration. A lazily instantiated declaration's instance is its own entry of the stack, and no
+		/// declaration. A scope closes on the innermost entry of its property and concrete type, which is the innermost one
+		/// that equals the declaration closed on.
+		func fillPathDeclarationsBeneath(_ declaration: ScopeGenerator.BuiltDeclaration) -> Int? {
+			let propertyStack = fillPropertyStack
+			let concreteTypeStack = fillConcreteTypeStack
+			return propertyStack.indices.first { propertyStack[$0] == declaration.property && concreteTypeStack[$0] == declaration.concreteType }.map { declarationIndex in
+				propertyStack[..<declarationIndex].indices.count { propertyStack[$0 + 1].asLazilyInstantiatedInstanceProperty != propertyStack[$0] }
+			}
 		}
 
 		/// The concrete type each entry of `fillPropertyStack` is built for, beside it: a fill's scope closes a cycle only where it
@@ -2159,13 +2173,20 @@ extension KeyedEncodingContainer {
 /// The signatures a module info file carries of the seams of one module, read only when a run reaches one of those seams:
 /// a module's file carries those of every seam it declares, and a run reaches the seams of few of the modules it reads.
 public struct StoredSeamSignatures: Sendable {
-	/// - Parameter read: Returns the signatures, as `SafeDITool` decodes them from the module info file.
-	public init(read: @escaping @Sendable () throws -> [StoredSeamSignature]) {
+	/// - Parameters:
+	///   - read: Returns the signatures, as `SafeDITool` decodes them from the module info file.
+	///   - readTogether: Returns the signatures of each of the modules named, in their order, this module's among them.
+	public init(read: @escaping @Sendable () throws -> [StoredSeamSignature], readTogether: @escaping @Sendable (_ moduleNames: [String]) async throws -> [[StoredSeamSignature]]) {
 		self.read = read
+		self.readTogether = readTogether
 	}
 
 	/// The signatures, each of one seam, decoded each time this is called.
 	public let read: @Sendable () throws -> [StoredSeamSignature]
+	/// The signatures of the seams of each of the modules named, decoded each time this is called. Every module's holds
+	/// the same function: a place one module's seam passes up from another's is read from that seam's own, so the modules
+	/// a run reaches are read together, each place once, and side by side where one does not wait for another.
+	public let readTogether: @Sendable (_ moduleNames: [String]) async throws -> [[StoredSeamSignature]]
 }
 
 public struct StoredSeamSignature: Codable, Sendable {

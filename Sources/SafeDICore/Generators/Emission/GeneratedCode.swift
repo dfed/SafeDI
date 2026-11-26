@@ -127,17 +127,15 @@ struct GeneratedCode: Sendable {
 	/// Whether the type key can lay out every statement this level stands for in a body, as `TypeKeyLayout.statementCodes(of:)`
 	/// reads it: the place it is, or each place of a sequence of places, from what each place recorded as it was built. It
 	/// reads the levels' storage, so asking it makes nothing: every place is built with it.
+	///
+	/// A level that is no sequence is one statement: a place, or a piece that is no place. A body's statements hold no other
+	/// node: `.lines` and `.sendableFunction` stand only inside a builder function's own code, beneath its place
+	/// (`BuilderFunctionGraph`), `.omittingRootFunctions` only around a root's body, and `.rootFunction` only among the
+	/// statements of a body that makes a seam call, whose place the type key never plans.
 	var statementsAreLaidOutByTypeKey: Bool {
-		guard case let .children(children) = unindented.storage else { return false }
-		switch children.kind {
-		case let .place(laysOut):
-			return laysOut
-		case .sequence:
-			// A sequence that holds anything but places is one statement, with no record, as a piece that is no place is.
-			return children.codes.allSatisfy(\.isPlaceTheTypeKeyLaysOut)
-		case .lines, .indented, .rootFunction, .sendableFunction, .omittingRootFunctions:
-			return false
-		}
+		guard case let .children(children) = unindented.storage, case .sequence = children.kind else { return isPlaceTheTypeKeyLaysOut }
+		// A sequence that holds anything but places is one statement, with no record, as a piece that is no place is.
+		return children.codes.allSatisfy(\.isPlaceTheTypeKeyLaysOut)
 	}
 
 	/// This level without the indentations around it.

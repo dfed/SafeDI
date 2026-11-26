@@ -3,9 +3,7 @@ paths:
   - "Sources/SafeDICore/Generators/**/*"
   - "Sources/SafeDICore/Models/{Scope,AccessDeclaration,AccessLevel,InstantiableStruct,SeamAccess,SeamSignature,TypeAccessProof,GuardedPlainTypeNames,PlainTypeDeclaration}.swift"
   - "Sources/SafeDIToolLibrary/GenerateCommand.swift"
-  - "Tests/**/*Seam*.swift"
-  - "Tests/**/*Hole*.swift"
-  - "Tests/**/*UnreadType*.swift"
+  - "Tests/**/*{Seam,Hole,UnreadType}*.swift"
 ---
 
 # Seams: carriers and builder structs

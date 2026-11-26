@@ -259,16 +259,10 @@ extension ScopeGenerator {
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
+		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
+		lines.append(parameterLines.joined(separator: ",\n"))
 		// The type the mocked type's hand-written mock returns.
-		let returnType = MockLowering.rootReturnType(of: instantiable)
-		if parameterLines.isEmpty {
-			// A tree that only binds properties to `nil`, each instantiated only if available with nothing to fulfill it.
-			lines.append("\(indent)\(mockAttributesPrefix)static func mock() -> \(returnType) {")
-		} else {
-			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-			lines.append(parameterLines.joined(separator: ",\n"))
-			lines.append("\(indent)) -> \(returnType) {")
-		}
+		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
 		lines.append(contentsOf: bindingLines)
 		// The mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in

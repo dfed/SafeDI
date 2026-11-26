@@ -1472,14 +1472,15 @@ extension ModuleSeamSignatures: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("seamTypes", \.seamTypes),
 				BinaryLayoutField("encoding", \.encodingWithPositions),
+				BinaryLayoutField("placesEncoding", \.placesEncodingWithPositions),
 			],
-			// Written as `encoding`.
-			unwrittenProperties: ["storage"],
+			// `storage` is written as `encoding` and `placesEncoding`; the count is of one run's write, which no file holds.
+			unwrittenProperties: ["storage", "passedUpPlacesWrittenInFull"],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(seamTypes: reader.read(), encoding: (reader.read() as BinaryEncoding).bytes)
+		try self.init(seamTypes: reader.read(), encoding: (reader.read() as BinaryEncoding).bytes, placesEncoding: (reader.read() as BinaryEncoding).bytes)
 	}
 
 	/// Writes the seams, then the encoding of their signatures (``encoding(writingPositionsAsAbsent:)``), which shares the
@@ -1487,11 +1488,17 @@ extension ModuleSeamSignatures: BinarySchemaMember {
 	func write(to writer: inout BinaryWriter) {
 		writer.write(seamTypes)
 		writer.write(BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: writer.writesPositionsAsAbsent)))
+		writer.write(BinaryEncoding(bytes: placesEncoding(writingPositionsAsAbsent: writer.writesPositionsAsAbsent)))
 	}
 
 	/// The encoding as a writer that writes positions writes it.
 	private var encodingWithPositions: BinaryEncoding {
 		BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: false))
+	}
+
+	/// The encoding of the places as a writer that writes positions writes it.
+	private var placesEncodingWithPositions: BinaryEncoding {
+		BinaryEncoding(bytes: placesEncoding(writingPositionsAsAbsent: false))
 	}
 }
 
