@@ -379,6 +379,29 @@ extension SeamSignature {
 			public let caseIndex: Int
 		}
 
+		/// What a run holds of the seam or public mock a passed-up case refers to (`CalledCase`): its place graph, and its
+		/// places, which name the places of a case in a message about a declaration bound on the path to a call that presents
+		/// them (`Hole.UncarriedDeclaration.Reason.boundByPassingUpSeam`). In memory only: a file stores the reference.
+		public struct Called: Sendable {
+			public init(places: SeamSignature.Places, holes: [Hole], caseIndexByHole: [Int]) {
+				self.places = places
+				self.holes = holes
+				self.caseIndexByHole = caseIndexByHole
+			}
+
+			public let places: SeamSignature.Places
+			/// The places of the seam's signature or the public mock's plan, and the case in `places` of each
+			/// (`SeamSignature.holes`, `SeamSignature.caseIndexByHole`).
+			public let holes: [Hole]
+			public let caseIndexByHole: [Int]
+
+			/// The first place, in builder order, of the case at `caseIndex`, which names the case's places; `nil` where no
+			/// place is of that case.
+			public func hole(ofCaseAt caseIndex: Int) -> Hole? {
+				zip(caseIndexByHole, holes).first { $0.0 == caseIndex }?.1
+			}
+		}
+
 		/// The places of one owner level in one family.
 		public struct Case: Codable, Sendable {
 			public init(

@@ -33,13 +33,14 @@ struct PublicMockPlans: Sendable {
 		try plansByType[type]?.get()
 	}
 
-	/// The place graph of the plan of `type`'s public mock, or `nil` when the run holds no plan of it.
-	func places(of type: TypeDescription) -> SeamSignature.Places? {
-		var places: SeamSignature.Places?
+	/// The place graph of the plan of `type`'s public mock, with the plan's places, or `nil` when the run holds no plan of
+	/// it.
+	func called(of type: TypeDescription) -> SeamSignature.Places.Called? {
+		var called: SeamSignature.Places.Called?
 		if case let .success(plan)? = plansByType[type] {
-			places = plan?.places
+			called = plan.map { SeamSignature.Places.Called(places: $0.places, holes: $0.holes, caseIndexByHole: $0.caseIndexByHole) }
 		}
-		return places
+		return called
 	}
 
 	mutating func add(plan: StoredPublicMockPlan?, of type: TypeDescription) {
@@ -245,7 +246,7 @@ extension DependencyTreeGenerator {
 					scopeEnums: plan.scopeEnums,
 					places: plan.places,
 					caseIndexByHole: plan.caseIndexByHole,
-					placesOfSeamsBeneath: { plansOfCalledMocks.places(of: $0.seamType) },
+					placesOfSeamsBeneath: { plansOfCalledMocks.called(of: $0.seamType) },
 				),
 			)
 		}

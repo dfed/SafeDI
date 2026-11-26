@@ -3146,6 +3146,23 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		#expect(seamsThatBind == ["Middle 0"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func called_handsPlaceOfCaseEachCallPresents_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		let additions = try #require(query.presentationAdditions(of: 0))
+		// `Outer`'s call presents `Middle`'s place, which `Middle` passes up from `Inner`; `Middle`'s call presents `Inner`'s
+		// own. Each is the place `api` of `Detail`, which `Inner`'s tree holds, under the builder label its seam gives it.
+		let placesPresented = try additions.boundOnPathsToCalls.map { bound in
+			let reference = try #require(bound.presentingCase.query.places.cases[bound.presentingCase.caseIndex].passedUp)
+			let hole = try #require(outer.called(of: reference)?.hole(ofCaseAt: reference.caseIndex))
+			return "\(Self.seamAndCase(bound.presentingCase)) presents \(reference.seamType.asSource)’s \(hole.property.asSource) of \(hole.ownerType.asSource), held by \(hole.scopeSeamType.asSource)"
+		}
+		#expect(placesPresented == ["Outer 0 presents Middle’s api: any Api of Detail, held by Inner", "Middle 0 presents Inner’s api: any Api of Detail, held by Inner"])
+		#expect(outer.called(of: SeamSignature.Places.CalledCase(seamType: TypeDescription.simple(name: "Middle"), isPublicMock: false, caseIndex: 1))?.hole(ofCaseAt: 1) == nil)
+	}
+
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func casesPresented_endAtCaseOfSeamTwoModulesBeneath_whenRunIsHandedOnlyTheMiddleModulesFile(viewsReferToModules: Bool) async throws {

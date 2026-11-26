@@ -435,13 +435,13 @@ extension DependencyTreeGenerator {
 		let places = placesBuilder.places(namingRouteByCase: namingRouteByCase)
 		// The graphs of the seams the calls on the places' paths fill places of, which a fill level's case refers into, after the
 		// graphs of the calls that present places, once per seam.
-		var calledPlaces = callPresentations.map { SeamSignature.Places.Observation.CalledPlaces(seamType: $0.innerSeamType, isPublicMock: $0.innerIsPublicMock, places: $0.innerPlaces, placesOfSeamsBeneath: $0.placesOfSeamsBeneath) }
+		var calledPlaces = callPresentations.map { SeamSignature.Places.Observation.CalledPlaces(seamType: $0.innerSeamType, isPublicMock: $0.innerIsPublicMock, called: $0.innerCalled, placesOfSeamsBeneath: $0.placesOfSeamsBeneath) }
 		for site in sites {
 			for frame in site.frames {
 				guard let calledBuilders = frame.generator.calledBuilders, let seamType = frame.generator.builtInstantiable?.concreteInstantiable else { continue }
 				let isPublicMock = frame.generator.publicMockCall != nil
 				guard !calledPlaces.contains(where: { $0.seamType == seamType && $0.isPublicMock == isPublicMock }) else { continue }
-				calledPlaces.append(SeamSignature.Places.Observation.CalledPlaces(seamType: seamType, isPublicMock: isPublicMock, places: calledBuilders.places, placesOfSeamsBeneath: calledBuilders.placesOfSeamsBeneath))
+				calledPlaces.append(SeamSignature.Places.Observation.CalledPlaces(seamType: seamType, isPublicMock: isPublicMock, called: calledBuilders.called, placesOfSeamsBeneath: calledBuilders.placesOfSeamsBeneath))
 			}
 		}
 		// The place graph rides on the levels' observer, which the caller hands on once the routes are computed, so the tests set
@@ -700,7 +700,7 @@ extension DependencyTreeGenerator {
 						reenteringPlaceFields: insideFills.reenteringPlaceFields,
 					))
 				}
-				let noPlaces: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil }
+				let noPlaces: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called? = { _ in nil }
 				let placesOfSeamsBeneath = visited.calledBuilders?.placesOfSeamsBeneath ?? noPlaces
 				if let framesToVisited, let callProperty = visited.property, !presentedPlaces.isEmpty {
 					callPresentations.append(CallPresentation(
@@ -710,7 +710,7 @@ extension DependencyTreeGenerator {
 						declaredSegment: declaredProperties(reaching: visited, from: framesToVisited.frames.last?.generator),
 						innerSeamType: innerSeamType,
 						innerIsPublicMock: visited.publicMockCall != nil,
-						innerPlaces: visited.calledBuilders?.places ?? SeamSignature.Places(levels: [], cases: []),
+						innerCalled: visited.calledBuilders?.called ?? SeamSignature.Places.Called(places: SeamSignature.Places(levels: [], cases: []), holes: [], caseIndexByHole: []),
 						placesOfSeamsBeneath: placesOfSeamsBeneath,
 						isInSendableFunction: callIsInSendableFunction,
 						opensSendableFunction: visited.buildsInSendableFunction,
@@ -787,10 +787,10 @@ extension DependencyTreeGenerator {
 		let declaredSegment: [SeamSignature.Hole.DeclaredProperty]
 		let innerSeamType: TypeDescription
 		let innerIsPublicMock: Bool
-		/// The called seam's place graph, which the cases of the places refer into.
-		let innerPlaces: SeamSignature.Places
-		/// The graphs the called seam's own passed-up cases refer into (`CalledBuilders.placesOfSeamsBeneath`).
-		let placesOfSeamsBeneath: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places?
+		/// The called seam's place graph, which the cases of the places refer into, with its places (`CalledBuilders.called`).
+		let innerCalled: SeamSignature.Places.Called
+		/// What the called seam's own passed-up cases refer into (`CalledBuilders.placesOfSeamsBeneath`).
+		let placesOfSeamsBeneath: @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places.Called?
 		/// Whether the call is made inside a `@Sendable` function, its own builder function included.
 		let isInSendableFunction: Bool
 		/// Whether the call's own builder function is `@Sendable`.

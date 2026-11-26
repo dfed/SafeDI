@@ -1468,14 +1468,14 @@ extension DependencyTreeGenerator {
 	) -> [TypeDescription: Scope] {
 		var typeDescriptionToScopeMap = [TypeDescription: Scope]()
 		var scopes = [Scope]()
-		// The place graph of each seam that holds one, which a case of a place passed up through two seams refers into. Only
-		// a run that drafts the graphs holds any.
-		var placesBySeamUnderConstruction = [TypeDescription: SeamSignature.Places]()
+		// The place graph of each seam that holds one, with the seam's places, which a case of a place passed up through two
+		// seams refers into. Only a run that drafts the graphs holds any.
+		var calledBySeamUnderConstruction = [TypeDescription: SeamSignature.Places.Called]()
 		for (seamType, seamRoot) in seamRoots {
-			guard let places = seamRoot?.signature.places, !places.cases.isEmpty else { continue }
-			placesBySeamUnderConstruction[seamType] = places
+			guard let signature = seamRoot?.signature, !signature.places.cases.isEmpty else { continue }
+			calledBySeamUnderConstruction[seamType] = SeamSignature.Places.Called(places: signature.places, holes: signature.holes, caseIndexByHole: signature.caseIndexByHole)
 		}
-		let placesBySeam = placesBySeamUnderConstruction
+		let calledBySeam = calledBySeamUnderConstruction
 		// Visited in type order: a type the map holds under several keys gets one scope whichever key is met first.
 		for typeDescription in reachableTypeDescriptions.sortedBySpelling() {
 			guard let instantiable = instantiables[typeDescription], typeDescriptionToScopeMap[instantiable.concreteInstantiable] == nil else { continue }
@@ -1533,7 +1533,7 @@ extension DependencyTreeGenerator {
 						callerPackageName: callerModule.packageName,
 						places: signature.places,
 						caseIndexByHole: signature.caseIndexByHole,
-						placesOfSeamsBeneath: { placesBySeam[$0.seamType] },
+						placesOfSeamsBeneath: { calledBySeam[$0.seamType] },
 					),
 				)
 			} else {

@@ -52,6 +52,8 @@ public enum SeamPlacesOracle {
 		/// The cases compared whose facts the references alone gave too, and those whose path through the calls was compared.
 		public var passedUpCasesJoinedBothWays = 0
 		public var passedUpPathQuestions = 0
+		/// The declarations bound by a seam that passes places up whose reason's place was compared.
+		public var passedUpReasonQuestions = 0
 		/// The declarations today's places hold as bound by a seam that passes them up which the graph's answers leave out,
 		/// because a seam nearer the place binds the label too, or because the holding seam's own tree declares it. The first
 		/// are where a message that named the outer declaration names the nearer one.
@@ -367,6 +369,11 @@ public enum SeamPlacesOracle {
 		return cases
 	}
 
+	/// A place a call presents, as a message about a declaration bound on the path to that call names it.
+	private static func presentedPlaceJSON(seamType: TypeDescription, ownerType: TypeDescription, property: Property, instantiatedType: TypeDescription, builderLabel: String, caseName: String?) -> String {
+		"\(property.asSource) of \(ownerType.asSource) in \(seamType.asSource), built as \(instantiatedType.asSource) by \(builderLabel) case \(caseName ?? "none")"
+	}
+
 	/// An uncarried declaration without its reason and what follows from it, as a path to a call binds it.
 	private static func boundKey(_ declaration: SeamSignature.Hole.UncarriedDeclaration) -> String {
 		"\(declaration.property.asSource) of \(declaration.declaringType.asSource) taken by \(declaration.parameterTakingType?.asSource ?? "none")"
@@ -516,6 +523,25 @@ public enum SeamPlacesOracle {
 			let missing = facts.labelsBoundOnPathsToCalls.subtracting(labelsToday)
 			if !missing.isEmpty {
 				report.record("presented place \(sitePath): the graph binds \(missing.sorted()) on the paths to its calls, which today's place does not list")
+			}
+			// The place today's reason of such a declaration names is the called seam's place of the case its call presents,
+			// which the run hands beside that seam's graph (`Places.Called.hole(ofCaseAt:)`).
+			for declaration in hole.uncarriedDeclarations {
+				guard case let .boundByPassingUpSeam(seam, _, place) = declaration.reason else { continue }
+				let placesNamed = additions.boundOnPathsToCalls.compactMap { bound -> String? in
+					let presentingPlaces = bound.presentingCase.query.places
+					guard boundKey(bound.declaration) == boundKey(declaration),
+					      presentingPlaces.levels.first(where: \.key.isSeamRoot)?.key.builtType == seam,
+					      let reference = presentingPlaces.cases[bound.presentingCase.caseIndex].passedUp,
+					      let calledHole = observation.called(of: reference)?.hole(ofCaseAt: reference.caseIndex)
+					else { return nil }
+					return presentedPlaceJSON(seamType: calledHole.scopeSeamType, ownerType: calledHole.ownerType, property: calledHole.property, instantiatedType: calledHole.instantiatedType, builderLabel: calledHole.builderLabel, caseName: calledHole.enumPlace?.caseName)
+				}
+				let placeToday = presentedPlaceJSON(seamType: place.seamType, ownerType: place.ownerType, property: place.property, instantiatedType: place.instantiatedType, builderLabel: place.builderLabel, caseName: place.caseName)
+				report.passedUpReasonQuestions += 1
+				if !placesNamed.contains(placeToday) {
+					report.record("presented place \(sitePath): today \(boundKey(declaration)) is bound by \(seam.asSource) on the path to its call that presents \(placeToday), and the called seams' places of the presenting cases are \(placesNamed.sorted())")
+				}
 			}
 			// A declaration today's place holds as bound by a seam that passes the place up is among those the query says
 			// the place reads of its label above the holding seam.
