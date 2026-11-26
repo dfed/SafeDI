@@ -788,6 +788,39 @@ extension DependencyTreeGenerator {
 		let declarations: [PathDeclaration?]
 		/// The properties of the children that start as carriers (`ScopeGenerator.startsAsCarrier(_:)`).
 		let carrierProperties: [Property]
+
+		/// Each carrier property's first position among `carrierProperties`, and the carrier there.
+		private let firstCarrierByProperty: [Property: (position: Int, carrier: Property)]
+
+		init(declarations: [PathDeclaration?], carrierProperties: [Property]) {
+			self.declarations = declarations
+			self.carrierProperties = carrierProperties
+			firstCarrierByProperty = Dictionary(
+				carrierProperties.enumerated().map { ($0.element, (position: $0.offset, carrier: $0.element)) },
+				uniquingKeysWith: { first, _ in first },
+			)
+		}
+
+		/// The first of `carrierProperties`, other than `pathProperty`, that is among `requiredProperties`. Whichever of the
+		/// two is smaller is walked and the other looked up in, so a scope of many carriers whose children each require a
+		/// few properties compares only those few for each child.
+		func firstCarrier(otherThan pathProperty: Property, among requiredProperties: Set<Property>) -> Property? {
+			if requiredProperties.count < carrierProperties.count {
+				// A set has no order of its own: the carrier at the lowest position is the one a scan in child order stops at.
+				GenerationWork.record(requiredProperties.count, by: .findingCarrierASiblingRequires)
+				return requiredProperties.lazy
+					.compactMap { firstCarrierByProperty[$0] }
+					.filter { $0.carrier != pathProperty }
+					.min { $0.position < $1.position }?.carrier
+			} else {
+				for (position, carrier) in carrierProperties.enumerated() where carrier != pathProperty && requiredProperties.contains(carrier) {
+					GenerationWork.record(position + 1, by: .findingCarrierASiblingRequires)
+					return carrier
+				}
+				GenerationWork.record(carrierProperties.count, by: .findingCarrierASiblingRequires)
+				return nil
+			}
+		}
 	}
 
 	/// A type's dependencies, looked up by property: what a scan of them in declaration order for the first of a property
@@ -1260,7 +1293,6 @@ extension DependencyTreeGenerator {
 				carrierProperties: frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil },
 			)
 			childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] = childDeclarations
-			let carrierProperties = childDeclarations.carrierProperties
 			for (position, child) in frame.orderedChildren.enumerated() {
 				guard var pathDeclaration = childDeclarations.declarations[position] else { continue }
 				let property = pathDeclaration.property
@@ -1279,7 +1311,7 @@ extension DependencyTreeGenerator {
 					pathDeclaration.builtAfter = pathProperty
 					if child.generator.onlyIfAvailableUnwrappedReceivedProperties.contains(pathProperty.asUnwrappedProperty) {
 						pathDeclaration.reason = .receivesPathScopeOnlyIfAvailable(type: childType)
-					} else if let carrier = carrierProperties.first(where: { $0 != pathProperty && child.generator.requiredReceivedProperties.contains($0) }) {
+					} else if let carrier = childDeclarations.firstCarrier(otherThan: pathProperty, among: child.generator.requiredReceivedProperties) {
 						pathDeclaration.reason = .requiresOtherCarrier(type: childType, carrier: carrier)
 					}
 				} else if position > pathPosition, let pathProperty, child.generator.holeSite != nil {
@@ -1575,7 +1607,7 @@ extension DependencyTreeGenerator {
 						case let .fill(_, fulfillingScope):
 							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], childRootDependency))
 						case .passUp:
-							guard reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
+							guard !hole.builtType.isOptional, reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
 							// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
 							// list stops the walk before it meets the hole's type, and a declaration of that type gets no scope.
 							let unlistedModuleNames = hole.typesToOwner
@@ -2381,7 +2413,8 @@ extension DependencyTreeGenerator {
 			while let (generator, callingType, pathDeclarations) = generatorsToVisit.popLast() {
 				guard !generator.closesPropertyCycle else { continue }
 				for (fillKey, calledHole) in generator.enclosingFillsPassed {
-					var hidden = hiddenByFillKey[fillKey, default: FillReentryHidings()]
+					// Taken out of the dictionary while it grows, so appending to its lists never copies them.
+					var hidden = hiddenByFillKey.removeValue(forKey: fillKey) ?? FillReentryHidings()
 					for declaration in calledHole.uncarriedDeclarations {
 						hidden.calledCopyDeclarations[declaration.property.label, default: []].append(declaration)
 					}

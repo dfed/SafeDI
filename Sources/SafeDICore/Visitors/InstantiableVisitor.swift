@@ -138,6 +138,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				if enclosingConditionalCompilationBlockCount > 0 {
 					dependencyLabelsInsideConditionalBlocks.append(identifier.text.spelledAsIdentifier)
 				}
+				diagnoseOpaqueDependencyType(type)
 				dependencies.append(
 					Dependency(
 						property: Property(
@@ -378,6 +379,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				} else if let reservation = ReservedName(reserving: name.text) {
 					diagnose(name.text, reservedAs: reservation, at: name)
 				}
+				diagnoseOpaqueDependencyType(parameter.type)
 			}
 			diagnoseNamesEncodedDifferently(amongParametersOf: node.signature.parameterClause.parameters)
 			let dependencies = dependencyParameters.map { argument, parameter in
@@ -758,7 +760,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// See `Instantiable.conformanceListNamesSendable`.
 	private var conformanceListNamesSendable = false
 	/// See `Instantiable.conformanceListNamesOtherTypes`.
-	private var conformanceListNamesOtherTypes = false
+	public private(set) var conformanceListNamesOtherTypes = false
 
 	/// Whether the walk reports `diagnostics`, which only the macro reads: SafeDITool, which evaluates `#if` blocks, trusts
 	/// what the macro rejects, so its walk skips the checks whose only result is a diagnostic.
@@ -860,6 +862,33 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				message: FixableInstantiableError.unnamedInstantiateDependency(argumentLabel: name.text).diagnostic,
 			))
 		}
+	}
+
+	/// Diagnoses `type`, the type of a dependency SafeDI supplies, when it names an opaque type (`some P`): generated
+	/// code spells a dependency's type (a mock's parameter or override closure, a seam's parameter), and only the
+	/// declaration that writes `some P` can spell it. The fix-it spells each `some` as `any`, which takes the same values.
+	private func diagnoseOpaqueDependencyType(_ type: TypeSyntax) {
+		guard reportsDiagnostics else {
+			return
+		}
+		let rewriter = OpaqueTypeSpelledAsExistential()
+		let existentialType = rewriter.rewrite(type)
+		guard rewriter.spellsOpaqueType else {
+			return
+		}
+		diagnostics.append(Diagnostic(
+			node: type,
+			error: FixableInstantiableError.opaqueDependencyType(
+				spelling: type.trimmedDescription,
+				existentialSpelling: existentialType.trimmedDescription,
+			),
+			changes: [
+				.replace(
+					oldNode: Syntax(type),
+					newNode: existentialType,
+				),
+			],
+		))
 	}
 
 	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`, naming it without the
@@ -990,6 +1019,22 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				],
 			))
 		}
+	}
+}
+
+/// Rewrites each opaque type (`some P`) of a type into the existential that takes the same values (`any P`).
+private final class OpaqueTypeSpelledAsExistential: SyntaxRewriter {
+	/// Whether the type rewritten names an opaque type.
+	private(set) var spellsOpaqueType = false
+
+	override func visit(_ node: SomeOrAnyTypeSyntax) -> TypeSyntax {
+		guard node.someOrAnySpecifier.tokenKind == .keyword(.some) else {
+			return super.visit(node)
+		}
+		spellsOpaqueType = true
+		var existential = node
+		existential.someOrAnySpecifier = node.someOrAnySpecifier.with(\.tokenKind, .keyword(.any))
+		return TypeSyntax(existential)
 	}
 }
 

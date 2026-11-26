@@ -830,16 +830,18 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public init(__safeDI_userServiceSendableBuilder: __safeDI_UserServiceSendableCarrier<any UserService>) {
 		        let analytics = Analytics()
 		        let session = Session()
+		        @Sendable nonisolated func __safeDI_profileBuilder(title: String, __safeDI_userServiceSendableBuilder_screenBuilder_Sendable: __safeDI_UserServiceSendableCarrier_Screen<any UserService>) -> ProfileN {
+		            let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder_screenBuilder_Sendable.profileBuilder()
+		            let analytics = Analytics()
+		            let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService(analytics)
+		            return ProfileN(userService: userService, analytics: analytics, title: title)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(title: String) -> Screen {
 		            let __safeDI_userServiceSendableBuilder_screenBuilder_Sendable = __safeDI_userServiceSendableBuilder.screenBuilder_Sendable
 		            let cache = Cache()
-		            @Sendable nonisolated func __safeDI_profileBuilder() -> ProfileN {
-		                let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder_screenBuilder_Sendable.profileBuilder()
-		                let analytics = Analytics()
-		                let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService(analytics)
-		                return ProfileN(userService: userService, analytics: analytics, title: title)
+		            let profileBuilder = SendableInstantiator<ProfileN> {
+		                __safeDI_profileBuilder(title: title, __safeDI_userServiceSendableBuilder_screenBuilder_Sendable: __safeDI_userServiceSendableBuilder_screenBuilder_Sendable)
 		            }
-		            let profileBuilder = SendableInstantiator<ProfileN>(__safeDI_profileBuilder)
 		            return Screen(title: title, cache: cache, profileBuilder: profileBuilder)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
@@ -1276,24 +1278,24 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			            .init(home: { values_analytics in __safeDI_userServiceBuilder_Service_Home_Scope(analytics: values_analytics) }, settings: { values_analytics, values_home in __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: values_analytics, session: session) })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Home_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			            .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: values_session) })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			            .init(userService: {
+			                let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
+			                return userService
+			            })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			            .init(avatar: { values_theme in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: session) })
+			        }
 			        let session = Session()
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_BC1954D39AB33269.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-			                .init(home: { values_analytics in __safeDI_userServiceBuilder_Service_Home_Scope(analytics: values_analytics) }, settings: { values_analytics, values_home in __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: values_analytics, session: session) })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
-			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: values_session) })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
-			                .init(userService: {
-			                    let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
-			                    return userService
-			                })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
-			                .init(avatar: { values_theme in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: session) })
-			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
@@ -4789,6 +4791,43 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 						seamFixtureType(named: "Z", declarations: ["@Received let p1: P1"]),
 						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let p1: P1", "@Instantiated let p2: P2", "@Instantiated let z: Z"]),
 					],
+					app: [
+						Self.fulfillingType(named: "SystemClock", fulfilling: "Clock", declarations: []),
+						Self.fulfillingType(named: "ZLedger", fulfilling: "Ledger", declarations: ["@Received let z: Z"]),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesFirstCarrierInChildOrder_whenSiblingBuiltAfterCarrierRequiresSixOtherCarriers(requiresAsManyPropertiesAsCarriers: Bool) async {
+		// `Service` builds eight carriers, `p5`, `p3`, `p7`, `p1`, `p6`, `p4`, `p8` and `p2`, and `z` requires six of them,
+		// declared in another order. The carrier the error names is the first of the six in `Service`'s child order,
+		// `p3`, whichever of them `z`'s set of required properties yields first: six candidates, so a carrier taken in the
+		// set's order is another on five runs of six. With two more receives `z` requires as many properties as `Service`
+		// has carriers, and the carriers are compared in child order in place of each required property being looked up.
+		let others = requiresAsManyPropertiesAsCarriers ? ["@Instantiated let other1: Other1", "@Instantiated let other2: Other2"] : []
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`’s dependency tree builds after `p2`, since `Z` requires `p3`, which carries another builder, so SafeDI does not hand it to the builder for `P2`’s `ledger: any Ledger` (`ledger` of `ledgerBuilder`). Declare `z` before `p2` in `Service`, or declare an @Instantiable type that fulfills `Ledger` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Service.swift"]):\(requiresAsManyPropertiesAsCarriers ? 27 : 23):5: note: `Service` declares `z: Z` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Clock {}\npublic protocol Ledger {}",
+						seamFixtureType(named: "P2", declarations: ["@Instantiated let ledger: any Ledger"]),
+						seamFixtureType(named: "Other1", declarations: []),
+						seamFixtureType(named: "Other2", declarations: []),
+						seamFixtureType(named: "Z", declarations: [8, 4, 6, 1, 7, 3].map { "@Received let p\($0): P\($0)" } + (requiresAsManyPropertiesAsCarriers ? ["@Received let other1: Other1", "@Received let other2: Other2"] : [])),
+						seamFixtureType(named: "Service", isSeam: true, declarations: others + [5, 3, 7, 1, 6, 4, 8, 2].map { "@Instantiated let p\($0): P\($0)" } + ["@Instantiated let z: Z"]),
+					] + [1, 3, 4, 5, 6, 7, 8].map { seamFixtureType(named: "P\($0)", declarations: ["@Instantiated let clock: any Clock"]) },
 					app: [
 						Self.fulfillingType(named: "SystemClock", fulfilling: "Clock", declarations: []),
 						Self.fulfillingType(named: "ZLedger", fulfilling: "Ledger", declarations: ["@Received let z: Z"]),

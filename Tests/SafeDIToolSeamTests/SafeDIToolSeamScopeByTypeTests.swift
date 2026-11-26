@@ -629,22 +629,22 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_Home_Hub_Scope() -> Home.__safeDI_ApiCarrier_Hub<any Api> {
+		            .init(leaf: { values__zeta, values__scope, values__mu, values__values, values__kappa, values__delta in __safeDI_apiBuilder_Home_Leaf_Scope(delta: values__delta, kappa: values__kappa, mu: values__mu, scope: values__scope, values: values__values, zeta: values__zeta) })
+		        }
+		        func __safeDI_apiBuilder_Home_Leaf_Scope(delta: Value?, kappa: Value?, mu: Value?, scope: Value?, values: Value?, zeta: Value?) -> Home.__safeDI_ApiCarrier_Leaf<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi(zeta: zeta, scope: scope, mu: mu, values: values, kappa: kappa, delta: delta)
+		                return api
+		            })
+		        }
+		        func __safeDI_apiBuilder_Home_Spoke_Scope(delta: Value?, kappa: Value?, mu: Value?, scope: Value?, values: Value?, zeta: Value?) -> Home.__safeDI_ApiCarrier_Spoke<any Api> {
+		            .init(leaf: __safeDI_apiBuilder_Home_Leaf_Scope(delta: delta, kappa: kappa, mu: mu, scope: scope, values: values, zeta: zeta))
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_E16DE2709E601390.self // \(Self.moduleInfoComment)
 		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
 		                .init(hubBuilder: __safeDI_apiBuilder_Home_Hub_Scope(), spoke: { values__hubBuilder in __safeDI_apiBuilder_Home_Spoke_Scope(delta: nil, kappa: nil, mu: nil, scope: nil, values: nil, zeta: nil) })
-		            }
-		            func __safeDI_apiBuilder_Home_Hub_Scope() -> Home.__safeDI_ApiCarrier_Hub<any Api> {
-		                .init(leaf: { values__zeta, values__scope, values__mu, values__values, values__kappa, values__delta in __safeDI_apiBuilder_Home_Leaf_Scope(delta: values__delta, kappa: values__kappa, mu: values__mu, scope: values__scope, values: values__values, zeta: values__zeta) })
-		            }
-		            func __safeDI_apiBuilder_Home_Leaf_Scope(delta: Value?, kappa: Value?, mu: Value?, scope: Value?, values: Value?, zeta: Value?) -> Home.__safeDI_ApiCarrier_Leaf<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi(zeta: zeta, scope: scope, mu: mu, values: values, kappa: kappa, delta: delta)
-		                    return api
-		                })
-		            }
-		            func __safeDI_apiBuilder_Home_Spoke_Scope(delta: Value?, kappa: Value?, mu: Value?, scope: Value?, values: Value?, zeta: Value?) -> Home.__safeDI_ApiCarrier_Spoke<any Api> {
-		                .init(leaf: __safeDI_apiBuilder_Home_Leaf_Scope(delta: delta, kappa: kappa, mu: mu, scope: scope, values: values, zeta: zeta))
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }

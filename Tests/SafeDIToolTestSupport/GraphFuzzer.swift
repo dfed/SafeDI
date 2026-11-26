@@ -903,8 +903,8 @@ struct GraphFuzzerReadTwin {
 	/// graph writes (`GraphFuzzerOracle.unreadTypeCommentPrefix`), which is compared by the types it names in each module:
 	/// none of the twinned types, and every other type the graph's names there. The module declaring the twins reads
 	/// their declarations, and names them in a declaration – the receive the twin was declared for – so its `.safedi`
-	/// file keeps them even when it is written without a target graph, which keeps no other `public` declaration
-	/// (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:)`), and every module that
+	/// file keeps them even when it is written without a target graph, which keeps no other top-level `public` declaration
+	/// (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)`), and every module that
 	/// depends on it reads them there. The SwiftPM plugin writes no comment, so there the twin's files are the graph's
 	/// byte for byte.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1912,6 +1912,27 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case carrierDrawLoopLevelReadByFill
 	/// The loop has a third member, `LoopReadC`.
 	case carrierDrawLoopLevelReadByFillThreeMembers
+	/// `addingOptionalPlaceShapes`' tree: `OptionalPlaceSeam`, a seam, builds `OptionalPlacePanel`, which instantiates
+	/// `optionalPlaceAnalytics: (any OptionalPlaceAnalytics)?` only if available, a type its module cannot see, and
+	/// `OptionalPlaceLeaf`, which receives it; the seam's initializer takes a builder returning the optional.
+	case optionalPlace
+	/// `OptionalPlaceAnalyticsImpl`, beside the root, fulfills the type, so the root fills the builder with it.
+	case optionalPlaceFilled
+	/// No declaration fulfills the type, so the root fills the builder with `nil`.
+	case optionalPlaceUnfilled
+	/// The seam itself instantiates the property, beside the leaf.
+	case optionalPlaceOnSeam
+	/// The seam builds `OptionalPlacePanel` through an instantiator.
+	case optionalPlaceThroughInstantiator
+	/// `OptionalPlaceOuter`, a seam of the same module, builds the seam and passes its builder up.
+	case optionalPlacePassedUp
+	/// The property's holder also instantiates the type required, beside the optional place, so the seam takes both
+	/// builders, the optional one named apart.
+	case optionalPlaceBesideRequiredPlace
+	/// The leaf requires the optional form.
+	case optionalPlaceReceivedRequired
+	/// The seam's mock is generated, which binds the property `nil` and takes no builder for it.
+	case optionalPlaceSeamMocked
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -1994,6 +2015,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// in accepted graphs the seam corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
 	var isRetentionShape: Bool {
 		rawValue.hasPrefix("retentionSeamValueBeforeBuilder") || rawValue.hasPrefix("retentionLoopOfBuilders") || rawValue.hasPrefix("carrierDraw")
+	}
+
+	/// Whether `addingOptionalPlaceShapes` draws this shape of a property a seam's tree instantiates only if available, whose
+	/// count in accepted graphs the seam corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
+	var isOptionalPlaceShape: Bool {
+		rawValue.hasPrefix("optionalPlace")
 	}
 
 	/// Whether `addingHoleShapes` draws this place of `HoleErasureImpl`'s erasure, whose count in accepted graphs the seam
@@ -2457,6 +2484,20 @@ enum GraphFuzzerGenerator {
 		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
+	/// The graph release acceptance compares for `seed` and `features`: drawn storing every parameter, and without the
+	/// draws of features 2.3.0 rejects (`Builder.omitsDrawsOlderReleasesReject`), each of which
+	/// draws from a stream of its own, so that the rest of the graph is the corpus's. Release acceptance compares a graph
+	/// only where the older release accepts it, so a graph that draws such a feature would compare nothing. Only release
+	/// acceptance draws it, so no corpus pin moves.
+	static func releaseAcceptanceFixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> GraphFuzzerFixture {
+		guard !features.contains(.generateMockPublic) else {
+			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed, omitsDrawsOlderReleasesReject: true).swiftFileContent(storingEveryParameter: true, isKnownRight: false))
+		}
+		var builder = Builder(seed: seed, features: features, storesEveryParameter: true)
+		builder.omitsDrawsOlderReleasesReject = true
+		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
+	}
+
 	/// The graph for `seed` and `features` without its second place of a hole – the property a hole draw adds that gives a
 	/// hole a second place, or an inner seam a second route, which the generator records as it draws – drawn otherwise
 	/// exactly as the graph is, or `nil` when the graph has none. The name-stability oracle compares the builder labels
@@ -2566,6 +2607,8 @@ enum GraphFuzzerGenerator {
 		var enclosingTypeAccess = AccessLevel.public
 		/// Whether the type is a `struct` rather than a `final class`.
 		var isStruct = false
+		/// Whether the type is an `actor` rather than a `final class`.
+		var isActor = false
 		/// Declarations written before the type's own, in its file.
 		var precedingDeclarations = [String]()
 		/// Modules the type's file imports beyond those of its module's header.
@@ -2853,6 +2896,10 @@ enum GraphFuzzerGenerator {
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
+			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
+			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
+			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
+			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2933,6 +2980,11 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingActorArgumentShapes(to: finalDeclarations)
+			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -2963,6 +3015,10 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = addingWrapperMixShapes(to: finalDeclarations)
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
 				finalDeclarations = addingCarrierShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
+				if !omitsDrawsOlderReleasesReject {
+					finalDeclarations = addingOptionalPlaceShapes(to: finalDeclarations)
+				}
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3296,6 +3352,10 @@ enum GraphFuzzerGenerator {
 		private(set) var drawnHolePlaces = [GraphFuzzerDrawnHolePlace]()
 		/// Whether `build()` leaves out `secondHolePlace`, after every draw, so that the graph is drawn as with it.
 		var omitsSecondHolePlace = false
+		/// Whether `build()` leaves out the draws of features 2.3.0 rejects – `@Instantiated(onlyIfAvailable: true)`
+		/// (`addingDependencyInstantiatedOnlyIfAvailable`, `addingOptionalPlaceShapes`) and actors
+		/// (`addingActorArgumentShapes`) – for release acceptance (`GraphFuzzerGenerator.releaseAcceptanceFixture`).
+		var omitsDrawsOlderReleasesReject = false
 		/// The property `addingHoleShapes` adds that is a second path to a type that already holds a place on another path,
 		/// on a type that holds a place without it – by its type's name and its label – which the second-path oracle removes
 		/// (`GraphFuzzerGenerator.fixtureWithoutSecondPath`).
@@ -3378,6 +3438,18 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
 		/// every shape of that tree.
 		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
+		/// that tree.
+		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
+		/// tree, and every shape of that tree.
+		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingOptionalPlaceShapes`' choices: whether a split graph gains `OptionalPlaceRoot`'s tree, and every
+		/// shape of that tree.
+		private var optionalPlaceRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
+		/// every shape of that tree.
+		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8068,6 +8140,193 @@ enum GraphFuzzerGenerator {
 
 		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
 
+		// MARK: An actor's argument holding a lazy builder
+
+		/// The base corpus's draw, outside `Sendable` graphs, of a mock tree in which an actor's initializer takes a value
+		/// whose tree holds a lazy builder. `ActorStore`, an actor, instantiates `ActorWorker`, which holds an `Instantiator`
+		/// or `LazilyInstantiated` of `ActorChild`, directly or through `ActorHelper`; `ActorChild` half the time takes a
+		/// default-valued parameter, so its configuration has a field, and a quarter of the time receives `actorToken`,
+		/// which `ActorWorker` instantiates. `ActorStore`'s mock is generated, or `ActorHost`'s, a class that instantiates
+		/// the store and, after it, `ActorOther`, or both. Swift 6 rejects sending the actor a value whose region holds the
+		/// mock's overrides, which a lazy builder reading them joined, so the compile is the oracle. No root reaches the tree.
+		/// `actorArgumentRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingActorArgumentShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, actorArgumentRandom.percentChance(16), sendability != .sendable else { return declarations }
+			var declarations = declarations
+			let wrapper = actorArgumentRandom.percentChance(50) ? "Instantiator" : "LazilyInstantiated"
+			let throughHelper = actorArgumentRandom.percentChance(50)
+			let childTakesDefault = actorArgumentRandom.percentChance(50)
+			let childReceivesToken = actorArgumentRandom.percentChance(25)
+			let mocksStore: Bool
+			let mocksHost: Bool
+			switch actorArgumentRandom.integer(in: 0...2) {
+			case 0:
+				(mocksStore, mocksHost) = (true, false)
+			case 1:
+				(mocksStore, mocksHost) = (false, true)
+			default:
+				(mocksStore, mocksHost) = (true, true)
+			}
+			func declaration(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: [],
+				)
+			}
+			let tokenName = "\(prefix)ActorToken"
+			let childName = "\(prefix)ActorChild"
+			let helperName = "\(prefix)ActorHelper"
+			let workerName = "\(prefix)ActorWorker"
+			let storeName = "\(prefix)ActorStore"
+			let lazyChild = PropertyDeclaration(attribute: "@Instantiated", label: "actorChild", type: "\(wrapper)<\(childName)>")
+			var child = declaration(childName, childReceivesToken ? [PropertyDeclaration(attribute: "@Received", label: "actorToken", type: tokenName)] : [])
+			if childTakesDefault {
+				child.defaultValuedParameters = [ParameterDeclaration(name: "name", type: "String", defaultValue: "\"child\"")]
+			}
+			declarations.append(child)
+			var workerProperties = [PropertyDeclaration]()
+			if childReceivesToken {
+				declarations.append(declaration(tokenName, []))
+				workerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorToken", type: tokenName))
+			}
+			if throughHelper {
+				declarations.append(declaration(helperName, [lazyChild]))
+				workerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorHelper", type: helperName))
+			} else {
+				workerProperties.append(lazyChild)
+			}
+			declarations.append(declaration(workerName, workerProperties))
+			var store = declaration(storeName, generatesMock: mocksStore, [PropertyDeclaration(attribute: "@Instantiated", label: "actorWorker", type: workerName)])
+			store.isActor = true
+			declarations.append(store)
+			if mocksHost {
+				declarations.append(declaration("\(prefix)ActorOther", []))
+				declarations.append(declaration("\(prefix)ActorHost", generatesMock: true, [
+					PropertyDeclaration(attribute: "@Instantiated", label: "actorStore", type: storeName),
+					PropertyDeclaration(attribute: "@Instantiated", label: "actorOther", type: "\(prefix)ActorOther"),
+				]))
+			}
+			return declarations
+		}
+
+		private static let actorArgumentRandomSeedMask: UInt64 = 0x6163746F72417267
+
+		// MARK: A dependency instantiated only if available
+
+		/// The base corpus's draw of `@Instantiated(onlyIfAvailable: true)`. `IfAvailableRoot`, a root, instantiates
+		/// `IfAvailableScreen`, which instantiates `ifAvailableToken: IfAvailableToken?` only if available and
+		/// `IfAvailableLeaf`, in either order, the leaf by value or through an `Instantiator`. Six draws in ten,
+		/// `IfAvailableToken` is `@Instantiable`, so the screen builds it; in the rest it is a plain class the screen's file
+		/// declares, which no declaration fulfills, so production binds the property to `nil` and a mock binds it from an
+		/// override that defaults to `nil`, and takes no parameter, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
+		/// form, required or only if available, and where it is only if available the root now and then builds a second
+		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
+		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
+		/// every other, and only in the base corpus.
+		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
+			var declarations = declarations
+			let tokenComesFirst = instantiatedOnlyIfAvailableRandom.percentChance(50)
+			let leafRequiresToken = instantiatedOnlyIfAvailableRandom.percentChance(40)
+			let leafIsBuiltByInstantiator = instantiatedOnlyIfAvailableRandom.percentChance(35)
+			let rootMayBuildLeaf = instantiatedOnlyIfAvailableRandom.percentChance(40)
+			let screenGeneratesMock = instantiatedOnlyIfAvailableRandom.percentChance(40)
+			let tokenIsFulfilled = instantiatedOnlyIfAvailableRandom.percentChance(60)
+			let rootBuildsLeaf = rootMayBuildLeaf && !leafRequiresToken
+			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			let tokenName = "\(prefix)IfAvailableToken"
+			let leafName = "\(prefix)IfAvailableLeaf"
+			let screenName = "\(prefix)IfAvailableScreen"
+			if tokenIsFulfilled {
+				append(tokenName, [])
+			}
+			append(leafName, [leafRequiresToken
+					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(tokenName)?")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")])
+			let token = PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
+			let leaf = leafIsBuiltByInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeafBuilder", type: "\(sendability == .sendable ? "SendableInstantiator" : "Instantiator")<\(leafName)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeaf", type: leafName)
+			append(screenName, arguments: screenGeneratesMock ? ["generateMock: true"] : [], tokenComesFirst ? [token, leaf] : [leaf, token])
+			if !tokenIsFulfilled {
+				declarations[declarations.count - 1].additionalDeclarations.append("public final class \(tokenName): Sendable {}")
+			}
+			var rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableScreen", type: screenName)]
+			if rootBuildsLeaf {
+				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableOuterLeaf", type: leafName))
+			}
+			append("\(prefix)IfAvailableRoot", arguments: ["isRoot: true"], rootProperties)
+			return declarations
+		}
+
+		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
+
+		// MARK: A type built again through a second lazy cycle
+
+		/// The base corpus's draw, in one graph of twenty-five, of two lazy cycles that share a type, with a label declared
+		/// again on one of them. `NestRoot`, a root, instantiates `nestLabel` and an instantiator of `NestOuter`, which
+		/// instantiates instantiators of `NestInner` and of `NestReader`, which receives `nestLabel`. `NestInner` instantiates
+		/// an instantiator of `NestOuter` again, closing the first cycle, and one of `NestRedeclarer`, which instantiates
+		/// its own `nestLabel` and an instantiator of `NestInner` again, closing the second, in either order. So the
+		/// `NestReader` of the `NestOuter` that the `NestInner` beneath a `NestRedeclarer` builds reads that
+		/// `NestRedeclarer`'s `nestLabel`, although nothing declares the label between `NestOuter` and the scope that builds
+		/// it again. One graph in three, `NestThird` sits between `NestInner` and `NestRedeclarer` and is what
+		/// `NestRedeclarer` builds again, a third cycle inside the second. One graph in four, `NestReader` receives the label
+		/// only if available and `NestRoot` declares none, so a `NestReader` beneath no `NestRedeclarer` is passed `nil`.
+		/// A mock of `NestRoot` and its production build pass the label by the same rule, so the value oracle compares
+		/// `NestRoot()` with a tree built by hand to the Manual's rule (`GraphFuzzerValueOraclePlan.nestedCyclePair`).
+		/// `nestedCycleRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingTypeBuiltAgainThroughSecondLazyCycle(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, nestedCycleRandom.percentChance(4) else { return declarations }
+			var declarations = declarations
+			let closesFirstCycleFirst = nestedCycleRandom.percentChance(50)
+			let hasThirdCycle = nestedCycleRandom.percentChance(33)
+			let receivesOnlyIfAvailable = nestedCycleRandom.percentChance(25)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			func builder(_ label: String, of name: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(instantiator)<\(prefix)\(name)>")
+			}
+			let labelName = "\(prefix)NestLabel"
+			let label = PropertyDeclaration(attribute: "@Instantiated", label: "nestLabel", type: labelName)
+			append(labelName, [])
+			append("\(prefix)NestReader", [receivesOnlyIfAvailable
+					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "nestLabel", type: labelName + "?")
+					: PropertyDeclaration(attribute: "@Received", label: "nestLabel", type: labelName)])
+			append("\(prefix)NestOuter", [builder("nestInnerBuilder", of: "NestInner"), builder("nestReaderBuilder", of: "NestReader")])
+			let closingFirstCycle = builder("nestOuterBuilder", of: "NestOuter")
+			let openingSecondCycle = hasThirdCycle ? builder("nestThirdBuilder", of: "NestThird") : builder("nestRedeclarerBuilder", of: "NestRedeclarer")
+			append("\(prefix)NestInner", closesFirstCycleFirst ? [closingFirstCycle, openingSecondCycle] : [openingSecondCycle, closingFirstCycle])
+			if hasThirdCycle {
+				append("\(prefix)NestThird", [builder("nestRedeclarerBuilder", of: "NestRedeclarer"), builder("nestInnerBuilder", of: "NestInner")])
+			}
+			append("\(prefix)NestRedeclarer", [label, hasThirdCycle ? builder("nestThirdBuilder", of: "NestThird") : builder("nestInnerBuilder", of: "NestInner")])
+			append("\(prefix)NestRoot", isRoot: true, (receivesOnlyIfAvailable ? [] : [label]) + [builder("nestOuterBuilder", of: "NestOuter")])
+			return declarations
+		}
+
+		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -9810,6 +10069,99 @@ enum GraphFuzzerGenerator {
 
 		private static let carrierDrawRandomSeedMask: UInt64 = 0x6361727269657244
 
+		// MARK: A seam's property instantiated only if available
+
+		/// With the `generateDependencyTree` feature on, six in ten graphs already split across modules gain a property a
+		/// seam's tree instantiates only if available whose type the seam's module cannot see: `OptionalPlaceSeam`, a seam of
+		/// the seam's module, builds `OptionalPlacePanel`, by value or through an instantiator, which instantiates
+		/// `optionalPlaceAnalytics: (any OptionalPlaceAnalytics)?` only if available, before or after `OptionalPlaceLeaf`,
+		/// which receives it only if available or, four in ten, requires the optional form; a quarter of the time the seam
+		/// holds both itself. So the seam's initializer takes `optionalPlaceAnalyticsOptionalBuilder`, a builder returning
+		/// the optional. Six in ten, `OptionalPlaceAnalyticsImpl`, beside `OptionalPlaceRoot` in the roots' module, fulfills
+		/// the protocol, and the root fills the builder with it; otherwise the root fills it with `nil`, as inline binds the
+		/// property `nil`. Where it is fulfilled, a third of the time the holder also instantiates the protocol required, so
+		/// that the optional builder is named apart beside a required one of its type. A third of the time
+		/// `OptionalPlaceOuter`, a seam of the same module, builds the seam and passes the builder up, and where nothing fulfills
+		/// the protocol, three in ten the seam generates its mock, which binds the property `nil` and takes no builder for it.
+		/// The value comparator judges the seam against its inline build and its visible build.
+		///
+		/// `optionalPlaceRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
+		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. Every roll
+		/// is made before any is read.
+		private mutating func addingOptionalPlaceShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), optionalPlaceRandom.percentChance(60) else { return declarations }
+			let isFulfilled = optionalPlaceRandom.percentChance(60)
+			let placeOnSeam = optionalPlaceRandom.percentChance(25)
+			let panelThroughInstantiator = optionalPlaceRandom.percentChance(40)
+			let leafFirst = optionalPlaceRandom.percentChance(50)
+			let leafRequires = optionalPlaceRandom.percentChance(40)
+			let besideRequiredRoll = optionalPlaceRandom.percentChance(35)
+			let passedUp = optionalPlaceRandom.percentChance(35)
+			let seamMockedRoll = optionalPlaceRandom.percentChance(30)
+			let besideRequired = besideRequiredRoll && isFulfilled
+			// The seam's own mock is internal to the seam's module, which sees no fulfilling type, so it binds the property
+			// from an override that defaults to `nil`, while the visible build, which declares the fillers in the seam's
+			// module, builds `OptionalPlaceAnalyticsImpl`: a stated difference, not a defect (seam smoke seeds 59 and 277).
+			// So the seam generates its mock only where nothing fulfills the protocol.
+			let seamMocked = seamMockedRoll && !isFulfilled
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			let protocolName = "\(prefix)OptionalPlaceAnalytics"
+			let optionalType = "(any \(protocolName))?"
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, arguments: [String] = [], properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: arguments, properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			var added = [TypeDeclaration]()
+			let leaf = instantiable("OptionalPlaceLeaf", properties: [leafRequires
+					? PropertyDeclaration(attribute: "@Received", label: "optionalPlaceAnalytics", type: optionalType)
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "optionalPlaceAnalytics", type: optionalType)])
+			added.append(leaf)
+			var holderProperties = [PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "optionalPlaceAnalytics", type: optionalType)]
+			let leafProperty = PropertyDeclaration(attribute: "@Instantiated", label: "optionalPlaceLeaf", type: leaf.name)
+			if leafFirst {
+				holderProperties.insert(leafProperty, at: 0)
+			} else {
+				holderProperties.append(leafProperty)
+			}
+			if besideRequired {
+				holderProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "optionalPlaceRequiredAnalytics", type: "any \(protocolName)"))
+			}
+			let seamProperties: [PropertyDeclaration]
+			if placeOnSeam {
+				seamProperties = holderProperties
+			} else {
+				let panel = instantiable("OptionalPlacePanel", properties: holderProperties)
+				added.append(panel)
+				seamProperties = [panelThroughInstantiator
+					? PropertyDeclaration(attribute: "@Instantiated", label: "optionalPlacePanelBuilder", type: "\(instantiator)<\(panel.name)>")
+					: PropertyDeclaration(attribute: "@Instantiated", label: "optionalPlacePanel", type: panel.name)]
+			}
+			var seam = instantiable("OptionalPlaceSeam", arguments: seamMocked ? ["generateDependencyTree: true", "generateMock: true"] : ["generateDependencyTree: true"], properties: seamProperties)
+			seam.additionalDeclarations.append("public protocol \(protocolName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			added.append(seam)
+			var rootBuilds = seam
+			if passedUp {
+				let outer = instantiable("OptionalPlaceOuter", arguments: ["generateDependencyTree: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "optionalPlaceSeam", type: seam.name)])
+				added.append(outer)
+				rootBuilds = outer
+			}
+			if isFulfilled {
+				var implementation = instantiable("OptionalPlaceAnalyticsImpl", module: .samePackageCaller, arguments: ["fulfillingAdditionalTypes: [\(protocolName).self]"])
+				implementation.additionalConformances.append(protocolName)
+				implementation.fillsHole = true
+				added.append(implementation)
+			}
+			let label = String(rootBuilds.name.dropFirst(prefix.count).prefix(1)).lowercased() + rootBuilds.name.dropFirst(prefix.count + 1)
+			added.append(instantiable("OptionalPlaceRoot", module: .samePackageCaller, arguments: ["isRoot: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: label, type: rootBuilds.name)]))
+			return declarations + added
+		}
+
+		private static let optionalPlaceRandomSeedMask: UInt64 = 0x4F7074506C616365
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -10077,7 +10429,7 @@ enum GraphFuzzerGenerator {
 				"Instantiable"
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
-			var lines = [instantiableAttribute, "\(declaration.access.modifier)\(declaration.isStruct ? "struct" : "final class") \(declaration.name): \(conformances) {"]
+			var lines = [instantiableAttribute, "\(declaration.access.modifier)\(declaration.isStruct ? "struct" : declaration.isActor ? "actor" : "final class") \(declaration.name): \(conformances) {"]
 			// A function-typed parameter is stored, so it escapes.
 			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
 			// The initializer is no wider, once its type caps it, than the narrowest type it names, so that the fixture
@@ -11439,6 +11791,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
 			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture)).union(fixedSeamCallDefectDrawFeatures(of: fixture)).union(carrierDrawFeatures(of: fixture))
+			.union(optionalPlaceDrawFeatures(of: fixture))
 	}
 
 	/// The shapes `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` and `addingReenteredFillShapes` draw, read from the
@@ -11579,6 +11932,35 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule)
 				}
 			}
+		}
+		return features
+	}
+
+	/// The shapes `addingOptionalPlaceShapes` draws, read from the types and properties the fixture declares.
+	private static func optionalPlaceDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, mockedTypeNames) = declaredProperties(of: fixture)
+		guard let seamProperties = propertiesByType[prefix + "OptionalPlaceSeam"] else { return [] }
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.optionalPlace]
+		features.insert(propertiesByType[prefix + "OptionalPlaceAnalyticsImpl"] != nil ? .optionalPlaceFilled : .optionalPlaceUnfilled)
+		let holderProperties = propertiesByType[prefix + "OptionalPlacePanel"] ?? seamProperties
+		if propertiesByType[prefix + "OptionalPlacePanel"] == nil {
+			features.insert(.optionalPlaceOnSeam)
+		}
+		if seamProperties.contains(where: { $0.label == "optionalPlacePanelBuilder" }) {
+			features.insert(.optionalPlaceThroughInstantiator)
+		}
+		if propertiesByType[prefix + "OptionalPlaceOuter"] != nil {
+			features.insert(.optionalPlacePassedUp)
+		}
+		if holderProperties.contains(where: { $0.label == "optionalPlaceRequiredAnalytics" }) {
+			features.insert(.optionalPlaceBesideRequiredPlace)
+		}
+		if propertiesByType[prefix + "OptionalPlaceLeaf"]?.contains(where: { $0.attribute == "@Received" }) == true {
+			features.insert(.optionalPlaceReceivedRequired)
+		}
+		if mockedTypeNames.contains(prefix + "OptionalPlaceSeam") {
+			features.insert(.optionalPlaceSeamMocked)
 		}
 		return features
 	}
@@ -12929,6 +13311,23 @@ enum GraphFuzzerSourceLine: Equatable {
 		return Substring(line)
 	}
 
+	/// The names of the `actor` types `@Instantiable` attributes decorate in `contents`, which only `addingActorArgumentShapes`
+	/// draws.
+	static func actorTypeNames(in contents: [String]) -> Set<String> {
+		var names = Set<String>()
+		for content in contents {
+			var previousLineWasInstantiableAttribute = false
+			for rawLine in content.split(separator: "\n", omittingEmptySubsequences: false) {
+				let line = rawLine.trimmingCharacters(in: .whitespaces)
+				if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("actor ") {
+					names.insert(String(declaration.dropFirst("actor ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }))
+				}
+				previousLineWasInstantiableAttribute = line.hasPrefix("@Instantiable")
+			}
+		}
+		return names
+	}
+
 	static func lines(of content: String) -> [GraphFuzzerSourceLine] {
 		var lines = [GraphFuzzerSourceLine]()
 		var previousLineWasInstantiableAttribute = false
@@ -12937,8 +13336,9 @@ enum GraphFuzzerSourceLine: Equatable {
 			let parsedLine: GraphFuzzerSourceLine
 			if line.hasPrefix("@Instantiable") {
 				parsedLine = .instantiableAttribute(arguments: String(line.dropFirst("@Instantiable".count)))
-			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("final class ") {
-				let name = declaration.dropFirst("final class ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), let keyword = ["final class ", "actor "].first(where: { declaration.hasPrefix($0) }) {
+				// Only `addingActorArgumentShapes` draws an actor, so reading one changes no other graph's files or model.
+				let name = declaration.dropFirst(keyword.count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("extension ") {
 				// The extended type's last component: a nested extended type's file is named after it.
@@ -13864,8 +14264,9 @@ struct GraphFuzzerResult {
 	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
 	/// without its package's name.
 	let isComparedAcrossIntegrations: Bool
-	/// Whether the oracle ran the graph with every module info's seam signatures discarded and compared the two runs
-	/// (`GraphFuzzerToolRuns.storedSeamSignaturesDisagreeFailure`): the graph is split across modules and declares a seam.
+	/// Whether the oracle ran the graph with every module info's seam signatures and public mock plans discarded and
+	/// compared the two runs (`GraphFuzzerToolRuns.storedSeamSignaturesDisagreeFailure`): the graph is split across
+	/// modules and declares a seam or a public mock.
 	let isComparedWithRecomputedSignatures: Bool
 	/// Whether the oracle ran the graph's read twin and compared it with the graph (`GraphFuzzerToolRuns.readTwinFailure`):
 	/// the graph names a type no declaration SafeDI reads declares.
@@ -14822,8 +15223,9 @@ struct GraphFuzzerToolRuns {
 	}
 
 	/// The failure of a graph split across modules whose modules generate other code or report other diagnostics when each
-	/// reads the signatures of the seams it calls from their modules' `.safedi` files than when it computes them again from
-	/// the declarations those files carry, or `nil`: a module's stored signature must be the one each caller would compute.
+	/// reads the signatures of the seams it calls, and the plans of the public mocks its mocks call, from their modules'
+	/// `.safedi` files than when it computes them again from the declarations those files carry, or `nil`: a module's
+	/// stored signature or plan must be the one each caller would compute.
 	var storedSeamSignaturesDisagreeFailure: GraphFuzzerFailure? {
 		guard let recomputedSignaturesOutcome, recomputedSignaturesOutcome != firstOutcome else { return nil }
 		return GraphFuzzerFailure(
@@ -16227,10 +16629,11 @@ enum GraphFuzzerOracle {
 		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
 			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
 			: nil
-		// A graph split across modules that declares a seam is run again with every `.safedi` file's seam signatures
-		// discarded, so each module computes the signatures of the seams it calls from the declarations: the two must
-		// agree byte for byte (`storedSeamSignaturesDisagreeFailure`).
-		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.declaresSeam
+		// A graph split across modules that declares a seam or a public mock is run again with every `.safedi` file's seam
+		// signatures and public mock plans discarded, so each module computes the signatures of the seams it calls and the
+		// plans of the public mocks its mocks call from the declarations: the two must agree byte for byte
+		// (`storedSeamSignaturesDisagreeFailure`).
+		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && (fixture.declaresSeam || GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic))
 			? try await toolOutcome(of: fixture, discardingStoredSeamSignatures: true)
 			: nil
 		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
@@ -16352,6 +16755,14 @@ enum GraphFuzzerOracle {
 	/// with the name of the module whose `generate` rejected a graph split across modules: `nil` where the tool accepts the
 	/// graph, or where the graph is in one module, which is then the module that rejects it.
 	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+		// A stored block that does not read back is reported by the run's harness, which knows no seed (`StoredBlockDecodeChecks`).
+		try await StoredBlockDecodeChecks.$runDescription.withValue("graph fuzzer seed \(fixture.seed)") {
+			try await toolRunOfGraph(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
+		}
+	}
+
+	/// See `toolRun(of:fileNames:integration:listsTransitiveDependencies:discardingStoredSeamSignatures:)`.
+	private static func toolRunOfGraph(of fixture: GraphFuzzerFixture, fileNames: [String]?, integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		if let modules = fixture.modules {
 			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
 		}
