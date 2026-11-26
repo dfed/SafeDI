@@ -672,7 +672,7 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # 170.1 MB (3.58), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
 # B 0.086 s and 1.576 s (18.37), 34.5 MB and 92.6 MB (2.68); BM 0.079 s and 2.543 s
 # (32.30), 33.7 MB and 179.7 MB (5.34), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
-# code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86); N 0.207 s and 1.365 s (6.60).
+# code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86).
 # The tool alone, on the smallest graph, peaks at about 33 MB. K (36.6 MB and 67.4 MB, 1.84) and W (52.4 MB and
 # 94.9 MB, 1.74 to 1.82 in five runs) stay under the default limit without room to spare.
 GROWTH_ROWS = {
@@ -696,10 +696,11 @@ GROWTH_ROWS = {
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
-    "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
-    # V 0.45 s and 3.8 s (8.6); VO 0.51 s and 4.6 s (9.2).
-    "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 11.0}),
-    "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {"time": 11.5}),
+    "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {}),
+    # V 0.122 s and 0.302 s (2.47); VO 0.111 s and 0.361 s (3.26), down from 8.6 and 9.2: what is left while a subtree's
+    # key holds the whole path to the scope that declares a rename read beneath it.
+    "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 4.5}),
+    "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {"time": 4.5}),
     # PR 0.33 s and 3.0 s (9.1), 48 MB and 175 MB (3.65); its code grows with the graph.
     "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {"time": 12.0, "memory": 4.5}),
 }

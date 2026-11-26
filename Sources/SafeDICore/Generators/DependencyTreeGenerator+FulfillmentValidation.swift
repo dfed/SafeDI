@@ -680,6 +680,10 @@ extension DependencyTreeGenerator {
 		let declaringType: TypeDescription
 		let lastAliasDeclaringType: TypeDescription
 		let lastAliasDeclaringInstantiationStack: [Property]
+		/// The one entry of the instantiation stack a walk finds by the length of the last alias's declaring stack, the
+		/// child of the declaring scope the subtree is built inside, where it is the property that alias is bound from:
+		/// a receive that requires the alias is then built inside the alias's own fulfilling sibling.
+		let fulfillingSiblingBeingBuilt: Property?
 	}
 
 	/// How the scopes a walk of a scope's subtree can reach use a label (see `CleanSubtreeLabelFacts`).
@@ -792,10 +796,9 @@ extension DependencyTreeGenerator {
 		let receivableProperties: Set<Property>
 		let closestDeclarations: [String: CleanSubtreeDeclaration]
 		let stack: [CleanSubtreeStackToken]
+		/// The aliases above of a label a scope beneath receives or renames a property of: a walk looks an alias up only
+		/// by the property a scope requires, or by the property an `onlyIfAvailable` alias beneath is fulfilled by.
 		let receivableAliases: [Property: CleanSubtreeAlias]
-		/// The whole stack, where an alias above is receivable: an alias's declaring stack is absolute.
-		let aliasStack: [Property]
-		let aliasParentTypeStack: [TypeDescription]
 	}
 
 	/// A scope whose required received properties `validateNoCycleInReceivedProperties` is walking.
@@ -1686,7 +1689,12 @@ extension DependencyTreeGenerator {
 				}
 			}
 			var receivableAliases = [Property: CleanSubtreeAlias]()
-			for (aliasProperty, alias) in scopeToValidate.receivableAliases where labelsBeneath.contains(aliasProperty.label) {
+			let usesByLabel = scopeToValidate.receivableAliases.isEmpty ? [:] : cleanSubtreeLabelFacts(of: scope).usesByLabel
+			// The walk's instantiation stack, nearest first, starts with the property `scope` is built for.
+			let instantiationStack = usesByLabel.isEmpty ? [] : (scopeToValidate.property.map { [$0] } ?? []) + scopeToValidate.propertyStack
+			for (aliasProperty, alias) in scopeToValidate.receivableAliases where usesByLabel[aliasProperty.label, default: []].contains(.read) {
+				let declaringChild = instantiationStack.dropFirst(instantiationStack.count - alias.lastAliasDeclaringInstantiationStack.count - 1).first
+				let lastFulfillingProperty = alias.fulfillingOnlyIfAvailableAliases.last?.fulfillingProperty ?? alias.fulfillingProperty
 				receivableAliases[aliasProperty] = CleanSubtreeAlias(
 					fulfillingProperty: alias.fulfillingProperty,
 					onlyIfAvailable: alias.onlyIfAvailable,
@@ -1695,6 +1703,7 @@ extension DependencyTreeGenerator {
 					declaringType: alias.declaringType,
 					lastAliasDeclaringType: alias.lastAliasDeclaringType,
 					lastAliasDeclaringInstantiationStack: alias.lastAliasDeclaringInstantiationStack,
+					fulfillingSiblingBeingBuilt: formsOnStack(of: lastFulfillingProperty.asValidatedForDependencyCycles).first { $0 == declaringChild },
 				)
 			}
 			return CleanSubtreeKey(
@@ -1705,8 +1714,6 @@ extension DependencyTreeGenerator {
 				closestDeclarations: closestDeclarations,
 				stack: stack,
 				receivableAliases: receivableAliases,
-				aliasStack: receivableAliases.isEmpty ? [] : scopeToValidate.propertyStack,
-				aliasParentTypeStack: receivableAliases.isEmpty ? [] : scopeToValidate.parentTypeStack,
 			)
 		}
 		/// Validates the tree rooted at `rootScope`, scope by scope, depth first in the order each scope declares its
