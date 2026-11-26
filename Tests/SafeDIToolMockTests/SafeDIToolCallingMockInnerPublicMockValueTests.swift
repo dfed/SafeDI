@@ -520,7 +520,6 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -636,7 +635,6 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _, _, _ in __safeDI_builder() }, inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }

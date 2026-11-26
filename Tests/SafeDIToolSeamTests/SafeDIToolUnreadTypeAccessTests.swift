@@ -634,7 +634,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
@@ -695,7 +694,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.renderer = renderer
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(renderer: { _ in __safeDI_builder() })
 			        }
@@ -6003,7 +6001,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: { _ in __safeDI_builder() })
 			        }
