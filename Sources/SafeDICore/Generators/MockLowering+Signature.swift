@@ -509,55 +509,76 @@ extension ScopeGenerator {
 		}
 		var visitedNodeIndexByKey = [NodeKey: Int]()
 		var laterMeetingsByVisitedNodeIndex = [Int: [Int]]()
-		/// The meetings of the visited node at `index`: the node itself, then each later meeting.
-		func meetings(ofNodeAt index: Int) -> [Int] {
-			[index] + (laterMeetingsByVisitedNodeIndex[index] ?? [])
-		}
-		/// Computes `value` for the visited node at `index` from the values of the parents of its meetings, each computed
-		/// once, with a stack, since the tree can be as deep as the module has types. A meeting's parent is a visited node,
-		/// and no node is met beneath itself, since a node that repeats an ancestor's declaration closes a cycle and builds
-		/// nothing beneath it.
-		func valueOfNode<Value>(at index: Int, memo: inout [Int: Value], value: (_ meetingsAndParentValues: [(meeting: Int, parentValue: Value?)]) -> Value) -> Value {
-			var stack = [index]
-			while let current = stack.last {
-				guard memo[current] == nil else {
+		/// The walk's nodes and where it met each visited node again, read once the walk has ended: each visited node's first
+		/// path and the labels the builder functions around it declare, each computed once. Its memory dies with this function.
+		/// A value, not local functions over the walk's dictionaries, which Swift 6.4 reports as sending them ("sending
+		/// 'laterMeetingsByVisitedNodeIndex' risks causing data races") inside the actor's method.
+		struct Meetings {
+			let nodes: [Node]
+			let laterMeetingsByVisitedNodeIndex: [Int: [Int]]
+			/// The first path to the visited node at each index, by declaration and then generation order, over every path that
+			/// meets it. No path to a node extends another, so the first path to a node extends the first path to a parent.
+			var firstPathByNodeIndex = [Int: [Position]]()
+			/// The labels a builder function around the visited node at each index, its own excluded, declares on some path to it.
+			var namesDeclaredAroundByNodeIndex = [Int: Set<String>]()
+
+			mutating func path(toNodeAt index: Int?) -> [Position] {
+				guard let index else { return [] }
+				let nodes = nodes
+				return Self.valueOfNode(at: index, of: nodes, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex, memo: &firstPathByNodeIndex) { meetingsAndParentPaths in
+					meetingsAndParentPaths.map { ($0.parentValue ?? []) + [nodes[$0.meeting].position] }
+						.min(by: { $0.lexicographicallyPrecedes($1) }) ?? []
+				}
+			}
+
+			mutating func isDeclaredAround(nodeAt index: Int, _ label: String) -> Bool {
+				let nodes = nodes
+				return Self.valueOfNode(at: index, of: nodes, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex, memo: &namesDeclaredAroundByNodeIndex) { meetingsAndParentNames in
+					var names = Set<String>()
+					for (meeting, parentNames) in meetingsAndParentNames {
+						guard let parentIndex = nodes[meeting].parentIndex else { continue }
+						names.formUnion(parentNames ?? [])
+						names.formUnion(nodes[parentIndex].namesDeclared)
+					}
+					return names
+				}.contains(label)
+			}
+
+			/// The meetings of the visited node at `index`: the node itself, then each later meeting.
+			private static func meetings(ofNodeAt index: Int, laterMeetingsByVisitedNodeIndex: [Int: [Int]]) -> [Int] {
+				[index] + (laterMeetingsByVisitedNodeIndex[index] ?? [])
+			}
+
+			/// Computes `value` for the visited node at `index` from the values of the parents of its meetings, each computed
+			/// once, with a stack, since the tree can be as deep as the module has types. A meeting's parent is a visited node,
+			/// and no node is met beneath itself, since a node that repeats an ancestor's declaration closes a cycle and builds
+			/// nothing beneath it.
+			private static func valueOfNode<Value>(
+				at index: Int,
+				of nodes: [Node],
+				laterMeetingsByVisitedNodeIndex: [Int: [Int]],
+				memo: inout [Int: Value],
+				value: (_ meetingsAndParentValues: [(meeting: Int, parentValue: Value?)]) -> Value,
+			) -> Value {
+				var stack = [index]
+				while let current = stack.last {
+					guard memo[current] == nil else {
+						stack.removeLast()
+						continue
+					}
+					let meetings = meetings(ofNodeAt: current, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex)
+					let pendingParents = meetings.compactMap { nodes[$0].parentIndex }.filter { memo[$0] == nil }
+					guard pendingParents.isEmpty else {
+						stack.append(contentsOf: pendingParents)
+						continue
+					}
+					memo[current] = value(meetings.map { meeting in
+						(meeting: meeting, parentValue: nodes[meeting].parentIndex.flatMap { memo[$0] })
+					})
 					stack.removeLast()
-					continue
 				}
-				let pendingParents = meetings(ofNodeAt: current).compactMap { nodes[$0].parentIndex }.filter { memo[$0] == nil }
-				guard pendingParents.isEmpty else {
-					stack.append(contentsOf: pendingParents)
-					continue
-				}
-				memo[current] = value(meetings(ofNodeAt: current).map { meeting in
-					(meeting: meeting, parentValue: nodes[meeting].parentIndex.flatMap { memo[$0] })
-				})
-				stack.removeLast()
+				return memo[index] ?? value([])
 			}
-			return memo[index] ?? value([])
-		}
-		/// The first path to the visited node at `index`, by declaration and then generation order, over every path that
-		/// meets it. No path to a node extends another, so the first path to a node extends the first path to a parent.
-		var firstPathByNodeIndex = [Int: [Position]]()
-		func path(toNodeAt index: Int?) -> [Position] {
-			guard let index else { return [] }
-			return valueOfNode(at: index, memo: &firstPathByNodeIndex) { meetingsAndParentPaths in
-				meetingsAndParentPaths.map { ($0.parentValue ?? []) + [nodes[$0.meeting].position] }
-					.min(by: { $0.lexicographicallyPrecedes($1) }) ?? []
-			}
-		}
-		/// The labels a builder function around the visited node at `index`, its own excluded, declares on some path to it.
-		var namesDeclaredAroundByNodeIndex = [Int: Set<String>]()
-		func isDeclaredAround(nodeAt index: Int, _ label: String) -> Bool {
-			valueOfNode(at: index, memo: &namesDeclaredAroundByNodeIndex) { meetingsAndParentNames in
-				var names = Set<String>()
-				for (meeting, parentNames) in meetingsAndParentNames {
-					guard let parentIndex = nodes[meeting].parentIndex else { continue }
-					names.formUnion(parentNames ?? [])
-					names.formUnion(nodes[parentIndex].namesDeclared)
-				}
-				return names
-			}.contains(label)
 		}
 		/// The generators of the children that build a type, each at its position among them.
 		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], under parentIndex: Int?, insideSendableFunction: Bool) -> [Visit] {
@@ -708,7 +729,8 @@ extension ScopeGenerator {
 			nodes[visit.nodeIndex].namesDeclared = namesDeclared
 			visits.append(contentsOf: children.reversed())
 		}
-		for creation in uncoveredCreations where isDeclaredAround(nodeAt: creation.nodeIndex, creation.dependency.property.label) {
+		var meetings = Meetings(nodes: nodes, laterMeetingsByVisitedNodeIndex: laterMeetingsByVisitedNodeIndex)
+		for creation in uncoveredCreations where meetings.isDeclaredAround(nodeAt: creation.nodeIndex, creation.dependency.property.label) {
 			hiddenProperties.insert(creation.dependency.property)
 		}
 		var uncoveredDependencies = [ScopeGenerator.MockTreeNames.UncoveredDependency]()
@@ -718,7 +740,7 @@ extension ScopeGenerator {
 			let creations = creatingTypesByProperty[property] ?? []
 			let orderedCreations = creations.count < 2
 				? creations
-				: creations.map { (path: path(toNodeAt: $0.nodeIndex), type: $0.type) }.sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }).map { (nodeIndex: Int?.none, type: $0.type) }
+				: creations.map { (path: meetings.path(toNodeAt: $0.nodeIndex), type: $0.type) }.sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }).map { (nodeIndex: Int?.none, type: $0.type) }
 			for (_, type) in orderedCreations where !creatingTypes.contains(type) {
 				creatingTypes.append(type)
 			}
