@@ -265,28 +265,33 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		// available, receive the rename, build a reader of it or declare `service` themselves, beneath roots and halls
 		// that may rename it too, with every type's mock generated in half the graphs. Every graph is run in passes and
 		// along the paths. The counts show the draw reaches what it is for: graphs the tool accepts, graphs it rejects,
-		// and graphs whose passes collected another number of scopes than the walk along the paths. No drawn graph tells
-		// a cycle whose own alias a receiver requires apart when it is kept as the passes completed it:
-		// `generate_buildsValueAfterBuilderItReceives_whenOnlyTypeBuilderOpensNextRenamesValueForTypeItOpens` does.
+		// those it rejects for a dependency cycle, and graphs whose passes collected another number of scopes than the
+		// walk along the paths. Seed 46 fails when the passes drop the properties whose renames a cycle's tree requires,
+		// and seed 17 when a cycle whose own rename a member requires is kept as the passes completed it.
 		var acceptedCount = 0
 		var rejectedCount = 0
+		var dependencyCycleCount = 0
 		var inPassesCount = 0
 		for seed in 0..<Self.aliasDrawSeedCount {
 			let fixture = Self.screensWithOnlyIfAvailableAliases(seed: seed)
 			let inPasses = try await run(fixture, completingByComponent: true)
 			let alongPaths = try await run(fixture, completingByComponent: false)
 			#expect(inPasses.outcome == alongPaths.outcome, "seed \(seed)")
-			if inPasses.outcome.isGenerated {
+			switch inPasses.outcome {
+			case .generated:
 				acceptedCount += 1
-			} else {
+			case let .error(description):
 				rejectedCount += 1
+				if description.contains("error: Dependency cycle") {
+					dependencyCycleCount += 1
+				}
 			}
 			if inPasses.collectedScopeCount != alongPaths.collectedScopeCount {
 				inPassesCount += 1
 			}
 		}
-		let counts = [acceptedCount, rejectedCount, inPassesCount]
-		#expect(counts == [87, 63, 86])
+		let counts = [acceptedCount, rejectedCount, dependencyCycleCount, inPassesCount]
+		#expect(counts == [29, 121, 59, 48])
 	}
 
 	// MARK: Tests – Diagnostics
@@ -615,6 +620,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 	/// requires the rename, by value or through an instantiator. One or two roots each reach the ring through entries
 	/// that may declare `service` or rename it; the root may too. In half the graphs every type but a root generates its
 	/// mock, whose promotion collects each tree's received properties.
+	/// A second stream then draws what can close a dependency cycle through a rename, described where it is drawn.
 	static func screensWithOnlyIfAvailableAliases(seed: UInt64) -> [String] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x416C696173526E67)
 		let rename = "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?"
@@ -657,6 +663,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 			types.append(("Screen\(index)", false, declarations))
 		}
 		var entryCount = 0
+		var entryProperties = [String]()
 		for rootIndex in 0..<random.integer(in: 1...2) {
 			var rootDeclarations = [String]()
 			if random.percentChance(70) {
@@ -679,16 +686,103 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 					break
 				}
 				types.append(("Entry\(entryCount)", false, entryDeclarations))
-				rootDeclarations.append(random.percentChance(50)
-					? "@Instantiated let entry\(entryCount): Entry\(entryCount)"
-					: "@Instantiated let entry\(entryCount)Builder: Instantiator<Entry\(entryCount)>")
+				let entryProperty = random.percentChance(50)
+					? "entry\(entryCount): Entry\(entryCount)"
+					: "entry\(entryCount)Builder: Instantiator<Entry\(entryCount)>"
+				rootDeclarations.append("@Instantiated let \(entryProperty)")
+				entryProperties.append(entryProperty)
 				entryCount += 1
 			}
 			types.append(("Root\(rootIndex)", true, rootDeclarations))
 		}
+		// What can close a dependency cycle through a rename, on a stream of its own, so that the graphs without it are
+		// the graphs above. In two graphs of ten `Service` receives an entry or a screen's builder. In eight, a root of
+		// the shape is the only type that declares `service`, and `Service` receives a property on the way from that
+		// root to the ring: one of three lobbies, each of which opens one screen (`Root8`); the builder every root holds
+		// itself, so that the roots' paths differ only in the one that declares `service` (`Root9`); the builder of the
+		// ring, one screen of which builds a `Panel` that renames `service` beneath the ring; or the builder a `Hall`
+		// opens beside its own `service`, the rename forwarded to it, for a screen that requires the rename and is
+		// opened by a screen that declares it. Beside them, a rename of the rename with a reader of its own, built in
+		// two types and now and then in `Service`, and a screen that also opens itself.
+		var cycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x4379636C65526E67)
+		let service = "@Instantiated let service: Service"
+		let receivedScreenIndex = cycleRandom.integer(in: 0...screenCount - 1)
+		var receivedProperty: String? = String(screenBuilder(receivedScreenIndex).dropFirst("@Instantiated let ".count))
+		let shape = cycleRandom.integer(in: 0...9)
+		if shape >= 2 {
+			for index in types.indices {
+				types[index].declarations.removeAll { $0 == service || $0 == "@Received let service: Service" }
+			}
+		}
+		switch shape {
+		case 0:
+			receivedProperty = nil
+		case 1:
+			if cycleRandom.percentChance(60) {
+				receivedProperty = cycleRandom.element(of: entryProperties)
+			}
+		case 2...3:
+			for lobbyIndex in 0...2 {
+				types.append(("Lobby\(lobbyIndex)", false, [screenBuilder(receivedScreenIndex)]))
+			}
+			types.append(("Root8", true, ["@Instantiated let lobby0: Lobby0", "@Instantiated let lobby1: Lobby1", "@Instantiated let lobby2: Lobby2", service]))
+			let lobbyIndex = cycleRandom.integer(in: 1...2)
+			receivedProperty = "lobby\(lobbyIndex): Lobby\(lobbyIndex)"
+		case 4...5:
+			for index in types.indices where types[index].isRoot {
+				types[index].declarations.insert(screenBuilder(receivedScreenIndex), at: 0)
+			}
+			types.append(("Root9", true, [screenBuilder(receivedScreenIndex), service]))
+		case 6...7:
+			types[cycleRandom.integer(in: 0...screenCount - 1)].declarations.append("@Instantiated let panel: Panel")
+			types.append(("Panel", false, [rename, "@Instantiated let reader: Reader"]))
+			types.append(("Root8", true, [screenBuilder(receivedScreenIndex), service]))
+		default:
+			let renamedServiceDeclarations = [rename, "@Received let renamedService: Service?", "@Received(onlyIfAvailable: true) let renamedService: Service?"]
+			let openingScreenIndex = (receivedScreenIndex + screenCount - 1) % screenCount
+			types[receivedScreenIndex].declarations.removeAll { renamedServiceDeclarations.contains($0) }
+			types[receivedScreenIndex].declarations.append("@Received let renamedService: Service?")
+			types[openingScreenIndex].declarations.removeAll { renamedServiceDeclarations.contains($0) }
+			types[openingScreenIndex].declarations.append(rename)
+			types.append(("Hall", false, ["@Forwarded let renamedService: Service?", service, screenBuilder(receivedScreenIndex)]))
+			types.append(("Root8", true, ["@Instantiated let hallBuilder: Instantiator<Hall>"]))
+		}
+		var serviceDeclarations = [String]()
+		if let receivedProperty {
+			serviceDeclarations.append(cycleRandom.percentChance(30)
+				? "@Received(onlyIfAvailable: true) let \(receivedProperty)?"
+				: "@Received let \(receivedProperty)")
+		}
+		if cycleRandom.percentChance(40) {
+			for _ in 0..<2 {
+				let typeIndex = cycleRandom.integer(in: 0...screenCount - 1)
+				if !types[typeIndex].declarations.contains("@Instantiated let relay: Relay") {
+					types[typeIndex].declarations.append("@Instantiated let relay: Relay")
+				}
+			}
+			if cycleRandom.percentChance(50) {
+				serviceDeclarations.append("@Instantiated let relay: Relay")
+				for index in types.indices where types[index].name == "Root8" && types[index].declarations.contains(service) {
+					types[index].declarations.append(rename)
+				}
+			}
+			types += [
+				("Relay", false, [
+					"@Received(fulfilledByDependencyNamed: \"renamedService\", ofType: Service?.self, onlyIfAvailable: true) let renamedAgain: Service?",
+					"@Instantiated let relayReader: RelayReader",
+				]),
+				("RelayReader", false, ["@Received let renamedAgain: Service?"]),
+			]
+		}
+		if cycleRandom.percentChance(25) {
+			let screenIndex = cycleRandom.integer(in: 0...screenCount - 1)
+			if !types[screenIndex].declarations.contains(screenBuilder(screenIndex)) {
+				types[screenIndex].declarations.append(screenBuilder(screenIndex))
+			}
+		}
 		types += [
 			("Reader", false, ["@Received let renamedService: Service?"]),
-			("Service", false, []),
+			("Service", false, serviceDeclarations),
 		]
 		let generatesMocks = random.percentChance(50)
 		return types.map { type in
