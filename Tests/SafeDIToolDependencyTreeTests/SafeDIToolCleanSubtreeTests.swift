@@ -807,12 +807,14 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	mutating func generate_reportsWhatWalkWithoutSkipReports_whenScreensWithOnlyIfAvailableAliasesAreDrawnFromEachSeed() async throws {
 		// The draw of `SafeDIToolReceivedPropertiesByComponentTests`: screens in a ring that rename `service` only if
 		// available, receive the rename or build a reader of it, beneath roots and entries that may rename it too. Every
-		// graph is run with the skip and without it. The counts are the graphs the tool accepts, those it rejects, and
-		// those whose walk skipped a subtree. With a key that holds no alias, 107 graphs skip and every run still agrees:
-		// in each graph drawn, what the walk reports of an alias the check of children that require each other reports
-		// too, so only the count tells such a key apart.
+		// graph is run with the skip and without it. The counts are the graphs the tool accepts, those it rejects, those
+		// it rejects for a dependency cycle, and those whose walk skipped a subtree. Each part of a subtree's key that
+		// only a rename's outcome shows fails a seed when it is left out by hand: the path to the scope that declares
+		// the last rename, seed 10 and nine more; what the rename is bound to, seed 68; the last fulfilling property of
+		// a rename of a rename, in place of the first, seeds 28, 60 and 98.
 		var acceptedCount = 0
 		var rejectedCount = 0
+		var dependencyCycleCount = 0
 		var skippingCount = 0
 		for seed in 0..<SafeDIToolReceivedPropertiesByComponentTests.aliasDrawSeedCount {
 			let fixture = SafeDIToolReceivedPropertiesByComponentTests.screensWithOnlyIfAvailableAliases(seed: seed)
@@ -822,15 +824,18 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			switch walking.outcome {
 			case .generated:
 				acceptedCount += 1
-			case .error:
+			case let .error(description):
 				rejectedCount += 1
+				if description.contains("error: Dependency cycle") {
+					dependencyCycleCount += 1
+				}
 			}
 			if skipping.skippedSubtreeCount > 0 {
 				skippingCount += 1
 			}
 		}
-		let counts = [acceptedCount, rejectedCount, skippingCount]
-		#expect(counts == [87, 63, 101])
+		let counts = [acceptedCount, rejectedCount, dependencyCycleCount, skippingCount]
+		#expect(counts == [29, 121, 59, 101])
 	}
 
 	// MARK: Tests – One graph for each part of the key
