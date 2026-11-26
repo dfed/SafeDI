@@ -9066,6 +9066,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalPlacePublicMockReceived: 84,
 		.optionalPlacePublicMockPassedUp: 67,
 		.optionalPlacePublicMockPublicConsumer: 45,
+		.unavailableEntryPublicMock: 144,
+		.unavailableEntryPublicMockOnLeaf: 75,
+		.unavailableEntryPublicMockSendably: 27,
+		.unavailableEntryPublicMockReceived: 72,
+		.unavailableEntryPublicMockPublicConsumer: 51,
 		.outerFulfillerPublicMockCall: 112,
 		.unbuildableValuePublicMockCall: 174,
 		.unbuildableValuePublicMockCallPublicTier: 174,
@@ -9182,7 +9187,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x69CB45E5EEDAF5F7
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x3B6BBB586197A2A0
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
