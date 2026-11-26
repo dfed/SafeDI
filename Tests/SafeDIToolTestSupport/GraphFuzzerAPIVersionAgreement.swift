@@ -239,13 +239,14 @@ enum GraphFuzzerAPIVersionAgreement {
 	}
 
 	/// The fixture both sides start from: the corpus's graph drawn storing every parameter. A base corpus graph also has
-	/// every class mocked and a type that builds an owner of an unbuildable dependency twice; a public mock corpus graph
+	/// every class mocked, a type that builds an owner of an unbuildable dependency twice, and the v3 engine draws
+	/// (`GraphFuzzerV3EngineDraw`); a public mock corpus graph
 	/// is drawn as it is, since its mocks are what the corpus draws.
 	static func fixture(forSeed seed: UInt64, in corpus: GraphFuzzerReleaseAcceptanceCorpus = .base) -> GraphFuzzerFixture {
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features, storingEveryParameter: true)
 		switch corpus {
 		case .base:
-			return fixture.mockingEveryClass.addingTwiceBuiltUnbuildableOwner
+			return fixture.mockingEveryClass.addingTwiceBuiltUnbuildableOwner.addingV3EngineShapes
 		case .seam, .publicMock:
 			return fixture
 		}
@@ -328,6 +329,10 @@ enum GraphFuzzerAPIVersionAgreement {
 			probes: probes,
 			samples: samples,
 		)]
+		// The v3 engine draws' configured probes, each against the tree built by hand (`GraphFuzzerV3EngineDraw`).
+		if judgesUnbuildableBuilders, let drawnProbeGraph = GraphFuzzerV3DrawnProbes.valueGraph(ofSeed: seed, v3Fixture: v3Fixture, v3GeneratedFiles: v3GeneratedFiles) {
+			graphs.append(drawnProbeGraph)
+		}
 		var unbuildableBuilderProbeCount = 0
 		let unbuildableBuilderProbes = judgesUnbuildableBuilders ? v3Fixture.unbuildableBuilderProbes(v3GeneratedFiles: v3GeneratedFiles) : []
 		if !unbuildableBuilderProbes.isEmpty, let twin = v2Fixture.makingUnbuildableTypesInstantiable?.selectingAPIVersion(.v3Unstable) {
