@@ -2106,7 +2106,7 @@ extension MockLowering {
 			// A node that reads the entry that builds it as `nil` is bound as its property's optional type.
 			let annotation = if unavailableEntryRead != nil {
 				": \(property.typeDescription.asSource)"
-			} else if isFulfilledByAnotherType && !isErased && nodePath != nil {
+			} else if isFulfilledByAnotherType, !isErased, nodePath != nil {
 				": \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
 			} else {
 				""
