@@ -1686,6 +1686,40 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		return try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath))).publicMockPlans
 	}
 
+	/// A module whose seam instantiates `placeCount` values no type of the module fulfills, all on the seam's own type, so
+	/// that each place's level lists the values bound before it and those bound after it.
+	private static func seamSource(placeCount: Int) -> String {
+		var source = (0..<placeCount).map { "public protocol Api\($0) {}" }.joined(separator: "\n")
+		source += "\n\n@Instantiable(generateDependencyTree: true)\npublic struct Home: Instantiable {\n    public init("
+		source += (0..<placeCount).map { "api\($0): any Api\($0)" }.joined(separator: ", ")
+		source += ") {}\n\n"
+		source += (0..<placeCount).map { "    @Instantiated let api\($0): any Api\($0)" }.joined(separator: "\n")
+		source += "\n}"
+		return source
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func seamSignatures(ofModuleWithPlaceCount placeCount: Int) async throws -> ModuleSeamSignatures {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.seamSource(placeCount: placeCount)],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		return try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath))).seamSignatures
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesSeamSignatureThatGrowsWithItsPlaces_whenEachPlaceOfOneTypeListsEveryOtherPlace() async throws {
+		// Each of N places of one type lists its N - 1 siblings, as fields or as declarations bound after it, in its hole and
+		// in the level of the place graph that leads to it: neither may be written once per place in full.
+		let twentyPlaces = try await seamSignatures(ofModuleWithPlaceCount: 20).encoding(writingPositionsAsAbsent: true).count
+		let fortyPlaces = try await seamSignatures(ofModuleWithPlaceCount: 40).encoding(writingPositionsAsAbsent: true).count
+
+		#expect(fortyPlaces * 2 < twentyPlaces * 5, "\(twentyPlaces) bytes at twenty places, \(fortyPlaces) at forty")
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_storesPublicMockPlanThatGrowsWithItsBuilders_whenEachBuildersPlaceListsEveryOtherBuilder() async throws {
