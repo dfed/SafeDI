@@ -1186,7 +1186,9 @@ extension GraphFuzzerMockMirrorModel {
 		for dependency in mockedType.dependencies {
 			let argument: String? = switch dependency.source {
 			case .instantiated:
-				Self.argument(for: dependency.property, isRequired: true, from: declarations)
+				// An optional instantiated property is instantiated only if available, since the macro rejects every other
+				// one: where nothing the mock builds fulfills it, the mock binds `nil`, as production does.
+				Self.argument(for: dependency.property, isRequired: !dependency.property.isOptional, from: declarations)
 			case let .aliased(_, onlyIfAvailable):
 				Self.argument(for: dependency.property, isRequired: !onlyIfAvailable, from: declarations)
 			case let .received(onlyIfAvailable):

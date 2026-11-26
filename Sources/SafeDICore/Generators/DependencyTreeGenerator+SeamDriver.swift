@@ -488,7 +488,7 @@ extension DependencyTreeGenerator {
 			guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
 			      let seamRoot = seamRoots[seamType] ?? nil
 			else { continue }
-			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)))
+			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, callerModule: seams.currentModule, aliasDeclarationReferences: aliasDeclarationReferences)))
 		}
 		// Creating a generator starts generating its code, so every construction must be known to compile first: a
 		// root's tree constructs a seam with the tier of its generated initializer the root's module can reach, and a
@@ -1038,7 +1038,7 @@ extension DependencyTreeGenerator {
 			)
 			let scopeInstantiables = scopeMap.mapValues(\.instantiable)
 			let rootScopes = componentSeams.map { seam in
-				Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+				Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, callerModule: callerModule, aliasDeclarationReferences: aliasDeclarationReferences)
 			}
 			let fulfillingKey = { (hole: SeamSignature.Hole) in
 				Self.fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
@@ -1525,7 +1525,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			} else {
-				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, callerModule: callerModule, aliasDeclarationReferences: aliasDeclarationReferences)
 			}
 		}
 		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
@@ -1550,6 +1550,7 @@ extension DependencyTreeGenerator {
 		of scope: Scope,
 		from typeDescriptionToScopeMap: [TypeDescription: Scope],
 		instantiables: [TypeDescription: Instantiable],
+		callerModule: ModuleIdentity,
 		aliasDeclarationReferences: AliasDeclarationReferences,
 	) {
 		for dependency in scope.instantiable.dependencies {
@@ -1562,6 +1563,10 @@ extension DependencyTreeGenerator {
 						instantiatedScope,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 					))
+				} else if dependency.isInstantiatedOnlyIfAvailable, callerModule.moduleName == nil {
+					// A seam whose module SafeDI does not know takes no builder (`holesInSeamsOfUnnamedModule`), and no
+					// module that could declare the type reads this one, so the property is `nil`, as in a module without a seam.
+					scope.propertiesToGenerate.append(Self.unavailableDependency(dependency))
 				} else if Self.canBeHole(dependency) {
 					// No production declaration these declarations hold fulfills the type, which validation accepts only
 					// in a seam's tree: the seam's generated initializer takes a builder for it.
@@ -1592,6 +1597,7 @@ extension DependencyTreeGenerator {
 		of seam: Instantiable,
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		instantiables: [TypeDescription: Instantiable],
+		callerModule: ModuleIdentity,
 		aliasDeclarationReferences: AliasDeclarationReferences,
 	) -> Scope {
 		let rootScope = Scope(instantiable: seam)
@@ -1599,6 +1605,7 @@ extension DependencyTreeGenerator {
 			of: rootScope,
 			from: typeDescriptionToScopeMap,
 			instantiables: instantiables,
+			callerModule: callerModule,
 			aliasDeclarationReferences: aliasDeclarationReferences,
 		)
 		return rootScope

@@ -2856,6 +2856,7 @@ enum GraphFuzzerGenerator {
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
+			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2938,6 +2939,7 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingActorArgumentShapes(to: finalDeclarations)
+			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3386,6 +3388,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
 		/// that tree.
 		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
+		/// tree, and every shape of that tree.
+		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8149,6 +8154,64 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let actorArgumentRandomSeedMask: UInt64 = 0x6163746F72417267
+
+		// MARK: A dependency instantiated only if available
+
+		/// The base corpus's draw of `@Instantiated(onlyIfAvailable: true)`. `IfAvailableRoot`, a root, instantiates
+		/// `IfAvailableScreen`, which instantiates `ifAvailableToken: IfAvailableToken?` only if available and
+		/// `IfAvailableLeaf`, in either order, the leaf by value or through an `Instantiator`. Six draws in ten,
+		/// `IfAvailableToken` is `@Instantiable`, so the screen builds it; in the rest it is a plain class the screen's file
+		/// declares, which no declaration fulfills, so production and every mock bind the property to `nil` and a mock takes
+		/// no parameter for it, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
+		/// form, required or only if available, and where it is only if available the root now and then builds a second
+		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
+		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
+		/// every other, and only in the base corpus.
+		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
+			var declarations = declarations
+			let tokenComesFirst = instantiatedOnlyIfAvailableRandom.percentChance(50)
+			let leafRequiresToken = instantiatedOnlyIfAvailableRandom.percentChance(40)
+			let leafIsBuiltByInstantiator = instantiatedOnlyIfAvailableRandom.percentChance(35)
+			let rootMayBuildLeaf = instantiatedOnlyIfAvailableRandom.percentChance(40)
+			let screenGeneratesMock = instantiatedOnlyIfAvailableRandom.percentChance(40)
+			let tokenIsFulfilled = instantiatedOnlyIfAvailableRandom.percentChance(60)
+			let rootBuildsLeaf = rootMayBuildLeaf && !leafRequiresToken
+			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			let tokenName = "\(prefix)IfAvailableToken"
+			let leafName = "\(prefix)IfAvailableLeaf"
+			let screenName = "\(prefix)IfAvailableScreen"
+			if tokenIsFulfilled {
+				append(tokenName, [])
+			}
+			append(leafName, [leafRequiresToken
+					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(tokenName)?")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")])
+			let token = PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
+			let leaf = leafIsBuiltByInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeafBuilder", type: "\(sendability == .sendable ? "SendableInstantiator" : "Instantiator")<\(leafName)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeaf", type: leafName)
+			append(screenName, arguments: screenGeneratesMock ? ["generateMock: true"] : [], tokenComesFirst ? [token, leaf] : [leaf, token])
+			if !tokenIsFulfilled {
+				declarations[declarations.count - 1].additionalDeclarations.append("public final class \(tokenName): Sendable {}")
+			}
+			var rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableScreen", type: screenName)]
+			if rootBuildsLeaf {
+				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableOuterLeaf", type: leafName))
+			}
+			append("\(prefix)IfAvailableRoot", arguments: ["isRoot: true"], rootProperties)
+			return declarations
+		}
+
+		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
 
 		// MARK: Cycle parameters
 
