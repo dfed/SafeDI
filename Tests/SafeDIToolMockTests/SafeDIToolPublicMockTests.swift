@@ -5229,6 +5229,71 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNotingEachReceiverOnce_whenTreeReachesReceiverOnTwoPaths() async {
+		// M2.9b: `Left` and `Right` each build `Leaf`, so the mock's tree reaches `Leaf`'s receive on two paths. A diagnostic
+		// names each declaration once, as a seam's does, and the mock's list of receivers never follows the number of paths.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializer of `Leaf` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `internal`. Declare `Token` `public`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
+			\(fixtures["Token.swift"]):1:1: note: `Token` is declared `internal` here.
+			\(fixtures["Token.swift"]):1:1-1:1: fixit: public\(" ")
+			\(fixtures["Leaf.swift"]):7:5: note: `Leaf` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    init(left: Left, right: Right) {
+					        self.left = left
+					        self.right = right
+					    }
+
+					    @Instantiated let left: Left
+					    @Instantiated let right: Right
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Left: Instantiable {
+					    init(leaf: Leaf) {
+					        self.leaf = leaf
+					    }
+
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Right: Instantiable {
+					    init(leaf: Leaf) {
+					        self.leaf = leaf
+					    }
+
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Leaf: Instantiable {
+					    init(token: Token) {
+					        self.token = token
+					    }
+
+					    @Received let token: Token
+					}
+					""",
+					"struct Token {}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Tests – the canonical fixture
 
 	@Test
