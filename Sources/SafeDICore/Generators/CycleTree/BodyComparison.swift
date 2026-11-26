@@ -21,7 +21,7 @@
 extension DependencyTreeGenerator {
 	/// Compares each place of a root's tree with a body built from its scope's copy beneath the answers its path gives
 	/// the labels the scope's tree receives (`VariantBodyObservation`), and the bodies today's places take with those the
-	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`), and the code the type key lays out of that plan (`PlanCodeObservation`). Does nothing where no test observes any.
+	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`), the code the type key lays out of that plan (`PlanCodeObservation`), and which of its bodies the plan and the layout mark `@Sendable` (`PlanSendableObservation`). Does nothing where no test observes any.
 	///
 	/// A tree with a label no one parameter can pass is rejected (`validateCycleLabelsArePassable`), and is not compared:
 	/// a body beneath a call's own answers passes a value there that today's parameter cannot carry.
@@ -45,7 +45,8 @@ extension DependencyTreeGenerator {
 		let planCallsObserver = PlanCallsObservation.observer
 		let twinIdentityObserver = TwinIdentityObservation.observer
 		let planCodeObserver = PlanCodeObservation.observer
-		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil || twinIdentityObserver != nil || planCodeObserver != nil,
+		let planSendableObserver = PlanSendableObservation.observer
+		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil || twinIdentityObserver != nil || planCodeObserver != nil || planSendableObserver != nil,
 		      todaysTree.unpassableCycleLabelsInTree.isEmpty,
 		      let shadow = CallPlaceShadow(root: scope, cache: &cache)
 		else { return nil }
@@ -120,7 +121,7 @@ extension DependencyTreeGenerator {
 		// body holds, beneath the answers that body's path gives it.
 		// The bodies whose code is still to be planned, where a test observes it.
 		var unplanned: WrittenVariantPlan.Unplanned?
-		if planBodiesObserver != nil || planCallsObserver != nil || planCodeObserver != nil, let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) {
+		if planBodiesObserver != nil || planCallsObserver != nil || planCodeObserver != nil || planSendableObserver != nil, let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) {
 			let bodiesOfPlan = plan.calledBodies
 			planCallsObserver?(
 				scope.instantiable.concreteInstantiable.asSource,
@@ -132,8 +133,17 @@ extension DependencyTreeGenerator {
 				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.description(of: $0) },
 				shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
 			)
-			if planCodeObserver != nil {
-				unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
+			if planCodeObserver != nil || planSendableObserver != nil {
+				let unplannedPlan = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
+				// The plan's mark against the family the type key lays out, which reads no code of the bodies.
+				planSendableObserver?(
+					scope.instantiable.concreteInstantiable.asSource,
+					unplannedPlan.sendableMarks,
+					WrittenVariantPlan.sendableFamily(of: unplannedPlan.generators, callsByBody: unplannedPlan.calls),
+				)
+				if planCodeObserver != nil {
+					unplanned = unplannedPlan
+				}
 			}
 		}
 		if let twinIdentityObserver, !shadow.twinValues.isEmpty {

@@ -612,7 +612,9 @@ func executeSafeDIToolMultiModuleTest(
 															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
 																try await MockVariantBodyChecks.comparing {
 																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
-																		try await tool.generate()
+																		try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																			try await tool.generate()
+																		}
 																	}
 																}
 															}

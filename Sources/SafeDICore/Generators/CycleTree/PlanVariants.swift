@@ -33,8 +33,17 @@ struct PlanVariants: Sendable {
 	/// declaration leads to, in edge order.
 	struct Body: Sendable {
 		let declaration: Int
-		let answers: [Answer]
+		let answers: [LabelAnswer]
 		var targets: [Int]
+	}
+
+	/// What a label a body reads from above resolves to. By label alone, an answer is a declaration or nothing: the form
+	/// a reader takes it in (`Answer.instance`) is not judged yet.
+	enum LabelAnswer: Hashable, Sendable {
+		/// Nothing above the body declares the label.
+		case none
+		/// The nearest declaration's property, and whether it is still being built where the body is built.
+		case declared(Property, isBeingBuilt: Bool)
 	}
 
 	init(plan: PerTypePlan) {
@@ -53,7 +62,7 @@ struct PlanVariants: Sendable {
 			let declaration = graph.nodes[bodies[next].declaration]
 			// A label a target reads from above that this declaration does not declare is one this declaration reads from
 			// above too, so its own answer stands.
-			var ownAnswerByLabel = [String: Answer]()
+			var ownAnswerByLabel = [String: LabelAnswer]()
 			for (label, answer) in zip(labels.labels(of: bodies[next].declaration), bodies[next].answers) {
 				ownAnswerByLabel[label] = answer
 			}
@@ -63,7 +72,7 @@ struct PlanVariants: Sendable {
 			}
 			for target in graph.edges(from: bodies[next].declaration) {
 				let builtLabel = graph.nodes[target].built?.property.label
-				let answers: [Answer] = labels.labels(of: target).map { label in
+				let answers: [LabelAnswer] = labels.labels(of: target).map { label in
 					if let property = declaredPropertyByLabel[label] {
 						.declared(property, isBeingBuilt: label == builtLabel)
 					} else {
@@ -115,8 +124,6 @@ struct PlanVariants: Sendable {
 					line.append(" [\(label) = nil]")
 				case let .declared(property, isBeingBuilt):
 					line.append(" [\(label) = \(property.asSource)\(isBeingBuilt ? " being built" : "")]")
-				case let .instance(property):
-					line.append(" [\(label) = instance of \(property.asSource)]")
 				}
 			}
 			for target in body.targets {
@@ -157,7 +164,7 @@ struct PlanVariants: Sendable {
 
 	private struct Key: Hashable {
 		let declaration: Int
-		let answers: [Answer]
+		let answers: [LabelAnswer]
 	}
 
 	private let labels: LabelsReadFromAbove
