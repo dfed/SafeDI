@@ -667,18 +667,19 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 #
 # Measured on a four-core Linux machine with a release build of the tool, the smaller graph's figure first:
 # P 0.376 s and 3.313 s (8.82), 50.7 MB and 213.5 MB (4.21), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
-# L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85);
+# L 0.335 s and 2.553 s (7.63); K, once an internal mock's walks visit each node once per context, 0.080 s and
+# 0.131 s (1.63), 41.7 MB and 43.3 MB (1.04), 252,345 and 471,361 bytes of code (1.87);
 # M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 47.5 MB and
 # 170.1 MB (3.58), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
 # Q 0.349 s and 2.483 s (7.11); B 0.086 s and 1.576 s (18.37), 34.5 MB and 92.6 MB (2.68); BM 0.079 s and 2.543 s
 # (32.30), 33.7 MB and 179.7 MB (5.34), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
 # code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86); N 0.207 s and 1.365 s (6.60).
-# The tool alone, on the smallest graph, peaks at about 33 MB. K (36.6 MB and 67.4 MB, 1.84) and W (52.4 MB and
-# 94.9 MB, 1.74 to 1.82 in five runs) stay under the default limit without room to spare.
+# The tool alone, on the smallest graph, peaks at about 33 MB. W (52.4 MB and 94.9 MB, 1.74 to 1.82 in five runs)
+# stays under the default limit without room to spare.
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
-    "K-mock-at-every-screen": (lambda layers: shape_k(layers), 6, {"time": 6.5, "code": 10.5}),
+    "K-mock-at-every-screen": (lambda layers: shape_k(layers), 6, {}),
     "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
     "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
     "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {"time": 10.5}),
