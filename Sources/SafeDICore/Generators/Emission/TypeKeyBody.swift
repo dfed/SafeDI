@@ -56,7 +56,9 @@ enum TypeKeyBody {
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
 		guard layout.computeReads() else { return nil }
 		layout.computeClasses()
-		guard layout.computePlacement() else { return nil }
+		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
+		// nested as before the type key laid loops out.
+		guard layout.laysOutLoops(), layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
 		      layout.checkEveryRead(),
@@ -142,6 +144,13 @@ struct TypeKeyLayout {
 	struct Domain {
 		var labels = Set<String>()
 		var closedOnFunctionNames = Set<String>()
+		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
+		/// outside it.
+		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).
@@ -150,6 +159,12 @@ struct TypeKeyLayout {
 		let isInSendableFamily: Bool
 		let outerView: [String: KeyedDeclaration]
 		let cycleArguments: [KeyedDeclaration]
+		/// The statements of enclosing bodies whose functions the view's closers call, a loop of builders' members, in the order
+		/// the walk of the names first reaches them (`closedOnFunctions(named:from:closesBeneathItsBody:)`).
+		let closedOnStatements: [ClosedOnStatementKey]
+		/// The statement each name of that walk resolves to, by its position in `closedOnStatements`, in the walk's order, so
+		/// two views share only where their closers' names resolve alike.
+		let closedOnResolutions: [Int]
 	}
 
 	/// What a view's key holds of a declaration outside it. Nothing inside a view depends on which body declares a value it
@@ -157,8 +172,11 @@ struct TypeKeyLayout {
 	/// declarations alike in those share a view, wherever the declarations are: each call of the view's function is
 	/// checked where its parent makes it (`checkCall`), and each read the view's function takes from its callers is passed by
 	/// each call (`computeOutcomes` reads every edge). A statement of the root's body stays itself, since a function can
-	/// capture it. A view a closer inside it calls a function above it from keeps the declarations themselves (`absolute`):
-	/// the closer calls the function its own place's path reaches, which a view standing for several paths could not tell.
+	/// capture it. A view whose closers call a function declared outside it keeps the declarations themselves (`absolute`):
+	/// the closer calls the function its own place's path declares, which a view standing for several paths could not tell.
+	/// A member of a loop of builders whose own statements call only its siblings' functions, declared in the body that
+	/// declares it, and whose siblings do the same, is keyed by kind: each of its places' calls is checked against the
+	/// siblings of that place's own body (`checkCall`).
 	enum KeyedDeclaration: Hashable {
 		case absolute(PathValue)
 		case none
@@ -170,6 +188,15 @@ struct TypeKeyLayout {
 			case forwarded
 			case cycleParameter
 		}
+	}
+
+	/// What tells apart two statements of enclosing bodies whose functions a view's closers call: the view key of the place
+	/// the statement is, its outer view over every label the functions called read, keyed as the view's own.
+	struct ClosedOnStatementKey: Hashable {
+		let node: PlanNode
+		let isInSendableFamily: Bool
+		let outerView: [String: KeyedDeclaration]
+		let cycleArguments: [KeyedDeclaration]
 	}
 
 	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, or a
@@ -189,10 +216,16 @@ struct TypeKeyLayout {
 	var rootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The views whose bodies wrap a member of a loop of builders again (`ClosingPlaceRecord.rebindsLoopMember`).
+	var loopRebindingBodies = Set<Int>()
 	/// The views other than the root's in post-order of the view DAG.
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
 	var domainsByNode = [PlanNode: Domain]()
+	/// The functions the statements of each body the walk has reached declare, by name, the first of each name: where a
+	/// closer's function is resolved (`resolvedFunction(named:from:)`), in one look-up per enclosing body rather than a scan
+	/// of its statements, which a wide body of a cycle would repeat for each of its statements.
+	var declaredFunctionsByBody = [Int: [String: DeclaredFunction]]()
 	/// The closing statements that call each body's function: their body and their index in it.
 	var closersByTarget = [Int: [(body: Int, index: Int)]]()
 	/// The labels each body's function reads and does not bind, in the order it first reads them.

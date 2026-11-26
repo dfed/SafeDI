@@ -33,6 +33,20 @@ enum PlaceRecord: Sendable {
 	case alias(AliasPlaceRecord)
 }
 
+extension PlaceRecord {
+	/// The property the place binds.
+	var boundProperty: Property {
+		switch self {
+		case let .built(record):
+			record.property
+		case let .closer(record):
+			record.property
+		case let .alias(record):
+			record.property
+		}
+	}
+}
+
 /// A read a construction or a call makes: the argument it passes, the label it reads, the property its receiver declares,
 /// and where the path key reads it from.
 struct PlaceRead: Hashable, Sendable {
@@ -150,6 +164,9 @@ struct ClosingPlaceRecord: Sendable {
 	/// Unlike a built place's, these and their count are part of the closer's structural key: the closer's call must match
 	/// the function it closes on.
 	var passedArguments = [PassedArgument]()
+	/// Whether the place is a member of a loop of builders wrapped again inside a sibling's function
+	/// (`ScopeGenerator.LoopRebinding`).
+	var rebindsLoopMember = false
 }
 
 /// A place written as text, as the path key writes it: a rename of a value, or another place whose code the engine copies
