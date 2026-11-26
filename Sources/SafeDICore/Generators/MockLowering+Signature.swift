@@ -303,9 +303,24 @@ extension MockLowering {
 }
 
 extension ScopeGenerator {
+	/// The names of `.v3Unstable`'s optional builders of filled places: each family whose places share one label takes that
+	/// label, and every builder's internal name is claimed apart from the builder functions the fills declare, one of which
+	/// such a label names (`__safeDI_api` for the places' property `api`).
+	static func optionalBuilderNamesAfterTheirPlaces(in treeNames: MockTreeNames) -> MockRootParameters.OptionalBuilderNames {
+		var names = MockRootParameters.OptionalBuilderNames()
+		for filled in filledFamilies(of: treeNames.filledCalls) {
+			let placeLabels = Set(filled.placeProperties.map(\.label))
+			if placeLabels.count == 1, let placeLabel = placeLabels.first {
+				names.labelsByFamily[filled.family] = placeLabel
+			}
+		}
+		names.namesApartFrom = Set(treeNames.namesDeclaredInFills.map { functionName(toBuildPropertyNamed: $0) })
+		return names
+	}
+
 	/// The parameters of this mock root's `mock()` other than its overrides.
 	func lowerRootSignature(of instantiable: Instantiable, context: MockContext) -> MockLowering.RootSignature {
-		let signature = lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults)
+		let signature = lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults, namesOptionalBuildersAfterTheirPlaces: context.apiVersion == .v3Unstable)
 		switch context.apiVersion {
 		case .v2:
 			return signature
@@ -315,15 +330,23 @@ extension ScopeGenerator {
 	}
 
 	/// The same, read with the defaults of the module's flat parameters, which is all of the module's mock context the
-	/// signature reads, so that `query needs`, which has no mock context, reads the same signature.
+	/// signature reads, so that `query needs`, which has no mock context, reads the same signature. Where
+	/// `namesOptionalBuildersAfterTheirPlaces` is set (`.v3Unstable`), an optional builder of filled places whose places
+	/// share one label is named after that label, the property they build, rather than after its stem.
 	func lowerRootSignature(
 		of instantiable: Instantiable,
 		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
+		namesOptionalBuildersAfterTheirPlaces: Bool = false,
 	) -> MockLowering.RootSignature {
 		// The one classification of the mock's parameters (`mockRootParameters(instantiable:mockDefaults:treeNames:)`),
 		// read from this generator's tree.
 		let tree = treeNames(of: instantiable)
-		let parameters = mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: tree.names)
+		let parameters = mockRootParameters(
+			instantiable: instantiable,
+			mockDefaults: flatParameterMockDefaults,
+			treeNames: tree.names,
+			optionalBuilderNames: namesOptionalBuildersAfterTheirPlaces ? Self.optionalBuilderNamesAfterTheirPlaces(in: tree.names) : .init(),
+		)
 		let forwardedParameters = parameters.forwardedDependencies.map { dependency in
 			MockLowering.RootSignature.Parameter(property: dependency.property, defaultExpression: parameters.forwardedParameterDefaults[dependency.property.label]?.expression)
 		}

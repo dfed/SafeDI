@@ -10071,6 +10071,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// named apart. `generateMockRootCode` emits them; `DependencyTreeGenerator.mockRequirements(forTypeNamed:)`
 	/// reports them.
 	struct MockRootParameters {
+		/// Names the caller of `mockRootParameters(instantiable:mockDefaults:treeNames:optionalBuilderNames:)` gives the
+		/// optional builders of filled places (`calling-mock-hole-builders.md`), in place of the labels their stems give them.
+		/// Empty, it changes nothing.
+		struct OptionalBuilderNames {
+			/// The label each family's optional builder claims, by family.
+			var labelsByFamily: [SeamMockBuilder.Family: String] = [:]
+			/// Names a builder's internal name is claimed apart from, beside the tree's builder functions and bindings.
+			var namesApartFrom: Set<String> = []
+		}
+
 		/// The names of the mock's tree the parameters were classified from.
 		let treeNames: MockTreeNames
 		/// The name of each child the mock root builds, by label and property type: its label,
@@ -10854,6 +10864,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		instantiable: Instantiable,
 		mockDefaults: [TypeDescription: FlatParameterMockDefault],
 		treeNames: MockTreeNames,
+		optionalBuilderNames: MockRootParameters.OptionalBuilderNames = .init(),
 	) -> MockRootParameters {
 		// A public mock another module generated builds what its call does not pass, so `mock()` takes no parameter or
 		// override for what every such call omits. It takes what the calls pass, as a receive only if available that
@@ -11171,6 +11182,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// read by the calls inside fills too, so its name is apart from them whatever the fills call.
 				namesBoundInTheTree: treeBindingNames.union(namesDeclaredInBuilderFunctions).union(treeNames.fillPlaces.isEmpty ? [] : treeNames.namesDeclaredInFills),
 				namesBoundInTheFills: treeNames.namesDeclaredInFills,
+				optionalBuilderNames: optionalBuilderNames,
 			)
 			: []
 		let passedUpPropertiesBuiltBySeamMockBuilders = Set(seamMockBuilders.flatMap(\.passedUpProperties))
@@ -11308,6 +11320,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderFunctionNames: Set<String>,
 		namesBoundInTheTree: Set<String>,
 		namesBoundInTheFills: Set<String>,
+		optionalBuilderNames: MockRootParameters.OptionalBuilderNames,
 	) -> [MockRootParameters.SeamMockBuilder] {
 		var placesByFamily = [MockRootParameters.SeamMockBuilder.Family: [MockRootParameters.UncoveredParameter]]()
 		var familiesInOrder = [MockRootParameters.SeamMockBuilder.Family]()
@@ -11396,7 +11409,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The optional builders claim their labels after every builder `mock()` took before, so none of those labels moves.
 		for filled in optionalFamilies {
 			let stem = optionalStems[filled.family.holeType, default: ""]
-			let label = labels.claim(filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
+			// A label the caller names the builder by (`MockRootParameters.OptionalBuilderNames`) takes the stem's place.
+			let label = labels.claim(optionalBuilderNames.labelsByFamily[filled.family] ?? (filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem)))
 			var builder = MockRootParameters.SeamMockBuilder(label: label, internalName: label, family: filled.family, places: [], fillPlaces: [], passedUpProperties: [], parameterType: MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: filled.placeProperties, in: filled.family))
 			builder.filledCallBuilders = filled.callBuilders
 			builder.isOptional = true
@@ -11405,7 +11419,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builders.sort { $0.label < $1.label }
 		// A builder whose label a name of the tree has is called by a name apart from every builder function of the tree.
 		let namesBoundInTheTreeAndFills = namesBoundInTheTree.union(namesBoundInTheFills)
-		var names = GeneratedNameAllocator(reserving: builderFunctionNames.union(namesBoundInTheTreeAndFills))
+		var names = GeneratedNameAllocator(reserving: builderFunctionNames.union(namesBoundInTheTreeAndFills).union(optionalBuilderNames.namesApartFrom))
 		for index in builders.indices where (builders[index].filledCallBuilders.isEmpty ? namesBoundInTheTree : namesBoundInTheTreeAndFills).contains(builders[index].label) {
 			builders[index].internalName = names.claim(functionName(toBuildPropertyNamed: builders[index].label))
 		}

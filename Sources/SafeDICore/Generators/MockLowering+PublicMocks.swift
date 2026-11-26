@@ -268,7 +268,7 @@ extension ScopeGenerator {
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			// `.v3Unstable`'s signature spells each as its builder already, which the plan spells from the value's type, as
 			// a calling module's plan does.
-			flatUncoveredParameters: context.apiVersion == .v2 ? signature.uncoveredRootParameters : lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults).uncoveredRootParameters,
+			flatUncoveredParameters: context.apiVersion == .v2 ? signature.uncoveredRootParameters : lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults, namesOptionalBuildersAfterTheirPlaces: true).uncoveredRootParameters,
 			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides,
 			wrapperParameterByInstance: wrapperParameterByInstance,

@@ -1772,9 +1772,10 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		#if DEBUG
 		extension Home {
 		    static func mock(
-		        apiBuilder: (() -> any Api)? = nil,
+		        api: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
+		        let __safeDI_api_ = api
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_apiBuilder_Screen() -> Screen.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1784,7 +1785,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		                })
 		            }
 		            _ = Screen.__safeDI_Screen_mock_5191B75849735ECB.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Screen.__safeDI_mock(api: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Screen(), session: session, safeDIOverrides: safeDIOverrides.screen ?? .init())
+		            return Screen.__safeDI_mock(api: __safeDI_api_.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Screen(), session: session, safeDIOverrides: safeDIOverrides.screen ?? .init())
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(session, screen) } else { Home(session: session, screen: screen) }
