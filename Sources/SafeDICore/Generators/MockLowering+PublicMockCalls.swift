@@ -244,6 +244,10 @@ extension MockLowering.Walk {
 
 	/// Whether `record` is a shared fill body `mock()` may declare once (`declareFillBodies(of:isInsideSendableFunction:)`):
 	/// only a shared body's record (`ScopeGenerator.sharedFillBodyFunction`) is declared so, never a fill or a dispatcher.
+	/// Whether the body is `@Sendable` is its fill's own flag (`ScopeGenerator.buildsInSendableFunction(ofFill:)`), never the
+	/// called seam's case facts (`SeamSignature.Places.Case.isBuiltInSendableFunction`, `isPassedOnSendable`): the flag also
+	/// holds where a `@Sendable` function of the caller's own tree refers to the fill, which no case of the called seam's
+	/// place graph sees, and a body declared from the case facts alone would not be `@Sendable` there.
 	private static func isDeclaredOnce(_ record: RootFunctionRecord, insideSendableFunction: Bool) -> Bool {
 		guard case let .fillBody(function, _) = record.declaration, record.calls.isEmpty, record.isSendable || !insideSendableFunction else { return false }
 		return !function.pathCode.holdsRootFunction
