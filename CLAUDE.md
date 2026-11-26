@@ -151,6 +151,8 @@ If your session started outside the worktree you are editing, scoped rules and n
 | `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-carriers.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
+| a mock's body laid out by the type key: its walk's records, a root that falls back, `laidOut` | `.claude/rules/mock-type-key-layout.md` |
+| sharing repeated subtrees in an internal mock's walk (`SubtreeKey`) | `.claude/rules/mock-subtree-sharing.md` |
 | the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `construction-memo-calls.md`, `emission-decisions.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |
 | a change's tests, before writing them | `.claude/rules/test-design.md` |

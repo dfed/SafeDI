@@ -120,8 +120,8 @@ extension TypeKeyLayout {
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
 					guard normalized(evaluate(declaration, inBody: body)) == expected,
-					      let typeModeType = type(of: declaration),
-					      let pathType = type(of: expected),
+					      let typeModeType = type(of: declaration, label: fulfillingProperty.label),
+					      let pathType = type(of: expected, label: fulfillingProperty.label),
 					      typeModeType.asSource == pathType.asSource
 					else { return false }
 				case let .built(child):
@@ -198,7 +198,7 @@ extension TypeKeyLayout {
 	/// The types are compared by exact spelling (`any P` and `P`, `Optional<X>` and `X?`, differ), which is what text
 	/// copied as written needs: a looser match would only share more places, never one the copy reads alike.
 	func readsDeclarationOfSameType(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int) -> Bool {
-		type(of: typeLookUp(read.label, inClass: owner, before: index))?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)))?.asSource
+		type(of: typeLookUp(read.label, inClass: owner, before: index), label: read.label)?.asSource == type(of: normalized(pathValue(of: read, inBody: body, before: index)), label: read.label)?.asSource
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path

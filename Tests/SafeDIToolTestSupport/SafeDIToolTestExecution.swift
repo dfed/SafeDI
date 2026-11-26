@@ -349,7 +349,13 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+										// Every mock root the type key lays out falls back only on the record errors it expects (`MockTypeKeyLayoutChecks`).
+										try await MockLowering.$typeKeyLayoutObserver.withValue(MockTypeKeyLayoutChecks.failingUnexpectedRecordErrors(handingOn: MockLowering.typeKeyLayoutObserver)) {
+											// Every mock lowered with shared work must equal its walk of every path (`MockSubtreeSharingChecks`).
+											try await MockLowering.$sharingComparisonObserver.withValue(MockSubtreeSharingChecks.recordingDifferences(handingOn: MockLowering.sharingComparisonObserver)) {
+												try await tool.generate()
+											}
+										}
 									}
 								}
 							}

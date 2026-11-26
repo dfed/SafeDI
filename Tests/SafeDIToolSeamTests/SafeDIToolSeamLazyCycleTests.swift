@@ -1114,22 +1114,22 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let filter: Filter? = safeDIOverrides.filter
-		        func __safeDI_aBuilder(filter: Filter?) -> A {
+		        func __safeDI_aBuilder(filter: Filter?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
-		            func __safeDI_midBuilder(filter: Filter) -> Mid {
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(filter: filter)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
-		            }
 		            let midBuilder = Instantiator<Mid> {
-		                __safeDI_midBuilder(filter: $0)
+		                __safeDI_midBuilder(filter: $0, __safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(filter: Filter, __safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(filter: filter, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: filter)
+		            __safeDI_aBuilder(filter: filter, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1260,22 +1260,22 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let filterBuilder: Instantiator<Filter>? = safeDIOverrides.filterBuilder
-		        func __safeDI_aBuilder(filterBuilder: Instantiator<Filter>?) -> A {
+		        func __safeDI_aBuilder(filterBuilder: Instantiator<Filter>?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            _ = Service.__safeDI_Service_mock_7BB6CDEEAD5D6D34.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.__safeDI_mock(filterBuilder: filterBuilder, safeDIOverrides: safeDIOverrides.aBuilder.service)
-		            func __safeDI_midBuilder(filterBuilder: Instantiator<Filter>) -> Mid {
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(filterBuilder: filterBuilder)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filterBuilder, aBuilder) } else { Mid(filterBuilder: filterBuilder, aBuilder: aBuilder) }
-		            }
 		            let midBuilder = Instantiator<Mid> {
-		                __safeDI_midBuilder(filterBuilder: $0)
+		                __safeDI_midBuilder(filterBuilder: $0, __safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(filterBuilder: Instantiator<Filter>, __safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(filterBuilder: filterBuilder, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(filterBuilder, aBuilder) } else { Mid(filterBuilder: filterBuilder, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filterBuilder: filterBuilder)
+		            __safeDI_aBuilder(filterBuilder: filterBuilder, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1412,24 +1412,26 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_aBuilder(filter: (any Hub.Space.FilterProtocol)?) -> A {
+		        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.__safeDI_mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_filter() -> any Hub.Space.FilterProtocol {
-		                    let aBuilder = Instantiator<A> {
-		                        __safeDI_aBuilder(filter: nil)
-		                    }
-		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.filter.safeDIBuilder { safeDIBuilder(aBuilder) } else { AppFilter(aBuilder: aBuilder) }
-		                }
-		                let filter: any Hub.Space.FilterProtocol = __safeDI_filter()
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter) } else { Mid(filter: filter) }
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let filter: any Hub.Space.FilterProtocol = __safeDI_filter(__safeDI_AppFilter_configuration: __safeDI_Mid_configuration.filter, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(filter) } else { Mid(filter: filter) }
+		        }
+		        func __safeDI_filter(__safeDI_AppFilter_configuration: AppFilter.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> any Hub.Space.FilterProtocol {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_AppFilter_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { AppFilter(aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: nil)
+		            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1846,22 +1848,22 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let filter: Filter? = safeDIOverrides.filter
-		        func __safeDI_aBuilder(filter: Filter?) -> A {
+		        func __safeDI_aBuilder(filter: Filter?, __safeDI_A_mockConfiguration: A.SafeDIMockConfiguration) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
-		            func __safeDI_midBuilder(filter: Filter) -> Mid {
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(filter: filter)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
-		            }
 		            let midBuilder = Instantiator<Mid> {
-		                __safeDI_midBuilder(filter: $0)
+		                __safeDI_midBuilder(filter: $0, __safeDI_Mid_configuration: __safeDI_A_mockConfiguration.midBuilder, __safeDI_A_mockConfiguration_nearest: __safeDI_A_mockConfiguration)
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A.mock(service: service, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_mockConfiguration.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A.mock(service: service, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(filter: Filter, __safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_mockConfiguration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(filter: filter, __safeDI_A_mockConfiguration: __safeDI_A_mockConfiguration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: filter)
+		            __safeDI_aBuilder(filter: filter, __safeDI_A_mockConfiguration: safeDIOverrides.aBuilder)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1988,22 +1990,22 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        filter: Filter,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_aBuilder(filter: Filter?) -> A {
+		        func __safeDI_aBuilder(filter: Filter?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
-		            func __safeDI_midBuilder(filter: Filter) -> Mid {
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(filter: filter)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
-		            }
 		            let midBuilder = Instantiator<Mid> {
-		                __safeDI_midBuilder(filter: $0)
+		                __safeDI_midBuilder(filter: $0, __safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(filter: Filter, __safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(filter: filter, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: filter)
+		            __safeDI_aBuilder(filter: filter, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Screen(filter: filter, aBuilder: aBuilder)
 		    }
@@ -2134,22 +2136,22 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let filter: Filter? = safeDIOverrides.filter
-		        func __safeDI_aBuilder(filter: Filter?) -> A {
+		        func __safeDI_aBuilder(filter: Filter?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
-		            func __safeDI_midBuilder(filter: Filter) -> Mid {
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(filter: filter)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
-		            }
 		            let midBuilder = Instantiator<Mid> {
-		                __safeDI_midBuilder(filter: $0)
+		                __safeDI_midBuilder(filter: $0, __safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(filter, service, midBuilder) } else { A(filter: filter, service: service, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(filter, service, midBuilder) } else { A(filter: filter, service: service, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(filter: Filter, __safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(filter: filter, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(filter, aBuilder) } else { Mid(filter: filter, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: filter)
+		            __safeDI_aBuilder(filter: filter, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }

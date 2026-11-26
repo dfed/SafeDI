@@ -276,11 +276,11 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_serviceBuilder(name: String) -> any Service {
-			            if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder(name) } else { DefaultService(name: name) }
+			        func __safeDI_serviceBuilder(name: String, __safeDI_DefaultService_configuration: ((String) -> any Service)?) -> any Service {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder(name) } else { DefaultService(name: name) }
 			        }
 			        let serviceBuilder = ErasedInstantiator<String, any Service> {
-			            __safeDI_serviceBuilder(name: $0)
+			            __safeDI_serviceBuilder(name: $0, __safeDI_DefaultService_configuration: safeDIOverrides.serviceBuilder)
 			        }
 			        return Root(serviceBuilder: serviceBuilder)
 			    }
@@ -364,10 +364,12 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_service() -> any Service {
-			            if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { DefaultService() }
+			        func __safeDI_service(__safeDI_DefaultService_configuration: (() -> any Service)?) -> any Service {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 			        }
-			        let service = LazilyInstantiated<any Service>(__safeDI_service)
+			        let service = LazilyInstantiated<any Service> {
+			            __safeDI_service(__safeDI_DefaultService_configuration: safeDIOverrides.service)
+			        }
 			        return Root(service: service)
 			    }
 			}
@@ -656,10 +658,12 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        func __safeDI_shared() -> any Service {
-			            if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        func __safeDI_shared(__safeDI_DefaultService_configuration: (() -> any Service)?) -> any Service {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 			        }
-			        let shared = LazilyInstantiated<any Service>(__safeDI_shared)
+			        let shared = LazilyInstantiated<any Service> {
+			            __safeDI_shared(__safeDI_DefaultService_configuration: safeDIOverrides.shared)
+			        }
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(shared: shared, grand: grand)
 			    }
@@ -1311,10 +1315,12 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        func __safeDI_shared() -> \(spellings.mockedType) {
-			            if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        func __safeDI_shared(__safeDI_DefaultService_configuration: (() -> \(spellings.mockedType))?) -> \(spellings.mockedType) {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 			        }
-			        let shared = LazilyInstantiated<\(spellings.mockedType)>(__safeDI_shared)
+			        let shared = LazilyInstantiated<\(spellings.mockedType)> {
+			            __safeDI_shared(__safeDI_DefaultService_configuration: safeDIOverrides.shared)
+			        }
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(shared: shared.instance, grand: grand)
 			    }
@@ -1377,11 +1383,13 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        let __safeDI_shared__safeDIBuilder = safeDIOverrides.shared
-			        @Sendable nonisolated func __safeDI_shared() -> \(spellings.mockedType) {
-			            if let safeDIBuilder = __safeDI_shared__safeDIBuilder { safeDIBuilder() } else { DefaultService() }
+			        @Sendable nonisolated func __safeDI_shared(__safeDI_DefaultService_configuration: (@Sendable () -> \(spellings.mockedType))?) -> \(spellings.mockedType) {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 			        }
-			        let shared = SendableLazilyInstantiated<\(spellings.mockedType)>(__safeDI_shared)
+			        let __safeDI_shared____safeDI_DefaultService_configuration: (@Sendable () -> \(spellings.mockedType))? = safeDIOverrides.shared
+			        let shared = SendableLazilyInstantiated<\(spellings.mockedType)> {
+			            __safeDI_shared(__safeDI_DefaultService_configuration: __safeDI_shared____safeDI_DefaultService_configuration)
+			        }
 			        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 			        return Lone(shared: shared.instance, grand: grand)
 			    }
@@ -2011,10 +2019,12 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        func __safeDI_shared() -> any Service {
-			            if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        func __safeDI_shared(__safeDI_DefaultService_configuration: (() -> any Service)?) -> any Service {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 			        }
-			        let shared = LazilyInstantiated<any Service>(__safeDI_shared)
+			        let shared = LazilyInstantiated<any Service> {
+			            __safeDI_shared(__safeDI_DefaultService_configuration: safeDIOverrides.shared)
+			        }
 			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
 			        let other: LazilyInstantiated<any Service> = shared
 			        #sourceLocation()
@@ -2090,11 +2100,13 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        let __safeDI_shared__safeDIBuilder = safeDIOverrides.shared
-			        @Sendable nonisolated func __safeDI_shared() -> any Service {
-			            if let safeDIBuilder = __safeDI_shared__safeDIBuilder { safeDIBuilder() } else { DefaultService() }
+			        @Sendable nonisolated func __safeDI_shared(__safeDI_DefaultService_configuration: (@Sendable () -> any Service)?) -> any Service {
+			            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 			        }
-			        let shared = SendableLazilyInstantiated<any Service>(__safeDI_shared)
+			        let __safeDI_shared____safeDI_DefaultService_configuration: (@Sendable () -> any Service)? = safeDIOverrides.shared
+			        let shared = SendableLazilyInstantiated<any Service> {
+			            __safeDI_shared(__safeDI_DefaultService_configuration: __safeDI_shared____safeDI_DefaultService_configuration)
+			        }
 			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: 7)
 			        let other: SendableLazilyInstantiated<any Service> = shared
 			        #sourceLocation()
@@ -2894,20 +2906,20 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        shared: any Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
-			        func __safeDI_first() -> First {
+			        func __safeDI_first(__safeDI_First_configuration: ((any Service) -> First)?) -> First {
 			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 7)
 			            let other: any Service = shared
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(other) } else { First(other: other) }
+			            return if let safeDIBuilder = __safeDI_First_configuration { safeDIBuilder(other) } else { First(other: other) }
 			        }
-			        let first: First = __safeDI_first()
-			        func __safeDI_second() -> Second {
+			        let first: First = __safeDI_first(__safeDI_First_configuration: safeDIOverrides.first)
+			        func __safeDI_second(__safeDI_Second_configuration: ((any Service) -> Second)?) -> Second {
 			            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
 			            let other: any Service = shared
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(other) } else { Second(other: other) }
+			            return if let safeDIBuilder = __safeDI_Second_configuration { safeDIBuilder(other) } else { Second(other: other) }
 			        }
-			        let second: Second = __safeDI_second()
+			        let second: Second = __safeDI_second(__safeDI_Second_configuration: safeDIOverrides.second)
 			        return Lone(first: first, second: second)
 			    }
 			}

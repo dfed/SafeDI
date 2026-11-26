@@ -7056,24 +7056,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What `cycleParameterArguments(unavailableProperties:)` passes, each with the parameter it passes, for the type key.
-	nonisolated private func cycleParameterReads(unavailableProperties: Set<Property>) -> [PlaceRead] {
+	/// `readNames` are the names a walk binds a parameter's label apart under, by the parameter's property, which the read
+	/// reads in place of the label: it then resolves to the declaration of that name.
+	nonisolated func cycleParameterReads(unavailableProperties: Set<Property>, readNames: [Property: String] = [:]) -> [PlaceRead] {
 		cycleParameters.map { parameter in
 			let label = parameter.property.label
+			let name = readNames[parameter.property] ?? label
 			let source: ArgumentSource = if unavailableProperties.contains(parameter.property) {
 				.nil
-			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: label) {
+			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: name) {
 				instanceSource
 			} else {
-				.binding(label: label)
+				.binding(label: name)
 			}
-			return PlaceRead(argumentLabel: label, label: label, property: parameter.property, source: source)
+			return PlaceRead(argumentLabel: label, label: name, property: parameter.property, source: source)
 		}
 	}
 
 	/// What the construction of `instantiable` in this scope's builder function reads, for the type key, or `nil` where it is
 	/// constructed with anything but its initializer's arguments. It throws what the path key's construction
 	/// (`constructionArgumentList(of:unavailableProperties:propertiesGeneratedLater:holeBuilders:)`), which makes the same call first, throws.
-	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
+	/// It reads nothing but this generator and `unavailableProperties`, so every place of one generator written in one context
+	/// reads alike.
+	nonisolated func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
 		guard builderCallArguments.isEmpty else { return nil }
 		return try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 	}
@@ -7145,29 +7150,154 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
 	) -> PlaceRecord? {
-		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings) else { return nil }
+		closingPlaceRecord(
+			of: property,
+			instantiable: instantiable,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			closedOnFunctionName: closedOnFunctionName,
+			unavailableProperties: unavailableProperties,
+			isPlannedAtPlace: isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+			plansRebindings: true,
+		)
+	}
+
+	/// The record of this scope's place where it closes a cycle on the function named `closedOnFunctionName`, from what the
+	/// walk that writes the place hands it, or `nil` where the type key does not plan it: the one function every walk
+	/// records a closer with. `isPlannedAtPlace` is the walk's half of whether the type key plans the place, and
+	/// `readNames` the names it binds labels apart under (`cycleParameterReads(unavailableProperties:readNames:)`).
+	nonisolated func closingPlaceRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		forwardedProperties: [Property],
+		erasedToConcreteExistential: Bool,
+		closedOnFunctionName: String,
+		unavailableProperties: Set<Property>,
+		isPlannedAtPlace: Bool,
+		readNames: [Property: String] = [:],
+		plansRebindings: Bool = false,
+	) -> PlaceRecord? {
+		guard isPlannedAtPlace, isPlannedByGenerator(plansRebindings: plansRebindings) else { return nil }
 		return .closer(ClosingPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: closedOnFunctionName,
 			forwardedProperties: forwardedProperties,
-			cycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+			cycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties, readNames: readNames),
 		))
+	}
+
+	/// The record of this scope's place where it builds `property`, from what the walk that writes the place hands it, or
+	/// `nil` where the type key does not plan it: the one function every walk records a built place with. `hasFunction` is
+	/// whether the walk writes the place's builder function, `functionName` the name it writes it under, `children` the
+	/// code of the places its body builds, `isPlannedAtPlace` the walk's half of whether the type key plans the place,
+	/// `readNames` the names the walk binds labels apart under, by the property the read is of, which each read's label
+	/// becomes (as `cycleParameterReads(unavailableProperties:readNames:)` reads them), and `alternatives` the values the
+	/// construction tries before its call.
+	/// It throws what the construction's argument list throws.
+	nonisolated func builtPlaceRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		forwardedProperties: Set<Property>,
+		erasedToConcreteExistential: Bool,
+		unavailableProperties: Set<Property>,
+		functionName: String,
+		hasFunction: Bool,
+		children: [GeneratedCode],
+		node: PlanNode,
+		isPlannedAtPlace: Bool,
+		readNames: [Property: String] = [:],
+		alternatives: [ConstructionAlternative] = [],
+		constructionReads computedConstructionReads: Result<[PlaceRead]?, Initializer.GenerationError>? = nil,
+		separatesValuesBindings: Bool = false,
+		separatesMemberCalls: Bool = false,
+		plansRebindings: Bool = false,
+	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		guard isPlannedAtPlace, isPlannedByGenerator(separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls, plansRebindings: plansRebindings) else { return nil }
+		// A caller that writes many places of one generator in one context hands the construction's reads it computed once for
+		// them (`constructionReads(of:unavailableProperties:)`).
+		let constructionReads = if let computedConstructionReads {
+			try computedConstructionReads.get()
+		} else {
+			try constructionReads(of: instantiable, unavailableProperties: unavailableProperties)
+		}
+		guard let arguments = constructionReads else { return nil }
+		var record = BuiltPlaceRecord(
+			property: property,
+			isErased: erasedToConcreteExistential,
+			concreteType: instantiable.concreteInstantiable,
+			isExtension: instantiable.declarationType.isExtension,
+			target: constructionTarget(of: instantiable),
+			// A read production passes `nil` reads no declaration, whatever name the walk reads there.
+			arguments: arguments.map { read in
+				guard let name = readNames[read.property], read.source != .nil else { return read }
+				return PlaceRead(argumentLabel: read.argumentLabel, label: name, property: read.property, source: read.source.renamed(to: name))
+			},
+			forwardedProperties: forwardedProperties.sorted(),
+			cycleParameters: cycleParameters.map(\.property),
+			callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties, readNames: readNames),
+			functionName: functionName,
+			isSendable: buildsInSendableFunction,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			lineEnd: builtInlineSeamComment.map { " \($0)" } ?? "",
+			hasFunction: hasFunction,
+			children: children,
+			node: node,
+		)
+		if !alternatives.isEmpty {
+			record.alternatives = alternatives
+		}
+		return .built(record)
+	}
+
+	/// What this scope's place calls to construct `instantiable`: nothing where the dependency is unavailable, another
+	/// module's public mock, the type's hand-written mock, its `instantiate(…)`, or its initializer.
+	nonisolated func constructionTarget(of instantiable: Instantiable) -> ConstructionTarget {
+		if isUnavailableDependency {
+			.unavailable
+		} else if let publicMockCall {
+			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
+		} else if constructsWithHandWrittenMock {
+			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
+		} else if instantiable.declarationType.isExtension {
+			.instantiate(instantiable.concreteInstantiable)
+		} else {
+			.initializer(instantiable.concreteInstantiable)
+		}
 	}
 
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call, but where the payloads or the member calls are places of their own
 	/// (`separatesValuesBindings`, `separatesMemberCalls`).
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false, separatesMemberCalls: Bool = false) -> Bool {
+		isPlannedByGenerator(separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls, plansRebindings: true)
+			&& isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
+	}
+
+	/// The half of `isPlannedByTypeKey(builderFunctionNames:fillPlaceBindings:)` the generator decides alone, whichever walk
+	/// writes its place: no payload binding, unless a seam's payload bindings are places of their own
+	/// (`separatesValuesBindings`), beside which the place is planned; no wrapper made again, unless the walk writes its
+	/// rebindings as places of their own (`plansRebindings`, production's, which then judges each at the place:
+	/// `rebindingsArePlannedByTypeKey(builderFunctionNames:)`); no member call, unless the member calls are places of their
+	/// own (`separatesMemberCalls`), and no fill's own place. The one predicate both the planned flag and a built place's
+	/// record read, so the two never disagree.
+	nonisolated func isPlannedByGenerator(separatesValuesBindings: Bool = false, separatesMemberCalls: Bool = false, plansRebindings: Bool = false) -> Bool {
 		(valuesBindingLines.isEmpty || separatesValuesBindings)
-			&& builderFunctionNames.loopValuesBindingLines?.isEmpty != false
-			&& builderFunctionNames.loopLevelsName == nil
-			&& builderFunctionNames.receivedFunctionName == nil
-			&& rebindingsArePlannedByTypeKey(builderFunctionNames: builderFunctionNames)
+			&& (reboundProperties.isEmpty || plansRebindings)
 			&& (memberCallLines.isEmpty || separatesMemberCalls)
 			&& !isBuiltByFill
 			&& !fillReturnsWrapperBuilder
+	}
+
+	/// The half of `isPlannedByTypeKey(builderFunctionNames:fillPlaceBindings:)` production's walk decides at the place: no
+	/// loop's payload binding, box or `_received` function, no rebinding the type key does not lay out, and no fill place
+	/// binding there.
+	nonisolated private func isPlannedAtPlace(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
+		builderFunctionNames.loopValuesBindingLines?.isEmpty != false
+			&& builderFunctionNames.loopLevelsName == nil
+			&& builderFunctionNames.receivedFunctionName == nil
+			&& rebindingsArePlannedByTypeKey(builderFunctionNames: builderFunctionNames)
 			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
 	}
 
@@ -8436,6 +8566,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let valuesBindingPlaces = valuesBindingPlaces(builderFunctionNames: builderFunctionNames)
 		let plan = try propertyCode(
 			around: childCode,
+			// A scope's code is written once for each context (`generateCode`'s cache), so each writing is a place of its own
+			// node, which every place that holds the cached code shares.
+			planNode: PlanNode(),
 			instantiable: instantiable,
 			property: property,
 			forwardedProperties: forwardedProperties,
@@ -8714,6 +8847,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	@inline(never)
 	private func propertyCode(
 		around childCode: [GeneratedCode],
+		planNode: PlanNode,
 		instantiable: Instantiable,
 		property: Property,
 		forwardedProperties: Set<Property>,
@@ -8727,17 +8861,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		separatesValuesBindings: Bool,
 	) throws(Initializer.GenerationError) -> PlacePlan {
 		let concreteTypeName = instantiable.concreteInstantiable.asSource
-		let constructionTarget: ConstructionTarget = if isUnavailableDependency {
-			.unavailable
-		} else if let publicMockCall {
-			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
-		} else if constructsWithHandWrittenMock {
-			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
-		} else if instantiable.declarationType.isExtension {
-			.instantiate(instantiable.concreteInstantiable)
-		} else {
-			.initializer(instantiable.concreteInstantiable)
-		}
+		let constructionTarget = constructionTarget(of: instantiable)
 		// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
 		// mock passes them among its arguments.
 		let holeArgumentList = publicMockCall == nil
@@ -8776,29 +8900,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let inlinePlaceBuilder = fillPlaceBindings.holeBuildersByInlinePlace[ObjectIdentifier(self)]
 		// What the type key reads of the place, where it plans it: a place built by its own construction, with nothing but
 		// its children in its function's body.
-		let isBuiltPlacePlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls)
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings)
 		// A member of a loop of builders writes its rebindings, places of their own, between its member calls and its children.
 		func builtRecord(functionName: String, hasFunction: Bool, rebindings: [GeneratedCode] = []) throws(Initializer.GenerationError) -> PlaceRecord? {
-			guard isBuiltPlacePlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
-			return .built(BuiltPlaceRecord(
-				property: property,
-				isErased: erasedToConcreteExistential,
-				concreteType: instantiable.concreteInstantiable,
-				isExtension: instantiable.declarationType.isExtension,
-				target: constructionTarget,
-				arguments: arguments,
-				forwardedProperties: forwardedProperties.sorted(),
-				cycleParameters: cycleParameters.map(\.property),
-				callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+			try builtPlaceRecord(
+				of: property,
+				instantiable: instantiable,
+				forwardedProperties: forwardedProperties,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				unavailableProperties: unavailableProperties,
 				functionName: functionName,
-				isSendable: buildsInSendableFunction,
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
 				children: memberCallCode + rebindings + childCode,
-				node: PlanNode(),
-			))
+				node: planNode,
+				isPlannedAtPlace: seamCall == nil && isPlannedAtPlace(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings),
+				separatesValuesBindings: separatesValuesBindings,
+				separatesMemberCalls: separatesMemberCalls,
+				plansRebindings: true,
+			)
 		}
 
 		let propertyType = property.propertyType

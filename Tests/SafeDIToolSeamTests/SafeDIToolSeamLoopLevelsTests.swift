@@ -1412,37 +1412,37 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_outer() -> Outer {
-			            func __safeDI_inner() -> Inner {
-			                func __safeDI_serviceBuilder_Inner_service() -> any Service {
-			                    func __safeDI_service() -> DefaultService {
-			                        func __safeDI_aBuilder() -> LoopA {
-			                            let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                            let gadget: any Gadget = LiveGadget()
-			                            return LoopA(gadget: gadget, bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                        func __safeDI_bBuilder() -> LoopB {
-			                            let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                            let gadget: any Gadget = LiveGadget()
-			                            return LoopB(gadget: gadget, aBuilder: aBuilder)
-			                        }
+			        func __safeDI_inner() -> Inner {
+			            func __safeDI_serviceBuilder_Inner_service() -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    func __safeDI_aBuilder() -> LoopA {
 			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                        return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
+			                        let gadget: any Gadget = LiveGadget()
+			                        return LoopA(gadget: gadget, bBuilder: bBuilder)
 			                    }
-			                    let service: any Service = __safeDI_service()
-			                    return service
+			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                    func __safeDI_bBuilder() -> LoopB {
+			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                        let gadget: any Gadget = LiveGadget()
+			                        return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                    }
+			                    let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                    return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
 			                }
-			                func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                    .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })
-			                }
-			                _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			                return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Inner_service() } }) } else { Inner.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner()) }
+			                let service: any Service = __safeDI_service()
+			                return service
 			            }
-			            let inner: Inner = __safeDI_inner()
-			            return if let safeDIBuilder = safeDIOverrides.outer.safeDIBuilder { safeDIBuilder(inner) } else { Outer(inner: inner) }
+			            func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })
+			            }
+			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+			            return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Inner_service() } }) } else { Inner.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner()) }
 			        }
-			        let outer: Outer = __safeDI_outer()
+			        func __safeDI_outer(__safeDI_Outer_configuration: Outer.SafeDIMockConfiguration) -> Outer {
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = __safeDI_Outer_configuration.safeDIBuilder { safeDIBuilder(inner) } else { Outer(inner: inner) }
+			        }
+			        let outer: Outer = __safeDI_outer(__safeDI_Outer_configuration: safeDIOverrides.outer)
 			        return Root(outer: outer)
 			    }
 			}

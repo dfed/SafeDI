@@ -855,22 +855,22 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
 			        let tag = if let safeDIBuilder = safeDIOverrides.tag { safeDIBuilder() } else { Tag() }
-			        func __safeDI_aBuilder(tag: Tag) -> A {
+			        func __safeDI_aBuilder(tag: Tag, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 			            let api: any Api = apiBuilder()
-			            let reader = if let safeDIBuilder = safeDIOverrides.aBuilder.reader { safeDIBuilder(tag) } else { TagReader(tag: tag) }
-			            func __safeDI_bBuilder(tag: Tag) -> B {
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(tag: tag)
-			                }
-			                return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder { safeDIBuilder(tag, aBuilder) } else { B(tag: tag, aBuilder: aBuilder) }
-			            }
+			            let reader = if let safeDIBuilder = __safeDI_A_configuration.reader { safeDIBuilder(tag) } else { TagReader(tag: tag) }
 			            let bBuilder = Instantiator<B> {
-			                __safeDI_bBuilder(tag: $0)
+			                __safeDI_bBuilder(tag: $0, __safeDI_B_configuration: __safeDI_A_configuration.bBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 			            }
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(reader, api, bBuilder) } else { A(reader: reader, api: api, bBuilder: bBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(reader, api, bBuilder) } else { A(reader: reader, api: api, bBuilder: bBuilder) }
+			        }
+			        func __safeDI_bBuilder(tag: Tag, __safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(tag: tag, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(tag, aBuilder) } else { B(tag: tag, aBuilder: aBuilder) }
 			        }
 			        let aBuilder = Instantiator<A> {
-			            __safeDI_aBuilder(tag: tag)
+			            __safeDI_aBuilder(tag: tag, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 			        }
 			        return Hub(aBuilder: aBuilder)
 			    }

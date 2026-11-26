@@ -773,11 +773,11 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_feedScreen() -> FeedScreen {
-			            let clock = if let safeDIBuilder = safeDIOverrides.feedScreen.clock { safeDIBuilder() } else { Clock() }
-			            return if let safeDIBuilder = safeDIOverrides.feedScreen.safeDIBuilder { safeDIBuilder(clock) } else { FeedScreen(clock: clock) }
+			        func __safeDI_feedScreen(__safeDI_FeedScreen_configuration: FeedScreen.SafeDIMockConfiguration) -> FeedScreen {
+			            let clock = if let safeDIBuilder = __safeDI_FeedScreen_configuration.clock { safeDIBuilder() } else { Clock() }
+			            return if let safeDIBuilder = __safeDI_FeedScreen_configuration.safeDIBuilder { safeDIBuilder(clock) } else { FeedScreen(clock: clock) }
 			        }
-			        let feedScreen: FeedScreen = __safeDI_feedScreen()
+			        let feedScreen: FeedScreen = __safeDI_feedScreen(__safeDI_FeedScreen_configuration: safeDIOverrides.feedScreen)
 			        return Screen(feedScreen: feedScreen)
 			    }
 			}
@@ -1136,15 +1136,15 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_feedScreen() -> FeedScreen {
-		            func __safeDI_innerScreen() -> InnerScreen {
-		                let clock = if let safeDIBuilder = safeDIOverrides.feedScreen.innerScreen.clock { safeDIBuilder() } else { Clock() }
-		                return if let safeDIBuilder = safeDIOverrides.feedScreen.innerScreen.safeDIBuilder { safeDIBuilder(clock) } else { InnerScreen(clock: clock) }
-		            }
-		            let innerScreen: InnerScreen = __safeDI_innerScreen()
-		            return if let safeDIBuilder = safeDIOverrides.feedScreen.safeDIBuilder { safeDIBuilder(innerScreen) } else { FeedScreen(innerScreen: innerScreen) }
+		        func __safeDI_innerScreen(__safeDI_InnerScreen_configuration: InnerScreen.SafeDIMockConfiguration) -> InnerScreen {
+		            let clock = if let safeDIBuilder = __safeDI_InnerScreen_configuration.clock { safeDIBuilder() } else { Clock() }
+		            return if let safeDIBuilder = __safeDI_InnerScreen_configuration.safeDIBuilder { safeDIBuilder(clock) } else { InnerScreen(clock: clock) }
 		        }
-		        let feedScreen: FeedScreen = __safeDI_feedScreen()
+		        func __safeDI_feedScreen(__safeDI_FeedScreen_configuration: FeedScreen.SafeDIMockConfiguration) -> FeedScreen {
+		            let innerScreen: InnerScreen = __safeDI_innerScreen(__safeDI_InnerScreen_configuration: __safeDI_FeedScreen_configuration.innerScreen)
+		            return if let safeDIBuilder = __safeDI_FeedScreen_configuration.safeDIBuilder { safeDIBuilder(innerScreen) } else { FeedScreen(innerScreen: innerScreen) }
+		        }
+		        let feedScreen: FeedScreen = __safeDI_feedScreen(__safeDI_FeedScreen_configuration: safeDIOverrides.feedScreen)
 		        return Screen(feedScreen: feedScreen)
 		    }
 		}

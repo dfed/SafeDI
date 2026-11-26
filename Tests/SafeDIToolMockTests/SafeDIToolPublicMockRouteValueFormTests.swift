@@ -1223,10 +1223,12 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_log() -> Log {
-		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        func __safeDI_log(__safeDI_Log_configuration: (() -> Log)?) -> Log {
+		            if let safeDIBuilder = __safeDI_Log_configuration { safeDIBuilder() } else { Log() }
 		        }
-		        let log = LazilyInstantiated<Log>(__safeDI_log)
+		        let log = LazilyInstantiated<Log> {
+		            __safeDI_log(__safeDI_Log_configuration: safeDIOverrides.log)
+		        }
 		        func __safeDI_f() -> F {
 		            func __safeDI_apiBuilder_F() -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(a: { _ in __safeDI_apiBuilder_F_A_Scope() })
@@ -1891,12 +1893,14 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_apiBuilder = apiBuilder
-		        func __safeDI_log() -> Log {
-		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        func __safeDI_log(__safeDI_Log_configuration: (() -> Log)?) -> Log {
+		            if let safeDIBuilder = __safeDI_Log_configuration { safeDIBuilder() } else { Log() }
 		        }
-		        let log = LazilyInstantiated<Log>(__safeDI_log)
-		        _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let log = LazilyInstantiated<Log> {
+		            __safeDI_log(__safeDI_Log_configuration: safeDIOverrides.log)
+		        }
 		        func __safeDI_f() -> F {
+		            _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
 		            return F.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), log: log.instance, safeDIOverrides: safeDIOverrides.f)
 		        }

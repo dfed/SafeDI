@@ -2973,6 +2973,7 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			sharedSubtreeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedSubtreeRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3058,6 +3059,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingSharedSubtreeShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3550,6 +3553,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingSharedSubtreeShapes`' choices: whether a graph gains `DiamondHost`'s tree, and every shape of that
+		/// tree.
+		private var sharedSubtreeRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8427,6 +8433,120 @@ enum GraphFuzzerGenerator {
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
+		// MARK: A subtree a mock meets on several paths
+
+		/// The base corpus's draw, in three graphs of ten, of a type with children that a mock's tree builds beneath two or
+		/// three parents, with no cycle, so that the mock's walk meets one subtree on several paths and shares its work
+		/// (`MockLowering.SubtreeSharing`), which no other draw does in more than a graph in hundreds. `DiamondHost`, whose
+		/// mock is generated, instantiates `DiamondLeft`, `DiamondRight` and now and then `DiamondMiddle`, each by value,
+		/// through an instantiator, or lazily, and each instantiates `DiamondCard`, which builds `DiamondLeaf`, directly or
+		/// through `DiamondRow`, and now and then `DiamondBadge`. The leaf reads nothing, or receives `diamondToken`, required
+		/// or only if available; the host now and then declares the token, before or after its parents, and each parent
+		/// now and then declares its own, before or after its card, so that the card's subtree reads another declaration,
+		/// or `nil`, on another path; where the leaf reads it, half the time the token receives `DiamondFollower` only if
+		/// available, which requires the card and which each parent that declares its own token declares too, so that the
+		/// card's subtree is built with the token generated later on some paths and not others (the key's `ChildContext`).
+		/// Half the time `DiamondRoot`, a root, builds the host. Every run of the tool lowers the
+		/// host's mock again without sharing and compares the two (`MockSubtreeSharingChecks`), so a key that misses a part
+		/// of the walk state the subtree reads fails the graph; the floor of graphs judged is
+		/// `sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain`. `sharedSubtreeRandom` draws only
+		/// for this pass, after every other, and only in the base corpus.
+		private mutating func addingSharedSubtreeShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, sharedSubtreeRandom.percentChance(30) else { return declarations }
+			var declarations = declarations
+			let parentNames = sharedSubtreeRandom.percentChance(30) ? ["Left", "Middle", "Right"] : ["Left", "Right"]
+			let cardBuildsLeafThroughRow = sharedSubtreeRandom.percentChance(35)
+			let cardBuildsBadge = sharedSubtreeRandom.percentChance(40)
+			let leafReadRoll = sharedSubtreeRandom.integer(in: 0...99)
+			let leafReadsToken = leafReadRoll >= 25
+			let leafRequiresToken = leafReadRoll >= 25 && leafReadRoll < 55
+			let hostDeclaresToken = leafRequiresToken || (leafReadsToken && sharedSubtreeRandom.percentChance(70))
+			let hostDeclaresTokenFirst = sharedSubtreeRandom.percentChance(50)
+			let rootBuildsHost = sharedSubtreeRandom.percentChance(50)
+			// The token receives `DiamondFollower`, which requires the card, only if available, so each parent that declares
+			// its own token and a follower orders its card, token and follower around a cycle of edges only if available,
+			// which leaves the token unavailable to the card's subtree on some paths and not others.
+			let tokenReadsFollower = leafReadsToken && sharedSubtreeRandom.percentChance(50)
+			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			let tokenName = "\(prefix)DiamondToken"
+			let leafName = "\(prefix)DiamondLeaf"
+			let rowName = "\(prefix)DiamondRow"
+			let badgeName = "\(prefix)DiamondBadge"
+			let cardName = "\(prefix)DiamondCard"
+			let hostName = "\(prefix)DiamondHost"
+			let instantiatorName = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let lazyName = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let token = PropertyDeclaration(attribute: "@Instantiated", label: "diamondToken", type: tokenName)
+			let followerName = "\(prefix)DiamondFollower"
+			if leafReadsToken || hostDeclaresToken {
+				append(tokenName, tokenReadsFollower ? [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "diamondFollower", type: "\(followerName)?")] : [])
+			}
+			if tokenReadsFollower {
+				append(followerName, [PropertyDeclaration(attribute: "@Received", label: "diamondCard", type: "\(prefix)DiamondCard")])
+			}
+			if !leafReadsToken {
+				append(leafName, [])
+			} else if leafRequiresToken {
+				append(leafName, [PropertyDeclaration(attribute: "@Received", label: "diamondToken", type: tokenName)])
+			} else {
+				append(leafName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "diamondToken", type: "\(tokenName)?")])
+			}
+			var cardProperties = [PropertyDeclaration]()
+			if cardBuildsLeafThroughRow {
+				append(rowName, [PropertyDeclaration(attribute: "@Instantiated", label: "diamondLeaf", type: leafName)])
+				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondRow", type: rowName))
+			} else {
+				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondLeaf", type: leafName))
+			}
+			if cardBuildsBadge {
+				append(badgeName, [])
+				cardProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondBadge", type: badgeName))
+			}
+			append(cardName, cardProperties)
+			let card = PropertyDeclaration(attribute: "@Instantiated", label: "diamondCard", type: cardName)
+			var hostProperties = [PropertyDeclaration]()
+			for parentName in parentNames {
+				let declaresOwnToken = leafReadsToken && sharedSubtreeRandom.percentChance(30)
+				let declaresTokenAfterCard = sharedSubtreeRandom.percentChance(50)
+				let holdRoll = sharedSubtreeRandom.integer(in: 0...99)
+				var parentProperties = [card]
+				if declaresOwnToken {
+					parentProperties.insert(token, at: declaresTokenAfterCard ? 1 : 0)
+					if tokenReadsFollower {
+						parentProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "diamondFollower", type: followerName))
+					}
+				}
+				let typeName = "\(prefix)Diamond\(parentName)"
+				append(typeName, parentProperties)
+				let label = "diamond\(parentName)"
+				if holdRoll < 65 {
+					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: typeName))
+				} else if holdRoll < 90 {
+					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "\(label)Builder", type: "\(instantiatorName)<\(typeName)>"))
+				} else {
+					hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(lazyName)<\(typeName)>"))
+				}
+			}
+			if hostDeclaresToken {
+				hostProperties.insert(token, at: hostDeclaresTokenFirst ? 0 : hostProperties.count)
+			}
+			append(hostName, arguments: ["generateMock: true"], hostProperties)
+			if rootBuildsHost {
+				append("\(prefix)DiamondRoot", arguments: ["isRoot: true"], [PropertyDeclaration(attribute: "@Instantiated", label: "diamondHost", type: hostName)])
+			}
+			return declarations
+		}
+
+		private static let sharedSubtreeRandomSeedMask: UInt64 = 0x7368617265645374
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -9067,7 +9187,8 @@ enum GraphFuzzerGenerator {
 		/// keeps alive too. The instantiators are `Sendable` as the graph's sendability allows, and then the place is in the
 		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing. Four in ten hold `RetainLeaf`'s place in
 		/// an erased instantiator, `ErasedInstantiator` or its `Sendable` twin as the instantiators are, which `RetainLive`
-		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps.
+		/// fills forwarding `retainTicket`, so the oracle holds the builder that wrapper keeps. Four in ten roots also build
+		/// `RetainHome` through an instantiator, so that the root function oracle compares the dispatchers both builds reach.
 		///
 		/// `retentionRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
@@ -9082,6 +9203,12 @@ enum GraphFuzzerGenerator {
 			// `RetainLeaf`'s place held in an erased instantiator, which `RetainLive` fills forwarding `retainTicket`: a place
 			// whose builder takes the value it forwards (`retentionSeamValueBeforeBuilderForwardingPlace`).
 			let leafPlaceForwards = retentionRandom.percentChance(40)
+			// A second build of `RetainHome` from the root, through an instantiator, so that the root reaches each dispatcher
+			// it declares once at its top from two calls of one key, which the root function oracle compares
+			// (`GraphFuzzerToolRuns.rootFunctionKeyFailure`); a `SendableInstantiator` reaches the dispatchers in the other
+			// family. A second by-value build would not: the type key builds both in one shared function, which the root's plan
+			// reaches once.
+			let rootBuildsHomeTwice = retentionRandom.percentChance(40)
 			let isSendable = switch sendability {
 			case .nonSendable: false
 			case .sendable: true
@@ -9131,6 +9258,9 @@ enum GraphFuzzerGenerator {
 				live.properties.append(PropertyDeclaration(attribute: "@Received", label: "retainNavigator", type: navigator.name))
 			}
 			var root = instantiable("RetainRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainHome", type: home.name)])
+			if rootBuildsHomeTwice {
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "retainHomeBuilder", type: "\(instantiator)<\(home.name)>"))
+			}
 			root.instantiableArguments = ["isRoot: true"]
 			return declarations + [navigator, leaf, detail, home, live, root]
 		}
@@ -14872,6 +15002,7 @@ struct GraphFuzzerResult {
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
 		isComparedWithCleanSubtreeSkipOff: Bool = false,
+		isJudgedByRootFunctionKeyOracle: Bool = false,
 		retentionCounts: GraphFuzzerRetentionCounts = GraphFuzzerRetentionCounts(),
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -14884,6 +15015,7 @@ struct GraphFuzzerResult {
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
 		self.isComparedWithCleanSubtreeSkipOff = isComparedWithCleanSubtreeSkipOff
+		self.isJudgedByRootFunctionKeyOracle = isJudgedByRootFunctionKeyOracle
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.outcome = outcome
@@ -14948,6 +15080,9 @@ struct GraphFuzzerResult {
 	/// Whether the oracle ran the graph again with no skip of a clean subtree in the validation walk and compared the two
 	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`): its first run skipped one.
 	let isComparedWithCleanSubtreeSkipOff: Bool
+	/// Whether the root function oracle compared two texts of one key in the graph (`GraphFuzzerToolRuns.rootFunctionKeyFailure`):
+	/// some root reached one key twice.
+	let isJudgedByRootFunctionKeyOracle: Bool
 	/// What the retention oracle judged of the graph (`GraphFuzzerOracle.ValueComparisons.retentionCounts`), each count
 	/// 0 or 1 but the unpaired experiments'.
 	let retentionCounts: GraphFuzzerRetentionCounts
@@ -15545,6 +15680,7 @@ struct GraphFuzzerToolRuns {
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
 		rootFunctionKeyDisagreements: [String] = [],
+		rootFunctionKeysCompared: Int = 0,
 		fillsOfCalls: [SeamFillSharing.FillsOfCall] = [],
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
@@ -15559,6 +15695,7 @@ struct GraphFuzzerToolRuns {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
 		self.rootFunctionKeyDisagreements = rootFunctionKeyDisagreements
+		self.rootFunctionKeysCompared = rootFunctionKeysCompared
 		self.fillsOfCalls = fillsOfCalls
 		self.placeFacts = placeFacts
 		self.withoutSecondPath = withoutSecondPath
@@ -15600,6 +15737,8 @@ struct GraphFuzzerToolRuns {
 	let placeLevelDisagreements: [String]
 	/// Each key a root reaches root functions of with two texts (`collectingRootFunctionKeyDisagreements(during:)`).
 	let rootFunctionKeyDisagreements: [String]
+	/// The keys a root reached root functions of more than once, each of whose texts the oracle compared.
+	let rootFunctionKeysCompared: Int
 	/// What each seam call that fills a place built in the first run (`SeamFillSharing.observer`).
 	let fillsOfCalls: [SeamFillSharing.FillsOfCall]
 	let placeFacts: GraphFuzzerPlaceFacts
@@ -16479,6 +16618,7 @@ enum GraphFuzzerOracle {
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,
+				isJudgedByRootFunctionKeyOracle: runs.rootFunctionKeysCompared > 0,
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
@@ -17275,7 +17415,7 @@ enum GraphFuzzerOracle {
 		// The call of `addingPlacesOfOneCaseShapes`' seam must build one fill per kind of place
 		// (`placesJudgedByAnotherPlacesFillFailure`).
 		let (fillsOfCallsStream, fillsOfCallsContinuation) = AsyncStream.makeStream(of: SeamFillSharing.FillsOfCall.self)
-		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
+		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements, rootFunctionKeysCompared) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
 					try await ValidationWalkObservation.$observer.withValue({ observation in
@@ -17428,6 +17568,7 @@ enum GraphFuzzerOracle {
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
 			rootFunctionKeyDisagreements: rootFunctionKeyDisagreements,
+			rootFunctionKeysCompared: rootFunctionKeysCompared,
 			fillsOfCalls: fillsOfCalls,
 			placeFacts: placeFacts,
 			withoutSecondPath: withoutSecondPath,

@@ -59,6 +59,8 @@ extension MockLowering {
 		var prelude = [String]()
 		var functions = [String]()
 		var bindings = [String]()
+		/// The members in the order the level emits them, each with its path of child indices and the name it is bound under.
+		var members = [(generator: ScopeGenerator, path: [Int], bindingName: String?)]()
 
 		var lines: [String] {
 			prelude + functions + bindings
@@ -237,7 +239,10 @@ extension MockLowering.Walk {
 	/// Appends the loop being emitted, if any, to `lines`.
 	mutating func endLoopUnit(appendingTo lines: inout [String]) {
 		if let loopUnit {
-			lines.append(contentsOf: loopUnit.lines)
+			if writesText {
+				lines.append(contentsOf: loopUnit.lines)
+			}
+			recordLoopUnit(loopUnit)
 		}
 		loopUnit = nil
 	}

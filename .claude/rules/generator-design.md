@@ -35,6 +35,8 @@ Mock generation follows this pipeline:
 2. For each type with `generateMock: true`, **`createMockRootScopeGenerator`** promotes `@Received` dependencies to root-level children (except those `mockCanBuild` rejects and those one of the mocked type's own aliases provides), in the order the mock's tree first receives them (`inOrderTheMockTreeFirstReceives`), and validates for cycles
 3. **`ScopeGenerator.lowerMockRoot(context:)`** builds the mock: `treeNames(of:readsFills:)` walks the tree once, recording each property node (`MockTreeNames.propertyNodes`, which `query needs`, promotion and the public mock plan read); `mockRootParameters(instantiable:mockDefaults:treeNames:)` classifies the flat parameters; `lowerMockRootWithTree(of:context:)` writes `SafeDIOverrides`, `mock()` and its body
 
+An internal mock's body is laid out by the type key from the records its walk makes, and walked again for text only where that layout falls back: `.claude/rules/mock-type-key-layout.md`.
+
 The production code path (`generatePropertyCode` with `.dependencyTree`) and mock path (`.mock`) share the same `ScopeGenerator` but diverge at `generatePropertyCode`. Mock fields (`mockInitializer`, `mockReturnType`, `customMockName`) are only accessed in mock code paths — never in production paths.
 
 ## Determinism in the generator
