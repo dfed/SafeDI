@@ -291,8 +291,9 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 
 	/// Every graph of seeds 0..<23,705 (15,000 laid out from their plans by the long run) whose plan writes other code than
 	/// today's tree and whose probes stay within the batch's limits: 31 graphs, which draw each of `PlanValueGraph.shapes`
-	/// at least four times. The other 214 whose code differs spend the batch's traversals, alike on both paths, and are
-	/// left to the long run.
+	/// but `renames` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
+	/// 1,981, pinned, and 246, which spends the batch's traversals alike on both paths. The other 214 whose code differs
+	/// spend them too, and are left to the long run.
 	private static let pinnedSeeds: [UInt64] = [
 		335, 576, 1_100, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
 		6_798, 8_112, 8_776, 9_172, 9_746, 10_419, 10_499, 11_225, 11_856, 13_584, 14_751, 15_247,
@@ -322,8 +323,8 @@ struct PlanValueGraph {
 	/// What the graph draws of the shapes a plan lays out, which `pinnedSeeds` are spread over: `fewScreens`,
 	/// `someScreens` or `manyScreens` (two or three, four or five, six or seven), `forwards`, `opensItself` (a screen
 	/// opens itself), `declaresModel`, `receivesModel` (a screen receives a model it does not declare), `typeBetween`
-	/// (a root opens its screens through a type in between), `screenByValue` (a root holds a screen by value) and
-	/// `twoRoots`.
+	/// (a root opens its screens through a type in between), `screenByValue` (a root holds a screen by value),
+	/// `twoRoots` and `renames` (a screen renames a service).
 	let shapes: [String]
 
 	var fileName: String {
@@ -421,6 +422,7 @@ struct PlanValueGraph {
 		let declaredModels = (0..<screenCount).map { _ in models.filter { _ in random.chance(0.3) } }
 		var screens = [(String, [Property])]()
 		var receivesModel = false
+		var renames = false
 		for screen in 0..<screenCount {
 			var properties = [Property]()
 			if forwards[screen] {
@@ -447,6 +449,7 @@ struct PlanValueGraph {
 			}
 			if odd > 0.5, odd < 0.56, random.chance(0.3) {
 				properties.append(Property(attribute: "@Received(fulfilledByDependencyNamed: \"service0\", ofType: \(name("Service0")).self)", label: "renamed", type: name("Service0")))
+				renames = true
 			}
 			random.shuffle(&properties)
 			// One dependency per label.
@@ -526,6 +529,9 @@ struct PlanValueGraph {
 		}
 		if rootNames.count == 2 {
 			shapes.append("twoRoots")
+		}
+		if renames {
+			shapes.append("renames")
 		}
 		self.shapes = shapes
 	}
