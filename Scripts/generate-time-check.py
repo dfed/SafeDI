@@ -141,6 +141,11 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                screens of the next layer and of the screen at its own position in the layer before,
                                the last layer's of a first-layer screen instead, so the graph is cycles through
                                `Instantiator`s; module `App`: the root, which builds the tree.
+  W-ring-of-screens-that-open-each-other
+                               one module: two layers of screens, the row's number the screens per layer, each
+                               first-layer screen holding `Instantiator`s of three second-layer screens and each
+                               second-layer screen one of the next first-layer screen, so the screens form one ring
+                               of cycles through `Instantiator`s that grows with the width, not the depth.
   BM-mocks-of-cycles-through-instantiators
                                the same graph with `generateMock: true` on every screen and on the root.
   O-only-if-available-at-every-screen, R-received-instantiator-at-every-screen, N-rename-at-every-screen
@@ -487,6 +492,21 @@ def shape_census(layers, variant, width=3):
     return [("App", [], "import SafeDI\n\n" + source)]
 
 
+def shape_w(width):
+    """One module: a root over two layers of `width` screens, each first-layer screen holding `Instantiator`s of three
+    second-layer screens, from its own position on, and each second-layer screen one of the first-layer screen after
+    its own position. The screens form one ring of cycles through `Instantiator`s, whose paths without a repeated
+    screen grow by a factor per screen added while the generated code holds one function per screen."""
+    source = "import SafeDI\n\n"
+    for layer in range(2):
+        for position in range(width):
+            children = [f"1x{(position + offset) % width}" for offset in range(3)] if layer == 0 else [f"0x{(position + 1) % width}"]
+            properties = [("@Instantiated", f"screen{child}Builder", f"Instantiator<Screen{child}>") for child in dict.fromkeys(children)]
+            source += declaration("@Instantiable", f"Screen{layer}x{position}", properties)
+    source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "home", "Screen0x0")])
+    return [("App", [], source)]
+
+
 SHAPES = {
     "E16-seam": lambda: shape_e(16, seam=True),
     "E24-seam": lambda: shape_e(24, seam=True),
@@ -534,6 +554,7 @@ GROWTH_ROWS = {
     # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
+    "W-ring-of-screens-that-open-each-other": (lambda width: shape_w(width), 10, {"time": 4.0}),
     "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 3.0, "code": 275.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {"code": 10.5}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
