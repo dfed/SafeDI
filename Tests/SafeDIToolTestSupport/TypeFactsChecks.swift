@@ -67,6 +67,10 @@ enum TypeFactsChecks {
 		var factsVariantCount = 0
 		/// Pairs of places of one variant that check 10 compared after setting aside a read one of them asks, answered none.
 		var check10ExemptedPairs = 0
+		/// A proxy for rule 3's `@Sendable` gap: nodes two or more of whose reads by label are answered by a value at one
+		/// place and by a `SendableLazilyInstantiated` at another. Wider than the gap: it does not ask whether the node is
+		/// reached inside a `@Sendable` function, which the report does not say.
+		var sendableGapProxyNodes = 0
 		var line = ""
 	}
 
@@ -241,6 +245,19 @@ enum TypeFactsChecks {
 				add(10, "places \(first) and \(index) of \(nodeDescription(places[index].node)) share variant \(variant) but answer \(answers.symmetricDifference(firstAnswers).sorted()) otherwise")
 			}
 		}
+		var answerFormsByNodeAndLabel = [Int: [String: Set<Character>]]()
+		for place in places {
+			guard let node = place.node else { continue }
+			for answer in place.answeredReads {
+				guard let form = bindingForm(of: answer) else { continue }
+				let read = readOfAnswer(answer)
+				let label = String(read.drop { $0 != "(" }.dropFirst().prefix { $0 != ")" })
+				answerFormsByNodeAndLabel[node, default: [:]][label, default: []].insert(form)
+			}
+		}
+		for formsByLabel in answerFormsByNodeAndLabel.values where formsByLabel.values.count(where: { $0.isSuperset(of: ["v", "s"]) }) >= 2 {
+			result.sendableGapProxyNodes += 1
+		}
 		result.factsVariantCount = report.variantNodes.count
 		// Check 5.
 		var nodesSeen = Set<Int>()
@@ -291,7 +308,7 @@ enum TypeFactsChecks {
 		for check in 1...10 {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
-		line.append(" check10Exempted=\(result.check10ExemptedPairs)")
+		line.append(" check10Exempted=\(result.check10ExemptedPairs) sendableGapProxy=\(result.sendableGapProxyNodes)")
 		for check in 1...10 {
 			if let first = result.findingsByCheck[check]?.first {
 				line.append(" first\(check)=«\(first.replacingOccurrences(of: "\n", with: " "))»")
@@ -304,6 +321,21 @@ enum TypeFactsChecks {
 	/// A place's answered reads as a variant's key compares them: a read only if available left out (rule 1), given the
 	/// node's declared reads as the report spells them, and what is
 	/// still being built left out of a read whose declaration is a wrapper (rule 2), which the text shows by its type.
+	/// How an answered read's nearest bindings hold the label, for the `@Sendable` gap proxy: `s` for a
+	/// `SendableLazilyInstantiated`, `l` for a `LazilyInstantiated`, `v` for a value, `nil` where nothing binds it.
+	private static func bindingForm(of answer: String) -> Character? {
+		guard let start = answer.range(of: " = bindings [") else { return nil }
+		let bindings = answer[start.upperBound...].prefix { $0 != "]" }
+		guard !bindings.isEmpty else { return nil }
+		if bindings.contains("SendableLazilyInstantiated<") {
+			return "s"
+		} else if bindings.contains("LazilyInstantiated<") {
+			return "l"
+		} else {
+			return "v"
+		}
+	}
+
 	/// The read an answered read names, `value(x)` of `value(x) = none`.
 	private static func readOfAnswer(_ answer: String) -> String {
 		String(answer.prefix { $0 != " " })
