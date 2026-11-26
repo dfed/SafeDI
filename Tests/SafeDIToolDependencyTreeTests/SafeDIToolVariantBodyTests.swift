@@ -427,6 +427,63 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesRenamedValueOptionally_whenAliasReceivesLabelOnlyIfAvailableThatCycleDeclares() async throws {
+		// `Screen` renames `context: Context` only if available, and `Flow`, on its cycle, instantiates `context`: the root
+		// opens `Screen` beneath no `Context`, and `Flow` beneath its own. `Screen`'s body takes `context` optionally, as
+		// the value the alias reads, so both calls share it.
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Screen: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "context", ofType: Context.self, onlyIfAvailable: true) let renamedContext: Context?
+					    @Instantiated let flowBuilder: Instantiator<Flow>
+					    public init(renamedContext: Context?, flowBuilder: Instantiator<Flow>) { self.renamedContext = renamedContext; self.flowBuilder = flowBuilder }
+					}
+
+					@Instantiable public final class Flow: Instantiable {
+					    @Instantiated let context: Context
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(context: Context, screenBuilder: Instantiator<Screen>) { self.context = context; self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Context: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var plans = [Plan]()
+		for await plan in stream {
+			plans.append(plan)
+		}
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Screen as screenBuilder: Instantiator<Screen> [context = context: Context?, optional] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
+				],
+				todaysBodiesPlanLacks: [],
+				twinValues: [],
+			),
+		])
+	}
+
 	// MARK: Private
 
 	/// How a screen of `screensOpeningEachOther(roles:targets:)` takes the root's `Context`.
