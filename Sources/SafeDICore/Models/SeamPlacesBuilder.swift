@@ -268,10 +268,16 @@ struct SeamPlacesBuilder {
 		} else {
 			caseIndex = cases.count
 			caseIndexByKey[key] = caseIndex
+			earlierCasePresentingSamePlaces.append(caseIndex)
 			cases.append(CaseDraft(ownerLevel: ownerLevel, passedUp: passedUp, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction))
 		}
 		if passedUp == nil || caseIndexBySite[site] == nil {
 			caseIndexBySite[site] = caseIndex
+		} else if let firstCase = caseIndexBySite[site] {
+			// As `addPassedUpPlace`: the cases of two sites that share a case lead to one first case.
+			let first = firstCasePresentingSamePlaces(as: firstCase)
+			let other = firstCasePresentingSamePlaces(as: caseIndex)
+			earlierCasePresentingSamePlaces[max(first, other)] = min(first, other)
 		}
 		return caseIndex
 	}

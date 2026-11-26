@@ -125,6 +125,9 @@ extension DependencyTreeGenerator {
 
 		private(set) var builder = SeamPlacesBuilder()
 		private(set) var sites = [WalkedSite]()
+		/// For each of `sites`, what a replay of a subtree that holds it needs: the position of each frame's next child on
+		/// its path, and its case's family.
+		private var siteRecords = [(positions: [Int], isBuiltInSendableFunction: Bool, siteOpensSendableFunction: Bool)]()
 		private(set) var calls = [WalkedCall]()
 
 		/// A scope's dependencies by property, and where a cycle re-enters it, by the scope's generator: both are read from the
@@ -194,7 +197,76 @@ extension DependencyTreeGenerator {
 			/// The levels' declaration list, drafted once, since a scope's declarations do not depend on its next property: a level
 			/// of the frame with its first next property, the list's projection, and the buildable trees its declarations hold.
 			var drafted: (draft: SeamPlacesBuilder.LevelDraft, listProjection: SeamPlacesBuilder.ListProjection, trees: [BuildableTree])?
+
+			// What a walk of the scope's subtree is kept as (`WalkedSubtree`), for the next path that reaches its declaration.
+
+			/// The key the walk of the subtree is kept by, where it can be kept.
+			let subtreeKey: SubtreeKey?
+			/// The number of sites and of met calls before the scope's.
+			let sitesStart: Int
+			let metCallsStart: Int
+			/// The declarations above the scope that a cycle in its subtree closes on.
+			var closedOnAbove = Set<ScopeGenerator.BuiltDeclaration>()
+			/// The declarations its subtree builds.
+			var builtInSubtree = Set<ScopeGenerator.BuiltDeclaration>()
+			/// Whether a subtree the walk does not enter holds a cycle-closing scope, whose declaration's tree may differ on
+			/// another path.
+			var holdsUnwalkedCycleClosing = false
+			/// Whether the walk replayed the subtree instead of walking it.
+			var isReplayed = false
 		}
+
+		/// What a frame hands its children that decides what they declare and how their levels and sites are added: two
+		/// frames with one key build the same subtree, unless a cycle in it closes differently (`WalkedSubtree`).
+		struct SubtreeKey: Hashable {
+			let builtType: TypeDescription?
+			let property: Property?
+			let fillSite: SeamSignature.Hole.Site?
+			let filledCase: SeamSignature.Places.CalledCase?
+			let isInFill: Bool
+			let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
+			let childrenAreInSendableFunction: Bool
+			let isOnPathToCalls: Bool
+			let callsAreInSendableFunction: Bool
+			let loopDeclaringType: TypeDescription
+			let nearestDeclarations: [String: Property]
+		}
+
+		/// A walk of a scope's subtree, kept so that the next path that reaches a scope of the same key adds its levels'
+		/// parents and replays its sites and calls instead of walking it again. It holds where the path must stand: every
+		/// declaration in `closedOnAbove` above the scope, so the subtree's cycles close where they closed, and none of
+		/// `builtInSubtree`, so none of them closes where it opened.
+		private struct WalkedSubtree {
+			struct Site {
+				let pathSuffix: [Property]
+				let position: Int
+				/// The positions of the next children of the frames beneath, for a replay that is kept again.
+				let positionsBeneath: [Int]
+				let routeSuffix: [Int]
+				let caseIndex: Int
+				let isBuiltInSendableFunction: Bool
+				let siteOpensSendableFunction: Bool
+			}
+
+			struct Call {
+				let childIndexPathSuffix: [Int]
+				let position: Int
+				let framesBeneath: [Frame]
+				let call: ScopeGenerator
+				let property: Property
+				let calledSeamType: TypeDescription
+				let isInSendableFunction: Bool
+			}
+
+			let closedOnAbove: Set<ScopeGenerator.BuiltDeclaration>
+			let builtInSubtree: Set<ScopeGenerator.BuiltDeclaration>
+			let sites: [Site]
+			let calls: [Call]
+		}
+
+		private var walkedSubtrees = [SubtreeKey: [WalkedSubtree]]()
+		/// How many frames on the path build each declaration.
+		private var declarationsOnPath = [ScopeGenerator.BuiltDeclaration: Int]()
 
 		/// A declaration of a level whose tree a type above the seam could build: its index among the level's declarations, the
 		/// tree's generator, and the path to the tree's property.
@@ -252,7 +324,15 @@ extension DependencyTreeGenerator {
 							inheritedDeclarations: [],
 							nearestAbove: frame.nearestDeclarations,
 						)
+						if let walk = reusableWalk() {
+							replay(walk)
+							pop()
+						}
+					} else {
+						noteUnwalked(child.generator)
 					}
+				} else {
+					noteUnwalked(child.generator)
 				}
 			}
 		}
@@ -501,12 +581,145 @@ extension DependencyTreeGenerator {
 				pendingSegment: endsLevel ? ([], [], []) : (pathSegment, pathTypes, declaredSegment),
 				pendingCycleReentries: endsLevel ? nil : cycleReentries,
 				childDeclarations: frameChildDeclarations,
+				subtreeKey: endsLevel && depth > 0 && parent?.endsLevel == true ? SubtreeKey(
+					builtType: instantiable?.concreteInstantiable,
+					property: generator.property,
+					fillSite: fill?.hole.site,
+					filledCase: fill?.filledCase,
+					isInFill: isInFill,
+					opensSendableFunction: opensSendableFunction,
+					childrenAreInSendableFunction: isInSendableFunction,
+					isOnPathToCalls: isOnPathToCalls,
+					callsAreInSendableFunction: callsAreInSendableFunction,
+					loopDeclaringType: loopDeclaring.instantiable.concreteInstantiable,
+					nearestDeclarations: bindsReceivesAgain ? nearest : [:],
+				) : nil,
+				sitesStart: sites.count,
+				metCallsStart: metCalls.count,
 			))
+			if let declaration = generator.declaration {
+				declarationsOnPath[declaration, default: 0] += 1
+				for index in frames.indices.dropLast() {
+					frames[index].builtInSubtree.insert(declaration)
+				}
+			}
 		}
 
-		/// Leaves the innermost scope.
+		/// The walk of the subtree of the innermost frame's declaration that an earlier path kept and this path can reuse.
+		private func reusableWalk() -> WalkedSubtree? {
+			guard let key = frames[frames.count - 1].subtreeKey, let walks = walkedSubtrees[key] else { return nil }
+			return walks.first { walk in
+				walk.closedOnAbove.allSatisfy { declarationsOnPath[$0, default: 0] > 0 }
+					&& walk.builtInSubtree.allSatisfy { declarationsOnPath[$0, default: 0] == 0 }
+			}
+		}
+
+		/// Adds, beneath the innermost frame, what `walk` kept of the subtree of a scope of its key: the frame's levels with this
+		/// path's parent, and the sites and calls beneath, with this path's.
+		private mutating func replay(_ walk: WalkedSubtree) {
+			let frameIndex = frames.count - 1
+			frames[frameIndex].isReplayed = true
+			let frame = frames[frameIndex]
+			for site in walk.sites {
+				frames[frameIndex].nextPosition = site.position + 1
+				let route = materializeRoute(throughFrameAt: frameIndex) + site.routeSuffix
+				let walkedSite = SeamSignature.Hole.Site(seamType: seam.concreteInstantiable, path: frame.pathToFrame + site.pathSuffix)
+				let caseIndex = builder.addCase(
+					ofSite: walkedSite,
+					ownerLevel: route.last ?? 0,
+					passedUp: nil,
+					isBuiltInSendableFunction: site.isBuiltInSendableFunction,
+					siteOpensSendableFunction: site.siteOpensSendableFunction,
+				)
+				sites.append(WalkedSite(site: walkedSite, caseIndex: caseIndex, route: SeamSignature.Places.Route(levels: route)))
+				siteRecords.append((frames.map { $0.nextPosition - 1 } + site.positionsBeneath, site.isBuiltInSendableFunction, site.siteOpensSendableFunction))
+			}
+			for call in walk.calls {
+				frames[frameIndex].nextPosition = call.position + 1
+				for index in frames.indices where frames[index].endsLevel {
+					_ = drafted(ofFrameAt: index)
+				}
+				metCalls.append(MetCall(
+					childIndexPath: frames[frameIndex].childIndexPath + call.childIndexPathSuffix,
+					frames: frames + call.framesBeneath,
+					call: call.call,
+					property: call.property,
+					calledSeamType: call.calledSeamType,
+					isInSendableFunction: call.isInSendableFunction,
+				))
+			}
+			mergeIntoAncestors(closedOnAbove: walk.closedOnAbove, builtInSubtree: walk.builtInSubtree)
+		}
+
+		/// Records in each frame above the innermost what a subtree beneath it closes on above itself and builds.
+		private mutating func mergeIntoAncestors(closedOnAbove: Set<ScopeGenerator.BuiltDeclaration>, builtInSubtree: Set<ScopeGenerator.BuiltDeclaration>) {
+			for index in frames.indices.dropLast() {
+				frames[index].builtInSubtree.formUnion(builtInSubtree)
+				frames[index].closedOnAbove.formUnion(closedOnAbove.filter { declaration in
+					// Closes above the frame at `index` where no frame from it down builds the declaration.
+					!frames[index...].contains { $0.generator.declaration == declaration }
+				})
+			}
+		}
+
+		/// Notes `child`, a child of the innermost scope the walk does not enter, where its tree holds a cycle-closing scope.
+		private mutating func noteUnwalked(_ child: ScopeGenerator) {
+			guard child.holdsCycleClosingScope else { return }
+			if child.closesPropertyCycle, let declaration = child.closedOnDeclaration {
+				// Closes on the nearest frame that builds its declaration: above every frame beneath that one.
+				let closedOnIndex = frames.lastIndex { $0.generator.declaration == declaration }
+				for index in frames.indices where closedOnIndex.map({ index > $0 }) ?? true {
+					frames[index].closedOnAbove.insert(declaration)
+				}
+			} else {
+				for index in frames.indices {
+					frames[index].holdsUnwalkedCycleClosing = true
+				}
+			}
+		}
+
+		/// Leaves the innermost scope, keeping the walk of its subtree where another path can reuse it.
 		private mutating func pop() {
-			frames.removeLast()
+			let frame = frames.removeLast()
+			if let declaration = frame.generator.declaration {
+				declarationsOnPath[declaration, default: 0] -= 1
+			}
+			guard let key = frame.subtreeKey, !frame.holdsUnwalkedCycleClosing else {
+				if frame.holdsUnwalkedCycleClosing, !frames.isEmpty {
+					frames[frames.count - 1].holdsUnwalkedCycleClosing = true
+				}
+				return
+			}
+			guard !frame.isReplayed else { return }
+			let prefixLevels = frames.count(where: \.endsLevel)
+			let walk = WalkedSubtree(
+				closedOnAbove: frame.closedOnAbove,
+				builtInSubtree: frame.builtInSubtree,
+				sites: sites.indices[frame.sitesStart...].map { index in
+					let record = siteRecords[index]
+					return WalkedSubtree.Site(
+						pathSuffix: Array(sites[index].site.path.dropFirst(frame.pathToFrame.count)),
+						position: record.positions[frames.count],
+						positionsBeneath: Array(record.positions.dropFirst(frames.count + 1)),
+						routeSuffix: Array(sites[index].route.levels.dropFirst(prefixLevels + 1)),
+						caseIndex: sites[index].caseIndex,
+						isBuiltInSendableFunction: record.isBuiltInSendableFunction,
+						siteOpensSendableFunction: record.siteOpensSendableFunction,
+					)
+				},
+				calls: metCalls[frame.metCallsStart...].map { met in
+					WalkedSubtree.Call(
+						childIndexPathSuffix: Array(met.childIndexPath.dropFirst(frame.childIndexPath.count)),
+						position: met.frames[frames.count].nextPosition - 1,
+						framesBeneath: Array(met.frames.dropFirst(frames.count + 1)),
+						call: met.call,
+						property: met.property,
+						calledSeamType: met.calledSeamType,
+						isInSendableFunction: met.isInSendableFunction,
+					)
+				},
+			)
+			walkedSubtrees[key, default: []].append(walk)
 		}
 
 		// MARK: Sites and levels
@@ -519,14 +732,16 @@ extension DependencyTreeGenerator {
 			guard owner.instantiable != nil else { return }
 			let route = materializeRoute(throughFrameAt: frames.count - 1)
 			let site = SeamSignature.Hole.Site(seamType: seam.concreteInstantiable, path: owner.pathToFrame + [property])
+			let isBuiltInSendableFunction = owner.childrenAreInSendableFunction || property.propertyType.isSendable
 			let caseIndex = builder.addCase(
 				ofSite: site,
 				ownerLevel: route.last ?? 0,
 				passedUp: nil,
-				isBuiltInSendableFunction: owner.childrenAreInSendableFunction || property.propertyType.isSendable,
+				isBuiltInSendableFunction: isBuiltInSendableFunction,
 				siteOpensSendableFunction: property.propertyType.isSendable,
 			)
 			sites.append(WalkedSite(site: site, caseIndex: caseIndex, route: SeamSignature.Places.Route(levels: route)))
+			siteRecords.append((frames.map { $0.nextPosition - 1 }, isBuiltInSendableFunction, property.propertyType.isSendable))
 		}
 
 		/// A call the walk met: the frames from the seam's root to the scope that declares it, that scope's position past the
