@@ -100,43 +100,43 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            analytics: (() -> any Analytics)? = nil,
 		            analyticsIsUnavailable: Bool = false,
-		            logger: DefaultLogger.SafeDIMockConfiguration = .init(),
-		            loggerIsUnavailable: Bool = false
+		            analytics: (() -> any Analytics)? = nil,
+		            loggerIsUnavailable: Bool = false,
+		            logger: DefaultLogger.SafeDIMockConfiguration = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                analytics: analytics,
 		                analyticsIsUnavailable: analyticsIsUnavailable,
-		                logger: logger,
-		                loggerIsUnavailable: loggerIsUnavailable
+		                analytics: analytics,
+		                loggerIsUnavailable: loggerIsUnavailable,
+		                logger: logger
 		            )
 		        }
 
-		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        var analyticsIsUnavailable: Bool { __safeDI_storage.analyticsIsUnavailable }
-		        var logger: DefaultLogger.SafeDIMockConfiguration { __safeDI_storage.logger }
+		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        var loggerIsUnavailable: Bool { __safeDI_storage.loggerIsUnavailable }
+		        var logger: DefaultLogger.SafeDIMockConfiguration { __safeDI_storage.logger }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                analytics: (() -> any Analytics)?,
 		                analyticsIsUnavailable: Bool,
-		                logger: DefaultLogger.SafeDIMockConfiguration,
-		                loggerIsUnavailable: Bool
+		                analytics: (() -> any Analytics)?,
+		                loggerIsUnavailable: Bool,
+		                logger: DefaultLogger.SafeDIMockConfiguration
 		            ) {
-		                self.analytics = analytics
 		                self.analyticsIsUnavailable = analyticsIsUnavailable
-		                self.logger = logger
+		                self.analytics = analytics
 		                self.loggerIsUnavailable = loggerIsUnavailable
+		                self.logger = logger
 		            }
 
-		            let analytics: (() -> any Analytics)?
 		            let analyticsIsUnavailable: Bool
-		            let logger: DefaultLogger.SafeDIMockConfiguration
+		            let analytics: (() -> any Analytics)?
 		            let loggerIsUnavailable: Bool
+		            let logger: DefaultLogger.SafeDIMockConfiguration
 		        }
 		    }
 
@@ -262,21 +262,21 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            analytics: (() -> any Analytics)? = nil,
 		            analyticsIsUnavailable: Bool = false,
+		            analytics: (() -> any Analytics)? = nil,
 		            footer: (((any Analytics)?) -> Footer)? = nil,
 		            _ safeDIBuilder: (((any Analytics)?, Footer) -> Child)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                analytics: analytics,
 		                analyticsIsUnavailable: analyticsIsUnavailable,
+		                analytics: analytics,
 		                footer: footer,
 		                safeDIBuilder: safeDIBuilder
 		            )
 		        }
 
-		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        var analyticsIsUnavailable: Bool { __safeDI_storage.analyticsIsUnavailable }
+		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        var footer: (((any Analytics)?) -> Footer)? { __safeDI_storage.footer }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: (((any Analytics)?, Footer) -> Child)? { __safeDI_storage.safeDIBuilder }
@@ -285,19 +285,19 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 
 		        private final class __safeDI_Storage {
 		            init(
-		                analytics: (() -> any Analytics)?,
 		                analyticsIsUnavailable: Bool,
+		                analytics: (() -> any Analytics)?,
 		                footer: (((any Analytics)?) -> Footer)?,
 		                safeDIBuilder: (((any Analytics)?, Footer) -> Child)?
 		            ) {
-		                self.analytics = analytics
 		                self.analyticsIsUnavailable = analyticsIsUnavailable
+		                self.analytics = analytics
 		                self.footer = footer
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            let analytics: (() -> any Analytics)?
 		            let analyticsIsUnavailable: Bool
+		            let analytics: (() -> any Analytics)?
 		            let footer: (((any Analytics)?) -> Footer)?
 		            let safeDIBuilder: (((any Analytics)?, Footer) -> Child)?
 		        }
@@ -421,8 +421,8 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class Screen: Instantiable {
 				    public init(analytics: (any Analytics)?, analyticsIsUnavailable: Flag) {
-				        self.analytics = analytics
 				        self.analyticsIsUnavailable = analyticsIsUnavailable
+				        self.analytics = analytics
 				    }
 				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
 				    @Instantiated let analyticsIsUnavailable: Flag
@@ -443,36 +443,36 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            analytics: (() -> any Analytics)? = nil,
 		            analyticsIsUnavailable_: Bool = false,
+		            analytics: (() -> any Analytics)? = nil,
 		            analyticsIsUnavailable: (() -> Flag)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                analytics: analytics,
 		                analyticsIsUnavailable_: analyticsIsUnavailable_,
+		                analytics: analytics,
 		                analyticsIsUnavailable: analyticsIsUnavailable
 		            )
 		        }
 
-		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        var analyticsIsUnavailable_: Bool { __safeDI_storage.analyticsIsUnavailable_ }
+		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        var analyticsIsUnavailable: (() -> Flag)? { __safeDI_storage.analyticsIsUnavailable }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                analytics: (() -> any Analytics)?,
 		                analyticsIsUnavailable_: Bool,
+		                analytics: (() -> any Analytics)?,
 		                analyticsIsUnavailable: (() -> Flag)?
 		            ) {
-		                self.analytics = analytics
 		                self.analyticsIsUnavailable_ = analyticsIsUnavailable_
+		                self.analytics = analytics
 		                self.analyticsIsUnavailable = analyticsIsUnavailable
 		            }
 
-		            let analytics: (() -> any Analytics)?
 		            let analyticsIsUnavailable_: Bool
+		            let analytics: (() -> any Analytics)?
 		            let analyticsIsUnavailable: (() -> Flag)?
 		        }
 		    }
@@ -528,31 +528,31 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            `default`: (() -> any Analytics)? = nil,
-		            defaultIsUnavailable: Bool = false
+		            defaultIsUnavailable: Bool = false,
+		            `default`: (() -> any Analytics)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                default: `default`,
-		                defaultIsUnavailable: defaultIsUnavailable
+		                defaultIsUnavailable: defaultIsUnavailable,
+		                default: `default`
 		            )
 		        }
 
-		        var `default`: (() -> any Analytics)? { __safeDI_storage.`default` }
 		        var defaultIsUnavailable: Bool { __safeDI_storage.defaultIsUnavailable }
+		        var `default`: (() -> any Analytics)? { __safeDI_storage.`default` }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                `default`: (() -> any Analytics)?,
-		                defaultIsUnavailable: Bool
+		                defaultIsUnavailable: Bool,
+		                `default`: (() -> any Analytics)?
 		            ) {
-		                self.`default` = `default`
 		                self.defaultIsUnavailable = defaultIsUnavailable
+		                self.`default` = `default`
 		            }
 
-		            let `default`: (() -> any Analytics)?
 		            let defaultIsUnavailable: Bool
+		            let `default`: (() -> any Analytics)?
 		        }
 		    }
 

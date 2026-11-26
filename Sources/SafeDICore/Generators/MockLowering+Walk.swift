@@ -1598,11 +1598,12 @@ extension MockLowering {
 				: OverridesField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendability: requiresSendable ? .always : .never)
 		}
 
-		/// The members of the enclosing overrides for the node: `overridesField`, then the entry that builds it as `nil` where
-		/// it has one.
+		/// The members of the enclosing overrides for the node: the entry that builds it as `nil` where it has one, then
+		/// `overridesField`. The entry, a `Bool`, comes first, so an unlabeled trailing closure that Swift 5 matches to
+		/// the last parameter still reaches the override.
 		var overridesFields: [OverridesField] {
 			guard let unavailableEntryField else { return [overridesField] }
-			return [overridesField, unavailableEntryField]
+			return [unavailableEntryField, overridesField]
 		}
 
 		/// The entry that builds the node as `nil`, where it has one: a `Bool`, which is `Sendable`.
@@ -2111,9 +2112,10 @@ extension MockLowering.ConfigurationRecord {
 				switch child {
 				case let .built(childNode):
 					let source = ChildFieldSource.built(bindingName: childNode.bindingName, hasConfiguration: childNode.hasConfiguration, requiresSendable: childNode.requiresSendable, concreteType: childNode.instantiable.concreteInstantiable, builderParameters: MockLowering.BuilderParameters(of: childNode.instantiable, usesMockInitializer: childNode.usesMockInitializer), propertyType: childNode.property.typeDescription)
-					// A node built only if available, then the entry that builds it as `nil`, a `Bool` in either form.
+					// The entry that builds a node built only if available as `nil`, a `Bool` in either form, then the node
+					// (`ConstantNode.overridesFields`).
 					guard let field = childNode.unavailableEntryField else { return [source] }
-					return [source, .spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: .init(typeSource: field.typeSource, defaultValue: field.defaultValue, configuredTypeName: nil)))]
+					return [.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: .init(typeSource: field.typeSource, defaultValue: field.defaultValue, configuredTypeName: nil))), source]
 				case .alias:
 					return []
 				// A node that closes a cycle is configured by the configuration of the type it repeats.

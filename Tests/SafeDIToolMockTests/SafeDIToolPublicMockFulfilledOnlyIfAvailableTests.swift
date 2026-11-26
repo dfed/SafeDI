@@ -62,36 +62,36 @@ struct SafeDIToolPublicMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
-		            analytics: (() -> any Analytics)? = nil,
 		            analyticsIsUnavailable: Bool = false,
+		            analytics: (() -> any Analytics)? = nil,
 		            panel: __safeDI_Feature_Panel_MockConfiguration = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                analytics: analytics,
 		                analyticsIsUnavailable: analyticsIsUnavailable,
+		                analytics: analytics,
 		                panel: panel
 		            )
 		        }
 
-		        public var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        public var analyticsIsUnavailable: Bool { __safeDI_storage.analyticsIsUnavailable }
+		        public var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		        public var panel: __safeDI_Feature_Panel_MockConfiguration { __safeDI_storage.panel }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                analytics: (() -> any Analytics)?,
 		                analyticsIsUnavailable: Bool,
+		                analytics: (() -> any Analytics)?,
 		                panel: __safeDI_Feature_Panel_MockConfiguration
 		            ) {
-		                self.analytics = analytics
 		                self.analyticsIsUnavailable = analyticsIsUnavailable
+		                self.analytics = analytics
 		                self.panel = panel
 		            }
 
-		            let analytics: (() -> any Analytics)?
 		            let analyticsIsUnavailable: Bool
+		            let analytics: (() -> any Analytics)?
 		            let panel: __safeDI_Feature_Panel_MockConfiguration
 		        }
 		    }
@@ -126,33 +126,33 @@ struct SafeDIToolPublicMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		/// Configuration for how `Panel` is constructed within the public mock trees of module `Feature`.
 		nonisolated public struct __safeDI_Feature_Panel_MockConfiguration {
 		    public init(
-		        analytics: (() -> any Analytics)? = nil,
-		        analyticsIsUnavailable: Bool = false
+		        analyticsIsUnavailable: Bool = false,
+		        analytics: (() -> any Analytics)? = nil
 		    ) {
 		        __safeDI_storage = __safeDI_Storage(
-		            analytics: analytics,
 		            analyticsIsUnavailable: analyticsIsUnavailable,
+		            analytics: analytics,
 		            leaf: nil,
 		            safeDIBuilder: nil
 		        )
 		    }
 
 		    init(
-		        analytics: (() -> any Analytics)? = nil,
 		        analyticsIsUnavailable: Bool = false,
+		        analytics: (() -> any Analytics)? = nil,
 		        leaf: (((any Analytics)?) -> Leaf)? = nil,
 		        _ safeDIBuilder: (((any Analytics)?, Leaf) -> Panel)? = nil
 		    ) {
 		        __safeDI_storage = __safeDI_Storage(
-		            analytics: analytics,
 		            analyticsIsUnavailable: analyticsIsUnavailable,
+		            analytics: analytics,
 		            leaf: leaf,
 		            safeDIBuilder: safeDIBuilder
 		        )
 		    }
 
-		    public var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		    public var analyticsIsUnavailable: Bool { __safeDI_storage.analyticsIsUnavailable }
+		    public var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
 		    var leaf: (((any Analytics)?) -> Leaf)? { __safeDI_storage.leaf }
 		    /// Overrides how `Panel` is constructed. Parameters match the type’s initializer or custom mock method.
 		    var safeDIBuilder: (((any Analytics)?, Leaf) -> Panel)? { __safeDI_storage.safeDIBuilder }
@@ -161,19 +161,19 @@ struct SafeDIToolPublicMockFulfilledOnlyIfAvailableTests: ~Copyable {
 
 		    private final class __safeDI_Storage {
 		        init(
-		            analytics: (() -> any Analytics)?,
 		            analyticsIsUnavailable: Bool,
+		            analytics: (() -> any Analytics)?,
 		            leaf: (((any Analytics)?) -> Leaf)?,
 		            safeDIBuilder: (((any Analytics)?, Leaf) -> Panel)?
 		        ) {
-		            self.analytics = analytics
 		            self.analyticsIsUnavailable = analyticsIsUnavailable
+		            self.analytics = analytics
 		            self.leaf = leaf
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let analytics: (() -> any Analytics)?
 		        let analyticsIsUnavailable: Bool
+		        let analytics: (() -> any Analytics)?
 		        let leaf: (((any Analytics)?) -> Leaf)?
 		        let safeDIBuilder: (((any Analytics)?, Leaf) -> Panel)?
 		    }
@@ -362,19 +362,19 @@ struct SafeDIToolPublicMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		/// Configuration for how `Child` is constructed within the public mock trees of this module.
 		nonisolated public struct __safeDI_Child_MockConfiguration {
 		    public init(
-		        analytics: (@Sendable () -> any Analytics)? = nil,
 		        analyticsIsUnavailable: Bool = false,
+		        analytics: (@Sendable () -> any Analytics)? = nil,
 		        _ safeDIBuilder: (@Sendable ((any Analytics)?) -> Child)? = nil
 		    ) {
 		        __safeDI_storage = __safeDI_Storage(
-		            analytics: analytics,
 		            analyticsIsUnavailable: analyticsIsUnavailable,
+		            analytics: analytics,
 		            safeDIBuilder: safeDIBuilder
 		        )
 		    }
 
-		    public var analytics: (@Sendable () -> any Analytics)? { __safeDI_storage.analytics }
 		    public var analyticsIsUnavailable: Bool { __safeDI_storage.analyticsIsUnavailable }
+		    public var analytics: (@Sendable () -> any Analytics)? { __safeDI_storage.analytics }
 		    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
 		    public var safeDIBuilder: (@Sendable ((any Analytics)?) -> Child)? { __safeDI_storage.safeDIBuilder }
 
@@ -382,17 +382,17 @@ struct SafeDIToolPublicMockFulfilledOnlyIfAvailableTests: ~Copyable {
 
 		    private final class __safeDI_Storage {
 		        init(
-		            analytics: (@Sendable () -> any Analytics)?,
 		            analyticsIsUnavailable: Bool,
+		            analytics: (@Sendable () -> any Analytics)?,
 		            safeDIBuilder: (@Sendable ((any Analytics)?) -> Child)?
 		        ) {
-		            self.analytics = analytics
 		            self.analyticsIsUnavailable = analyticsIsUnavailable
+		            self.analytics = analytics
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let analytics: (@Sendable () -> any Analytics)?
 		        let analyticsIsUnavailable: Bool
+		        let analytics: (@Sendable () -> any Analytics)?
 		        let safeDIBuilder: (@Sendable ((any Analytics)?) -> Child)?
 		    }
 		}

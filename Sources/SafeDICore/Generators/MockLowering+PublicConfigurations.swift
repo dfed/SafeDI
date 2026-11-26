@@ -363,12 +363,13 @@ extension MockLowering.PublicConstructionRecord {
 }
 
 extension MockLowering.PublicConstructionRecord.ChildMember {
-	/// The members that configure `child`: the one `init(of:)` makes, then, for a node its parent's type instantiates
-	/// only if available, the entry that builds it as `nil`, as an internal mock's configuration holds them.
+	/// The members that configure `child`: for a node its parent's type instantiates only if available, the entry that
+	/// builds it as `nil`, then the one `init(of:)` makes, as an internal mock's configuration holds them
+	/// (`ConstantNode.overridesFields`).
 	static func members(of child: MockLowering.TreeNode) -> [Self] {
 		guard let member = Self(of: child) else { return [] }
 		guard case let .built(node) = child, let unavailableEntryName = node.unavailableEntryName else { return [member] }
-		return [member, Self(name: unavailableEntryName, concreteType: member.concreteType, source: .unavailableEntry)]
+		return [Self(name: unavailableEntryName, concreteType: member.concreteType, source: .unavailableEntry), member]
 	}
 
 	/// The member that configures `child`, or `nil` for an alias, which the overrides hold no member of.
