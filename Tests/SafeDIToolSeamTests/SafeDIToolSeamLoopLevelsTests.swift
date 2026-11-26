@@ -234,33 +234,33 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
-			        func __safeDI_screenABuilder(id: Int) -> ScreenA {
-			            let screenBBuilder = Instantiator<ScreenB> {
-			                __safeDI_screenBBuilder(id: $0)
-			            }
-			            let api: any Api = DefaultApi()
-			            return ScreenA(id: id, api: api, screenBBuilder: screenBBuilder)
-			        }
-			        func __safeDI_screenBBuilder(id: Int) -> ScreenB {
-			            let screenCBuilder = Instantiator<ScreenC> {
-			                __safeDI_screenCBuilder(id: $0)
-			            }
-			            let api: any Api = DefaultApi()
-			            return ScreenB(id: id, api: api, screenCBuilder: screenCBuilder)
-			        }
-			        func __safeDI_screenCBuilder(id: Int) -> ScreenC {
-			            let screenABuilder = Instantiator<ScreenA> {
-			                __safeDI_screenABuilder(id: $0)
-			            }
-			            let api: any Api = DefaultApi()
-			            return ScreenC(id: id, api: api, screenABuilder: screenABuilder)
-			        }
 			        func __safeDI_home() -> Home {
+			            func __safeDI_screenABuilder(id: Int) -> ScreenA {
+			                let screenBBuilder = Instantiator<ScreenB> {
+			                    __safeDI_screenBBuilder(id: $0)
+			                }
+			                let api: any Api = DefaultApi()
+			                return ScreenA(id: id, api: api, screenBBuilder: screenBBuilder)
+			            }
 			            let screenABuilder = Instantiator<ScreenA> {
 			                __safeDI_screenABuilder(id: $0)
 			            }
+			            func __safeDI_screenBBuilder(id: Int) -> ScreenB {
+			                let screenCBuilder = Instantiator<ScreenC> {
+			                    __safeDI_screenCBuilder(id: $0)
+			                }
+			                let api: any Api = DefaultApi()
+			                return ScreenB(id: id, api: api, screenCBuilder: screenCBuilder)
+			            }
 			            let screenBBuilder = Instantiator<ScreenB> {
 			                __safeDI_screenBBuilder(id: $0)
+			            }
+			            func __safeDI_screenCBuilder(id: Int) -> ScreenC {
+			                let screenABuilder = Instantiator<ScreenA> {
+			                    __safeDI_screenABuilder(id: $0)
+			                }
+			                let api: any Api = DefaultApi()
+			                return ScreenC(id: id, api: api, screenABuilder: screenABuilder)
 			            }
 			            let screenCBuilder = Instantiator<ScreenC> {
 			                __safeDI_screenCBuilder(id: $0)
