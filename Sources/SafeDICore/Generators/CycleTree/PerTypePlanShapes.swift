@@ -51,18 +51,17 @@ extension DependencyTreeGenerator {
 		// Every node is a scope the walk met, in the graph's order.
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
 		var reason: RootTreeChoiceObservation.PerPathReason?
-		var formsByLabel = [String: Property]()
 		for (index, scope) in scopes.enumerated() where reason == nil {
 			if scope.instantiable.generatesDependencyTree {
 				reason = .buildsSeam
 			} else if scope.instantiable.initializer?.typesDeclaredEscaping.isEmpty == false {
 				reason = .declaresEscapingName
 			}
+			// One label may be declared and received in several forms across the tree: each read takes the form its nearest
+			// declaration provides, on every path, or validation rejects the tree, and a function's body is keyed by the
+			// declarations that answer it, so no body reads a form another path's declaration gives.
 			for dependency in scope.instantiable.dependencies where reason == nil {
 				reason = Self.shapeOutsidePerTypePlan(of: dependency)
-				if reason == nil, let otherForm = formsByLabel.updateValue(dependency.property, forKey: dependency.property.label), otherForm != dependency.property {
-					reason = .holdsLabelInSeveralForms
-				}
 			}
 			var edge = 0
 			// The graph's edges are these properties, in this order.

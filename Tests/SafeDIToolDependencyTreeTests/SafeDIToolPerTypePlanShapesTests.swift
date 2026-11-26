@@ -380,8 +380,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTreeDeclaresLabelInTwoForms() async throws {
-		// The root and a screen declare one label with two types.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTreeDeclaresLabelInTwoForms() async throws {
+		// The root and a screen declare one label with two types, which nothing receives.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let leaf: Leaf
@@ -403,7 +403,114 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .holdsLabelInSeveralForms])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenEachCycleReceivesLabelInFormOfItsOwn() async throws {
+		// Two features, each a cycle, declare `state` with a type of their own, which their screens receive; each screen
+		// declares `model` with a type of its own, which a panel beneath it receives.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let f0Builder: Instantiator<F0Entry>
+		    @Instantiated let f1Builder: Instantiator<F1Entry>
+		    public init(f0Builder: Instantiator<F0Entry>, f1Builder: Instantiator<F1Entry>) { self.f0Builder = f0Builder; self.f1Builder = f1Builder }
+		}
+
+		@Instantiable public final class F0Entry: Instantiable {
+		    @Instantiated let state: F0State
+		    @Instantiated let screenBuilder: Instantiator<F0Screen>
+		    public init(state: F0State, screenBuilder: Instantiator<F0Screen>) { self.state = state; self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class F0Screen: Instantiable {
+		    @Received let state: F0State
+		    @Instantiated let model: F0Model
+		    @Instantiated let panel: F0Panel
+		    @Instantiated let entryBuilder: Instantiator<F0Entry>
+		    public init(state: F0State, model: F0Model, panel: F0Panel, entryBuilder: Instantiator<F0Entry>) { self.state = state; self.model = model; self.panel = panel; self.entryBuilder = entryBuilder }
+		}
+
+		@Instantiable public final class F0Panel: Instantiable {
+		    @Received let model: F0Model
+		    public init(model: F0Model) { self.model = model }
+		}
+
+		@Instantiable public final class F1Entry: Instantiable {
+		    @Instantiated let state: F1State
+		    @Instantiated let screenBuilder: Instantiator<F1Screen>
+		    public init(state: F1State, screenBuilder: Instantiator<F1Screen>) { self.state = state; self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class F1Screen: Instantiable {
+		    @Received let state: F1State
+		    @Instantiated let model: F1Model
+		    @Instantiated let panel: F1Panel
+		    @Instantiated let entryBuilder: Instantiator<F1Entry>
+		    public init(state: F1State, model: F1Model, panel: F1Panel, entryBuilder: Instantiator<F1Entry>) { self.state = state; self.model = model; self.panel = panel; self.entryBuilder = entryBuilder }
+		}
+
+		@Instantiable public final class F1Panel: Instantiable {
+		    @Received let model: F1Model
+		    public init(model: F1Model) { self.model = model }
+		}
+
+		@Instantiable public final class F0State: Instantiable { public init() {} }
+		@Instantiable public final class F1State: Instantiable { public init() {} }
+		@Instantiable public final class F0Model: Instantiable { public init() {} }
+		@Instantiable public final class F1Model: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenReceive_whenScreenOnCycleReceivesLabelAnotherPathDeclaresInOtherForm() async {
+		// The plan keeps no check of a label's forms: a screen's read takes its nearest declaration's form on every path,
+		// so `S1`, reached beneath the root's `state` and beneath `S0`'s, is rejected before any plan is built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["S1.swift"]):2:5: error: @Received property `state: State` is hidden in chain: Root -> Instantiator<S1> -> Instantiator<S0> -> S1. `S0` declares `state: Instantiator<State>` with the same label, so the types below `S0` receive `state: Instantiator<State>` instead. Give `state: Instantiator<State>` on `S0` a different label to fix.
+				\(fixtures["S0.swift"]):2:5: note: `state: Instantiator<State>` is declared here
+				"""
+			},
+		) {
+			try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: [
+						"""
+						@Instantiable(isRoot: true) public final class Root: Instantiable {
+						    @Instantiated let state: State
+						    @Instantiated let s1Builder: Instantiator<S1>
+						    public init(state: State, s1Builder: Instantiator<S1>) { self.state = state; self.s1Builder = s1Builder }
+						}
+						""",
+						"""
+						@Instantiable public final class S0: Instantiable {
+						    @Instantiated let state: Instantiator<State>
+						    @Instantiated let s1Builder: Instantiator<S1>
+						    public init(state: Instantiator<State>, s1Builder: Instantiator<S1>) { self.state = state; self.s1Builder = s1Builder }
+						}
+						""",
+						"""
+						@Instantiable public final class S1: Instantiable {
+						    @Received let state: State
+						    @Instantiated let s0Builder: Instantiator<S0>
+						    public init(state: State, s0Builder: Instantiator<S0>) { self.state = state; self.s0Builder = s0Builder }
+						}
+						""",
+						"""
+						@Instantiable public final class State: Instantiable { public init() {} }
+						""",
+					],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
 	}
 
 	@Test

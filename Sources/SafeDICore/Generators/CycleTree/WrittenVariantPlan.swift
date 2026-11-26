@@ -45,8 +45,6 @@ public enum RootTreeChoiceObservation {
 		case erasesCycleMember
 		/// An initializer of the root's tree declares a parameter `@escaping` by a name.
 		case declaresEscapingName
-		/// The types of the root's tree receive or declare one label in more than one form.
-		case holdsLabelInSeveralForms
 		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
 		case receivesInstantiator
 		/// The root's tree builds a type whose dependency tree its own module generates.
