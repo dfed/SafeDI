@@ -68,6 +68,90 @@ struct SafeDIToolMockNodeSharingTests {
 		#expect(Self.fieldNames(of: argument) == Self.fieldNames(of: MockLowering.PassedArgumentShape(argument, value: true)))
 	}
 
+	@Test
+	func sharedRecordKey_differs_whenTwoPlacesDifferInOneField() throws {
+		let type = TypeDescription.simple(name: "Screen", generics: [])
+		let otherType = TypeDescription.simple(name: "Panel", generics: [])
+		let property = Property(label: "screen", typeDescription: type)
+		let otherProperty = Property(label: "panel", typeDescription: otherType)
+		let read = PlaceRead(argumentLabel: "panel", label: "panel", property: otherProperty, source: .binding(label: "panel"))
+		let child = GeneratedCode.place(PlacePlan(code: .text(""), record: .alias(AliasPlaceRecord(property: otherProperty, fulfillingProperty: nil, text: ""))))
+		func record(
+			property: Property = property,
+			isErased: Bool = false,
+			concreteType: TypeDescription = type,
+			isExtension: Bool = false,
+			target: ConstructionTarget = .initializer(type),
+			arguments: [PlaceRead] = [],
+			forwardedProperties: [Property] = [],
+			cycleParameters: [Property] = [],
+			callCycleArguments: [PlaceRead] = [],
+			functionName: String = "__safeDI_screen",
+			isSendable: Bool = false,
+			typesDeclaredEscaping: Set<TypeDescription> = [],
+			lineEnd: String = "",
+			hasFunction: Bool = true,
+			children: [GeneratedCode] = [],
+			changingSharingFields change: (inout BuiltPlaceRecord) -> Void = { _ in },
+		) -> BuiltPlaceRecord {
+			var record = BuiltPlaceRecord(
+				property: property,
+				isErased: isErased,
+				concreteType: concreteType,
+				isExtension: isExtension,
+				target: target,
+				arguments: arguments,
+				forwardedProperties: forwardedProperties,
+				cycleParameters: cycleParameters,
+				callCycleArguments: callCycleArguments,
+				functionName: functionName,
+				isSendable: isSendable,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lineEnd: lineEnd,
+				hasFunction: hasFunction,
+				children: children,
+				node: PlanNode(),
+			)
+			change(&record)
+			return record
+		}
+		// One record per field of the key, each differing from the first in that field alone.
+		let recordsByChangedField = [
+			"property": record(property: otherProperty),
+			"isErased": record(isErased: true),
+			"concreteType": record(concreteType: otherType),
+			"isExtension": record(isExtension: true),
+			"target": record(target: .instantiate(type)),
+			"arguments": record(arguments: [read]),
+			"forwardedProperties": record(forwardedProperties: [otherProperty]),
+			"cycleParameters": record(cycleParameters: [otherProperty]),
+			"callCycleArguments": record(callCycleArguments: [read]),
+			"functionName": record(functionName: "__safeDI_screen_Screen"),
+			"isSendable": record(isSendable: true),
+			"typesDeclaredEscaping": record(typesDeclaredEscaping: [otherType]),
+			"lineEnd": record(lineEnd: " // comment"),
+			"hasFunction": record(hasFunction: false),
+			"children": record(children: [child]),
+			"passedArguments": record(changingSharingFields: {
+				$0.passedArguments = [PassedArgument(parameterName: "panel", type: otherType, value: .passedArgument("panel"), staysOutsideSendableFunctions: false)]
+			}),
+			"constructionValue": record(changingSharingFields: {
+				$0.constructionValue = ConstructionValue(value: .passedArgument("panel"), resultWrapper: nil)
+			}),
+			"alternatives": record(changingSharingFields: {
+				$0.alternatives = [ConstructionAlternative(closure: .passedArgument("panel"), bindingName: nil, requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
+			}),
+			"argumentValues": record(changingSharingFields: { $0.argumentValues = [0: .passedArgument("panel")] }),
+			"functionReturnType": record(changingSharingFields: { $0.functionReturnType = otherType }),
+		]
+		let key = try #require(MockLowering.SharedRecordKey(record()))
+		#expect(try #require(MockLowering.SharedRecordKey(record())) == key)
+		#expect(Set(recordsByChangedField.keys) == Self.fieldNames(of: key.record))
+		for (field, changed) in recordsByChangedField {
+			#expect(try #require(MockLowering.SharedRecordKey(changed)) != key, "The key ignores `\(field)`.")
+		}
+	}
+
 	private static func fieldNames(of value: Any) -> Set<String> {
 		Set(Mirror(reflecting: value).children.compactMap(\.label))
 	}
