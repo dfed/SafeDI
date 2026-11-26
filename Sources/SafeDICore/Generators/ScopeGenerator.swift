@@ -7164,7 +7164,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call, but where the payloads or the member calls are places of their own
 	/// (`separatesValuesBindings`, `separatesMemberCalls`).
-	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false, separatesMemberCalls: Bool = false) -> Bool {
+	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false, separatesMemberCalls: Bool = false, isBuiltByFillPlanned: Bool = false) -> Bool {
 		(valuesBindingLines.isEmpty || separatesValuesBindings)
 			&& builderFunctionNames.loopValuesBindingLines == nil
 			&& builderFunctionNames.loopLevelsName == nil
@@ -7172,7 +7172,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			&& builderFunctionNames.loopMemberDeclarations.isEmpty
 			&& reboundProperties.isEmpty
 			&& (memberCallLines.isEmpty || separatesMemberCalls)
-			&& !isBuiltByFill
+			&& (!isBuiltByFill || isBuiltByFillPlanned)
 			&& !fillReturnsWrapperBuilder
 			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
 	}
@@ -7215,7 +7215,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					codeGeneration: codeGeneration,
 					unavailableProperties: body.orderedChildren[index].unavailableProperties,
 					propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
-					builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
+					builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body, fillPlaceBindings: fillPlaceBindings),
 					leadingWhitespace: leadingMemberWhitespace,
 					fillPlaceBindings: fillPlaceBindings,
 				)
@@ -7253,7 +7253,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				generator: body.orderedChildren[index].generator,
 				unavailableProperties: body.orderedChildren[index].unavailableProperties,
 				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
-				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
+				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body, fillPlaceBindings: fillPlaceBindings),
 			)
 		}
 		for childCode in try await Self.concurrentChildCode(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings) {
@@ -7565,11 +7565,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The names the code of the child at `index` among `body`'s ordered children refers to builder functions by.
 	@inline(never)
-	private func builderFunctionNamesOfChild(at index: Int, in body: BodyChildren) -> BuilderFunctionNames {
+	private func builderFunctionNamesOfChild(at index: Int, in body: BodyChildren, fillPlaceBindings: FillPlaceBindings) -> BuilderFunctionNames {
 		let child = body.orderedChildren[index]
 		var builderFunctionNames = body.childBuilderFunctionNames?[index].flatMap(\.self)
 			?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
 		builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(body.overrideFillKeys.contains) ?? false
+		// A fill a dispatcher's case may hold in place keeps no function, so it shares none (`append(_:ofChildAt:to:…)`).
+		if seamCall != nil,
+		   let key = child.generator.fillKey,
+		   !body.fillInlining.mayHold(key) || body.fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
+		{
+			builderFunctionNames.fillSharesBody = child.generator.sharesFillBody(handedParameterFields: body.parametersByKey[key] ?? [])
+		}
 		if !body.loopMemberDeclarationsByLoop.isEmpty, let loop = receivedBuilderLoops.loopByChildIndex[child.index] {
 			builderFunctionNames.loopMemberDeclarations = body.loopMemberDeclarationsByLoop[loop, default: [:]]
 			builderFunctionNames.receivedFunctionName = body.receivedFunctionNameByIndex[index]
@@ -7608,6 +7615,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// Whether this fill, of a seam call, reads nothing of the code around the call but the fields it binds and
+	/// `handedParameterFields`, what its call hands it beside its struct: no value it is not handed, which the caller's
+	/// declaration gives; no function a cycle beneath it closes on outside it; no struct of a level of an enclosing call or
+	/// seam, nor a member of the seam's builder, which a site inside it reads; and no builder it passes up. What it names of
+	/// an enclosing call, the fills and dispatchers a call inside it re-enters, it calls by name. Such a fill's text is a
+	/// function of what it is handed alone, so the root may declare it once for every call (`fillRootFunction`), and the
+	/// function its bindings call once for every fill that writes the same text (`generateFillCode`).
+	nonisolated func sharesFillBody(handedParameterFields: [SeamSignature.Hole.Field]) -> Bool {
+		guard case .fill = scopeData,
+		      !passesUpBuilder,
+		      !containsBuildSite,
+		      cycleClosedOnDeclarations.isEmpty,
+		      fillCallerReads.innerScopeParameters.isEmpty
+		else { return false }
+		let handedLabels = Set((fillBoundFields + handedParameterFields).map(\.property.label))
+		return receivedProperties.allSatisfy { handedLabels.contains($0.label) }
+	}
+
 	/// The record of `fill`, a fill of this scope's seam call whose function is `code` indented by `leadingMemberWhitespace`,
 	/// where the root may declare it once for every call (`RootFunctionHoisting`), or `nil` where its text reads anything of
 	/// the code around the call: a value it is not handed, which the caller's declaration gives; the function a cycle
@@ -7618,13 +7643,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard seamCall != nil,
 		      let key = fill.fillKey,
 		      case let .fill(hole, name) = fill.scopeData,
-		      !fill.passesUpBuilder,
-		      !fill.containsBuildSite,
-		      fill.cycleClosedOnDeclarations.isEmpty,
-		      fill.fillCallerReads.innerScopeParameters.isEmpty
+		      fill.sharesFillBody(handedParameterFields: body.parametersByKey[key] ?? [])
 		else { return nil }
-		let handedLabels = Set((fill.fillBoundFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
-		guard fill.receivedProperties.allSatisfy({ handedLabels.contains($0.label) }) else { return nil }
 		var fillCode = code
 		if !leadingMemberWhitespace.isEmpty, case let .indented(inner, indentation) = code.node, indentation == leadingMemberWhitespace {
 			fillCode = inner
@@ -8032,6 +8052,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a fill an override closure of its call is handed a function over (`publicMockOverrideBuilders`), whether its
 		/// function takes each field of its case's payload it reads by itself, never the payload, which no other module can make.
 		var fillTakesPayloadFields = false
+		/// For a fill of a seam call that keeps its function and reads nothing of the code around the call but what it is handed
+		/// (`ScopeGenerator.sharesFillBody(handedParameterFields:)`), whether its function calls a function of what it binds,
+		/// named after that function's text, which the root declares once for every fill that writes the same text.
+		var fillSharesBody = false
 		/// For a member of a loop of builders, the declarations with which the members of its loop are wrapped again, by
 		/// their property: its builder function rebinds those its tree receives, and its `__safeDI_<label>_received`
 		/// function those it passes as parameters a lazy cycle needs (see `ReceivedBuilderLoops`).
@@ -8341,6 +8365,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				functionName: functionName,
 				isSendable: builderFunctionNames.fillIsSendable,
 				takesPayloadFields: builderFunctionNames.fillTakesPayloadFields,
+				sharesFillBody: builderFunctionNames.fillSharesBody,
 				codeGeneration: codeGeneration,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -8752,7 +8777,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let inlinePlaceBuilder = fillPlaceBindings.holeBuildersByInlinePlace[ObjectIdentifier(self)]
 		// What the type key reads of the place, where it plans it: a place built by its own construction, with nothing but
 		// its children in its function's body.
-		let isBuiltPlacePlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls)
+		let isBuiltPlacePlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls, isBuiltByFillPlanned: property.propertyType == .constant)
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings)
 		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
 			guard isBuiltPlacePlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
@@ -9523,12 +9548,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		functionName: String,
 		isSendable: Bool,
 		takesPayloadFields: Bool,
+		sharesFillBody: Bool,
 		codeGeneration: CodeGeneration,
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> GeneratedCode {
 		guard let child = propertiesToGenerate.first, let property = child.property else { return .empty }
+		let sharesBody = sharesFillBody
 		// A field is bound where the tree reads it, or where a site inside the fill – one of the seam whose tree the fill
 		// is generated in – carries this binding in its own struct, unless the fill reads it from the caller's scope: one bound
 		// from a deferred parameter (see `fillStructBoundLabels`).
@@ -9554,9 +9581,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		// A caller's own value the fill reads from its mock root's binding is bound under its label from the name the root binds
 		// it under, where that is not the label.
-		var body = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { GeneratedCode.text("\(indent)let \($0.label) = \($0.rootBindingName)") }
+		let rebindings = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { GeneratedCode.text("\(indent)let \($0.label) = \($0.rootBindingName)") }
 		// The fill's tree keeps its plan, so the root functions it declares stay visible to the root (`RootFunctionHoisting`).
-		body.append(.lines(childCode))
+		var body = rebindings + [.lines(childCode)]
+		// The statements of the function a fill that shares its body calls, declaring `outerDeclarations`, its parameters: the
+		// type key's layout of the tree where it lays the tree out, with what follows the tree, `trailing`.
+		func sharedBodyStatements(outerDeclarations: [Property], trailing: [GeneratedCode]) -> [GeneratedCode] {
+			guard rebindings.isEmpty,
+			      let statements = TypeKeyBody.statements(ofFillBody: childCode, outerDeclarations: outerDeclarations, indentation: indent)
+			else { return rebindings + [.lines(childCode)] + trailing }
+			return statements + trailing
+		}
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
 			// builder the wrapper keeps, spelled as the wrapper's own `Builder`: a function type a value it forwards could not
@@ -9582,16 +9617,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return "\(field.property.label.spelledAsArgumentLabel): \(type.asSource)"
 			}
 			let builderType = TypeDescription.nested(name: Dependency.wrapperBuilderTypeName, parentType: hole.property.typeDescription.unwrapped, generics: [])
+			guard !sharesBody else {
+				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: fillMemberParameterFields.map(\.property.label), returnType: builderType.asSource, body: sharedBodyStatements(outerDeclarations: fillMemberParameterFields.map(\.property), trailing: []), isSendable: isSendable)
+			}
 			return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {", body: body, isSendable: isSendable)
 		}
 		// A wrapper's scope returns what its builder function builds, and a constant's has bound it.
-		if property.propertyType.isConstant {
-			body.append(.text(indent + "return \(property.label)"))
-		}
+		let returnStatement: [GeneratedCode] = property.propertyType.isConstant ? [.text(indent + "return \(property.label)")] : []
+		body += returnStatement
 		guard !takesPayloadFields else {
 			// An override closure of the call calls the fill with the values the call passes the called mock, and a level
 			// function's member with its payload's, each by itself: no other module can make the payload.
-			let parameters = fillMemberParameterFields(takingPayloadFields: true).map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+			let payloadFields = fillMemberParameterFields(takingPayloadFields: true)
+			let parameters = payloadFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+			guard !sharesBody else {
+				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: payloadFields.map(\.property.label), returnType: hole.builtType.asSource, body: sharedBodyStatements(outerDeclarations: payloadFields.map(\.property), trailing: returnStatement), isSendable: isSendable)
+			}
 			return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {", body: body, isSendable: isSendable)
 		}
 		// A fill of a place nested by type binds what its case's payload holds, and takes what a type further out binds.
@@ -9606,7 +9647,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			false
 		}
 		let caseValues = nestedByTypeValues ?? hole.fields
-		let bindings: [GeneratedCode] = valuesType == nil ? [] : caseValues.enumerated().filter { isRead($0.element) }.map { index, field -> GeneratedCode in
+		// Each field the fill binds, with what reads it from what the fill is handed.
+		let boundFields: [(field: SeamSignature.Hole.Field, read: String)] = valuesType == nil ? [] : caseValues.enumerated().filter { isRead($0.element) }.map { index, field in
 			let bindsMemo = memoBoundLabels.contains(field.property.label)
 			let read = if let fillCarrierUse, takesValuesAsArguments {
 				// The struct of the run the values end holds the field, unless it is one taken after it.
@@ -9616,7 +9658,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(scopeParameterName).\(field.memberName(bindingMemo: bindsMemo))"
 			}
-			return .text("\(indent)let \(field.property.label) = \(read)")
+			return (field, read)
 		}
 		// A fill of an instantiator's place returns the wrapper's builder (`fillReturnsWrapperBuilder`), so no fill here takes
 		// a forwarded value.
@@ -9627,8 +9669,81 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			valuesType.map { ["_ \(scopeParameterName): \($0.asSource)"] } ?? []
 		}
-		parameters += fillParameterFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+		let parameterFieldParameters = fillParameterFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+		parameters += parameterFieldParameters
+		guard !sharesBody else {
+			// The function the fill calls takes each field the fill binds, in the order the fill reads them, so each is read
+			// where it was bound, then what the fill takes beside its struct.
+			return sharedFillBodyFunction(
+				named: functionName,
+				parameters: parameters,
+				bodyParameters: boundFields.map { "\($0.field.property.label.spelledAsArgumentLabel): \($0.field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" } + parameterFieldParameters,
+				arguments: boundFields.map(\.read) + fillParameterFields.map(\.property.label),
+				argumentLabels: (boundFields.map(\.field) + fillParameterFields).map(\.property.label),
+				returnType: hole.builtType.asSource,
+				body: sharedBodyStatements(
+					outerDeclarations: boundFields.map { Property(label: $0.field.property.label, typeDescription: $0.field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []).strippingEscaping) } + fillParameterFields.map { Property(label: $0.property.label, typeDescription: $0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []).strippingEscaping) },
+					trailing: returnStatement,
+				),
+				isSendable: isSendable,
+			)
+		}
+		let bindings = boundFields.map { GeneratedCode.text("\(indent)let \($0.field.property.label) = \($0.read)") }
 		return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {", body: bindings + body, isSendable: isSendable)
+	}
+
+	/// A fill's function, named `name` and taking `parameters`, that calls the function `body` is the body of, which takes
+	/// `bodyParameters` and is named after the hash of its text (`ReservedName.fillBodyFunctionName(hash:)`), passing it
+	/// `arguments` under `argumentLabels` (each argument's own label where `nil`). That function reads only its parameters and
+	/// the functions it calls by name (`sharesFillBody(handedParameterFields:)`), so every fill whose body writes the same text
+	/// calls one function, which the root declares once (`RootFunctionHoisting`); where it does not, the fill's function
+	/// declares it, as it declared its body before. The arguments are read in the order the fill bound its fields, so each
+	/// value is read, and created, where it was.
+	nonisolated private func sharedFillBodyFunction(
+		named name: String,
+		parameters: [String],
+		bodyParameters: [String],
+		arguments: [String],
+		argumentLabels: [String]? = nil,
+		returnType: String,
+		body: [GeneratedCode],
+		isSendable: Bool,
+	) -> GeneratedCode {
+		let indent = Self.standardIndent
+		let prefix = Self.localFunctionPrefix(isSendable: isSendable)
+		let signatureAfterName = "(\(bodyParameters.joined(separator: ", "))) -> \(returnType) {"
+		let statements = GeneratedCode.lines(body)
+		let heldNames = Set(RootFunctionHoisting.records(in: [statements]).map(\.name))
+		let statementsText = GeneratedCode.omittingRootFunctions(statements, named: heldNames).spelled()
+		var hash = SeamSignatureHash()
+		hash.combine(prefix + signatureAfterName)
+		hash.combine(statementsText)
+		let bodyName = ReservedName.fillBodyFunctionName(hash: hash.hexadecimal)
+		let bodyCode = Self.fillFunction(declaredBy: "\(prefix)func \(bodyName)\(signatureAfterName)", body: body, isSendable: isSendable)
+		let bodyRecord = RootFunctionRecord(
+			key: RootFunctionKey(
+				calledSeam: nil,
+				level: bodyName,
+				isSendable: isSendable,
+				inlinedFillKeys: [],
+				fillsTakingPayloadFields: [],
+				typesDeclaredEscaping: [],
+				labelsHiddenByReenteringCalls: [],
+				indentation: "",
+				text: prefix + signatureAfterName + "\n" + statementsText,
+			),
+			name: bodyName,
+			declaration: .code(bodyCode, inPlaceIndentation: indent),
+			isSendable: isSendable,
+			calls: referencedFillNamesByKey.values.sorted(),
+		)
+		let labels = argumentLabels ?? arguments
+		let argumentList = zip(labels, arguments).map { "\($0.spelledAsArgumentLabel): \($1)" }.joined(separator: ", ")
+		return Self.fillFunction(
+			declaredBy: "\(prefix)func \(name)(\(parameters.joined(separator: ", "))) -> \(returnType) {",
+			body: [.rootFunction(bodyRecord), .text("\(indent)return \(bodyName)(\(argumentList))")],
+			isSendable: isSendable,
+		)
 	}
 
 	/// A fill's function, declared by `declaration` around `body`. A `@Sendable` fill's body is marked as a `@Sendable`

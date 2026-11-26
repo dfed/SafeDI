@@ -38,7 +38,7 @@ enum TypeKeyBody {
 	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
 	/// - Parameter hoisting: The root functions `rootBody` reaches (`RootFunctionHoisting.hoisting(_:indentation:)`), which a
 	///   caller that keeps the path key's body where this returns `nil` reads once for both.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], hoisting: RootFunctionHoisting.Hoisting? = nil) -> [GeneratedCode]? {
+	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], hoisting: RootFunctionHoisting.Hoisting? = nil, indentation: String = rootStatementIndentation) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
@@ -61,8 +61,24 @@ enum TypeKeyBody {
 		      layout.checkValuePaths()
 		else { return nil }
 		layout.computeDecoratorsAndNames()
-		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements() else { return nil }
+		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements(indentation: indentation) else { return nil }
 		return rootFunctionDeclarations + statements
+	}
+
+	/// The statements of the function a fill of a seam call calls with what it binds (`ScopeGenerator.generateFillCode`), in
+	/// the type key's layout, each indented by `indentation`, or `nil` where the fill keeps `fillBody`, its tree's statements
+	/// in the path key's layout. `outerDeclarations` are the function's parameters. The root functions the tree declares
+	/// stay where the tree declares them, for the root to declare once (`RootFunctionHoisting`): a statement that holds one
+	/// keeps the path key's code.
+	static func statements(ofFillBody fillBody: [GeneratedCode], outerDeclarations: [Property], indentation: String) -> [GeneratedCode]? {
+		let heldNames = Set(RootFunctionHoisting.records(in: fillBody).map(\.name))
+		return statements(
+			ofRootBody: fillBody,
+			outerDeclarations: outerDeclarations,
+			namesInScope: Set(outerDeclarations.map(\.label)),
+			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: [], declarations: [], body: fillBody),
+			indentation: indentation,
+		)
 	}
 
 	/// The indentation of a root's statements, which every root body is written after.
