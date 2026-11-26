@@ -40,10 +40,12 @@ extension DependencyTreeGenerator {
 	/// (`PublicMockRootLevel`), whose `namesApartAtRoot` no level declares and whose `receiversByParameter` are the declarations
 	/// that receive each parameter's own form (`PublicMockRootLevel.receiversByField`).
 	/// - Parameter unsettledSeams: The seams whose signatures are still being settled beside `seam`'s, the seams of its
-	///   strongly connected component. A hole a call of one of them passes up is labeled from its site, as the seam's own
-	///   sites are, never from the label that seam's signature of the pass before gave it: that label is named apart from
-	///   that seam's holes, which include this seam's, so copying it around a cycle of seams fed each seam's names into the
-	///   next pass of its own, and the labels changed on every pass.
+	///   strongly connected component. A hole that one of them passes up in turn, and a call of it passes up here, is
+	///   labeled from its site, as the seam's own sites are, never from the label that seam's signature of the pass before
+	///   gave it: that label is named apart from that seam's holes, which include this seam's, so copying it around a
+	///   cycle of seams fed each seam's names into the next pass of its own, and the labels changed on every pass. A hole
+	///   that seam builds itself keeps its label there, its builder's, which follows only from the seam's hole types and
+	///   parameters, both of which only grow.
 	static func holes(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
@@ -140,9 +142,9 @@ extension DependencyTreeGenerator {
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
 		// are named apart by their owner, their declared type simplified, their declared type, and their site path, a
-		// parameter keeping its label. A hole a call passes up keeps the label the called seam's settled signature gives
-		// it, but one a seam of this seam's component passes up, whose signature is not settled, is labeled from its site
-		// (`unsettledSeams`). A scope struct is named after the owner and the property, with the site path
+		// parameter keeping its label. A hole a call passes up keeps the label the called seam's signature gives it,
+		// but one that a seam of this seam's component, whose signature is not settled, passes up in turn is labeled from
+		// its site (`unsettledSeams`). A scope struct is named after the owner and the property, with the site path
 		// appended for a property built at several sites, and an underscore appended while it equals an earlier one.
 		struct Candidate {
 			let label: String
@@ -160,7 +162,7 @@ extension DependencyTreeGenerator {
 			)
 		} + passedUpHoles.map { passedUp in
 			Candidate(
-				label: unsettledSeams.contains(passedUp.innerSeamType) ? "\(passedUp.hole.property.label)Builder".spelledAsJoinedIdentifier : passedUp.hole.builderLabel,
+				label: unsettledSeams.contains(passedUp.innerSeamType) && passedUp.hole.innerSeamType != nil ? "\(passedUp.hole.property.label)Builder".spelledAsJoinedIdentifier : passedUp.hole.builderLabel,
 				suffixTypes: [
 					passedUp.hole.ownerType,
 					passedUp.hole.property.typeDescription.simplified,
