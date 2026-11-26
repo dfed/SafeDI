@@ -205,6 +205,25 @@ struct TypeFactsGraph: Sendable {
 	/// which is passed and made again at the call, keys as the wrapper alone.
 	static let optionalParameterKey: Int32 = -2
 
+	/// Rule 1's keys where the answer is a lazy wrapper, one per kind: a receive of the value only if available that a
+	/// wrapper answers reads its instance where the value is read, so the parameter is the wrapper, never the value
+	/// (which, made at the call, would move when the value is built). `nil`, a declaration and one being built still key
+	/// alike within each.
+	static let optionalLazilyInstantiatedParameterKey: Int32 = -3
+	static let optionalSendableLazilyInstantiatedParameterKey: Int32 = -4
+
+	/// The key rule 1 gives an answer declared with `kind`.
+	static func optionalParameterKey(of kind: Property.PropertyType?) -> Int32 {
+		switch kind {
+		case .lazilyInstantiated:
+			optionalLazilyInstantiatedParameterKey
+		case .sendableLazilyInstantiated:
+			optionalSendableLazilyInstantiatedParameterKey
+		case nil, .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+			optionalParameterKey
+		}
+	}
+
 	/// What answers each read at each edge, by value: a node answers a read of a label it declares with the forms its
 	/// declaration provides, being built where the edge builds that declaration. Interned at the edge, where the graph
 	/// is built from the table; the worklist sees IDs only. Every declaration a node holds answers at every edge: which
@@ -214,7 +233,8 @@ struct TypeFactsGraph: Sendable {
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
 		var keys = [Int32]()
-		func answer(text: String, beingBuilt: Bool, keyText: String) -> Int32 {
+		var kinds = [Property.PropertyType]()
+		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType) -> Int32 {
 			let keyID: Int32
 			if let existing = answerIDByText[keyText] {
 				keyID = existing
@@ -223,6 +243,7 @@ struct TypeFactsGraph: Sendable {
 				answerIDByText[keyText] = keyID
 				texts.append(keyText)
 				isBeingBuilt.append(false)
+				kinds.append(kind)
 				keys.append(keyID)
 			}
 			guard text != keyText else {
@@ -235,19 +256,20 @@ struct TypeFactsGraph: Sendable {
 			answerIDByText[text] = id
 			texts.append(text)
 			isBeingBuilt.append(beingBuilt)
+			kinds.append(kind)
 			keys.append(keyID)
 			return id
 		}
 		var sourceByEdge = [Int32]()
-		var declarationByLabelByNode = [[Int32: (forms: String, isWrapper: Bool)]]()
+		var declarationByLabelByNode = [[Int32: (forms: String, kind: Property.PropertyType)]]()
 		for index in graph.nodes.indices {
 			for _ in graph.edges(from: index) {
 				sourceByEdge.append(Int32(index))
 			}
-			var declarations = [Int32: (forms: String, isWrapper: Bool)]()
+			var declarations = [Int32: (forms: String, kind: Property.PropertyType)]()
 			for (property, forms) in graph.nodes[index].scope.sortedDeclaredPropertyForms {
 				guard let label = labels.existingID(of: property.label) else { continue }
-				declarations[label] = (forms.sorted().map(\.asSource).joined(separator: ", "), !property.propertyType.isConstant)
+				declarations[label] = (forms.sorted().map(\.asSource).joined(separator: ", "), property.propertyType)
 			}
 			declarationByLabelByNode.append(declarations)
 		}
@@ -269,8 +291,8 @@ struct TypeFactsGraph: Sendable {
 				let beingBuilt = graph.nodes[child].property.map { labels.existingID(of: $0.label) == read.label } ?? false
 				let text = "\(read.channel.name) \(declaration.forms)\(beingBuilt ? " being built" : "")"
 				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-				let keyText = declaration.isWrapper ? "\(read.channel.name) \(declaration.forms)" : text
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText), declaration: Int32(node))
+				let keyText = declaration.kind.isConstant ? text : "\(read.channel.name) \(declaration.forms)"
+				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: declaration.kind), declaration: Int32(node))
 			},
 			// Production bodies have one variant, `@Sendable` a mark folded over call edges (lead, 11-26 20:26Z); the family
 			// a seam's cases, builders and mock bodies key by is the edge facts' `opens`, owed by the table-side columns.
@@ -279,7 +301,7 @@ struct TypeFactsGraph: Sendable {
 				switch readTable[Int(readID)].channel {
 				case .optional:
 					// Rule 1.
-					optionalParameterKey
+					optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
 				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 					answer < 0 ? answer : keys[Int(answer)]
 				}

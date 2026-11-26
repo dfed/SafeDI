@@ -45,8 +45,9 @@ typealias ComponentID = Int32
 /// A cycle's identity (A4): the property as cycle validation sees it with the concrete type built.
 typealias CycleID = Int32
 
-/// What one read of a variant comes to in its body (the outcomes fold, `TypeFactsOutcomes`, lanes/per-type-facts: the
-/// outcomes lane fills it; track D reads it).
+/// What one read of a variant comes to in its body (the outcomes fold, `TypeFactsOutcomes`: the outcomes lane fills it;
+/// track D reads it). Track D's `passesNil` is `none` here and its `boundBeforeSendableFunction` is
+/// `readBeforeSendableFunction`; `keysVariant` is a read track D has no outcome for, whose answer keys the variant.
 enum TypeFactsOutcome: UInt8, Sendable {
 	/// Nothing answers the read: the body is passed `nil`, or the read has no value.
 	case none
@@ -144,6 +145,10 @@ struct TypeFactsAnswer: Equatable, Sendable {
 		case beingBuilt
 		/// A key only: a read only if available, whose `nil` or value is an optional parameter (rule 1).
 		case optionalParameter
+		/// As `optionalParameter`, answered by a `LazilyInstantiated`, which the parameter is.
+		case optionalLazilyInstantiatedParameter
+		/// As `optionalParameter`, answered by a `SendableLazilyInstantiated`, which the parameter is.
+		case optionalSendableLazilyInstantiatedParameter
 	}
 
 	let form: Form
@@ -315,7 +320,17 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func answer(_ answer: AnswerID) -> TypeFactsAnswer {
 		guard answer >= 0 else {
-			return TypeFactsAnswer(form: answer == TypeFactsGraph.optionalParameterKey ? .optionalParameter : .none, forms: -1)
+			let form: TypeFactsAnswer.Form = switch answer {
+			case TypeFactsGraph.optionalParameterKey:
+				.optionalParameter
+			case TypeFactsGraph.optionalLazilyInstantiatedParameterKey:
+				.optionalLazilyInstantiatedParameter
+			case TypeFactsGraph.optionalSendableLazilyInstantiatedParameterKey:
+				.optionalSendableLazilyInstantiatedParameter
+			default:
+				.none
+			}
+			return TypeFactsAnswer(form: form, forms: -1)
 		}
 		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerKeys[Int(answer)])
 	}

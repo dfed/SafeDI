@@ -64,6 +64,8 @@ public struct TypeFactsReport: Sendable {
 			variantCounts[Int(graph.declaration(of: VariantID(variant)))] += 1
 		}
 		variantCountsByNode = variantCounts
+		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
+		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		nodes = graph.graph.nodes.indices.map { index in
@@ -156,6 +158,10 @@ public struct TypeFactsReport: Sendable {
 	public let world: String
 	/// How many variants each node has, by node position.
 	public let variantCountsByNode: [Int]
+	/// Each variant's node.
+	public let variantNodes: [Int]
+	/// The variant each edge of a variant's node calls, in edge order.
+	public let variantCalls: [[Int]]
 
 	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
 	private static func projection(of world: some TypeFactsWorld) -> String {
