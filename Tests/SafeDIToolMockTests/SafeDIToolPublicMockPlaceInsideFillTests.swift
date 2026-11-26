@@ -2811,9 +2811,9 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIMockScope_Service.service_Values, __safeDI_innerBuilder_serviceBuilder: SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>) -> any Service {
 			                func __safeDI_service() -> Outer {
 			                    let gadget: any Gadget = __safeDI_innerBuilder_serviceBuilder.gadget(SafeDIMockScope_Gadget.gadget_Values())
-			                    let __safeDI_gadgetBuilder_innerBuilder_serviceBuilder_ = __safeDI_innerBuilder_serviceBuilder.innerBuilder_serviceBuilder(SafeDIMockScope_Gadget.innerBuilder_serviceBuilder_Values(gadget: gadget))
+			                    let __safeDI_gadgetBuilder_innerBuilder_serviceBuilder = __safeDI_innerBuilder_serviceBuilder.innerBuilder_serviceBuilder(SafeDIMockScope_Gadget.innerBuilder_serviceBuilder_Values(gadget: gadget))
 			                    func __safeDI_innerBuilder() -> Inner {
-			                        Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_innerBuilder_serviceBuilder_))
+			                        Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_innerBuilder_serviceBuilder))
 			                    }
 			                    let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
 			                    return Outer(gadget: gadget, innerBuilder: innerBuilder)
