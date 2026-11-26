@@ -33,6 +33,12 @@ extension MockLowering {
 	/// tool.
 	@TaskLocal public static var typeKeyLayoutObserver: (@Sendable (_ mockedType: String, _ outcome: String) -> Void)?
 
+	/// Called after each walk of a mock root's tree with how many statements the walk wrote to the root's body: none where
+	/// the type key may lay the root out, whose body the layout writes from the walk's records, and every one where the root
+	/// is walked again because its layout fell back, or is never laid out (`MockLowering.Walk.writesText`). Set by the tests,
+	/// which fail when a walk the layout follows writes a statement; never by the tool.
+	@TaskLocal static var rootWalkObserver: (@Sendable (_ mockedType: String, _ statementCount: Int) -> Void)?
+
 	/// What the walk hands production's record function at a built place.
 	///
 	/// A class, so that the walk's table of them holds a reference per place: the table has a slot for up to twice the

@@ -239,7 +239,9 @@ extension MockLowering.Walk {
 	/// Appends the loop being emitted, if any, to `lines`.
 	mutating func endLoopUnit(appendingTo lines: inout [String]) {
 		if let loopUnit {
-			lines.append(contentsOf: loopUnit.lines)
+			if writesText {
+				lines.append(contentsOf: loopUnit.lines)
+			}
 			recordLoopUnit(loopUnit)
 		}
 		loopUnit = nil
