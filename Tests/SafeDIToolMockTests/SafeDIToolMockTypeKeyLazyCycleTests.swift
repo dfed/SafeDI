@@ -169,6 +169,31 @@ struct SafeDIToolMockTypeKeyLazyCycleTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenCycleClosingCallPassesValueMockTakesUnderNameApartFromItsLabel() async throws {
+		// No type builds `Mark`, so `Hub.mock()` takes it, and `Hub`, between `screenBuilder` and the `screenBuilder` that
+		// closes the cycle on it, declares `mark` again, so the cycle's function takes `mark`. The mock names its own parameter
+		// apart from the function's (`mark_Mark`), which the call that closes the cycle reads inside that function.
+		let fixture = [
+			"Hub.swift": seamFixtureType(named: "Hub", isFinalClass: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>", "@Instantiated let mark: Mark"])
+				.replacingOccurrences(of: "@Instantiable", with: "@Instantiable(generateMock: true)"),
+			"Screen.swift": seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated let hubBuilder: Instantiator<Hub>", "@Received let mark: Mark"]),
+			"Mark.swift": """
+			public final class Mark {
+			    public init() {}
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixture)
+
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixture, probes: [
+			DifferentialValueProbe("{ let mark = Mark(); return Hub.mock(mark_Mark: mark).screenBuilder.instantiate().mark === mark }()"),
+			DifferentialValueProbe("{ let mark = Mark(); return Hub.mock(mark_Mark: mark).screenBuilder.instantiate().hubBuilder.instantiate().mark === mark }()"),
+			DifferentialValueProbe("{ let mark = Mark(); return Hub.mock(mark_Mark: mark).screenBuilder.instantiate().hubBuilder.instantiate().screenBuilder.instantiate().mark === mark }()"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

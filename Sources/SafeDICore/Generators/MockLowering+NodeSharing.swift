@@ -66,6 +66,11 @@ extension MockLowering {
 				guard let shape = ChildShape(child) else { return nil }
 				children.append(shape)
 			}
+			self.init(record, children: children, passedArgumentValues: passedArgumentValues)
+		}
+
+		/// The shape of `record` with its children's shapes given.
+		init(_ record: BuiltPlaceRecord, children: [ChildShape], passedArgumentValues: Bool) {
 			property = record.property
 			isErased = record.isErased
 			concreteType = record.concreteType
@@ -183,10 +188,9 @@ extension MockLowering {
 			case let .built(built):
 				if built.hasFunction {
 					self = .function(node: ObjectIdentifier(built.node), passedArguments: built.passedArguments)
-				} else if let shape = BuiltRecordShape(built, passedArgumentValues: true) {
-					self = .inline(shape)
 				} else {
-					return nil
+					// A place with no function holds no children: its record's are its function's body (`recordBuiltPlaces`).
+					self = .inline(BuiltRecordShape(built, children: [], passedArgumentValues: true))
 				}
 			case let .closer(closer):
 				self = .closer(ClosingShape(closer))

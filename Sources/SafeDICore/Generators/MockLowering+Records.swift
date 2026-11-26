@@ -24,6 +24,9 @@ extension MockLowering {
 	struct OverrideRead {
 		let text: String
 		let path: ValuePath?
+		/// The configuration the place's path key reads the override of, `safeDIOverrides.<member>…`, whatever local a
+		/// `@Sendable` function reads the override into.
+		let configuration: ValuePath
 	}
 
 	/// The value path of an override read spelled `safeDIOverrides.<member>.<member>…`, or `nil` for any other read, such
@@ -49,9 +52,9 @@ extension MockLowering {
 		let readNames: [Property: String]
 		let alternatives: [ConstructionAlternative]
 		/// The argument labels of the construction the walk passes `nil`, which a record must pass `nil` too.
-		var labelsPassedNil = Set<String>()
+		let labelsPassedNil: Set<String>
 		/// The argument labels of the construction the walk passes a value.
-		var labelsPassedValue = Set<String>()
+		let labelsPassedValue: Set<String>
 		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
 		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
 		var configuredConstruction: ConfiguredConstruction?
@@ -119,30 +122,21 @@ extension MockLowering {
 }
 
 extension ArgumentSource {
-	/// This source read under `name` where it reads the declaration of `label`: what a read becomes where a mock binds the
-	/// label apart (`ScopeGenerator.builtPlaceRecord(of:…readNames:…)`).
-	func renamed(from label: String, to name: String) -> ArgumentSource {
-		switch self {
-		case let .binding(boundLabel) where boundLabel == label:
-			.binding(label: name)
-		case let .lazyInstance(boundLabel, throughOptional) where boundLabel == label:
+	/// This source read under `name`: what a read of a declaration becomes where a mock binds the declaration apart from
+	/// its label (`ScopeGenerator.builtPlaceRecord(of:…readNames:…)`), the binding itself, or the lazy wrapper whose
+	/// instance the read is of.
+	func renamed(to name: String) -> ArgumentSource {
+		if case let .lazyInstance(_, throughOptional) = self {
 			.lazyInstance(label: name, throughOptional: throughOptional)
-		case .binding,
-		     .lazyInstance,
-		     .nil,
-		     .forwardedSpread,
-		     .wrapper,
-		     .optionalWrapper,
-		     .builderArgument,
-		     .spelledArgument:
-			self
+		} else {
+			.binding(label: name)
 		}
 	}
 }
 
 extension MockLowering.Walk {
-	/// A generator in one context it is written in: what production's plan node is made once for (`planNode(…)` in
-	/// `ScopeGenerator`).
+	/// A generator in one context it is written in: what production makes one plan node for, since it writes a scope's
+	/// code once for each context and every place of that context holds the code it cached (`ScopeGenerator.generateCode`).
 	///
 	/// Mock roots share one construction memo, so whether two places hold one generator follows the order the roots are
 	/// built in. The key therefore also holds what the place's record reads beyond the generator (`BuiltPlaceInputs.RecordedKey`):
@@ -178,7 +172,7 @@ extension MockLowering.Walk {
 	) {
 		guard recordsPlaces else { return }
 		// A construction by the type's hand-written mock, or one that reads defaults from its configuration, records its target
-		// and its defaults' reads apart (`configuredConstruction(of:…)`), or nothing where it cannot say them.
+		// and its defaults' reads apart (`configuredConstruction(of:…)`).
 		// A place of another module's public mock built inline reads the builder `mock()` takes for its hole first
 		// (`HoleBuilder.inlinePlaceValue`), which no alternative records.
 		guard node.inlinePlace == nil else {
@@ -186,22 +180,15 @@ extension MockLowering.Walk {
 			return
 		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
-		guard configuredConstruction != .unrecorded else {
-			unrecordedReasons[childIndexPath] = "configuredUnrecorded"
-			return
-		}
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {
-			// An override read the record cannot name, as a local an extractor bound it to, leaves the place unrecorded,
-			// except in an internal mock, whose record reads the override of the configuration its call hands it
-			// (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the read its path names.
-			guard let alternative = MockLowering.overrideAlternative(reading: overrideRead.path, resultWrapper: node.overrideResultWrapper)
-				?? internalMockOverrideAlternative(of: node)
-			else {
-				unrecordedReasons[childIndexPath] = "overrideLocal"
-				return
-			}
-			alternatives.append(alternative)
+			// An override read through a local an extractor bound it to is recorded as the read of the configuration the
+			// place's call hands it (`relativeConfiguration(of:…)`), so a place built in a `@Sendable` function records the
+			// read its path names.
+			alternatives.append(
+				MockLowering.overrideAlternative(reading: overrideRead.path, resultWrapper: node.overrideResultWrapper)
+					?? MockLowering.Walk.internalMockOverrideAlternative(of: node, configuration: overrideRead.configuration),
+			)
 		}
 		builtPlaceInputs[childIndexPath] = MockLowering.BuiltPlaceInputs(
 			functionName: node.functionName,
@@ -210,7 +197,7 @@ extension MockLowering.Walk {
 			alternatives: alternatives,
 			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
 			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
-			configuredConstruction: configuredConstruction.recorded,
+			configuredConstruction: configuredConstruction,
 			overrideReadText: overrideRead?.text,
 		)
 	}

@@ -124,12 +124,12 @@ extension MockLowering {
 		ofBuiltPlaceOf concreteType: TypeDescription,
 		label: String,
 		builtWithHandWrittenMock: Bool,
-		configurationType: TypeDescription?,
+		configurationType: TypeDescription,
 		parentConfiguration: ValuePath?,
 		nearestIsProvided: Bool,
 		staysOutsideSendableFunctions: Bool,
 	) -> [PassedArgument] {
-		guard let parameter = configurationParameter(ofPlaceOf: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: configurationType) else { return [] }
+		let parameter = ConfigurationParameter(concreteType: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: configurationType)
 		let value: ValuePath = if let parentConfiguration {
 			.member(label, of: parentConfiguration)
 		} else {
@@ -145,20 +145,13 @@ extension MockLowering {
 	static func passedArguments(
 		ofCloser generator: ScopeGenerator,
 		closedOnBuiltWithHandWrittenMock: Bool,
-		configurationType: TypeDescription?,
+		configurationType: TypeDescription,
 		closedOnIsProvided: Bool,
 		staysOutsideSendableFunctions: Bool,
 	) -> [PassedArgument] {
-		guard let closedOn = generator.closedOnDeclaration,
-		      let parameter = configurationParameter(ofPlaceOf: closedOn.concreteType, builtWithHandWrittenMock: closedOnBuiltWithHandWrittenMock, configurationType: configurationType)
-		else { return [] }
+		guard let closedOn = generator.closedOnDeclaration else { return [] }
+		let parameter = ConfigurationParameter(concreteType: closedOn.concreteType, builtWithHandWrittenMock: closedOnBuiltWithHandWrittenMock, configurationType: configurationType)
 		return [parameter.argument(handing: parameter.read(isProvided: closedOnIsProvided), staysOutsideSendableFunctions: staysOutsideSendableFunctions)]
-	}
-
-	/// The parameter a type key function of `concreteType` takes its configuration through, or `nil` where its place reads
-	/// no configuration and no override closure.
-	static func configurationParameter(ofPlaceOf concreteType: TypeDescription, builtWithHandWrittenMock: Bool, configurationType: TypeDescription?) -> ConfigurationParameter? {
-		configurationType.map { ConfigurationParameter(concreteType: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: $0) }
 	}
 }
 
@@ -175,8 +168,6 @@ extension MockLowering {
 		/// Whether the place, with no field in its parent's configuration, reads the overrides of the nearest place of its
 		/// type around it built the same way.
 		let nearestIsProvided: Bool
-		/// The configuration the path key's place reads, `safeDIOverrides.<member>…`, or `nil` where it reads none.
-		let pathKeyConfiguration: ValuePath?
 	}
 
 	/// The read of `mock()`'s `safeDIOverrides`, the configuration of the mock root's children.
@@ -197,9 +188,7 @@ extension MockLowering {
 		sendableConfigurationTypeNames: Set<String>,
 	) -> (passedArguments: [PassedArgument], alternatives: [ConstructionAlternative]) {
 		let configurationType = configurationType(of: node)
-		guard let parameter = configurationParameter(ofPlaceOf: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType) else {
-			return (passedArguments: [], alternatives: alternatives)
-		}
+		let parameter = ConfigurationParameter(concreteType: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
 		let staysOutsideSendableFunctions = if node.hasConfiguration {
 			!sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
 		} else {

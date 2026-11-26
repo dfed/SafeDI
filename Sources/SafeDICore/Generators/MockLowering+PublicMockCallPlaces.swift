@@ -101,11 +101,10 @@ extension MockLowering {
 				names.insert(parameter.name)
 			}
 		}
-		// A closure's parameters are the names between its `{` and its `in`.
+		// A closure's parameter is the name between its `{` and its `in`: no closure a mock's text holds takes two.
 		for open in text.indices where text[open] == "{" {
-			var parameters = [String]()
 			var index = text.index(after: open)
-			while true {
+			func nextWord() -> Substring {
 				while index < text.endIndex, text[index] == " " {
 					index = text.index(after: index)
 				}
@@ -113,19 +112,11 @@ extension MockLowering {
 				while index < text.endIndex, text[index].isLetter || text[index].isNumber || text[index] == "_" {
 					index = text.index(after: index)
 				}
-				guard start < index else { break }
-				let name = String(text[start..<index])
-				if name == "in" {
-					names.formUnion(parameters)
-					break
-				}
-				parameters.append(name)
-				while index < text.endIndex, text[index] == " " {
-					index = text.index(after: index)
-				}
-				if index < text.endIndex, text[index] == "," {
-					index = text.index(after: index)
-				}
+				return text[start..<index]
+			}
+			let parameter = nextWord()
+			if nextWord() == "in" {
+				names.insert(String(parameter))
 			}
 		}
 		return names
@@ -158,13 +149,10 @@ extension MockLowering {
 		let localNames = declaredNames(in: text, tokens: tokens)
 		var segments = [ValueSegment]()
 		var cursor = text.startIndex
+		// Each call but the last is followed by a segment that is no text, so no two texts are neighbors.
 		func appendText(upTo end: String.Index) {
 			guard cursor < end else { return }
-			if case let .text(previous)? = segments.last {
-				segments[segments.count - 1] = .text(previous + text[cursor..<end])
-			} else {
-				segments.append(.text(String(text[cursor..<end])))
-			}
+			segments.append(.text(String(text[cursor..<end])))
 		}
 		for token in tokens where !token.isMember && !token.isLabel && !keywords.contains(token.name) && !token.name.hasPrefix("$") && !localNames.contains(token.name) {
 			if declaredFunctionNames.contains(token.name) {

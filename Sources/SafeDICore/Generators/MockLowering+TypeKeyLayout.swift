@@ -221,8 +221,6 @@ extension MockLowering.Walk {
 				unrecordedReasons[path] = "unplannedLines:" + ([unplannedLineKinds[path]] + (keepsOverrideLocals ? ["overrideExtraction"] : [])).compactMap(\.self).joined(separator: "+")
 			} else if keepsOverrideLocals {
 				unrecordedReasons[path] = "unplannedLines:overrideExtraction"
-			} else if !call.isPlannedAtPlace {
-				unrecordedReasons[path] = "notPlannedAtPlace"
 			}
 			do throws(Initializer.GenerationError) {
 				let productionRecord = try call.generator.builtPlaceRecord(
@@ -247,19 +245,20 @@ extension MockLowering.Walk {
 				} else {
 					productionRecord
 				}
-				// A record whose construction passes `nil` where the walk passes a value, or the other way, as for an
-				// `@Instantiated` dependency the mock takes as a parameter where production builds nothing, keeps the walk's
-				// body.
-				if case let .built(built)? = record, built.arguments.contains(where: { argument in
-					argument.source == .nil ? call.inputs.labelsPassedValue.contains(argument.argumentLabel) : call.inputs.labelsPassedNil.contains(argument.argumentLabel)
-				}) {
-					unrecordedReasons[path] = "nilDisagrees"
-					continue
+				// A record whose construction passes `nil` where the walk passes a value, or the other way, is no record of
+				// the walk's place, which keeps the walk's body.
+				let passesWhatTheWalkPasses = if case let .built(built)? = record {
+					built.arguments.allSatisfy { argument in
+						argument.source == .nil ? !call.inputs.labelsPassedValue.contains(argument.argumentLabel) : !call.inputs.labelsPassedNil.contains(argument.argumentLabel)
+					}
+				} else {
+					true
 				}
-				if record == nil, unrecordedReasons[path] == nil {
+				let recordOfWalksPlace = passesWhatTheWalkPasses ? record : nil
+				if recordOfWalksPlace == nil, unrecordedReasons[path] == nil {
 					unrecordedReasons[path] = "noRecord"
 				}
-				builtRecords[path] = record
+				builtRecords[path] = recordOfWalksPlace
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.nodeConfiguration)
 				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
 					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
@@ -332,45 +331,32 @@ extension MockLowering.Walk {
 		}
 	}
 
-	/// The code of the place at `path` as the type key reads it: its record, or text, which keeps the root's walk body.
 	/// Puts the configuration a built place with no function of its own would be handed into the reads of its alternatives:
 	/// such a place is built in its parent's body, where no parameter takes what `relateConfiguration(ofBuiltPlaceAt:of:)`
 	/// passes it, so it reads that value where it is built.
 	mutating func readPassedConfigurationInPlace(ofBuiltPlaceAt path: [Int]) {
-		guard case var .built(record) = builtRecords[path], !record.passedArguments.isEmpty else { return }
-		let valueByName = Dictionary(record.passedArguments.map { ($0.parameterName, $0.value) }, uniquingKeysWith: { first, _ in first })
-		func substituting(_ value: ValuePath) -> ValuePath {
-			switch value {
-			case let .passedArgument(name):
-				valueByName[name] ?? value
-			case let .memberRead(member, of: base):
-				.member(member, of: substituting(base.value))
-			case let .optionalMemberRead(member, of: base):
-				.optionalMember(member, of: substituting(base.value))
-			case let .call(member, of: base, arguments: arguments, argumentsWrapper: wrapper):
-				.call(member, of: substituting(base), arguments: arguments, argumentsWrapper: wrapper)
-			case let .spliced(segments):
-				.spliced(segments.map { segment in
-					switch segment {
-					case let .value(value):
-						.value(substituting(value))
-					case .text, .declaredFunction:
-						segment
-					}
-				})
-			case .rootDeclaration, .read, .emptyInitialization:
-				value
+		guard case var .built(record) = builtRecords[path], let handed = record.passedArguments.first else { return }
+		// A place with no function is handed one argument, its own configuration parameter
+		// (`MockLowering.relativeConfiguration(of:…)`), which each alternative it tries reads. Such a place has no default
+		// field, so no value its construction passes reads the parameter, but for a parameter of its type's hand-written mock
+		// that only a clause the build leaves out declares a dependency for, which the walk's text reads as a member of the
+		// parameter (`defaultArgumentReads(of:…)`), in a mock that build never compiles.
+		func readInPlace(_ value: ValuePath) -> ValuePath {
+			if case let .memberRead(member, of: base) = value {
+				.member(member, of: readInPlace(base.value))
+			} else {
+				handed.value
 			}
 		}
 		record.alternatives = record.alternatives.map { alternative in
-			ConstructionAlternative(closure: substituting(alternative.closure), bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent.map(substituting), use: alternative.use, resultWrapper: alternative.resultWrapper)
+			ConstructionAlternative(closure: readInPlace(alternative.closure), bindingName: alternative.bindingName, requiresAbsent: alternative.requiresAbsent, use: alternative.use, resultWrapper: alternative.resultWrapper)
 		}
-		record.argumentValues = record.argumentValues.mapValues(substituting)
-		record.constructionValue = record.constructionValue.map { ConstructionValue(value: substituting($0.value), resultWrapper: $0.resultWrapper) }
+		record.argumentValues = record.argumentValues.mapValues(readInPlace)
 		record.passedArguments = []
 		builtRecords[path] = .built(record)
 	}
 
+	/// The code of the place at `path` as the type key reads it: its record, or text, which keeps the root's walk body.
 	func placeCode(at path: [Int]) -> GeneratedCode {
 		let record: PlaceRecord? = if let loopUnit = loopUnitRecords[path] {
 			loopUnit
@@ -437,11 +423,20 @@ extension MockLowering.Walk {
 			frames[frames.count - 1].next += 1
 			guard let record = TypeKeyLayout.record(of: frame.children[frame.next]) else { return "" }
 			let visible = frame.visible
+			// A call reads what is declared where it is made, a closer's as a built place's.
+			let callSiteReads: [PlaceRead] = switch record {
+			case let .built(built):
+				built.callSiteReads
+			case let .closer(closer):
+				closer.callSiteReads
+			case .alias:
+				[]
+			}
+			if let label = resolves(callSiteReads, in: visible) {
+				return label
+			}
 			switch record {
 			case let .built(built):
-				if let label = resolves(built.callSiteReads, in: visible) {
-					return label
-				}
 				if built.hasFunction {
 					var inner = visible
 					inner.formUnion(built.parameterProperties.map(\.label))
@@ -455,9 +450,6 @@ extension MockLowering.Walk {
 					frames[frames.count - 1].visible.insert(built.property.label)
 				}
 			case let .closer(closer):
-				if let label = resolves(closer.callSiteReads, in: visible) {
-					return label
-				}
 				frames[frames.count - 1].visible.insert(closer.property.label)
 			case let .alias(alias):
 				// A rename of a name `mock()` binds apart, such as a sibling its root names apart, reads no declaration the
