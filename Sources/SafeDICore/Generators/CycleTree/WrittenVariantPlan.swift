@@ -40,7 +40,7 @@ public enum RootTreeChoiceObservation {
 		case holdsSendableWrapperOrFunction
 		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
 		case receivesInstantiator
-		/// The root's tree builds a type whose dependency tree its own module generates.
+		/// The root's tree calls a seam's generated initializer or a public mock with a builder.
 		case buildsSeam
 		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares, and that a type other
 		/// than the root declares, or the root does not: today's function captures that declaration, and a function of

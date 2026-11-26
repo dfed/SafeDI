@@ -52,7 +52,10 @@ extension DependencyTreeGenerator {
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
 		var reason: RootTreeChoiceObservation.PerPathReason?
 		for scope in scopes where reason == nil {
-			if scope.instantiable.generatesDependencyTree {
+			// A call of a seam's generated initializer that passes no builder is a leaf, which receives the tier's
+			// parameters, and a seam built by its own initializer is built as any type is. A call that passes a builder
+			// keeps the root on today's tree.
+			if !scope.holeArguments.isEmpty {
 				reason = .buildsSeam
 			}
 			// One label may be declared and received in several forms across the tree: each read takes the form its nearest

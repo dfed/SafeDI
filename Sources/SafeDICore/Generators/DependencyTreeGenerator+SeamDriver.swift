@@ -455,6 +455,8 @@ extension DependencyTreeGenerator {
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
+		plansCyclesPerType: Bool,
+		drawsTrees: Bool,
 	) async throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
 		var (seamRoots, firstPassTrees) = try await computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
@@ -501,22 +503,18 @@ extension DependencyTreeGenerator {
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
 		var constructionMemo = ConstructionMemo()
-		var rootScopeGenerators = [RootScopeInfo]()
-		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
-			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
-			try rootScopeGenerators.append(RootScopeInfo(
-				typeDescription: typeDescription,
-				instantiable: scope.instantiable,
-				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				tree: .perPath(record.createScopeGenerator(
-					in: table,
-					lazilyInstantiatedInstanceProperties: [],
-					erasedToConcreteExistential: false,
-					declaredTypeNames: declaredTypeNames,
-					constructionMemo: &constructionMemo,
-				)),
-			))
-		}
+		// A root is built as in a module without seams: today's tree per path, or its per-type plan past the limit, where
+		// each seam its tree calls is a leaf. What a scope of the seam world receives is collected apart from the
+		// validated scopes'.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		var rootScopeGenerators = try await rootTrees(
+			of: rootScopesToGenerate.rootScopes,
+			frozenScopeMap: seamWorld.frozenScopeMap,
+			plansCyclesPerType: plansCyclesPerType,
+			drawsTrees: drawsTrees,
+			constructionMemo: &constructionMemo,
+			cache: &receivedPropertiesCache,
+		)
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment

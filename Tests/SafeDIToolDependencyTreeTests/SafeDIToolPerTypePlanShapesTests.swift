@@ -158,6 +158,246 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleCallsSeamThatTakesNoBuilder() async throws {
+		// A screen on a cycle holds a seam, whose generated initializer its function calls with what the seam receives.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(service: Service, s0Builder: Instantiator<S0>) { self.service = service; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let feature: Feature
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(feature: Feature, s0Builder: Instantiator<S0>) { self.feature = feature; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+		    @Received let service: Service
+		    @Instantiated let leaf: Leaf
+		    public init(service: Service, leaf: Leaf) { self.service = service; self.leaf = leaf }
+		}
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenSeamOnCycleReceivesValueItsCycleDeclares() async throws {
+		// A screen declares a value, and the screen it opens holds a seam that receives it, so the call of the seam's
+		// initializer passes a parameter of its function.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(service: Service, s0Builder: Instantiator<S0>) { self.service = service; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(leaf: Leaf, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let feature: Feature
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(feature: Feature, s0Builder: Instantiator<S0>) { self.feature = feature; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+		    @Received let service: Service
+		    @Received let leaf: Leaf
+		    @Instantiated let gadget: Gadget
+		    public init(service: Service, leaf: Leaf, gadget: Gadget) { self.service = service; self.leaf = leaf; self.gadget = gadget }
+		}
+
+		@Instantiable public final class Gadget: Instantiable { public init() {} }
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeBeneathCycleCallsSeam() async throws {
+		// A type two screens of a cycle each build holds a seam, off the cycle.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(service: Service, s0Builder: Instantiator<S0>) { self.service = service; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let panel: Panel
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(panel: Panel, s1Builder: Instantiator<S1>) { self.panel = panel; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let panel: Panel
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(panel: Panel, s0Builder: Instantiator<S0>) { self.panel = panel; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Panel: Instantiable {
+		    @Instantiated let feature: Feature
+		    public init(feature: Feature) { self.feature = feature }
+		}
+
+		@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+		    @Received let service: Service
+		    @Instantiated let leaf: Leaf
+		    public init(service: Service, leaf: Leaf) { self.service = service; self.leaf = leaf }
+		}
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleHoldsBuilderOfSeam() async throws {
+		// A screen on a cycle holds a builder of a seam, which reads what it receives only inside a builder of its
+		// own.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(service: Service, s0Builder: Instantiator<S0>) { self.service = service; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let featureBuilder: Instantiator<Feature>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(featureBuilder: Instantiator<Feature>, s0Builder: Instantiator<S0>) { self.featureBuilder = featureBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+		    @Instantiated let readerBuilder: Instantiator<Reader>
+		    public init(readerBuilder: Instantiator<Reader>) { self.readerBuilder = readerBuilder }
+		}
+
+		@Instantiable public final class Reader: Instantiable {
+		    @Received let service: Service
+		    @Instantiated let leaf: Leaf
+		    public init(service: Service, leaf: Leaf) { self.service = service; self.leaf = leaf }
+		}
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleHoldsBuilderOfSeamForwardedValue() async throws {
+		// A screen on a cycle holds a builder of a seam, which is forwarded a value: the type key plans no such call yet, so
+		// the root's plan has no layout.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(service: Service, s0Builder: Instantiator<S0>) { self.service = service; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let featureBuilder: Instantiator<Feature>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(featureBuilder: Instantiator<Feature>, s0Builder: Instantiator<S0>) { self.featureBuilder = featureBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+		    @Forwarded let count: Int
+		    @Instantiated let readerBuilder: Instantiator<Reader>
+		    public init(count: Int, readerBuilder: Instantiator<Reader>) { self.count = count; self.readerBuilder = readerBuilder }
+		}
+
+		@Instantiable public final class Reader: Instantiable {
+		    @Received let service: Service
+		    @Instantiated let leaf: Leaf
+		    public init(service: Service, leaf: Leaf) { self.service = service; self.leaf = leaf }
+		}
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .noLayout])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenSeamOnCycleReceivesValueOnlyIfAvailable() async throws {
+		// A seam a screen on a cycle holds receives a value only if available, which its call passes or omits.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let service: Service
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(service: Service, s0Builder: Instantiator<S0>) { self.service = service; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let feature: Feature
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(feature: Feature, s0Builder: Instantiator<S0>) { self.feature = feature; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+		    @Received let service: Service
+		    @Received(onlyIfAvailable: true) let leaf: Leaf?
+		    public init(service: Service, leaf: Leaf?) { self.service = service; self.leaf = leaf }
+		}
+
+		@Instantiable public final class Service: Instantiable { public init() {} }
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .holdsValueOnlyIfAvailable])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsSendableLazilyInstantiated() async throws {
 		// A screen holds a `SendableLazilyInstantiated`.
 		let choices = try await choicesGeneratingTodaysCode(of: """

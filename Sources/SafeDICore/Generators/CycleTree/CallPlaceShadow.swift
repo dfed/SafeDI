@@ -392,6 +392,8 @@ extension DependencyTreeGenerator {
 						instantiable: scope.instantiable,
 						dependenciesLeftOut: scope.dependenciesLeftOut,
 						builtInlineSeamComment: scope.builtInlineSeamComment,
+						// A call of a seam's generated initializer stays one in a body: its guard line is written with it.
+						seamCall: scope.seamCall,
 						isUnavailableDependency: scope.isUnavailableDependency,
 					)
 					if graph.isOnCycle(index) {
