@@ -293,6 +293,15 @@ extension DependencyTreeGenerator {
 						// Bodies a key holds apart differ in a label no one optional parameter takes, such as one declared
 						// in two forms: past a bound, the root is built per path rather than by a plan that grows with
 						// the paths.
+						// A label the calling body takes optionally stands for every call's answer: a body called beneath the
+						// parameter that does not take it optionally too would be keyed by the parameter, which answers no
+						// path, so the root is built per path.
+						guard !zip(bodies[calledBody].labels, bodies[calledBody].answers).contains(where: { label, answer in
+							body.labelsTakenOptionally.contains(label) && !bodies[calledBody].labelsTakenOptionally.contains(label) && answer != nil && answer == body.nearestDeclarations[label]
+						}) else {
+							keptPerPathBecause = .optionalParameterNotTakenByCall
+							return nil
+						}
 						bodiesOfPlanByKey[key, default: []].insert(calledBody)
 						guard bodiesOfPlanByKey[key, default: []].count <= Self.bodiesPerKeyLimit else {
 							keptPerPathBecause = .bodiesOfOneDeclarationPassBound
@@ -434,8 +443,8 @@ extension DependencyTreeGenerator {
 		) throws -> (body: Int, arguments: [Answer]) {
 			var optionalParameters = [String: OptionalParameter]()
 			var optionalArguments = [String: Answer]()
-			// A member of a loop of builders made again at the call keeps its answer, which the call passes made again.
-			for (label, parameter) in Self.optionalParameters(ofTreeOf: calledScope, keyedBy: labels.filter(parameterLabels.contains), builtAs: key.property?.label, cache: &cache) where !labelsMadeAgainAtCall.contains(label) {
+			// A member of a loop of builders made again at the call is passed made again (`VariantAnswers.arguments`).
+			for (label, parameter) in Self.optionalParameters(ofTreeOf: calledScope, keyedBy: labels.filter(parameterLabels.contains), builtAs: key.property?.label, cache: &cache) {
 				if let argument = Self.argument(
 					passing: parameter,
 					labeled: label,
@@ -520,7 +529,8 @@ extension DependencyTreeGenerator {
 		private let frozenScopeMap: FrozenScopeMap
 		private let declaredTypeNames: DeclaredTypeNames
 		private let forMockGeneration: Bool
-		/// Why the last plan stopped before its last body: the bodies of one key passed `bodiesPerKeyLimit`.
+		/// Why the last plan stopped before its last body: the bodies of one key passed `bodiesPerKeyLimit`, or a body
+		/// called beneath an optional parameter of its caller does not take it optionally too.
 		private(set) var keptPerPathBecause: PerPathReason?
 		/// The most bodies one key holds before the plan stops: each differs from the others in an answer no optional
 		/// parameter merges, of which a path around a cycle can give a key one per subset of its labels.

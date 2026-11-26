@@ -364,6 +364,58 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		#expect(hubBodyCounts == [8, nil])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootPerPath_whenBodyCalledBeneathOptionalParameterCannotTakeIt() async throws {
+		// `Flow` declares `mark` on the cycle, so `Screen`, whose tree receives `mark: Stamp?` only if available, takes it
+		// optionally. `Flow` forwards its own `mark: Mark?`, so its body cannot take the label optionally, and a body of
+		// `Flow` keyed by `Screen`'s parameter would answer no path: the root keeps today's tree and builds no plan.
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+					}
+
+					@Instantiable public final class Screen: Instantiable {
+					    @Instantiated let flowBuilder: Instantiator<Flow>
+					    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+					}
+
+					@Instantiable public final class Flow: Instantiable {
+					    @Forwarded let mark: Mark?
+					    @Instantiated let detailBuilder: Instantiator<Detail>
+					    public init(mark: Mark?, detailBuilder: Instantiator<Detail>) { self.mark = mark; self.detailBuilder = detailBuilder }
+					}
+
+					@Instantiable public final class Detail: Instantiable {
+					    @Received(onlyIfAvailable: true) let mark: Stamp?
+					    @Instantiated let screenBuilder: Instantiator<Screen>
+					    public init(mark: Stamp?, screenBuilder: Instantiator<Screen>) { self.mark = mark; self.screenBuilder = screenBuilder }
+					}
+
+					public final class Mark {}
+
+					public final class Stamp {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var plans = [Plan]()
+		for await plan in stream {
+			plans.append(plan)
+		}
+		#expect(plans == [])
+	}
+
 	// MARK: Private
 
 	/// How a screen of `screensOpeningEachOther(roles:targets:)` takes the root's `Context`.

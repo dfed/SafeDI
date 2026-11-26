@@ -229,7 +229,7 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 				root: "Root",
 				bodiesOfPlan: [
 					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
-					"Screen as screenBuilder: Instantiator<Screen> [peerBuilder = peerBuilder: Instantiator<Peer>] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Screen as screenBuilder: Instantiator<Screen> [peerBuilder = peerBuilder: Instantiator<Peer>?, optional] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
 				],
 				todaysBodiesPlanLacks: [],
 			),
@@ -272,7 +272,7 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 			Plan(
 				root: "Root",
 				bodiesOfPlan: [
-					"Screen as screenBuilder: Instantiator<Screen> [peerBuilder = peerBuilder: Instantiator<Peer>] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Screen as screenBuilder: Instantiator<Screen> [peerBuilder = peerBuilder: Instantiator<Peer>?, optional] [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
 					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
 				],
 				todaysBodiesPlanLacks: [],
@@ -312,9 +312,9 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 
 		#expect(calls == [[
 			"Root",
-			"Root [3] at [0] calls [0] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
-			"\"flowBuilder: Instantiator<Flow>\" [0] at [0] calls [1] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
-			"\"screenBuilder: Instantiator<Screen>\" [1] at [0] calls [0] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
+			"Root [4] at [0] calls [0] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
+			"\"flowBuilder: Instantiator<Flow>\" [0] at [0] calls [2] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
+			"\"screenBuilder: Instantiator<Screen>\" [2] at [0] calls [0] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
 		]])
 	}
 
@@ -351,9 +351,9 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 
 		#expect(calls == [[
 			"Root",
-			"Root [3] at [0] calls [0] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
-			"\"screenBuilder: Instantiator<Screen>\" [0] at [0] calls [2] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
-			"\"flowBuilder: Instantiator<Flow>\" [2] at [0] calls [0] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
+			"Root [4] at [0] calls [1] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
+			"\"screenBuilder: Instantiator<Screen>\" [1] at [0] calls [3] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
+			"\"flowBuilder: Instantiator<Flow>\" [3] at [0] calls [1] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
 		]])
 	}
 
