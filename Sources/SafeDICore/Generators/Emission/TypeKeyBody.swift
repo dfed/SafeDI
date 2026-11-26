@@ -228,6 +228,10 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
+	/// The declaration each label a view reads outside it resolves to at each of its places, keyed by the body and index of
+	/// the place's statement: what the walk looked up for the view's key, which `resolution(of:atPlace:edge:)` reads rather
+	/// than walking up again.
+	var outerDeclarationsByEdge = [[Int]: [String: PathValue]]()
 }
 
 extension AliasPlaceRecord {

@@ -76,9 +76,13 @@ extension TypeKeyLayout {
 					// A view whose closers call a function above it keeps the declarations themselves (`KeyedDeclaration`).
 					let keysByKind = domain.closedOnFunctionNames.isEmpty
 					var outerView = [String: KeyedDeclaration]()
+					var outerDeclarations = [String: PathValue]()
 					for label in labels {
-						outerView[label] = keyed(lookUp(label, inBody: body, before: position), byKind: keysByKind)
+						let declaration = lookUp(label, inBody: body, before: position)
+						outerDeclarations[label] = declaration
+						outerView[label] = keyed(declaration, byKind: keysByKind)
 					}
+					outerDeclarationsByEdge[[body, position]] = outerDeclarations
 					let key = ViewKey(
 						node: built.node,
 						isInSendableFamily: isInSendableFamily,
@@ -366,7 +370,8 @@ extension TypeKeyLayout {
 		} else if escapingReads[body][label] == PathValue.none {
 			.none
 		} else {
-			lookUp(label, inBody: edge.parent, before: edge.position)
+			// The walk looked up each label the view reads outside it at each of its places (`outerDeclarationsByEdge`).
+			outerDeclarationsByEdge[[edge.parent, edge.position]]?[label] ?? lookUp(label, inBody: edge.parent, before: edge.position)
 		}
 	}
 
