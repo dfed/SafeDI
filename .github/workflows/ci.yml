@@ -118,6 +118,82 @@ jobs:
           echo "integrations=$integrations" >> "$GITHUB_OUTPUT"
           echo "source=$source docc=$docc integrations=$integrations"
 
+  # A stack of pull requests is checked at its top: the top's merge holds every branch below it, so the heavy jobs
+  # of a branch another open pull request is based on repeat work the top's run does. Those runs were cancelled
+  # by hand, when someone got to them: 423 Linux and 65 macOS runner hours went to runs later cancelled between
+  # 2026-11-21 and 2026-11-25. So a pull request's run asks two things: whether another open pull request of this
+  # repository names its branch as base, and whether its own base is a branch other than the default one. When
+  # both hold, it is in the middle of a stack, this job's output names the pull requests above it, and every job
+  # that builds or tests is skipped: each has `needs.stack-position.outputs.stacked-under == ''` in its `if:`.
+  # The quick jobs (the version checks, the Markdown and skill script checks, lint) run as always.
+  #
+  # A pull request into the default branch always runs everything, whatever is based on it: when the row below
+  # lands, the next one takes main as its base and is pushed ("retarget first, then push"), and that run is
+  # complete. So a stack costs two full runs, its top and its bottom, where it cost one per branch.
+  #
+  # A skipped job satisfies a required check, and a skipped matrix job reports only its unexpanded name, so a
+  # required check a matrix reports stays unreported. Neither matters here and no stand-in is needed: required
+  # checks protect only the default branch, and no pull request into it is skipped. Whoever lands a stack still
+  # requires a green run, with nothing skipped but for a Markdown-only change, on the head being landed.
+  #
+  # A pull request labelled `run-all-checks` runs everything wherever it is in a stack, for a check in the
+  # middle. The label and the base are read as they are now, not as the event carried them, so label first, then
+  # push.
+  #
+  # Any doubt runs everything: a pull request from a fork, or one whose pull requests cannot be listed, gets an
+  # empty output. On a push to main and on the schedule the job is skipped, its output is empty, and every job
+  # runs. A full run pays for it with the seconds a Linux runner takes to start and answer; the macOS build jobs
+  # already wait that long for "Bazel Source Archive Check". No container, since it only calls GitHub.
+  stack-position:
+    name: Decide Whether This Pull Request Runs the Heavy Jobs
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      # To list the open pull requests based on this one's branch, and to read this one's labels and base.
+      pull-requests: read
+    outputs:
+      stacked-under: ${{ steps.find.outputs.stacked-under }}
+    steps:
+      # Twice the longest it should take, and then some: the two kinds of call "Find Builds a Pull Request Passed
+      # on This Tree" makes took 1 second. Not yet measured on a runner; set it from the first runs.
+      - name: Find the Pull Requests Based on This Branch
+        id: find
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request
+            if (pullRequest.head.repo.id !== pullRequest.base.repo.id) {
+              core.info('A pull request from a fork: every job runs.')
+              return
+            }
+            let above
+            try {
+              const { data: live } = await github.rest.pulls.get({ ...context.repo, pull_number: pullRequest.number })
+              if (live.labels.some(label => label.name === 'run-all-checks')) {
+                core.info('Labelled run-all-checks: every job runs.')
+                return
+              }
+              if (live.base.ref === context.payload.repository.default_branch) {
+                core.info(`Based on ${live.base.ref}: every job runs.`)
+                return
+              }
+              const open = await github.paginate(github.rest.pulls.list, { ...context.repo, state: 'open', base: pullRequest.head.ref, per_page: 100 })
+              above = open.filter(other => other.number !== pullRequest.number && other.base.repo.id === pullRequest.base.repo.id).map(other => `#${other.number}`)
+            } catch (error) {
+              core.warning(`Could not tell whether a pull request is based on this branch (${error.message}): every job runs.`)
+              return
+            }
+            if (above.length === 0) {
+              core.info('No open pull request is based on this branch: every job runs.')
+              return
+            }
+            const message = `Skipped: stacked under ${above.join(', ')}; checks run on the top of the stack and on the pull request into ${context.payload.repository.default_branch}.`
+            core.notice(message)
+            await core.summary.addRaw(message).write()
+            core.setOutput('stacked-under', above.join(', '))
+
   version-consistency-check:
     name: Version Consistency Check
     # Checks that each SwiftPM dependency Package.resolved pins has the
@@ -461,13 +537,13 @@ jobs:
     name: Build for Apple Platforms, DocC and Xcode Projects on Xcode 26
     # Every macOS job but "Build and Test on Xcode 26" also waits for a Linux job that takes seconds, so that the
     # run's longest job queues for the few macOS runners first and the run ends when it does, not 30 minutes later.
-    needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check, passed-on-this-tree]
+    needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check, passed-on-this-tree, stack-position]
     # DocC articles under `*.docc/` are Markdown, so this job also runs
     # when only those changed, and then only its DocC steps do. It skips
     # when the change feeds nothing it builds ("Detect Changed Files"), and
     # on main when a pull request's run passed it on the same tree ("Find
     # Builds a Pull Request Passed on This Tree").
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -742,7 +818,7 @@ jobs:
     needs: *after-the-long-macos-job-queues
     # Skips when the change feeds nothing it builds ("Detect Changed Files"), and on main when a pull request's
     # run passed it on the same tree ("Find Builds a Pull Request Passed on This Tree").
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.example-integrations == 'true') && needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false' }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.example-integrations == 'true') && needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -1258,12 +1334,12 @@ jobs:
   # No run has measured the parts on macOS yet.
   spm-tests:
     name: Build and Test on Xcode 26 (${{ matrix.part }})
-    needs: [changes, spm-plan]
+    needs: [changes, spm-plan, stack-position]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
     # test run. It runs when "Choose How the Xcode 26 Tests Run" failed too,
     # as one job.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
     # the compiler adopters use, and compiles every test's generated code
     # with it: Xcode's Swift 6.2 and Linux's have disagreed about the same
@@ -1602,8 +1678,8 @@ jobs:
   # moves lists, so it runs on Linux and needs no container.
   spm:
     name: Build and Test on Xcode 26
-    needs: [changes, spm-plan, spm-tests]
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    needs: [changes, spm-plan, spm-tests, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1662,10 +1738,10 @@ jobs:
   # to 17.8 (runs 43760851366, 43721724778, 43755152593, 43671437925).
   linux-build:
     name: Build Tests on Linux
-    needs: changes
+    needs: [changes, stack-position]
     # Also runs on every push to main, Markdown-only or not, for the reason
     # "Build and Test on Linux" gives.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -1772,8 +1848,8 @@ jobs:
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build, linux-latest-swift-group, generate-time, example-integrations]
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [spm, linux-build, linux-latest-swift-group, generate-time, example-integrations, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -1958,12 +2034,12 @@ jobs:
   # built, which is the name of a required check.
   linux:
     name: Build and Test on Linux
-    needs: [changes, linux-build]
+    needs: [changes, linux-build, stack-position]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
     # test run. It runs when the build failed too, and fails in its first
     # step: a skipped job would satisfy the required check.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2163,8 +2239,8 @@ jobs:
   # leaves the answer empty, which each reads as one job.
   spm-plan:
     name: Choose How the Xcode 26 Tests Run
-    needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # About twice what its steps take: the checkout, the two restores, of
@@ -2232,8 +2308,8 @@ jobs:
     name: Release Acceptance
     # On main it skips when a pull request's run passed every one of its jobs on the same tree ("Find Builds a
     # Pull Request Passed on This Tree").
-    needs: [changes, linux-build, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.release-acceptance == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    needs: [changes, linux-build, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.release-acceptance == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     permissions:
       contents: read
     uses: ./.github/workflows/release-acceptance.yml
@@ -2254,8 +2330,8 @@ jobs:
   # `.claude/rules/releases-and-packaging.md` says.
   written-calls:
     name: Check Written Calls on Linux
-    needs: [changes, linux-build]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    needs: [changes, linux-build, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2300,8 +2376,8 @@ jobs:
     name: Repeat Tests on Linux (pass ${{ matrix.pass }})
     # On main it skips when a pull request's run passed the four passes on the same tree ("Find Builds a Pull
     # Request Passed on This Tree").
-    needs: [changes, linux-build, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    needs: [changes, linux-build, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2339,8 +2415,8 @@ jobs:
   linux-repeat:
     name: Repeat Tests on Linux
     # Skips on main when the passes do, since it would have no result to require.
-    needs: [changes, linux-repeat-pass, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' }}
+    needs: [changes, linux-repeat-pass, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -2378,8 +2454,8 @@ jobs:
     name: Build Release SafeDITool on Linux
     # On main it skips when a pull request's run passed it on the same tree ("Find Builds a Pull Request Passed
     # on This Tree").
-    needs: [changes, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-release-build == 'true') && needs.changes.outputs.source != 'false' }}
+    needs: [changes, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-release-build == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.3
     permissions:
@@ -2444,8 +2520,8 @@ jobs:
   # what differs.
   generate-time:
     name: Check Generate Time on Linux
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2634,8 +2710,8 @@ jobs:
   # lines left out), as information that fails nothing.
   base-tool:
     name: Build the Base SafeDITool on Linux
-    needs: changes
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # A cold build is the job's long pole: 8.6 minutes locally, and 10 to 11
@@ -2753,8 +2829,8 @@ jobs:
     name: Check Function Compile Time on Linux
     # On main it skips when a pull request's run passed it on the same tree ("Find Builds a Pull Request Passed
     # on This Tree").
-    needs: [changes, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.function-compile-time == 'true') && needs.changes.outputs.source != 'false' }}
+    needs: [changes, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.function-compile-time == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2840,8 +2916,8 @@ jobs:
     # the base only when it built.
     # On main it skips when a pull request's run passed every shard and the corpus check on the same tree
     # ("Find Builds a Pull Request Passed on This Tree").
-    needs: [changes, linux-build, base-tool, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    needs: [changes, linux-build, base-tool, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # Above the fuzzer's and the base comparison's limits together by more
@@ -3056,8 +3132,8 @@ jobs:
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux
     # Skips on main when the shards do, since it would have no report to read.
-    needs: [changes, graph-fuzzer, base-tool, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' }}
+    needs: [changes, graph-fuzzer, base-tool, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -3132,8 +3208,8 @@ jobs:
   # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
   line-coverage:
     name: Check Line Coverage on Linux
-    needs: [changes, spm-plan, spm, linux]
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    needs: [changes, spm-plan, spm, linux, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -3239,8 +3315,8 @@ jobs:
   graph-fuzzer-coverage:
     name: Report Changed Lines No Fuzzer Graph Executed on Linux
     # Skips on main when the shards do, since it would have no report to read.
-    needs: [changes, linux, graph-fuzzer, passed-on-this-tree]
-    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+    needs: [changes, linux, graph-fuzzer, passed-on-this-tree, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 15
@@ -3315,8 +3391,8 @@ jobs:
   # groups under the one name the job had.
   linux-latest-swift-group:
     name: Build and Test on Latest Swift (${{ matrix.group }})
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    needs: [changes, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     # `swift:latest` floats to the newest Swift release so this job
     # catches toolchain changes (e.g. SwiftPM's `swiftbuild` build
@@ -3480,8 +3556,8 @@ jobs:
   # skipped, it would satisfy a required check.
   linux-latest-swift:
     name: Build and Test on Latest Swift
-    needs: [changes, linux-latest-swift-group]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    needs: [changes, linux-latest-swift-group, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # To check out the download action.
@@ -3530,8 +3606,8 @@ jobs:
   # that is not uploaded only means main runs the check. No container, since it only uploads.
   record-passed-on-this-tree:
     name: Record the Linux Checks That Passed on This Tree
-    needs: [changes, passed-on-this-tree, graph-fuzzer, graph-fuzzer-corpus, linux-repeat-pass, linux-repeat, release-acceptance, linux-release-build, function-compile-time]
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' }}
+    needs: [changes, passed-on-this-tree, graph-fuzzer, graph-fuzzer-corpus, linux-repeat-pass, linux-repeat, release-acceptance, linux-release-build, function-compile-time, stack-position]
+    if: ${{ !cancelled() && needs.stack-position.outputs.stacked-under == '' && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
