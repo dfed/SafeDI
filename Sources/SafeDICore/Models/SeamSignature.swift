@@ -2531,6 +2531,7 @@ struct CalledBuilders: Sendable {
 		guard let caseIndex = caseIndexBySite[site], places.cases[caseIndex].passedUp == nil else { return nil }
 		return caseIndex
 	}
+
 	/// The place graph a case of `places` that the called seam itself passes up refers into (`Places.CalledCase`): that of
 	/// a seam the called seam calls, wherever the run holds its signature, or `nil` where it holds none. It captures the
 	/// run's signatures, which live as long as the run.

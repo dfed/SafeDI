@@ -2674,7 +2674,13 @@ extension DependencyTreeGenerator {
 			for entry in group {
 				guard let child = entry.fill.children.first else { continue }
 				let reads = FillTreeReads(walking: child)
-				findings += findingsOfFill(of: entry.hole, fill: entry.fill, reads: reads.keeping { if case .closer = $0 { true } else { false } }, call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+				findings += findingsOfFill(of: entry.hole, fill: entry.fill, reads: reads.keeping {
+					if case .closer = $0 {
+						true
+					} else {
+						false
+					}
+				}, call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 				var labels = [String]()
 				for read in reads.reads {
 					if case let .receive(receive) = read, !labels.contains(receive.property.label) {
@@ -2682,7 +2688,13 @@ extension DependencyTreeGenerator {
 					}
 				}
 				for label in labels {
-					let labelReads = reads.keeping { if case let .receive(receive) = $0 { receive.property.label == label } else { false } }
+					let labelReads = reads.keeping {
+						if case let .receive(receive) = $0 {
+							receive.property.label == label
+						} else {
+							false
+						}
+					}
 					let signature = labelSignature(of: entry, label: label, reads: labelReads)
 					if let known = representatives[signature] {
 						if entry.hole.declarationLocations.lexicographicallyPrecedes(known.entry.hole.declarationLocations, by: Dependency.DeclarationLocation.precedesInSourceOrder) {
