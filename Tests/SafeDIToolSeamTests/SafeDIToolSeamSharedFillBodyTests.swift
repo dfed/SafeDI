@@ -241,9 +241,9 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_DC1755BA41374EE4(service: scope_service)
+		            return __safeDI_fillBody_1CDF274DEAADB187(service: scope_service)
 		        }
-		        func __safeDI_fillBody_DC1755BA41374EE4(service: Service) -> any Api {
+		        func __safeDI_fillBody_1CDF274DEAADB187(service: Service) -> any Api {
 		            func __safeDI_api() -> LiveApi {
 		                func __safeDI_c() -> C {
 		                    func __safeDI_f0Builder() -> F0 {
@@ -263,7 +263,7 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
 		        }
 		        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_DC1755BA41374EE4(service: scope_service)
+		            return __safeDI_fillBody_1CDF274DEAADB187(service: scope_service)
 		        }
 		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
@@ -424,9 +424,10 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesFillBodyApartFromDirectoryOfFileItPointsAt_whenFillTreeRefersToAliasDeclarationByDirective(integration: MultiModuleIntegration) async throws {
 		// `C` renames `service`, so the body points the compiler at `C`'s declaration with a `#sourceLocation` directive,
-		// which names `C.swift` by a path each integration spells apart, and each checkout too: the body's name is the same.
+		// which names `C.swift` by a path each integration spells apart, and each checkout too; and `C` builds `F0` again,
+		// whose guard's comment each integration words apart: the body's name is the same.
 		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Fixture(cDeclarations: [Fixture.renamingDeclaration]).modules,
+			modules: Fixture(cDeclarations: [Fixture.renamingDeclaration, "@Instantiated let f0Builder: Instantiator<F0>"]).modules,
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
@@ -442,16 +443,21 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_39E7F2829E92CA82(service: scope_service)
+		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
 		        }
-		        func __safeDI_fillBody_39E7F2829E92CA82(service: Service) -> any Api {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(cPath)", line: 5)
-		                let renamedService: Service = service
-		                #sourceLocation()
-		                return C(renamedService: renamedService)
-		            }
+		        func __safeDI_fillBody_DA998F868C342499(service: Service) -> any Api {
 		            func __safeDI_api() -> LiveApi {
+		                func __safeDI_c() -> C {
+		                    #sourceLocation(file: "\(cPath)", line: 5)
+		                    let renamedService: Service = service
+		                    #sourceLocation()
+		                    func __safeDI_f0Builder() -> F0 {
+		                        _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+		                    }
+		                    let f0Builder = Instantiator<F0>(__safeDI_f0Builder)
+		                    return C(renamedService: renamedService, f0Builder: f0Builder)
+		                }
 		                let c: C = __safeDI_c()
 		                return LiveApi(service: service, c: c)
 		            }
@@ -462,7 +468,7 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
 		        }
 		        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_39E7F2829E92CA82(service: scope_service)
+		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
 		        }
 		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
@@ -492,16 +498,21 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_39E7F2829E92CA82(service: scope_service)
+		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
 		        }
-		        func __safeDI_fillBody_39E7F2829E92CA82(service: Service) -> any Api {
-		            func __safeDI_c() -> C {
-		                #sourceLocation(file: "\(cPath)", line: 5)
-		                let renamedService: Service = service
-		                #sourceLocation()
-		                return C(renamedService: renamedService)
-		            }
+		        func __safeDI_fillBody_DA998F868C342499(service: Service) -> any Api {
 		            func __safeDI_api() -> LiveApi {
+		                func __safeDI_c() -> C {
+		                    #sourceLocation(file: "\(cPath)", line: 5)
+		                    let renamedService: Service = service
+		                    #sourceLocation()
+		                    func __safeDI_f0Builder() -> F0 {
+		                        _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, add the SafeDI plugin to the target that declares F0.
+		                        return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+		                    }
+		                    let f0Builder = Instantiator<F0>(__safeDI_f0Builder)
+		                    return C(renamedService: renamedService, f0Builder: f0Builder)
+		                }
 		                let c: C = __safeDI_c()
 		                return LiveApi(service: service, c: c)
 		            }
@@ -512,7 +523,7 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
 		        }
 		        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_39E7F2829E92CA82(service: scope_service)
+		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
 		        }
 		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
@@ -564,9 +575,9 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_46B63983F8D69DD7(service: scope_service)
+		            return __safeDI_fillBody_9EBD8B88FAD7AB9F(service: scope_service)
 		        }
-		        func __safeDI_fillBody_46B63983F8D69DD7(service: Service) -> any Api {
+		        func __safeDI_fillBody_9EBD8B88FAD7AB9F(service: Service) -> any Api {
 		            func __safeDI_c() -> C {
 		                let renamedService: Service = service // Declared at \(cPath):5
 		                return C(renamedService: renamedService)
@@ -582,7 +593,7 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
 		        }
 		        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_46B63983F8D69DD7(service: scope_service)
+		            return __safeDI_fillBody_9EBD8B88FAD7AB9F(service: scope_service)
 		        }
 		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
 		            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })

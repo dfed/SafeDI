@@ -9715,10 +9715,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let statementsText = GeneratedCode.omittingRootFunctions(statements, named: heldNames).spelled()
 		var hash = SeamSignatureHash()
 		hash.combine(prefix + signatureAfterName)
-		// The name never reads a directory: a body that points a diagnostic at a declaration names the declaration's
-		// file by its path, which differs between checkouts and between integrations. The key keeps the whole text,
-		// so two bodies whose files share a name are two keys of one name, each kept where its call declares it.
-		hash.combine(Self.textNamingFilesWithoutDirectories(statementsText))
+		// The name reads nothing an integration or a checkout spells its own way: a seam call's guard comment, a file's
+		// path. The key keeps the whole text, so two bodies that differ only there are two keys of one name, each kept
+		// where its call declares it.
+		hash.combine(Self.textWithoutIntegrationSpellings(statementsText))
 		let bodyName = ReservedName.fillBodyFunctionName(hash: hash.hexadecimal)
 		let bodyRecord = RootFunctionRecord(
 			key: RootFunctionKey(
@@ -10062,31 +10062,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// `text` with the directory dropped from the path of every file `referencingDeclaration(of:by:)` names: the path in
-	/// a `#sourceLocation(file:line:)` directive and in a `// Declared at` comment keeps only its last component.
-	static func textNamingFilesWithoutDirectories(_ text: String) -> String {
-		guard text.contains(sourceLocationFilePrefix) || text.contains(declaredAtCommentPrefix) else { return text }
+	/// `text` without what an integration or a checkout spells its own way: the comment that ends a line (a seam call's
+	/// guard names how each integration compiles the seam's module, and `// Declared at` names a file by the path the
+	/// integration hands `generate`), and the directory of the file a `#sourceLocation(file:line:)` directive names.
+	static func textWithoutIntegrationSpellings(_ text: String) -> String {
+		guard text.contains(trailingCommentPrefix) || text.contains(sourceLocationFilePrefix) else { return text }
 		return text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-			if let directive = line.range(of: sourceLocationFilePrefix),
-			   let closing = line.range(of: "\", line: ", range: directive.upperBound..<line.endIndex)
-			{
-				String(line[..<directive.upperBound] + lastPathComponent(of: line[directive.upperBound..<closing.lowerBound]) + line[closing.lowerBound...])
-			} else if let comment = line.range(of: declaredAtCommentPrefix),
-			          let lineSeparator = line[comment.upperBound...].lastIndex(of: ":")
-			{
-				String(line[..<comment.upperBound] + lastPathComponent(of: line[comment.upperBound..<lineSeparator]) + line[lineSeparator...])
-			} else {
-				String(line)
-			}
+			let code = line[..<(line.range(of: trailingCommentPrefix)?.lowerBound ?? line.endIndex)]
+			guard let directive = code.range(of: sourceLocationFilePrefix),
+			      let closing = code.range(of: "\", line: ", range: directive.upperBound..<code.endIndex)
+			else { return String(code) }
+			let path = code[directive.upperBound..<closing.lowerBound]
+			return String(code[..<directive.upperBound] + path[(path.lastIndex(of: "/").map { path.index(after: $0) } ?? path.startIndex)...] + code[closing.lowerBound...])
 		}.joined(separator: "\n")
 	}
 
+	private static let trailingCommentPrefix = " // "
 	private static let sourceLocationFilePrefix = "#sourceLocation(file: \""
-	private static let declaredAtCommentPrefix = " // Declared at "
-
-	private static func lastPathComponent(of path: Substring) -> Substring {
-		path[(path.lastIndex(of: "/").map { path.index(after: $0) } ?? path.startIndex)...]
-	}
 
 	// MARK: Mock Root Parameters
 
