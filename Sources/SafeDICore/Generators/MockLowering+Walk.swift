@@ -166,7 +166,7 @@ extension ScopeGenerator {
 			lines: &bindingLines,
 		)
 		// The shared bodies of the calls' fills, declared once before the tree, which captures nothing.
-		bindingLines.insert(contentsOf: walk.fillBodies.map { $0.hoisted(atIndentation: bodyIndent, isSendable: $0.isSendable).spelled() }, at: rootReceiverBindingIndex)
+		bindingLines.insert(contentsOf: walk.fillBodies.map { $0.hoisted(atIndentation: bodyIndent, isSendable: $0.isSendable, omittingRootFunctionsNamed: []).spelled() }, at: rootReceiverBindingIndex)
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
 		// The mocked type's construction reads the names its own dependencies are bound apart under.

@@ -62,8 +62,9 @@ struct RootFunctionRecord: Sendable {
 	}
 
 	/// The declaration as a root whose statements are written after `indentation` declares it at its top, `@Sendable
-	/// nonisolated` where `isSendable` and it is a dispatcher.
-	func hoisted(atIndentation indentation: String, isSendable: Bool) -> GeneratedCode {
+	/// nonisolated` where `isSendable` and it is a dispatcher, without the root functions named `declaredNames`, which the
+	/// root declares beside it.
+	func hoisted(atIndentation indentation: String, isSendable: Bool, omittingRootFunctionsNamed declaredNames: Set<String>) -> GeneratedCode {
 		switch declaration {
 		case .text:
 			// A call's body is indented by the levels around it, so its declarations are written after its own indentation alone.
@@ -71,7 +72,7 @@ struct RootFunctionRecord: Sendable {
 		case let .code(code, _):
 			.indented(code, by: indentation)
 		case let .fillBody(function, _):
-			.indented(function.laidOutCode, by: indentation)
+			.indented(function.laidOutCode(omittingRootFunctionsNamed: declaredNames), by: indentation)
 		}
 	}
 
@@ -236,7 +237,7 @@ public enum RootFunctionHoisting {
 			rootFunctionNames: rootFunctionNames,
 			declaredNames: declaredNames,
 			declarations: declared.map { record in
-				.omittingRootFunctions(record.hoisted(atIndentation: indentation, isSendable: sendable.contains(record.name)), named: declaredNames)
+				.omittingRootFunctions(record.hoisted(atIndentation: indentation, isSendable: sendable.contains(record.name), omittingRootFunctionsNamed: declaredNames), named: declaredNames)
 			},
 			body: [.omittingRootFunctions(.lines(statements), named: declaredNames)],
 		)
@@ -361,9 +362,10 @@ struct FillBodyFunction: Sendable {
 		ScopeGenerator.fillFunction(declaredBy: declaration, body: body.pathStatements, isSendable: isSendable)
 	}
 
-	/// The function with its tree in the type key's layout, where the type key lays it out, as a root declares it once.
-	var laidOutCode: GeneratedCode {
-		ScopeGenerator.fillFunction(declaredBy: declaration, body: body.laidOutStatements, isSendable: isSendable)
+	/// The function with its tree in the type key's layout, where the type key lays it out, as a root declares it once,
+	/// without the root functions named `declaredNames`, which the root declares beside it.
+	func laidOutCode(omittingRootFunctionsNamed declaredNames: Set<String>) -> GeneratedCode {
+		ScopeGenerator.fillFunction(declaredBy: declaration, body: body.laidOutStatements(omittingRootFunctionsNamed: declaredNames), isSendable: isSendable)
 	}
 }
 
@@ -381,10 +383,11 @@ struct FillBodyLayout: Sendable {
 	}
 
 	/// The statements with the tree in the type key's layout, where nothing precedes it and the type key lays it out, and in
-	/// the path key's otherwise.
-	var laidOutStatements: [GeneratedCode] {
+	/// the path key's otherwise, without the root functions named `declaredNames`, which the root declares beside the body: a
+	/// statement the type key keeps in the path key's code is written as text, which no omission around it reaches.
+	func laidOutStatements(omittingRootFunctionsNamed declaredNames: Set<String>) -> [GeneratedCode] {
 		guard leading.isEmpty,
-		      let statements = TypeKeyBody.statements(ofFillBody: tree, outerDeclarations: outerDeclarations, indentation: ScopeGenerator.standardIndent)
+		      let statements = TypeKeyBody.statements(ofFillBody: tree, outerDeclarations: outerDeclarations, omittingRootFunctionsNamed: declaredNames, indentation: ScopeGenerator.standardIndent)
 		else { return pathStatements }
 		return statements + trailing
 	}

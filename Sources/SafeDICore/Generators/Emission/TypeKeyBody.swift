@@ -68,15 +68,15 @@ enum TypeKeyBody {
 	/// The statements of the function a fill of a seam call calls with what it binds (`ScopeGenerator.generateFillCode`), in
 	/// the type key's layout, each indented by `indentation`, or `nil` where the fill keeps `fillBody`, its tree's statements
 	/// in the path key's layout. `outerDeclarations` are the function's parameters. The root functions the tree declares
-	/// stay where the tree declares them, for the root to declare once (`RootFunctionHoisting`): a statement that holds one
-	/// keeps the path key's code.
-	static func statements(ofFillBody fillBody: [GeneratedCode], outerDeclarations: [Property], indentation: String) -> [GeneratedCode]? {
+	/// that the root declares beside the function, `declaredNames`, are left out, as the root's own statements leave them
+	/// out; every other one stays where the tree declares it: a statement that holds one keeps the path key's code.
+	static func statements(ofFillBody fillBody: [GeneratedCode], outerDeclarations: [Property], omittingRootFunctionsNamed declaredNames: Set<String>, indentation: String) -> [GeneratedCode]? {
 		let heldNames = Set(RootFunctionHoisting.records(in: fillBody).map(\.name))
 		return statements(
 			ofRootBody: fillBody,
 			outerDeclarations: outerDeclarations,
 			namesInScope: Set(outerDeclarations.map(\.label)),
-			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: [], declarations: [], body: fillBody),
+			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: heldNames.intersection(declaredNames), declarations: [], body: fillBody),
 			indentation: indentation,
 		)
 	}
