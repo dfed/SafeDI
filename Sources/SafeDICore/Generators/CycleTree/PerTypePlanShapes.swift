@@ -24,6 +24,8 @@ extension DependencyTreeGenerator {
 		/// The first shape found that keeps the root on today's tree, or `nil` where the root's code is laid out from its
 		/// per-type plan.
 		let reason: RootTreeChoiceObservation.PerPathReason?
+		/// How many scopes the root's tree reaches, the root among them, each counted once however many places build it.
+		let scopeCount: Int
 	}
 
 	/// Whether the tree of `root`, which reaches a cycle, holds a shape the per-type plan does not lay out yet, decided
@@ -105,7 +107,7 @@ extension DependencyTreeGenerator {
 				}
 			}
 		}
-		return ShapeOutsidePerTypePlan(reason: reason)
+		return ShapeOutsidePerTypePlan(reason: reason, scopeCount: scopes.count)
 	}
 
 	/// The shape of one dependency that keeps a root on today's tree, or `nil`.

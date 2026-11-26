@@ -671,6 +671,11 @@ public actor DependencyTreeGenerator {
 	/// root was planned by type, at the same cost; only a tree that grows with its paths passes it.
 	static let scopeGeneratorLimitOfTodaysTree = 1_500
 
+	/// How many places for each scope a root reaches its tree per path must also hold before it is abandoned: a root
+	/// of thousands of types whose tree holds each a few times passes `scopeGeneratorLimitOfTodaysTree` without growing
+	/// with its paths, and abandoning its tree would cost more than it saves. Both numbers read declarations alone.
+	static let placesPerScopeOfTodaysTree = 8
+
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
 	/// this module calls or generates once, here, and handing them down.
 	/// - Parameters:
@@ -760,6 +765,8 @@ public actor DependencyTreeGenerator {
 				let scopeGeneratorLimit: Int? = plansCyclesPerType && perPathReasonOfRun == nil
 					? RootTreeChoiceObservation.scopeGeneratorLimitOverride ?? Self.scopeGeneratorLimitOfTodaysTree
 					: nil
+				// A limit a test sets is the whole criterion, so a small tree can be planned.
+				let placesPerScopeOfTodaysTree: Int? = RootTreeChoiceObservation.scopeGeneratorLimitOverride == nil ? Self.placesPerScopeOfTodaysTree : nil
 				let rootTreeChoiceObserver = RootTreeChoiceObservation.observer
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
@@ -776,13 +783,17 @@ public actor DependencyTreeGenerator {
 							declaredTypeNames: declaredTypeNames,
 							constructionMemo: &constructionMemo,
 							scopeGeneratorLimit: scopeGeneratorLimit.map { places in
-								ScopeGeneratorLimit(places: places) {
-									guard let shapeOutsidePlan = Self.shapeOutsidePerTypePlan(inTreeOf: scope, cache: &receivedPropertiesCache) else { return false }
+								ScopeGeneratorLimit(places: places) { placesPassed in
+									guard let shapeOutsidePlan = Self.shapeOutsidePerTypePlan(inTreeOf: scope, cache: &receivedPropertiesCache) else { return .keepsTree }
 									if let reason = shapeOutsidePlan.reason {
 										rootTreeChoiceObserver?(scope.instantiable.concreteInstantiable.asSource, reason)
-										return false
+										return .keepsTree
+									} else if let placesOfTreeThatGrowsWithItsScopes = placesPerScopeOfTodaysTree.map({ $0 * shapeOutsidePlan.scopeCount }), placesPassed < placesOfTreeThatGrowsWithItsScopes {
+										// A large tree that does not grow with its paths: it is asked again only if it comes to hold
+										// that many places for each scope it reaches.
+										return .asksAgain(pastPlaces: placesOfTreeThatGrowsWithItsScopes)
 									} else {
-										return true
+										return .abandonsTree
 									}
 								}
 							},
@@ -791,16 +802,6 @@ public actor DependencyTreeGenerator {
 						todaysTree = nil
 					}
 					let passedLimit = todaysTree == nil
-					if passedLimit, comparesWithTodaysTree {
-						// A test that compares the plan with today's tree has the tree built whatever its size.
-						todaysTree = try record.createScopeGenerator(
-							in: table,
-							lazilyInstantiatedInstanceProperties: [],
-							erasedToConcreteExistential: false,
-							declaredTypeNames: declaredTypeNames,
-							constructionMemo: &constructionMemo,
-						)
-					}
 					// The root's code laid out from the per-type plan of its cycles, where today's tree was abandoned, the root
 					// has a plan and the type key lays it out.
 					var perTypeTree: RootScopeInfo.Tree?
@@ -845,16 +846,21 @@ public actor DependencyTreeGenerator {
 					var drawnTree: ScopeGenerator?
 					if passedLimit, let perTypeTree {
 						tree = perTypeTree
-						if drawsTrees {
+						if drawsTrees || comparesWithTodaysTree {
 							// The graph is drawn from a tree per path, whatever the root's code is laid out from, so the code is
-							// the same with and without a graph.
-							drawnTree = try todaysTree ?? record.createScopeGenerator(
+							// the same with and without a graph. A test that compares the plan with today's tree has the tree
+							// built too, after the plan, as a run that draws has.
+							let scopeGenerator = try record.createScopeGenerator(
 								in: table,
 								lazilyInstantiatedInstanceProperties: [],
 								erasedToConcreteExistential: false,
 								declaredTypeNames: declaredTypeNames,
 								constructionMemo: &constructionMemo,
 							)
+							drawnTree = scopeGenerator
+							if comparesWithTodaysTree {
+								todaysTree = scopeGenerator
+							}
 						}
 					} else if let todaysTree {
 						tree = .perPath(todaysTree)

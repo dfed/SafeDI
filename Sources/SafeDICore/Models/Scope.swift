@@ -405,8 +405,9 @@ extension ScopeRecord {
 	///     reuse when it is shared across trees, and which then keeps that pass's generators once the tree is created
 	///     (see `ConstructionMemo.Sharing`).
 	///   - scopeGeneratorLimit: The number of places the tree's passes may build or reuse between them, past which its
-	///     caller is asked once whether to abandon the tree (`ScopeGeneratorLimitExceeded`, and the memo keeps nothing of
-	///     it) or to build on with no limit, or `nil` for a tree built whatever its size.
+	///     caller is asked whether to abandon the tree (`ScopeGeneratorLimitExceeded`, and the memo keeps nothing of
+	///     it), to build on with no limit, or to build on and be asked again past more places
+	///     (`ScopeGeneratorLimit.Answer`), or `nil` for a tree built whatever its size.
 	///
 	/// The tree is created again while a scope that a lazy cycle closes on finds other parameters for its builder
 	/// function than it was created with (see `CycleParameter`): its cycle-closing scopes, created before it, pass
@@ -733,9 +734,15 @@ extension ScopeRecord {
 					// Every place counts, built or reused: a tree that grows with its paths reuses most of them.
 					scopeGeneratorCount += 1
 					if let limit = scopeGeneratorLimit, scopeGeneratorCount > limit.places {
-						guard !limit.abandonsTree() else { throw ScopeGeneratorLimitExceeded() }
-						// The caller keeps this tree: it is built on as if no limit had been given.
-						scopeGeneratorLimit = nil
+						switch limit.answer(limit.places) {
+						case .abandonsTree:
+							throw ScopeGeneratorLimitExceeded()
+						case .keepsTree:
+							// The caller keeps this tree: it is built on as if no limit had been given.
+							scopeGeneratorLimit = nil
+						case let .asksAgain(pastPlaces):
+							scopeGeneratorLimit = ScopeGeneratorLimit(places: pastPlaces, answer: limit.answer)
+						}
 					}
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential)
@@ -2770,24 +2777,35 @@ extension Instantiable {
 	}
 }
 
-// MARK: - ErasedInstantiatorForwardedPropertiesMismatchError
+// MARK: - ScopeGeneratorLimit
 
-/// An `@Instantiated` `ErasedInstantiator` or `SendableErasedInstantiator` whose first generic argument is not the
-/// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 /// Thrown where a tree's passes have built or reused more places than the limit its caller gave it and the caller
 /// abandons the tree. Never reported: the caller that gave the limit catches it and builds the root another way.
 struct ScopeGeneratorLimitExceeded: Error {}
 
-/// How many places a tree's passes may build or reuse between them before its caller is asked, once, whether to
-/// abandon it. A place is a property a scope of the tree instantiates, counted where its generator is built or
-/// reused from the construction memo: the count reads the declarations alone, never a name.
+/// How many places a tree's passes may build or reuse between them before its caller is asked what to do with it.
+/// A place is a property a scope of the tree instantiates, counted where its generator is built or reused from the
+/// construction memo: the count reads the declarations alone, never a name.
 struct ScopeGeneratorLimit {
+	/// What the caller answers once the tree holds more than `places` places.
+	enum Answer {
+		/// The tree is abandoned (`ScopeGeneratorLimitExceeded`).
+		case abandonsTree
+		/// The tree is built on with no limit, and nothing built so far is thrown away.
+		case keepsTree
+		/// The tree is built on, and the caller is asked again once it holds more than this many places.
+		case asksAgain(pastPlaces: Int)
+	}
+
 	let places: Int
-	/// Whether the tree is abandoned (`ScopeGeneratorLimitExceeded`). `false` keeps it: it is built on with no limit,
-	/// and nothing built so far is thrown away.
-	let abandonsTree: () -> Bool
+	/// The caller's answer for a tree that has passed `places`, which it is handed.
+	let answer: (_ places: Int) -> Answer
 }
 
+// MARK: - ErasedInstantiatorForwardedPropertiesMismatchError
+
+/// An `@Instantiated` `ErasedInstantiator` or `SendableErasedInstantiator` whose first generic argument is not the
+/// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
 	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.

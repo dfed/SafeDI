@@ -617,6 +617,37 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTreePastTheLimitHoldsFewPlacesForEachTypeItReaches() async throws {
+		// A root of 4,000 services beside one screen that opens itself: its tree passes the limit the tool ships with
+		// and reaches a cycle, but holds each type once or twice, so it does not grow with its paths. No plan is asked
+		// for, so none is reported.
+		let services = 0..<4_000
+		let properties = services.map { "    @Instantiated let service\($0): Service\($0)" }.joined(separator: "\n")
+		let parameters = services.map { "service\($0): Service\($0)" }.joined(separator: ", ")
+		let assignments = services.map { "self.service\($0) = service\($0)" }.joined(separator: "; ")
+		let declarations = services.map { "@Instantiable public final class Service\($0): Instantiable { public init() {} }" }.joined(separator: "\n")
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		\(properties)
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(\(parameters), screenBuilder: Instantiator<Screen>) { \(assignments); self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+
+		\(declarations)
+		""", abandoningTodaysTreePast: nil, comparingWithTreesWithin: .max, skipCompileVerification: true)
+
+		// The generated initializer takes 4,000 arguments, which the compiler takes minutes over; the code is compared
+		// with the code of a run that keeps every tree.
+		#expect(choices == [:])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsEveryRootOnTodaysTree_whenTreesAreWithinTheLimit() async throws {
 		// Under the limit the tool ships with, no root is asked for a plan, so none is reported.
 		let choices = try await choicesGeneratingTodaysCode(of: Self.layersOfScreens(layers: 2, width: 2), abandoningTodaysTreePast: nil)
@@ -737,6 +768,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		of swiftFileContent: String,
 		abandoningTodaysTreePast scopeGeneratorLimit: Int? = 0,
 		comparingWithTreesWithin todaysScopeGeneratorLimit: Int? = nil,
+		skipCompileVerification: Bool = false,
 	) async throws -> [String: RootTreeChoiceObservation.PerPathReason?] {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		// With no place allowed, every root's tree per path is abandoned at once, so each root is laid out from its plan
@@ -749,6 +781,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 					swiftFileContent: [swiftFileContent],
 					buildSwiftOutputDirectory: true,
 					filesToDelete: &filesToDelete,
+					skipCompileVerification: skipCompileVerification,
 				)
 			}
 		}
@@ -763,6 +796,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 				swiftFileContent: [swiftFileContent],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
+				skipCompileVerification: skipCompileVerification,
 			)
 		}
 		// A rename's `#sourceLocation` names its fixture's file, which each run writes in a folder of its own.
