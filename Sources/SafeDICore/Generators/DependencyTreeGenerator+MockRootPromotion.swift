@@ -1352,7 +1352,9 @@ extension DependencyTreeGenerator {
 		/// children, over-approximating the scopes a walk skips as repeats.
 		private mutating func reads(of scope: Scope) -> CycleWalkReads {
 			let scopeID = ObjectIdentifier(scope)
-			if let reads = readsByScope[scopeID] { return reads }
+			if let reads = readsByScope[scopeID] {
+				return reads
+			}
 			var properties = Set<Property>()
 			var receivedLabels = Set<String>()
 			var visitedScopes: Set<ObjectIdentifier> = [scopeID]
