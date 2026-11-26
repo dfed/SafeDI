@@ -50,8 +50,38 @@ extension DependencyTreeGenerator {
 		guard graph.nodes.indices.contains(where: { graph.isOnCycle($0) }) else { return nil }
 		// Every node is a scope the walk met, in the graph's order.
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
+		// The nodes each label of a builder builds, wherever the tree declares one.
+		var nodesBuiltByBuilderLabel = [String: [Int]]()
+		for (index, scope) in scopes.enumerated() {
+			var edge = 0
+			// The graph's edges are these properties, in this order.
+			for case let .instantiated(property, _, _) in scope.propertiesToGenerate {
+				let target = graph.edges(from: index)[edge]
+				edge += 1
+				if !property.propertyType.isConstant {
+					nodesBuiltByBuilderLabel[property.label, default: []].append(target)
+				}
+			}
+		}
+		// The nodes each node reaches, itself among them, found once for each node a received builder may build.
+		var nodesReachedByNode = [Int: Set<Int>]()
+		func reaches(_ node: Int, _ receiver: Int) -> Bool {
+			if let reached = nodesReachedByNode[node] {
+				return reached.contains(receiver)
+			} else {
+				var reached: Set = [node]
+				var stack = [node]
+				while let next = stack.popLast() {
+					for target in graph.edges(from: next) where reached.insert(target).inserted {
+						stack.append(target)
+					}
+				}
+				nodesReachedByNode[node] = reached
+				return reached.contains(receiver)
+			}
+		}
 		var reason: RootTreeChoiceObservation.PerPathReason?
-		for scope in scopes where reason == nil {
+		for (index, scope) in scopes.enumerated() where reason == nil {
 			// A call of a seam's generated initializer that passes no builder is a leaf, which receives the tier's
 			// parameters, and a seam built by its own initializer is built as any type is. A call that passes a builder
 			// keeps the root on today's tree.
@@ -63,6 +93,13 @@ extension DependencyTreeGenerator {
 			// declarations that answer it, so no body reads a form another path's declaration gives.
 			for dependency in scope.instantiable.dependencies where reason == nil {
 				reason = Self.shapeOutsidePerTypePlan(of: dependency)
+				// A builder received, or renamed, by a label whose declaration builds a type that reaches the receiver
+				// closes a loop of builders, whose member the layout does not make again at the call yet.
+				if reason == nil, let builderLabel = dependency.receivedBuilderLabel,
+				   nodesBuiltByBuilderLabel[builderLabel, default: []].contains(where: { reaches($0, index) })
+				{
+					reason = .receivesBuilderThatClosesLoop
+				}
 			}
 		}
 		if reason == nil {
@@ -99,21 +136,15 @@ extension DependencyTreeGenerator {
 	private static func shapeOutsidePerTypePlan(of dependency: Dependency) -> RootTreeChoiceObservation.PerPathReason? {
 		let property = dependency.property
 		switch dependency.source {
-		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+		case let .aliased(_, _, onlyIfAvailable),
+		     let .received(onlyIfAvailable):
 			// A rename reads the property it renames, whose form may differ from its own: a builder renamed as `Any` is
-			// a receive of the builder. Only the wrapper kinds are read of the fulfilling property here, since a scope of
-			// the same tree declares it, and that declaration refuses the root where it is optional or `Sendable`. A
-			// lift that admits such a declaration reads that form of the fulfilling property here in the same change.
+			// a receive of the builder (`receivedBuilderLabel`). Only the wrapper kinds are read of the fulfilling
+			// property, since a scope of the same tree declares it, and that declaration refuses the root where it is
+			// optional or `Sendable`. A lift that admits such a declaration reads that form of the fulfilling property
+			// in the same change.
 			if onlyIfAvailable {
 				return .holdsValueOnlyIfAvailable
-			} else if !property.propertyType.isConstant || !fulfillingProperty.propertyType.isConstant {
-				return .receivesInstantiator
-			}
-		case let .received(onlyIfAvailable):
-			if onlyIfAvailable {
-				return .holdsValueOnlyIfAvailable
-			} else if !property.propertyType.isConstant {
-				return .receivesInstantiator
 			}
 		case .forwarded,
 		     .instantiated:
@@ -143,6 +174,21 @@ extension DependencyTreeGenerator {
 			return .holdsSendableFunction
 		} else {
 			return nil
+		}
+	}
+}
+
+extension Dependency {
+	/// The label of the builder this dependency receives or renames, or `nil` where it receives no builder.
+	fileprivate var receivedBuilderLabel: String? {
+		switch source {
+		case let .aliased(fulfillingProperty, _, _):
+			fulfillingProperty.propertyType.isConstant ? nil : fulfillingProperty.label
+		case .received:
+			property.propertyType.isConstant ? nil : property.label
+		case .forwarded,
+		     .instantiated:
+			nil
 		}
 	}
 }

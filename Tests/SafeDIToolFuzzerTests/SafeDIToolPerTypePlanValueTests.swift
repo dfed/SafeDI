@@ -555,12 +555,13 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 
 	/// Every graph of seeds 0..<23,705 (15,000 laid out from their plans by the long run) whose plan writes other code than
 	/// today's tree and whose probes stay within the batch's limits: 31 graphs, which draw each of `PlanValueGraph.shapes`
-	/// but `renames`, `escapingName` and `erases` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
+	/// but `renames`, `escapingName`, `erases` and `receivesBuilder` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
 	/// 1,981, pinned, and 246, which spends the batch's traversals alike on both paths. The other 214 whose code differs
 	/// spend them too, and are left to the long run. Of seeds 0..<1,200, the 12 accepted graphs that forward a closure
 	/// `@escaping` are all laid out from their plans with today's code, so none is pinned; 51 graphs that open a screen
 	/// erased are accepted and 50 laid out from their plans, and two write other code than today's, 190 and 211, both
-	/// pinned.
+	/// pinned. Of seeds 0..<1,500, 65 graphs that receive a builder are accepted; the three whose code differs, 414, 692
+	/// and 1,423, spend the batch's traversals alike on both paths.
 	private static let pinnedSeeds: [UInt64] = [
 		190, 211, 335, 576, 1_100, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
 		6_798, 8_112, 8_776, 9_172, 9_746, 10_419, 10_499, 11_225, 11_856, 13_584, 14_751, 15_247,
@@ -577,7 +578,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 /// some models, forwarding an `Int` about a third of the time and opening one to three screens, and one or two roots
 /// that build every service and open one or two screens, directly or through a type in between. A few graphs draw a
 /// lazily instantiated wrapper, a rename, a typealiased closure forwarded and received `@escaping` or a screen opened
-/// through an erased instantiator of a concrete existential, which a plan lays out, or a `Sendable` wrapper or a value received only if
+/// through an erased instantiator of a concrete existential or a builder received, which a plan lays out, or a `Sendable` wrapper or a value received only if
 /// available, which keep their roots on today's tree. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
 /// the seed, so that a batch compiles many graphs side by side, and every class stores two counters' values: the
 /// creation stamp the comparator reads (`DifferentialValueCreationStamp`) and `creationOrder`, which it describes.
@@ -595,7 +596,8 @@ struct PlanValueGraph {
 	/// opens itself), `declaresModel`, `receivesModel` (a screen receives a model it does not declare), `typeBetween`
 	/// (a root opens its screens through a type in between), `screenByValue` (a root holds a screen by value),
 	/// `twoRoots`, `renames` (a screen renames a service) `escapingName` (a screen forwards a typealiased closure
-	/// `@escaping`) and `erases` (a screen opens another through an erased instantiator).
+	/// `@escaping`) `erases` (a screen opens another through an erased instantiator)
+	/// and `receivesBuilder` (a screen receives a builder the root declares).
 	let shapes: [String]
 
 	/// A value of each forwarding type's forwarded properties, for the comparator to build its screens with.
@@ -713,6 +715,9 @@ struct PlanValueGraph {
 		var receivesModel = false
 		var renames = false
 		var erases = false
+		// A few graphs have screens receive a builder of a leaf that the root declares.
+		let drawsReceivedBuilder = odd > 0.86 && odd < 0.93
+		var receivesBuilder = false
 		for screen in 0..<screenCount {
 			var properties = [Property]()
 			if forwardsClosure[screen] {
@@ -746,6 +751,10 @@ struct PlanValueGraph {
 					properties.append(Property(attribute: "@Instantiated", label: wrapper == "LazilyInstantiated" ? "s\(edge)Lazy" : "s\(edge)Builder", type: "\(wrapper)<\(name("S\(edge)"))>"))
 				}
 			}
+			if drawsReceivedBuilder, random.chance(0.3) {
+				properties.append(.received("leafBuilder", "Instantiator<\(name("Leaf"))>"))
+				receivesBuilder = true
+			}
 			if odd > 0.4, odd < 0.5, random.chance(0.3) {
 				properties.append(Property(attribute: "@Received(onlyIfAvailable: true)", label: "maybe", type: name("Maybe") + "?"))
 			}
@@ -765,6 +774,9 @@ struct PlanValueGraph {
 		if odd > 0.4, odd < 0.5 {
 			declare("Maybe", [])
 		}
+		if drawsReceivedBuilder {
+			declare("Leaf", [])
+		}
 		if erases {
 			declarations.append("public final class \(name("AnyScreen")) {\n    public init(_ screen: AnyObject) { self.screen = screen }\n    public let screen: AnyObject\n}")
 		}
@@ -781,6 +793,9 @@ struct PlanValueGraph {
 			let buildsTypeBetween = random.chance(0.25)
 			if odd > 0.4, odd < 0.5, random.chance(0.5) {
 				properties.append(Property(attribute: "@Instantiated", label: "maybe", type: name("Maybe")))
+			}
+			if drawsReceivedBuilder {
+				properties.append(Property(attribute: "@Instantiated", label: "leafBuilder", type: "Instantiator<\(name("Leaf"))>"))
 			}
 			for model in models where random.chance(0.3) {
 				properties.append(Property(attribute: "@Instantiated", label: lowered(model), type: name(model)))
@@ -847,6 +862,9 @@ struct PlanValueGraph {
 		}
 		if erases {
 			shapes.append("erases")
+		}
+		if receivesBuilder {
+			shapes.append("receivesBuilder")
 		}
 		self.shapes = shapes
 	}

@@ -38,8 +38,9 @@ public enum RootTreeChoiceObservation {
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree holds a `@Sendable` function.
 		case holdsSendableFunction
-		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
-		case receivesInstantiator
+		/// A type of the root's tree receives, or renames, a builder by a label whose declaration builds a type that
+		/// reaches the receiver, which closes a loop of builders.
+		case receivesBuilderThatClosesLoop
 		/// The root's tree calls a seam's generated initializer or a public mock with a builder.
 		case buildsSeam
 		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares, and that a type other

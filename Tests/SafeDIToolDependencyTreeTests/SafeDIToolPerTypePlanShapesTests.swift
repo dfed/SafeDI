@@ -824,7 +824,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 			},
 		)
 
-		#expect(choices == ["Root": .receivesInstantiator])
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
 	}
 
 	@Test
@@ -1347,8 +1347,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeRenamesInstantiatorAsAnotherType() async throws {
-		// A screen renames a builder the root declares as a value of another type, which is a receive of the builder.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleRenamesInstantiatorAsAnotherType() async throws {
+		// A screen renames a builder the root declares as a value of another type, which is a receive of the builder, and
+		// the screen before it receives the builder by its own label.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let leafBuilder: Instantiator<Leaf>
@@ -1357,8 +1358,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 
 		@Instantiable public final class S0: Instantiable {
+		    @Received let leafBuilder: Instantiator<Leaf>
 		    @Instantiated let s1Builder: Instantiator<S1>
-		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		    public init(leafBuilder: Instantiator<Leaf>, s1Builder: Instantiator<S1>) { self.leafBuilder = leafBuilder; self.s1Builder = s1Builder }
 		}
 
 		@Instantiable public final class S1: Instantiable {
@@ -1370,12 +1372,12 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .receivesInstantiator])
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeRenamesLazilyInstantiatedAsAnotherType() async throws {
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleRenamesLazilyInstantiatedAsAnotherType() async throws {
 		// A screen renames a `LazilyInstantiated` the root declares as a value of another type, which is a receive of the wrapper.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -1398,12 +1400,12 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .receivesInstantiator])
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeReceivesInstantiator() async throws {
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesInstantiatorRootDeclares() async throws {
 		// A screen receives an instantiator the root declares.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -1426,7 +1428,124 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .receivesInstantiator])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesInstantiatorItsCycleDeclares() async throws {
+		// A screen declares a builder of a row on no cycle, and the screen it opens receives that builder.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let rowBuilder: Instantiator<Row>
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(rowBuilder: Instantiator<Row>, s1Builder: Instantiator<S1>) { self.rowBuilder = rowBuilder; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let rowBuilder: Instantiator<Row>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(rowBuilder: Instantiator<Row>, s0Builder: Instantiator<S0>) { self.rowBuilder = rowBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Row: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesErasedInstantiator() async throws {
+		// A screen receives an erased builder of a row the root declares.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated(fulfilledByType: "Row", erasedToConcreteExistential: false) let rowBuilder: ErasedInstantiator<(), any Rowish>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(rowBuilder: ErasedInstantiator<(), any Rowish>, s0Builder: Instantiator<S0>) { self.rowBuilder = rowBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let rowBuilder: ErasedInstantiator<(), any Rowish>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(rowBuilder: ErasedInstantiator<(), any Rowish>, s0Builder: Instantiator<S0>) { self.rowBuilder = rowBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Row: Instantiable, Rowish { public init() {} }
+
+		public protocol Rowish {}
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleReceivesBuilderOfItsOwnCycle() async throws {
+		// The root declares the builder of the first screen, and the second screen receives it to open the first again, a
+		// loop of builders, whose member the layout does not make again at the call yet.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let s0Builder: Instantiator<S0>
+		    @Instantiated let s2Builder: Instantiator<S2>
+		    public init(s0Builder: Instantiator<S0>, s2Builder: Instantiator<S2>) { self.s0Builder = s0Builder; self.s2Builder = s2Builder }
+		}
+
+		@Instantiable public final class S2: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+		""")
+
+		#expect(choices == ["Root": .receivesBuilderThatClosesLoop])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesLazilyInstantiated() async throws {
+		// A screen receives a `LazilyInstantiated` the root declares.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: LazilyInstantiated<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: LazilyInstantiated<Leaf>, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let leaf: LazilyInstantiated<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: LazilyInstantiated<Leaf>, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
