@@ -126,6 +126,7 @@ extension TypeKeyLayout {
 							record: variant.record,
 							isInSendableFamily: variant.isInSendableFamily,
 							domainLabels: [],
+							outerView: [:],
 							forwardedLabels: Set(variant.record.parameterProperties.map(\.label)),
 							cycleParameters: variant.parameters,
 						))

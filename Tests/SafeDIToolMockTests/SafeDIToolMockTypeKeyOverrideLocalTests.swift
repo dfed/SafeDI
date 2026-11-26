@@ -774,36 +774,36 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 		            if let safeDIBuilder = __safeDI_L_configuration.safeDIBuilder { safeDIBuilder(__safeDI_L_configuration.title) } else { L(title: __safeDI_L_configuration.title) }
 		        }
 		        let l: L = __safeDI_l(__safeDI_L_configuration: safeDIOverrides.l)
-		        func __safeDI_wBuilder(__safeDI_W_configuration: W.SafeDIMockConfiguration) -> W {
+		        func __safeDI_wBuilder(l: L, __safeDI_W_configuration: W.SafeDIMockConfiguration) -> W {
 		            let uBuilder = Instantiator<U> {
-		                __safeDI_uBuilder(__safeDI_U_configuration: U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration)
+		                __safeDI_uBuilder(l: l, __safeDI_U_configuration: U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration)
 		            }
 		            let vBuilder = Instantiator<V> {
-		                __safeDI_vBuilder(__safeDI_V_configuration: __safeDI_W_configuration.vBuilder)
+		                __safeDI_vBuilder(l: l, __safeDI_V_configuration: __safeDI_W_configuration.vBuilder)
 		            }
 		            return if let safeDIBuilder = __safeDI_W_configuration.safeDIBuilder { safeDIBuilder(uBuilder, vBuilder) } else { W(uBuilder: uBuilder, vBuilder: vBuilder) }
 		        }
-		        func __safeDI_uBuilder(__safeDI_U_configuration: U.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?) -> U {
+		        func __safeDI_uBuilder(l: L, __safeDI_U_configuration: U.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?) -> U {
 		            let pBuilder = Instantiator<P> {
 		                __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest, __safeDI_U_configuration_nearest: __safeDI_U_configuration)
 		            }
 		            let wBuilder = Instantiator<W> {
-		                __safeDI_wBuilder(__safeDI_W_configuration: __safeDI_W_configuration_nearest ?? W.SafeDIMockConfiguration())
+		                __safeDI_wBuilder(l: l, __safeDI_W_configuration: __safeDI_W_configuration_nearest ?? W.SafeDIMockConfiguration())
 		            }
 		            return if let safeDIBuilder = __safeDI_U_configuration.safeDIBuilder { safeDIBuilder(pBuilder, wBuilder) } else { U(pBuilder: pBuilder, wBuilder: wBuilder) }
 		        }
 		        func __safeDI_pBuilder(__safeDI_P_configuration: P.SafeDIMockConfiguration, __safeDI_W_configuration_nearest: W.SafeDIMockConfiguration?, __safeDI_U_configuration_nearest: U.SafeDIMockConfiguration?) -> P {
 		            let l: L = __safeDI_l(__safeDI_L_configuration: __safeDI_P_configuration.l)
 		            let uBuilder = Instantiator<U> {
-		                __safeDI_uBuilder(__safeDI_U_configuration: __safeDI_U_configuration_nearest ?? U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest)
+		                __safeDI_uBuilder(l: l, __safeDI_U_configuration: __safeDI_U_configuration_nearest ?? U.SafeDIMockConfiguration(), __safeDI_W_configuration_nearest: __safeDI_W_configuration_nearest)
 		            }
 		            return if let safeDIBuilder = __safeDI_P_configuration.safeDIBuilder { safeDIBuilder(l, uBuilder) } else { P(l: l, uBuilder: uBuilder) }
 		        }
-		        func __safeDI_vBuilder(__safeDI_V_configuration: ((L) -> V)?) -> V {
+		        func __safeDI_vBuilder(l: L, __safeDI_V_configuration: ((L) -> V)?) -> V {
 		            if let safeDIBuilder = __safeDI_V_configuration { safeDIBuilder(l) } else { V(l: l) }
 		        }
 		        let wBuilder = Instantiator<W> {
-		            __safeDI_wBuilder(__safeDI_W_configuration: safeDIOverrides.wBuilder)
+		            __safeDI_wBuilder(l: l, __safeDI_W_configuration: safeDIOverrides.wBuilder)
 		        }
 		        return Root(l: l, wBuilder: wBuilder)
 		    }
