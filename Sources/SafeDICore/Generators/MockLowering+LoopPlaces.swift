@@ -40,10 +40,18 @@ extension MockLowering.Walk {
 				pathsCoveredByLoopUnits.insert(member.path)
 			}
 		}
-		// Override locals before the functions bind values the text place would have to list.
-		guard unit.prelude.isEmpty else {
-			unrecordedReasons[first.path] = "loop:prelude"
-			return
+		// Override locals before the functions bind values the text place would have to list. In `.v3Unstable` they are the
+		// configurations each member reads before its function (`let <label>Configuration = …`), which only the loop's own
+		// text reads: the text declares them, and lists what they read. `.v2` keeps the walk's body, as it did.
+		let localNames: Set<String>
+		if unit.prelude.isEmpty {
+			localNames = []
+		} else {
+			guard isV3, let names = Self.namesBoundByLocals(unit.prelude) else {
+				unrecordedReasons[first.path] = "loop:prelude"
+				return
+			}
+			localNames = names
 		}
 		// In `.v3Unstable`, the bindings of the members `mock()` is passed a `SafeDIReceived` for, which the level writes before
 		// the loop and the loop's text reads.
@@ -51,7 +59,7 @@ extension MockLowering.Walk {
 			guard case let .property(_, property, _, _, _, _) = member.generator.scopeData else { return nil }
 			return v3PromotedLoopMemberPreludes[property]
 		}
-		let preludeNames = preludes.reduce(into: Set<String>()) { $0.formUnion($1.boundNames) }
+		let preludeNames = preludes.reduce(into: localNames) { $0.formUnion($1.boundNames) }
 		for prelude in preludes where !v3PromotedParameterDeclarations.contains(where: { $0.label == prelude.parameter.label }) {
 			v3PromotedParameterDeclarations.append(prelude.parameter)
 		}
@@ -92,8 +100,9 @@ extension MockLowering.Walk {
 			unrecordedReasons[first.path] = "loop:namesFunctionOrLocalAround"
 			return
 		}
-		// The bindings read the functions the unit declares, and the members the unit binds before them.
-		let bindingText = Self.unindenting(unit.bindings, by: indent).joined(separator: "\n")
+		// The bindings read the functions the unit declares, and the members the unit binds before them; the locals before
+		// the functions read what is above the loop.
+		let bindingText = Self.unindenting(unit.prelude + unit.bindings, by: indent).joined(separator: "\n")
 		let bindingTokens = MockLowering.codeTokens(in: bindingText)
 		guard !bindingTokens.contains(where: { !$0.isMember && $0.name.hasPrefix(ReservedName.builderFunctionNamePrefix) && !place.declaredFunctionNames.contains($0.name) && !preludeNames.contains($0.name) }) else {
 			unrecordedReasons[first.path] = "loop:namesFunctionOrLocalAround"
@@ -122,6 +131,21 @@ extension MockLowering.Walk {
 			otherBindings: Array(bindings.dropFirst()),
 			declaredFunctionNames: place.declaredFunctionNames,
 		))
+	}
+
+	/// The names `locals` bind, each line of which binds one name, `let <name> = …`; `nil` where a line does anything else.
+	private static func namesBoundByLocals(_ locals: [String]) -> Set<String>? {
+		var names = Set<String>()
+		for element in locals {
+			for line in element.split(separator: "\n") {
+				let trimmed = line.drop { $0 == " " || $0 == "\t" }
+				guard trimmed.hasPrefix("let ") else { return nil }
+				let name = trimmed.dropFirst(4).prefix { $0 != ":" && $0 != " " }
+				guard !name.isEmpty, trimmed.dropFirst(4 + name.count).contains(" = ") else { return nil }
+				names.insert(String(name))
+			}
+		}
+		return names
 	}
 
 	/// The unit's text, each line without the unit's indent. An element can hold several lines, such as a rebinding
