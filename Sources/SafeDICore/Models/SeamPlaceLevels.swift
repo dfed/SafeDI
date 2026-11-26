@@ -31,6 +31,13 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 	public let seamType: TypeDescription
 	/// Each place the seam's tree builds, in the order the generated code builds them.
 	public let places: [Place]
+	/// Test only, deleted before merge: the seam's place graph beside its per-site holes, for the differential oracle
+	/// (`SeamSignature.Places.Observation`). Left out of `==`, which compares the levels alone.
+	public var placesObservation: SeamSignature.Places.Observation?
+
+	public static func == (lhs: SeamPlaceLevels, rhs: SeamPlaceLevels) -> Bool {
+		lhs.seamType == rhs.seamType && lhs.places == rhs.places
+	}
 
 	/// One place of a hole, with its levels and the fields of its scope struct.
 	public struct Place: Sendable, Equatable {

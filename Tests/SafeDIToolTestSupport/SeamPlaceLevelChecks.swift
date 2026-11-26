@@ -108,18 +108,11 @@ extension SeamPlaceLevels {
 func collectingPlaceLevelDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
-	// Test only, deleted before merge: every seam's place graph must answer as its per-site walk (`SeamPlacesOracle`).
-	let enclosingPlacesObserver = SeamSignature.Places.observer
-	let result = try await SeamSignature.Places.$observer.withValue({ observation in
-		continuation.yield(SeamPlacesOracle.mismatches(of: observation))
-		enclosingPlacesObserver?(observation)
+	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches)
+		enclosingObserver?(placeLevels)
 	}) {
-		try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-			continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches)
-			enclosingObserver?(placeLevels)
-		}) {
-			try await operation()
-		}
+		try await operation()
 	}
 	continuation.finish()
 	var disagreements = [String]()

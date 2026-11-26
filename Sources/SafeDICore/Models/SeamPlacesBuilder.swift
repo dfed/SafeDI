@@ -25,7 +25,7 @@ import Foundation
 /// per parent it is reached from, and a case per owner level and family.
 ///
 /// A step of the change that holds places by case: it reads the per-site walk, so it is as costly as that walk, and runs
-/// only while a test observes the graph (`SeamSignature.Places.observer`). The walk that builds the graph directly, once per
+/// only while a test observes the graph (`SeamPlaceLevels.observer`). The walk that builds the graph directly, once per
 /// level variant, replaces it. It holds its drafts for one computation of a seam's holes.
 struct SeamPlacesBuilder {
 	/// A declaration of a level, with the sites of the places of the tree it instantiates where a type above the seam could
