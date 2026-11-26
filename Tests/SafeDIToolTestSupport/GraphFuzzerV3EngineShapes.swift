@@ -378,11 +378,13 @@ extension GraphFuzzerFixture {
 
 // MARK: - O3: layout parity
 
-/// O3, layout parity: the type key must lay out the same mocks of a graph under `.v3Unstable` as under `.v2`. Each side's
-/// tool run reports, per internal mock root, `laidOut` or why the root keeps the walk's body
-/// (`MockLowering.typeKeyLayoutObserver`); the oracle fails a graph where a root's outcome differs between the two, or a
-/// root reports under one version only. v3 prunes no cycle edge where `.v2` does, so a v3 root may in principle lay out
-/// where `.v2` falls back: that difference is reported too, with its direction, so the step that makes it says so.
+/// O3, layout parity: the type key must lay out under `.v3Unstable` every mock of a graph it lays out under `.v2`. Each
+/// side's tool run reports, per internal mock root, `laidOut` or why the root keeps the walk's body
+/// (`MockLowering.typeKeyLayoutObserver`); the oracle fails a graph where `.v3Unstable` keeps the walk's body for a root
+/// `.v2` lays out, where both keep it for different reasons, or where a root reports under one version only, since each
+/// loses sharing `.v2` has. A root `.v3Unstable` lays out where `.v2` keeps the walk's body is the expected direction:
+/// v3 prunes no cycle edge, and its configuration per type is never named apart, so it is counted by `.v2`'s reason
+/// (`Difference.v2FallbackKind`) and pinned, not failed, and a change to `.v2` that lays one of them out moves a pin.
 ///
 /// Hand mutation that must make it fire: force one `.v3Unstable` place's record to fall back (`v3FallsBackWhereV2LaysOut`).
 enum GraphFuzzerV3LayoutParity {
@@ -401,6 +403,23 @@ enum GraphFuzzerV3LayoutParity {
 
 		var description: String {
 			"\(kind.rawValue): `\(mockedType).mock()` is \(v2Outcome ?? "not reported") under .v2 and \(v3Outcome ?? "not reported") under .v3Unstable"
+		}
+
+		/// Whether the difference fails parity: every kind but a root `.v3Unstable` lays out where `.v2` does not.
+		var failsParity: Bool {
+			switch kind {
+			case .v3FallsBackWhereV2LaysOut, .fallbackReasonsDiffer, .mockReportedUnderOneVersionOnly: true
+			case .v3LaysOutWhereV2FallsBack: false
+			}
+		}
+
+		/// The kind of `.v2`'s reason for keeping the walk's body, without its detail: `namedApart` for
+		/// `unrecorded:namedApart`, `unplannedLines` for `unrecorded:unplannedLines:rebindings`, `readUnresolved` for
+		/// `readUnresolved:<label>`, `engineRefused` as it is.
+		var v2FallbackKind: String? {
+			guard let v2Outcome else { return nil }
+			let reason = v2Outcome.hasPrefix("unrecorded:") ? v2Outcome.dropFirst("unrecorded:".count) : Substring(v2Outcome)
+			return String(reason.prefix { $0 != ":" })
 		}
 	}
 
