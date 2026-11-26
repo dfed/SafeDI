@@ -2950,6 +2950,7 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3035,6 +3036,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations, extensionSource: extensionSource)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3523,6 +3526,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingScreensLaidOutFromPerTypePlan`'s choices: whether a graph gains `PlanRoot`'s tree, and every
+		/// shape of that tree.
+		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8399,6 +8405,117 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
+
+		/// Whether any declaration, or the extension-based type, names a `Sendable` wrapper.
+		private static func namesSendableWrapper(_ declarations: [TypeDeclaration], extensionSource: String?) -> Bool {
+			let sendableWrapperNames = ["SendableInstantiator<", "SendableErasedInstantiator<", "SendableLazilyInstantiated<"]
+			func names(_ text: String) -> Bool {
+				sendableWrapperNames.contains { text.contains($0) }
+			}
+			return declarations.contains { declaration in
+				declaration.properties.contains { names($0.type) } || declaration.additionalDeclarations.contains(where: names)
+			} || extensionSource.map(names) ?? false
+		}
+
+		// MARK: Screens laid out from the per-type plan
+
+		/// Adds, to one base corpus graph in twenty whose wrappers are all plain and that names no `Sendable` wrapper,
+		/// `PlanRoot`'s tree: screens that open one another, in the shape the tool lays out from a root's per-type plan rather than per path
+		/// (`DependencyTreeGenerator.shapeOutsidePerTypePlan(inTreeOf:cache:)` finds nothing in it), which the corpus's other
+		/// draws almost never are. `PlanRoot` instantiates one or two services by value and opens `PlanScreen0` through an
+		/// instantiator. Three to five screens open the next one around a ring through instantiators, and now and then
+		/// another screen too, so every screen is in one cycle. `PlanScreen0` instantiates one or two models, which the other
+		/// screens now and then receive, a value their own cycle declares again each time it builds `PlanScreen0`; a screen
+		/// now and then receives a service only the root declares, and forwards a value of its own (`planId<i>`), which its
+		/// opener's instantiator is called with. A screen now and then builds `PlanPane<i>` by value, which opens a screen
+		/// through an instantiator, a member of the cycle built by value; and one graph in three, one screen builds
+		/// `PlanDetail` by value, which builds `PlanPart`, a tree outside the cycle built once. Each type's properties are in
+		/// an order of their own. The draw holds none of what keeps a root on today's tree: no seam, rename, optional, value
+		/// received only if available, received instantiator, lazy or `Sendable` wrapper, erasure, function type, label held
+		/// in two forms, tree outside the cycles built twice, or label a screen receives that another type of the root's tree
+		/// declares outside its cycle. `perTypePlanRandom` draws only for this pass, after every other, and only in the base
+		/// corpus, whose value oracle compares `PlanRoot()` with its mock.
+		private mutating func addingScreensLaidOutFromPerTypePlan(to declarations: [TypeDeclaration], extensionSource: String?) -> [TypeDeclaration] {
+			// A graph that names a `Sendable` wrapper and a plain one plans no root per type (`moduleNamesNonSendableWrapperAndSendableBuilder`),
+			// and one whose wrappers are all `Sendable` keeps every root holding one on today's tree (`holdsSendableWrapperOrFunction`).
+			// A graph whose wrappers are plain still names a `Sendable` one where another pass draws it, such as the mock vocabulary.
+			guard features.isEmpty,
+			      sendability == .nonSendable,
+			      perTypePlanRandom.percentChance(5),
+			      !Self.namesSendableWrapper(declarations, extensionSource: extensionSource)
+			else { return declarations }
+			var declarations = declarations
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				// Each type's properties in an order of their own, so that no order the walk relies on is always drawn.
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, perTypePlanRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+				))
+			}
+			func screenBuilder(_ screen: Int) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: "planScreen\(screen)Builder", type: "Instantiator<\(prefix)PlanScreen\(screen)>")
+			}
+			let screenCount = perTypePlanRandom.integer(in: 3...5)
+			let serviceCount = perTypePlanRandom.integer(in: 1...2)
+			let modelCount = perTypePlanRandom.integer(in: 1...2)
+			let services = (0..<serviceCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planService\($0)", type: "\(prefix)PlanService\($0)") }
+			let models = (0..<modelCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planModel\($0)", type: "\(prefix)PlanModel\($0)") }
+			for index in 0..<serviceCount {
+				append("PlanService\(index)", [])
+			}
+			for index in 0..<modelCount {
+				append("PlanModel\(index)", [])
+			}
+			let detailScreen = perTypePlanRandom.percentChance(33) ? perTypePlanRandom.integer(in: 0...(screenCount - 1)) : nil
+			for screen in 0..<screenCount {
+				var properties = [screenBuilder((screen + 1) % screenCount)]
+				for other in 0..<screenCount where other != screen && other != (screen + 1) % screenCount && perTypePlanRandom.percentChance(20) {
+					properties.append(screenBuilder(other))
+				}
+				if screen == 0 {
+					properties += models
+				} else {
+					properties += models.filter { _ in perTypePlanRandom.percentChance(50) }.map {
+						PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+					}
+					if perTypePlanRandom.percentChance(30) {
+						properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "planId\(screen)", type: "Int"))
+					}
+				}
+				properties += services.filter { _ in perTypePlanRandom.percentChance(40) }.map {
+					PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+				}
+				if screen != 0, perTypePlanRandom.percentChance(30) {
+					properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planPane\(screen)", type: "\(prefix)PlanPane\(screen)"))
+					var paneProperties = [screenBuilder(perTypePlanRandom.integer(in: 0...(screenCount - 1)))]
+					if perTypePlanRandom.percentChance(50) {
+						paneProperties.append(PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type))
+					}
+					append("PlanPane\(screen)", paneProperties)
+				}
+				if detailScreen == screen {
+					properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planDetail", type: "\(prefix)PlanDetail"))
+				}
+				append("PlanScreen\(screen)", properties)
+			}
+			if detailScreen != nil {
+				append("PlanDetail", [
+					PropertyDeclaration(attribute: "@Instantiated", label: "planPart", type: "\(prefix)PlanPart"),
+					PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type),
+				])
+				append("PlanPart", [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)])
+			}
+			append("PlanRoot", isRoot: true, services + [screenBuilder(0)])
+			return declarations
+		}
+
+		private static let perTypePlanRandomSeedMask: UInt64 = 0x506C616E547970
 
 		// MARK: Cycle parameters
 
