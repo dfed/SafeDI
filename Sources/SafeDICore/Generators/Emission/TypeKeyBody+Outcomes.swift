@@ -71,7 +71,11 @@ extension TypeKeyLayout {
 			for label in reads[membersByClass[owner][0]] {
 				var declarations = [TypeDeclaration]()
 				for member in membersByClass[owner] {
-					declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
+					// A view's places can resolve a label to other declarations outside it, alike in kind and type, each of
+					// which its call passes.
+					for edge in bodies[member].edges {
+						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member, edge: edge)))
+					}
 					for closer in closersByTarget[member] ?? [] {
 						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
 					}

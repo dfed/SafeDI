@@ -73,15 +73,21 @@ extension TypeKeyLayout {
 						}
 						labels.formUnion(bodies[target].domainLabels)
 					}
-					var outerView = [String: PathValue]()
+					// A view whose closers call a function above it keeps the declarations themselves (`KeyedDeclaration`).
+					let keysByKind = domain.closedOnFunctionNames.isEmpty
+					var outerView = [String: KeyedDeclaration]()
+					var outerDeclarations = [String: PathValue]()
 					for label in labels {
-						outerView[label] = lookUp(label, inBody: body, before: position)
+						let declaration = lookUp(label, inBody: body, before: position)
+						outerDeclarations[label] = declaration
+						outerView[label] = keyed(declaration, byKind: keysByKind)
 					}
+					outerDeclarationsByEdge[[body, position]] = outerDeclarations
 					let key = ViewKey(
 						node: built.node,
 						isInSendableFamily: isInSendableFamily,
 						outerView: outerView,
-						cycleArguments: built.callCycleArguments.map { pathValue(of: $0, inBody: body, before: position) },
+						cycleArguments: built.callCycleArguments.map { keyed(pathValue(of: $0, inBody: body, before: position), byKind: keysByKind) },
 					)
 					passedArgumentsByCall[[body, position]] = built.passedArguments
 					if let view = viewsByKey[key] {
@@ -345,18 +351,43 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// The declaration the place whose function is `body` resolves `label` to where it is called from its parent: what its
-	/// binding passes a cycle parameter, else the first declaration outside it its reads of the label resolve to, `.none`
-	/// where they all read `nil`, else the nearest declaration at its binding.
+	/// The declaration the place whose function is `body` resolves `label` to where its first place is called from its
+	/// parent (`resolution(of:atPlace:edge:)`).
 	func resolution(of label: String, atPlace body: Int) -> PathValue {
+		resolution(of: label, atPlace: body, edge: (parent: bodies[body].parent, position: bodies[body].position))
+	}
+
+	/// The declaration the place of view `body` at `edge`, a statement of its parent that builds it, resolves `label` to:
+	/// what that binding passes a cycle parameter, else `.none` where every read of the label inside the view reads `nil`,
+	/// else the nearest declaration at that binding, which every read of it inside the view resolves to. Whether every
+	/// read is `nil` is the view's own, so the same at each of its edges: the view's key holds which of its labels resolve
+	/// to none.
+	func resolution(of label: String, atPlace body: Int, edge: (parent: Int, position: Int)) -> PathValue {
 		if bodies[body].cycleParameterLabels.contains(label) {
 			bodies[body].record?.callCycleArguments.first(where: { $0.label == label }).map {
-				pathValue(of: $0, inBody: bodies[body].parent, before: bodies[body].position)
+				pathValue(of: $0, inBody: edge.parent, before: edge.position)
 			} ?? .none
-		} else if let value = escapingReads[body][label] {
-			value
+		} else if escapingReads[body][label] == PathValue.none {
+			.none
 		} else {
-			lookUp(label, inBody: bodies[body].parent, before: bodies[body].position)
+			// The walk looked up each label the view reads outside it at each of its places (`outerDeclarationsByEdge`).
+			outerDeclarationsByEdge[[edge.parent, edge.position]]?[label] ?? lookUp(label, inBody: edge.parent, before: edge.position)
+		}
+	}
+
+	/// What a view's key holds of `value`, a declaration outside it: the declaration itself, or, keyed `byKind`, whether
+	/// there is one, and for one outside the root's body its kind and type.
+	func keyed(_ value: PathValue, byKind: Bool) -> KeyedDeclaration {
+		guard byKind else { return .absolute(value) }
+		switch value {
+		case .none:
+			return .none
+		case let .statement(body, index):
+			return body == 0 ? .root(index: index) : .outside(kind: .statement, type: type(of: value)?.asSource)
+		case .forwarded:
+			return .outside(kind: .forwarded, type: type(of: value)?.asSource)
+		case .cycleParameter:
+			return .outside(kind: .cycleParameter, type: type(of: value)?.asSource)
 		}
 	}
 }

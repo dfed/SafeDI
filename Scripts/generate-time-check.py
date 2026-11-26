@@ -173,6 +173,8 @@ alternating runs after one untimed run of each graph. A run still going after 30
   PR-parents-router            one module: layers of three screens, each holding `Instantiator`s of every screen of
                                the next layer, instantiating a `Router` under its layer's label and receiving the
                                one its parents declare.
+  PRS-seam-parents-router      the same screens under a seam `Home` of module `Feature`, whose tree its own module
+                               lays out; module `App`: the root, which builds `Home`.
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -604,10 +606,11 @@ def shape_alternating_renames(layers, only_if_available, width=4):
     return [("App", [], source)]
 
 
-def shape_parent_router(layers, width=3):
+def shape_parent_router(layers, width=3, seam=False):
     """One module: a root over `layers` layers of `width` screens, each holding `Instantiator`s of every screen of the
     next layer, instantiating a `Router` under its own layer's label and receiving the one the layer before declares,
-    so each screen receives what every one of its parents declares."""
+    so each screen receives what every one of its parents declares. With `seam`, module `Feature` holds the screens
+    under a seam `Home`, whose own module lays out its tree, and module `App` holds the root, which builds `Home`."""
     source = "import SafeDI\n\n" + declaration("@Instantiable", "Router", [])
     for layer in range(layers):
         for position in range(width):
@@ -617,6 +620,9 @@ def shape_parent_router(layers, width=3):
             if layer + 1 < layers:
                 properties += [("@Instantiated", f"screen{layer + 1}x{child}Builder", f"Instantiator<Screen{layer + 1}x{child}>") for child in range(width)]
             source += declaration("@Instantiable", f"Screen{layer}x{position}", properties)
+    if seam:
+        source += declaration("@Instantiable(generateDependencyTree: true)", "Home", [("@Instantiated", f"screen0x{child}Builder", f"Instantiator<Screen0x{child}>") for child in range(width)])
+        return [("Feature", [], source), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "home", "Home")]))]
     source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", f"screen0x{child}Builder", f"Instantiator<Screen0x{child}>") for child in range(width)])
     return [("App", [], source)]
 
@@ -701,8 +707,8 @@ GROWTH_ROWS = {
     # path its walk reads; 2.47 and 3.26 while it holds the whole path.
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {}),
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {}),
-    # PR 0.33 s and 3.0 s (9.1), 48 MB and 175 MB (3.65); its code grows with the graph.
-    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {"time": 12.0, "memory": 4.5}),
+    "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {}),
+    "PRS-seam-parents-router": (lambda layers: shape_parent_router(layers, seam=True), 8, {}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
