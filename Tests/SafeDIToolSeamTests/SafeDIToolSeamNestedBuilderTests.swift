@@ -3851,6 +3851,36 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesBuilderTheDeclaringSeamTakes_whenChainOfSeamsPassesUpTwoPlacesOfOneType() async throws {
+		// `A` calls `B`, which holds a place `service: any Service` and calls `C`, which holds one too. `A` passes up both
+		// places, whose labels collide there and are named apart, but `B` and `C` each take theirs as `serviceBuilder`, which
+		// the error names: no generated initializer takes the label `A` gives either place.
+		let feature = [
+			Self.service,
+			Self.type("A", seam: true, ["@Instantiated public let b: B"]),
+			Self.type("B", seam: true, ["@Instantiated public let service: any Service", "@Instantiated public let c: C"]),
+			Self.type("C", seam: true, ["@Instantiated public let service: any Service"]),
+		]
+		let labels = try await passedUpLabelsBySeam(of: feature)
+		#expect(labels == [
+			"A builds [], passes up [B.service: serviceBuilder_B, C.service: serviceBuilder_C]",
+			"B builds [serviceBuilder], passes up [C.service: serviceBuilder_C]",
+			"C builds [serviceBuilder], passes up []",
+		])
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Service`, which @Instantiated property `service: any Service` instantiates in chain: Root -> A -> B -> C. `C` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `serviceBuilder`, whose member `service` builds `service`, and the root `Root` must fill it. Decorate `Service`, or an extension of it, with @Instantiable; list `Service` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Feature"]!["C.swift"]):7:5: note: `C` instantiates `service: any Service` here.
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Service`, which @Instantiated property `service: any Service` instantiates in chain: Root -> A -> B. `B` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `serviceBuilder`, whose member `service` builds `service`, and the root `Root` must fill it. Decorate `Service`, or an extension of it, with @Instantiable; list `Service` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` instantiates `service: any Service` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: feature, app: [Self.root(["@Instantiated public let a: A"])]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
 	/// `ring`'s seams beside `Z`, a seam outside the ring whose place's label, `service`, differs from its type's name,
 	/// `Other`, so the builder of `Z` that builds it is `otherBuilder`; nothing fulfills `Other`.
 	private static func ringPassingUpPlaceOfOutsideSeam(ring: [String]) -> [String] {
