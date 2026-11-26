@@ -22,8 +22,9 @@
 // order the world's walk first reaches it, so nothing sorts by name. A column owed by the table-side columns lane
 // (lanes/per-type-facts/step0-columns-brief.md) or the mock track (lanes/per-type-facts/track-d-columns.md) is declared
 // here with its final type and answers empty until that lane fills it; its doc comment says which. One part is not
-// frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label,
-// and the override-reach read about nothing, a key `key` never projects away (track D, "Settled by the design thread").
+// frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label
+// (track D, "Settled by the design thread"). Its answer is an optional argument handed down like any answer, and `key`
+// projects every answer of it to one key, as rule 1 does: one body per declaration, never one per set of cycle types.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
