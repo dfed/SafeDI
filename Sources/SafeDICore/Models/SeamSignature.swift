@@ -1274,8 +1274,7 @@ public struct SeamSignature: Sendable {
 			/// `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns can be a plain struct,
 			/// which that function could not capture.
 			public struct Member: Codable, Sendable {
-				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPathLength: Int, isCalledInsideFunction: Bool, isLetChild: Bool = false) {
-					self.isLetChild = isLetChild
+				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPathLength: Int, isCalledInsideFunction: Bool) {
 					self.bindingName = bindingName
 					self.valuesType = valuesType
 					self.fields = fields
@@ -1293,8 +1292,6 @@ public struct SeamSignature: Sendable {
 				/// would grow with the square of the place's depth.
 				public let bindingPathLength: Int
 				public let isCalledInsideFunction: Bool
-				/// Whether the level is a carrier's `let` child (`ScopeEnum.Case.isLetChildOfCarrier`), read, not called.
-				public let isLetChild: Bool
 
 				/// The path, from the seam's root, of the property the call is made for, on the route to the place or call at
 				/// `sitePath`.
@@ -1354,7 +1351,7 @@ public struct SeamSignature: Sendable {
 					innerScope: innerScope.map { InnerScope(callPathLength: $0.callPathLength, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
 					leadsIntoFill: leadsIntoFill,
 					member: memberBindingName.flatMap { name in
-						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPathLength: $0.bindingPathLength, isCalledInsideFunction: $0.isCalledInsideFunction, isLetChild: $0.isLetChild) }
+						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPathLength: $0.bindingPathLength, isCalledInsideFunction: $0.isCalledInsideFunction) }
 					},
 				)
 			}
@@ -1612,13 +1609,13 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// Whether a seam's carrier holds the case's child carrier as a `let`: a nested level whose member is handed no value,
-			/// outside every loop of levels (`isIndirect`, or, where the cases are not marked yet, `isInLoop` of the key of the
-			/// enum the case holds), so forming it once where the parent is formed ends and captures nothing; a `Sendable`
-			/// carrier holds only a `Sendable` child.
-			public func isLetChildOfCarrier(inSendableEnum: Bool, isInLoop: ((Key) -> Bool)? = nil) -> Bool {
+			/// outside every loop of levels (`isIndirect`, which the cases carry once every seam of the module settles, loops
+			/// through other seams' carriers included), so forming it once where the parent is formed ends and captures
+			/// nothing; a `Sendable` carrier holds only a `Sendable` child.
+			public func isLetChildOfCarrier(inSendableEnum: Bool) -> Bool {
 				switch kind {
 				case let .nested(enumKey, _, isIndirect), let .inner(enumKey, _, isIndirect):
-					!isIndirect && !(isInLoop?(enumKey) ?? false) && (values?.fields.isEmpty ?? true) && (!inSendableEnum || enumKey.isSendable)
+					!isIndirect && (values?.fields.isEmpty ?? true) && (!inSendableEnum || enumKey.isSendable)
 				case .place, .fill:
 					false
 				}

@@ -25,11 +25,16 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// The walk that finds a seam's receivers and the reads of its parameters (`DependencyTreeGenerator.receivers(in:of:instantiables:)`)
-/// does not visit a generator again in a frame that agrees, on the labels the generator's subtree reads, with a frame it
-/// was visited in (`ReceiversVisit`). Each test here holds a generator two places of a seam's tree share, reached in
-/// frames that differ in one part of that key: with the part left out, the second visit is skipped, and what only it
-/// finds is lost. Which visit comes second follows the order the seam declares its properties in, so each graph is
-/// written in both orders; the part is needed in one of them.
+/// does not visit a generator again in a frame that agrees, on what the generator's subtree reads from above it, with a
+/// frame it was visited in (`ReceiversVisit`). Each test here holds a generator two places of a seam's tree share, reached
+/// in frames that differ in one part of that key: with the part left out, or with a read left out of what the subtree
+/// reads, the second visit is skipped, and what only it finds is lost. Which visit comes second follows the order the
+/// seam declares its properties in, so each graph is written in both orders; the part is needed in one of them.
+///
+/// Two parts of the key have no graph here: the labels declared above the place, and the fill nearest it that binds a
+/// label. Neither decides a visit. Two places whose declarations above differ read declarations the construction memo
+/// answers apart, so they share no generator, and a fill is reached along one path, since neither it nor any scope above
+/// it is shared. The key keeps both, so that a visit it skips never rests on how the memo shares generators.
 struct SafeDIToolSeamReceiversWalkTests: ~Copyable {
 	// MARK: Initialization
 
@@ -150,6 +155,39 @@ struct SafeDIToolSeamReceiversWalkTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – What an alias reads from above the place
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingAlias_whenSharedAliasIsReachedBeneathDeclarationOfItsFulfillingLabelFirst() async {
+		// The graph above with `Detail` reading `service` through an alias, `renamed`. The walk visits `Detail` beneath
+		// `First` first, which provides `service`, and then beneath `Second`, where only the seam's parameter does: only
+		// the second visit finds that the alias reads the parameter. With the alias's fulfilling property left out of what
+		// `Detail`'s subtree reads from above, the two frames agree, the second visit is skipped, and no error is reported.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `service: Instantiator<Service>`, which `Detail` receives through its alias `renamed` (`fulfilledByDependencyNamed: "service"`), and cannot pass `nil` for it, since it is required. `Service`’s own `@Instantiable` declaration is `internal`. Declare `Service` `public`; declare `Screen` `internal`; receive `renamed` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Detail.swift"]):7:5: note: `Detail` receives `service: Instantiator<Service>` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.declarationFixture(firstDeclaredFirst: true, receivesThroughAlias: true), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingAlias_whenSharedAliasIsReachedBeneathNoDeclarationOfItsFulfillingLabelFirst() async {
+		// The graph above with `Second` declared first: the first visit of `Detail` finds the alias's read.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `service: Instantiator<Service>`, which `Detail` receives through its alias `renamed` (`fulfilledByDependencyNamed: "service"`), and cannot pass `nil` for it, since it is required. `Service`’s own `@Instantiable` declaration is `internal`. Declare `Service` `public`; declare `Screen` `internal`; receive `renamed` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Detail.swift"]):7:5: note: `Detail` receives `service: Instantiator<Service>` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.declarationFixture(firstDeclaredFirst: false, receivesThroughAlias: true), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -173,14 +211,19 @@ struct SafeDIToolSeamReceiversWalkTests: ~Copyable {
 	}
 
 	/// `Screen`, a `public` seam, builds `First` and `Second`, in the order `firstDeclaredFirst` says; each builds `Detail`,
-	/// which receives `service`, and `First` declares `service` too. `Service` is `internal`.
-	private static func declarationFixture(firstDeclaredFirst: Bool) -> [String] {
+	/// which receives `service`, through an alias `renamed` where `receivesThroughAlias`, and `First` declares `service`
+	/// too. `Service` is `internal`.
+	private static func declarationFixture(firstDeclaredFirst: Bool, receivesThroughAlias: Bool = false) -> [String] {
 		let screenDeclarations = ["@Instantiated let first: First", "@Instantiated let second: Second"]
 		return [
 			seamFixtureType(named: "Screen", isSeam: true, declarations: firstDeclaredFirst ? screenDeclarations : screenDeclarations.reversed()),
 			seamFixtureType(named: "First", declarations: ["@Instantiated let service: Instantiator<Service>", "@Instantiated let detail: Detail"]),
 			seamFixtureType(named: "Second", declarations: ["@Instantiated let detail: Detail"]),
-			seamFixtureType(named: "Detail", declarations: ["@Received let service: Instantiator<Service>"]),
+			seamFixtureType(named: "Detail", declarations: [
+				receivesThroughAlias
+					? "@Received(fulfilledByDependencyNamed: \"service\", ofType: Instantiator<Service>.self) let renamed: Instantiator<Service>"
+					: "@Received let service: Instantiator<Service>",
+			]),
 			"""
 			@Instantiable
 			final class Service: Instantiable {
