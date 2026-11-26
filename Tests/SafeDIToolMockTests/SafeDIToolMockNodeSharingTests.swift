@@ -235,6 +235,7 @@ struct SafeDIToolMockNodeSharingTests: ~Copyable {
 			}),
 			"argumentValues": record(changingSharingFields: { $0.argumentValues = [0: .passedArgument("panel")] }),
 			"functionReturnType": record(changingSharingFields: { $0.functionReturnType = otherType }),
+			"nilAlternative": record(changingSharingFields: { $0.nilAlternative = .member("screenIsUnavailable", of: .passedArgument("panel")) }),
 		]
 		let key = try #require(MockLowering.SharedRecordKey(record()))
 		#expect(try #require(MockLowering.SharedRecordKey(record())) == key)

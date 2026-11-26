@@ -99,19 +99,19 @@ struct BuiltPlaceRecord: Sendable {
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
 		get { sharingFields?.passedArguments ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: newValue, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType, nilAlternative: nilAlternative) }
 	}
 
 	/// Where set, the construction is this value (a `ValuePath.call`) in place of the call of `target`.
 	var constructionValue: ConstructionValue? {
 		get { sharingFields?.constructionValue }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: newValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType, nilAlternative: nilAlternative) }
 	}
 
 	/// The optional closures the construction tries first, in order, before calling `target` or its construction value.
 	var alternatives: [ConstructionAlternative] {
 		get { sharingFields?.alternatives ?? [] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: newValue, argumentValues: argumentValues, functionReturnType: functionReturnType, nilAlternative: nilAlternative) }
 	}
 
 	/// The values of the construction's arguments that are no read, by the argument's position in `arguments`, whose read
@@ -119,7 +119,7 @@ struct BuiltPlaceRecord: Sendable {
 	/// once, where the argument is passed.
 	var argumentValues: [Int: ValuePath] {
 		get { sharingFields?.argumentValues ?? [:] }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue, functionReturnType: functionReturnType) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: newValue, functionReturnType: functionReturnType, nilAlternative: nilAlternative) }
 	}
 
 	/// Where set, the type the place's function returns in place of `concreteType`: its construction and every
@@ -127,7 +127,18 @@ struct BuiltPlaceRecord: Sendable {
 	/// value as it is.
 	var functionReturnType: TypeDescription? {
 		get { sharingFields?.functionReturnType }
-		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: newValue) }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: newValue, nilAlternative: nilAlternative) }
+	}
+
+	/// Where set, a `Bool` the place's binding reads before anything else of the place, where the place is bound: `true`
+	/// binds the place to `nil` and builds nothing of it, so its function is not called and no alternative is tried, and
+	/// `false` builds it as a place without one is built. The binding is annotated with the property's type, an optional.
+	/// It stands beside the place's alternatives, never among them: an alternative gives the place's value from inside its
+	/// function, which a place bound to `nil` never calls. The read is made in the body that holds the place's call, so
+	/// that body's structural key holds it and the place's own function's does not.
+	var nilAlternative: ValuePath? {
+		get { sharingFields?.nilAlternative }
+		set { sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: constructionValue, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: functionReturnType, nilAlternative: newValue) }
 	}
 }
 
@@ -138,13 +149,15 @@ final class PlaceSharingFields: Sendable {
 	let alternatives: [ConstructionAlternative]
 	let argumentValues: [Int: ValuePath]
 	let functionReturnType: TypeDescription?
+	let nilAlternative: ValuePath?
 
-	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath], functionReturnType: TypeDescription?) {
+	init(passedArguments: [PassedArgument], constructionValue: ConstructionValue?, alternatives: [ConstructionAlternative], argumentValues: [Int: ValuePath], functionReturnType: TypeDescription?, nilAlternative: ValuePath?) {
 		self.passedArguments = passedArguments
 		self.constructionValue = constructionValue
 		self.alternatives = alternatives
 		self.argumentValues = argumentValues
 		self.functionReturnType = functionReturnType
+		self.nilAlternative = nilAlternative
 	}
 }
 

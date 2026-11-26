@@ -162,7 +162,12 @@ extension TypeKeyLayout {
 			)
 			let call = Expression.construction(record.target, arguments: arguments).erased(to: record.property.typeDescription.unwrapped, where: record.isErased).spelled
 			guard let value = spelledConstruction(of: record, call: call, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
-			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
+			if let nilAlternative = record.nilAlternative {
+				guard let binding = spelledBinding(of: record.property, to: value, unlessNilAt: nilAlternative, inClass: owner, before: index) else { return nil }
+				return "\(binding)\(record.lineEnd)"
+			} else {
+				return "\(declaration.spelled) = \(value)\(record.lineEnd)"
+			}
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
 			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
@@ -197,7 +202,21 @@ extension TypeKeyLayout {
 				arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
 			}
 		}
-		return bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative)
+		// The members of `owner` read alike what binds their statements' places to `nil` (`structuralKey`) too.
+		if let nilAlternative = nilAlternative(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) {
+			// Only a constant is instantiated only if available: the macro rejects a wrapper that is.
+			let call = Expression.call(function: functionNames[callee], arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription.unwrapped, where: isErased).spelled
+			return spelledBinding(of: property, to: call, unlessNilAt: nilAlternative, inClass: owner, before: index).map { bindings + $0 }
+		} else {
+			return bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative)
+		}
+	}
+
+	/// The binding of `property`, spelled with its type, an optional, to `nil` where `nilAlternative` reads `true` and
+	/// otherwise to `value`, which is evaluated only then, made before the statement at `index` of `owner`'s body.
+	func spelledBinding(of property: Property, to value: String, unlessNilAt nilAlternative: ValuePath, inClass owner: Int, before index: Int) -> String? {
+		guard let isNil = spelledValuePath(nilAlternative, inClass: owner, before: index) else { return nil }
+		return "let \(property.asSource) = if \(isNil) { nil } else \(value.hasPrefix("if ") ? value : "{ \(value) }")"
 	}
 
 	/// The binding of `property` to a call of `callee`'s function that hands it `arguments`.

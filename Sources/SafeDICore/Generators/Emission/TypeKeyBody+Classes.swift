@@ -125,6 +125,10 @@ extension TypeKeyLayout {
 			} else {
 				key.append(contentsOf: passedArguments.map(\.shape))
 			}
+			// The read that binds a statement's place to `nil` is the calling body's, as what the call hands is.
+			if let nilAlternative = nilAlternative(ofStatementAt: index, inBody: body) {
+				key.append("nilAlternative|\(nilAlternative.shape)")
+			}
 		}
 		return key
 	}

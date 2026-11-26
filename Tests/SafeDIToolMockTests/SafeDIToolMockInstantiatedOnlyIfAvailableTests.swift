@@ -177,12 +177,12 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_child() -> Child {
+		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 		            let analytics: (any Analytics)? = safeDIOverrides.analytics
-		            let footer = if let safeDIBuilder = safeDIOverrides.child.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
-		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
+		            let footer = if let safeDIBuilder = __safeDI_Child_configuration.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(child: child)
 		    }
 		}
@@ -278,16 +278,16 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_header() -> Header {
+		        func __safeDI_header(__safeDI_Header_configuration: (((any Analytics)?) -> Header)?) -> Header {
 		            let analytics: (any Analytics)? = safeDIOverrides.analytics
-		            return if let safeDIBuilder = safeDIOverrides.header { safeDIBuilder(analytics) } else { Header(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Header_configuration { safeDIBuilder(analytics) } else { Header(analytics: analytics) }
 		        }
-		        let header: Header = __safeDI_header()
-		        func __safeDI_footer() -> Footer {
+		        let header: Header = __safeDI_header(__safeDI_Header_configuration: safeDIOverrides.header)
+		        func __safeDI_footer(__safeDI_Footer_configuration: (((any Analytics)?) -> Footer)?) -> Footer {
 		            let analytics: (any Analytics)? = safeDIOverrides.analytics
-		            return if let safeDIBuilder = safeDIOverrides.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Footer_configuration { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
 		        }
-		        let footer: Footer = __safeDI_footer()
+		        let footer: Footer = __safeDI_footer(__safeDI_Footer_configuration: safeDIOverrides.footer)
 		        return Screen(header: header, footer: footer)
 		    }
 		}
@@ -367,11 +367,11 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        analytics: (any Analytics)?,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_child() -> Child {
+		        func __safeDI_child(__safeDI_Child_configuration: (((any Analytics)?) -> Child)?) -> Child {
 		            let analytics: (any Analytics)? = nil
-		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(analytics: analytics, child: child)
 		    }
 		}
@@ -461,12 +461,12 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_child() -> Child {
+		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 		            let analytics: (any Analytics)? = safeDIOverrides.analytics
-		            let footer = if let safeDIBuilder = safeDIOverrides.child.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
-		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
+		            let footer = if let safeDIBuilder = __safeDI_Child_configuration.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(child: child)
 		    }
 		}
@@ -564,11 +564,11 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { AnalyticsClient() }
-		        func __safeDI_child() -> Child {
+		        func __safeDI_child(__safeDI_Child_configuration: (((any Analytics)?) -> Child)?) -> Child {
 		            let analytics: (any Analytics)? = safeDIOverrides.analytics_Analytics
-		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(analytics: analytics, child: child)
 		    }
 		}
@@ -648,11 +648,11 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        analytics: (any Analytics)?,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_child() -> Child {
+		        func __safeDI_child(__safeDI_Child_configuration: (((any Analytics)?) -> Child)?) -> Child {
 		            let analytics: (any Analytics)? = nil
-		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(analytics: analytics, child: child)
 		    }
 		}
@@ -734,11 +734,11 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics: (any Analytics)? = safeDIOverrides.analytics
-		        func __safeDI_child() -> Child {
+		        func __safeDI_child(__safeDI_Child_configuration: (((any Analytics)?) -> Child)?) -> Child {
 		            let analytics: (any Analytics)? = nil
-		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(analytics: analytics, child: child)
 		    }
 		}
@@ -814,12 +814,14 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
-		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable ((any Analytics)?) -> Child)?) -> Child {
 		            let analytics: (any Analytics)? = nil
-		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		        }
-		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
+		        let __safeDI_childBuilder____safeDI_Child_configuration: (@Sendable ((any Analytics)?) -> Child)? = safeDIOverrides.childBuilder
+		        let childBuilder = SendableInstantiator<Child> {
+		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
+		        }
 		        return Screen(childBuilder: childBuilder)
 		    }
 		}

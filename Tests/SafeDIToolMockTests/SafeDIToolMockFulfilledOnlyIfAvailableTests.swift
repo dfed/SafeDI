@@ -144,11 +144,11 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics: (any Analytics)? = if safeDIOverrides.analyticsIsUnavailable { nil } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { DefaultAnalytics() }
-		        func __safeDI_logger() -> any Logger {
-		            let store = if let safeDIBuilder = safeDIOverrides.logger.store { safeDIBuilder() } else { Store() }
-		            return if let safeDIBuilder = safeDIOverrides.logger.safeDIBuilder { safeDIBuilder(store) } else { DefaultLogger(store: store) }
+		        func __safeDI_logger(__safeDI_DefaultLogger_configuration: DefaultLogger.SafeDIMockConfiguration) -> any Logger {
+		            let store = if let safeDIBuilder = __safeDI_DefaultLogger_configuration.store { safeDIBuilder() } else { Store() }
+		            return if let safeDIBuilder = __safeDI_DefaultLogger_configuration.safeDIBuilder { safeDIBuilder(store) } else { DefaultLogger(store: store) }
 		        }
-		        let logger: (any Logger)? = if safeDIOverrides.loggerIsUnavailable { nil } else { __safeDI_logger() }
+		        let logger: (any Logger)? = if safeDIOverrides.loggerIsUnavailable { nil } else { __safeDI_logger(__safeDI_DefaultLogger_configuration: safeDIOverrides.logger) }
 		        return Screen(analytics: analytics, logger: logger)
 		    }
 		}
@@ -241,12 +241,12 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_child() -> Child {
-		            let analytics: (any Analytics)? = if safeDIOverrides.child.analyticsIsUnavailable { nil } else if let safeDIBuilder = safeDIOverrides.child.analytics { safeDIBuilder() } else { DefaultAnalytics() }
-		            let footer = if let safeDIBuilder = safeDIOverrides.child.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
-		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
+		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+		            let analytics: (any Analytics)? = if __safeDI_Child_configuration.analyticsIsUnavailable { nil } else if let safeDIBuilder = __safeDI_Child_configuration.analytics { safeDIBuilder() } else { DefaultAnalytics() }
+		            let footer = if let safeDIBuilder = __safeDI_Child_configuration.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Screen(child: child)
 		    }
 		}
@@ -310,9 +310,9 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_readsEntryFromLocal_whenTypeBuiltInsideSendableFunctionInstantiatesFulfilledTypeOnlyIfAvailable() async throws {
-		// `Child` is built inside a `@Sendable` builder function, which reads its overrides from locals bound before it:
-		// the entry is read so too.
+	mutating func mock_readsEntryFromConfigurationFunctionIsHanded_whenTypeBuiltInsideSendableFunctionInstantiatesFulfilledTypeOnlyIfAvailable() async throws {
+		// `Child` is built inside a `@Sendable` builder function, which is handed its configuration, bound to a local before
+		// the wrapper’s closure: the entry is read from it, as the overrides are.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -382,12 +382,14 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let __safeDI_childBuilder__overrides = safeDIOverrides.childBuilder
-		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
-		            let analytics: (any Analytics)? = if __safeDI_childBuilder__overrides.analyticsIsUnavailable { nil } else if let safeDIBuilder = __safeDI_childBuilder__overrides.analytics { safeDIBuilder() } else { DefaultAnalytics() }
-		            return if let safeDIBuilder = __safeDI_childBuilder__overrides.safeDIBuilder { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		        @Sendable nonisolated func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+		            let analytics: (any Analytics)? = if __safeDI_Child_configuration.analyticsIsUnavailable { nil } else if let safeDIBuilder = __safeDI_Child_configuration.analytics { safeDIBuilder() } else { DefaultAnalytics() }
+		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
 		        }
-		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
+		        let __safeDI_childBuilder____safeDI_Child_configuration: Child.SafeDIMockConfiguration = safeDIOverrides.childBuilder
+		        let childBuilder = SendableInstantiator<Child> {
+		            __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_childBuilder____safeDI_Child_configuration)
+		        }
 		        return Screen(childBuilder: childBuilder)
 		    }
 		}
@@ -569,8 +571,9 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsWalksBody_whenPlaceReadsEntry() async throws {
-		// The type key’s records hold no read of the entry, so a root with a place that reads one keeps the walk’s body.
+	mutating func mock_laysOutRoot_whenPlaceReadsEntry() async throws {
+		// The place’s record holds the read of its entry (`BuiltPlaceRecord.nilAlternative`), so the type key lays the root
+		// out; a constant built in place is spelled as the walk spells it.
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		let laidOut = try await MockLowering.$typeKeyLayoutObserver.withValue({ mockedType, outcome in continuation.yield("\(mockedType): \(outcome)") }) {
 			try await MockLowering.$laysOutWithTypeKey.withValue(true) {
@@ -594,7 +597,7 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 			)
 		}
 
-		#expect(outcomes == ["Screen: unrecorded:readsUnavailableEntry"])
+		#expect(outcomes == ["Screen: laidOut"])
 		#expect(laidOut.mockFiles == walk.mockFiles)
 	}
 

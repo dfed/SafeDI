@@ -59,6 +59,9 @@ extension MockLowering {
 		let alternatives: [AlternativeShape]
 		let argumentValues: [Int: ValuePath]
 		let functionReturnType: TypeDescription?
+		/// The read that binds the place to `nil`, a read of its call site that no call hands the function: two places alike
+		/// but for it are two nodes, so neither takes the other's, and every place of one node reads one.
+		let nilAlternative: ValuePath?
 
 		init?(_ record: BuiltPlaceRecord, passedArgumentValues: Bool) {
 			var children = [ChildShape]()
@@ -91,6 +94,7 @@ extension MockLowering {
 			alternatives = record.alternatives.map(AlternativeShape.init)
 			argumentValues = record.argumentValues
 			functionReturnType = record.functionReturnType
+			nilAlternative = record.nilAlternative
 		}
 	}
 

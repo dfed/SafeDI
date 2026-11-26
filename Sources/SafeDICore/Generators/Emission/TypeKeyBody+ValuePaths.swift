@@ -254,6 +254,22 @@ extension TypeKeyLayout {
 		}
 	}
 
+	/// The read that binds the place of the statement at `index` of `body` to `nil`, where its place records one
+	/// (`BuiltPlaceRecord.nilAlternative`). Unlike what a call hands, it is the same at every place of one plan node,
+	/// whose record holds it: the mock's walk makes places that read different ones different nodes
+	/// (`MockLowering.SharedRecordKey`), and production's records hold none.
+	func nilAlternative(ofStatementAt index: Int, inBody body: Int) -> ValuePath? {
+		switch bodies[body].statements[index] {
+		case let .built(child):
+			bodies[child].record?.nilAlternative
+		case let .inline(record):
+			record.nilAlternative
+		case .closer,
+		     .alias:
+			nil
+		}
+	}
+
 	/// Whether every value path of every place names only passed arguments its function takes, the root's names none, and
 	/// each ordinary read in a path reads in the type key's code what it reads in the path key's.
 	func checkValuePaths() -> Bool {
@@ -291,6 +307,9 @@ extension TypeKeyLayout {
 				}
 				for argument in passedArguments(ofStatementAt: index, inBody: body) {
 					guard check(argument.value, before: index) else { return false }
+				}
+				if let nilAlternative = nilAlternative(ofStatementAt: index, inBody: body) {
+					guard check(nilAlternative, before: index) else { return false }
 				}
 			}
 		}

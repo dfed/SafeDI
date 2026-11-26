@@ -573,8 +573,8 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableShapeTests: ~Copyable {
 		    ) -> Home {
 		        let __safeDI_analyticsOptionalBuilder = analyticsOptionalBuilder
 		        let analytics: (any Analytics)? = safeDIOverrides.analytics
-		        _ = Screen.__safeDI_Screen_mock_6C25C81712F913A1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_mock_6C25C81712F913A1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let analyticsOptionalBuilder: () -> (any Analytics)? = __safeDI_analyticsOptionalBuilder
 		            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(analyticsOptionalBuilder) } else { Screen.__safeDI_mock(analyticsOptionalBuilder: .init(__safeDI_noScope: analyticsOptionalBuilder)) }
 		        }

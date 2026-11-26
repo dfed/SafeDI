@@ -211,11 +211,6 @@ extension MockLowering.Walk {
 				unrecordedReasons[path] = "namedApart"
 				continue
 			}
-			// A place bound as `nil` where its entry says so binds what production's record never does.
-			guard !pathsReadingUnavailableEntries.contains(path) else {
-				unrecordedReasons[path] = "readsUnavailableEntry"
-				continue
-			}
 			// A member of a loop of builders whose function rebinds another member hands each closer that member's
 			// configuration and its level's, as the level hands them (`MockLowering+LoopPlaces.swift`).
 			var rebindingCodes = [GeneratedCode]()
@@ -330,6 +325,11 @@ extension MockLowering.Walk {
 				if !call.inputs.hasFunction {
 					readPassedConfigurationInPlace(ofBuiltPlaceAt: path)
 				}
+				// A place bound as `nil` where its entry says so reads the entry where it is bound, before anything of it.
+				if let nilAlternative = nilAlternatives.removeValue(forKey: path), case var .built(built)? = builtRecords[path] {
+					built.nilAlternative = nilAlternative
+					builtRecords[path] = .built(built)
+				}
 				sharingNode(ofBuiltPlaceAt: path, nodesByKey: &sharedRecordsByKey)
 			} catch {
 				// The error is named by its case alone (`unexpectedArgument`), and by whether the place calls its type's hand-written
@@ -355,7 +355,7 @@ extension MockLowering.Walk {
 		pathsWithUnplannedLines = []
 		unplannedLineKinds = [:]
 		pathsStartingExtraction = []
-		pathsReadingUnavailableEntries = []
+		nilAlternatives = [:]
 		leadingBodyPlaces = [:]
 		loopRebindings = [:]
 		unrecordedReasons = [:]

@@ -461,9 +461,10 @@ extension MockLowering {
 		var parentConfigurationReservedNames = Set<String>()
 		/// The name of the entry that builds the node the walk is about to build as `nil`, which that node takes.
 		var pendingUnavailableEntryName: String?
-		/// The places whose binding reads the entry that builds them as `nil`, which keep the walk's body: production's record
-		/// of a place always builds it.
-		var pathsReadingUnavailableEntries = Set<[Int]>()
+		/// The read of the entry that builds a place as `nil`, for each place whose binding reads one: a member of its parent's
+		/// configuration, beside the place's own field, which the place's record takes as its `nil` alternative
+		/// (`BuiltPlaceRecord.nilAlternative`); production's record of a place always builds it.
+		var nilAlternatives = [[Int]: ValuePath]()
 		/// The names a receive is handed in place of its label, by label and then type: a node named apart from a sibling
 		/// that shares its label (`ScopeGenerator.disambiguatePropertyLabels(forProperties:)`), which its receivers bind again under
 		/// the label in their builder functions, until a declaration of the label hides it.
@@ -929,6 +930,16 @@ extension MockLowering {
 				)
 				if writesText {
 					lines.append(binding.bindingLines(indent: indent))
+				}
+				// The type key lays the binding out as a place written as text that reads no declaration of a body: `nil`, or
+				// a member of `mock()`'s overrides, which every function not `@Sendable` can capture.
+				if recordsPlaces {
+					closerAndDefaultRecords[childIndexPath] = .alias(AliasPlaceRecord(
+						property: Property(label: binding.bindingName, typeDescription: property.typeDescription),
+						fulfillingProperty: nil,
+						text: binding.bindingLines(indent: ""),
+						reads: [],
+					))
 				}
 				return .alias(binding)
 			} else {
@@ -1426,6 +1437,14 @@ extension MockLowering {
 					parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
 					nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
 				)
+				// The record reads the entry that builds the node as `nil` of the configuration its parent's function takes,
+				// or of `mock()`'s overrides at the root, beside its own field of it, wherever it reads that configuration:
+				// never the local an extractor reads the entry into. Beneath a node no override reaches the walk's text
+				// reads no entry and always builds the node, and the record reads the entry of the configuration built
+				// afresh that node is handed, `false`, so its record is the same whichever edge is left out.
+				if let unavailableEntryName, readsParentConfiguration, case let parentConfiguration?? = configurationReads.last {
+					nilAlternatives[childIndexPath] = .member(unavailableEntryName, of: parentConfiguration)
+				}
 			}
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
@@ -1537,9 +1556,6 @@ extension MockLowering {
 			if let unavailableEntryName, ownFieldIsRead {
 				let entryPath = "\(path).\(unavailableEntryName)"
 				node.unavailableEntryRead = readingOverride(entryPath, localNameSuffix: GeneratedCodeText.overrideRelativePath(of: entryPath))
-				if recordsPlaces {
-					pathsReadingUnavailableEntries.insert(childIndexPath)
-				}
 			}
 			node.sendableAutoclosureBindings = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureBindings[$0] }
 			// A node a public mock promotes at its root's level reads its caller's value first.
