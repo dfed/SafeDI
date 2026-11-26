@@ -986,7 +986,6 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		"""], dependencies: ["InnerSeam", "OuterSeam"]),
 	]
 
-
 	/// The modules of `generate_keepsRootFunctionInItsCall_whenItCallsFunctionAnEnclosingCallDeclaresInPlace`.
 	private static let inPlaceCalleeModules = [
 		ModuleFixture(name: "InnerSeam", packageName: "pkg", swiftFileContentByFilePath: ["Inner.swift": """
@@ -1064,7 +1063,6 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		}
 		"""], dependencies: ["InnerSeam", "OuterSeam"]),
 	]
-
 
 	/// The modules of `generate_laysOutOtherRootStatementsByType_whenOneStatementReachesFilledCallTheTypeKeyCannotShare`.
 	private static let lazyCycleFallbackModules = [
