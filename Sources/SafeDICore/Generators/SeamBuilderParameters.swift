@@ -75,8 +75,10 @@ extension DependencyTreeGenerator {
 			let placeLevels: [SeamPlacesBuilder.LevelDraft]
 			let isBuiltInSendableFunction: Bool
 		}
-		// Every place is drafted into the place graph, which the signature holds beside the per-site holes while readers move to it.
-		let draftsPlaceLevels = true
+		// Places are drafted into the place graph, which the signature holds beside the per-site holes, only while a test
+		// observes it: drafting per site costs a seam with a place on every screen as much as the rest of its generation, and
+		// nothing outside the tests reads the graph until the builder that walks the seam's tree once replaces this walk.
+		let draftsPlaceLevels = SeamPlaceLevels.observer != nil
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
@@ -345,6 +347,7 @@ extension DependencyTreeGenerator {
 		}
 		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
 		let sortedHoles = order.map { holes[$0] }
+		guard draftsPlaceLevels else { return HolesAndPlaces(holes: sortedHoles) }
 		// Each case is named by its first place in builder-label order, as each place was named when a seam held a hole per site.
 		var namingRouteByCase = [Int: [Int]]()
 		for index in order where caseIndexByHole[index] >= 0 && namingRouteByCase[caseIndexByHole[index]] == nil {

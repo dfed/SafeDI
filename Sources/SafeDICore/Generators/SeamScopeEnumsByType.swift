@@ -647,23 +647,26 @@ extension DependencyTreeGenerator {
 					}
 					let buildsInSendableFunction = reachedStep.buildsInSendableFunction || isBoundInsideFulfillersFunction
 					guard let step = routeStep(of: caseOfProperty, bindingPrefix: bindingPrefix, buildsInSendableFunction: buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
-					// The step is the edge's, whatever path leads to it, but for where its member and inner scope are bound.
-					let edge = RouteEdge(
-						holeType: holeType,
-						type: type,
-						isSendableEnum: caseOfProperty.described.isSendable,
-						property: property,
-						isSendableBeneath: caseOfProperty.isSendableBeneath,
-						filledBuilder: caseOfProperty.filledBuilder,
-						buildsInSendableFunction: buildsInSendableFunction,
-						isSendableRoute: innermostSendableIndex != nil,
-						bindsPayload: bindingPrefix != nil,
-					)
-					if result.routeStepByEdge[edge] == nil {
-						result.routeStepByEdge[edge] = step.atBindingPathLength(0)
+					// The step is the edge's, whatever path leads to it, but for where its member and inner scope are bound. The
+					// table is kept only while a test observes it, until the readers of routes move onto it.
+					if observesRouteSteps {
+						let edge = RouteEdge(
+							holeType: holeType,
+							type: type,
+							isSendableEnum: caseOfProperty.described.isSendable,
+							property: property,
+							isSendableBeneath: caseOfProperty.isSendableBeneath,
+							filledBuilder: caseOfProperty.filledBuilder,
+							buildsInSendableFunction: buildsInSendableFunction,
+							isSendableRoute: innermostSendableIndex != nil,
+							bindsPayload: bindingPrefix != nil,
+						)
+						if result.routeStepByEdge[edge] == nil {
+							result.routeStepByEdge[edge] = step.atBindingPathLength(0)
+						}
+						computedSteps.append(step)
+						edgesOfSteps.append((edge, bindingPrefix?.count ?? 0))
 					}
-					computedSteps.append(step)
-					edgesOfSteps.append((edge, bindingPrefix?.count ?? 0))
 					if index < count - 1 {
 						steps.append(step)
 						continue
