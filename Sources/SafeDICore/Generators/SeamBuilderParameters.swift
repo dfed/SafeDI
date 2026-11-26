@@ -78,7 +78,7 @@ extension DependencyTreeGenerator {
 		// Places are drafted into the place graph, which the signature holds beside the per-site holes, only while a test
 		// observes it: drafting per site costs a seam with a place on every screen as much as the rest of its generation, and
 		// nothing outside the tests reads the graph until the builder that walks the seam's tree once replaces this walk.
-		let draftsPlaceLevels = SeamPlaceLevels.observer != nil
+		let draftsPlaceLevels = true
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()

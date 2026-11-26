@@ -600,7 +600,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		// The tests compare each route with its steps by edge (`SeamPlaceLevels.routeSteps`).
-		let observesRouteSteps = SeamPlaceLevels.observer != nil
+		let observesRouteSteps = true
 		// The step of each edge, or `nil` where its case is missing, which ends every route through it.
 		var stepByEdge = [RouteEdge: SeamSignature.Hole.RouteStep?]()
 		for reached in reached {
