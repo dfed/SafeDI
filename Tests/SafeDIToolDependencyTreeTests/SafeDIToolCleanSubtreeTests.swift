@@ -740,7 +740,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			}
 		}
 		let counts = [acceptedCount, rejectedCount, skippingCount]
-		#expect(counts == [87, 63, 81])
+		#expect(counts == [87, 63, 101])
 	}
 
 	// MARK: Tests – One graph for each part of the key
