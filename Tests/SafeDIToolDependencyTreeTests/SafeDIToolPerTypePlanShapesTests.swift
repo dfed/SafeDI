@@ -757,8 +757,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsSendableWrapper() async throws {
-		// A screen holds a `SendableInstantiator`.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeHoldsSendableWrapper() async throws {
+		// A screen holds a `SendableInstantiator`, whose `@Sendable` builder function captures nothing that is not `Sendable`.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let s0Builder: SendableInstantiator<S0>
@@ -776,7 +776,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 		""")
 
-		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test
@@ -824,7 +824,55 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 			},
 		)
 
-		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
+		#expect(choices == ["Root": .receivesInstantiator])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderOnCycleCapturesInstanceOfLazilyInstantiatedDeclaredAboveIt() async {
+		// `S0`, on the cycle, declares `leaf` as a `LazilyInstantiated`; `S1` builds `W` in the `@Sendable` builder function of
+		// `wBuilder`, and `W` reads the instance, which that function cannot capture.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let leaf: LazilyInstantiated<Leaf>
+				    @Instantiated let s1Builder: Instantiator<S1>
+				    public init(leaf: LazilyInstantiated<Leaf>, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    @Instantiated let wBuilder: SendableInstantiator<W>
+				    public init(s0Builder: Instantiator<S0>, wBuilder: SendableInstantiator<W>) { self.s0Builder = s0Builder; self.wBuilder = wBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class W: Instantiable {
+				    @Received let leaf: Leaf
+				    public init(leaf: Leaf) { self.leaf = leaf }
+				}
+				""",
+				"""
+				@Instantiable public final class Leaf: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["W.swift"]):2:5: error: @Received property `leaf: Leaf` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1 -> W. SafeDI builds `wBuilder: SendableInstantiator<W>` on `S1` in a `@Sendable` function, which cannot capture `leaf: LazilyInstantiated<Leaf>` on `S0`, because `LazilyInstantiated<Leaf>` is not `Sendable`. Declare `leaf` on `S0` as `SendableLazilyInstantiated<Leaf>` to fix. A `SendableLazilyInstantiated` requires its instance type, `Leaf`, to be `Sendable`.
+				\(fixtures["S0.swift"]):2:5: note: `leaf: LazilyInstantiated<Leaf>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
 	}
 
 	@Test
@@ -849,7 +897,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 		""")
 
-		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
+		#expect(choices == ["Root": .holdsSendableFunction])
 	}
 
 	@Test
@@ -908,6 +956,106 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		""")
 
 		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenErasedSendableCycleMemberWrapsCallReadingLazilyInstantiatedDeclaredAboveIt() async {
+		// `S0` declares `leaf` as a `LazilyInstantiated` and opens `S1` through a `SendableErasedInstantiator`, whose `@Sendable`
+		// function wraps the call of `S1`'s body, and `S1` reads the instance, which that function cannot capture.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let leaf: LazilyInstantiated<Leaf>
+				    @Instantiated(fulfilledByType: "S1", erasedToConcreteExistential: true) let s1Builder: SendableErasedInstantiator<(), AnyScreen>
+				    public init(leaf: LazilyInstantiated<Leaf>, s1Builder: SendableErasedInstantiator<(), AnyScreen>) { self.leaf = leaf; self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Received let leaf: Leaf
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class Leaf: Instantiable { public init() {} }
+				""",
+				"""
+				public final class AnyScreen {
+				    public init(_ screen: AnyObject) { self.screen = screen }
+				    public let screen: AnyObject
+				}
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["S1.swift"]):2:5: error: @Received property `leaf: Leaf` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1. SafeDI builds `s1Builder: SendableErasedInstantiator<(), AnyScreen>` on `S0` in a `@Sendable` function, which cannot capture `leaf: LazilyInstantiated<Leaf>` on `S0`, because `LazilyInstantiated<Leaf>` is not `Sendable`. Declare `leaf` on `S0` as `SendableLazilyInstantiated<Leaf>` to fix. A `SendableLazilyInstantiated` requires its instance type, `Leaf`, to be `Sendable`.
+				\(fixtures["S0.swift"]):2:5: note: `leaf: LazilyInstantiated<Leaf>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTodaysCaptureError_whenSendableBuilderOnCycleCallsSeamWithInstanceOfLazilyInstantiatedDeclaredAboveIt() async {
+		// `S0` declares `leaf` as a `LazilyInstantiated`; `S1` builds the seam `Feature` in the `@Sendable` builder function of
+		// `featureBuilder`, and the call of its initializer passes the instance, which that function cannot capture.
+		let choices = await choicesThrowingTodaysError(
+			of: [
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S0: Instantiable {
+				    @Instantiated let leaf: LazilyInstantiated<Leaf>
+				    @Instantiated let s1Builder: Instantiator<S1>
+				    public init(leaf: LazilyInstantiated<Leaf>, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.s1Builder = s1Builder }
+				}
+				""",
+				"""
+				@Instantiable public final class S1: Instantiable {
+				    @Instantiated let s0Builder: Instantiator<S0>
+				    @Instantiated let featureBuilder: SendableInstantiator<Feature>
+				    public init(s0Builder: Instantiator<S0>, featureBuilder: SendableInstantiator<Feature>) { self.s0Builder = s0Builder; self.featureBuilder = featureBuilder }
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true) public final class Feature: Instantiable {
+				    @Received let leaf: Leaf
+				    @Instantiated let gadget: Gadget
+				    public init(leaf: Leaf, gadget: Gadget) { self.leaf = leaf; self.gadget = gadget }
+				}
+				""",
+				"""
+				@Instantiable public final class Gadget: Instantiable { public init() {} }
+				""",
+				"""
+				@Instantiable public final class Leaf: Instantiable { public init() {} }
+				""",
+			],
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feature.swift"]):2:5: error: @Received property `leaf: Leaf` cannot be received inside a `@Sendable` function in chain: Root -> S0 -> S1 -> Feature. SafeDI builds `featureBuilder: SendableInstantiator<Feature>` on `S1` in a `@Sendable` function, which cannot capture `leaf: LazilyInstantiated<Leaf>` on `S0`, because `LazilyInstantiated<Leaf>` is not `Sendable`. Declare `leaf` on `S0` as `SendableLazilyInstantiated<Leaf>` to fix. A `SendableLazilyInstantiated` requires its instance type, `Leaf`, to be `Sendable`.
+				\(fixtures["S0.swift"]):2:5: note: `leaf: LazilyInstantiated<Leaf>` is declared here
+				"""
+			},
+		)
+
+		#expect(choices == ["Root": .mayCaptureNonSendableWrapper])
 	}
 
 	@Test

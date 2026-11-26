@@ -807,6 +807,9 @@ public actor DependencyTreeGenerator {
 		// A limit a test sets is the whole criterion, so a small tree can be planned.
 		let placesPerScopeOfTodaysTree: Int? = RootTreeChoiceObservation.scopeGeneratorLimitOverride == nil ? Self.placesPerScopeOfTodaysTree : nil
 		let rootTreeChoiceObserver = RootTreeChoiceObservation.observer
+		// Only a module that names a wrapper that is not `Sendable` and a `Sendable` builder walks a plan's bodies for a
+		// capture, as only such a module walks today's trees (`validateSendableBuildersCaptureNoNonSendableWrapper`).
+		let walksPlansForCaptures = namesNonSendableWrapperAndSendableBuilder
 		for (typeDescription, scope) in rootScopes {
 			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
 			// Today's tree, one generator per place, or `nil` where it passed the limit and was abandoned. A root within
@@ -857,7 +860,10 @@ public actor DependencyTreeGenerator {
 						reachesCycle = true
 						switch choice {
 						case let .perType(unplanned):
-							if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
+							if walksPlansForCaptures, await unplanned.mayCaptureNonSendableWrapper() {
+								// Today's tree reports the capture, as a build with no plan does.
+								perPathReason = .mayCaptureNonSendableWrapper
+							} else if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
 								perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
 							} else {
 								perPathReason = .noLayout

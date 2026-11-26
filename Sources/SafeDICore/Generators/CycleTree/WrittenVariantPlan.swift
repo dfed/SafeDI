@@ -36,8 +36,8 @@ public enum RootTreeChoiceObservation {
 		case holdsLazilyInstantiated
 		/// A type of the root's tree receives, renames or instantiates a value only if available, or holds an optional one.
 		case holdsValueOnlyIfAvailable
-		/// A type of the root's tree holds a `Sendable` wrapper or a `@Sendable` function.
-		case holdsSendableWrapperOrFunction
+		/// A type of the root's tree holds a `@Sendable` function.
+		case holdsSendableFunction
 		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
 		case receivesInstantiator
 		/// The root's tree calls a seam's generated initializer or a public mock with a builder.
@@ -53,6 +53,9 @@ public enum RootTreeChoiceObservation {
 		case noPlan
 		/// A call of the plan passes a member of a loop of builders made again at the call.
 		case passesLoopMemberMadeAgainAtCall
+		/// A `@Sendable` function of a body of the root's plan may capture a wrapper that is not `Sendable`
+		/// (`WrittenVariantPlan.Unplanned.mayCaptureNonSendableWrapper()`): today's tree reports the capture.
+		case mayCaptureNonSendableWrapper
 		/// The type key lays out none of the plan.
 		case noLayout
 		/// Planning the root threw an error, which is discarded: today's tree reports what a build with no plan reports.
@@ -120,6 +123,21 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		let answers: [[Answer]]
 		/// Whether the plan marks each body `@Sendable` (`VariantBodies.isSendable(_:)`).
 		let sendableMarks: [Bool]
+		/// The type each body builds, and the declarations that answer the labels it reads from above.
+		let instantiables: [Instantiable]
+		let answerDeclarations: [[NearestDeclaration]]
+
+		/// Whether a `@Sendable` function of some body may capture a wrapper that is not `Sendable` declared outside it:
+		/// today's capture walk over each body's tree, each label it reads from above declared where its answer is, outside
+		/// every `@Sendable` function of the body (`ScopeGenerator.mayCaptureNonSendableWrapper(asBodyOf:answeredBy:)`). A
+		/// call of another body is a call place that receives every label the called body's tree receives, so a call
+		/// inside a `@Sendable` function reads, at the call, what the called body reads from above.
+		func mayCaptureNonSendableWrapper() async -> Bool {
+			for (body, generator) in generators.enumerated() where await generator.mayCaptureNonSendableWrapper(asBodyOf: instantiables[body], answeredBy: answerDeclarations[body]) {
+				return true
+			}
+			return false
+		}
 
 		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
 		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
@@ -165,6 +183,8 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 			}
 			generators = positions.map { bodies.generator(of: $0) }
 			sendableMarks = positions.map { bodies.isSendable($0) }
+			instantiables = positions.map { bodies.bodies[$0].copy.instantiable }
+			answerDeclarations = positions.map { bodies.bodies[$0].answers.compactMap(\.self) }
 			self.calls = calls
 			labels = zip(positions, argumentOrders).map { position, order in order.map { bodies.bodies[position].labels[$0] } }
 			answers = zip(positions, argumentOrders).map { position, order in order.map { bodies.bodies[position].planAnswers[$0] } }
