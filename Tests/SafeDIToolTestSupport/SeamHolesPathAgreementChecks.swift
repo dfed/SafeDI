@@ -97,8 +97,8 @@ enum SeamHolesPathAgreementChecks {
 		let disagreeing = answers.pathsByAnswerByKey.filter { $0.value.count > 1 }.sorted { $0.key < $1.key }
 		let disagreeingWithFamily = Set(answers.keysDisagreeingWithFamily)
 		let narrowDisagreeing = answers.narrowKeys.values.count(where: { $0.count > 1 })
-		let longestPath = answers.pathsByAnswerByKey.values.flatMap(\.values).flatMap { $0 }.map { $0.components(separatedBy: " / ").count }.max() ?? 0
-		let deepestFill = answers.outerFillsByAnswerByKey.values.flatMap(\.values).flatMap { $0 }.map { $0.isEmpty ? 0 : $0.components(separatedBy: " <- ").count }.max() ?? 0
+		let longestPath = answers.pathsByAnswerByKey.values.flatMap(\.values).flatMap(\.self).map { $0.components(separatedBy: " / ").count }.max() ?? 0
+		let deepestFill = answers.outerFillsByAnswerByKey.values.flatMap(\.values).flatMap(\.self).map { $0.isEmpty ? 0 : $0.components(separatedBy: " <- ").count }.max() ?? 0
 		var report = "test \(Test.current?.name ?? "?") | fixture bytes \(fixtureSize) | longest path \(longestPath) | outer fills at most \(deepestFill) | keys \(answers.pathsByAnswerByKey.count) | narrow keys disagreeing \(narrowDisagreeing) | disagreeing \(disagreeing.count) | disagreeing with family \(disagreeingWithFamily.count)\n"
 		for (key, pathsByAnswer) in disagreeing {
 			let families = answers.familiesByAnswerByKey[key, default: [:]]

@@ -193,7 +193,7 @@ struct SafeDIToolSeamHolesWidenedKeyTests: ~Copyable {
 	/// Expects every key, widened to the innermost fill and the family, to read one answer in each column generated code
 	/// reads, and the fills to nest at least `minimumOuterFills` deep somewhere, so the shape is the one named.
 	private func expectAgreement(of runs: [SeamHolesPathAgreementChecks.Answers], withOuterFillsAtLeast minimumOuterFills: Int, sourceLocation: SourceLocation = #_sourceLocation) {
-		let deepestOuterFills = runs.flatMap { $0.outerFillsByAnswerByKey.values.flatMap(\.values).flatMap { $0 } }.map { $0.isEmpty ? 0 : $0.components(separatedBy: " <- ").count }.max() ?? 0
+		let deepestOuterFills = runs.flatMap { $0.outerFillsByAnswerByKey.values.flatMap(\.values).flatMap(\.self) }.map { $0.isEmpty ? 0 : $0.components(separatedBy: " <- ").count }.max() ?? 0
 		#expect(deepestOuterFills >= minimumOuterFills, "fills nest \(deepestOuterFills) deep outside the innermost", sourceLocation: sourceLocation)
 		#expect(runs.contains { !$0.pathsByAnswerByKey.isEmpty }, sourceLocation: sourceLocation)
 		for answers in runs {
