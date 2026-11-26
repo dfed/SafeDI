@@ -42,7 +42,10 @@
 // (root, declaration, read): a union over the answers not being built that are bound for that read at every call into
 // the node within one root's tree, since a root's functions are local to its code, so two roots that disagree on it share
 // no variant. It is computed before the variants fold so that `key` can ask it, never decided per call or by arrival
-// order. Where one form alone reaches, stage 1's key stands. Read neither stage's count of bodies as permanent.
+// order. It projects a value beside a plain wrapper, or wrappers alone; a value beside a `SendableLazilyInstantiated`
+// answering one read of a body in the `@Sendable` family keeps its form in the key, a stated gap (lead, 4:00 PM PT), since
+// no wrapper can carry a value that need not be `Sendable`. Where one form alone reaches, stage 1's key stands. Read
+// neither stage's count of bodies as permanent.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
