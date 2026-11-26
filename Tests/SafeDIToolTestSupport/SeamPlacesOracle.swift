@@ -129,9 +129,9 @@ public enum SeamPlacesOracle {
 			var ownMatches = today.count >= ownGraph.count
 			for (index, graphJSON) in ownGraph.enumerated() where index < today.count {
 				let label = hole.uncarriedDeclarations[index].property.label
-				// The case records, for each declaration bound from the caller's argument, what the place holds in its place,
-				// replaced or not.
-				if graphUncarried[index].isBoundFromCallersArgument {
+				// The case records, of the declarations bound from the caller's argument, what the place holds in place of each
+				// one a path to a call binds otherwise.
+				if graphUncarried[index].isBoundFromCallersArgument, today[index] != graphJSON {
 					replaced.append(today[index])
 				}
 				if today[index] == graphJSON || graphUncarried[index].isBoundFromCallersArgument && replacedOfCase.contains(today[index]) {
