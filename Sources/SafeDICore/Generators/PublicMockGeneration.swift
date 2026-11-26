@@ -1505,12 +1505,11 @@ struct PublicMockCall: Sendable {
 	}
 
 	/// The builders a caller that fills `filledHoles` passes up, as the leaf receives them: each whose routes reach a place
-	/// the caller does not fill (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`).
+	/// the caller does not fill (`CalledBuilders.routesReachOnly(_:by:)`).
 	var passedUpBuilders: [SeamSignature.Builder] {
-		let filledSites = Set(filledHoles.map(\.site))
 		let calledBuilders = calledBuilders
-		let enumsByKey = calledBuilders.enumsByKey
-		return builders.filter { !calledBuilders.sitesReachedOnItsRoutes(by: $0, in: enumsByKey).isSubset(of: filledSites) }
+		let filledSites = calledBuilders.siteNumbers(of: Set(filledHoles.map(\.site)))
+		return builders.filter { !calledBuilders.routesReachOnly(filledSites, by: $0) }
 	}
 
 	/// Whether the leaf that makes the call receives `property` as a builder it passes up, which an internal mock takes as a
