@@ -71,7 +71,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.panelBuilder = panelBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(panelBuilder: { _ in __safeDI_builder })
 		        }
@@ -150,7 +149,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.panelBuilder = panelBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(panelBuilder: { __safeDI_builder })
 		        }
@@ -220,7 +218,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(a: { __safeDI_builder })
 		        }
@@ -292,7 +289,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(a: { __safeDI_builder })
 		        }
@@ -306,7 +302,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(child: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -320,7 +315,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.o = o
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(o: { __safeDI_builder })
 		        }
@@ -480,7 +474,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.a2 = a2
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(a2: { __safeDI_builder })
 		        }
@@ -556,7 +549,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(a: { _ in __safeDI_builder })
 		        }
@@ -570,7 +562,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -755,7 +746,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -824,7 +814,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -838,7 +827,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -852,7 +840,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.workerBuilder = workerBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -899,7 +886,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { _ in __safeDI_builder() })
 		        }
@@ -913,7 +899,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -927,7 +912,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.workerBuilder = workerBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -982,7 +966,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }
@@ -996,7 +979,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.implApi = implApi
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(implApi: { _ in __safeDI_builder() })
 		        }
@@ -1100,7 +1082,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.sendable = sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Outer_ThingSendable.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(sendable: { __safeDI_builder })
 		        }
@@ -1114,7 +1095,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.nested = nested
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Outer.Thing.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(nested: { __safeDI_builder })
 		        }
@@ -1128,7 +1108,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.joined = joined
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Outer_Thing.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(joined: { __safeDI_builder })
 		        }
@@ -1200,7 +1179,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.implApiSendable = implApiSendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Impl_ApiSendable.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(implApiSendable: { __safeDI_builder })
 		        }
@@ -1214,7 +1192,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(api: { __safeDI_builder })
 		        }
@@ -1228,7 +1205,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            self.implApi = implApi
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Impl_Api.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.init(implApi: { __safeDI_builder })
 		        }
@@ -1289,7 +1265,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
 			            self.init(service: { __safeDI_builder })
 			        }
@@ -1303,7 +1278,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			            self.serviceSendableService = serviceSendableService
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ServiceSendable_Service.ForwardedProperties, __safeDI_Built>.Builder) {
 			            self.init(serviceSendableService: { __safeDI_builder })
 			        }
@@ -1317,7 +1291,6 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			            self.serviceSendable = serviceSendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(serviceSendable: { __safeDI_builder() })
 			        }

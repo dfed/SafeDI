@@ -259,7 +259,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	/// as `service: Service`. The generated wrapper is never optional, so neither is this property.
 	/// `nil` when the property is not lazily instantiated, and when the instance it creates is itself
 	/// optional (`LazilyInstantiated<Service?>`): an instance that may be `nil` cannot be received by value.
-	var asLazilyInstantiatedInstanceProperty: Property? {
+	public var asLazilyInstantiatedInstanceProperty: Property? {
 		guard let instanceType = typeDescription.unwrapped.lazilyInstantiatedInstanceType,
 		      !instanceType.isOptional
 		else { return nil }
