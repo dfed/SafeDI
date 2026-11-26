@@ -181,8 +181,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeRenamesDependency() async throws {
-		// A screen renames a value the root declares.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleRenamesValueRootDeclares() async throws {
+		// A screen renames a value the root declares, which every call of its function passes alike.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let leaf: Leaf
@@ -204,7 +204,76 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .renames])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleRenamesValueItsCycleDeclares() async throws {
+		// A screen renames a value the screen before it on the cycle declares, which each call passes on.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(leaf: Leaf, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self) let other: Leaf
+		    @Instantiated let s2Builder: Instantiator<S2>
+		    public init(other: Leaf, s2Builder: Instantiator<S2>) { self.other = other; self.s2Builder = s2Builder }
+		}
+
+		@Instantiable public final class S2: Instantiable {
+		    @Received let other: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(other: Leaf, s0Builder: Instantiator<S0>) { self.other = other; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleRenamesValueErasedToConcreteExistential() async throws {
+		// A screen renames the root's value to an existential it erases to.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		public protocol Clock {}
+
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self, erasedToConcreteExistential: true) let clock: AnyClock
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(clock: AnyClock, s1Builder: Instantiator<S1>) { self.clock = clock; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let clock: AnyClock
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(clock: AnyClock, s0Builder: Instantiator<S0>) { self.clock = clock; self.s0Builder = s0Builder }
+		}
+
+		public final class AnyClock: Clock {
+		    public init(_ clock: some Clock) {}
+		}
+
+		@Instantiable public final class Leaf: Instantiable, Clock { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test

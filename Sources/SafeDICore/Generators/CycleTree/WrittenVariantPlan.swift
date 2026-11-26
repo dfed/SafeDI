@@ -37,10 +37,8 @@ public enum RootTreeChoiceObservation {
 		case moduleNamesNonSendableWrapperAndSendableBuilder
 		/// A type of the root's tree holds a `LazilyInstantiated` or a `SendableLazilyInstantiated`.
 		case holdsLazilyInstantiated
-		/// A type of the root's tree receives or instantiates a value only if available, or holds an optional one.
+		/// A type of the root's tree receives, renames or instantiates a value only if available, or holds an optional one.
 		case holdsValueOnlyIfAvailable
-		/// A type of the root's tree renames a dependency (`fulfilledByDependencyNamed:`).
-		case renames
 		/// A type of the root's tree holds a `Sendable` wrapper or a `@Sendable` function.
 		case holdsSendableWrapperOrFunction
 		/// A type on a cycle of the root's tree is instantiated erased.

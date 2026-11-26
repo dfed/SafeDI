@@ -114,9 +114,8 @@ extension DependencyTreeGenerator {
 	private static func shapeOutsidePerTypePlan(of dependency: Dependency) -> RootTreeChoiceObservation.PerPathReason? {
 		let property = dependency.property
 		switch dependency.source {
-		case .aliased:
-			return .renames
-		case let .received(onlyIfAvailable):
+		case let .aliased(_, _, onlyIfAvailable),
+		     let .received(onlyIfAvailable):
 			if onlyIfAvailable {
 				return .holdsValueOnlyIfAvailable
 			} else if !property.propertyType.isConstant {
