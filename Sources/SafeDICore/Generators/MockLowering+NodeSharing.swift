@@ -19,95 +19,56 @@
 // SOFTWARE.
 
 extension MockLowering {
-	/// Everything the type key reads of a built place's record but its node and the values its passed arguments are
-	/// handed, which each call hands its own (`TypeKeyBody`'s `passedArgumentsByCall`). Places whose records have one such
-	/// key are one node of the plan, as the places of one generator's cached code are in production: a mock's walk writes
-	/// every place afresh, so without it each place was a node of its own, and the type key read a body per place.
+	/// What tells a built place's record apart from an alike one's within one mock root (`BuiltRecordShape`). Places whose
+	/// records have one such key are one node of the plan, as the places of one generator's cached code are in production:
+	/// a mock's walk writes every place afresh, so without it each place was a node of its own, and the type key read a
+	/// body per place. Each place keeps its own passed arguments, which each call hands its own (`TypeKeyBody`'s
+	/// `passedArgumentsByCall`).
 	///
-	/// A child that declares a function is read by its node and what the call hands it; any other child by its whole
-	/// record. A record with a child that is no recorded place has no key, so its place keeps a node of its own.
-	/// `MockNodeSharingTests` fails when a record type gains a field this key does not read.
+	/// A child that declares a function is read by its node and what the call hands it; any other child by its keyed
+	/// fields. A record with a child that is no recorded place has no key, so its place keeps a node of its own.
+	/// `SafeDIToolMockNodeSharingTests` fails when a record type gains a field this key neither reads nor leaves out with
+	/// a reason.
 	struct SharedRecordKey: Hashable {
 		let record: BuiltRecordShape
 
 		init?(_ record: BuiltPlaceRecord) {
-			guard let shape = BuiltRecordShape(record, passedArgumentValues: false) else { return nil }
+			guard let shape = BuiltRecordShape(record) else { return nil }
 			self.record = shape
 		}
 	}
 
+	/// The fields of a built place's record that tell alike places apart. The record's other fields follow from these
+	/// within one mock root, or are ones the type key derives again for each call and class (`notKeyedFields` in
+	/// `SafeDIToolMockNodeSharingTests` gives the reason for each).
 	struct BuiltRecordShape: Hashable {
 		let property: Property
-		let isErased: Bool
 		let concreteType: TypeDescription
-		let isExtension: Bool
 		let target: ConstructionTarget
+		/// Where each argument of the construction is read from: an argument handed `nil` inside one build and a binding
+		/// inside another needs a function of its own for each.
 		let arguments: [PlaceRead]
-		let forwardedProperties: [Property]
-		let cycleParameters: [Property]
-		let callCycleArguments: [PlaceRead]
-		let functionName: String
-		let isSendable: Bool
-		let typesDeclaredEscaping: Set<TypeDescription>
-		let lineEnd: String
-		let hasFunction: Bool
 		let children: [ChildShape]
-		/// The passed arguments in full where the place's call is in the body being keyed, else only what the function
-		/// declares of them.
-		let passedArguments: [PassedArgumentShape]
-		let constructionValue: ConstructionValue?
+		/// The override closures, which name the configuration of the place's parent.
 		let alternatives: [AlternativeShape]
-		let argumentValues: [Int: ValuePath]
-		let functionReturnType: TypeDescription?
 
-		init?(_ record: BuiltPlaceRecord, passedArgumentValues: Bool) {
+		init?(_ record: BuiltPlaceRecord) {
 			var children = [ChildShape]()
 			for child in record.children {
 				guard let shape = ChildShape(child) else { return nil }
 				children.append(shape)
 			}
-			self.init(record, children: children, passedArgumentValues: passedArgumentValues)
+			self.init(record, children: children)
 		}
 
 		/// The shape of `record` with its children's shapes given.
-		init(_ record: BuiltPlaceRecord, children: [ChildShape], passedArgumentValues: Bool) {
+		init(_ record: BuiltPlaceRecord, children: [ChildShape]) {
 			property = record.property
-			isErased = record.isErased
 			concreteType = record.concreteType
-			isExtension = record.isExtension
 			target = record.target
 			arguments = record.arguments
-			forwardedProperties = record.forwardedProperties
-			cycleParameters = record.cycleParameters
-			callCycleArguments = record.callCycleArguments
-			functionName = record.functionName
-			isSendable = record.isSendable
-			typesDeclaredEscaping = record.typesDeclaredEscaping
-			lineEnd = record.lineEnd
-			hasFunction = record.hasFunction
 			self.children = children
-			passedArguments = record.passedArguments.map { PassedArgumentShape($0, value: passedArgumentValues) }
-			constructionValue = record.constructionValue
 			alternatives = record.alternatives.map(AlternativeShape.init)
-			argumentValues = record.argumentValues
-			functionReturnType = record.functionReturnType
-		}
-	}
-
-	/// A passed argument as the function declares it, with the value its call hands it where that call is keyed.
-	struct PassedArgumentShape: Hashable {
-		let parameterName: String
-		let type: TypeDescription
-		let staysOutsideSendableFunctions: Bool
-		let bindsBeforeCall: Bool
-		let value: ValuePath?
-
-		init(_ argument: PassedArgument, value: Bool) {
-			parameterName = argument.parameterName
-			type = argument.type
-			staysOutsideSendableFunctions = argument.staysOutsideSendableFunctions
-			bindsBeforeCall = argument.bindsBeforeCall
-			self.value = value ? argument.value : nil
 		}
 	}
 
@@ -190,7 +151,7 @@ extension MockLowering {
 					self = .function(node: ObjectIdentifier(built.node), passedArguments: built.passedArguments)
 				} else {
 					// A place with no function holds no children: its record's are its function's body (`recordBuiltPlaces`).
-					self = .inline(BuiltRecordShape(built, children: [], passedArgumentValues: true))
+					self = .inline(BuiltRecordShape(built, children: []))
 				}
 			case let .closer(closer):
 				self = .closer(ClosingShape(closer))

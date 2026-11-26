@@ -18,13 +18,106 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import Testing
 @testable import SafeDICore
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// A mock's alike places share one plan node (`MockLowering.SharedRecordKey`), and the type key reads the first place's
-/// record for all of them, so the key must read every field of each record type it compares: a field it missed would
-/// let two places that differ in it share one body.
-struct SafeDIToolMockNodeSharingTests {
+/// record for all of them, so the key reads every field of each record type it compares, but the fields that follow from
+/// the ones it reads or that the type key derives again for each call: a field it missed would let two places that
+/// differ in it share one body.
+struct SafeDIToolMockNodeSharingTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	/// The two `panelBuilder` places differ only in where their argument is read from: inside the lazy screen's build no
+	/// lazy screen is available yet, so its `lazyScreen` is `nil`, and inside the screen's build it is the root's binding.
+	/// The key keeps them two nodes, which the type key lays out as one function that takes the argument. As one node,
+	/// the second place would read the first one's `nil`, and the root would keep the walk's body.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutOneBuilderTakingTheArgument_whenAlikePlacesReadTheArgumentFromNilAndFromABinding() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let lazyScreen: LazilyInstantiated<Screen>?"]),
+				seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated let panelBuilder: Instantiator<Panel>"]),
+				seamFixtureType(named: "Root", isFinalClass: true, declarations: ["@Instantiated let screen: Screen", "@Instantiated let lazyScreen: LazilyInstantiated<Screen>"])
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            lazyScreen: Screen.SafeDIMockConfiguration = .init(),
+		            screen: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                lazyScreen: lazyScreen,
+		                screen: screen
+		            )
+		        }
+
+		        var lazyScreen: Screen.SafeDIMockConfiguration { __safeDI_storage.lazyScreen }
+		        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                lazyScreen: Screen.SafeDIMockConfiguration,
+		                screen: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.lazyScreen = lazyScreen
+		                self.screen = screen
+		            }
+
+		            let lazyScreen: Screen.SafeDIMockConfiguration
+		            let screen: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_lazyScreen(lazyScreen: LazilyInstantiated<Screen>?, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let panelBuilder = Instantiator<Panel> {
+		                __safeDI_panelBuilder(lazyScreen: lazyScreen, __safeDI_Panel_configuration: __safeDI_Screen_configuration.panelBuilder)
+		            }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(panelBuilder) } else { Screen(panelBuilder: panelBuilder) }
+		        }
+		        func __safeDI_panelBuilder(lazyScreen: LazilyInstantiated<Screen>?, __safeDI_Panel_configuration: ((LazilyInstantiated<Screen>?) -> Panel)?) -> Panel {
+		            if let safeDIBuilder = __safeDI_Panel_configuration { safeDIBuilder(lazyScreen) } else { Panel(lazyScreen: lazyScreen) }
+		        }
+		        let lazyScreen = LazilyInstantiated<Screen> {
+		            __safeDI_lazyScreen(lazyScreen: nil, __safeDI_Screen_configuration: safeDIOverrides.lazyScreen)
+		        }
+		        let screen: Screen = __safeDI_lazyScreen(lazyScreen: lazyScreen, __safeDI_Screen_configuration: safeDIOverrides.screen)
+		        return Root(screen: screen, lazyScreen: lazyScreen)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	@Test
 	func sharedRecordKey_readsEveryFieldOfBuiltPlaceRecord_whenComparingPlaces() throws {
 		let type = TypeDescription.simple(name: "Screen", generics: [])
@@ -47,11 +140,12 @@ struct SafeDIToolMockNodeSharingTests {
 			node: PlanNode(),
 		)
 		record.passedArguments = []
-		let shape = try #require(MockLowering.BuiltRecordShape(record, passedArgumentValues: false))
+		let shape = try #require(MockLowering.BuiltRecordShape(record))
 		let sharingFields = try #require(record.sharingFields)
 		// The node is what the key decides, and the box's fields are read through its accessors.
 		let recordFields = Self.fieldNames(of: record).subtracting(["node", "sharingFields"]).union(Self.fieldNames(of: sharingFields))
-		#expect(recordFields == Self.fieldNames(of: shape))
+		#expect(recordFields.subtracting(Self.notKeyedFields.keys) == Self.fieldNames(of: shape))
+		#expect(Set(Self.notKeyedFields.keys).isSubset(of: recordFields))
 	}
 
 	@Test
@@ -64,8 +158,6 @@ struct SafeDIToolMockNodeSharingTests {
 		#expect(Self.fieldNames(of: alias) == Self.fieldNames(of: MockLowering.AliasShape(alias)))
 		let alternative = ConstructionAlternative(closure: .passedArgument("screen"), bindingName: nil, requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)
 		#expect(Self.fieldNames(of: alternative) == Self.fieldNames(of: MockLowering.AlternativeShape(alternative)))
-		let argument = PassedArgument(parameterName: "screen", type: type, value: .passedArgument("screen"), staysOutsideSendableFunctions: false)
-		#expect(Self.fieldNames(of: argument) == Self.fieldNames(of: MockLowering.PassedArgumentShape(argument, value: true)))
 	}
 
 	@Test
@@ -118,31 +210,13 @@ struct SafeDIToolMockNodeSharingTests {
 		// One record per field of the key, each differing from the first in that field alone.
 		let recordsByChangedField = [
 			"property": record(property: otherProperty),
-			"isErased": record(isErased: true),
 			"concreteType": record(concreteType: otherType),
-			"isExtension": record(isExtension: true),
 			"target": record(target: .instantiate(type)),
 			"arguments": record(arguments: [read]),
-			"forwardedProperties": record(forwardedProperties: [otherProperty]),
-			"cycleParameters": record(cycleParameters: [otherProperty]),
-			"callCycleArguments": record(callCycleArguments: [read]),
-			"functionName": record(functionName: "__safeDI_screen_Screen"),
-			"isSendable": record(isSendable: true),
-			"typesDeclaredEscaping": record(typesDeclaredEscaping: [otherType]),
-			"lineEnd": record(lineEnd: " // comment"),
-			"hasFunction": record(hasFunction: false),
 			"children": record(children: [child]),
-			"passedArguments": record(changingSharingFields: {
-				$0.passedArguments = [PassedArgument(parameterName: "panel", type: otherType, value: .passedArgument("panel"), staysOutsideSendableFunctions: false)]
-			}),
-			"constructionValue": record(changingSharingFields: {
-				$0.constructionValue = ConstructionValue(value: .passedArgument("panel"), resultWrapper: nil)
-			}),
 			"alternatives": record(changingSharingFields: {
 				$0.alternatives = [ConstructionAlternative(closure: .passedArgument("panel"), bindingName: nil, requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
 			}),
-			"argumentValues": record(changingSharingFields: { $0.argumentValues = [0: .passedArgument("panel")] }),
-			"functionReturnType": record(changingSharingFields: { $0.functionReturnType = otherType }),
 		]
 		let key = try #require(MockLowering.SharedRecordKey(record()))
 		#expect(try #require(MockLowering.SharedRecordKey(record())) == key)
@@ -152,7 +226,29 @@ struct SafeDIToolMockNodeSharingTests {
 		}
 	}
 
+	/// The fields of a built place's record the key leaves out, each with why two places of one mock root that the key
+	/// finds alike cannot differ in it, or why the type key reads it again for each call. No graph of the base, seam and
+	/// public mock fuzzer corpora generates a different mock when the key leaves all of these out.
+	private static let notKeyedFields = [
+		"isErased": "The property’s declaration decides it, and the property, its concrete type and the configuration that the alternatives name fix that declaration.",
+		"isExtension": "The concrete type’s declaration decides it.",
+		"forwardedProperties": "The concrete type’s declaration decides them.",
+		"cycleParameters": "They are the properties of `callCycleArguments`.",
+		"callCycleArguments": "The type key reads a call’s cycle arguments from the call, and the children decide which cycle a place closes.",
+		"functionName": "The type key names each class’s function itself.",
+		"isSendable": "The type key derives each call’s Sendable family from where the call is.",
+		"typesDeclaredEscaping": "The concrete type’s initializer, its mock and the children decide them.",
+		"lineEnd": "The concrete type decides the comment that ends a seam’s line.",
+		"hasFunction": "The children and the arguments decide whether a place needs a function of its own.",
+		"passedArguments": "Each place keeps its own, which its call hands its function (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`).",
+		"constructionValue": "The target, the arguments and the alternatives decide it.",
+		"argumentValues": "They are the values of the arguments, which the key reads.",
+		"functionReturnType": "The property and the concrete type decide it.",
+	]
+
 	private static func fieldNames(of value: Any) -> Set<String> {
 		Set(Mirror(reflecting: value).children.compactMap(\.label))
 	}
+
+	private var filesToDelete: [URL]
 }
