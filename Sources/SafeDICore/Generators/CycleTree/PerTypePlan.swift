@@ -66,6 +66,8 @@ struct PerTypePlan: Sendable {
 	/// `nil` where no declaration the root reaches is on a cycle, so each path of its tree is built once.
 	init?(root: ConstructionScope) {
 		let table = root.table
+		var fillEdgesByDeclaration = [Declaration: FillEdges]()
+		var firstFillEdgeByDeclaration = [Declaration: Int]()
 		let graph = OrderedGraph(root: Declaration(record: root.identity, built: nil)) { declaration in
 			var targets = [Declaration]()
 			for case let .instantiated(property, scopeID, erasedToConcreteExistential, propertyID) in declaration.record.propertiesToGenerate {
@@ -74,16 +76,35 @@ struct PerTypePlan: Sendable {
 					built: Declaration.Built(property: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential),
 				))
 			}
+			// A call's fills follow its properties, as its build creates them.
+			let fillEdges = FillEdges(of: declaration.record, in: table)
+			if !fillEdges.edges.isEmpty {
+				fillEdgesByDeclaration[declaration] = fillEdges
+				firstFillEdgeByDeclaration[declaration] = targets.count
+				targets += fillEdges.edges.map(\.target)
+			}
 			return targets
 		}
 		guard graph.nodes.indices.contains(where: { graph.isOnCycle($0) }) else { return nil }
 		self.graph = graph
+		fillEdgesByNode = graph.nodes.map { fillEdgesByDeclaration[$0] }
+		firstFillEdgeByNode = graph.nodes.map { firstFillEdgeByDeclaration[$0] ?? 0 }
 		interner = table.interner
 	}
 
 	/// The declarations in the order a walk of the root's properties, in the order each scope generates them, first reaches
 	/// each, with an edge for each property a declaration's scope instantiates.
 	let graph: OrderedGraph<Declaration>
+
+	/// The fills of the call each declaration's scope makes, or `nil` where it makes none, by position.
+	let fillEdgesByNode: [FillEdges?]
+
+	/// The fill the node's edge at `edge`, its position among the node's edges, leads to, or `nil` for an edge of a property
+	/// the node's scope instantiates.
+	func fillEdge(from node: Int, at edge: Int) -> FillEdges.Edge? {
+		guard let fillEdges = fillEdgesByNode[node], edge >= firstFillEdgeByNode[node] else { return nil }
+		return fillEdges.edges[edge - firstFillEdgeByNode[node]]
+	}
 
 	/// The pair a cycle closes on at a scope built as `built`.
 	func cycleIdentity(of built: Declaration.Built, record: ScopeRecord) -> CycleIdentity {
@@ -108,7 +129,8 @@ struct PerTypePlan: Sendable {
 	}
 
 	/// The plan as text, a line per declaration: its position, the type built, the property it is built as, `cycle` and its
-	/// component's number where it is on a cycle, `twin` where it is one of `twins`, and the positions its properties build.
+	/// component's number where it is on a cycle, `twin` where it is one of `twins`, and the positions its properties build,
+	/// then those its call's fills build, each marked `fill`.
 	var projection: String {
 		let twins = Set(twins)
 		var lines = [String]()
@@ -126,8 +148,8 @@ struct PerTypePlan: Sendable {
 			if twins.contains(index) {
 				line.append(" twin")
 			}
-			for target in graph.edges(from: index) {
-				line.append(" -> \(target)")
+			for (edge, target) in graph.edges(from: index).enumerated() {
+				line.append(fillEdge(from: index, at: edge) == nil ? " -> \(target)" : " -> fill \(target)")
 			}
 			lines.append(line)
 		}
@@ -140,6 +162,8 @@ struct PerTypePlan: Sendable {
 	}
 
 	private let interner: ConstructionInterner
+	/// The position among each node's edges of its first edge to a fill.
+	private let firstFillEdgeByNode: [Int]
 }
 
 /// What the tests read of each tree's plan: set by the tests, never by the tool.

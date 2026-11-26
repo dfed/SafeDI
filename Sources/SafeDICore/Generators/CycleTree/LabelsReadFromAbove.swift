@@ -30,15 +30,19 @@
 /// labels per node for as long as its owner keeps it.
 struct LabelsReadFromAbove: Sendable {
 	/// `own` gives the labels a node reads itself, in the order it reads them, and `bound` the labels it binds, which hide
-	/// those labels from the nodes above it; each is asked once per node.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: (Int) -> [String], bound: (Int) -> Set<String>) {
+	/// those labels from the nodes above it; each is asked once per node. `boundAlong` gives the labels a node binds along
+	/// one of its edges alone, by the edge's position among the node's edges, which hide those labels from the nodes above
+	/// it in what that edge's target reads; it is asked once per edge.
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: (Int) -> [String], bound: (Int) -> Set<String>, boundAlong: (_ node: Int, _ edge: Int) -> Set<String> = { _, _ in [] }) {
 		var labelsByNode = [[String]](repeating: [], count: graph.nodes.count)
 		var labelSetByNode = [Set<String>](repeating: [], count: graph.nodes.count)
 		var boundByNode = [Set<String>](repeating: [], count: graph.nodes.count)
+		var boundAlongByNode = [[Set<String>]](repeating: [], count: graph.nodes.count)
 		var nodesByComponent = [[Int]](repeating: [], count: (graph.componentByNode.max() ?? 0) + 1)
 		for index in graph.nodes.indices {
 			nodesByComponent[graph.componentByNode[index]].append(index)
 			boundByNode[index] = bound(index)
+			boundAlongByNode[index] = graph.edges(from: index).indices.map { boundAlong(index, $0) }
 			for label in own(index) where labelSetByNode[index].insert(label).inserted {
 				labelsByNode[index].append(label)
 			}
@@ -50,8 +54,8 @@ struct LabelsReadFromAbove: Sendable {
 			while changed {
 				changed = false
 				for index in nodes {
-					for target in graph.edges(from: index) {
-						for label in labelsByNode[target] where !boundByNode[index].contains(label) && labelSetByNode[index].insert(label).inserted {
+					for (edge, target) in graph.edges(from: index).enumerated() {
+						for label in labelsByNode[target] where !boundByNode[index].contains(label) && !boundAlongByNode[index][edge].contains(label) && labelSetByNode[index].insert(label).inserted {
 							labelsByNode[index].append(label)
 							changed = true
 						}

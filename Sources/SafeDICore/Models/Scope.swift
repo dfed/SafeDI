@@ -753,9 +753,9 @@ extension ScopeRecord {
 				} else {
 					// Filtered once, for the memo and the parent alike.
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
-					// A call that passes fills reads the caller's declarations for its fills' trees, which the plan has no edge
-					// for yet, so a place whose subtree holds a call or a fill is not compared.
-					if let placeReadLabels, let placeReadsObserver, createdScope.recordsReads, !scopeGenerator.treeHoldsCallOrFill, let built = createdScope.builtProperty {
+					// A call that passes fills reads the caller's declarations for its fills' trees, which the plan's fill edges
+					// carry (`FillEdges`), so a place whose subtree holds a call or a fill is compared as any other.
+					if let placeReadLabels, let placeReadsObserver, createdScope.recordsReads, let built = createdScope.builtProperty {
 						placeReadsObserver(
 							createdScope.builtScope.instantiable.concreteInstantiable.asSource,
 							built.property.asSource,

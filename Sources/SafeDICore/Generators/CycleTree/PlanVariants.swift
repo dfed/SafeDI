@@ -41,8 +41,10 @@ struct PlanVariants: Sendable {
 		let graph = plan.graph
 		let labels = LabelsReadFromAbove(
 			graph: graph,
-			own: { Self.labelsReadFromAbove(byDependenciesOf: graph.nodes[$0].record) },
+			// A call reads the declarations enclosing it for its fills, beside what its scope receives.
+			own: { Self.labelsReadFromAbove(byDependenciesOf: graph.nodes[$0].record) + (plan.fillEdgesByNode[$0]?.labelsReadOfCaller ?? []) },
 			bound: { graph.nodes[$0].record.declaredLabels },
+			boundAlong: { plan.fillEdge(from: $0, at: $1)?.boundLabels ?? [] },
 		)
 		var bodies = [Body(declaration: 0, answers: labels.labels(of: 0).map { _ in .none }, targets: [])]
 		var positionByKey = [Key(declaration: 0, answers: bodies[0].answers): 0]
@@ -61,10 +63,17 @@ struct PlanVariants: Sendable {
 			for (property, _) in declaration.record.sortedDeclaredPropertyForms where declaredPropertyByLabel[property.label] == nil {
 				declaredPropertyByLabel[property.label] = property
 			}
-			for target in graph.edges(from: bodies[next].declaration) {
+			for (edge, target) in graph.edges(from: bodies[next].declaration).enumerated() {
 				let builtLabel = graph.nodes[target].built?.property.label
+				// A fill reads each field it binds from its place's struct, which hides every declaration enclosing the call.
+				var fieldByLabel = [String: Property]()
+				for field in plan.fillEdge(from: bodies[next].declaration, at: edge)?.boundFields ?? [] {
+					fieldByLabel[field.property.label] = field.property
+				}
 				let answers: [Answer] = labels.labels(of: target).map { label in
-					if let property = declaredPropertyByLabel[label] {
+					if let property = fieldByLabel[label] {
+						.declared(property, isBeingBuilt: false)
+					} else if let property = declaredPropertyByLabel[label] {
 						.declared(property, isBeingBuilt: label == builtLabel)
 					} else {
 						ownAnswerByLabel[label] ?? .none
