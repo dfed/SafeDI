@@ -1587,6 +1587,23 @@ extension DependencyTreeGenerator {
 		///   `validateTreeBuiltAgainByCycle` returns at once unless a label it can judge in that tree is declared, or made
 		///   receivable, deeper than the entry. No scope beneath `scope` declares such a label, or the set is empty, and
 		///   `cleanSubtreeKey(of:rootContextIndex:)` keeps an entry that a declaration above `scope` is deeper than.
+		///
+		/// Each condition here and in `cleanSubtreeKey(of:rootContextIndex:)` makes the key hold more, so it can cost a skip
+		/// and never cause a wrong one. A test shows these are needed, failing with the condition left out
+		/// (`SafeDIToolCleanSubtreeTests`, "One graph for each part of the key"): a label a scope beneath reads from above
+		/// keeps its receivable properties; the root's context; and a subtree skipped as found clean beneath a scope still
+		/// being walked hands that scope's depth up. No graph is known for these, each left out by hand over about 43,000
+		/// seeded graphs with no difference between a run that skips and one that skips nothing:
+		/// - "exactly one property" and "its non-optional form" of a label fulfilled beneath. A second property, or an
+		///   optional form, under a label a scope beneath forwards is received beneath that forwarder, where the walk
+		///   reports it on every path or on none.
+		/// - the two conditions on the labels only instantiators build (no judged label declared beneath; used no other
+		///   way), and the two depths `cleanSubtreeKey(of:rootContextIndex:)` compares an entry with. A declaration deeper
+		///   than an entry a cycle closes on is made by a scope between that entry's scope and `scope`, which `scope`
+		///   reaches through the cycle, so the first condition appears to cover what the depths do.
+		/// - a cycle that closes above its parent counting as an equal first build only for a label only instantiators
+		///   build; the stack's entries; and the positions of the declarations among them.
+		/// Leaving one out needs an argument that the rest of the key tells apart everything it does, not this search.
 		func cleanSubtreeKeyLabels(of scope: Scope) -> CleanSubtreeKeyLabels {
 			if let cached = cleanSubtreeKeyLabelsByScope[scope] {
 				return cached
