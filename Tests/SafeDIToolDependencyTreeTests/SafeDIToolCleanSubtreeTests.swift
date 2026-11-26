@@ -563,6 +563,27 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		#expect(counts == [72, 128, 149])
 	}
 
+	// MARK: Tests – One graph for each part of the key
+
+	@Test(arguments: GraphForKeyPart.allCases, DeclarationOrder.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkWithoutSkipReports_whenGraphNeedsOnePartOfKey(graph: GraphForKeyPart, order: DeclarationOrder) async throws {
+		// Each graph is one a search over seeded graphs found and shrank: with the part of the key its case names left out
+		// by hand, the run that skips reports other diagnostics than the run that skips nothing, in the order the
+		// declarations are written in. The other orders are run too, since which path reaches a scope first follows them.
+		let fixture = graph.fixture(order: order)
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		guard case let .error(description) = walking.outcome else {
+			Issue.record("Every graph of this test holds an error the walk reports")
+			return
+		}
+		#expect(description.components(separatedBy: "error: ").count - 1 == graph.errorCount)
+		// The key was asked, and told the paths apart.
+		#expect(skipping.keyedSubtreeCount > 0)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1177,6 +1198,90 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		]
 		return shuffled(types).map { name, isRoot, declarations in
 			seamFixtureType(named: name, isRoot: isRoot, isFinalClass: true, declarations: shuffled(declarations))
+		}
+	}
+
+	/// Graphs that each need one part of the key (`CleanSubtreeKey`, `cleanSubtreeKeyLabels(of:)`) or of the bookkeeping
+	/// of subtrees found clean beneath a scope still being walked.
+	enum GraphForKeyPart: CaseIterable {
+		/// A label that only one non-optional property is received under beneath a scope still keeps its receivable
+		/// properties in the key while a type beneath reads it from above the scope. `Screen` receives `b: Screen`, which
+		/// nothing declares, and is reached beneath `Direct` and, through a cycle of builders, beneath `Loop`: each path
+		/// reports the receive. With the label left out as "fulfilled beneath", the path through `Loop` is skipped.
+		case labelReadFromAboveKeepsItsReceivableProperties
+		/// The key holds the root's context: which checks its walk runs. `MockedFlow`'s mock is a root of its own, whose walk
+		/// reports that `Hider`'s `f0: Shadow` hides the `f0: Value?` that `MockedLeaf` receives only if available; the walk
+		/// of `Root`, which reaches the same types first, does not judge that. With one context for every root, the
+		/// subtree found clean beneath `Root` is skipped beneath the mock and the error is lost.
+		case rootContext
+		/// A subtree skipped because it was found clean beneath a scope still being walked hands that scope's depth up, so
+		/// that what is above it is kept only once that scope's walk completes clean. `Leaf` receives `x: Value?`, which
+		/// nothing declares, beneath `D`, which the cycles through `A`, `B` and `C` reach along four paths. With the depth
+		/// not handed up, a path is skipped and its diagnostic is lost.
+		case pendingSubtreeHandsItsDepthUp
+
+		/// The number of errors the walk reports.
+		var errorCount: Int {
+			switch self {
+			case .labelReadFromAboveKeepsItsReceivableProperties: 2
+			case .rootContext: 1
+			case .pendingSubtreeHandsItsDepthUp: 4
+			}
+		}
+
+		private var types: [(name: String, arguments: String, declarations: [String])] {
+			switch self {
+			case .labelReadFromAboveKeepsItsReceivableProperties:
+				[
+					("Root", "(isRoot: true)", ["@Instantiated let c: Direct", "@Instantiated let a: Instantiator<Loop>"]),
+					("Loop", "", ["@Instantiated let c: Instantiator<Screen>"]),
+					("Direct", "", ["@Instantiated let a: Screen"]),
+					("Screen", "", ["@Received let b: Screen", "@Instantiated let a: Instantiator<Loop>"]),
+				]
+			case .rootContext:
+				[
+					("Root", "(isRoot: true)", ["@Instantiated let child3: Instantiator<Entry>"]),
+					("Entry", "", ["@Instantiated let child3: Instantiator<MockedFlow>"]),
+					("MockedFlow", "(generateMock: true)", ["@Instantiated let child3: Step"]),
+					("Step", "", ["@Instantiated let child3: Instantiator<Fork>"]),
+					("Fork", "", ["@Instantiated let child3: Plain", "@Instantiated let child2: Instantiator<Hider>"]),
+					("Plain", "", ["@Instantiated let child3: Instantiator<MockedLeaf>"]),
+					("Hider", "", ["@Instantiated let child1: MockedLeaf", "@Instantiated let f0: Shadow"]),
+					("MockedLeaf", "(generateMock: true)", ["@Received(onlyIfAvailable: true) let f0: Value?"]),
+					("Shadow", "", []),
+					("Value", "", []),
+				]
+			case .pendingSubtreeHandsItsDepthUp:
+				[
+					("Root", "(isRoot: true)", ["@Instantiated let r2: Instantiator<C>", "@Instantiated let r3: Instantiator<D>"]),
+					("A", "", ["@Instantiated let b1: Instantiator<B>"]),
+					("B", "", ["@Instantiated let b3: Instantiator<C>", "@Instantiated let b2: Instantiator<A>"]),
+					("C", "", ["@Instantiated let b2: Instantiator<D>"]),
+					("D", "", ["@Instantiated let b0: Instantiator<B>", "@Instantiated let b2: Instantiator<Leaf>"]),
+					("Leaf", "", ["@Received let x: Value?"]),
+					("Value", "", []),
+				]
+			}
+		}
+
+		func fixture(order: DeclarationOrder) -> [String] {
+			types.map { name, arguments, declarations in
+				let ordered = order.ordered(declarations, ofRoot: name == "Root")
+				let properties = ordered.map { declaration -> (label: String, type: String) in
+					let property = declaration[declaration.range(of: " let ")!.upperBound...]
+					return (String(property.prefix { $0 != ":" }), property.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces))
+				}
+				return """
+				@Instantiable\(arguments)
+				public final class \(name): Instantiable {
+				    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+				\(properties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+				    }
+
+				\(ordered.map { "    \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
 		}
 	}
 
