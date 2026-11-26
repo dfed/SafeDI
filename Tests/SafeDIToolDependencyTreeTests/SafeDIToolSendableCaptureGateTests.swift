@@ -43,7 +43,7 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_letsCaptureWalkRun_whenRootsTreeHoldsCapture() async throws {
+	mutating func generate_letsCaptureWalkRun_whenRootsTreeHoldsCapture() async {
 		// `Settings` is built in the `@Sendable` function of `settingsBuilder` and receives `childBuilder`, an
 		// `Instantiator` `Root` declares outside it: today's walk finds the capture, so the gate must let it run.
 		let (gates, error) = await gates(of:
@@ -70,7 +70,7 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_holdsCaptureWalkBackForEachRoot_whenModuleNamesBothKindsOfWrapper() async throws {
+	mutating func generate_holdsCaptureWalkBackForEachRoot_whenModuleNamesBothKindsOfWrapper() async {
 		// The module names both kinds of wrapper, so its gate lets the walk run. `SendableRoot`'s scopes name only
 		// `SendableInstantiator`s, and `MixedRoot`'s `Instantiator` is of a label no scope built in a `@Sendable` function
 		// reads: neither root's tree can hold a capture.
@@ -106,7 +106,7 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_letsCaptureWalkRun_whenSendableFunctionRenamesNonSendableWrapper() async throws {
+	mutating func generate_letsCaptureWalkRun_whenSendableFunctionRenamesNonSendableWrapper() async {
 		// `Settings`, built in the `@Sendable` function of `settingsBuilder`, renames `childBuilder`, an `Instantiator`
 		// `Root` declares outside it: the alias reads the wrapper there, so the gate must let the walk run.
 		let (gates, error) = await gates(of:
@@ -133,7 +133,7 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_holdsCaptureWalkBack_whenSendableFunctionReadsNoLabelOfNonSendableWrapper() async throws {
+	mutating func generate_holdsCaptureWalkBack_whenSendableFunctionReadsNoLabelOfNonSendableWrapper() async {
 		// `Root` declares an `Instantiator` and builds `Settings` in a `@Sendable` function, but `Settings` forwards
 		// `name` and receives only `theme`, a constant: no read inside the function names the wrapper's label.
 		let (gates, error) = await gates(of:
@@ -166,7 +166,7 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_letsCaptureWalkRun_whenCycleOfSendableInstantiatorsReceivesInstanceOfRootsLazilyInstantiated() async throws {
+	mutating func generate_letsCaptureWalkRun_whenCycleOfSendableInstantiatorsReceivesInstanceOfRootsLazilyInstantiated() async {
 		// The cycle plan review's capture graph: a plan of `A`'s body would take `theme` as the instance of `Root`'s
 		// `LazilyInstantiated`, read inside `aBuilder`'s `@Sendable` function. Today's walk reports the capture, so the
 		// gate must keep today's tree.
@@ -200,7 +200,7 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_letsCaptureWalkRun_whenTypeBuiltAgainByCycleDeclaresLazilyInstantiatedItsSendableFunctionReads() async throws {
+	mutating func generate_letsCaptureWalkRun_whenTypeBuiltAgainByCycleDeclaresLazilyInstantiatedItsSendableFunctionReads() async {
 		// The review's second capture graph: the wrapper is declared in `A`, a body the cycle calls, not in the root's
 		// body, so a walk of the root body's own tree would not see it. `B`, built in `A`'s `@Sendable` function,
 		// receives its instance, and builds `A` again.
