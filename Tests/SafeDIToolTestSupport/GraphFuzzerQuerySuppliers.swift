@@ -741,7 +741,7 @@ struct GraphFuzzerQueryDeletion: Sendable {
 	}
 
 	/// A provenance entry as the oracle compares it: everything it holds but its sentences.
-	private static func entry(of entry: [String: Any]) -> String {
+	fileprivate static func entry(of entry: [String: Any]) -> String {
 		let reason = entry["reason"] as? [String: Any]
 		return Self.entry(
 			source: entry["source"] as? String ?? "?",
@@ -777,23 +777,316 @@ struct GraphFuzzerQueryDeletion: Sendable {
 	}
 }
 
+/// One property that provides a value deleted from a graph the tool accepts, and what `query graph` must then export,
+/// which the deletion oracle checks beside `GraphFuzzerQueryDeletion`: `query graph` reads a receive nothing provides
+/// from the declarations as written, so deleting a property moves only what read that property.
+///
+/// The property is an instantiated dependency of a declaration some root reaches, the first that declaration declares,
+/// so that its siblings keep their order without it, whose type's declaration has no dependency of its own, so that no
+/// tree goes with it; chosen by the graph's seed. The export of the graph without it, where it has trees, must be the
+/// full graph's but for the dependencies that receive or rename its label. Of those, none is handed the property, each
+/// keeps every other declaration it was handed, one that never read the property keeps its `provenance` whole, a
+/// dependency is marked exactly where a value of it is `unfulfilled` and names nothing, and each `unfulfilled` value
+/// that names a dependency names a marked receive of the label. Every other dependency's `provenance`, and every
+/// `isReachedByRoot` but the property's type's, is the full graph's.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+struct GraphFuzzerQueryProviderDeletion: Sendable {
+	/// The deletion to make from `fixture`, whose `query graph` export is `json`, or `nil` where the export built no
+	/// trees or holds no property the oracle deletes.
+	init?(exportedJSON json: String, fixture: GraphFuzzerFixture) throws {
+		guard let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+		      export["completeness"] as? String == "trees",
+		      let declarations = export["declarations"] as? [[String: Any]],
+		      let files = GraphFuzzerRemedies.Files(fixture)
+		else { return nil }
+		var leafIDs = Set<String>()
+		for declaration in declarations where (declaration["dependencies"] as? [[String: Any]])?.isEmpty == true {
+			if let id = declaration["id"] as? String {
+				leafIDs.insert(id)
+			}
+		}
+		var candidates = [(declarationID: String, typeName: String, label: String, fulfilledBy: String)]()
+		for declaration in declarations where declaration["isReachedByRoot"] as? Bool == true {
+			guard let id = declaration["id"] as? String, let typeName = declaration["typeName"] as? String else { continue }
+			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["source"] as? String == "instantiated" {
+				guard let label = dependency["label"] as? String,
+				      let fulfilledBy = dependency["fulfilledBy"] as? String, leafIDs.contains(fulfilledBy)
+				else { continue }
+				candidates.append((id, typeName, label, fulfilledBy))
+			}
+		}
+		// A property whose value a receive beneath another receive of it is handed is deleted first, and then one with
+		// more receives: what a receive beneath a marked receive reads is what the comparison is for.
+		func receives(of candidate: (declarationID: String, typeName: String, label: String, fulfilledBy: String)) -> (nested: Int, count: Int) {
+			var receivingIDs = Set<String>()
+			var count = 0
+			for declaration in declarations {
+				for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] {
+					for entry in dependency["provenance"] as? [[String: Any]] ?? [] where entry["source"] as? String == "declaration"
+						&& entry["declaredBy"] as? String == candidate.declarationID && entry["label"] as? String == candidate.label
+					{
+						count += 1
+						if let id = declaration["id"] as? String {
+							receivingIDs.insert(id)
+						}
+					}
+				}
+			}
+			var nested = 0
+			for declaration in declarations where (declaration["id"] as? String).map(receivingIDs.contains) == true {
+				for constructor in declaration["constructedBy"] as? [[String: Any]] ?? [] where (constructor["declaredBy"] as? String).map(receivingIDs.contains) == true {
+					nested += 1
+				}
+			}
+			return (nested, count)
+		}
+		var preferred = [(declarationID: String, typeName: String, label: String, fulfilledBy: String)]()
+		var preferredReceives = (nested: -1, count: -1)
+		for candidate in candidates {
+			let receives = receives(of: candidate)
+			if receives == preferredReceives {
+				preferred.append(candidate)
+			} else if receives > preferredReceives {
+				preferred = [candidate]
+				preferredReceives = receives
+			}
+		}
+		guard !preferred.isEmpty else { return nil }
+		let candidate = preferred[Int(fixture.seed % UInt64(preferred.count))]
+		var editedFiles = files
+		guard editedFiles.edit(typeNamed: candidate.typeName, { properties in
+			let kept = properties.filter { $0.label != candidate.label }
+			return kept.count == properties.count - 1 ? kept : nil
+		}) else { return nil }
+		declarationID = candidate.declarationID
+		label = candidate.label
+		fulfillingDeclarationID = candidate.fulfilledBy
+		fixtureWithoutProperty = GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: editedFiles.contents)
+		fullExportJSON = json
+	}
+
+	/// The `id` of the declaration whose property is deleted, and the property's label.
+	let declarationID: String
+	let label: String
+	/// The `id` of the declaration that fulfilled the property's type, which the deletion may leave unreached.
+	private let fulfillingDeclarationID: String
+	/// The graph without that property.
+	let fixtureWithoutProperty: GraphFuzzerFixture
+	/// The graph's own export, which the export without the property is compared with.
+	private let fullExportJSON: String
+
+	/// Whether `json`, the export of `fixtureWithoutProperty`, has trees to judge: it has none where the graph without
+	/// the property has an error that is not of a dependency that cannot be fulfilled.
+	static func hasTrees(exportedJSON json: String) throws -> Bool {
+		let completeness = (try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])?["completeness"] as? String
+		return completeness == "trees" || completeness == "partialTrees"
+	}
+
+	/// Whether a value of a receive in `json`, an export, is `unfulfilled` naming a receive above it.
+	static func namesMarkedReceive(exportedJSON json: String) throws -> Bool {
+		let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] ?? [:]
+		return (export["declarations"] as? [[String: Any]] ?? []).contains { declaration in
+			(declaration["dependencies"] as? [[String: Any]] ?? []).contains { dependency in
+				(dependency["provenance"] as? [[String: Any]] ?? []).contains { $0["source"] as? String == "unfulfilled" && $0["declaredBy"] != nil }
+			}
+		}
+	}
+
+	/// Each way `json`, the export of `fixtureWithoutProperty`, differs from what the deletion must leave, empty where it
+	/// is that export or has no trees.
+	func problems(exportedJSONWithoutProperty json: String) throws -> [String] {
+		guard try Self.hasTrees(exportedJSON: json) else { return [] }
+		let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] ?? [:]
+		let fullExport = try JSONSerialization.jsonObject(with: Data(fullExportJSON.utf8)) as? [String: Any] ?? [:]
+		var problems = [String]()
+		var declarationsByID = [String: [String: Any]]()
+		var markedReceivesOfLabel = Set<String>()
+		var marksDependency = false
+		for declaration in export["declarations"] as? [[String: Any]] ?? [] {
+			let id = declaration["id"] as? String ?? "?"
+			declarationsByID[id] = declaration
+			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["isUnfulfilled"] as? Bool == true {
+				marksDependency = true
+				if dependency["label"] as? String == label, dependency["aliasOf"] == nil {
+					markedReceivesOfLabel.insert("unfulfilled \(id).\(label)")
+				}
+			}
+		}
+		let expectedCompleteness = marksDependency ? "partialTrees" : "trees"
+		if export["completeness"] as? String != expectedCompleteness {
+			problems.append("The export's completeness is \(export["completeness"] as? String ?? "?"), not \(expectedCompleteness).")
+		}
+		for fullDeclaration in fullExport["declarations"] as? [[String: Any]] ?? [] {
+			guard let id = fullDeclaration["id"] as? String else { continue }
+			guard let declaration = declarationsByID.removeValue(forKey: id) else {
+				problems.append("\(id): the export without the property lacks it.")
+				continue
+			}
+			if id != fulfillingDeclarationID, declaration["isReachedByRoot"] as? Bool != fullDeclaration["isReachedByRoot"] as? Bool {
+				problems.append("\(id): isReachedByRoot is \(String(describing: declaration["isReachedByRoot"])), not \(String(describing: fullDeclaration["isReachedByRoot"])).")
+			}
+			let dependencies = declaration["dependencies"] as? [[String: Any]] ?? []
+			let fullDependencies = (fullDeclaration["dependencies"] as? [[String: Any]] ?? []).filter { id != declarationID || $0["label"] as? String != label }
+			guard dependencies.map({ $0["label"] as? String }) == fullDependencies.map({ $0["label"] as? String }) else {
+				problems.append("\(id): the export without the property lists other dependencies.")
+				continue
+			}
+			for (dependency, fullDependency) in zip(dependencies, fullDependencies) {
+				let name = "\(id).\(fullDependency["label"] as? String ?? "?")"
+				let isMarked = dependency["isUnfulfilled"] as? Bool == true
+				let provenance = (dependency["provenance"] as? [[String: Any]])?.map(GraphFuzzerQueryDeletion.entry(of:)).sorted()
+				let fullProvenance = (fullDependency["provenance"] as? [[String: Any]])?.map(GraphFuzzerQueryDeletion.entry(of:)).sorted()
+				let readsLabel = dependency["source"] as? String == "received"
+					&& ((dependency["aliasOf"] as? [String: Any])?["label"] as? String ?? dependency["label"] as? String) == label
+				guard readsLabel else {
+					if isMarked {
+						problems.append("\(name): marked unfulfilled, though it reads no `\(label)`.")
+					}
+					if provenance != fullProvenance {
+						problems.append("\(name): provenance is \(provenance.map { "\($0)" } ?? "absent"), not \(fullProvenance.map { "\($0)" } ?? "absent"), though it reads no `\(label)`.")
+					}
+					continue
+				}
+				guard let provenance else {
+					if fullProvenance != nil {
+						problems.append("\(name): has no provenance without the property.")
+					}
+					if isMarked {
+						problems.append("\(name): marked unfulfilled in a declaration no root reaches, which `generate` does not report.")
+					}
+					continue
+				}
+				let deleted = "declaration \(declarationID).\(label)"
+				let fullEntries = fullProvenance ?? []
+				if !fullEntries.contains(deleted), !fullEntries.contains(where: { $0.hasPrefix("nil (providerNotYetBuilt") }), provenance != fullEntries {
+					problems.append("\(name): provenance is \(provenance), not \(fullEntries), though it never read the property.")
+				}
+				for entry in fullEntries where entry.hasPrefix("declaration ") && entry != deleted && !provenance.contains(entry) {
+					problems.append("\(name): is no longer handed `\(entry)`.")
+				}
+				for entry in provenance {
+					if entry == deleted {
+						problems.append("\(name): is handed the deleted property.")
+					} else if entry == "unfulfilled" {
+						if dependency["isOnlyIfAvailable"] as? Bool == true {
+							problems.append("\(name): received only if available, and a value of it is `unfulfilled` naming nothing.")
+						}
+					} else if entry.hasPrefix("unfulfilled "), !markedReceivesOfLabel.contains(entry) {
+						problems.append("\(name): a value of it is `\(entry)`, which is no marked receive of `\(label)`.")
+					} else if entry == "nil (noProvidingDeclaration)", dependency["isOnlyIfAvailable"] as? Bool != true {
+						problems.append("\(name): required, and a value of it is `nil` where nothing provides it, which `generate` reports or a receive above stands for.")
+					}
+				}
+				if isMarked != provenance.contains("unfulfilled") {
+					problems.append("\(name): \(isMarked ? "marked unfulfilled though each value of it names a receive above" : "not marked unfulfilled though a value of it names nothing").")
+				}
+			}
+		}
+		for id in declarationsByID.keys.sorted() {
+			problems.append("\(id): only the export without the property holds it.")
+		}
+		return problems
+	}
+}
+
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerToolRuns {
-	/// The failure of a graph in one module the tool accepts whose `query graph` export, once one declaration is deleted
-	/// from the graph, moves what another receive is handed (`GraphFuzzerQueryDeletion`), or `nil`.
+	/// The failure of a graph in one module the tool accepts whose `query graph` export, once a type's declaration or a
+	/// property that provides a value is deleted from the graph, moves what a receive that did not read it is handed
+	/// (`GraphFuzzerQueryDeletion`, `GraphFuzzerQueryProviderDeletion`), or `nil`.
 	var queryDeletionFailure: GraphFuzzerFailure? {
-		guard let queryDeletion else { return nil }
-		let problems: [String]
+		var details = [String]()
 		do {
-			problems = try queryDeletion.deletion.problems(exportedJSONWithoutDeclaration: queryDeletion.export)
+			if let queryDeletion {
+				let problems = try queryDeletion.deletion.problems(exportedJSONWithoutDeclaration: queryDeletion.export)
+				if !problems.isEmpty {
+					details.append("Without the declaration \(queryDeletion.deletion.deletedDeclarationID):\n\(problems.joined(separator: "\n"))\nThe export without it:\n\(queryDeletion.export)")
+				}
+			}
+			if let queryProviderDeletion {
+				let problems = try queryProviderDeletion.deletion.problems(exportedJSONWithoutProperty: queryProviderDeletion.export)
+				if !problems.isEmpty {
+					details.append("Without the property \(queryProviderDeletion.deletion.declarationID).\(queryProviderDeletion.deletion.label):\n\(problems.joined(separator: "\n"))\nThe export without it:\n\(queryProviderDeletion.export)")
+				}
+			}
 		} catch {
-			return GraphFuzzerFailure(seed: fixture.seed, kind: .queryProvenanceMovesWhenDeclarationIsDeleted, details: "The export is not JSON: \(error)\n\(queryDeletion.export)")
+			return GraphFuzzerFailure(seed: fixture.seed, kind: .queryProvenanceMovesWhenDeclarationIsDeleted, details: "An export is not JSON: \(error)")
 		}
-		guard !problems.isEmpty else { return nil }
+		guard !details.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
 			kind: .queryProvenanceMovesWhenDeclarationIsDeleted,
-			details: "Without \(queryDeletion.deletion.deletedDeclarationID):\n\(problems.joined(separator: "\n"))\nThe export without it:\n\(queryDeletion.export)\nThe graph's export:\n\(queryExport ?? "")",
+			details: "\(details.joined(separator: "\n"))\nThe graph's export:\n\(queryExport ?? "")",
+		)
+	}
+}
+
+/// The query oracles' judgments of one graph, made as `GraphFuzzerOracle.toolRuns(of:)` makes them and without the
+/// rest of its runs, for the tests that hold the oracles' floors.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+enum GraphFuzzerQueryJudgment {
+	/// What `queryUnfulfilledFailure` finds in a graph in one module the tool rejects.
+	struct Marks {
+		/// Whether the export has partial trees.
+		let isPartial: Bool
+		/// Whether the export marks a dependency only the graph with its missing types declared accounts for, so that the
+		/// graph was run again so.
+		let ranWithMissingTypesDeclared: Bool
+		let problems: [String]
+	}
+
+	/// The marks oracle's judgment of `fixture`, or `nil` where the tool accepts it.
+	static func marks(of fixture: GraphFuzzerFixture) async throws -> Marks? {
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture.withoutSeams)
+		guard case .rejected = outcome else { return nil }
+		let marks = try await GraphFuzzerUnfulfilledDependencies(exportedJSON: GraphFuzzerQuerySupplies.export(of: fixture))
+		let outcomeWithMissingTypesDeclared = try await marks.outcomeWithMissingTypesDeclared(of: fixture, generateOutcome: outcome)
+		return Marks(
+			isPartial: marks.isPartial,
+			ranWithMissingTypesDeclared: outcomeWithMissingTypesDeclared != nil,
+			problems: marks.problems(
+				generateErrorLocations: GraphFuzzerUnfulfilledDependencies.errorLocations(of: outcome, fixture: fixture),
+				errorLocationsWithMissingTypesDeclared: outcomeWithMissingTypesDeclared.map { GraphFuzzerUnfulfilledDependencies.errorLocations(of: $0, fixture: fixture) },
+				fixture: fixture,
+			),
+		)
+	}
+
+	/// What `queryDeletionFailure` finds in a graph in one module whose export has trees.
+	struct Deletions {
+		/// Whether a type's declaration was deleted, and whether that left a dependency `generate` reports.
+		let deletesDeclaration: Bool
+		let declarationLeavesDependencyUnfulfilled: Bool
+		/// Whether the export without a property that provides a value has partial trees, and whether a receive in it is
+		/// `unfulfilled` naming a marked receive above it.
+		let propertyLeavesPartialTrees: Bool
+		let propertyLeavesReceiveBeneathMarkedReceive: Bool
+		let problems: [String]
+	}
+
+	/// The deletion oracle's judgment of `fixture`.
+	static func deletions(of fixture: GraphFuzzerFixture) async throws -> Deletions {
+		let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
+		var problems = [String]()
+		let declarationDeletion = try GraphFuzzerQueryDeletion(exportedJSON: export, fixture: fixture)
+		if let declarationDeletion {
+			problems += try await declarationDeletion.problems(exportedJSONWithoutDeclaration: GraphFuzzerQuerySupplies.export(of: declarationDeletion.fixtureWithoutDeclaration))
+		}
+		var propertyLeavesPartialTrees = false
+		var propertyLeavesReceiveBeneathMarkedReceive = false
+		let propertyDeletion = try GraphFuzzerQueryProviderDeletion(exportedJSON: export, fixture: fixture)
+		if let propertyDeletion {
+			let exportWithoutProperty = try await GraphFuzzerQuerySupplies.export(of: propertyDeletion.fixtureWithoutProperty)
+			propertyLeavesPartialTrees = try GraphFuzzerUnfulfilledDependencies(exportedJSON: exportWithoutProperty).isPartial
+			propertyLeavesReceiveBeneathMarkedReceive = try GraphFuzzerQueryProviderDeletion.namesMarkedReceive(exportedJSON: exportWithoutProperty)
+			problems += try propertyDeletion.problems(exportedJSONWithoutProperty: exportWithoutProperty)
+		}
+		return Deletions(
+			deletesDeclaration: declarationDeletion != nil,
+			declarationLeavesDependencyUnfulfilled: declarationDeletion?.leavesDependencyUnfulfilled == true,
+			propertyLeavesPartialTrees: propertyLeavesPartialTrees,
+			propertyLeavesReceiveBeneathMarkedReceive: propertyLeavesReceiveBeneathMarkedReceive,
+			problems: problems,
 		)
 	}
 }

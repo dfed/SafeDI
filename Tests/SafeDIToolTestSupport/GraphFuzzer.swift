@@ -14225,12 +14225,13 @@ struct GraphFuzzerFailure: Equatable {
 		/// `query graph` names other suppliers for a receive than the generated code hands it, or the oracle cannot follow
 		/// a read of the generated code (`GraphFuzzerToolRuns.querySuppliersFailure`).
 		case querySuppliersDifferFromGeneratedCode = "query graph names other suppliers for a receive than the generated code hands it"
-		/// `query graph` marks a dependency unfulfilled where it reports no error, or where the trees it reports are not built
-		/// with it set aside, or leaves an error it reports with no unfulfilled dependency where it is
-		/// (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
+		/// `query graph` marks a dependency unfulfilled that neither `generate` reports nor it reports once each type no
+		/// declaration fulfills is declared, or marks none where its trees are partial or one where they are not, or leaves
+		/// a dependency `generate` reports unmarked (`GraphFuzzerToolRuns.queryUnfulfilledFailure`).
 		case queryMarksOtherDependenciesUnfulfilled = "query graph marks other dependencies unfulfilled than the errors generate reports name"
-		/// `query graph`'s export of a graph the tool accepts, with one declaration deleted, is not the graph's own export
-		/// but for what names that declaration (`GraphFuzzerToolRuns.queryDeletionFailure`).
+		/// `query graph`'s export of a graph the tool accepts, with a type's declaration or a property that provides a value
+		/// deleted, is not the graph's own export but for what read the deleted declaration
+		/// (`GraphFuzzerToolRuns.queryDeletionFailure`).
 		case queryProvenanceMovesWhenDeclarationIsDeleted = "query graph moves what a receive is handed when another declaration is deleted"
 		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
@@ -15124,6 +15125,8 @@ struct GraphFuzzerToolRuns {
 	///     missing, with no seam, where the export marks a dependency `generate` reports no error at.
 	///   - queryDeletion: The declaration the deletion oracle deletes from a graph in one module the tool accepts, with
 	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges.
+	///   - queryProviderDeletion: The property that provides a value the deletion oracle deletes from that graph, with
+	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges too.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -15152,11 +15155,13 @@ struct GraphFuzzerToolRuns {
 		rejectedQueryExport: String? = nil,
 		missingTypesDeclaredOutcome: GraphFuzzerToolOutcome? = nil,
 		queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)? = nil,
+		queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)? = nil,
 	) {
 		self.queryExport = queryExport
 		self.rejectedQueryExport = rejectedQueryExport
 		self.missingTypesDeclaredOutcome = missingTypesDeclaredOutcome
 		self.queryDeletion = queryDeletion
+		self.queryProviderDeletion = queryProviderDeletion
 		self.builderSurfaceRuns = builderSurfaceRuns
 		self.drawnHolePlaces = drawnHolePlaces
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
@@ -15214,6 +15219,7 @@ struct GraphFuzzerToolRuns {
 	let rejectedQueryExport: String?
 	let missingTypesDeclaredOutcome: GraphFuzzerToolOutcome?
 	let queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+	let queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 
 	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
 	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
@@ -17001,6 +17007,7 @@ enum GraphFuzzerOracle {
 		var rejectedQueryExport: String?
 		var missingTypesDeclaredOutcome: GraphFuzzerToolOutcome?
 		var queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
+		var queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic) {
 			switch firstOutcome {
 			case .accepted:
@@ -17010,6 +17017,9 @@ enum GraphFuzzerOracle {
 				// (`queryDeletionFailure`).
 				if let deletion = try? GraphFuzzerQueryDeletion(exportedJSON: export, fixture: fixture) {
 					queryDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutDeclaration))
+				}
+				if let deletion = try? GraphFuzzerQueryProviderDeletion(exportedJSON: export, fixture: fixture) {
+					queryProviderDeletion = try await (deletion, GraphFuzzerQuerySupplies.export(of: deletion.fixtureWithoutProperty))
 				}
 			case .rejected:
 				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
@@ -17064,6 +17074,7 @@ enum GraphFuzzerOracle {
 			rejectedQueryExport: rejectedQueryExport,
 			missingTypesDeclaredOutcome: missingTypesDeclaredOutcome,
 			queryDeletion: queryDeletion,
+			queryProviderDeletion: queryProviderDeletion,
 		)
 	}
 

@@ -405,13 +405,6 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		return instantiable
 	}
 
-	/// Returns a copy of this Instantiable whose dependencies are `transform`'s result for each.
-	func mappingDependencies(_ transform: (Dependency) -> Dependency) -> Instantiable {
-		var instantiable = self
-		instantiable.dependencies = dependencies.map(transform)
-		return instantiable
-	}
-
 	/// Returns a copy of this Instantiable that declares only the dependencies `isKept` accepts.
 	public func keepingDependencies(where isKept: (Dependency) -> Bool) -> Instantiable {
 		var instantiable = self

@@ -2618,6 +2618,356 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_exportsEveryKeyOfPartialTrees_whenTypeIsMissingAndReceiveAndAliasAreUnprovided() async throws {
+		// One export that holds every key a partial tree adds, compared whole: `partialTrees`, `isUnfulfilled` on an
+		// instantiated dependency, a receive and an alias, an `unfulfilled` value that names the instantiated dependency,
+		// one that names the receive above, one that names nothing, an alias as a supplier, and a `nil` value whose reason
+		// names the declaration that is not instantiated.
+		let directory = try temporaryDirectory()
+		let moduleDirectory = directory.appendingPathComponent("App")
+		_ = try createSwiftFixtureFiles(
+			atFilePaths: [
+				"Root.swift": """
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(missing: Missing, gone: Gone?, child: Child) {}
+				    @Instantiated let missing: Missing
+				    @Instantiated(onlyIfAvailable: true) let gone: Gone?
+				    @Instantiated let child: Child
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(missing: Missing, gone: Gone?, token: Token, renamed: Token, leaf: Leaf) {}
+				    @Received let missing: Missing
+				    @Received(onlyIfAvailable: true) let gone: Gone?
+				    @Received let token: Token
+				    @Received(fulfilledByDependencyNamed: "source", ofType: Token.self) let renamed: Token
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"Leaf.swift": """
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(token: Token, renamed: Token) {}
+				    @Received let token: Token
+				    @Received let renamed: Token
+				}
+				""",
+				"Token.swift": """
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			in: moduleDirectory,
+			alongside: [],
+		)
+
+		let report = try await QueryGraph.parse(["--include", moduleDirectory.path]).graph()
+
+		let path = moduleDirectory.path
+		#expect(try report.json() == """
+		{
+		  "command" : "graph",
+		  "completeness" : "partialTrees",
+		  "declarations" : [
+		    {
+		      "constructedBy" : [
+		        {
+		          "declaredBy" : "App.Root",
+		          "label" : "child"
+		        }
+		      ],
+		      "declarationKind" : "class",
+		      "dependencies" : [
+		        {
+		          "filePath" : "\(path)/Child.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "label" : "missing",
+		          "line" : 4,
+		          "plainType" : "Missing",
+		          "provenance" : [
+		            {
+		              "declaredBy" : "App.Root",
+		              "label" : "missing",
+		              "message" : "`App.Root` instantiates `missing`, which no declaration fulfills.",
+		              "source" : "unfulfilled"
+		            }
+		          ],
+		          "source" : "received",
+		          "type" : "Missing"
+		        },
+		        {
+		          "filePath" : "\(path)/Child.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : true,
+		          "label" : "gone",
+		          "line" : 5,
+		          "plainType" : "Gone",
+		          "provenance" : [
+		            {
+		              "reason" : {
+		                "declaredBy" : "App.Root",
+		                "kind" : "declarationNotInstantiated",
+		                "label" : "gone",
+		                "message" : "`App.Root` instantiates `gone` only if available, and no declaration fulfills it."
+		              },
+		              "source" : "nil"
+		            }
+		          ],
+		          "source" : "received",
+		          "type" : "Gone?"
+		        },
+		        {
+		          "filePath" : "\(path)/Child.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "isUnfulfilled" : true,
+		          "label" : "token",
+		          "line" : 6,
+		          "plainType" : "Token",
+		          "provenance" : [
+		            {
+		              "message" : "Nothing provides the `token` that `Child` receives.",
+		              "source" : "unfulfilled"
+		            }
+		          ],
+		          "source" : "received",
+		          "type" : "Token"
+		        },
+		        {
+		          "aliasOf" : {
+		            "label" : "source",
+		            "plainType" : "Token",
+		            "type" : "Token"
+		          },
+		          "filePath" : "\(path)/Child.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "isUnfulfilled" : true,
+		          "label" : "renamed",
+		          "line" : 7,
+		          "plainType" : "Token",
+		          "provenance" : [
+		            {
+		              "message" : "Nothing provides the `source` that `Child` renames `renamed`.",
+		              "source" : "unfulfilled"
+		            }
+		          ],
+		          "source" : "received",
+		          "type" : "Token"
+		        },
+		        {
+		          "filePath" : "\(path)/Child.swift",
+		          "fulfilledBy" : "App.Leaf",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "label" : "leaf",
+		          "lifetime" : "eager",
+		          "line" : 8,
+		          "plainType" : "Leaf",
+		          "source" : "instantiated",
+		          "type" : "Leaf"
+		        }
+		      ],
+		      "filePath" : "\(path)/Child.swift",
+		      "fulfills" : [
+		        "Child"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Child",
+		      "isReachedByRoot" : true,
+		      "isRoot" : false,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Child"
+		    },
+		    {
+		      "constructedBy" : [
+		        {
+		          "declaredBy" : "App.Child",
+		          "label" : "leaf"
+		        }
+		      ],
+		      "declarationKind" : "class",
+		      "dependencies" : [
+		        {
+		          "filePath" : "\(path)/Leaf.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "label" : "token",
+		          "line" : 4,
+		          "plainType" : "Token",
+		          "provenance" : [
+		            {
+		              "declaredBy" : "App.Child",
+		              "label" : "token",
+		              "message" : "`App.Child` receives `token`, which nothing provides.",
+		              "source" : "unfulfilled"
+		            }
+		          ],
+		          "source" : "received",
+		          "type" : "Token"
+		        },
+		        {
+		          "filePath" : "\(path)/Leaf.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "label" : "renamed",
+		          "line" : 5,
+		          "plainType" : "Token",
+		          "provenance" : [
+		            {
+		              "declaredBy" : "App.Child",
+		              "label" : "renamed",
+		              "source" : "declaration"
+		            }
+		          ],
+		          "source" : "received",
+		          "type" : "Token"
+		        }
+		      ],
+		      "filePath" : "\(path)/Leaf.swift",
+		      "fulfills" : [
+		        "Leaf"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Leaf",
+		      "isReachedByRoot" : true,
+		      "isRoot" : false,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Leaf"
+		    },
+		    {
+		      "constructedBy" : [
+
+		      ],
+		      "declarationKind" : "class",
+		      "dependencies" : [
+		        {
+		          "filePath" : "\(path)/Root.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "isUnfulfilled" : true,
+		          "label" : "missing",
+		          "lifetime" : "eager",
+		          "line" : 4,
+		          "plainType" : "Missing",
+		          "source" : "instantiated",
+		          "type" : "Missing"
+		        },
+		        {
+		          "filePath" : "\(path)/Root.swift",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : true,
+		          "label" : "gone",
+		          "lifetime" : "eager",
+		          "line" : 5,
+		          "plainType" : "Gone",
+		          "source" : "instantiated",
+		          "type" : "Gone?"
+		        },
+		        {
+		          "filePath" : "\(path)/Root.swift",
+		          "fulfilledBy" : "App.Child",
+		          "isErased" : false,
+		          "isOnlyIfAvailable" : false,
+		          "label" : "child",
+		          "lifetime" : "eager",
+		          "line" : 6,
+		          "plainType" : "Child",
+		          "source" : "instantiated",
+		          "type" : "Child"
+		        }
+		      ],
+		      "filePath" : "\(path)/Root.swift",
+		      "fulfills" : [
+		        "Root"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Root",
+		      "isReachedByRoot" : true,
+		      "isRoot" : true,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Root"
+		    },
+		    {
+		      "constructedBy" : [
+
+		      ],
+		      "declarationKind" : "class",
+		      "dependencies" : [
+
+		      ],
+		      "filePath" : "\(path)/Token.swift",
+		      "fulfills" : [
+		        "Token"
+		      ],
+		      "generatesDependencyTree" : false,
+		      "id" : "App.Token",
+		      "isReachedByRoot" : false,
+		      "isRoot" : false,
+		      "line" : 1,
+		      "module" : "App",
+		      "typeName" : "Token"
+		    }
+		  ],
+		  "errors" : [
+		    {
+		      "filePath" : "\(path)/Root.swift",
+		      "line" : 4,
+		      "message" : "No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. If a declaration that fulfills `Missing` is in another target, add that target’s folder to `additionalDirectoriesToInclude` in this target’s `#SafeDIConfiguration`, or, in a SafeDITool run by hand, list the `.safedi` file of its module in the file you pass to `--dependent-module-info-file-path`."
+		    },
+		    {
+		      "filePath" : "\(path)/Child.swift",
+		      "line" : 6,
+		      "message" : "@Received property `token: Token` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let token: Token` on `Root` or on another type in the chain to fix."
+		    },
+		    {
+		      "filePath" : "\(path)/Child.swift",
+		      "line" : 7,
+		      "message" : "@Received property `source: Token` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let source: Token` on `Root` or on another type in the chain to fix."
+		    }
+		  ],
+		  "formatVersion" : 0,
+		  "fulfillments" : [
+		    {
+		      "fulfilledBy" : "App.Child",
+		      "plainType" : "Child"
+		    },
+		    {
+		      "fulfilledBy" : "App.Leaf",
+		      "plainType" : "Leaf"
+		    },
+		    {
+		      "fulfilledBy" : "App.Root",
+		      "plainType" : "Root"
+		    },
+		    {
+		      "fulfilledBy" : "App.Token",
+		      "plainType" : "Token"
+		    }
+		  ],
+		  "modules" : [
+		    {
+		      "name" : "App",
+		      "paths" : [
+		        "\(path)"
+		      ]
+		    }
+		  ]
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_reportsPropertysPlainType_whenInstantiatedDependencyIsFulfilledByAnotherType() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
