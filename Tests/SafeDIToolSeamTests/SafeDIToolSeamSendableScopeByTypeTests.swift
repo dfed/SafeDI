@@ -78,7 +78,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell = shell
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -92,7 +91,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -106,7 +104,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -120,7 +117,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -134,7 +130,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -240,7 +235,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -254,7 +248,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widgetBuilder = widgetBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
 			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
@@ -339,7 +332,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell = shell
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -353,7 +345,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.plainPanelBuilder = plainPanelBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(plainPanelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -367,7 +358,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -381,7 +371,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -395,7 +384,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -502,7 +490,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -516,7 +503,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -602,7 +588,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -616,7 +601,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -632,7 +616,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.screen_Sendable = screen_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(screen_Sendable_: .init(__safeDI_noScope: __safeDI_builder), screen_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -646,7 +629,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.panelBuilder = panelBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -833,7 +815,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.api = api
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(api: { __safeDI_builder() })
 			        }
@@ -847,7 +828,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.mid_Sendable = mid_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(mid_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -861,7 +841,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.screenBuilder = screenBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -981,6 +960,57 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesInstantiatedDeclarationOfSecondCycle_whenItPrecedesForwardedDeclarationOfTypeBetweenInSourceOrder() async {
+		// `B` forwards `tag` and builds `A` again; `AStep`, which `B` also builds, instantiates a `tag` of its own and builds
+		// `B` again. So two declarations of `tag` are between `A` and the `A` built again, `B`'s and, through `B`'s cycle,
+		// `AStep`'s, and the parameter of `A`'s function is traced to the one first in source order: `AStep`'s, instantiated.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `cBuilder: SendableInstantiator<C>`, because a cycle inside `A`’s tree passes it (`AStep` declares `tag: Tag`), and SafeDI hands the builder for `C`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let tag: Tag` on `C` too, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["AStep.swift"]):8:5: note: `AStep` declares `tag: Tag` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: Self.secondCycleThroughSendableFunction(typeBuildingBAgain: "AStep"),
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let hub: Hub"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesForwardedDeclarationOfTypeBetween_whenItPrecedesInstantiatedDeclarationOfSecondCycleInSourceOrder() async {
+		// As above with the type that builds `B` again named `Step`, whose file follows `B`'s: the parameter is traced to
+		// `B`'s declaration, forwarded.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag?`, which `A`’s builder function takes as a parameter outside the `@Sendable` function that builds `cBuilder: SendableInstantiator<C>`, because a cycle inside `A`’s tree passes it (`B` forwards `tag: Tag`), and SafeDI hands the builder for `C`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let tag: Tag` on `C` too, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["B.swift"]):9:5: note: `B` forwards `tag: Tag` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: Self.secondCycleThroughSendableFunction(typeBuildingBAgain: "Step"),
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let hub: Hub"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillReadsValueTheFunctionForwards_whenTypeTheSendableFunctionBuildsForwardsCycleParameterLabel() async throws {
 		// As above, with the remedy followed: `C` forwards `tag`, so the `@Sendable` function binds it and the case carries it.
 		try await expectSeam(
@@ -1002,7 +1032,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.api = api
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(api: { _ in __safeDI_builder() })
 			        }
@@ -1016,7 +1045,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.aBuilder_Sendable = aBuilder_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(aBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1030,7 +1058,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(cBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1275,7 +1302,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		            self.hub_Sendable = hub_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(hub_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -1437,7 +1463,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.shell_Sendable = shell_Sendable
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
 			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1451,7 +1476,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.widgetBuilder = widgetBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
 			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
@@ -1530,6 +1554,21 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			seamFixtureType(named: "A", declarations: ["@Instantiated public let reader: TagReader", "@Instantiated public let cBuilder: SendableInstantiator<C>", "@Instantiated public let bBuilder: Instantiator<B>"]),
 			seamFixtureType(named: "B", declarations: ["@Forwarded public let tag: Tag", "@Instantiated public let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "C", declarations: c + ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+		]
+	}
+
+	/// `cycleThroughSendableFunction(c: [])` with a second cycle inside the first: `B` also builds `typeBuildingBAgain`,
+	/// which instantiates a `tag` of its own and builds `B` again. The type's name decides whether its file precedes `B`'s.
+	private static func secondCycleThroughSendableFunction(typeBuildingBAgain: String) -> [String] {
+		[
+			"public protocol Api {}",
+			tag,
+			seamFixtureType(named: "TagReader", declarations: ["@Received public let tag: Tag"]),
+			seamFixtureType(named: "A", declarations: ["@Instantiated public let reader: TagReader", "@Instantiated public let cBuilder: SendableInstantiator<C>", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", declarations: ["@Forwarded public let tag: Tag", "@Instantiated public let stepBuilder: Instantiator<\(typeBuildingBAgain)>", "@Instantiated public let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: typeBuildingBAgain, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "C", declarations: ["@Instantiated public let api: any Api"]),
 			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
 		]
 	}

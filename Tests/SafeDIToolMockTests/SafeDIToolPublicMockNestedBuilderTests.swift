@@ -3194,7 +3194,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(panel: { .init(__safeDI_noScope: __safeDI_builder) }, serviceBuilder: { { _ in __safeDI_builder() } })
 		        }

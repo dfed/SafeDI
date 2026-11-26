@@ -2293,24 +2293,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// passes as its leaf's dependency of the builder's label: an empty value here, or the parameter called with the scope.
 	private mutating func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
-		let filledSites = Self.filledSites(of: holeArguments)
-		let enumsByKey = calledBuilders.enumsByKey
+		let filledSites = calledBuilders.siteNumbers(of: Self.filledSites(of: holeArguments))
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
 		// caller passes each builder by the leaf's argument of its label.
 		let isPublicMockCall = scope.publicMockCall != nil
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
-			let reachedSites = isPublicMockCall
-				? calledBuilders.sitesReachedOnItsRoutes(by: builder, in: enumsByKey)
-				: SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
+			// A public mock's caller reads only the sites on the builder's routes (`CalledBuilders.routesReachOnly(_:by:)`).
+			let reachesFilledSite = calledBuilders.reaches(anyOf: filledSites, from: enumKey, onRoutesOf: isPublicMockCall ? enumKey : nil)
 			// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
 			let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
 			/// The struct a public mock's caller passes up of the called mock's root level: the member of the caller's own struct for
 			/// the call, or, as an internal mock, the struct of the builder the caller takes under the label it takes it by.
 			let receivedLabel = scope.publicMockCall?.passedParameters.first { $0.builder?.enumKey == enumKey }?.dependency.property.label ?? builder.label
 			let publicMockUpValue = route.map { $0.memberCall ?? "" } ?? ".init(\(ReservedName.noScopeArgumentLabel): \(receivedLabel))"
-			guard !reachedSites.isDisjoint(with: filledSites) else {
+			guard reachesFilledSite else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
 					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)

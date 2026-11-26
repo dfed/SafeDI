@@ -62,7 +62,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// holes share none: `SafeDIToolFulfillerImportTests` counts it on a production root whose places share generators.
 		// Finding the carrier a sibling requires grows with the children of one scope, which shape E does not grow: the test
 		// below counts it on a seam whose own type builds many children.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires])
+		// The walk that finds the values a seam tier omits enters only a subtree that holds a call omitting a parameter or a
+		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -178,6 +180,95 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			work.append(count)
 		}
 		#expect(work == [112, 224])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_walksEachSeamsTreeOncePerGeneratorAndContext_whenScreensOpenScreensOfTheNextLayer() async throws {
+		// Layers of four screens, each holding instantiators of three screens of the next layer, every screen of the first
+		// layer a seam and every screen receiving `service`: places share generators (see `ConstructionMemo`), so the last
+		// layer is reached from each seam along 3^(layers - 1) paths. The walk that collects the names of a seam's builder
+		// functions visits each generator once, and the walk that finds a seam's receivers each generator once for each
+		// context it is reached in, as far as its subtree reads it: here one. No call omits a parameter and no cycle closes,
+		// so the walk that finds the values a tier omits enters nothing. Each of the last two walks visited every path: at
+		// four and six layers, 160 and 1,456 visits each.
+		var visitsByLayerCount = [[GenerationWork.Step: Int]]()
+		for layerCount in [4, 6] {
+			var fixture = [seamFixtureType(named: "Service", declarations: [])]
+			for layer in 0..<layerCount {
+				for position in 0..<4 {
+					var declarations = ["@Received let service: Service"]
+					if layer + 1 < layerCount {
+						declarations += (0..<3).map { offset in "@Instantiated let screen\(layer + 1)x\((position + offset) % 4)Builder: Instantiator<Screen\(layer + 1)x\((position + offset) % 4)>" }
+					}
+					fixture.append(seamFixtureType(named: "Screen\(layer)x\(position)", isSeam: layer == 0, declarations: declarations))
+				}
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
+					integration: .moduleInfo,
+					compileVerification: layerCount == 4 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			let countedSteps: [GenerationWork.Step] = [.collectingBuilderFunctionNames, .findingSeamReceivers, .findingSeamTierOmissions]
+			var visits = Dictionary(uniqueKeysWithValues: countedSteps.map { ($0, 0) })
+			for await work in stream where countedSteps.contains(work.step) {
+				visits[work.step, default: 0] += work.elementCount
+			}
+			visitsByLayerCount.append(visits)
+		}
+		#expect(visitsByLayerCount == [
+			[.collectingBuilderFunctionNames: 96, .findingSeamReceivers: 100, .findingSeamTierOmissions: 0],
+			[.collectingBuilderFunctionNames: 160, .findingSeamReceivers: 196, .findingSeamTierOmissions: 0],
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsEachScopeOfACycleOnce_whenLayersOfScreensBetweenPlaceAndItsCycleClosingScopesShareSubtrees() async throws {
+		// `Entry` builds `W`, which holds a place and builds three screens; each screen builds every screen of the next
+		// layer, and each screen of the last layer builds `W` again. The paths from `W` to a `W` built again triple with
+		// each layer, 9 through two layers and 81 through four, while the scopes between them grow by three.
+		var generatorsRead = [Int]()
+		for layerCount in [2, 4] {
+			var fixture = [
+				"public protocol Gizmo {}",
+				seamFixtureType(named: "Entry", isSeam: true, declarations: ["@Instantiated let wBuilder: Instantiator<W>"]),
+				seamFixtureType(named: "W", declarations: ["@Instantiated let gizmo: any Gizmo"] + (0..<3).map { "@Instantiated let screen0x\($0)Builder: Instantiator<Screen0x\($0)>" }),
+			]
+			for layer in 0..<layerCount {
+				for screen in 0..<3 {
+					fixture.append(seamFixtureType(
+						named: "Screen\(layer)x\(screen)",
+						declarations: layer == layerCount - 1
+							? ["@Instantiated let wBuilder: Instantiator<W>"]
+							: (0..<3).map { "@Instantiated let screen\(layer + 1)x\($0)Builder: Instantiator<Screen\(layer + 1)x\($0)>" },
+					))
+				}
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
+					integration: .moduleInfo,
+					compileVerification: layerCount == 2 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var count = 0
+			for await work in stream where work.step == .collectingDeclarationsOfACycle {
+				count += work.elementCount
+			}
+			generatorsRead.append(count)
+		}
+		// The signature is computed three times. Walked along every path, each time read the 12 and the 120 scopes on the
+		// paths, 36 and 360 in all; read once per generator, the 6 and the 44 generators the construction memo makes of them.
+		#expect(generatorsRead == [18, 132])
 	}
 
 	// MARK: Private

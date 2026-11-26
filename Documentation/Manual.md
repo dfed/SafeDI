@@ -900,7 +900,6 @@ extension Service {
             self.profile = profile
         }
 
-        @_alwaysEmitIntoClient
         public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
             self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
         }
@@ -914,7 +913,6 @@ extension Service {
             self.userService = userService
         }
 
-        @_alwaysEmitIntoClient
         public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
             self.init(userService: { __safeDI_builder() })
         }
@@ -1420,7 +1418,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
 ]
 ```
 
@@ -1527,7 +1525,7 @@ Unlike the Xcode project plugin, the Swift package plugin finds the source files
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.3.5")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.4.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1592,7 +1590,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
 ]
 ```
 
@@ -1967,7 +1965,7 @@ Each of these errors says what to change.
 - **A hole’s implementation that reads a value of a seam’s tree, at a place an inner seam passes up.** Say a seam `Shared` instantiates `db` and calls the seam `ScreenA`, whose `api: any Api` only the app implements, and the app’s `LiveApi` receives `db`. Inline, `LiveApi` reads `Shared`’s `db`, but `Shared` passes `ScreenA`’s builder on from its own caller, which cannot hand it `Shared`’s values. Declare `@Received let db: Db` on `ScreenA`, so its builder is handed `db`, or implement `Api` in `Shared`’s module or a module it lists among its SafeDI dependencies. A mock that calls `Shared`’s public mock reports the same error for a fake that receives `db`, as [Calling a public mock from another module](#calling-a-public-mock-from-another-module) describes.
 - **A hole’s implementation that reads a value bound on the way to a seam built again.** When a seam’s tree builds the seam again, directly or through another seam of its module, the builders it took are handed on to that call. So the caller that fills a builder cannot hand its implementation a value the tree declares on that path.
 - **A hole’s implementation that builds the seam again and reads a value only the place it fills carries.** Say a seam’s `CartScreen` forwards `cart` and holds a place of a hole, and the implementation in another module receives `cart`, even only if available, and instantiates the seam again. Inline, the seam built again sits beneath that screen, so a place of it outside every screen reads the screen’s `cart`. A builder hands that place no `cart`, so it would read `nil` or another value. Receive the value on the seam, as `@Received(onlyIfAvailable: true) let cart: Cart?`, so the call passes it on, or implement the hole in the seam’s module. Where a `@Sendable` function builds the place, as a `SendableInstantiator` does, no value the seam receives reaches it, so implement the hole in the seam’s module. A type of the seam’s tree that receives the value is reported at the call.
-- **A hole’s implementation that reads a value declared on a cycle in the seam’s tree, between where a type is instantiated and where the cycle instantiates it again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the value declared at its own level of the cycle, but a builder hands its implementation the same values at every level. A value declared above the cycle, or by the type built again, is the same in both, and is no error, so receive the value on the type built again.
+- **A hole’s implementation that reads a value declared on a cycle in the seam’s tree, between where a type is instantiated and where the cycle instantiates it again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the value declared at its own level of the cycle, but a builder hands its implementation the same values at every level. The same holds for a value that a second cycle through one of the types between declares, which inline reaches the type built again through that cycle. It holds, too, where the cycle is in the tree of another type that generates its dependency tree, around the property that instantiates the type whose hole it is: there, receive the value on the type whose hole it is. A value declared above the cycle, or by the type built again, is the same in both, and is no error, so receive the value on the type built again.
 - **A hole’s implementation that receives an instantiator the seam’s tree instantiates.** Say a seam declares `@Instantiated let detailBuilder: ErasedInstantiator<(), any Detail>`, and the type that implements `Detail` in another module receives `detailBuilder` to open itself again. Inline, it gets an instantiator of its own, as [Dependency cycles](#dependency-cycles) describes, but that instantiator builds through a function inside the seam’s initializer, which the caller cannot refer to. The same holds for an instantiator that builds a type on the way to the hole, and for one the seam builds after the hole, such as the instantiator of a second hole whose implementation receives the first one back. Declare the instantiator on a type above the seam instead, and receive it in the seam’s tree, where everything its tree receives, its holes’ implementations included, comes from outside the seam too. Otherwise, where the instantiator is built after a property that leads to the hole, and no other module implements a hole of the instantiator’s tree, declare both on one type of the implementation’s module, and have the seam instantiate a protocol that type fulfills in their place.
 
 #### Trees a seam builds differently
@@ -2122,7 +2120,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.3.5"`
+2. Update your SafeDI dependency to `from: "2.4.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
