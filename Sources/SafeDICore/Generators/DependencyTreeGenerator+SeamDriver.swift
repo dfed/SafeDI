@@ -524,18 +524,22 @@ extension DependencyTreeGenerator {
 			let finalSeamRoot = seamRoot
 			let declaredTypeNames = declaredTypeNames
 			func builtTree() throws -> ScopeGenerator {
-				try Self.seamRootGenerator(
-					rootScope: seamRootScope,
-					in: .seamWorld(seamWorld),
-					seamRoot: finalSeamRoot,
-					declaredTypeNames: declaredTypeNames,
-				)
+				try SeamHolesPathAnswer.building(treeOf: seam.concreteInstantiable) {
+					try Self.seamRootGenerator(
+						rootScope: seamRootScope,
+						in: .seamWorld(seamWorld),
+						seamRoot: finalSeamRoot,
+						declaredTypeNames: declaredTypeNames,
+					)
+				}
 			}
 			// A tree its first signature pass settled is made again from the final signature, which it holds as the tree
 			// built here would (`seam-signature-passes.md`); the pass's tree is released once it is.
 			let scopeGenerator: ScopeGenerator
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
-				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
+				scopeGenerator = SeamHolesPathAnswer.building(treeOf: seam.concreteInstantiable) {
+					ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
+				}
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
 					let treeBuiltAnew = try builtTree()
 					observer(ReusedSeamTree(

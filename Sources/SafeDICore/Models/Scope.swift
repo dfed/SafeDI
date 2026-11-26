@@ -820,8 +820,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		reboundProperties: Set<Property> = [],
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
 		recordsReads: Bool,
+		pathAnswerIsInsideSilentFill: Bool = false,
 	) {
 		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
+		// A fill whose code is not generated (`Fill.emitsCode`) is judged but never emitted, so no answer it reads is read by
+		// generated code.
+		self.pathAnswerIsInsideSilentFill = pathAnswerIsInsideSilentFill || fill.map { !$0.emitsCode } ?? false
 		self.depth = depth
 		self.recordsReads = recordsReads
 		// Every read of the context this scope inherits goes through `context`, logged, so a construction memo can tell
@@ -971,6 +975,20 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// A scope that closes a cycle creates no children.
 		propertiesToGenerate = isPropertyCycle ? [] : scope.propertiesToGenerate
 		self.childContextStack = childContextStack
+		if SeamHolesPathAnswer.isRecording {
+			pathAnswerNode = SeamHolesPathAnswer.node(parentProperty: contextStack.propertiesInnermostFirst.first, parentConcreteType: contextStack.concreteTypesInnermostFirst.first)
+			// A place kind the key could tell apart without widening it: a scope that closes a cycle, and a place inside a fill
+			// that is judged but never emitted, are marked so that a disagreement can be read by kind.
+			let kind = (isPropertyCycle ? " [closes cycle]" : "") + (pathAnswerIsInsideSilentFill || fill.map { !$0.emitsCode } ?? false ? " [fill not emitted]" : "")
+			pathAnswerEdge = property.map { SeamHolesPathAnswer.edge(property: $0, concreteType: scope.instantiable.concreteInstantiable) + kind }
+			pathAnswerChildNode = property.map { SeamHolesPathAnswer.node(parentProperty: $0, parentConcreteType: scope.instantiable.concreteInstantiable) }
+			pathAnswerIsInsideSendableWrapper = contextStack.propertiesInnermostFirst.contains { $0.propertyType.isSendable }
+		} else {
+			pathAnswerNode = nil
+			pathAnswerEdge = nil
+			pathAnswerChildNode = nil
+			pathAnswerIsInsideSendableWrapper = false
+		}
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		self.previousPassGenerator = previousPassGenerator
@@ -1881,11 +1899,21 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// A fill is never stored, and leaves every scope above it unstored, so its reads are recorded only as its
 			// enclosing scope's are.
 			recordsReads: recordsReads,
+			pathAnswerIsInsideSilentFill: pathAnswerIsInsideSilentFill,
 		)
 	}
 
 	/// Creates the generator of a hole this scope's type instantiates, a site of the seam whose tree is generated.
 	mutating func addHoleGenerator(property: Property, erasedToConcreteExistential: Bool) {
+		if SeamHolesPathAnswer.isRecording {
+			let path = sitePath + [property]
+			let node = pathAnswerChildNode ?? "<seam root>"
+			let edge = SeamHolesPathAnswer.edge(property: property, concreteType: nil) + (pathAnswerIsInsideSilentFill ? " [fill not emitted]" : "")
+			let isInsideSendableWrapper = childContextStack.propertiesInnermostFirst.contains { $0.propertyType.isSendable }
+			SeamHolesPathAnswer.record(node: node, edge: edge, column: "site", answer: SeamHolesPathAnswer.projection(of: seamHoles.site(at: path)), path: path, isInsideSendableWrapper: isInsideSendableWrapper)
+			SeamHolesPathAnswer.record(node: node, edge: edge, column: "site as read", answer: SeamHolesPathAnswer.projection(ofSiteAsRead: seamHoles.site(at: path)), path: path, isInsideSendableWrapper: isInsideSendableWrapper)
+			SeamHolesPathAnswer.record(node: node, edge: edge, column: "carrierSite", answer: SeamHolesPathAnswer.projection(of: seamHoles.carrierSite(at: path)), path: path, isInsideSendableWrapper: isInsideSendableWrapper)
+		}
 		// A hole's generator holds the whole path to it (its owner's stacks), which the memo's log does not cover: a tree
 		// built only to find a seam's or public mock's signature has holes but no `seamHoles`.
 		isMemoizable = false
@@ -1942,6 +1970,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			reboundProperties: childReboundProperties,
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 			recordsReads: recordsReads || isKeyed,
+			pathAnswerIsInsideSilentFill: pathAnswerIsInsideSilentFill,
 		)
 	}
 
@@ -2446,6 +2475,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`.
 	mutating func scopeGenerator() -> ScopeGenerator {
+		if let pathAnswerNode, let pathAnswerEdge {
+			SeamHolesPathAnswer.record(node: pathAnswerNode, edge: pathAnswerEdge, column: "valuesBindings", answer: SeamHolesPathAnswer.projection(of: seamHoles.valuesBindings(at: sitePath)), path: sitePath, isInsideSendableWrapper: pathAnswerIsInsideSendableWrapper)
+			SeamHolesPathAnswer.record(node: pathAnswerNode, edge: pathAnswerEdge, column: "memberCallsInsideFunction", answer: SeamHolesPathAnswer.projection(of: seamHoles.memberCallsInsideFunction(at: sitePath)), path: sitePath, isInsideSendableWrapper: pathAnswerIsInsideSendableWrapper)
+			for scopeEnum in scope.calledBuilders?.scopeEnums ?? [] {
+				SeamHolesPathAnswer.record(node: pathAnswerNode, edge: pathAnswerEdge, column: "call \(scopeEnum.key.spelling)", answer: SeamHolesPathAnswer.projection(ofCallAt: sitePath, innerKey: scopeEnum.key, in: seamHoles), path: sitePath, isInsideSendableWrapper: pathAnswerIsInsideSendableWrapper)
+			}
+		}
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		// Both read the caller's declarations, which they log.
@@ -2574,6 +2610,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private var nextPropertyIndex = 0
 	/// The declarations being built above this scope's children: those above it, then its own.
 	private let childContextStack: ContextStack
+	/// While `SeamHolesPathAnswer` records, the node of the seam's graph this scope's edge leaves, the edge, the node this
+	/// scope's own edges leave, and whether a `Sendable` wrapper is above the edge; otherwise `nil` and `false`.
+	private let pathAnswerNode: String?
+	private let pathAnswerEdge: String?
+	private let pathAnswerChildNode: String?
+	private let pathAnswerIsInsideSendableWrapper: Bool
+	private let pathAnswerIsInsideSilentFill: Bool
 	/// See `init(scope:property:contextStack:depth:fillPathStackCount:…)`.
 	private let fillPathStackCount: Int
 	/// See `init(scope:property:contextStack:depth:fillPathStackCount:fillCallDepth:…)`.
@@ -3774,6 +3817,24 @@ extension ScopeGeneratorUnderConstruction {
 				continue
 			}
 			let reseating = stack.removeLast()
+			if SeamHolesPathAnswer.isRecording, let property = reseating.sitePath.last {
+				let parentDeclaration = stack.last?.generator.declaration
+				let node = SeamHolesPathAnswer.node(parentProperty: parentDeclaration?.property, parentConcreteType: parentDeclaration?.concreteType)
+				let isInsideSendableWrapper = stack.contains { $0.generator.property?.propertyType.isSendable == true }
+				switch reseating.generator.scopeData {
+				case .hole:
+					let edge = SeamHolesPathAnswer.edge(property: property, concreteType: nil)
+					SeamHolesPathAnswer.record(node: node, edge: edge, column: "site", answer: SeamHolesPathAnswer.projection(of: seamHoles.site(at: reseating.sitePath)), path: reseating.sitePath, isInsideSendableWrapper: isInsideSendableWrapper)
+					SeamHolesPathAnswer.record(node: node, edge: edge, column: "site as read", answer: SeamHolesPathAnswer.projection(ofSiteAsRead: seamHoles.site(at: reseating.sitePath)), path: reseating.sitePath, isInsideSendableWrapper: isInsideSendableWrapper)
+					SeamHolesPathAnswer.record(node: node, edge: edge, column: "carrierSite", answer: SeamHolesPathAnswer.projection(of: seamHoles.carrierSite(at: reseating.sitePath)), path: reseating.sitePath, isInsideSendableWrapper: isInsideSendableWrapper)
+				case let .property(instantiable, _, _, _, isPropertyCycle, _):
+					let edge = SeamHolesPathAnswer.edge(property: property, concreteType: instantiable.concreteInstantiable) + (isPropertyCycle ? " [closes cycle]" : "")
+					SeamHolesPathAnswer.record(node: node, edge: edge, column: "valuesBindings", answer: SeamHolesPathAnswer.projection(of: seamHoles.valuesBindings(at: reseating.sitePath)), path: reseating.sitePath, isInsideSendableWrapper: isInsideSendableWrapper)
+					SeamHolesPathAnswer.record(node: node, edge: edge, column: "memberCallsInsideFunction", answer: SeamHolesPathAnswer.projection(of: seamHoles.memberCallsInsideFunction(at: reseating.sitePath)), path: reseating.sitePath, isInsideSendableWrapper: isInsideSendableWrapper)
+				case .root, .alias, .fill:
+					break
+				}
+			}
 			let reseated = ScopeGenerator(
 				reseating: reseating.generator,
 				children: reseating.children,

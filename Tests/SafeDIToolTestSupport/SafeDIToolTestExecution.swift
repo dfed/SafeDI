@@ -349,7 +349,9 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+										try await SeamHolesPathAgreementChecks.recording(fixturePaths: inputSwiftFilePaths) {
+											try await tool.generate()
+										}
 									}
 								}
 							}
