@@ -710,6 +710,17 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.ScopeEnum.Case.self,
 		SeamSignature.ScopeEnum.Case.Kind.self,
 		SeamSignature.Builder.self,
+		SeamSignature.Places.self,
+		SeamSignature.Places.Level.self,
+		SeamSignature.Places.LevelKey.self,
+		SeamSignature.Places.Declaration.self,
+		SeamSignature.Places.Buildability.self,
+		SeamSignature.Places.FillFieldHiding.self,
+		SeamSignature.Places.SendableFunctionOpened.self,
+		SeamSignature.Places.CycleReentry.self,
+		SeamSignature.Places.StackEntry.self,
+		SeamSignature.Places.Case.self,
+		SeamSignature.Places.PassedUpReference.self,
 		TypeAccessProof.Cause.self,
 		TypeAccessProof.Prover.self,
 		TypeAccessProof.MemberKind.self,
@@ -2992,6 +3003,17 @@ extension SeamSignature.ScopeEnum.Values: BinarySample {}
 extension SeamSignature.ScopeEnum.Case: BinarySample {}
 extension SeamSignature.ScopeEnum.Case.Kind: BinarySample {}
 extension SeamSignature.Builder: BinarySample {}
+extension SeamSignature.Places: BinarySample {}
+extension SeamSignature.Places.Level: BinarySample {}
+extension SeamSignature.Places.LevelKey: BinarySample {}
+extension SeamSignature.Places.Declaration: BinarySample {}
+extension SeamSignature.Places.Buildability: BinarySample {}
+extension SeamSignature.Places.FillFieldHiding: BinarySample {}
+extension SeamSignature.Places.SendableFunctionOpened: BinarySample {}
+extension SeamSignature.Places.CycleReentry: BinarySample {}
+extension SeamSignature.Places.StackEntry: BinarySample {}
+extension SeamSignature.Places.Case: BinarySample {}
+extension SeamSignature.Places.PassedUpReference: BinarySample {}
 extension TypeAccessProof.Cause: BinarySample {}
 extension TypeAccessProof.Prover: BinarySample {}
 extension TypeAccessProof.MemberKind: BinarySample {}
