@@ -735,12 +735,12 @@ def self_test(directory):
     expect_growth("growth-none", fast, 0, "within the limits")
     expect_growth("growth-of-time-with-the-types", tool("linear-time", 0.005, grows={"time": 1}), 0, "within the limits")
     expect_growth("growth-of-time-with-their-cube", tool("cubic-time", 0.00001, grows={"time": 3}), 1, "**time over the limit**")
-    # 3.24 times a time that stays under the floor is the processes starting.
-    expect_growth("growth-of-time-under-the-floor", tool("cubic-time-under-the-floor", 0.0000005, grows={"time": 3}), 0, "within the limits")
     expect_growth("growth-of-memory-with-the-types", tool("linear-memory", 0.0, allocates=1024 * 1024, grows={"memory": 1}), 0, "within the limits")
     expect_growth("growth-of-memory-with-their-cube", tool("cubic-memory", 0.0, allocates=2048, grows={"memory": 3}), 1, "**memory over the limit**")
     expect_growth("growth-of-size-with-the-types", tool("linear-size", 0.0, module_info_size=1000, grows={"size": 1}), 0, "within the limits")
     expect_growth("growth-of-size-with-their-cube", tool("cubic-size", 0.0, module_info_size=1, grows={"size": 3}), 1, "**size over the limit**")
+    # Under the floor: files of 629 and 1,373 bytes are 2.18 times apart and 744 bytes apart, and the floor is 4 KB.
+    expect_growth("growth-of-size-under-the-floor", tool("squared-size-under-the-floor", 0.0, module_info_size=1, grows={"size": 2}), 0, "629 bytes, 1373 bytes, 2.18")
     expect_growth("growth-of-code-with-the-types", tool("linear-code", 0.0, grows={"code": 1}), 0, "within the limits")
     expect_growth("growth-of-code-with-their-cube", tool("cubic-code", 0.0, grows={"code": 3}), 1, "**code over the limit**")
     expect_growth("growth-of-two-measures", tool("cubic-size-and-code", 0.0, module_info_size=1, grows={"size": 3, "code": 3}), 2, "**size and code over the limit**")
