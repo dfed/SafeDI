@@ -1272,6 +1272,14 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forMainActorDefaultIsolation() {
+		// A seam module that declares the main actor its default isolation, with every module above it declaring it too,
+		// stands in for compile checks of a caller in another module calling its `@MainActor` seam initializers while it
+		// lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		#expect(Self.seamCorpusAcceptedDrawFeatureCounts[.mainActorDefaultIsolation, default: 0] >= Self.gatingDrawJudgedGraphFloor)
+	}
+
+	@Test
 	func corpusAcceptedFeatureCounts_holdAtLeastTenGraphs_forMainActorDefaultIsolation() {
 		// A module that declares the main actor its default isolation, compiled under the matching flag
 		// (`declaringMainActorDefaultIsolation(seed:in:)`), stands in for compile checks of declared modules' generated
@@ -7340,7 +7348,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape || $0 == .mainActorDefaultIsolation }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -7542,6 +7550,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeScreenValueReceivedBySeam: 19,
 		.holeScreenValueRequiredLostOnReentry: 0,
 		.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule: 14,
+		.mainActorDefaultIsolation: 21,
 		.wrapperMix: 92,
 		.wrapperMixValueAndSendableWrapper: 82,
 		.wrapperMixWrapperReadInSendableFunction: 44,
