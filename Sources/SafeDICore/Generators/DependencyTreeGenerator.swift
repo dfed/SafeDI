@@ -804,6 +804,15 @@ public actor DependencyTreeGenerator {
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						tree: tree,
 					))
+					// Whether the root's scopes let the capture walk run, beside whether today's walk finds anything, only where a
+					// test compares the two: a root the gate holds back must have nothing to find.
+					if let observer = SendableCaptureGateObservation.observer, let todaysTree = roots.last?.scopeGenerator {
+						await observer(
+							scope.instantiable.concreteInstantiable.asSource,
+							Self.treeMayCaptureNonSendableWrapper(rootedAt: scope),
+							!todaysTree.nonSendableWrapperCaptures(ofTreeRootedAt: scope.instantiable).isEmpty,
+						)
+					}
 					// Each scope the root reaches with its children on a cycle as call places, built only where a test compares
 					// the order it gives the scope's children with today's. A tree with a label no one parameter can pass,
 					// which is rejected, is not compared: today's scope that closes the cycle takes no parameter for the

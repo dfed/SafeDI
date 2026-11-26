@@ -358,7 +358,9 @@ func executeSafeDIToolTest(
 																try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
 																	try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
 																		try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
-																			try await tool.generate()
+																			try await SendableCaptureGateChecks.comparing(handingOn: SendableCaptureGateObservation.observer) {
+																				try await tool.generate()
+																			}
 																		}
 																	}
 																}

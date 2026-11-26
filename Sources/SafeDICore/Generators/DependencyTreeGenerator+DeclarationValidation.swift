@@ -56,9 +56,7 @@ extension DependencyTreeGenerator {
 	/// for a `@Sendable` builder function's captures costs a pass over every scope, so only such a module pays for it,
 	/// and only such a module's trees need be built per path for that walk.
 	var namesNonSendableWrapperAndSendableBuilder: Bool {
-		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
-		return dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable })
-			&& dependencies.contains(where: \.property.propertyType.isSendable)
+		Self.nameBothWrapperKinds(typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies))
 	}
 
 	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree
