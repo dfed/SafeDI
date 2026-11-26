@@ -93,13 +93,16 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 			declarations.filter(\.isBoundBeforeNextProperty).map(\.property)
 		}
 
-		/// The values the level holds that its type binds: `fields` but the parameters of the scope's builder function and the
-		/// instantiators it wraps again. A lazy cycle that closes on that function makes the parameters (`CycleParameter`), and
-		/// a loop of builders the function's scope is a member of makes the wrappers (`ScopeGenerator.reboundProperties`),
-		/// which another build of the type, in another function, need not take or make, so they are a fact of the function,
-		/// not of the type. A level nested by type carries both of any build of the type.
+		/// The values the level holds that its type binds: `fields` but the parameters of the scope's builder function, the
+		/// instantiators it wraps again, and the receives a public mock binds again. A lazy cycle that closes on that function
+		/// makes the parameters (`CycleParameter`), and a loop of builders the function's scope is a member of makes the
+		/// wrappers (`ScopeGenerator.reboundProperties`), which another build of the type, in another function, need not take
+		/// or make, so they are a fact of the function, not of the type; a public mock binds a receive again only where the
+		/// nearest declaration above does not provide its form (`DependencyTreeGenerator.mockBindsAgain(receiving:beneath:)`),
+		/// which another build of the type, beneath another declaration, need not do, so that is a fact of the path. A level
+		/// nested by type carries all three of any build of the type (`receivesBoundAgainOfAnyBuild`).
 		public var fieldsOfType: [Property] {
-			declarations.filter { $0.isBoundBeforeNextProperty && !$0.isCycleParameter && !$0.isReboundByBuilderFunction }.map(\.property)
+			declarations.filter { $0.isBoundBeforeNextProperty && !$0.isCycleParameter && !$0.isReboundByBuilderFunction && !$0.isReceiveBoundAgain }.map(\.property)
 		}
 
 		/// A declaration of a level.
@@ -113,6 +116,9 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 			/// Whether the scope's builder function wraps it again as a member of a loop of builders
 			/// (`ScopeGenerator.reboundProperties`).
 			public var isReboundByBuilderFunction = false
+			/// Whether a public mock binds it again, as a receive of the scope that the nearest declaration above does not
+			/// provide (`DependencyTreeGenerator.mockBindsAgain(receiving:beneath:)`).
+			public var isReceiveBoundAgain = false
 			/// For the tests' checks only: whether it is a parameter of the seam, which a fill reads from its caller's scope.
 			public var isSeamParameter = false
 			/// For the tests' checks only: for a fill's field, whether it is bound from a parameter of the filled seam.

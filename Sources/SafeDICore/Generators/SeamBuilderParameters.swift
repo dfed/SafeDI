@@ -989,6 +989,9 @@ extension DependencyTreeGenerator {
 		var isCycleParameter = false
 		/// Whether the builder function of the scope at `frameLevel` wraps it again as a member of a loop of builders.
 		var isReboundByBuilderFunction = false
+		/// Whether a public mock binds it again, as a receive of the scope at `frameLevel` that the nearest declaration above
+		/// does not provide (`DependencyTreeGenerator.mockBindsAgain(receiving:beneath:)`).
+		var isReceiveBoundAgain = false
 		/// Whether its type forwards it.
 		var isForwarded = false
 		/// Where it is a parameter of a builder function a lazy cycle closes on: whose, and what the cycle passes it.
@@ -1072,6 +1075,7 @@ extension DependencyTreeGenerator {
 			levelDeclaration.isSeamParameter = declaration.frameLevel < 0
 			levelDeclaration.isCycleParameter = declaration.isCycleParameter
 			levelDeclaration.isReboundByBuilderFunction = declaration.isReboundByBuilderFunction
+			levelDeclaration.isReceiveBoundAgain = declaration.isReceiveBoundAgain
 			levelDeclarations.append(levelDeclaration)
 		}
 		var isInFill = false
@@ -1361,7 +1365,9 @@ extension DependencyTreeGenerator {
 						dependency.source.isReceived && namesApartAtRoot.labels.contains(dependency.property.label)
 					}
 					guard bindsAgain else { continue }
-					declare(declaration(of: dependency.property, isBoundBeforeSite: true))
+					var boundAgainDeclaration = declaration(of: dependency.property, isBoundBeforeSite: true)
+					boundAgainDeclaration.isReceiveBoundAgain = true
+					declare(boundAgainDeclaration)
 				}
 			}
 			let pathPosition = frame.nextPosition - 1

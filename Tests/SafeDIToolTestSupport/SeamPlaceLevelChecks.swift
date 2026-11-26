@@ -50,8 +50,9 @@ extension SeamPlaceLevels {
 	/// A description of each level that one build of its type gives with other fields than another build of the same type
 	/// does: the level a type holds before a property, or the seam's root's level, is the same on every path, inside a fill
 	/// too, whose tree starts its children in the order of its types as any other. The parameters of a builder function a
-	/// lazy cycle closes on, and the instantiators a loop member's builder function wraps again, are left out
-	/// (`Level.fieldsOfType`): facts of the function, which another build of the type need not take or make.
+	/// lazy cycle closes on, the instantiators a loop member's builder function wraps again, and the receives a public mock
+	/// binds again are left out (`Level.fieldsOfType`): facts of the function or the path, which another build of the type
+	/// need not take or make.
 	func levelDisagreements() -> [String] {
 		struct Key: Hashable {
 			let builtType: TypeDescription

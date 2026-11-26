@@ -233,7 +233,7 @@ public enum SeamRouteQueryShadow {
 			}
 			report.levelConflicts += 1
 			let functionFacts = { (declarations: [SeamPlaceLevels.Level.Declaration]) in
-				declarations.filter { !$0.isCycleParameter && !$0.isReboundByBuilderFunction }
+				declarations.filter { !$0.isCycleParameter && !$0.isReboundByBuilderFunction && !$0.isReceiveBoundAgain }
 			}
 			if node.key.builtType == nil {
 				report.fillLevelVariants += 1
@@ -275,6 +275,9 @@ public enum SeamRouteQueryShadow {
 			}
 			if declaration.isReboundByBuilderFunction {
 				text += "(rebound)"
+			}
+			if declaration.isReceiveBoundAgain {
+				text += "(bound again)"
 			}
 			return text
 		}
