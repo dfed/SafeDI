@@ -97,7 +97,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            let leaf = if let safeDIBuilder = __safeDI_Panel_configuration.leaf { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(leaf, __safeDI_Panel_configuration.title) } else { Panel(leaf: leaf, title: __safeDI_Panel_configuration.title) }
 		        }
-		        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel ?? .init())
+		        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: Panel.SafeDIOverrides.__safeDI_read(safeDIOverrides.panel))
 		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(panel, leaf) } else { Root(panel: panel, leaf: leaf) }
 		    }
@@ -410,7 +410,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_List_configuration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		        }
 		        let detailBuilder = Instantiator<Detail> {
-		            __safeDI_detailBuilder(__safeDI_Detail_configuration: safeDIOverrides.detailBuilder ?? .init(), __safeDI_List_configuration_nearest: safeDIOverrides)
+		            __safeDI_detailBuilder(__safeDI_Detail_configuration: Detail.SafeDIOverrides.__safeDI_read(safeDIOverrides.detailBuilder), __safeDI_List_configuration_nearest: safeDIOverrides)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		    }
@@ -436,6 +436,8 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        var detailBuilder: Detail.SafeDIOverrides? { __safeDI_storage.detailBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: ((Instantiator<Detail>) -> List)? { __safeDI_storage.safeDIBuilder }
+
+		        static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -498,7 +500,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { C(aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder ?? .init(), __safeDI_B_configuration_nearest: nil, __safeDI_C_configuration_nearest: nil)
+		            __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIOverrides.__safeDI_read(safeDIOverrides.aBuilder), __safeDI_B_configuration_nearest: nil, __safeDI_C_configuration_nearest: nil)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(aBuilder) } else { Root(aBuilder: aBuilder) }
 		    }
@@ -887,10 +889,10 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Inner_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Inner(leaf: leaf) }
 		        }
 		        func __safeDI_panel(__safeDI_Outer_configuration: Outer.SafeDIOverrides) -> Outer {
-		            let panel: Inner = __safeDI_panel_(__safeDI_Inner_configuration: __safeDI_Outer_configuration.panel ?? .init())
+		            let panel: Inner = __safeDI_panel_(__safeDI_Inner_configuration: Inner.SafeDIOverrides.__safeDI_read(__safeDI_Outer_configuration.panel))
 		            return if let safeDIBuilder = __safeDI_Outer_configuration.safeDIBuilder { safeDIBuilder(panel) } else { Outer(panel: panel) }
 		        }
-		        let panel: Outer = __safeDI_panel(__safeDI_Outer_configuration: safeDIOverrides.panel ?? .init())
+		        let panel: Outer = __safeDI_panel(__safeDI_Outer_configuration: Outer.SafeDIOverrides.__safeDI_read(safeDIOverrides.panel))
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(panel) } else { Page(panel: panel) }
 		    }
 		}
@@ -1094,7 +1096,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let alphaBuilderConfiguration = safeDIOverrides.alphaBuilder ?? .init()
+		        let alphaBuilderConfiguration = Alpha.SafeDIOverrides.__safeDI_read(safeDIOverrides.alphaBuilder)
 		        func __safeDI_alphaBuilder() -> Alpha {
 		            let betaBuilder = Instantiator<Beta>(__safeDI_betaBuilder)
 		            let leaf = if let safeDIBuilder = alphaBuilderConfiguration.leaf { safeDIBuilder() } else { Leaf() }
@@ -1305,7 +1307,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = stepBuilderConfiguration.safeDIBuilder { safeDIBuilder(flowBuilder, token) } else { Step(flowBuilder: flowBuilder, token: token) }
 		        }
 		        let stepBuilder = Instantiator<Step> {
-		            __safeDI_stepBuilder(token: token_Token, safeDIOverrides.stepBuilder ?? .init(), safeDIOverrides)
+		            __safeDI_stepBuilder(token: token_Token, Step.SafeDIOverrides.__safeDI_read(safeDIOverrides.stepBuilder), safeDIOverrides)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(stepBuilder, token_Token) } else { Flow(stepBuilder: stepBuilder, token: token_Token) }
 		    }
@@ -1331,6 +1333,8 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        var stepBuilder: Step.SafeDIOverrides? { __safeDI_storage.stepBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: ((Instantiator<Step>, Token) -> Flow)? { __safeDI_storage.safeDIBuilder }
+
+		        static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1433,7 +1437,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = stepBuilderConfiguration.safeDIBuilder { safeDIBuilder(pageBuilder) } else { Step(pageBuilder: pageBuilder) }
 		        }
 		        let stepBuilder = Instantiator<Step> {
-		            __safeDI_stepBuilder(token: token_Token, safeDIOverrides.stepBuilder ?? .init(), safeDIOverrides, nil)
+		            __safeDI_stepBuilder(token: token_Token, Step.SafeDIOverrides.__safeDI_read(safeDIOverrides.stepBuilder), safeDIOverrides, nil)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(stepBuilder, token_Token) } else { Flow(stepBuilder: stepBuilder, token: token_Token) }
 		    }
@@ -1459,6 +1463,8 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        var stepBuilder: Step.SafeDIOverrides? { __safeDI_storage.stepBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: ((Instantiator<Step>, Token) -> Flow)? { __safeDI_storage.safeDIBuilder }
+
+		        static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1593,6 +1599,8 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: ((Item, Helper) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
+		        static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
+
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
@@ -1634,7 +1642,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            let helper = if let safeDIBuilder = __safeDI_Screen_configuration.helper { safeDIBuilder(sheet) } else { Helper(sheet: sheet) }
 		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(item, helper) } else { Screen(item: item, helper: helper) }
 		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen ?? .init())
+		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIOverrides.__safeDI_read(safeDIOverrides.screen))
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(screen) } else { Host(screen: screen) }
 		    }
 		}
@@ -2175,7 +2183,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
-		        let extConfiguration = safeDIOverrides.ext ?? .init()
+		        let extConfiguration = Ext.SafeDIOverrides.__safeDI_read(safeDIOverrides.ext)
 		        let __safeDI_ext__safeDIBuilder = extConfiguration.safeDIBuilder
 		        let __safeDI_ext__extConfiguration_isEnabled = extConfiguration.isEnabled
 		        let __safeDI_ext__extConfiguration_pollInterval = extConfiguration.pollInterval
@@ -2387,7 +2395,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Gadget_configuration.safeDIBuilder { safeDIBuilder(gadgetBuilder) } else { Gadget(gadgetBuilder: gadgetBuilder) }
 		        }
 		        let gadgetBuilder = Instantiator<Gadget> {
-		            __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: safeDIOverrides.gadgetBuilder ?? .init())
+		            __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: Gadget.SafeDIOverrides.__safeDI_read(safeDIOverrides.gadgetBuilder))
 		        }
 		        let (__safeDI_received_alphaBuilder, alphaBuilderConfiguration): (Instantiator<Alpha>?, Alpha.SafeDIOverrides) = switch alphaBuilder {
 		        case let .instance(instance): (instance, .init())
@@ -2406,7 +2414,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		                return if let safeDIBuilder = gadgetBuilderConfiguration.safeDIBuilder { safeDIBuilder(gadgetBuilder) } else { Gadget(gadgetBuilder: gadgetBuilder) }
 		            }
 		            let gadgetBuilder = Instantiator<Gadget> {
-		                __safeDI_gadgetBuilder(alphaBuilderConfiguration.gadgetBuilder ?? .init())
+		                __safeDI_gadgetBuilder(Gadget.SafeDIOverrides.__safeDI_read(alphaBuilderConfiguration.gadgetBuilder))
 		            }
 		            return if let safeDIBuilder = alphaBuilderConfiguration.safeDIBuilder { safeDIBuilder(gadgetBuilder, betaBuilder) } else { Alpha(gadgetBuilder: gadgetBuilder, betaBuilder: betaBuilder) }
 		        }
@@ -2522,7 +2530,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(rowBuilder, token) } else { Panel(rowBuilder: rowBuilder, token: token) }
 		        }
 		        let rowBuilder = Instantiator<Row> {
-		            __safeDI_rowBuilder(__safeDI_Row_configuration: safeDIOverrides.rowBuilder ?? .init(), __safeDI_Panel_configuration_nearest: safeDIOverrides)
+		            __safeDI_rowBuilder(__safeDI_Row_configuration: Row.SafeDIOverrides.__safeDI_read(safeDIOverrides.rowBuilder), __safeDI_Panel_configuration_nearest: safeDIOverrides)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(rowBuilder, token) } else { Panel(rowBuilder: rowBuilder, token: token) }
 		    }
@@ -2548,6 +2556,8 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        var rowBuilder: Row.SafeDIOverrides? { __safeDI_storage.rowBuilder }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: ((Instantiator<Row>, Token?) -> Panel)? { __safeDI_storage.safeDIBuilder }
+
+		        static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -2648,7 +2658,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(widget) } else { Panel(widget: widget) }
 		        }
 		        let panelBuilder = Instantiator<Panel> {
-		            __safeDI_panelBuilder(__safeDI_Panel_configuration: safeDIOverrides.panelBuilder ?? .init())
+		            __safeDI_panelBuilder(__safeDI_Panel_configuration: Panel.SafeDIOverrides.__safeDI_read(safeDIOverrides.panelBuilder))
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(widgetBuilder, panelBuilder, widget) } else { Host(widgetBuilder: widgetBuilder, panelBuilder: panelBuilder, widget: widget) }
 		    }
@@ -2774,7 +2784,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let alphaBuilderConfiguration = safeDIOverrides.alphaBuilder ?? .init()
+		        let alphaBuilderConfiguration = Alpha.SafeDIOverrides.__safeDI_read(safeDIOverrides.alphaBuilder)
 		        func __safeDI_alphaBuilder() -> Alpha {
 		            let betaBuilder = Instantiator<Beta>(__safeDI_betaBuilder)
 		            let leaf = if let safeDIBuilder = alphaBuilderConfiguration.leaf { safeDIBuilder() } else { Leaf() }
@@ -2790,7 +2800,7 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            let leaf = if let safeDIBuilder = __safeDI_Gamma_configuration.leaf { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = __safeDI_Gamma_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Gamma(leaf: leaf) }
 		        }
-		        let gamma: Gamma = __safeDI_gamma(__safeDI_Gamma_configuration: safeDIOverrides.gamma ?? .init())
+		        let gamma: Gamma = __safeDI_gamma(__safeDI_Gamma_configuration: Gamma.SafeDIOverrides.__safeDI_read(safeDIOverrides.gamma))
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(alphaBuilder, betaBuilder, gamma) } else { Root(alphaBuilder: alphaBuilder, betaBuilder: betaBuilder, gamma: gamma) }
 		    }
 		}
@@ -2920,9 +2930,9 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let hostConfiguration = safeDIOverrides.host ?? .init()
+		        let hostConfiguration = Host.SafeDIOverrides.__safeDI_read(safeDIOverrides.host)
 		        func __safeDI_host() -> Host {
-		            let alphaBuilderConfiguration = hostConfiguration.alphaBuilder ?? .init()
+		            let alphaBuilderConfiguration = Alpha.SafeDIOverrides.__safeDI_read(hostConfiguration.alphaBuilder)
 		            func __safeDI_alphaBuilder() -> Alpha {
 		                let betaBuilder = Instantiator<Beta>(__safeDI_betaBuilder)
 		                let leaf = if let safeDIBuilder = alphaBuilderConfiguration.leaf { safeDIBuilder() } else { Leaf() }

@@ -118,15 +118,15 @@ struct SafeDIToolMockV3TypeKeyTests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leaf, __safeDI_Child_configuration.name) } else { Child(leaf: leaf, name: __safeDI_Child_configuration.name) }
 		        }
 		        func __safeDI_a(__safeDI_A_configuration: A.SafeDIOverrides) -> A {
-		            let child: Child = __safeDI_child(__safeDI_Child_configuration: __safeDI_A_configuration.child ?? .init())
+		            let child: Child = __safeDI_child(__safeDI_Child_configuration: Child.SafeDIOverrides.__safeDI_read(__safeDI_A_configuration.child))
 		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(child) } else { A(child: child) }
 		        }
-		        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a ?? .init())
+		        let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIOverrides.__safeDI_read(safeDIOverrides.a))
 		        func __safeDI_b(__safeDI_B_configuration: B.SafeDIOverrides) -> B {
-		            let child: Child = __safeDI_child(__safeDI_Child_configuration: __safeDI_B_configuration.child ?? .init())
+		            let child: Child = __safeDI_child(__safeDI_Child_configuration: Child.SafeDIOverrides.__safeDI_read(__safeDI_B_configuration.child))
 		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(child) } else { B(child: child) }
 		        }
-		        let b: B = __safeDI_b(__safeDI_B_configuration: safeDIOverrides.b ?? .init())
+		        let b: B = __safeDI_b(__safeDI_B_configuration: B.SafeDIOverrides.__safeDI_read(safeDIOverrides.b))
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(a, b) } else { Root(a: a, b: b) }
 		    }
 		}
@@ -236,7 +236,7 @@ struct SafeDIToolMockV3TypeKeyTests: ~Copyable {
 		            }
 		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(leafBuilder) } else { A(leafBuilder: leafBuilder) }
 		        }
-		        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a ?? .init())
+		        let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIOverrides.__safeDI_read(safeDIOverrides.a))
 		        let leafBuilder = Instantiator<Leaf> {
 		            __safeDI_leafBuilder(__safeDI_Leaf_configuration: safeDIOverrides.leafBuilder)
 		        }
@@ -368,15 +368,15 @@ struct SafeDIToolMockV3TypeKeyTests: ~Copyable {
 		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(client, __safeDI_Child_configuration.name) } else { Child(client: client, name: __safeDI_Child_configuration.name) }
 		        }
 		        func __safeDI_a(__safeDI_A_configuration: A.SafeDIOverrides) -> A {
-		            let child: Child = __safeDI_child(__safeDI_Child_configuration: __safeDI_A_configuration.child ?? .init())
+		            let child: Child = __safeDI_child(__safeDI_Child_configuration: Child.SafeDIOverrides.__safeDI_read(__safeDI_A_configuration.child))
 		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(child) } else { A(child: child) }
 		        }
-		        let a: A = __safeDI_a(__safeDI_A_configuration: safeDIOverrides.a ?? .init())
+		        let a: A = __safeDI_a(__safeDI_A_configuration: A.SafeDIOverrides.__safeDI_read(safeDIOverrides.a))
 		        func __safeDI_b(__safeDI_B_configuration: B.SafeDIOverrides) -> B {
-		            let child: Child = __safeDI_child(__safeDI_Child_configuration: __safeDI_B_configuration.child ?? .init())
+		            let child: Child = __safeDI_child(__safeDI_Child_configuration: Child.SafeDIOverrides.__safeDI_read(__safeDI_B_configuration.child))
 		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(child) } else { B(child: child) }
 		        }
-		        let b: B = __safeDI_b(__safeDI_B_configuration: safeDIOverrides.b ?? .init())
+		        let b: B = __safeDI_b(__safeDI_B_configuration: B.SafeDIOverrides.__safeDI_read(safeDIOverrides.b))
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(a, b) } else { Root(a: a, b: b) }
 		    }
 		}

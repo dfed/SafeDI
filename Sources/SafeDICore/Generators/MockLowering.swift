@@ -26,11 +26,47 @@ public enum MockLowering {
 	public struct Result: Sendable, Equatable {
 		let code: String
 		let configurations: [ConfigurationRecord]
+		/// The forms in which the code reads each type's configuration through its read function, by concrete type
+		/// (`MockLowering.Walk.noteConfigurationRead(of:form:)`).
+		let configurationReadForms: [TypeDescription: Set<ConfigurationReadForm>]
 
-		init(code: String, configurations: [ConfigurationRecord] = []) {
+		init(code: String, configurations: [ConfigurationRecord] = [], configurationReadForms: [TypeDescription: Set<ConfigurationReadForm>] = [:]) {
 			self.code = code
 			self.configurations = configurations
+			self.configurationReadForms = configurationReadForms
 		}
+	}
+
+	/// A form in which a `.v3Unstable` call reads a configuration it hands on, each spelled as a call of a static function
+	/// the configuration declares (`ReservedName.configurationReadFunctionName`), which the configuration declares only
+	/// for the forms a read in the module makes of it.
+	enum ConfigurationReadForm: Comparable, Sendable {
+		/// The parent's optional field, else the type's defaults: `value ?? Self()`.
+		case value
+		/// The parent's optional field, else the nearest configuration of the type, else its defaults:
+		/// `value ?? nearest ?? Self()`.
+		case valueOrNearest
+
+		/// The declaration of the form's read function on a configuration, at the configuration's access `accessPrefix`.
+		func declaration(accessPrefix: String) -> String {
+			switch self {
+			case .value:
+				"\(accessPrefix)static func \(ReservedName.configurationReadFunctionName)(_ value: Self?) -> Self { value ?? Self() }"
+			case .valueOrNearest:
+				"\(accessPrefix)static func \(ReservedName.configurationReadFunctionName)(_ value: Self?, _ nearest: Self?) -> Self { value ?? nearest ?? Self() }"
+			}
+		}
+	}
+
+	/// A read of the configuration `value`, of type `configurationType`, through the configuration's read function in the
+	/// form `.value`.
+	static func configurationRead(_ value: ValuePath, of configurationType: TypeDescription) -> ValuePath {
+		.spliced([.text("\(configurationType.asSource).\(ReservedName.configurationReadFunctionName)("), .value(value), .text(")")])
+	}
+
+	/// The same, for a value spelled as text, of the configuration named `configurationTypeName`.
+	static func configurationRead(_ value: String, of configurationTypeName: String) -> String {
+		"\(configurationTypeName).\(ReservedName.configurationReadFunctionName)(\(value))"
 	}
 
 	/// A configuration a node of a mock's tree is configured by: what the `SafeDIMockConfiguration` of its concrete type,

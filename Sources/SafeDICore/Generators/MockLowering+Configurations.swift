@@ -35,8 +35,13 @@ extension MockLowering {
 		publicMockContext: PublicMockContext?,
 	) -> (mergedCodes: [String], configurationCode: String?, fulfillers: Set<FulfillerImports.Fulfiller>) {
 		let loweredRoots = roots.map { (code: $0.lowered.code, records: $0.lowered.configurations) }
+		// Each configuration declares the read functions of the forms some root's code reads it in.
+		var readFormsByType = [TypeDescription: Set<ConfigurationReadForm>]()
+		for root in roots {
+			readFormsByType.merge(root.lowered.configurationReadForms) { $0.union($1) }
+		}
 		// A configuration `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the module has, takes
-		// `@Sendable` closures (`configurationStruct(amongConfigurationsTypedSendable:)`); a public mock's, and a public mock's
+		// `@Sendable` closures (`configurationStruct(amongConfigurationsTypedSendable:readForms:)`); a public mock's, and a public mock's
 		// module-level one too (`publicConfigurationDeclarations`).
 		let rootedTypeNames = Set(roots.map(\.mockedType.asSource))
 		var seenTypeNames = Set<String>()
@@ -61,7 +66,7 @@ extension MockLowering {
 				let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
 					recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
 				} ?? record
-				let structCode = structRecord.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+				let structCode = structRecord.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames, readForms: readFormsByType[structRecord.concreteType, default: []])
 				if rootedTypeNames.contains(typeName) {
 					rootedStructs[typeName] = structCode
 				} else {
@@ -76,9 +81,9 @@ extension MockLowering {
 			for (rootIndex, record) in Self.configurationsBeneathRepeatedAncestors(of: recordsInRootOrder, isPublicMock: isPublicMock) where seenTypeNames.insert(record.concreteType.asSource).inserted {
 				let typeName = record.concreteType.asSource
 				if rootedTypeNames.contains(typeName) {
-					rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+					rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames, readForms: readFormsByType[record.concreteType, default: []])
 				} else {
-					sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames), isFileScope: record.isFileScopeInV3))
+					sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames, readForms: readFormsByType[record.concreteType, default: []]), isFileScope: record.isFileScopeInV3))
 					// `generateMockCode` records the fulfillers of the node that reads the configuration,
 					// where its construction differs.
 					let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
@@ -387,9 +392,10 @@ extension MockLowering.Walk {
 
 extension MockLowering.ConfigurationRecord {
 	/// The `SafeDIMockConfiguration` this record describes, nested in an extension of its type: a field per child, one per
-	/// default-valued parameter, then the builder that overrides how the type is built, each held in the configuration's storage.
+	/// default-valued parameter, then the builder that overrides how the type is built, each held in the configuration's
+	/// storage, and a read function for each of `readForms`, the forms the module's code reads it in.
 	// A configuration `@Sendable`-typed, `typeNames` naming the types whose configurations are.
-	func configurationStruct(amongConfigurationsTypedSendable typeNames: Set<String>) -> String {
+	func configurationStruct(amongConfigurationsTypedSendable typeNames: Set<String>, readForms: Set<MockLowering.ConfigurationReadForm>) -> String {
 		let requiresSendable = typeNames.contains(concreteType.asSource)
 		// In `.v3Unstable`, the configuration of a type another module declares is at file scope (`V3ConfigurationNames`).
 		let fileScopeName = isV3 ? v3ConfigurationNames.fileScopeName(of: concreteType) : nil
@@ -477,6 +483,11 @@ extension MockLowering.ConfigurationRecord {
 		lines.append("")
 		lines.append(contentsOf: storage.readers(indent: innerIndent))
 		lines.append("")
+		// A read function has the configuration's access and isolation, as `.init()` at the call that reads it would.
+		if !readForms.isEmpty {
+			lines.append(contentsOf: readForms.sorted().map { "\(innerIndent)\($0.declaration(accessPrefix: ""))" })
+			lines.append("")
+		}
 		lines.append(contentsOf: storage.declarations(indent: innerIndent))
 		lines.append("\(indent)}")
 		if !providers.isEmpty {

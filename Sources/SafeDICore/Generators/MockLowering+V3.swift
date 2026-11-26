@@ -127,7 +127,7 @@ extension ScopeGenerator {
 			lines.insert("#if \(mockConditionalCompilation)", at: 0)
 			lines.append("#endif")
 		}
-		return MockLowering.Result(code: MockLowering.joinedLines(lines), configurations: walk.configurationRecords + [rootRecord])
+		return MockLowering.Result(code: MockLowering.joinedLines(lines), configurations: walk.configurationRecords + [rootRecord], configurationReadForms: walk.configurationReadForms)
 	}
 }
 
@@ -238,8 +238,12 @@ extension MockLowering.Walk {
 
 	/// The expression a node of `concreteType` reads its configuration from: the field `fieldPath` of its parent's, else the
 	/// nearest configuration of its type in scope, else its type's defaults.
-	func v3ConfigurationExpression(of concreteType: TypeDescription, field fieldPath: String) -> String {
-		guard let nearest = v3NearestConfiguration(of: concreteType) else { return "\(fieldPath) ?? .init()" }
+	mutating func v3ConfigurationExpression(of concreteType: TypeDescription, field fieldPath: String) -> String {
+		guard let nearest = v3NearestConfiguration(of: concreteType) else {
+			guard readsConfigurationThroughFunction(of: concreteType) else { return "\(fieldPath) ?? .init()" }
+			noteConfigurationRead(of: concreteType, form: .value)
+			return MockLowering.configurationRead(fieldPath, of: v3ConfigurationNames.typeName(of: concreteType))
+		}
 		return nearest.isOptional ? "\(fieldPath) ?? \(nearest.expression) ?? .init()" : "\(fieldPath) ?? \(nearest.expression)"
 	}
 
