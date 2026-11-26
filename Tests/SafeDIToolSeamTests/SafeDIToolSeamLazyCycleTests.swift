@@ -733,6 +733,26 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtEachScopeBetween_whenCycleClosingScopeInsideNestedFunctionPassesItsParameterThatTierCalledInOuterFunctionOmits() async {
+		// `A`'s builder function takes `theme`, which `Mid` declares before closing the cycle on `A`, and so does `B`'s, which
+		// `MidB` declares before closing a cycle on `B`. `B`'s scope that closes the cycle on `A` passes `B`'s parameter, so it
+		// passes what each call of `B`'s function passes: `MidB`'s `theme`. `A`'s body calls `Service`'s `public` tier, which
+		// omits `theme`: built inline, the `Badge` of the `A` built again under `Mid` or under `MidB` would be handed theirs.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			Self.tierOmissionError(provider: "Mid", fixtures) + "\n" + Self.tierOmissionError(provider: "MidB", fixtures)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.tierOmissionModules(appPackage: "Other", appFiles: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let bBuilder: Instantiator<B>"]),
+				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "B", declarations: ["@Instantiated let midBBuilder: Instantiator<MidB>", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "MidB", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let bBuilder: Instantiator<B>"]),
+			]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtScopeBetween_whenConstantClosingCycleOnLazilyInstantiatedDeclarationPassesValueThatTierCalledInClosedOnFunctionOmits() async {
 		// As above, with `Root` declaring `a` lazily instantiated and `Mid`'s constant `a` closing the cycle on it: the
 		// function the cycle closes on is the wrapper's, which `Mid`'s `a` calls with its own `theme`.
