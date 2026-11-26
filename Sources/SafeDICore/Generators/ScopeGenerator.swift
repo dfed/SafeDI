@@ -7175,6 +7175,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			&& (!isBuiltByFill || isBuiltByFillPlanned)
 			&& !fillReturnsWrapperBuilder
 			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
+			// A place of a public mock built inline inside a fill reads the builder `mock()` takes for it, which no record holds.
+			&& fillPlaceBindings.holeBuildersByInlinePlace[ObjectIdentifier(self)] == nil
 	}
 
 	/// The properties of this scope's `onlyIfAvailableDependencies` that are unavailable because an
