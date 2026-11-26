@@ -7614,6 +7614,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
 					indentation: leadingMemberWhitespace,
+					text: textWithoutAttributes,
 				),
 				name: dispatcher.functionName,
 				declaration: .text(textWithoutAttributes),

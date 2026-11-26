@@ -79,8 +79,10 @@ struct RootFunctionRecord: Sendable {
 }
 
 /// What a root function's text is a function of, within one root: the called seam, the level of its tree the function
-/// returns the struct of, and what of the call around it the text reads. Nothing compares a dispatcher's text; the graph
-/// fuzzer checks that equal keys give equal text. A fill's key holds its text.
+/// returns the struct of, what of the call around it the text reads, and the text itself, which the other fields do not
+/// settle: two calls of one seam each declare a dispatcher of one name and level, which call their own fills by name, so
+/// the key holds the text, and the root declares a name once only where every call wrote one text. The graph fuzzer
+/// checks that equal keys give equal text.
 public struct RootFunctionKey: Hashable, Sendable {
 	/// The seam whose tree the function walks.
 	let calledSeam: TypeDescription?
@@ -100,9 +102,10 @@ public struct RootFunctionKey: Hashable, Sendable {
 	/// statements too (`ScopeGenerator.rootStatementIndentation`). Empty for a fill, whose plan is indented where it is
 	/// written.
 	let indentation: String
-	/// For a fill, its text without the root functions its plan holds: a fill's text is a function of its call's
-	/// position in the root, which nothing else in the key names, so the key is the text itself. `nil` for a dispatcher.
-	var text: String?
+	/// The text: a fill's without the root functions its plan holds, a dispatcher's after `indentation` and without the
+	/// attributes `isSendable` adds. A function's text is a function of its call's position in the root, which nothing else
+	/// in the key names, such as the names of the fills a dispatcher calls, so the key is the text itself.
+	let text: String
 
 	/// The key with `isSendable` false: what two records of one name must share to be declared once.
 	var ignoringSendability: RootFunctionKey {
@@ -273,7 +276,12 @@ public enum RootFunctionHoisting {
 					text: record.key.text,
 				)
 				if observer != nil {
-					occurrences.append(Occurrence(key: key, name: record.name, text: record.key.text ?? record.spelled(isSendable: key.isSendable).spelled()))
+					// A dispatcher's text as the root would write it, which its key's text omits the attributes of; a fill's key text.
+					let text = switch record.declaration {
+					case .text: record.spelled(isSendable: key.isSendable).spelled()
+					case .code: key.text
+					}
+					occurrences.append(Occurrence(key: key, name: record.name, text: text))
 				}
 				if key.isSendable, !record.canBeDeclaredSendable {
 					conflictingNames.insert(record.name)
