@@ -146,10 +146,11 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_declaresOneFunctionPerAnswer_whenBodiesOfOneTypeAreAnsweredApart() async throws {
+	mutating func generate_declaresOneFunctionTakingOptionalParameter_whenCallsAnswerLabelReceivedOnlyIfAvailableApart() async throws {
 		// `Home` receives `context` only if available: `Plain` builds it again beneath no `Context`, and `Scoped` beneath
-		// its own. Each `Home` and `Plain` the plan answers apart gets a function of its own, which takes `context` where
-		// its answer declares it.
+		// its own. A body per answer would double with each such label a path around the cycle can declare, so `Home`'s
+		// and `Plain`'s functions take `context` optionally, as today's do, and each call passes its own declaration or
+		// `nil`. `Home` built as `home` and as `homeBuilder` lay out alike, so they share one function.
 		let codes = try await planCodes(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: Home
@@ -180,36 +181,27 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		#expect(codes == ["Root": """
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_home() -> Home {
-		            let plainBuilder = Instantiator<Plain>(__safeDI_plainBuilder)
+		        func __safeDI_home(context: Context?) -> Home {
+		            let plainBuilder = Instantiator<Plain> {
+		                __safeDI_plainBuilder(context: context)
+		            }
 		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
-		            return Home(context: nil, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
+		            return Home(context: context, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
 		        }
-		        func __safeDI_plainBuilder() -> Plain {
-		            let homeBuilder = Instantiator<Home>(__safeDI_home)
+		        func __safeDI_plainBuilder(context: Context?) -> Plain {
+		            let homeBuilder = Instantiator<Home> {
+		                __safeDI_home(context: context)
+		            }
 		            return Plain(homeBuilder: homeBuilder)
 		        }
 		        func __safeDI_scopedBuilder() -> Scoped {
 		            let context = Context()
 		            let homeBuilder = Instantiator<Home> {
-		                __safeDI_homeBuilder(context: context)
+		                __safeDI_home(context: context)
 		            }
 		            return Scoped(context: context, homeBuilder: homeBuilder)
 		        }
-		        func __safeDI_homeBuilder(context: Context) -> Home {
-		            let plainBuilder = Instantiator<Plain> {
-		                __safeDI_plainBuilder_(context: context)
-		            }
-		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
-		            return Home(context: context, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
-		        }
-		        func __safeDI_plainBuilder_(context: Context) -> Plain {
-		            let homeBuilder = Instantiator<Home> {
-		                __safeDI_homeBuilder(context: context)
-		            }
-		            return Plain(homeBuilder: homeBuilder)
-		        }
-		        let home: Home = __safeDI_home()
+		        let home: Home = __safeDI_home(context: nil)
 		        self.init(home: home)
 		    }
 		}

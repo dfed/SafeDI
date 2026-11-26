@@ -546,9 +546,10 @@ extension ScopeRecord {
 		var placeReadLabels: PlaceReadLabels?
 		if PerTypePlanObservation.observer != nil || PerTypePlanObservation.variantsObserver != nil || PlaceReadsObservation.observer != nil, let plan = PerTypePlan(root: root) {
 			PerTypePlanObservation.observer?(plan.projection)
-			let variants = PlanVariants(plan: plan)
-			PerTypePlanObservation.variantsObserver?(variants.projection)
-			placeReadLabels = variants.placeReadLabels
+			if let variantsObserver = PerTypePlanObservation.variantsObserver {
+				variantsObserver(PlanVariants(plan: plan).projection)
+			}
+			placeReadLabels = PlanVariants.placeReadLabels(of: plan)
 		}
 		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
 		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees

@@ -618,6 +618,7 @@ struct TypeKeyBodyCycleVariantTests {
 			isExtension: false,
 			forwardedProperties: [],
 			labels: reading,
+			answers: answers ?? declarations(of: reading),
 			arguments: answers ?? declarations(of: reading),
 		)
 		return .place(PlacePlan(code: .text("let \(label) = Instantiator<\(type)>(__safeDI_\(label))"), record: .closer(record)))
