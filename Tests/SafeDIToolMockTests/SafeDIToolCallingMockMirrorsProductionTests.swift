@@ -1230,7 +1230,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let log: Log? = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        func __safeDI_f() -> F {
 		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values, log: Log) -> any Api2 {
 		                func __safeDI_api2() -> Live2 {
@@ -1400,7 +1400,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let log: Log? = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        func __safeDI_f() -> F {
 		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values) -> any Api2 {
 		                func __safeDI_api2() -> Live2 {
