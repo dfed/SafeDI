@@ -666,13 +666,15 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # so that the row holds what has been gained until the change that removes the growth deletes the entry.
 #
 # Measured on a four-core Linux machine with a release build of the tool, the smaller graph's figure first:
-# P 0.376 s and 3.313 s (8.82), 57.0 MB and 220.2 MB (3.86), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
+# P 0.376 s and 3.313 s (8.82), 50.7 MB and 213.5 MB (4.21), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
 # L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85);
-# M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 51.2 MB and
-# 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
-# Q 0.349 s and 2.483 s (7.11); B 0.086 s and 1.576 s (18.37), 38.2 MB and 90.6 MB (2.37); BM 0.079 s and 2.543 s
-# (32.30), 93.0 MB and 173.9 MB (1.87), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
+# M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 47.5 MB and
+# 170.1 MB (3.58), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
+# Q 0.349 s and 2.483 s (7.11); B 0.086 s and 1.576 s (18.37), 34.5 MB and 92.6 MB (2.68); BM 0.079 s and 2.543 s
+# (32.30), 33.7 MB and 179.7 MB (5.34), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
 # code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86); N 0.207 s and 1.365 s (6.60).
+# The tool alone, on the smallest graph, peaks at about 33 MB. K (36.6 MB and 67.4 MB, 1.84) and W (52.4 MB and
+# 94.9 MB, 1.74 to 1.82 in five runs) stay under the default limit without room to spare.
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
@@ -686,10 +688,10 @@ GROWTH_ROWS = {
     "W-ring-of-screens-that-open-each-other": (lambda width: shape_w(width), 10, {"time": 4.0}),
     "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 6.5, "code": 275.0}),
     # Three and five modules, not four and six: at six this row alone takes 21 s and 1.2 GB on main today (30 times
-    # four's time). 0.26 s and 3.17 s (12.4), 42 MB and 199 MB (4.7), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
+    # four's time). 0.26 s and 3.17 s (12.4), 38 MB and 196 MB (5.1), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
     # 282,609 and 4,967,332 bytes of code (17.6).
     "F9-public-mock-seam-chain": (lambda layers: shape_public_mock_seam_chain(layers), 3, {"time": 16.0, "memory": 6.0, "size": 36.0, "code": 19.0}),
-    # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 39 MB and 78 MB (2.00), 25,811 and 1,406,899 bytes of `.safedi`
+    # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 35 MB and 74 MB (2.13), 25,811 and 1,406,899 bytes of `.safedi`
     # (54.5), 31,432 and 126,780 bytes of code (4.03). Starts at three layers: at six, Feature alone takes 9.8 s.
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
@@ -698,7 +700,7 @@ GROWTH_ROWS = {
     # V 0.45 s and 3.8 s (8.6); VO 0.51 s and 4.6 s (9.2).
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 11.0}),
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {"time": 11.5}),
-    # PR 0.33 s and 3.0 s (9.1), 52 MB and 179 MB (3.5); its code grows with the graph.
+    # PR 0.33 s and 3.0 s (9.1), 48 MB and 175 MB (3.65); its code grows with the graph.
     "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {"time": 12.0, "memory": 4.5}),
 }
 GROWTH_STEP = 2
