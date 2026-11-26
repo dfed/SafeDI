@@ -2974,6 +2974,7 @@ enum GraphFuzzerGenerator {
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			sharedSubtreeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedSubtreeRandomSeedMask)
+			mockNodeKeyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockNodeKeyRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3061,6 +3062,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingSharedSubtreeShapes(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingMockNodeKeyShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3556,6 +3559,8 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingSharedSubtreeShapes`' choices: whether a graph gains `DiamondHost`'s tree, and every shape of that
 		/// tree.
 		private var sharedSubtreeRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingMockNodeKeyShapes`' choices: whether a graph gains its mocks, and every shape of them.
+		private var mockNodeKeyRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8546,6 +8551,115 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let sharedSubtreeRandomSeedMask: UInt64 = 0x7368617265645374
+
+		/// Draws, beside the rest of a base graph, a mock whose places differ in one part of their records alone, so that a
+		/// laid out mock that gives two of them one node (`MockLowering.SharedRecordKey`) or one configuration parameter name
+		/// (`MockLowering.ConfigurationParameterNames`) builds other values than its walk, or does not compile. Each shape is
+		/// drawn on its own: `KeyOrderRoot`, whose two features declare the same siblings in other orders beneath
+		/// `SendableInstantiator`s, so that a leaf beneath one receives the feature's `keyX` and beneath the other `nil`;
+		/// `KeyRenameRoot`, two of whose places beneath `SendableInstantiator`s differ only in the value a receive of
+		/// `keyConfig` is handed, the feature's own beneath one and `mock()`'s parameter, named apart from a sibling's
+		/// `keyConfig` of another type, beneath the other; `KeyActorRoot`, whose actor and class each declare an
+		/// `Instantiator` of one leaf, whose override closure is `@Sendable` only beneath the actor; and `KeyLabelRoot`, a property of which is labeled as the parameter its sibling's
+		/// builder function takes its type's configuration under. A nested type beside a top-level type whose names join to one
+		/// identifier (`Outer.Inner` beside `Outer_Inner`) is not drawn: the base corpus's mirror model reads no qualified
+		/// spelling, so it would not compare such a mock, and `SafeDIToolMockTypeKeyConfigurationNameTests` holds that
+		/// meeting. `mockNodeKeyRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingMockNodeKeyShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, mockNodeKeyRandom.percentChance(30) else { return declarations }
+			var declarations = declarations
+			let drawsOrder = sendability != .nonSendable && mockNodeKeyRandom.percentChance(45)
+			let drawsRename = sendability != .nonSendable && mockNodeKeyRandom.percentChance(45)
+			// 2.3.0 rejects an `@Instantiable` actor, so release acceptance leaves the actor out after the roll, which keeps
+			// the rest of the pass drawn as the corpus draws it.
+			let rollsActor = sendability != .sendable && mockNodeKeyRandom.percentChance(45)
+			let drawsActor = rollsActor && !omitsDrawsOlderReleasesReject
+			let drawsLabel = mockNodeKeyRandom.percentChance(35)
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func declaration(_ name: String, arguments: [String] = [], conformances extraConformances: [String] = [], _ properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(
+					name: name,
+					instantiableArguments: arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: extraConformances + conformances,
+				)
+			}
+			func instantiated(_ label: String, _ type: String) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: label, type: type)
+			}
+			let leafName = "\(prefix)KeyLeaf"
+			if drawsActor || drawsLabel {
+				declarations.append(declaration(leafName, []))
+			}
+			if drawsOrder {
+				let xName = "\(prefix)KeyX"
+				let screenName = "\(prefix)KeyScreen"
+				let screenBuilder = instantiated("keyScreenBuilder", "SendableInstantiator<\(screenName)>")
+				let x = instantiated("keyX", xName)
+				declarations.append(declaration(xName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "keyScreenBuilder", type: "SendableInstantiator<\(screenName)>?")]))
+				declarations.append(declaration("\(prefix)KeyOrderLeaf", [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "keyX", type: "\(xName)?")]))
+				declarations.append(declaration("\(prefix)KeyOrderPanel", [instantiated("keyOrderLeaf", "\(prefix)KeyOrderLeaf")]))
+				declarations.append(declaration(screenName, [instantiated("keyOrderPanel", "\(prefix)KeyOrderPanel")]))
+				declarations.append(declaration("\(prefix)KeyFirstFeature", [x, screenBuilder]))
+				declarations.append(declaration("\(prefix)KeySecondFeature", [screenBuilder, x]))
+				declarations.append(declaration("\(prefix)KeyOrderRoot", arguments: ["generateMock: true"], [
+					instantiated("keySecondFeature", "\(prefix)KeySecondFeature"),
+					instantiated("keyFirstFeature", "\(prefix)KeyFirstFeature"),
+				]))
+			}
+			if drawsRename {
+				let configName = "\(prefix)KeyConfig"
+				let otherConfigName = "\(prefix)KeyOtherConfig"
+				let sendable = helperTypesAreSendable ? ", Sendable" : ""
+				let screenName = "\(prefix)KeyRenameScreen"
+				let screenBuilder = instantiated("keyRenameScreenBuilder", "SendableInstantiator<\(screenName)>")
+				var live = declaration("\(prefix)KeyLiveConfig", conformances: [configName], [])
+				live.additionalDeclarations = [
+					"public protocol \(configName): AnyObject\(sendable) {}",
+					"public protocol \(otherConfigName): AnyObject\(sendable) {}",
+				]
+				declarations.append(live)
+				declarations.append(declaration("\(prefix)KeyModel", [PropertyDeclaration(attribute: "@Received", label: "keyConfig", type: "any \(configName)")]))
+				declarations.append(declaration("\(prefix)KeyRenamePanel", [instantiated("keyModel", "\(prefix)KeyModel")]))
+				declarations.append(declaration(screenName, [instantiated("keyRenamePanel", "\(prefix)KeyRenamePanel")]))
+				declarations.append(declaration("\(prefix)KeyBareFeature", [screenBuilder]))
+				declarations.append(declaration("\(prefix)KeyConfiguredFeature", [
+					PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(prefix)KeyLiveConfig\")", label: "keyConfig", type: "any \(configName)"),
+					screenBuilder,
+				]))
+				declarations.append(declaration("\(prefix)KeyOtherReader", [PropertyDeclaration(attribute: "@Received", label: "keyConfig", type: "any \(otherConfigName)")]))
+				declarations.append(declaration("\(prefix)KeyRenameRoot", arguments: ["generateMock: true"], [
+					instantiated("keyConfiguredFeature", "\(prefix)KeyConfiguredFeature"),
+					instantiated("keyBareFeature", "\(prefix)KeyBareFeature"),
+					instantiated("keyOtherReader", "\(prefix)KeyOtherReader"),
+				]))
+			}
+			if drawsActor {
+				let leafBuilder = instantiated("keyLeafBuilder", "Instantiator<\(leafName)>")
+				var store = declaration("\(prefix)KeyActorStore", [leafBuilder])
+				store.isActor = true
+				declarations.append(store)
+				declarations.append(declaration("\(prefix)KeyClassStore", [leafBuilder]))
+				let actorFirst = mockNodeKeyRandom.percentChance(50)
+				let stores = [instantiated("keyActorStore", "\(prefix)KeyActorStore"), instantiated("keyClassStore", "\(prefix)KeyClassStore")]
+				declarations.append(declaration("\(prefix)KeyActorRoot", arguments: ["generateMock: true"], actorFirst ? stores : stores.reversed()))
+			}
+			if drawsLabel {
+				let configuredName = "\(prefix)KeyConfigured"
+				let parameterLabel = "\(configuredName)_configuration"
+				let holderName = "\(prefix)KeyLabelHolder"
+				declarations.append(declaration(holderName, [instantiated("keyLeaf", leafName)]))
+				declarations.append(declaration(configuredName, [instantiated(parameterLabel, holderName)]))
+				declarations.append(declaration("\(prefix)KeyLabelRoot", arguments: ["generateMock: true"], [
+					instantiated("keyConfigured", configuredName),
+					instantiated(parameterLabel, holderName),
+				]))
+			}
+			return declarations
+		}
+
+		private static let mockNodeKeyRandomSeedMask: UInt64 = 0x6D6F636B4E6F6465
 
 		// MARK: Cycle parameters
 
