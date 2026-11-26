@@ -192,6 +192,13 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "publicConstructionFunction"
 			return
 		}
+		// Inside a `@Sendable` builder function a public mock reads an override from a local bound before that function
+		// (`readingOverride(_:localNameSuffix:)`), since its overrides are never `Sendable`: a local no record names, where
+		// the record would read the overrides inside the function.
+		guard !buildsPublicMock || overrideRead.map({ $0.path != nil }) ?? true else {
+			unrecordedReasons[childIndexPath] = "overrideLocal"
+			return
+		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {

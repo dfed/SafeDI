@@ -103,6 +103,32 @@ struct SafeDIToolPublicMockTypeKeyRefusalTests: ~Copyable {
 	}
 
 	@Test
+	mutating func mock_keepsWalksBody_whenPublicMockReadsOverrideInsideSendableBuilderFunction() async throws {
+		// `Screen.mock()` builds `Service` in a `@Sendable` function, which cannot capture a public mock's overrides: they are
+		// never `Sendable`. The walk reads the override into a local before that function, a local no record names.
+		let fixture = [
+			"""
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    public init(serviceBuilder: SendableInstantiator<Service>) { self.serviceBuilder = serviceBuilder }
+			    @Instantiated let serviceBuilder: SendableInstantiator<Service>
+			}
+			""",
+		]
+		let laidOut = try await layingOutPublicMocks(fixture)
+		let walk = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+
+		#expect(laidOut.outcomes == ["Screen: unrecorded:overrideLocal"])
+		#expect(laidOut.output.mockFiles == walk.mockFiles)
+	}
+
+	@Test
 	mutating func mock_laysOutBody_whenPublicMockBuildsOnlyWhatItsRecordsCarry() async throws {
 		// `Screen` builds one `Leaf`, which has no configuration and is not promoted: the record of its place holds the
 		// override and the construction, which is all the walk writes of it.
