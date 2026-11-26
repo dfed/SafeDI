@@ -71,7 +71,11 @@ extension DependencyTreeGenerator {
 			let pathFields: [Property]
 			let pathUncarriedProperties: [Property]
 			let declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]
+			/// The site's levels as the place graph holds them, root first, while a test observes the graph.
+			let placeLevels: [SeamPlacesBuilder.LevelDraft]
+			let isBuiltInSendableFunction: Bool
 		}
+		let draftsPlaceLevels = SeamSignature.Places.observer != nil
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
@@ -94,6 +98,7 @@ extension DependencyTreeGenerator {
 				seamDependencies: seamDependencies,
 				dependenciesByGenerator: &dependenciesByGenerator,
 				childDeclarationsByGenerator: &childDeclarationsByGenerator,
+				draftsPlaceLevels: draftsPlaceLevels,
 			)
 			return SiteContent(
 				site: site,
@@ -106,6 +111,8 @@ extension DependencyTreeGenerator {
 				pathFields: content.pathFields,
 				pathUncarriedProperties: content.pathUncarriedProperties,
 				declarationsHiddenByFields: content.declarationsHiddenByFields,
+				placeLevels: content.placeLevels,
+				isBuiltInSendableFunction: content.isBuiltInSendableFunction,
 			)
 		}
 		// The levels of each place, beside its fields, for the tests and the graph fuzzer: generated code reads none yet.
@@ -211,6 +218,10 @@ extension DependencyTreeGenerator {
 		}
 		var scopeTypeNames = Set<String>()
 		var holes = [SeamSignature.Hole]()
+		// While a test observes the place graph: the graph, and each hole's case and route, beside `holes`.
+		var placesBuilder = SeamPlacesBuilder()
+		var caseIndexByHole = [Int]()
+		var routeByHole = [SeamSignature.Places.Route]()
 		for (index, content) in siteContents.enumerated() {
 			let property = content.site.property
 			var scopeTypeName = "\(ReservedName.seamScopeTypeNamePrefix)\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
@@ -257,6 +268,29 @@ extension DependencyTreeGenerator {
 			hole.reenteringCallDeclarations = Self.adding(additions.reenteringCallDeclarations, to: insideFills.reenteringCallDeclarations)
 			hole.reenteringPlaceFields = Self.adding(additions.reenteringPlaceFields, to: insideFills.reenteringPlaceFields)
 			hole.declarationsHiddenByFields = content.declarationsHiddenByFields
+			if draftsPlaceLevels {
+				let (caseIndex, route) = placesBuilder.addSite(
+					content.site.site(of: seam.concreteInstantiable),
+					levels: content.placeLevels,
+					isBuiltInSendableFunction: content.isBuiltInSendableFunction,
+					siteOpensSendableFunction: property.propertyType.isSendable,
+				)
+				// The uncarried declarations the presentation appends after the place's own, and those it puts in place of one the
+				// place's own list holds.
+				let ownCount = content.uncarriedDeclarations.count
+				placesBuilder.addPresentation(
+					ofCase: caseIndex,
+					isPassedOnSendable: hole.isSendable,
+					calledCopyDeclarations: Array(hole.uncarriedDeclarations.dropFirst(ownCount)),
+					uncarriedReplacedOnPathsToCalls: zip(content.uncarriedDeclarations, hole.uncarriedDeclarations.prefix(ownCount)).compactMap { own, presented in
+						own.isBoundFromCallersArgument ? presented : nil
+					},
+					reenteringCallDeclarations: hole.reenteringCallDeclarations,
+					reenteringPlaceFields: hole.reenteringPlaceFields,
+				)
+				caseIndexByHole.append(caseIndex)
+				routeByHole.append(route)
+			}
 			holes.append(hole)
 		}
 		for (offset, passedUp) in passedUpHoles.enumerated() {
@@ -302,8 +336,25 @@ extension DependencyTreeGenerator {
 			passedUpHole.reenteringPlaceFields = inner.reenteringPlaceFields
 			passedUpHole.declarationsHiddenByFields = inner.declarationsHiddenByFields
 			holes.append(passedUpHole)
+			if draftsPlaceLevels {
+				// A place a call passes up is no case yet.
+				caseIndexByHole.append(-1)
+				routeByHole.append(SeamSignature.Places.Route(levels: []))
+			}
 		}
-		return holes.sorted { $0.builderLabel < $1.builderLabel }
+		guard draftsPlaceLevels else {
+			return holes.sorted { $0.builderLabel < $1.builderLabel }
+		}
+		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
+		let sortedHoles = order.map { holes[$0] }
+		SeamSignature.Places.observer?(SeamSignature.Places.Observation(
+			seamType: seam.concreteInstantiable,
+			places: placesBuilder.places(),
+			siteHoles: sortedHoles,
+			caseIndexBySite: order.map { caseIndexByHole[$0] },
+			routeBySite: order.map { routeByHole[$0] },
+		))
+		return sortedHoles
 	}
 
 	/// The type that fulfills `hole` in `instantiables`, the declarations a module calling the seam sees, or `nil`
@@ -360,6 +411,11 @@ extension DependencyTreeGenerator {
 			frames.dropFirst().flatMap { frame in
 				frame.generator.fillHole?.pathBeforePropertyInItsFill ?? frame.generator.property.map { [$0] } ?? []
 			} + [property]
+		}
+
+		/// The site in the tree of `seamType`.
+		func site(of seamType: TypeDescription) -> SeamSignature.Hole.Site {
+			SeamSignature.Hole.Site(seamType: seamType, path: sitePath)
 		}
 
 		/// The properties the code declares from the root to the hole's property, which a diagnostic prints.
@@ -929,6 +985,11 @@ extension DependencyTreeGenerator {
 		var treeBuildableAboveSeam: (generator: ScopeGenerator, pathToDeclaringScope: [Property])?
 		/// Whether a public mock's root binds it from a value it receives (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`).
 		var isBoundByPublicMockRoot = false
+		/// For a fill's field bound from a parameter of the filled seam, the seams a declaration it hides is named with
+		/// (`SeamSignature.Places.Declaration.fillFieldHiding`).
+		var fillFieldHiding: SeamSignature.Places.FillFieldHiding?
+		/// Whether it is a fill's field bound from a parameter of the filled seam.
+		var isFieldOfSeamParameter = false
 	}
 
 	/// The fields of `site`'s place, the declarations on its path that carry no field, the declarations a cycle hands the
@@ -968,7 +1029,8 @@ extension DependencyTreeGenerator {
 		seamDependencies: DependenciesByProperty,
 		dependenciesByGenerator: inout [ObjectIdentifier: DependenciesByProperty],
 		childDeclarationsByGenerator: inout [ObjectIdentifier: ChildDeclarations],
-	) -> (fields: [SeamSignature.Hole.Field], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level], pathFields: [Property], pathUncarriedProperties: [Property], declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]) {
+		draftsPlaceLevels: Bool,
+	) -> (fields: [SeamSignature.Hole.Field], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level], pathFields: [Property], pathUncarriedProperties: [Property], declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField], placeLevels: [SeamPlacesBuilder.LevelDraft], isBuiltInSendableFunction: Bool) {
 		// A field is as visible as the narrowest type it names, which the declarations of the seam's module and of the
 		// module of the type that declares the value prove, capped at the seam's type.
 		func access(of property: Property, declaredBy declaringModuleName: String?) -> (level: AccessLevel, cause: TypeAccessProof.Cause?) {
@@ -996,14 +1058,53 @@ extension DependencyTreeGenerator {
 			levelDeclaration.isCycleParameter = declaration.isCycleParameter
 			levelDeclaration.isReboundByBuilderFunction = declaration.isReboundByBuilderFunction
 			levelDeclarations.append(levelDeclaration)
+			if draftsPlaceLevels {
+				levelPathDeclarations.append(declaration)
+			}
 		}
+		// Beside the levels, while a test observes the place graph (`SeamSignature.Places.observer`), each level's
+		// declarations as the path declares them and the facts of the level and of the edge into it, outermost first.
+		struct PlaceLevelInProgress {
+			let key: SeamSignature.Places.LevelKey
+			let declarations: [PathDeclaration]
+			let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
+			var cycleReentries = [SeamSignature.Places.CycleReentry]()
+			let fillBaseStack: [SeamSignature.Places.StackEntry]
+			let fillOwnerType: TypeDescription?
+			let pathSegment: [Property]
+			let pathTypes: [SeamSignature.Hole.PathType]
+			let declaredSegment: [SeamSignature.Hole.DeclaredProperty]
+		}
+		var placeLevelsInProgress = [PlaceLevelInProgress]()
+		var levelPathDeclarations = [PathDeclaration]()
+		var levelOpensFunction: SeamSignature.Places.SendableFunctionOpened?
+		var levelPathSegment = [Property]()
+		var levelPathTypes = [SeamSignature.Hole.PathType]()
+		var levelDeclaredSegment = [SeamSignature.Hole.DeclaredProperty]()
 		var isInFill = false
 		// Each declaration a fill's field hides, by label, with the level of the fill that binds the field.
 		var hiddenByFillFields = [String: (declaration: SeamSignature.Hole.DeclarationHiddenByField, fieldLevel: Int)]()
 		var levelOpensSendableFunction = false
-		func endLevel(builtType: TypeDescription?, nextProperty: Property?) {
+		func endLevel(builtType: TypeDescription?, nextProperty: Property?, filledType: TypeDescription? = nil, fillBaseStack: [SeamSignature.Places.StackEntry] = [], fillOwnerType: TypeDescription? = nil) {
 			var level = SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations)
 			level.opensSendableFunction = levelOpensSendableFunction
+			if draftsPlaceLevels {
+				placeLevelsInProgress.append(PlaceLevelInProgress(
+					key: SeamSignature.Places.LevelKey(builtType: builtType, nextProperty: nextProperty, isSeamRoot: levels.isEmpty, isInFill: isInFill, filledType: filledType),
+					declarations: levelPathDeclarations,
+					opensSendableFunction: levelOpensFunction,
+					fillBaseStack: fillBaseStack,
+					fillOwnerType: fillOwnerType,
+					pathSegment: levelPathSegment,
+					pathTypes: levelPathTypes,
+					declaredSegment: levelDeclaredSegment,
+				))
+				levelPathDeclarations = []
+				levelOpensFunction = nil
+				levelPathSegment = []
+				levelPathTypes = []
+				levelDeclaredSegment = []
+			}
 			levels.append(level)
 			levelDeclarations = []
 			levelOpensSendableFunction = false
@@ -1082,10 +1183,15 @@ extension DependencyTreeGenerator {
 		for (level, frame) in site.frames.enumerated() {
 			if level > 0 {
 				pathToFrame += frame.generator.fillHole?.pathBeforePropertyInItsFill ?? frame.generator.property.map { [$0] } ?? []
+				if draftsPlaceLevels {
+					levelPathSegment += frame.generator.fillHole?.pathBeforePropertyInItsFill ?? frame.generator.property.map { [$0] } ?? []
+					levelPathTypes += SeamSignature.Hole.PathType.pathTypes(through: frame.generator)
+					levelDeclaredSegment += declaredProperties(reaching: frame.generator, from: site.frames[level - 1].generator)
+				}
 			}
 			if level > 0, let declaration = frame.generator.declarationACycleClosesOn {
 				scopesACycleClosesOn.append((level, frame.generator, declaration, childDeclaringType))
-				if observesLevels {
+				if observesLevels || draftsPlaceLevels {
 					levelIndexByClosedOnFrameLevel[level] = levels.count
 				}
 			}
@@ -1124,6 +1230,7 @@ extension DependencyTreeGenerator {
 				if frame.fillIsSendable {
 					sendableDepth += 1
 					levelOpensSendableFunction = true
+					levelOpensFunction = SeamSignature.Places.SendableFunctionOpened(property: filledHole.property, function: .other)
 					sendableFunctions.append((filledHole.property, .other))
 				}
 				for boundField in frame.generator.fillFields where frame.generator.fillStructBoundLabels.contains(boundField.property.label) && !uncarriedLabels.contains(boundField.property.label) {
@@ -1167,10 +1274,24 @@ extension DependencyTreeGenerator {
 					// field a called public mock's root binds keeps its origin only where that root binds it (`isBoundByPublicMockRoot`),
 					// which this declaration is not, so the calling mock's deliberate gap holds here too.
 					fieldDeclaration.seamParameterOrigin = field.isBoundByPublicMockRoot ? nil : field.seamParameterOrigin
+					fieldDeclaration.isFieldOfSeamParameter = field.isSeamParameter
+					if field.isSeamParameter {
+						// The seam a declaration this field hides is named with, where that declaration is no passing-up seam's.
+						fieldDeclaration.fillFieldHiding = SeamSignature.Places.FillFieldHiding(
+							calledSeam: site.frames[level - 1].generator.builtInstantiable?.concreteInstantiable ?? filledHole.scopeSeamType,
+							receivingSeam: filledHole.scopeSeamType,
+						)
+					}
 					declare(fieldDeclaration)
 					levelDeclarations[levelDeclarations.count - 1].isFieldOfSeamParameter = field.isSeamParameter
 				}
-				endLevel(builtType: nil, nextProperty: frame.orderedChildren[frame.nextPosition - 1].generator.property)
+				endLevel(
+					builtType: nil,
+					nextProperty: frame.orderedChildren[frame.nextPosition - 1].generator.property,
+					filledType: site.frames[level - 1].generator.builtInstantiable?.concreteInstantiable,
+					fillBaseStack: zip(filledHole.fillPropertyStack, filledHole.fillConcreteTypeStack).map { SeamSignature.Places.StackEntry(property: $0, concreteType: $1) },
+					fillOwnerType: filledHole.ownerType,
+				)
 				if observesLevels {
 					levels[levels.count - 1].fillBaseStack = filledHole.fillPropertyStack
 					levels[levels.count - 1].fillBaseConcreteTypes = filledHole.fillConcreteTypeStack
@@ -1193,6 +1314,7 @@ extension DependencyTreeGenerator {
 				} else {
 					.other
 				}
+				levelOpensFunction = SeamSignature.Places.SendableFunctionOpened(property: property, function: function)
 				sendableFunctions.append((property, function))
 			}
 			func declaration(of property: Property, isBoundBeforeSite: Bool) -> PathDeclaration {
@@ -1362,24 +1484,28 @@ extension DependencyTreeGenerator {
 		var uncarriedDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
 		var pathFields = [Property]()
 		var pathUncarriedProperties = [Property]()
+		/// The field `declaration` is where it is bound before the site and inside the innermost `@Sendable` function on its path.
+		func field(of declaration: PathDeclaration) -> SeamSignature.Hole.Field {
+			SeamSignature.Hole.Field(
+				property: declaration.property,
+				access: declaration.access,
+				accessCause: declaration.accessCause,
+				declaringType: declaration.declaringType,
+				declarationLocation: declaration.declarationLocation,
+				isReceivedOnlyIfAvailable: declaration.isReceivedOnlyIfAvailable,
+				parameterTakingType: declaration.parameterTakingType,
+				deferral: declaration.deferral,
+				isSeamParameter: declaration.frameLevel < 0,
+				isBoundByPublicMockRoot: declaration.isBoundByPublicMockRoot,
+				seamParameterOrigin: declaration.seamParameterOrigin,
+			)
+		}
 		for label in labelsInBindingOrder {
 			guard let declaration = nearestDeclarations[label] else { continue }
 			if declaration.isBoundBeforeSite {
 				pathFields.append(declaration.property)
 				if declaration.sendableDepth == sendableDepth {
-					fields.append(SeamSignature.Hole.Field(
-						property: declaration.property,
-						access: declaration.access,
-						accessCause: declaration.accessCause,
-						declaringType: declaration.declaringType,
-						declarationLocation: declaration.declarationLocation,
-						isReceivedOnlyIfAvailable: declaration.isReceivedOnlyIfAvailable,
-						parameterTakingType: declaration.parameterTakingType,
-						deferral: declaration.deferral,
-						isSeamParameter: declaration.frameLevel < 0,
-						isBoundByPublicMockRoot: declaration.isBoundByPublicMockRoot,
-						seamParameterOrigin: declaration.seamParameterOrigin,
-					))
+					fields.append(field(of: declaration))
 				} else if declaration.frameLevel >= 0, let innermostFunction = sendableFunctions.last {
 					// Bound in the seam's tree outside the innermost `@Sendable` function: a fill that reads it is reported. A
 					// parameter of the seam is the caller's, which a fill reads from its own scope. So is a received value a
@@ -1419,6 +1545,19 @@ extension DependencyTreeGenerator {
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
 			if let levelIndex = levelIndexByClosedOnFrameLevel[level], levelIndex < levels.count {
 				levels[levelIndex].reentryDeclarations = declarationsBetween.map(\.property)
+				if draftsPlaceLevels {
+					placeLevelsInProgress[levelIndex].cycleReentries = declarationsBetween.map { between in
+						SeamSignature.Places.CycleReentry(
+							property: between.property,
+							declaringType: between.declaringType,
+							declarationLocation: between.declarationLocation,
+							parameterTakingType: between.parameterTakingType,
+							closedOnProperty: between.closedOnProperty,
+							closedOnBuiltType: closedOnDeclaration.concreteType,
+							reenteringType: between.reenteringType,
+						)
+					}
+				}
 			}
 			/// Whether the site reads the value of `label` bound inside the function. A place nested by type reads a parameter
 			/// of a builder function from its type's level, which carries every one any build of the type declares.
@@ -1449,7 +1588,48 @@ extension DependencyTreeGenerator {
 			guard let (declaration, fieldLevel) = hiddenByFillFields[field.property.label], nearestDeclarations[field.property.label]?.frameLevel == fieldLevel else { continue }
 			declarationsHiddenByFields.append(declaration)
 		}
-		return (fields, uncarriedDeclarations, cycleReentryDeclarations, levels.reversed(), pathFields, pathUncarriedProperties, declarationsHiddenByFields)
+		// Each level of the path as the place graph holds it: its declarations with what a fill reader is told of them.
+		let placeLevels = placeLevelsInProgress.map { level in
+			SeamPlacesBuilder.LevelDraft(
+				key: level.key,
+				declarations: level.declarations.map { declaration in
+					var buildability: SeamSignature.Places.Buildability?
+					var placesInTree = [SeamSignature.Hole.Site]()
+					if let tree = declaration.treeBuildableAboveSeam {
+						buildability = SeamSignature.Places.Buildability(labelsHeldAboveSeam: receivedLabels.union([declaration.property.label]).sorted(), placesInTree: [])
+						let treePath = tree.pathToDeclaringScope + [declaration.property]
+						placesInTree = placesByTreePath[treePath] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
+						placesByTreePath[treePath] = placesInTree
+					}
+					return SeamPlacesBuilder.DeclarationDraft(
+						declaration: SeamSignature.Places.Declaration(
+							field: field(of: declaration),
+							isBoundBeforeNextProperty: declaration.isBoundBeforeSite,
+							builtAfter: declaration.builtAfter,
+							reason: declaration.reason,
+							isForwarded: declaration.isForwarded,
+							cycleParameterOrigin: declaration.cycleParameterOrigin,
+							alias: declaration.alias,
+							isBoundFromCallersArgument: declaration.isBoundFromCallersArgument,
+							isCycleParameter: declaration.isCycleParameter,
+							isReboundByBuilderFunction: declaration.isReboundByBuilderFunction,
+							isFieldOfSeamParameter: declaration.isFieldOfSeamParameter,
+							fillFieldHiding: declaration.fillFieldHiding,
+							buildability: buildability,
+						),
+						placesInTree: placesInTree,
+					)
+				},
+				opensSendableFunction: level.opensSendableFunction,
+				cycleReentries: level.cycleReentries,
+				fillBaseStack: level.fillBaseStack,
+				fillOwnerType: level.fillOwnerType,
+				pathSegment: level.pathSegment,
+				pathTypes: level.pathTypes,
+				declaredSegment: level.declaredSegment,
+			)
+		}
+		return (fields, uncarriedDeclarations, cycleReentryDeclarations, levels.reversed(), pathFields, pathUncarriedProperties, declarationsHiddenByFields, placeLevels, sendableDepth > 0)
 	}
 
 	/// The sites of the places the tree `generator` roots holds, `generator` building `property` in the scope the properties

@@ -109,13 +109,14 @@ extension SeamSignature {
 
 		/// Where a type above the seam can build the tree a declaration instantiates (`Hole.UncarriedDeclaration.isBuildableAboveSeam`).
 		public struct Buildability: Codable, Sendable {
-			public init(labelsHeldAboveSeam: Set<String>, placesInTree: [Int]) {
+			public init(labelsHeldAboveSeam: [String], placesInTree: [Int]) {
 				self.labelsHeldAboveSeam = labelsHeldAboveSeam
 				self.placesInTree = placesInTree
 			}
 
-			/// The labels the seam's caller would hold (`Hole.UncarriedDeclaration.labelsHeldAboveSeam`).
-			public let labelsHeldAboveSeam: Set<String>
+			/// The labels the seam's caller would hold (`Hole.UncarriedDeclaration.labelsHeldAboveSeam`), sorted, so that the
+			/// record encodes the same bytes on every run.
+			public let labelsHeldAboveSeam: [String]
 			/// The indices in `cases` of the cases of the places the tree holds or passes up, in the order the tree reaches them.
 			public let placesInTree: [Int]
 		}
@@ -280,11 +281,26 @@ extension SeamSignature {
 
 		/// The places of one owner level in one family.
 		public struct Case: Codable, Sendable {
-			public init(ownerLevel: Int, isBuiltInSendableFunction: Bool, siteOpensSendableFunction: Bool, passedUp: PassedUpReference?) {
+			public init(
+				ownerLevel: Int,
+				isBuiltInSendableFunction: Bool,
+				siteOpensSendableFunction: Bool,
+				passedUp: PassedUpReference?,
+				isPassedOnSendable: Bool = false,
+				calledCopyDeclarations: [Hole.UncarriedDeclaration] = [],
+				uncarriedReplacedOnPathsToCalls: [Hole.UncarriedDeclaration] = [],
+				reenteringCallDeclarations: [Hole.ReenteringCallDeclaration] = [],
+				reenteringPlaceFields: [Hole.ReenteringPlaceField] = [],
+			) {
 				self.ownerLevel = ownerLevel
 				self.isBuiltInSendableFunction = isBuiltInSendableFunction
 				self.siteOpensSendableFunction = siteOpensSendableFunction
 				self.passedUp = passedUp
+				self.isPassedOnSendable = isPassedOnSendable
+				self.calledCopyDeclarations = calledCopyDeclarations
+				self.uncarriedReplacedOnPathsToCalls = uncarriedReplacedOnPathsToCalls
+				self.reenteringCallDeclarations = reenteringCallDeclarations
+				self.reenteringPlaceFields = reenteringPlaceFields
 			}
 
 			/// The index in `levels` of the owner level of every place of the case, whose next property is the hole's; for a
@@ -297,6 +313,25 @@ extension SeamSignature {
 			public let siteOpensSendableFunction: Bool
 			/// For a place a call presents, the inner seam's case it stands for.
 			public let passedUp: PassedUpReference?
+
+			// What the calls on the paths to the places, and the fills those paths run through, add to the places, stored per
+			// case: they come from calls and fills, which the levels do not hold, and each is bounded by the declarations, not by
+			// the paths. Each is the union over the case's places in site order, the first of each equal entry.
+
+			/// Whether a call that presents a place of the case is made inside a `@Sendable` function, or takes the builder
+			/// `@Sendable` (`Hole.isSendable`), on any route.
+			public let isPassedOnSendable: Bool
+			/// The declarations the calls that present the places add to them, and those the copies of the places that the seams
+			/// called inside fills on their paths leave uncarried (`SiteAdditions.presenting`, `calledCopyDeclarations`),
+			/// appended to the places' own uncarried declarations.
+			public let calledCopyDeclarations: [Hole.UncarriedDeclaration]
+			/// For a declaration a public mock's root binds from its caller's argument (`isBoundFromCallersArgument`), the
+			/// declaration a path to a call that presents the place binds of its label, which stands in its place, by label.
+			public let uncarriedReplacedOnPathsToCalls: [Hole.UncarriedDeclaration]
+			/// `Hole.reenteringCallDeclarations` of the places.
+			public let reenteringCallDeclarations: [Hole.ReenteringCallDeclaration]
+			/// `Hole.reenteringPlaceFields` of the places.
+			public let reenteringPlaceFields: [Hole.ReenteringPlaceField]
 		}
 
 		/// What the places of a case read of a label, on one or more of the routes to the case.

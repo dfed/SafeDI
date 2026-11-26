@@ -62,7 +62,9 @@ extension SeamSignature.Places {
 
 		public let places: SeamSignature.Places
 		/// How often a walk met a level it was still walking: a cycle in the graph.
-		public private(set) var cycleRevisits = 0
+		public var cycleRevisits: Int {
+			answerFold.revisits + hiddenFold.revisits + nearestFold.revisits + reentryFold.revisits
+		}
 
 		// MARK: Answers
 
@@ -74,7 +76,6 @@ extension SeamSignature.Places {
 			let crossedAtSite = placeCase.siteOpensSendableFunction
 			let answers = answerFold.value(
 				of: AnswerKey(level: placeCase.ownerLevel, label: label, state: start, crossed: crossedAtSite),
-				countingRevisitsIn: &cycleRevisits,
 				direct: directAnswers(of:),
 				children: answerChildren(of:),
 			)
@@ -131,7 +132,7 @@ extension SeamSignature.Places {
 			)
 			if let buildability = declaration.buildability {
 				uncarried.isBuildableAboveSeam = true
-				uncarried.labelsHeldAboveSeam = buildability.labelsHeldAboveSeam
+				uncarried.labelsHeldAboveSeam = Set(buildability.labelsHeldAboveSeam)
 			}
 			return uncarried
 		}
@@ -185,7 +186,6 @@ extension SeamSignature.Places {
 			guard places.levels[placeCase.ownerLevel].key.nextProperty?.label != label else { return [nil] }
 			let reached = reentryFold.value(
 				of: StateKey(level: placeCase.ownerLevel, label: label, state: start),
-				countingRevisitsIn: &cycleRevisits,
 				direct: { [unowned self] key in
 					if lastDeclarationIndexByLabel[key.level][key.label] != nil || places.levels[key.level].parents.isEmpty {
 						return isValid(key.level, key.state) ? [.none] : []
@@ -248,7 +248,6 @@ extension SeamSignature.Places {
 			guard let start = startState(of: placeCase), !placeCase.siteOpensSendableFunction else { return [] }
 			let hidden = hiddenFold.value(
 				of: AnswerKey(level: placeCase.ownerLevel, label: label, state: start, crossed: false),
-				countingRevisitsIn: &cycleRevisits,
 				direct: { [unowned self] key in
 					if let index = lastDeclarationIndexByLabel[key.level][key.label] {
 						guard isValid(key.level, key.state) else { return [] }
@@ -319,7 +318,6 @@ extension SeamSignature.Places {
 		private func nearestDeclarations(ofLabel label: String, at level: Int, state: RouteState) -> [SeamSignature.Places.Reached] {
 			nearestFold.value(
 				of: StateKey(level: level, label: label, state: state),
-				countingRevisitsIn: &cycleRevisits,
 				direct: { [unowned self] key in
 					if let index = lastDeclarationIndexByLabel[key.level][key.label] {
 						return isValid(key.level, key.state) ? [.declaration(level: key.level, declaration: index)] : []
@@ -432,6 +430,131 @@ extension SeamSignature.Places {
 				entries.append(SeamSignature.Places.StackEntry(property: instance, concreteType: concreteType))
 			}
 			return entries
+		}
+
+		/// The route a diagnostic about `answer`, the answer the places of the case at `caseIndex` read of `label`, names its
+		/// place by: of the routes of the case's family on which the places read that answer, the least by the source
+		/// locations of the properties the code declares along it, root first (a route whose locations are a prefix of
+		/// another's first, a location-less declaration after every located one), so neither a name nor the order in which
+		/// the places were reached decides it. Found from the roots down, one location at a time, over the levels that lead to
+		/// the answer, so no route is listed; a level a route has already passed is not entered again. `nil` when no route
+		/// reads `answer`.
+		public func representativeRoute(of caseIndex: Int, ofLabel label: String, answer: SeamSignature.Places.Answer) -> Route? {
+			let placeCase = places.cases[caseIndex]
+			guard let start = startState(of: placeCase) else { return nil }
+			// A step of a walk up from the owner: before the nearest declaration of the label, with the innermost function
+			// crossed so far, or past it, where only the family matters.
+			struct Node: Hashable {
+				let level: Int
+				let state: RouteState
+				let isPastDeclaration: Bool
+				let function: Int?
+			}
+			let startNode = Node(level: placeCase.ownerLevel, state: start, isPastDeclaration: false, function: placeCase.siteOpensSendableFunction ? SeamSignature.Places.Answer.siteFunction : nil)
+			// The walk up, each node with the nodes it leads up to; a node that decides the answer leads to the same level past
+			// the declaration, when the answer is `answer`.
+			var parentsByNode = [Node: [Node]]()
+			var nodesInOrderReached = [startNode]
+			var roots = [Node]()
+			var toVisit = [startNode]
+			var seen: Set<Node> = [startNode]
+			while let node = toVisit.popLast() {
+				var next = [Node]()
+				if !node.isPastDeclaration, let decided = decidedAnswer(at: node.level, label: label, state: node.state, function: node.function) {
+					if decided == answer {
+						next.append(Node(level: node.level, state: node.state, isPastDeclaration: true, function: nil))
+					}
+				} else if places.levels[node.level].parents.isEmpty {
+					if isValid(node.level, node.state) {
+						roots.append(node)
+					}
+				} else {
+					let opens = places.levels[node.level].opensSendableFunction.isPresent
+					for (parent, state) in transitions(from: node.level, state: node.state) {
+						let function = node.isPastDeclaration ? nil : node.function ?? (opens ? node.level : nil)
+						next.append(Node(level: parent, state: state, isPastDeclaration: node.isPastDeclaration, function: function))
+					}
+				}
+				parentsByNode[node] = next
+				for parent in next where seen.insert(parent).inserted {
+					nodesInOrderReached.append(parent)
+					toVisit.append(parent)
+				}
+			}
+			// The nodes that lead up to a root reached past the answer's declaration, or that are such a root: only they are
+			// on a route that reads `answer`.
+			var childrenByNode = [Node: [Node]]()
+			for node in nodesInOrderReached {
+				for parent in parentsByNode[node] ?? [] {
+					childrenByNode[parent, default: []].append(node)
+				}
+			}
+			var onRoute = Set<Node>()
+			var toMark = roots.filter(\.isPastDeclaration)
+			while let node = toMark.popLast() {
+				guard onRoute.insert(node).inserted else { continue }
+				toMark += childrenByNode[node] ?? []
+			}
+			guard onRoute.contains(startNode) else { return nil }
+			// From the roots down, one location at a time: every walk in `frontier` has read the same locations, and a walk
+			// holds the locations of the edge it is on that it has not read yet.
+			struct Walk {
+				var levels: [Int]
+				var node: Node
+				var pending: ArraySlice<Dependency.DeclarationLocation?>
+			}
+			var entered = Set<Node>()
+			var frontier = [Walk]()
+			for root in roots where onRoute.contains(root) && entered.insert(root).inserted {
+				frontier.append(Walk(levels: [root.level], node: root, pending: []))
+			}
+			while !frontier.isEmpty {
+				// Each walk with nothing pending goes on down each of its edges; a step to the same level past or before the
+				// declaration reads nothing.
+				var expanded = [Walk]()
+				var index = 0
+				while index < frontier.count {
+					let walk = frontier[index]
+					index += 1
+					guard walk.pending.isEmpty else {
+						expanded.append(walk)
+						continue
+					}
+					if walk.node == startNode {
+						return Route(levels: walk.levels)
+					}
+					for child in childrenByNode[walk.node] ?? [] where onRoute.contains(child) && entered.insert(child).inserted {
+						if child.level == walk.node.level, child.isPastDeclaration != walk.node.isPastDeclaration {
+							frontier.append(Walk(levels: walk.levels, node: child, pending: []))
+						} else {
+							let parentPosition = places.levels[child.level].parents.firstIndex(of: walk.node.level) ?? 0
+							let segment = places.levels[child.level].declaredSegmentByParent[parentPosition].map(\.declarationLocation)
+							frontier.append(Walk(levels: walk.levels + [child.level], node: child, pending: segment[...]))
+						}
+					}
+				}
+				// Keep the walks whose next location sorts first.
+				guard let least = expanded.lazy.compactMap(\.pending.first).min(by: Dependency.DeclarationLocation.precedesInSourceOrder) else { return nil }
+				frontier = expanded.compactMap { walk in
+					guard let next = walk.pending.first, next == least else { return nil }
+					var advanced = walk
+					advanced.pending = walk.pending.dropFirst()
+					return advanced
+				}
+			}
+			return nil
+		}
+
+		/// The answer the declaration of `label` at `level` gives a walk that reached it in `state`, having crossed `function`
+		/// first, or `nil` where `level` declares no `label`. A root that declares none gives the caller's own.
+		private func decidedAnswer(at level: Int, label: String, state: RouteState, function: Int?) -> SeamSignature.Places.Answer? {
+			guard let index = lastDeclarationIndexByLabel[level][label] else {
+				return places.levels[level].parents.isEmpty && isValid(level, state) ? .callersOwn : nil
+			}
+			let declaration = places.declaration(level: level, declaration: index)
+			guard declaration.isBoundBeforeNextProperty else { return .uncarried(level: level, declaration: index) }
+			guard let function else { return .field(level: level, declaration: index) }
+			return declaration.isSeamParameter ? .callersOwn : .boundOutsideSendableFunction(level: level, declaration: index, functionLevel: function)
 		}
 
 		/// The levels on any route to the case at `caseIndex` in its family, in the order a walk up from the owner meets them.
@@ -637,10 +760,11 @@ extension Optional {
 /// route, as a value computed from a finite graph of routes must be. It holds its memo as long as its owner does.
 private struct Fold<Key: Hashable, Element: Hashable> {
 	private var memo = [Key: [Element]]()
+	/// How often a walk met a key it was still walking. Each fold counts its own, since one fold's walk can ask another.
+	private(set) var revisits = 0
 
 	mutating func value(
 		of start: Key,
-		countingRevisitsIn revisits: inout Int,
 		direct: (Key) -> [Element]?,
 		children: (Key) -> [(Key, (Element) -> Element)],
 	) -> [Element] {

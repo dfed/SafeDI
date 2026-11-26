@@ -26,6 +26,7 @@ filegroup(
             "Models/Scope.swift",
             "Models/SeamPlaceLevels.swift",
             "Models/SeamPlaces.swift",
+            "Models/SeamPlacesBuilder.swift",
             "Models/SeamPlacesObservation.swift",
             "Models/SeamPlacesQuery.swift",
             "Models/SeamSignature.swift",
