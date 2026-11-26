@@ -438,9 +438,13 @@ public enum SeamPlacesOracle {
 			report.passedUpCasesUnresolved += 1
 			return
 		}
-		// Seams that call each other settle over several passes, and a pass's references are indices into the graphs of the
-		// pass before, so a chain can end at a case of another place until the signatures settle: such a chain is counted,
-		// never compared.
+		// Seams that call each other settle over several passes, each observed, and a pass's references are indices into
+		// the graphs of the pass before, so a chain can end at a case of another place on a pass before the last. On the last
+		// pass, a site two calls present is referred to by the case of the call that presents it first, and two seams that
+		// call each other can each present it first through the other, so the chain returns to its first case without
+		// reaching the seam that holds the place (`generate_settlesSignatures_whenFourSeamsFormSeveralCyclesOfInstantiators`:
+		// `S0`'s and `S1`'s cases of `S3`'s `service`). Either chain is counted, never compared; the facts above are joined
+		// over every call that presents the places (`casesPresentingSamePlaces`), which no such chain decides.
 		let chain = query.casesPresented(from: caseIndex)
 		if let last = chain.last {
 			let holding = last.query.places

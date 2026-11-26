@@ -159,6 +159,19 @@ extension DependencyTreeGenerator {
 				for (seamType, seamRoot) in storedSeamRoots {
 					seamRoots[seamType] = seamRoot
 				}
+				// A stored place graph refers to the cases of the seams its own seams call and pass places up from
+				// (`SeamSignature.Places.CalledCase`). Such a seam's module is one this module's trees may not reach, so
+				// its stored signatures are read too, from the view the referring module was computed over, and never
+				// computed: a module without them leaves the reference unresolved. Only a file that stores a graph with
+				// such a reference reads another for it.
+				let referencedSeams = storedSeamRoots.flatMap { $0.seamRoot?.signature.places.cases.compactMap(\.passedUp) ?? [] }.filter { !$0.isPublicMock && seamRoots[$0.seamType] == nil }
+				if !referencedSeams.isEmpty {
+					let seamsSeen = seams.foreignDeclarations(seenByModuleNamed: module.moduleName).seams
+					let referencedModuleNames = Set(referencedSeams.compactMap { seamsSeen[$0.seamType]?.declaringModule.moduleName }).subtracting(computedModules)
+					modulesToCompute.append(contentsOf: foreignModulesByName.filter { referenced in
+						referencedModuleNames.contains(referenced.moduleName) && referenced.seams.allSatisfy { $0.seam.storedSignatures != nil }
+					}.sorted { $0.moduleName > $1.moduleName })
+				}
 				continue
 			}
 			// Resolved once per module, on its first visit.
@@ -859,6 +872,16 @@ extension DependencyTreeGenerator {
 					for scopeEnum in ownScopeEnumsBySeamType[seamType] ?? [] {
 						reachedScopeEnums[scopeEnum.key] = scopeEnum
 					}
+				}
+				// A reached seam's place graph refers to the cases of the seams it calls and passes places up from
+				// (`SeamSignature.Places.CalledCase`), which the component's own trees may not reach: their roots come
+				// along, so that a reference through two seams resolves (`CalledBuilders.placesOfSeamsBeneath`). No tree
+				// of the component holds such a seam, so its enums do not.
+				var referencedSeamTypes = reachedSeamRoots.values.flatMap { $0?.signature.places.cases.compactMap(\.passedUp) ?? [] }
+				while let reference = referencedSeamTypes.popLast() {
+					guard !reference.isPublicMock, reachedSeamRoots[reference.seamType] == nil, case let referencedRoot?? = knownSeamRoots[reference.seamType] else { continue }
+					reachedSeamRoots[reference.seamType] = .some(referencedRoot)
+					referencedSeamTypes += referencedRoot.signature.places.cases.compactMap(\.passedUp)
 				}
 				return SeamComponentInput(plan: plan, knownSeamRoots: reachedSeamRoots, ownScopeEnums: reachedScopeEnums)
 			}

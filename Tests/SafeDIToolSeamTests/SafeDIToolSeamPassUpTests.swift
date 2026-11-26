@@ -2969,6 +2969,67 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		#expect(casePlacesBySeam.mapValues { $0.map { $0.hole.sitePath.map(\.label) } } == ["Inner": [["detailBuilder", "api"]], "Middle": [["detailBuilder", "api"]], "Outer": [["detailBuilder", "api"]]])
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casesPresented_endAtCaseOfSeamTwoModulesBeneath_whenRunIsHandedOnlyTheMiddleModulesFile(viewsReferToModules: Bool) async throws {
+		// `Inner`, in `Base`, holds the place `api`; `Middle`, in `Mid`, calls `Inner` and passes the place up; `Outer`, in
+		// `App`, calls `Middle` and passes it up again. `App` lists only `Mid`: its view carries `Base`'s seam signatures, or,
+		// where views refer to modules, as Bazel's do, the run is told of `Base`'s own file. Either way `Outer`'s case refers
+		// to `Middle`'s, whose reference to `Inner`'s case resolves to the graph `Base`'s own run computed.
+		let modules = [
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: AnyObject {}",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(api: any Api) { self.api = api }
+				    @Instantiated public let api: any Api
+				}
+				""",
+				seamFixtureType(named: "Inner", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+			]),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+				"import Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let middle: Middle"]),
+			], dependencies: ["Mid"]),
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		let output = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: modules,
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				modulesBeneath: viewsReferToModules ? { $0 } : nil,
+				viewsReferToModules: viewsReferToModules,
+				filesToDelete: &writtenFiles,
+			)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var observationOfOuter: SeamSignature.Places.Observation?
+		for await observation in stream where observation.seamType.asSource == "Outer" {
+			observationOfOuter = observation
+		}
+		let outer = try #require(observationOfOuter)
+		let chain = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:)).casesPresented(from: 0)
+		let seamAndCase = chain.map { resolved in
+			"\(resolved.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam") \(resolved.caseIndex)"
+		}
+		#expect(seamAndCase == ["Outer 0", "Middle 0", "Inner 0"])
+		let computedInner = try #require(output.modules["Base"]?.generateOutput?.seamSignaturesWrittenToModuleInfo?.first { $0.seamType.asSource == "Inner" }?.signature?.places)
+		let resolvedInner = try #require(chain.last?.query.places)
+		#expect(StoredPlaceGraphChecks.firstDifference(between: resolvedInner, and: computedInner, at: "the places of `Inner`") == nil)
+	}
+
 	/// `Inner` builds `Detail`, which receives `logger` and instantiates `api: any Api`; `Outer` instantiates `logger` and calls
 	/// `Inner`, passing the hole up; `App` fills it with `LiveApi`, which receives `logger`.
 	private static func passedUpLoggerModules(rootDeclarations: [String], liveApiInFeature: Bool = false) -> [ModuleFixture] {
