@@ -49,7 +49,7 @@ Construction reads the scopes through `ConstructionScope`, a record of a frozen 
 | `seamRoot`, `mockBuilders` | The root place only (children get `seamRoot: nil`), and a root place is never stored. A tree with either keeps its memo to itself (`sharesMemo` in `Scope.createScopeGenerator`). |
 | `holeArguments`, for `holeCallArguments`, `builderCallArguments`, `fillDispatchers`, `passedUpHoles`, `fillsStoodFor`, `buildsFillOfEveryPlace` | In the key, from `scope`; unset where it is. Outside a mock's tree a call with holes is excluded. |
 | `closesCycleOnFillPath` | `true` only inside a fill. Derived from the call. |
-| A hole generator's `ownerPropertyStack`, `ownerConcreteTypeStack`, `siteCarrierUse` | Excluded by `addHoleGenerator`: the creating scope and every ancestor are not memoizable. |
+| A hole generator's `siteCarrierUse` | Excluded by `addHoleGenerator`: the creating scope and every ancestor are not memoizable. A hole generator stores no stack: `SeamBuilderParameters.buildSites(in:)` derives its owner's from the site's path (`ownerStack(of:)`), which the tests check against the stack construction saw (`HoleOwnerStackObservation`). |
 | `isBuiltByFill`, `fillReturnsWrapperBuilder`, and a fill generator's own fields, `fillCarrierUse` among them | Derived from the call. |
 | `constructsWithHandWrittenMock` | Key (flag, scope, property). |
 | `cycleParameters`, `builtCycleParameters`, `cycleParameterUnavailableProperties`, `callSiteLazilyInstantiatedInstanceProperties` | From the key and logged reads (cycle context, bindings). |

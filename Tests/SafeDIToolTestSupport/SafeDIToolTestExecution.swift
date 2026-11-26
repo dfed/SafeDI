@@ -349,7 +349,10 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+										// Every hole's owner stack derived from its site's path must be the stack construction built it with (`HoleOwnerStackChecks`).
+										try await HoleOwnerStackObservation.$observer.withValue(HoleOwnerStackObservation.checkingDerivedStacksWherePossible(handingOn: HoleOwnerStackObservation.observer)) {
+											try await tool.generate()
+										}
 									}
 								}
 							}

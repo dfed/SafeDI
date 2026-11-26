@@ -85,8 +85,6 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 			holeProperty: Property(label: "place", typeDescription: .simple(name: "Place")),
 			erasedToConcreteExistential: false,
 			site: nil,
-			ownerPropertyStack: [],
-			ownerConcreteTypeStack: [],
 		)
 		let storedProperties = Set(Mirror(reflecting: generator).children.compactMap(\.label)).subtracting(["$defaultActor"])
 		#expect(storedProperties == Set(ScopeGenerator.ReseatedField.byStoredProperty.keys))

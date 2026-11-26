@@ -1858,11 +1858,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// Creates the generator of a hole this scope's type instantiates, a site of the seam whose tree is generated.
 	mutating func addHoleGenerator(property: Property, erasedToConcreteExistential: Bool) {
-		// A hole's generator holds the whole path to it (its owner's stacks), which the memo's log does not cover: a tree
-		// built only to find a seam's or public mock's signature has holes but no `seamHoles`.
+		// A scope that holds a place is never shared between paths: the walks of a finished tree that read a site's path
+		// (`SeamBuilderParameters`' declarations of each generator, the owner's stack `buildSites(in:)` derives from the
+		// path) take each generator to stand for one path. A tree built only to find a seam's or public mock's signature has
+		// holes but no `seamHoles`, so the key alone would not keep two paths apart.
 		isMemoizable = false
 		subtreeIsShareable = false
-		childGenerators.append(ScopeGenerator(
+		let holeGenerator = ScopeGenerator(
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
@@ -1870,11 +1872,17 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// instantiated only if available that nothing fulfills, which is `nil`, and orders its siblings as it does in a
 			// module that generates no seam. A mock's tree keeps the place, a deliberate gap until mocks pass `nil`.
 			holdsPlace: seamHoles.takesBuilders || forMockGeneration || !property.typeDescription.isOptional,
-			ownerPropertyStack: childContextStack.propertiesInnermostFirst,
-			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			carrierSite: seamHoles.carrierSite(at: sitePath + [property]),
-		))
+		)
+		if let observer = HoleOwnerStackObservation.observer {
+			observer(.built(
+				generator: ObjectIdentifier(holeGenerator),
+				keepingAlive: holeGenerator,
+				stack: .init(properties: childContextStack.propertiesInnermostFirst, concreteTypes: childContextStack.concreteTypesInnermostFirst),
+			))
+		}
+		childGenerators.append(holeGenerator)
 	}
 
 	/// The scope under construction for a scope this one instantiates.
@@ -3752,6 +3760,9 @@ extension ScopeGeneratorUnderConstruction {
 				seamHoles: seamHoles,
 				namesBoundBySeam: namesBoundBySeam,
 			)
+			if reseating.generator.holeSite != nil, let observer = HoleOwnerStackObservation.observer {
+				observer(.reseated(generator: ObjectIdentifier(reseated), keepingAlive: reseated, original: ObjectIdentifier(reseating.generator)))
+			}
 			if stack.isEmpty {
 				reseatedTree = reseated
 			} else {

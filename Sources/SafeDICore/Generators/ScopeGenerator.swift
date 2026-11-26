@@ -121,8 +121,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFields.fillCaseHoles = fill?.caseHoles ?? []
 		fillEmitsCode = fill?.emitsCode ?? true
 		seamAndFillFields.fillCallerReads = fill?.callerReads
-		ownerPropertyStack = []
-		ownerConcreteTypeStack = []
 		seamAndFillFields.passedUpHoles = passedUpHoles
 		seamAndFillFields.valuesBindings = valuesBindings
 		seamAndFillFields.memberCallsInsideFunction = memberCallsInsideFunction
@@ -1325,8 +1323,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredLazilyInstantiatedInstanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		self.property = property
 		// An alias constructs nothing.
-		ownerPropertyStack = []
-		ownerConcreteTypeStack = []
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = false
@@ -1353,14 +1349,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		site: SeamSignature.Hole?,
 		holdsPlace: Bool = true,
-		ownerPropertyStack: [Property],
-		ownerConcreteTypeStack: [TypeDescription],
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		carrierSite: SeamHoles.CarrierSite? = nil,
 	) {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
-		self.ownerPropertyStack = ownerPropertyStack
-		self.ownerConcreteTypeStack = ownerConcreteTypeStack
 		receivedProperties = []
 		receivedOnlyByPublicMockCalls = []
 		passedByPublicMockCalls = []
@@ -1492,8 +1484,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		receivedProperties = generator.receivedProperties
 		receivedOnlyByPublicMockCalls = generator.receivedOnlyByPublicMockCalls
 		passedByPublicMockCalls = generator.passedByPublicMockCalls
-		ownerPropertyStack = generator.ownerPropertyStack
-		ownerConcreteTypeStack = generator.ownerConcreteTypeStack
 		closesCycleOnFillPath = generator.closesCycleOnFillPath
 		requiredReceivedProperties = generator.requiredReceivedProperties
 		unwrappedOptionalRequiredReceivedProperties = generator.unwrappedOptionalRequiredReceivedProperties
@@ -1564,8 +1554,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"receivedProperties": .copied,
 			"receivedOnlyByPublicMockCalls": .copied,
 			"passedByPublicMockCalls": .copied,
-			"ownerPropertyStack": .copied,
-			"ownerConcreteTypeStack": .copied,
 			"closesCycleOnFillPath": .copied,
 			"scopeData": .recomputed,
 			"seamAndFillFieldsStorage": .recomputed,
@@ -3074,12 +3062,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// For a hole's generator, the property stack its owner's scope was built with, innermost first: the stack a fill
-	/// of the hole builds the property with. Empty for every other generator.
-	let ownerPropertyStack: [Property]
-	/// The concrete type each entry of `ownerPropertyStack` is built for, beside it. Empty for every generator that is no
-	/// hole's.
-	let ownerConcreteTypeStack: [TypeDescription]
 	/// Whether this scope, in a fill's tree, closes a cycle on a declaration of the filled seam's path (`closedOnDeclaration`).
 	/// `false` for every other scope, a closer on a declaration inside the fill's own tree among them, and for a closer
 	/// inside a fill nested in that fill, whose stack is its own. Where on the path the declaration lies is the place's to

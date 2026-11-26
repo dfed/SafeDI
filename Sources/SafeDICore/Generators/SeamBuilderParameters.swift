@@ -350,7 +350,8 @@ extension DependencyTreeGenerator {
 		let erasedToConcreteExistential: Bool
 		/// The properties from the root of the seam whose tree holds the site to the owner's property, innermost first,
 		/// each lazily instantiated one preceded by its instance, as `Scope.createScopeGenerator` stacks them: the stack
-		/// the owner's scope was built with, which inside a fill this seam generates is the filled seam's.
+		/// the owner's scope was built with, which inside a fill this seam generates is the filled seam's. Derived from
+		/// `frames` (`ownerStack(of:)`), since a generator holds no path.
 		let fillPropertyStack: [Property]
 		/// The concrete type each entry of `fillPropertyStack` is built for, beside it.
 		let fillConcreteTypeStack: [TypeDescription]
@@ -418,7 +419,11 @@ extension DependencyTreeGenerator {
 			frames[frames.count - 1].nextPosition += 1
 			let child = frame.orderedChildren[frame.nextPosition]
 			if let holeSite = child.generator.holeSite {
-				sites.append(BuildSite(frames: frames, property: holeSite.property, erasedToConcreteExistential: holeSite.erasedToConcreteExistential, fillPropertyStack: child.generator.ownerPropertyStack, fillConcreteTypeStack: child.generator.ownerConcreteTypeStack))
+				let ownerStack = ownerStack(of: frames)
+				if let observer = HoleOwnerStackObservation.observer {
+					observer(.derived(generator: ObjectIdentifier(child.generator), stack: ownerStack))
+				}
+				sites.append(BuildSite(frames: frames, property: holeSite.property, erasedToConcreteExistential: holeSite.erasedToConcreteExistential, fillPropertyStack: ownerStack.properties, fillConcreteTypeStack: ownerStack.concreteTypes))
 			} else if child.generator.containsBuildSite, child.generator.fillEmitsCode {
 				// A fill whose code another fill of its case generates builds no site of its own.
 				frames.append(PathFrame(
@@ -430,6 +435,34 @@ extension DependencyTreeGenerator {
 			}
 		}
 		return sites
+	}
+
+	/// The stack the scope `frames` ends at builds its children with, innermost first, as `Scope.createScopeGenerator`
+	/// stacks it: the root pushes nothing, and a fill's tree is built beneath the stack of the hole it fills
+	/// (`SeamSignature.Hole.fillPropertyStack`), so the stack starts from the innermost fill on the path, or else empty, and
+	/// each scope after that pushes its property, built for its type, and, inside it, the instance of a lazily
+	/// instantiated one.
+	private static func ownerStack(of frames: [PathFrame]) -> HoleOwnerStackObservation.Stack {
+		let innermostFillIndex = frames.lastIndex { $0.generator.fillHole != nil }
+		// Outermost first while the stack is built.
+		var properties = [Property]()
+		var concreteTypes = [TypeDescription]()
+		if let innermostFillIndex, let filledHole = frames[innermostFillIndex].generator.fillHole {
+			properties = filledHole.fillPropertyStack.reversed()
+			concreteTypes = filledHole.fillConcreteTypeStack.reversed()
+		}
+		// Every scope after the root and the innermost fill builds a property: a fill, an alias and a hole are no frame of
+		// a path beneath them.
+		let pushed = frames[((innermostFillIndex ?? 0) + 1)...].map { ($0.generator.property, $0.generator.builtInstantiable?.concreteInstantiable) }
+		for case let (property?, concreteType?) in pushed {
+			properties.append(property)
+			concreteTypes.append(concreteType)
+			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
+				properties.append(instanceProperty)
+				concreteTypes.append(concreteType)
+			}
+		}
+		return HoleOwnerStackObservation.Stack(properties: properties.reversed(), concreteTypes: concreteTypes.reversed())
 	}
 
 	/// The holes of the seams the tree `generator` roots calls whose builders it passes up, one per site whatever route
