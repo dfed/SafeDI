@@ -152,6 +152,78 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresOneFunctionPerAnswer_whenBodiesOfOneTypeAreAnsweredApart() async throws {
+		// `Home` receives `context` only if available: `Plain` builds it again beneath no `Context`, and `Scoped` beneath
+		// its own. Each `Home` and `Plain` the plan answers apart gets a function of its own, which takes `context` where
+		// its answer declares it.
+		let codes = try await planCodes(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Context: Instantiable { public init() {} }
+
+		@Instantiable public final class Home: Instantiable {
+		    @Received(onlyIfAvailable: true) let context: Context?
+		    @Instantiated let plainBuilder: Instantiator<Plain>
+		    @Instantiated let scopedBuilder: Instantiator<Scoped>
+		    public init(context: Context?, plainBuilder: Instantiator<Plain>, scopedBuilder: Instantiator<Scoped>) { self.context = context; self.plainBuilder = plainBuilder; self.scopedBuilder = scopedBuilder }
+		}
+
+		@Instantiable public final class Plain: Instantiable {
+		    @Instantiated let homeBuilder: Instantiator<Home>
+		    public init(homeBuilder: Instantiator<Home>) { self.homeBuilder = homeBuilder }
+		}
+
+		@Instantiable public final class Scoped: Instantiable {
+		    @Instantiated let context: Context
+		    @Instantiated let homeBuilder: Instantiator<Home>
+		    public init(context: Context, homeBuilder: Instantiator<Home>) { self.context = context; self.homeBuilder = homeBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_home() -> Home {
+		            let plainBuilder = Instantiator<Plain>(__safeDI_plainBuilder)
+		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
+		            return Home(context: nil, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
+		        }
+		        func __safeDI_plainBuilder() -> Plain {
+		            let homeBuilder = Instantiator<Home>(__safeDI_home)
+		            return Plain(homeBuilder: homeBuilder)
+		        }
+		        func __safeDI_scopedBuilder() -> Scoped {
+		            let context = Context()
+		            let homeBuilder = Instantiator<Home> {
+		                __safeDI_homeBuilder(context: context)
+		            }
+		            return Scoped(context: context, homeBuilder: homeBuilder)
+		        }
+		        func __safeDI_homeBuilder(context: Context) -> Home {
+		            let plainBuilder = Instantiator<Plain> {
+		                __safeDI_plainBuilder_(context: context)
+		            }
+		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
+		            return Home(context: context, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
+		        }
+		        func __safeDI_plainBuilder_(context: Context) -> Plain {
+		            let homeBuilder = Instantiator<Home> {
+		                __safeDI_homeBuilder(context: context)
+		            }
+		            return Plain(homeBuilder: homeBuilder)
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsPathKeysBody_whenABodyHoldsLoopOfBuilders() async throws {
 		// `Screen`'s builders receive each other, a loop the type key does not plan, so `Screen`'s body is written per
 		// path and the root keeps the path key's body.
