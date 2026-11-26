@@ -8014,6 +8014,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					closedOnFunctionName: closer.functionName,
 					forwardedProperties: closer.forwardedProperties,
 					cycleArguments: [],
+					rebindsLoopMember: true,
 				))
 			}
 		}

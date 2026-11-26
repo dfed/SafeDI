@@ -244,6 +244,41 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 		return nil
 	}
 
+	/// The local function a wrapper, `expression`, hands: `W<T>(f)`, `W<T> { f(…) }`, or an erasing wrapper's
+	/// `W<(), AnyT> { AnyT(f()) }`.
+	private func wrappedFunction(in expression: ExprSyntax?, at node: Syntax) -> FunctionDeclSyntax? {
+		guard let call = expression?.as(FunctionCallExprSyntax.self) else { return nil }
+		if let argument = call.arguments.first, call.arguments.count == 1, argument.label == nil {
+			return argument.expression.as(DeclReferenceExprSyntax.self).flatMap { function(named: $0.baseName.text, at: node) }
+		}
+		guard call.arguments.isEmpty, var called = call.trailingClosure?.statements.first?.item.as(ExprSyntax.self)?.as(FunctionCallExprSyntax.self) else { return nil }
+		while true {
+			if let reference = called.calledExpression.as(DeclReferenceExprSyntax.self), let function = function(named: reference.baseName.text, at: node) {
+				return function
+			}
+			guard let argument = called.arguments.first, called.arguments.count == 1, argument.label == nil, let inner = argument.expression.as(FunctionCallExprSyntax.self) else { return nil }
+			called = inner
+		}
+	}
+
+	/// The declarations named `name` that wrap `function` and that the type of their frame declares, rather than receives,
+	/// in the file: what a rebinding that wraps the function again stands for.
+	private func suppliers(of name: String, wrapping function: FunctionDeclSyntax) -> Set<String> {
+		let declarations = WrapperCollector(name: name)
+		declarations.walk(Syntax(function.root))
+		var suppliers = Set<String>()
+		for (binding, variable) in declarations.bindings where wrappedFunction(in: binding.initializer?.value, at: Syntax(variable))?.id == function.id {
+			guard let frame = frameTypeName(enclosing: Syntax(variable)) else { continue }
+			switch kindsByLabelByType[frame.name]?[name] {
+			case "instantiated", "lazy", "builder", "forwarded":
+				suppliers.insert("\(frame.name).\(name)")
+			default:
+				break
+			}
+		}
+		return suppliers
+	}
+
 	/// The function a call names `name` at `node`: the nearest local function of that name in an enclosing code block.
 	private func function(named name: String, at node: Syntax) -> FunctionDeclSyntax? {
 		var current = node.parent
@@ -316,6 +351,11 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 				if let initializer = binding.initializer?.value, isAlias || initializer.is(NilLiteralExprSyntax.self) || initializer.is(DeclReferenceExprSyntax.self) || initializer.is(MemberAccessExprSyntax.self) {
 					// A rename – an alias – reads the declaration of its fulfilling property where it is bound.
 					resolve(initializer, into: &values, visitedFunctions: &visitedFunctions)
+				} else if let wrapped = wrappedFunction(in: binding.initializer?.value, at: Syntax(variable)), case let wrappers = suppliers(of: name, wrapping: wrapped), !wrappers.isEmpty {
+					// A rebinding of a loop of builders wraps a member's function again: it stands for each declaration of its name
+					// that wraps that function, wherever the type key declares the function the rebinding is in, since it is
+					// called from each of their places.
+					values.formUnion(wrappers)
 				} else {
 					// A rebinding at the top of a builder function: the declaration of the scope that declares the function.
 					resolve(name: name, at: frame.function, anywhereInBlocks: true, into: &values, visitedFunctions: &visitedFunctions)
@@ -341,6 +381,29 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 			unreadable.append("\(fileName): \(name), declared nowhere in scope")
 		}
 	}
+}
+
+/// The variable bindings of a name in a tree of syntax, outside code compiled only under `DEBUG`.
+private final class WrapperCollector: SyntaxVisitor {
+	init(name: String) {
+		self.name = name
+		super.init(viewMode: .sourceAccurate)
+	}
+
+	private(set) var bindings = [(PatternBindingSyntax, VariableDeclSyntax)]()
+
+	override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
+		node.condition?.trimmedDescription == "DEBUG" ? .skipChildren : .visitChildren
+	}
+
+	override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		for binding in node.bindings where binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name {
+			bindings.append((binding, node))
+		}
+		return .visitChildren
+	}
+
+	private let name: String
 }
 
 /// The calls of a function of a name in a tree of syntax.

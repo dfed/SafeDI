@@ -168,6 +168,9 @@ struct ClosingPlaceRecord: Sendable {
 	/// handed, or `nil` where the place closes on the enclosing function `closedOnFunctionName` names. The layout names a
 	/// variant's function, so a call of one is never resolved by name.
 	var targetVariant: Int?
+	/// Whether the place is a member of a loop of builders wrapped again inside a sibling's function
+	/// (`ScopeGenerator.LoopRebinding`).
+	var rebindsLoopMember = false
 }
 
 extension ClosingPlaceRecord {

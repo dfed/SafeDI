@@ -76,9 +76,13 @@ extension TypeKeyLayout {
 					// that gives the body its parent; `variantsReadOnlyTheirCycleParameters` gives up on the layout otherwise.
 					let keysByKind = closed.keysByKind
 					var outerView = [String: KeyedDeclaration]()
+					var outerDeclarations = [String: PathValue]()
 					for label in labels {
-						outerView[label] = keyed(lookUp(label, inBody: body, before: position), byKind: keysByKind)
+						let declaration = lookUp(label, inBody: body, before: position)
+						outerDeclarations[label] = declaration
+						outerView[label] = keyed(declaration, byKind: keysByKind)
 					}
+					outerDeclarationsByEdge[[body, position]] = outerDeclarations
 					let key = ViewKey(
 						node: built.node,
 						isInSendableFamily: isInSendableFamily,
@@ -113,6 +117,9 @@ extension TypeKeyLayout {
 					statement = .inline(built)
 				}
 			case let .closer(closer):
+				if closer.rebindsLoopMember {
+					loopRebindingBodies.insert(body)
+				}
 				if let index = closer.targetVariant {
 					guard variants.indices.contains(index) else { return false }
 					let variant = variants[index]
@@ -550,7 +557,8 @@ extension TypeKeyLayout {
 		} else if escapingReads[body][label] == PathValue.none {
 			.none
 		} else {
-			lookUp(label, inBody: edge.parent, before: edge.position)
+			// The walk looked up each label the view reads outside it at each of its places (`outerDeclarationsByEdge`).
+			outerDeclarationsByEdge[[edge.parent, edge.position]]?[label] ?? lookUp(label, inBody: edge.parent, before: edge.position)
 		}
 	}
 
