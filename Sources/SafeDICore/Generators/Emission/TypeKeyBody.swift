@@ -214,9 +214,10 @@ struct TypeKeyLayout {
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
 	var domainsByNode = [PlanNode: Domain]()
-	/// The children of each body the walk has reached, and the index of its first statement among them (the root's follows
-	/// its outer declarations): where a closer's function is resolved (`resolvedFunction(named:from:)`).
-	var childCodesByBody = [Int: (first: Int, children: [GeneratedCode])]()
+	/// The functions the statements of each body the walk has reached declare, by name, the first of each name: where a
+	/// closer's function is resolved (`resolvedFunction(named:from:)`), in one look-up per enclosing body rather than a scan
+	/// of its statements, which a wide body of a cycle would repeat for each of its statements.
+	var declaredFunctionsByBody = [Int: [String: DeclaredFunction]]()
 	/// The closing statements that call each body's function: their body and their index in it.
 	var closersByTarget = [Int: [(body: Int, index: Int)]]()
 	/// The labels each body's function reads and does not bind, in the order it first reads them.

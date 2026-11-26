@@ -150,14 +150,35 @@ extension TypeKeyLayout {
 
 	/// Declares the statements of `body`, whose children are `children`: the positions of the labels each binds, which a look-up
 	/// before any index of the body reads, so a look-up made from a statement after one the walk has not reached reads what
-	/// it would once the walk reaches it; and the children, which a closer's function is resolved among.
+	/// it would once the walk reaches it; and the functions they declare, which a closer's function is resolved among.
 	mutating func declareChildren(_ children: [GeneratedCode], ofBody body: Int) {
 		let first = bodies[body].statements.count
+		var functions = [String: DeclaredFunction]()
 		for (offset, code) in children.enumerated() {
-			guard let label = Self.record(of: code).map(\.boundProperty.label) else { continue }
+			let record = Self.record(of: code)
+			switch record {
+			case let .built(built):
+				if built.hasFunction, functions[built.functionName] == nil {
+					functions[built.functionName] = .statement(index: first + offset, record: built)
+				}
+			case let .alias(alias):
+				for name in alias.declaredFunctionNames where functions[name] == nil {
+					functions[name] = .text
+				}
+			case .closer, nil:
+				break
+			}
+			guard let label = record.map(\.boundProperty.label) else { continue }
 			bodies[body].positionsByLabel[label, default: []].append(first + offset)
 		}
-		childCodesByBody[body] = (first: first, children: children)
+		declaredFunctionsByBody[body] = functions
+	}
+
+	/// A function a statement of a body declares: a place's, at its index among the body's statements, or one a place
+	/// written as text declares, which no closer's function resolves to.
+	enum DeclaredFunction {
+		case statement(index: Int, record: BuiltPlaceRecord)
+		case text
 	}
 
 	/// A function a closer calls: the function of an enclosing place's body, or the function a statement of an enclosing
@@ -174,21 +195,13 @@ extension TypeKeyLayout {
 	func resolvedFunction(named name: String, from body: Int) -> ResolvedFunction? {
 		var body = body
 		while true {
-			if let declared = childCodesByBody[body] {
-				for (offset, code) in declared.children.enumerated() {
-					switch Self.record(of: code) {
-					case let .built(built):
-						if built.hasFunction, built.functionName == name {
-							return .statement(body: body, index: declared.first + offset, record: built)
-						}
-					case let .alias(alias):
-						if alias.declaredFunctionNames.contains(name) {
-							return nil
-						}
-					case .closer, nil:
-						break
-					}
-				}
+			switch declaredFunctionsByBody[body]?[name] {
+			case let .statement(index, record):
+				return .statement(body: body, index: index, record: record)
+			case .text:
+				return nil
+			case nil:
+				break
 			}
 			if body == 0 {
 				return nil
