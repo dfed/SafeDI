@@ -48,6 +48,25 @@ enum StoredPlaceGraphChecks {
 		}
 	}
 
+	/// Records an issue for each seam whose place graph `file`, the module info file the run of the module named
+	/// `moduleName` wrote, holds as another graph than the one of `computedSignatures`, the signatures that run computed
+	/// (`Generate.Output.seamSignaturesWrittenToModuleInfo`), and for a file whose signatures do not decode.
+	static func expectGraphsReadBackAsComputed(ofSeamSignatures computedSignatures: [StoredSeamSignature], in file: ModuleInfoFile, writtenByRunOfModuleNamed moduleName: String, sourceLocation: SourceLocation) {
+		do {
+			let readSignatures = try file.seamSignaturesReadBack
+			let readBySeam = Dictionary(readSignatures.map { ($0.seamType, $0.signature?.places) }, uniquingKeysWith: { first, _ in first })
+			let computedSeams = Set(computedSignatures.map(\.seamType))
+			let pairs = computedSignatures.map { computed in
+				Pair(subject: "seam `\(computed.seamType.asSource)`", computed: computed.signature?.places, read: readBySeam[computed.seamType] ?? nil)
+			} + readSignatures.filter { !computedSeams.contains($0.seamType) }.map { read in
+				Pair(subject: "seam `\(read.seamType.asSource)`", computed: nil, read: read.signature?.places)
+			}
+			expectGraphsReadBackAsComputed(pairs, byRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		} catch {
+			Issue.record("The seam signatures the run of module `\(moduleName)` wrote do not decode: \(error)", sourceLocation: sourceLocation)
+		}
+	}
+
 	/// Where `read` first differs from `computed`, and how, or `nil` where they hold the same values: every stored
 	/// property of each, at every depth, in the order they are stored, the members of a set or a dictionary in the order
 	/// of their descriptions. A source position counts as absent, as a module info file holds none: `read` came from a

@@ -385,6 +385,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 				BinaryLayoutField("uncarriedReplacedOnPathsToCalls", \.uncarriedReplacedOnPathsToCalls),
 				BinaryLayoutField("reenteringCallDeclarations", \.reenteringCallDeclarations),
 				BinaryLayoutField("reenteringPlaceFields", \.reenteringPlaceFields),
+				BinaryLayoutField("namingRoute", \.namingRoute),
 			],
 			unwrittenProperties: [],
 		)
@@ -402,6 +403,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 			uncarriedReplacedOnPathsToCalls: reader.read(),
 			reenteringCallDeclarations: reader.read(),
 			reenteringPlaceFields: reader.read(),
+			namingRoute: reader.read(),
 		)
 		try fieldFlags.finish()
 	}
@@ -418,6 +420,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 		writer.write(uncarriedReplacedOnPathsToCalls)
 		writer.write(reenteringCallDeclarations)
 		writer.write(reenteringPlaceFields)
+		writer.write(namingRoute)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }

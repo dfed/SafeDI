@@ -20,6 +20,7 @@
 
 import SafeDICore
 import Testing
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// The check that holds each place graph a module info file holds to the graph its run computed
@@ -66,6 +67,50 @@ struct SafeDIToolStoredPlaceGraphChecksTests {
 			StoredPlaceGraphChecks.expectGraphsReadBackAsComputed([.init(subject: "`Seam`", computed: computed, read: SeamSignature.Places(levels: [], cases: [sendableCase]))], byRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
 		} matching: { issue in
 			issue.description.contains("the places of `Seam`.cases.0.isBuiltInSendableFunction is read as `true`, and was computed as `false`")
+		}
+	}
+	@Test
+	func expectGraphsReadBackAsComputed_recordsIssue_whenFileHoldsAnotherGraphOfSeamOrOtherSeams() throws {
+		func signature(of seam: String, cases: [SeamSignature.Places.Case]) -> StoredSeamSignature {
+			let seamType = TypeDescription.simple(name: seam)
+			return StoredSeamSignature(seamType: seamType, signature: SeamSignature(seamType: seamType, parameters: [], tiers: [.public], places: SeamSignature.Places(levels: [], cases: cases)))
+		}
+		let plainCase = SeamSignature.Places.Case(ownerLevel: 0, isBuiltInSendableFunction: false, siteOpensSendableFunction: false, passedUp: nil, namingRoute: [0])
+		let sendableCase = SeamSignature.Places.Case(ownerLevel: 0, isBuiltInSendableFunction: true, siteOpensSendableFunction: false, passedUp: nil, namingRoute: [0])
+		// A seam whose generated signature is its own initializer's stores none, and has no graph on either side.
+		let written = [signature(of: "Host", cases: [plainCase]), signature(of: "Panel", cases: [plainCase, sendableCase]), StoredSeamSignature(seamType: .simple(name: "Plain"), signature: nil)]
+		let file = try ModuleInfoFile(moduleInfoData: ModuleInfoFile(
+			moduleName: "Feature",
+			packageName: nil,
+			dependencyModuleNames: [],
+			imports: [],
+			mockImports: [],
+			instantiables: [],
+			configurations: [],
+			filesWithUnexpectedNodes: nil,
+			conditionalCompilationDecisions: [],
+			instantiableTypeNamesInAnyClause: [],
+			plainTypeDeclarations: [],
+			seamSignatures: written,
+			view: .empty,
+		).moduleInfoDataWritingSeamSignaturesWithoutPositions)
+		// The signatures the file was written from record nothing.
+		StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: written, in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		withKnownIssue {
+			let computed = [written[0], signature(of: "Panel", cases: [plainCase, plainCase]), written[2]]
+			StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: computed, in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		} matching: { issue in
+			issue.description.contains("A place graph the run of module `Feature` wrote reads back as another graph than the one it computed: the places of seam `Panel`.cases.1.isBuiltInSendableFunction is read as `true`, and was computed as `false`")
+		}
+		withKnownIssue {
+			StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: written + [signature(of: "Sheet", cases: [plainCase])], in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		} matching: { issue in
+			issue.description.contains("the places of seam `Sheet` is read as absent, and was computed as")
+		}
+		withKnownIssue {
+			StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: [written[1], written[2]], in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		} matching: { issue in
+			issue.description.contains("the places of seam `Host` is read as") && issue.description.contains("and was computed as absent")
 		}
 	}
 }

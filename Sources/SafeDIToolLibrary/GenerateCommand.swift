@@ -156,6 +156,10 @@ public struct Generate: AsyncParsableCommand {
 		public let warnings: [SourceDiagnostic]
 		/// The module this run generated code for, with the module that declares each of its declarations.
 		public let module: ModuleInfo
+		/// The signatures of its module’s seams as the run computed them and wrote them into its module info, or `nil` for a
+		/// run that wrote no module info. The tests read it, never the tool: the multi-module harness compares the place
+		/// graph the file holds of each seam, read back, with the graph computed.
+		public let seamSignaturesWrittenToModuleInfo: [StoredSeamSignature]?
 		/// The modules whose info this run read, in the order it combined their declarations.
 		let dependentModuleNames: [String?]
 		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
@@ -989,6 +993,7 @@ public struct Generate: AsyncParsableCommand {
 		return Output(
 			warnings: warnings,
 			module: module,
+			seamSignaturesWrittenToModuleInfo: moduleInfoDestination.map { _ in storedSeamSignatures },
 			dependentModuleNames: dependentModuleNames,
 			// Only what the run reads until its end: holding a value it is done with sooner would raise its peak memory.
 			builtValues: [generator, moduleInfoViewToWrite],

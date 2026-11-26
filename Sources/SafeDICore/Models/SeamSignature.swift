@@ -2138,6 +2138,8 @@ extension SeamSignature: Codable {
 			scopeEnums: container.decode([ScopeEnum].self, forKey: .scopeEnums),
 			callRoutes: container.decode([CallRoute].self, forKey: .callRoutes),
 			typesDeclaredEscaping: container.decode(Set<TypeDescription>.self, forKey: .typesDeclaredEscaping),
+			places: container.decode(Places.self, forKey: .places),
+			caseIndexByHole: container.decode([Int].self, forKey: .caseIndexByHole),
 		)
 	}
 
@@ -2152,6 +2154,8 @@ extension SeamSignature: Codable {
 		try container.encode(scopeEnums, forKey: .scopeEnums)
 		try container.encode(callRoutes, forKey: .callRoutes)
 		try container.encode(typesDeclaredEscaping.sorted(), forKey: .typesDeclaredEscaping)
+		try container.encode(places, forKey: .places)
+		try container.encode(caseIndexByHole, forKey: .caseIndexByHole)
 	}
 
 	/// The fields a signature is written as: `callShape` and `guardTypeName` are computed from them.
@@ -2165,6 +2169,8 @@ extension SeamSignature: Codable {
 		case scopeEnums
 		case callRoutes
 		case typesDeclaredEscaping
+		case places
+		case caseIndexByHole
 	}
 }
 

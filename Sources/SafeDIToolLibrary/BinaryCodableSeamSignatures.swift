@@ -61,9 +61,10 @@ extension SeamSignature: BinarySchemaMember {
 				BinaryLayoutField("scopeEnums", \.scopeEnums),
 				BinaryLayoutField("callRoutes", \.callRoutes),
 				BinaryLayoutField("typesDeclaredEscaping", \.typesDeclaredEscaping),
+				BinaryLayoutField("places", \.places),
+				BinaryLayoutField("caseIndexByHole", \.caseIndexByHole),
 			],
-			// `places` and `caseIndexByHole` are written once the place graph's coders are wired in (the .safedi lane's change).
-			unwrittenProperties: ["callShape", "guardTypeName", "places", "caseIndexByHole"],
+			unwrittenProperties: ["callShape", "guardTypeName"],
 		)
 	}
 
@@ -78,6 +79,8 @@ extension SeamSignature: BinarySchemaMember {
 			scopeEnums: reader.read(),
 			callRoutes: reader.read(),
 			typesDeclaredEscaping: reader.read(),
+			places: reader.read(),
+			caseIndexByHole: reader.read(),
 		)
 	}
 
@@ -91,6 +94,8 @@ extension SeamSignature: BinarySchemaMember {
 		writer.write(scopeEnums)
 		writer.write(callRoutes)
 		writer.write(typesDeclaredEscaping)
+		writer.write(places)
+		writer.write(caseIndexByHole)
 	}
 }
 

@@ -637,6 +637,11 @@ func executeSafeDIToolMultiModuleTest(
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
 			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			if let computedSignatures = generateOutput?.seamSignaturesWrittenToModuleInfo {
+				// Each seam's place graph reads back from the file as the graph the run computed (`StoredPlaceGraphChecks`), so
+				// what the oracles check of a computed graph holds of the graph a module above decodes.
+				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: computedSignatures, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			}
 		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
