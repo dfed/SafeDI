@@ -6838,7 +6838,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The scope visited next is the last one on the stack, so the first child goes last. Each is visited with the index
 		// of the type it is built inside.
 		var generatorsToVisit = children.reversed().map { (generator: $0, parentIndex: 0) }
+		// A generator places share (`construction-memo.md`) is one subtree, which meets the same labels wherever the walk
+		// reaches it: the labels it left unmet the first time stay unmet beneath it. So the walk visits each once, or it
+		// would visit a loop of builders once per path to each member. The set is this walk's and dies with it.
+		var visitedGenerators = Set<ObjectIdentifier>()
 		while !unmetLabels.isEmpty, let (generator, parentIndex) = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(generator.searchIdentity).inserted else { continue }
 			// An alias is among the dependencies of the type that declares it, which the walk met first.
 			var index = parentIndex
 			if let builtInstantiable = generator.searchBuiltInstantiable {
@@ -7007,7 +7012,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			candidates.append(BuilderFunctionCandidate(
 				property: property,
 				declaration: BuiltDeclaration(property: property, concreteType: property.typeDescription.asInstantiatedType),
-				name: nil,
+				name: generator.holeWrapperFunctionName,
 				declaresFunction: true,
 				cycleClosedOnDeclarations: [],
 				isReferencedByCycleClosingScope: false,
@@ -7161,15 +7166,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (`separatesValuesBindings`, `separatesMemberCalls`).
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings, separatesValuesBindings: Bool = false, separatesMemberCalls: Bool = false) -> Bool {
 		(valuesBindingLines.isEmpty || separatesValuesBindings)
-			&& builderFunctionNames.loopValuesBindingLines == nil
+			&& builderFunctionNames.loopValuesBindingLines?.isEmpty != false
 			&& builderFunctionNames.loopLevelsName == nil
 			&& builderFunctionNames.receivedFunctionName == nil
-			&& builderFunctionNames.loopMemberDeclarations.isEmpty
-			&& reboundProperties.isEmpty
+			&& rebindingsArePlannedByTypeKey(builderFunctionNames: builderFunctionNames)
 			&& (memberCallLines.isEmpty || separatesMemberCalls)
 			&& !isBuiltByFill
 			&& !fillReturnsWrapperBuilder
 			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
+	}
+
+	/// Whether every rebinding this scope's builder function begins with, as a member of a loop of builders, is a place the
+	/// type key lays out: a wrapper made again of a member's own builder function (`LoopRebinding.closer`), never one of a
+	/// `__safeDI_<label>_received` function, of a rename, or of the function's own property with its cycle parameters.
+	nonisolated private func rebindingsArePlannedByTypeKey(builderFunctionNames: BuilderFunctionNames) -> Bool {
+		reboundProperties.allSatisfy { reboundProperty in
+			!(reboundProperty == property && declaresCycleParameters)
+				&& builderFunctionNames.loopMemberDeclarations[reboundProperty]?.closer != nil
+		}
 	}
 
 	/// The properties of this scope's `onlyIfAvailableDependencies` that are unavailable because an
@@ -7340,7 +7354,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// every child keeps its own.
 		let childBuilderFunctionNames: [BuilderFunctionNames?]?
 		/// Per loop of builders: the rebinding of each member the body declares, wrapping the function this body names.
-		let loopMemberDeclarationsByLoop: [Int: [Property: String]]
+		let loopMemberDeclarationsByLoop: [Int: [Property: LoopRebinding]]
 		/// The `_received` function of each member, by its index among `orderedChildren`, that takes cycle parameters.
 		let receivedFunctionNameByIndex: [Int: String]
 		/// Per loop: the lines binding its members' payloads, the index of the member that binds them, and the name of a
@@ -7399,7 +7413,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// that declares such a function, or a cycle-closing scope that calls one – is wrapped through a function of no
 		// such parameters, `__safeDI_<label>_received`, that this body declares beside it and that passes the parameters
 		// what this body binds, a member of the same loop as a wrapper the function makes. Nearly every body holds no loop.
-		var loopMemberDeclarationsByLoop = [Int: [Property: String]]()
+		var loopMemberDeclarationsByLoop = [Int: [Property: LoopRebinding]]()
 		var receivedFunctionNameByIndex = [Int: String]()
 		var memberFunctionByProperty = [Property: (property: Property, generator: ScopeGenerator, functionName: String)]()
 		// The payloads of each loop's members, in the order the body generates them, and the index of the member that binds
@@ -7459,7 +7473,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					functionName = receivedFunctionName
 					receivedFunctionNameByIndex[index] = functionName
 				}
-				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebindingDeclaration(functionName: functionName)
+				// A rebinding that hands the member's own builder function is a cycle-closing place on that function, which
+				// the type key lays out (`LoopRebinding.closedOnFunctionName`); one that hands a `_received` function is not.
+				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebinding(
+					functionName: functionName,
+					closesOnFunction: claimedNames.receivedFunctionName == nil,
+				)
 				memberFunctionByProperty[property] = (property, child.generator, functionName)
 			}
 			// A rename this body declares of a member is rebound under its own label, wrapping the member's function.
@@ -7469,7 +7488,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      let memberFunction = memberFunctionByProperty[fulfillingProperty],
 				      let declaration = child.generator.loopRebindingDeclaration(ofRenameOf: memberFunction)
 				else { continue }
-				loopMemberDeclarationsByLoop[loop, default: [:]][property] = declaration
+				loopMemberDeclarationsByLoop[loop, default: [:]][property] = LoopRebinding(declaration: declaration, closer: nil)
 			}
 		}
 		// What each fill nested by type takes beside its case's payload, then what each dispatcher takes to pass on.
@@ -7922,12 +7941,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration with which a member of a loop of builders rebinds this scope's instantiator, a member of the same
 	/// loop, whose builder function its scope's body names `functionName` (see `ReceivedBuilderLoops`): the declaration the
 	/// scope's body makes of it, which wraps the function again.
-	nonisolated private func loopRebindingDeclaration(functionName: String) -> String {
-		guard case let .property(_, _, forwardedProperties, _, _, _) = scopeData else { return "" }
-		return instantiatorDeclaration(
-			handing: functionName,
-			forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
+	nonisolated private func loopRebinding(functionName: String, closesOnFunction: Bool) -> LoopRebinding {
+		guard case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, _) = scopeData else { return LoopRebinding(declaration: "", closer: nil) }
+		let sortedForwardedProperties = forwardedProperties.sorted()
+		return LoopRebinding(
+			declaration: instantiatorDeclaration(
+				handing: functionName,
+				forwardedArguments: Self.forwardedArguments(of: sortedForwardedProperties, spreading: "$0").joined(separator: ", "),
+			),
+			closer: closesOnFunction ? LoopRebinding.Closer(
+				property: property,
+				isErased: erasedToConcreteExistential,
+				isExtension: instantiable.declarationType.isExtension,
+				functionName: functionName,
+				forwardedProperties: sortedForwardedProperties,
+			) : nil,
 		)
+	}
+
+	/// How a member of a loop of builders is wrapped again inside the functions of the members whose trees receive it: its
+	/// declaration, and, where the declaration hands the member's own builder function, the cycle-closing place the type key
+	/// reads of it. A rebinding is a closer on the function a statement of the loop's body declares, rather than one an
+	/// enclosing scope declares (`TypeKeyLayout.read(_:)` resolves it as Swift does).
+	struct LoopRebinding: Hashable {
+		/// The rebinding, unindented.
+		let declaration: String
+		/// What the type key reads of the rebinding, or `nil` where it hands a `__safeDI_<label>_received` function or wraps a
+		/// rename, which the type key does not lay out.
+		let closer: Closer?
+
+		struct Closer: Hashable {
+			let property: Property
+			let isErased: Bool
+			let isExtension: Bool
+			let functionName: String
+			let forwardedProperties: [Property]
+		}
+
+		/// The place the type key reads, where it lays the rebinding out.
+		var record: PlaceRecord? {
+			closer.map { closer in
+				.closer(ClosingPlaceRecord(
+					property: closer.property,
+					isErased: closer.isErased,
+					isExtension: closer.isExtension,
+					closedOnFunctionName: closer.functionName,
+					forwardedProperties: closer.forwardedProperties,
+					cycleArguments: [],
+					rebindsLoopMember: true,
+				))
+			}
+		}
 	}
 
 	/// The declaration with which a member of a loop of builders rebinds this scope, a rename its scope declares of a member
@@ -7986,7 +8050,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a member of a loop of builders, the declarations with which the members of its loop are wrapped again, by
 		/// their property: its builder function rebinds those its tree receives, and its `__safeDI_<label>_received`
 		/// function those it passes as parameters a lazy cycle needs (see `ReceivedBuilderLoops`).
-		var loopMemberDeclarations = [Property: String]()
+		var loopMemberDeclarations = [Property: LoopRebinding]()
 		/// For a member of a loop of builders whose function takes parameters a lazy cycle needs, the name of the function
 		/// of no such parameters its wrappers hand, which passes them; `nil` for every other scope.
 		var receivedFunctionName: String?
@@ -8147,13 +8211,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			BuilderFunctionCandidate(
 				property: declaration.property,
 				declaration: declaration,
-				name: nil,
+				name: holeWrapperFunctionName,
 				declaresFunction: declaresBuilderFunction,
 				cycleClosedOnDeclarations: cycleClosedOnDeclarations,
 				isReferencedByCycleClosingScope: isReferencedByCycleClosingScope,
 				referencedFillNames: Set(referencedFillNamesByKey.values),
 			)
 		}
+	}
+
+	/// The name of the function a site of a hole held in a wrapper declares, which its site names apart from the builder
+	/// the function calls (`HoleSiteRecord`), or `nil` for any other scope, whose function is `functionName(toBuild:)`.
+	nonisolated private var holeWrapperFunctionName: String? {
+		guard case let .hole(_, _, site) = scopeData else { return nil }
+		return site?.wrapperFunctionName
 	}
 
 	static let standardIndent = "    "
@@ -8714,7 +8785,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// its children in its function's body.
 		let isBuiltPlacePlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings, separatesMemberCalls: separatesMemberCalls)
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings)
-		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
+		// A member of a loop of builders writes its rebindings, places of their own, between its member calls and its children.
+		func builtRecord(functionName: String, hasFunction: Bool, rebindings: [GeneratedCode] = []) throws(Initializer.GenerationError) -> PlaceRecord? {
 			guard isBuiltPlacePlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
 			return .built(BuiltPlaceRecord(
 				property: property,
@@ -8731,7 +8803,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
-				children: memberCallCode + childCode,
+				children: memberCallCode + rebindings + childCode,
 				node: PlanNode(),
 			))
 		}
@@ -8770,15 +8842,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if reboundProperty == property, declaresCycleParameters {
 					// The function's own property is wrapped again with the function's own parameters: where a cycle-closing
 					// scope builds the tree again, they are that scope's, which is then the nearest declaration of each.
-					Self.indented(instantiatorDeclaration(
+					GeneratedCode.text(Self.indented(instantiatorDeclaration(
 						handing: functionName,
 						forwardedArguments: (
 							Self.forwardedArguments(of: forwardedProperties, spreading: "$0")
 								+ cycleParameters.map { CallArgument(label: $0.property.label, source: .binding(label: $0.property.label)).spelled },
 						).joined(separator: ", "),
-					))
+					)))
 				} else {
-					builderFunctionNames.loopMemberDeclarations[reboundProperty].map(Self.indented)
+					builderFunctionNames.loopMemberDeclarations[reboundProperty].map { rebinding in
+						GeneratedCode.indented(.place(PlacePlan(code: .text(rebinding.declaration), record: rebinding.record)), by: Self.standardIndent)
+					}
 				}
 			}
 			// A member of a boxed loop first unboxes its own payloads, which the scope bound in the loop's box.
@@ -8800,7 +8874,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var generatedProperties = unboxingLines.map(GeneratedCode.text)
 			generatedProperties += forwardedInnerScopeLines.map(GeneratedCode.text)
 			generatedProperties += memberCallCode
-			generatedProperties += rebindingLines.map(GeneratedCode.text)
+			generatedProperties += rebindingLines
 			generatedProperties += seamGuardLines
 			generatedProperties += fillPlaceBindingLines
 			generatedProperties += childCode
@@ -8846,7 +8920,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let unwrappedProperty = parameter.property.asUnwrappedProperty
 					let memberDeclaration = builderFunctionNames.loopMemberDeclarations[unwrappedProperty] ?? builderFunctionNames.loopMemberDeclarations[unwrappedProperty.asOptionalProperty]
 					if let memberDeclaration {
-						memberLines.append(Self.indented(memberDeclaration))
+						memberLines.append(Self.indented(memberDeclaration.declaration))
 						return CallArgument(label: parameter.property.label, source: .binding(label: parameter.property.label)).spelled
 					} else {
 						return argument
@@ -8888,7 +8962,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
 				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
 			} else {
-				try builtRecord(functionName: functionName, hasFunction: true)
+				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
 			return place(code: code).with(record: record)
 		case .lazilyInstantiated,
@@ -12307,6 +12381,10 @@ extension ScopeGenerator: CycleParameterSearchNode {
 
 	nonisolated var searchChildren: [ScopeGenerator] {
 		propertiesToGenerate
+	}
+
+	nonisolated var searchIdentity: ObjectIdentifier {
+		ObjectIdentifier(self)
 	}
 
 	/// Whether a child's subtree closes a cycle on a scope enclosing the child, or a child is the scope a cycle beneath it

@@ -37,6 +37,8 @@ protocol CycleParameterSearchNode {
 	var searchClosesPropertyCycle: Bool { get }
 	var searchClosedOnDeclaration: ScopeGenerator.BuiltDeclaration? { get }
 	var searchChildren: [Self] { get }
+	/// The node's identity: two nodes of one identity have the same subtree.
+	var searchIdentity: ObjectIdentifier { get }
 }
 
 /// What the cycle parameter search reads of a scope that is the same in every pass of a tree: the type and what the scope
@@ -339,6 +341,13 @@ enum CycleParameterPlan {
 			switch self {
 			case let .generator(generator): generator.searchChildren.map { .generator($0) }
 			case let .place(place): place.children
+			}
+		}
+
+		var searchIdentity: ObjectIdentifier {
+			switch self {
+			case let .generator(generator): ObjectIdentifier(generator)
+			case let .place(place): ObjectIdentifier(place)
 			}
 		}
 	}

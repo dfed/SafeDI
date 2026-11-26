@@ -94,17 +94,34 @@ extension TypeKeyLayout {
 	/// How many places the views stand for, saturating at `Int.max`: each view stands for one place at each place of each
 	/// body holding it.
 	func placeCount() -> Int {
+		Self.saturatingSum(placesByBody().dropFirst())
+	}
+
+	/// How many places each view stands for, saturating at `Int.max`; the root's body stands for one.
+	func placesByBody() -> [Int] {
 		var placesByBody = [Int](repeating: 0, count: bodies.count)
 		placesByBody[0] = 1
-		var total = 0
 		for body in postOrder.reversed() {
-			var places = 0
-			for edge in bodies[body].edges {
-				let (sum, overflow) = places.addingReportingOverflow(placesByBody[edge.parent])
-				places = overflow ? Int.max : sum
-			}
-			placesByBody[body] = places
-			let (sum, overflow) = total.addingReportingOverflow(places)
+			placesByBody[body] = Self.saturatingSum(bodies[body].edges.map { placesByBody[$0.parent] })
+		}
+		return placesByBody
+	}
+
+	/// Whether the root lays out the loops of builders it holds: it holds none, or a class holding a member's view that wraps
+	/// another member again stands for several places, which the path key would write once per path. A class's places do not
+	/// depend on which places the walk keyed into one view, only on the path key's tree.
+	func laysOutLoops() -> Bool {
+		guard !loopRebindingBodies.isEmpty else { return true }
+		let places = placesByBody()
+		return loopRebindingBodies.contains { body in
+			Self.saturatingSum(membersByClass[classByBody[body]].map { places[$0] }) > 1
+		}
+	}
+
+	static func saturatingSum(_ counts: some Sequence<Int>) -> Int {
+		var total = 0
+		for count in counts {
+			let (sum, overflow) = total.addingReportingOverflow(count)
 			total = overflow ? Int.max : sum
 		}
 		return total

@@ -244,6 +244,54 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 		return nil
 	}
 
+	/// The local function a wrapper, `expression`, hands: `W<T>(f)`, `W<T> { f(…) }`, or an erasing wrapper's
+	/// `W<(), AnyT> { AnyT(f()) }`.
+	private func wrappedFunction(in expression: ExprSyntax?, at node: Syntax) -> FunctionDeclSyntax? {
+		guard let call = expression?.as(FunctionCallExprSyntax.self) else { return nil }
+		if let argument = call.arguments.first, call.arguments.count == 1, argument.label == nil {
+			return argument.expression.as(DeclReferenceExprSyntax.self).flatMap { function(named: $0.baseName.text, at: node) }
+		}
+		guard call.arguments.isEmpty, var called = call.trailingClosure?.statements.first?.item.as(ExprSyntax.self)?.as(FunctionCallExprSyntax.self) else { return nil }
+		while true {
+			if let reference = called.calledExpression.as(DeclReferenceExprSyntax.self), let function = function(named: reference.baseName.text, at: node) {
+				return function
+			}
+			guard let argument = called.arguments.first, called.arguments.count == 1, argument.label == nil, let inner = argument.expression.as(FunctionCallExprSyntax.self) else { return nil }
+			called = inner
+		}
+	}
+
+	/// The places of `function`: each declaration, wherever the type key writes it, that wraps the function and that the type
+	/// of its frame declares rather than receives, with its label and that type. A declaration inside the function closes a
+	/// cycle on it, which the query graph does not count as a place.
+	private func places(of function: FunctionDeclSyntax) -> [(label: String, typeName: String, variable: VariableDeclSyntax)] {
+		let declarations = BindingCollector()
+		declarations.walk(Syntax(function.root))
+		var places = [(label: String, typeName: String, variable: VariableDeclSyntax)]()
+		for (label, binding, variable) in declarations.bindings where !Self.isInside(Syntax(variable), function) && wrappedFunction(in: binding.initializer?.value, at: Syntax(variable))?.id == function.id {
+			guard let frame = frameTypeName(enclosing: Syntax(variable)) else { continue }
+			switch kindsByLabelByType[frame.name]?[label] {
+			case "instantiated", "lazy", "builder", "forwarded":
+				places.append((label, frame.name, variable))
+			default:
+				break
+			}
+		}
+		return places
+	}
+
+	/// Whether `node` is inside `function`'s body.
+	private static func isInside(_ node: Syntax, _ function: FunctionDeclSyntax) -> Bool {
+		var current = node.parent
+		while let ancestor = current {
+			if ancestor.id == function.id {
+				return true
+			}
+			current = ancestor.parent
+		}
+		return false
+	}
+
 	/// The function a call names `name` at `node`: the nearest local function of that name in an enclosing code block.
 	private func function(named name: String, at node: Syntax) -> FunctionDeclSyntax? {
 		var current = node.parent
@@ -316,6 +364,18 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 				if let initializer = binding.initializer?.value, isAlias || initializer.is(NilLiteralExprSyntax.self) || initializer.is(DeclReferenceExprSyntax.self) || initializer.is(MemberAccessExprSyntax.self) {
 					// A rename – an alias – reads the declaration of its fulfilling property where it is bound.
 					resolve(initializer, into: &values, visitedFunctions: &visitedFunctions)
+				} else if wrappedFunction(in: binding.initializer?.value, at: Syntax(variable)) != nil, let function = frame.function.as(FunctionDeclSyntax.self), case let places = places(of: function), !places.isEmpty {
+					// A rebinding at the top of a builder function, which wraps a function again, holds what is in scope at each
+					// place of the function it is in: where the type key lays out a loop of builders, the function is declared in
+					// the root's body, away from its places. A place that declares the label itself supplies it.
+					guard visitedFunctions.insert(variable.id).inserted else { return }
+					for place in places {
+						if place.label == name {
+							values.insert("\(place.typeName).\(name)")
+						} else {
+							resolve(name: name, at: Syntax(place.variable), anywhereInBlocks: true, into: &values, visitedFunctions: &visitedFunctions)
+						}
+					}
 				} else {
 					// A rebinding at the top of a builder function: the declaration of the scope that declares the function.
 					resolve(name: name, at: frame.function, anywhereInBlocks: true, into: &values, visitedFunctions: &visitedFunctions)
@@ -340,6 +400,28 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 		case nil:
 			unreadable.append("\(fileName): \(name), declared nowhere in scope")
 		}
+	}
+}
+
+/// The variable bindings in a tree of syntax, with their names, outside code compiled only under `DEBUG`.
+private final class BindingCollector: SyntaxVisitor {
+	init() {
+		super.init(viewMode: .sourceAccurate)
+	}
+
+	private(set) var bindings = [(String, PatternBindingSyntax, VariableDeclSyntax)]()
+
+	override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
+		node.condition?.trimmedDescription == "DEBUG" ? .skipChildren : .visitChildren
+	}
+
+	override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		for binding in node.bindings {
+			if let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text {
+				bindings.append((name, binding, node))
+			}
+		}
+		return .visitChildren
 	}
 }
 
