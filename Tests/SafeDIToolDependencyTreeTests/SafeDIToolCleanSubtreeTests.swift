@@ -430,6 +430,8 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 				validatedScopeCount += 1
 			case .skippedCleanSubtree:
 				skippedSubtreeCount += 1
+			case .collectedReceivedPropertiesOfScope:
+				break
 			case .keyedSubtree:
 				keyedSubtreeCount += 1
 			}
