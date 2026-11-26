@@ -173,9 +173,8 @@ struct TypeKeyLayout {
 		let forwardedLabels: Set<String>
 		/// The parameters of the body's function a cycle closes on, or of a variant's function: what its calls pass it.
 		let cycleParameters: [Property]
-		var cycleParameterLabels: Set<String> {
-			Set(cycleParameters.map(\.label))
-		}
+		/// The labels of `cycleParameters`, which every look-up through the body reads.
+		let cycleParameterLabels: Set<String>
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -268,6 +267,8 @@ struct TypeKeyLayout {
 	var declaredFunctionsByBody = [Int: [String: DeclaredFunction]]()
 	/// The closing statements that call each body's function: their body and their index in it.
 	var closersByTarget = [Int: [(body: Int, index: Int)]]()
+	/// What each closing statement passes each label it passes, by its body and index (`recordCloser(_:at:closing:)`).
+	var cycleArgumentsByCloser = [CallSite: [String: PlaceRead]]()
 	/// The labels each body's function reads and does not bind, in the order it first reads them.
 	var reads = [[String]]()
 	/// The labels of each body's reads that some read inside it requires a value of.
@@ -327,5 +328,20 @@ extension AliasPlaceRecord {
 	/// The reads the place's text lists, which a rename's read is not among.
 	var listedReads: [PlaceRead] {
 		reads ?? []
+	}
+}
+
+extension TypeKeyLayout.Body {
+	init(parent: Int, position: Int, record: BuiltPlaceRecord?, isInSendableFamily: Bool, domainLabels: Set<String>, forwardedLabels: Set<String>, cycleParameters: [Property]) {
+		self.init(
+			parent: parent,
+			position: position,
+			record: record,
+			isInSendableFamily: isInSendableFamily,
+			domainLabels: domainLabels,
+			forwardedLabels: forwardedLabels,
+			cycleParameters: cycleParameters,
+			cycleParameterLabels: Set(cycleParameters.map(\.label)),
+		)
 	}
 }

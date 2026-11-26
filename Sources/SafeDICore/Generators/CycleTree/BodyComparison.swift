@@ -43,13 +43,14 @@ extension DependencyTreeGenerator {
 		declaredTypeNames: DeclaredTypeNames,
 		cache: inout ReceivedPropertiesCache,
 	) throws -> PerTypePlanChoice? {
-		guard let shapeOutsidePlan = shapeOutsidePerTypePlan(inTreeOf: scope, cache: &cache), let shadow = CallPlaceShadow(root: scope, cache: &cache) else { return nil }
+		// A root refused for its shape builds no shadow: its copies cost a scope each.
+		guard let shapeOutsidePlan = shapeOutsidePerTypePlan(inTreeOf: scope, cache: &cache) else { return nil }
 		if let reason = shapeOutsidePlan.reason {
 			return .perPath(reason)
 		}
 		guard !mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &cache) else { return .perPath(.mayHaveUnpassableCycleLabel) }
-		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames)
-		guard let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) else { return .perPath(.noPlan) }
+		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames, sharesConstructionMemo: true)
+		guard let shadow = CallPlaceShadow(root: scope, cache: &cache), let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) else { return .perPath(.noPlan) }
 		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
 		if let reason = unplanned.argumentTheLayoutCannotWrite {
 			return .perPath(reason)

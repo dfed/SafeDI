@@ -76,6 +76,43 @@ extension DependencyTreeGenerator {
 			let nearestDeclarations: NearestDeclarations
 			let lazilyInstantiatedInstanceProperties: Set<Property>
 			let generator: ScopeGenerator
+			/// What the body's answers are to a call of it, one per label of `labels`: nothing where no declaration answers
+			/// the label; a declaration being built where its path is building a form of it; the instance of a lazily
+			/// instantiated declaration where the body reads the label through one; else the declaration. Where an answer
+			/// hands its readers more than one property, the first in property order names it. Made once, with the body.
+			let planAnswers: [Answer]
+
+			init(
+				key: VariantBodyKey,
+				copy: Scope,
+				labels: [String],
+				answers: [NearestDeclaration?],
+				nearestDeclarations: NearestDeclarations,
+				lazilyInstantiatedInstanceProperties: Set<Property>,
+				generator: ScopeGenerator,
+			) {
+				self.key = key
+				self.copy = copy
+				self.labels = labels
+				self.answers = answers
+				self.nearestDeclarations = nearestDeclarations
+				self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+				self.generator = generator
+				var instancePropertiesByLabel = [String: Property]()
+				for instance in lazilyInstantiatedInstanceProperties {
+					instancePropertiesByLabel[instance.label] = min(instance, instancePropertiesByLabel[instance.label] ?? instance)
+				}
+				planAnswers = zip(labels, answers).map { label, answer in
+					guard let answer, let property = answer.bindings.values.min() else { return .none }
+					if !answer.formsBeingBuilt.isEmpty {
+						return .declared(property, isBeingBuilt: true)
+					} else if let instance = instancePropertiesByLabel[label] {
+						return .instance(of: answer.bindings[instance] ?? property)
+					} else {
+						return .declared(property, isBeingBuilt: false)
+					}
+				}
+			}
 
 			/// The body's type and property, then each label with the properties its answer hands its readers.
 			var description: String {
@@ -95,23 +132,6 @@ extension DependencyTreeGenerator {
 					description.append(" [building \(twin)]")
 				}
 				return description
-			}
-
-			/// What the body's answers are to a call of it, one per label of `labels`: nothing where no declaration answers
-			/// the label; a declaration being built where its path is building a form of it; the instance of a lazily
-			/// instantiated declaration where the body reads the label through one; else the declaration. Where an answer
-			/// hands its readers more than one property, the first in property order names it.
-			var planAnswers: [Answer] {
-				zip(labels, answers).map { label, answer in
-					guard let answer, let property = answer.bindings.values.min() else { return .none }
-					if !answer.formsBeingBuilt.isEmpty {
-						return .declared(property, isBeingBuilt: true)
-					} else if let instance = lazilyInstantiatedInstanceProperties.filter({ $0.label == label }).min() {
-						return .instance(of: answer.bindings[instance] ?? property)
-					} else {
-						return .declared(property, isBeingBuilt: false)
-					}
-				}
 			}
 		}
 
@@ -139,10 +159,14 @@ extension DependencyTreeGenerator {
 		}
 
 		/// - Parameter forMockGeneration: Whether each body is built as a place of a mock's tree is.
-		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames, forMockGeneration: Bool = false) {
+		/// - Parameter sharesConstructionMemo: Whether the root's bodies share one construction memo, as the plan a root's
+		///   code is laid out from does: a test's comparison builds each body with a memo of its own, so what it builds
+		///   reads no other body's places.
+		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames, forMockGeneration: Bool = false, sharesConstructionMemo: Bool = false) {
 			self.frozenScopeMap = frozenScopeMap
 			self.declaredTypeNames = declaredTypeNames
 			self.forMockGeneration = forMockGeneration
+			constructionMemo = ConstructionMemo(sharing: sharesConstructionMemo ? .acrossTrees : .perTree)
 		}
 
 		private(set) var bodies = [Body]()
@@ -200,6 +224,7 @@ extension DependencyTreeGenerator {
 		///   `nil` where `shadow` holds no copy of `scope`.
 		mutating func plan(ofRoot scope: Scope, shadow: CallPlaceShadow, cache: inout ReceivedPropertiesCache) throws -> (rootBody: Int, calledBodies: [Int])? {
 			guard let rootCopy = shadow.copy(of: scope) else { return nil }
+			frozenScopeMap = frozenScopeMap.freezing(scopes: shadow.copies)
 			let rootBody = try body(
 				of: rootCopy,
 				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
@@ -225,6 +250,7 @@ extension DependencyTreeGenerator {
 			cache: inout ReceivedPropertiesCache,
 		) throws -> (rootBody: Int, calledBodies: [Int])? {
 			guard let rootCopy = shadow.copy(of: scope) else { return nil }
+			frozenScopeMap = frozenScopeMap.freezing(scopes: shadow.copies)
 			let rootBody = try body(
 				of: rootCopy,
 				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
@@ -242,6 +268,7 @@ extension DependencyTreeGenerator {
 		/// join the bindings it is built beneath.
 		private mutating func plan(fromRootBody rootBody: Int, shadow: CallPlaceShadow, isMockRoot: Bool, cache: inout ReceivedPropertiesCache) throws -> [Int] {
 			var bodiesOfPlan = [Int]()
+			var bodiesInPlan = Set<Int>()
 			var bodiesToWalk = [rootBody]
 			while let bodyToWalk = bodiesToWalk.popLast() {
 				let body = bodies[bodyToWalk]
@@ -254,13 +281,15 @@ extension DependencyTreeGenerator {
 					twinValues: shadow.twinValues,
 					twinsBeingBuilt: body.key.twinsBeingBuilt,
 					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
+					followingOnly: shadow.scopesLeadingToCallPlaces,
 					isMockRoot: isMockRoot && bodyToWalk == rootBody,
 				)
 				while let (context, _) = bodyWalk.next() {
 					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
-						var labelSet = Set(DependencyTreeGenerator.collectReceivedProperties(from: calledScope, cache: &cache).received.map(\.label))
-						labelSet.insert(context.property.label)
-						let labels = labelSet.sorted()
+						let calledTree = calledTree(of: calledScope, cache: &cache)
+						let labels = calledTree.sortedReceivedLabels.contains(context.property.label)
+							? calledTree.sortedReceivedLabels
+							: (calledTree.sortedReceivedLabels + [context.property.label]).sorted()
 						// A call is of the function's property: where the path is building the value the call place
 						// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
 						// cycle on that property's function, beneath the calling scope's declarations.
@@ -281,8 +310,13 @@ extension DependencyTreeGenerator {
 							builtBy: (context.builder, context.erasedToConcreteExistential),
 						)
 						// The tree can receive the label the body is built as too, as a loop mate does: it keeps its first place.
-						let labelsInOrderReceived = [context.property.label] + Self.labelsInOrderFirstReceived(inTreeOf: calledScope).filter { $0 != context.property.label }
-						let argumentOrder = labelsInOrderReceived.compactMap { bodies[calledBody].labels.firstIndex(of: $0) }
+						let labelsInOrderReceived = [context.property.label] + calledTree.labelsInOrderFirstReceived.filter { $0 != context.property.label }
+						var positionsByLabel = [String: Int]()
+						for (position, label) in bodies[calledBody].labels.enumerated() {
+							positionsByLabel[label] = position
+						}
+						let argumentOrder = labelsInOrderReceived.compactMap { positionsByLabel[$0] }
+						let orderedPositions = Set(argumentOrder)
 						calls.append(Call(
 							path: context.path,
 							property: context.property,
@@ -291,10 +325,10 @@ extension DependencyTreeGenerator {
 							// again as its binding (`Answer.argumentSource(labeled:)`).
 							arguments: VariantAnswers.arguments(bodies[calledBody].planAnswers, of: labels, makingAgain: context.labelsMadeAgainAtCall),
 							// A label no receive of the walk names keeps its sorted place after the others.
-							argumentOrder: argumentOrder + bodies[calledBody].labels.indices.filter { !argumentOrder.contains($0) },
+							argumentOrder: argumentOrder + bodies[calledBody].labels.indices.filter { !orderedPositions.contains($0) },
 							isInSendableFamily: context.isInSendableFamily,
 						))
-						if !bodiesOfPlan.contains(calledBody) {
+						if bodiesInPlan.insert(calledBody).inserted {
 							bodiesOfPlan.append(calledBody)
 							bodiesToWalk.append(calledBody)
 						}
@@ -327,13 +361,13 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: Set<Property>,
 			builtBy builder: (scope: Scope, erasedToConcreteExistential: Bool)? = nil,
 		) throws -> Int {
-			let answers = labels.map { answeredLabels.contains($0) ? nearestDeclarations[$0] : nil }
-			let lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties.filter { answeredLabels.contains($0.label) }
+			let answeredLabelSet = Set(answeredLabels)
+			let answers = labels.map { answeredLabelSet.contains($0) ? nearestDeclarations[$0] : nil }
+			let lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties.filter { answeredLabelSet.contains($0.label) }
 			if let position = positionsByKey[key]?.first(where: { bodies[$0].answers == answers && bodies[$0].lazilyInstantiatedInstanceProperties == lazilyInstantiatedInstanceProperties }) {
 				return position
 			} else {
 				let keptNearestDeclarations = nearestDeclarations.keeping(labels: answeredLabels)
-				var memo = ConstructionMemo()
 				let generator: ScopeGenerator
 				if let builder, let dependency = builder.scope.instantiable.dependencies.first(where: { $0.property == key.property }) {
 					// Built as its property: the one child of a scope that declares nothing else, so the body is built as
@@ -356,7 +390,7 @@ extension DependencyTreeGenerator {
 						erasedToConcreteExistential: false,
 						forMockGeneration: forMockGeneration,
 						declaredTypeNames: declaredTypeNames,
-						constructionMemo: &memo,
+						constructionMemo: &constructionMemo,
 					)
 					generator = holderGenerator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).first?.generator ?? holderGenerator
 				} else {
@@ -368,7 +402,7 @@ extension DependencyTreeGenerator {
 						erasedToConcreteExistential: false,
 						forMockGeneration: forMockGeneration,
 						declaredTypeNames: declaredTypeNames,
-						constructionMemo: &memo,
+						constructionMemo: &constructionMemo,
 					)
 				}
 				bodies.append(Body(
@@ -385,11 +419,33 @@ extension DependencyTreeGenerator {
 			}
 		}
 
+		/// What every call of a scope reads of the scope's tree, made once per scope called.
+		private struct CalledTree {
+			/// The labels the scope's tree receives, sorted.
+			let sortedReceivedLabels: [String]
+			/// The same labels in the order a walk first meets a receive of each (`labelsInOrderFirstReceived(inTreeOf:)`).
+			let labelsInOrderFirstReceived: [String]
+		}
+
+		private mutating func calledTree(of scope: Scope, cache: inout ReceivedPropertiesCache) -> CalledTree {
+			if let calledTree = calledTreesByScope[ObjectIdentifier(scope)] {
+				return calledTree
+			} else {
+				let calledTree = CalledTree(
+					sortedReceivedLabels: Set(DependencyTreeGenerator.collectReceivedProperties(from: scope, cache: &cache).received.map(\.label)).sorted(),
+					labelsInOrderFirstReceived: Self.labelsInOrderFirstReceived(inTreeOf: scope),
+				)
+				calledTreesByScope[ObjectIdentifier(scope)] = calledTree
+				return calledTree
+			}
+		}
+
 		/// The labels the scopes of `scope`'s tree receive, each once, in the order a walk first meets a receive of it: each
 		/// scope's received dependencies and the properties its renames are fulfilled by, in declaration order, then the
 		/// trees of the scopes it instantiates, depth first, each scope once.
 		private static func labelsInOrderFirstReceived(inTreeOf scope: Scope) -> [String] {
 			var labels = [String]()
+			var labelsMet = Set<String>()
 			var visitedScopes = Set<ObjectIdentifier>()
 			var scopesToVisit = [scope]
 			while let scope = scopesToVisit.popLast() {
@@ -403,7 +459,7 @@ extension DependencyTreeGenerator {
 					case let .aliased(fulfillingProperty, _, _):
 						fulfillingProperty.label
 					}
-					if let label, !labels.contains(label) {
+					if let label, labelsMet.insert(label).inserted {
 						labels.append(label)
 					}
 				}
@@ -441,10 +497,15 @@ extension DependencyTreeGenerator {
 			return holder
 		}
 
-		private let frozenScopeMap: FrozenScopeMap
+		/// The world's frozen map, with every copy of the shadow a plan is built from frozen in it once the plan starts.
+		private var frozenScopeMap: FrozenScopeMap
 		private let declaredTypeNames: DeclaredTypeNames
 		private let forMockGeneration: Bool
 		private var positionsByKey = [VariantBodyKey: [Int]]()
+		private var calledTreesByScope = [ObjectIdentifier: CalledTree]()
+		/// The memo the root's bodies are built with: shared across them where the plan lays the root's code out, so a
+		/// body's places that read their context alike reuse what another body built.
+		private var constructionMemo: ConstructionMemo
 		private var callsByBody = [Int: [Call]]()
 		private var sendableBodies = Set<Int>()
 	}

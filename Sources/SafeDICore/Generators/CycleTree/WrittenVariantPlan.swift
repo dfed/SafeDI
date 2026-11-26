@@ -101,7 +101,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 	let rootStatements: [GeneratedCode]
 	/// The record of each called body's place, at its position less one.
 	private let records: [PlaceRecord?]
-	/// For each body, the indices of the children of each place, by the place's path.
+	/// For each body, the indices of the children of each place on the path to a call, by the place's path.
 	private let childIndicesByPath: [[[Int]: [Int]]]
 	private let callsByBody: [[VariantCall]]
 	private let labelsByBody: [[String]]
@@ -185,7 +185,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		callsByBody = unplanned.calls
 		labelsByBody = unplanned.labels
 		answersByBody = unplanned.answers
-		childIndicesByPath = unplanned.generators.map(Self.childIndicesByPath(of:))
+		childIndicesByPath = zip(unplanned.generators, unplanned.calls).map { Self.childIndicesByPath(of: $0, toward: $1) }
 		sendableFamily = Self.sendableFamily(of: unplanned.generators, callsByBody: unplanned.calls)
 	}
 
@@ -215,15 +215,17 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		sendableFamily[body]
 	}
 
-	/// The indices into `propertiesToGenerate` of the children of each place of `generator`'s body, in the order it builds
-	/// them, by the place's path, `[]` being the body's root.
-	private static func childIndicesByPath(of generator: ScopeGenerator) -> [[Int]: [Int]] {
+	/// The indices into `propertiesToGenerate` of the children of each place of `generator`'s body that leads to one of
+	/// `calls`, in the order it builds them, by the place's path, `[]` being the body's root: the layout reads no other
+	/// place's children (`TypeKeyLayout.resolvingCalls(in:ofBody:plan:)`).
+	private static func childIndicesByPath(of generator: ScopeGenerator, toward calls: [VariantCall]) -> [[Int]: [Int]] {
+		let pathsToCalls = VariantCall.pathsLeadingTo(calls)
 		var childIndicesByPath = [[Int]: [Int]]()
 		var placesToVisit: [(path: [Int], generator: ScopeGenerator)] = [([], generator)]
 		while let (path, place) = placesToVisit.popLast() {
 			let children = place.orderedChildGeneratorsWithIndices
 			childIndicesByPath[path] = children.map(\.index)
-			for (index, child) in children {
+			for (index, child) in children where pathsToCalls.contains(path + [index]) {
 				placesToVisit.append((path + [index], child))
 			}
 		}

@@ -147,19 +147,19 @@ extension TypeKeyLayout {
 						frames.append((body: target, children: children, next: 0))
 					}
 					statement = .closer(closer, target: target)
-					closersByTarget[target, default: []].append((body: body, index: position))
+					recordCloser(closer, at: (body: body, index: position), closing: target)
 				} else {
 					// The function a closing scope calls is the nearest of its name, as Swift resolves it: an enclosing place's, or,
 					// for a member of a loop of builders, one a statement of an enclosing body declares.
 					switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {
 					case let .enclosing(target):
 						statement = .closer(closer, target: target)
-						closersByTarget[target, default: []].append((body: body, index: position))
+						recordCloser(closer, at: (body: body, index: position), closing: target)
 					case let .statement(declaringBody, index, _):
 						if index < bodies[declaringBody].statements.count {
 							guard case let .built(target) = bodies[declaringBody].statements[index] else { return false }
 							statement = .closer(closer, target: target)
-							closersByTarget[target, default: []].append((body: body, index: position))
+							recordCloser(closer, at: (body: body, index: position), closing: target)
 						} else {
 							statement = .closer(closer, target: 0)
 							closersOnLaterStatements.append((body: body, position: position, declaringBody: declaringBody, index: index))
@@ -183,7 +183,7 @@ extension TypeKeyLayout {
 			      case let .closer(record, _) = bodies[closer.body].statements[closer.position]
 			else { return false }
 			bodies[closer.body].statements[closer.position] = .closer(record, target: target)
-			closersByTarget[target, default: []].append((body: closer.body, index: closer.position))
+			recordCloser(record, at: (body: closer.body, index: closer.position), closing: target)
 		}
 		return true
 	}
@@ -191,6 +191,17 @@ extension TypeKeyLayout {
 	/// Declares the statements of `body`, whose children are `children`: the positions of the labels each binds, which a look-up
 	/// before any index of the body reads, so a look-up made from a statement after one the walk has not reached reads what
 	/// it would once the walk reaches it; and the functions they declare, which a closer's function is resolved among.
+	/// Records the closing statement at `site`, whose record is `record`, as a call of `target`'s function, with what it
+	/// passes each label, which `closerValue(of:closing:onPlace:)` reads.
+	private mutating func recordCloser(_ record: ClosingPlaceRecord, at site: (body: Int, index: Int), closing target: Int) {
+		closersByTarget[target, default: []].append(site)
+		var argumentsByLabel = [String: PlaceRead]()
+		for argument in record.cycleArguments where argumentsByLabel[argument.label] == nil {
+			argumentsByLabel[argument.label] = argument
+		}
+		cycleArgumentsByCloser[CallSite(owner: site.body, index: site.index)] = argumentsByLabel
+	}
+
 	mutating func declareChildren(_ children: [GeneratedCode], ofBody body: Int) {
 		let first = bodies[body].statements.count
 		var functions = [String: DeclaredFunction]()

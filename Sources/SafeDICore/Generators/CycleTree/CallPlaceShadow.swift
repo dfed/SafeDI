@@ -99,6 +99,8 @@ extension DependencyTreeGenerator {
 		///   - nearestDeclarations: The declarations `todaysTree` was built beneath, with their lazily instantiated instances.
 		///   - parameterLabelsByCallPlace: Where `todaysTree` is a body holding call places, the labels each call place's
 		///     function can take as parameters (`CallPlaceShadow.parameterLabelsByCallPlace`).
+		///   - scopesFollowed: Where given, the only scopes whose places the walk returns and walks beneath: a walk for a
+		///     body's calls follows only the scopes that lead to a call place (`CallPlaceShadow.scopesLeadingToCallPlaces`).
 		///   - isMockRoot: Whether `todaysTree` is a mock root's, whose declarations join the bindings it is given and
 		///     whose required receives pin none in the trees of the dependencies it promotes, as `Scope.createScopeGenerator`
 		///     builds a root built for a mock.
@@ -110,10 +112,12 @@ extension DependencyTreeGenerator {
 			twinValues: Set<TwinValue>,
 			twinsBeingBuilt: [TwinValue: Property] = [:],
 			parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>] = [:],
+			followingOnly scopesFollowed: Set<ObjectIdentifier>? = nil,
 			isMockRoot: Bool = false,
 		) {
 			self.twinValues = twinValues
 			self.parameterLabelsByCallPlace = parameterLabelsByCallPlace
+			self.scopesFollowed = scopesFollowed
 			places = [Place(
 				generator: todaysTree,
 				scope: rootScope,
@@ -137,7 +141,7 @@ extension DependencyTreeGenerator {
 		mutating func next() -> (context: PlaceContext, isCalledByCycleClosingScope: Bool)? {
 			calledPlace = nil
 			while placesOfScope.isEmpty, let place = places.popLast() {
-				placesOfScope = Self.childPlaces(of: place, twinValues: twinValues, parameterLabelsByCallPlace: parameterLabelsByCallPlace).reversed()
+				placesOfScope = Self.childPlaces(of: place, twinValues: twinValues, parameterLabelsByCallPlace: parameterLabelsByCallPlace, followingOnly: scopesFollowed).reversed()
 			}
 			guard let (context, place, isCalledByCycleClosingScope) = placesOfScope.popLast() else { return nil }
 			if isCalledByCycleClosingScope {
@@ -178,11 +182,12 @@ extension DependencyTreeGenerator {
 
 		private let twinValues: Set<TwinValue>
 		private let parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>]
+		private let scopesFollowed: Set<ObjectIdentifier>?
 		private var places: [Place]
 		private var placesOfScope = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
 		private var calledPlace: Place?
 
-		private static func childPlaces(of place: Place, twinValues: Set<TwinValue>, parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>]) -> [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)] {
+		private static func childPlaces(of place: Place, twinValues: Set<TwinValue>, parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>], followingOnly scopesFollowed: Set<ObjectIdentifier>?) -> [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)] {
 			let (generator, scope, functions, callDescription) = (place.generator, place.scope, place.functions, place.callDescription)
 			var childPlaces = [(context: PlaceContext, place: Place, isCalledByCycleClosingScope: Bool)]()
 			let childLabelsPassedNil = place.labelsPassedNil.subtracting(scope.declaredLabels)
@@ -216,6 +221,9 @@ extension DependencyTreeGenerator {
 				}
 				childNearestDeclarations.recordRequiredReceives(of: scope.instantiable, publicMockCall: scope.publicMockCall)
 			}
+			// Each child's declarations change only the label it builds: they share the scope's in a layer of their own.
+			childNearestDeclarations = childNearestDeclarations.sharingDeclarations()
+			promotedChildNearestDeclarations = promotedChildNearestDeclarations?.sharingDeclarations()
 			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: place.propertiesGeneratedLater)
 			// The members of each child's loop of builders, which a `_received` function passes the child's function. Where
 			// the walk is of a body with call places, the loops are that body's own generator's: no check compares them
@@ -224,7 +232,9 @@ extension DependencyTreeGenerator {
 			let loopMembersByChildIndex = generator.loopMembersPassedByReceivedFunctions(of: orderedChildren, includingChildrenWithoutCycleParameters: true)
 			for child in orderedChildren where scope.propertiesToGenerate.indices.contains(child.index) {
 				let loopMembers = loopMembersByChildIndex[child.index, default: []]
-				if case let .instantiated(property, childScope, erasedToConcreteExistential) = scope.propertiesToGenerate[child.index] {
+				if case let .instantiated(property, childScope, erasedToConcreteExistential) = scope.propertiesToGenerate[child.index],
+				   scopesFollowed?.contains(ObjectIdentifier(childScope)) != false
+				{
 					let childNearestDeclarations = if let promotedChildNearestDeclarations, childNearestDeclarations.isPromotedByMockRoot(property) {
 						promotedChildNearestDeclarations
 					} else {
@@ -396,11 +406,27 @@ extension DependencyTreeGenerator {
 				}
 			}
 			self.copyByIdentifier = copyByIdentifier
+			copies = graph.nodes.compactMap { copyByIdentifier[$0] }
+			// A copy's children are copies or call places, so the copies reach no cycle: each copy is judged once its
+			// children are, in reverse of the order the root reaches them, which puts no copy before a copy it builds.
+			var scopesLeadingToCallPlaces = Set(callPlaceByIdentifier.values.map(ObjectIdentifier.init))
+			for copy in copies.reversed() {
+				for case let .instantiated(_, child, _) in copy.propertiesToGenerate where scopesLeadingToCallPlaces.contains(ObjectIdentifier(child)) {
+					scopesLeadingToCallPlaces.insert(ObjectIdentifier(copy))
+				}
+			}
+			self.scopesLeadingToCallPlaces = scopesLeadingToCallPlaces
 			self.calledScopeByCallPlace = calledScopeByCallPlace
 			self.callPlaceByIdentifier = callPlaceByIdentifier
 			self.parameterLabelsByCallPlace = parameterLabelsByCallPlace
 			twinValues = Set(propertiesByTwinValue.lazy.filter { $0.value.count > 1 }.map(\.key))
 		}
+
+		/// The copy of each scope the root reaches, the root's first, in the order the root reaches them.
+		let copies: [Scope]
+
+		/// The call places, and the copies whose trees hold one: a walk of a body for its calls follows no other child.
+		let scopesLeadingToCallPlaces: Set<ObjectIdentifier>
 
 		/// The values two properties build of one type on a cycle, a constant and a `LazilyInstantiated` of it
 		/// (`PerTypePlan.twins`): a cycle closes on whichever of the two its path built first.

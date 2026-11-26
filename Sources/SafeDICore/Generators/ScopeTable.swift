@@ -381,6 +381,18 @@ struct FrozenScopeMap {
 		return reached
 	}
 
+	/// This map with `scopes` and every scope they reach frozen in it, in the order given: every tree frozen from the map
+	/// it returns names each of them by one record, so a construction memo shared by those trees reuses their places.
+	func freezing(scopes: [Scope]) -> FrozenScopeMap {
+		var frozenScopeMap = self
+		for scope in scopes {
+			_ = frozenScopeMap.id(of: scope)
+		}
+		frozenScopeMap.freezePendingScopes()
+		frozenScopeMap.table.interner = internerSpace.snapshot()
+		return frozenScopeMap
+	}
+
 	/// The record of `scope` – a mock root's or a seam's root, which is in no map, or a root the map holds – frozen against
 	/// the table, and the table its children are found in: this one, with a record appended for each scope it refers to
 	/// that the map did not hold.

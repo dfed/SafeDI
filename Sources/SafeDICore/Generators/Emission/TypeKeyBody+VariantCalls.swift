@@ -25,6 +25,20 @@ struct VariantCall: Sendable {
 	let property: Property
 	let calledBody: Int
 	let arguments: [Answer]
+
+	/// The paths of the places beneath which one of `calls` is made: each proper prefix of a call's path, `[]` included.
+	static func pathsLeadingTo(_ calls: [VariantCall]) -> Set<[Int]> {
+		var paths = Set<[Int]>()
+		for call in calls {
+			var path = [Int]()
+			paths.insert(path)
+			for index in call.path.dropLast() {
+				path.append(index)
+				paths.insert(path)
+			}
+		}
+		return paths
+	}
 }
 
 /// What the type key reads of the per-type plan of one root's cycles: its bodies, the root's own first, each with its
@@ -80,6 +94,8 @@ extension TypeKeyBody {
 		for call in calls {
 			guard call.calledBody > 0, call.calledBody < plan.bodyCount, callsByPath.updateValue(call, forKey: call.path) == nil else { return nil }
 		}
+		// Only a place on the path to a call changes; every other is kept as its statement is.
+		let pathsToCalls = VariantCall.pathsLeadingTo(calls)
 		var resolvedCalls = 0
 		var resolvedStatements = [GeneratedCode]()
 		var frames = [CallResolutionFrame(path: [], statements: statements, childIndices: plan.childIndices(ofPlaceAt: [], inBody: body), owner: nil)]
@@ -105,7 +121,7 @@ extension TypeKeyBody {
 				resolvedCalls += 1
 				frame.resolved.append(replacingRecord(in: statement, with: .closer(closer)))
 				frames.append(frame)
-			} else if case let .built(built) = record, !built.children.isEmpty {
+			} else if case let .built(built) = record, !built.children.isEmpty, pathsToCalls.contains(path) {
 				frames.append(frame)
 				frames.append(CallResolutionFrame(path: path, statements: TypeKeyLayout.statementCodes(of: built.children), childIndices: plan.childIndices(ofPlaceAt: path, inBody: body), owner: (statement, built)))
 			} else {

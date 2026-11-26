@@ -195,9 +195,7 @@ extension TypeKeyLayout {
 	/// else what the place resolves the label to.
 	func closerValue(of label: String, closing closer: (body: Int, index: Int), onPlace place: Int) -> PathValue {
 		guard bodies[place].cycleParameterLabels.contains(label) else { return resolution(of: label, atPlace: place) }
-		guard case let .closer(record, _) = bodies[closer.body].statements[closer.index],
-		      let argument = record.cycleArguments.first(where: { $0.label == label })
-		else { return .none }
+		guard let argument = cycleArgumentsByCloser[CallSite(owner: closer.body, index: closer.index)]?[label] else { return .none }
 		return pathValue(of: argument, inBody: closer.body, before: closer.index)
 	}
 
