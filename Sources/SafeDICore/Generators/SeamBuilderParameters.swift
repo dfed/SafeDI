@@ -2025,7 +2025,7 @@ extension DependencyTreeGenerator {
 			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, call: ScopeGenerator?.none, isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]](), placeStoodFor: SeamSignature.Hole?.none)]
 			while let (generator, hidden, call, isFillOfPublicMockCall, inheritedCalledCopyDeclarations, placeStoodFor) = generatorsToVisit.popLast() {
 				if !byCase, let hole = placeStoodFor ?? generator.fillHole, let child = generator.children.first, let call {
-					findingsOfFill(of: hole, fill: generator, child: child, call: call, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
+					findingsOfFill(of: hole, fill: generator, reads: FillTreeReads(walking: child), call: call, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
 				}
 				// A seam call's children are its fills, which are judged against the calls inside any of them. A public mock's call
 				// inside one of its fills that re-enters a level function the call declares hands it only what that call reads of its
@@ -2157,7 +2157,7 @@ extension DependencyTreeGenerator {
 				guard let entry = representatives[signature] else { continue }
 				let fill = entry.fill
 				guard let child = fill.children.first else { continue }
-				findings += findingsOfFill(of: entry.hole, fill: entry.fill, child: child, call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+				findings += findingsOfFill(of: entry.hole, fill: entry.fill, reads: FillTreeReads(walking: child), call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 			}
 		}
 		return findings
@@ -2298,7 +2298,126 @@ extension DependencyTreeGenerator {
 		return nil
 	}
 
-	/// The findings of the fill of `hole` whose tree `child` roots, in the order the tree declares them. A closer is judged
+	/// What one fill's tree reads, in the order its walk meets them: each receive it resolves outside the fill and each scope
+	/// that closes a cycle on a declaration of the filled seam's path. A fact of the tree alone, never of the place it fills,
+	/// so places that share a fill's tree are judged from one walk (`findingsOfFill`), each against its own hole.
+	struct FillTreeReads {
+		/// A receive the tree resolves outside the fill: no scope above it in the fill provides it.
+		struct Receive {
+			let property: Property
+			let readerType: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
+			let onlyIfAvailable: Bool
+			/// The seam call the receive is made by, where a call in the fill passes it on to the seam's tree.
+			let passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall?
+		}
+
+		/// A scope of the tree that closes a cycle on a declaration of the filled seam's path. A closer beneath a fill nested in
+		/// this one is that fill's, which `validateFills` reaches itself, and is not listed.
+		struct Closer {
+			let property: Property
+			let closingType: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
+			let fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor]
+			let closedOnDeclaration: ScopeGenerator.BuiltDeclaration
+		}
+
+		enum Read {
+			case receive(Receive)
+			case closer(Closer)
+		}
+
+		/// The reads, in walk order: each type before the types beneath it, siblings in declaration order.
+		let reads: [Read]
+		/// The root of the tree, which `firstReader(of:)` walks again only where a finding names a reader.
+		private let root: ScopeGenerator
+
+		init(walking root: ScopeGenerator) {
+			self.root = root
+			var reads = [Read]()
+			typealias Frame = (generator: ScopeGenerator, parent: Instantiable, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool)
+			var framesToVisit = [Frame]()
+			func isProvided(_ property: Property, by providedProperties: Set<Property>) -> Bool {
+				providedProperties.contains(property)
+					|| (property.typeDescription.isOptional && providedProperties.contains(property.asUnwrappedProperty))
+			}
+			/// Records the receives of `generator`'s scope and queues the scopes beneath it. A fill nested in this one is no scope
+			/// of its own: what it builds is judged for receives as this tree's, and its closers by `validateFills`.
+			func visit(_ generator: ScopeGenerator, parent: Instantiable?, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool) {
+				let childProvidedProperties = providedProperties.union(generator.providedProperties)
+				if let instantiable = generator.builtInstantiable {
+					// A seam's call receives what it passes on to the seam's tree.
+					let passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = if generator.seamCall != nil, let parent, let property = generator.property {
+						.init(callingType: parent.concreteInstantiable, property: property, declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation)
+					} else {
+						nil
+					}
+					for dependency in instantiable.dependencies {
+						switch dependency.source {
+						case let .received(onlyIfAvailable):
+							guard !isProvided(dependency.property, by: providedProperties) else { continue }
+							reads.append(.receive(.init(property: dependency.property, readerType: instantiable.concreteInstantiable, declarationLocation: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: passingCall)))
+						case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+							guard !isProvided(fulfillingProperty, by: childProvidedProperties) else { continue }
+							reads.append(.receive(.init(property: fulfillingProperty, readerType: instantiable.concreteInstantiable, declarationLocation: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: nil)))
+						case .instantiated, .forwarded:
+							continue
+						}
+					}
+					let childFillAncestors = fillAncestors + (generator.property.map { [DependencyTreeGeneratorError.FillFinding.FillAncestor(property: $0, builtType: instantiable.concreteInstantiable)] } ?? [])
+					framesToVisit.append(contentsOf: generator.children.reversed().map { ($0, instantiable, childProvidedProperties, childFillAncestors, judgesClosers) })
+				} else if let parent {
+					framesToVisit.append(contentsOf: generator.children.reversed().map { ($0, parent, childProvidedProperties, fillAncestors, judgesClosers && generator.fillHole == nil) })
+				}
+			}
+			visit(root, parent: nil, providedProperties: [], fillAncestors: [], judgesClosers: true)
+			while let (generator, parent, providedProperties, fillAncestors, judgesClosers) = framesToVisit.popLast() {
+				if generator.closesPropertyCycle {
+					// A scope in the fill that closes a cycle on a property of the seam's path refers to a builder function
+					// the seam's initializer declares, which code generated outside the seam's module cannot refer to.
+					if judgesClosers, generator.closesCycleOnFillPath, let property = generator.property, let closedOnDeclaration = generator.closedOnDeclaration {
+						reads.append(.closer(.init(
+							property: property,
+							closingType: parent.concreteInstantiable,
+							declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation,
+							fillAncestors: fillAncestors,
+							closedOnDeclaration: closedOnDeclaration,
+						)))
+					}
+				} else {
+					visit(generator, parent: parent, providedProperties: providedProperties, fillAncestors: fillAncestors, judgesClosers: judgesClosers)
+				}
+			}
+			self.reads = reads
+		}
+
+		/// The receive of `instance`, or of its optional form, in the tree declared first in source order, by the type
+		/// that receives it: a receive of the label, or an alias whose fulfilling property is the instance, which the finding
+		/// names by that property, as it names a reader through an alias.
+		func firstReader(of instance: Property) -> DependencyTreeGeneratorError.FillFinding.InstanceReader? {
+			var readers = [DependencyTreeGeneratorError.FillFinding.InstanceReader]()
+			var generatorsToVisit = [root]
+			while let generator = generatorsToVisit.popLast() {
+				for dependency in generator.builtInstantiable?.dependencies ?? [] {
+					let receivedProperty: Property? = switch dependency.source {
+					case .received:
+						dependency.property
+					case let .aliased(fulfillingProperty, _, _):
+						fulfillingProperty
+					case .instantiated, .forwarded:
+						nil
+					}
+					if let receivedProperty, receivedProperty.asUnwrappedProperty == instance, let type = generator.builtInstantiable?.concreteInstantiable {
+						readers.append(.init(property: receivedProperty, type: type, declarationLocation: dependency.declarationLocation))
+					}
+				}
+				generatorsToVisit.append(contentsOf: generator.children)
+			}
+			return readers.min { [$0.declarationLocation].lexicographicallyPrecedes([$1.declarationLocation], by: Dependency.DeclarationLocation.precedesInSourceOrder) }
+		}
+	}
+
+	/// The findings of the fill of `hole` whose tree `reads` walked, in the order the tree declares them. A closer is judged
 	/// by what generation found (`ScopeGenerator.closesCycleOnFillPath`), so only against the stack it was built
 	/// with: the walk goes on into a fill nested in this one, whose receives fall through to this fill's fields, but a closer
 	/// beneath it is that fill's, which `validateFills` reaches itself. This generator tree holds a seam the fill calls as a
@@ -2315,7 +2434,7 @@ extension DependencyTreeGenerator {
 	private static func findingsOfFill(
 		of hole: SeamSignature.Hole,
 		fill: ScopeGenerator,
-		child: ScopeGenerator,
+		reads: FillTreeReads,
 		call: ScopeGenerator,
 		hidden: FillReentryHidings,
 		requirement: AccessRequirement,
@@ -2327,12 +2446,6 @@ extension DependencyTreeGenerator {
 		// The hole says which module declares each seam: this run may know a seam only through a module that calls it.
 		let seamModule = hole.scopeSeamModule
 		let fields = hole.fields
-		typealias Frame = (generator: ScopeGenerator, parent: Instantiable, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool)
-		var framesToVisit = [Frame]()
-		func isProvided(_ property: Property, by providedProperties: Set<Property>) -> Bool {
-			providedProperties.contains(property)
-				|| (property.typeDescription.isOptional && providedProperties.contains(property.asUnwrappedProperty))
-		}
 		/// Whether `property`, which a type in the fill's tree receives, is the hole's own property, or its instance.
 		func isHolesOwnProperty(_ property: Property) -> Bool {
 			[hole.property, hole.property.asLazilyInstantiatedInstanceProperty]
@@ -2385,30 +2498,6 @@ extension DependencyTreeGenerator {
 				return nil
 			}
 		}
-		/// The receive of `instance`, or of its optional form, in the fill's tree declared first in source order, by the type
-		/// that receives it: a receive of the label, or an alias whose fulfilling property is the instance, which the finding
-		/// names by that property, as it names a reader through an alias.
-		func firstReader(of instance: Property) -> DependencyTreeGeneratorError.FillFinding.InstanceReader? {
-			var readers = [DependencyTreeGeneratorError.FillFinding.InstanceReader]()
-			var generatorsToVisit = [child]
-			while let generator = generatorsToVisit.popLast() {
-				for dependency in generator.builtInstantiable?.dependencies ?? [] {
-					let receivedProperty: Property? = switch dependency.source {
-					case .received:
-						dependency.property
-					case let .aliased(fulfillingProperty, _, _):
-						fulfillingProperty
-					case .instantiated, .forwarded:
-						nil
-					}
-					if let receivedProperty, receivedProperty.asUnwrappedProperty == instance, let type = generator.builtInstantiable?.concreteInstantiable {
-						readers.append(.init(property: receivedProperty, type: type, declarationLocation: dependency.declarationLocation))
-					}
-				}
-				generatorsToVisit.append(contentsOf: generator.children)
-			}
-			return readers.min { [$0.declarationLocation].lexicographicallyPrecedes([$1.declarationLocation], by: Dependency.DeclarationLocation.precedesInSourceOrder) }
-		}
 		/// The seams whose parameter a reader in the fill's tree receives in another form, each once per label and seam.
 		var twoFormsKeys = Set<SeamTreeReceives.Key>()
 		let sitePath = SeamTreeReceives.sitePath(of: hole)
@@ -2429,7 +2518,7 @@ extension DependencyTreeGenerator {
 				)))
 			}
 		}
-		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool, passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = nil) {
+		func checkReceive(of property: Property, by readerType: TypeDescription, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool, passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall?) {
 			// The seam's tree, as the caller fills it, receives the label wherever the fill's tree resolves it outside the fill,
 			// where the fill's field of the label is that seam's parameter. Where some route hands the fill the memo of a seam that
 			// defers the label, which the fill binds in the field's place (`ScopeGenerator.fillMemoOriginsByLabel`), the tree of
@@ -2443,10 +2532,10 @@ extension DependencyTreeGenerator {
 			let memoOrigins = (fill.fillMemoOriginsByLabel[property.label] ?? []).filter { $0.seamType != fieldOrigin?.seamType }
 			for origin in [fieldOrigin].compactMap(\.self) + memoOrigins {
 				seamTreeReceives.add(
-					DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: instantiable.concreteInstantiable, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false),
+					DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: readerType, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false),
 					isRequired: !onlyIfAvailable,
 					sitePath: sitePath,
-					calledSeam: passingCall.map { _ in instantiable.concreteInstantiable },
+					calledSeam: passingCall.map { _ in readerType },
 					to: .init(label: property.label, seamType: origin.seamType),
 				)
 			}
@@ -2454,7 +2543,7 @@ extension DependencyTreeGenerator {
 			// `nil`, which the fill's tree passes it too, unless the property is an instantiator, which is handed a wrapper of
 			// its own (see `instantiatorBuildingSite`).
 			guard !onlyIfAvailable || ScopeGenerator.isBuilder(hole.property) || !isHolesOwnProperty(property) else { return }
-			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, isOnlyIfAvailable: onlyIfAvailable, fillingModule: callerModule, passingCall: passingCall)
+			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: readerType, declarationLocation: declarationLocation, isOnlyIfAvailable: onlyIfAvailable, fillingModule: callerModule, passingCall: passingCall)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
 			// A declaration a called copy of a fill on the place's path leaves uncarried, which the place joins to its own
 			// (`unreadableInsideFills(_:placeFields:fillingModule:)`), is nearer the place than every field of its label: each
@@ -2545,7 +2634,7 @@ extension DependencyTreeGenerator {
 			          let instance = property.asLazilyInstantiatedInstanceProperty,
 			          let routes = fill.fillPlainMemoRoutesOfSendableWrapperReads[property.label],
 			          let memo = fill.fillFields.first(where: { $0.property.label == property.label && $0.deferral == .deferred(isSendable: false) && $0.property.asUnwrappedProperty == instance }),
-			          let instanceReader = firstReader(of: instance)
+			          let instanceReader = reads.firstReader(of: instance)
 			{
 				// The fill takes a `LazilyInstantiated` some route hands, which is no `SendableLazilyInstantiated`, where its tree reads
 				// the value too: generation found it (`ScopeGenerator.fillPlainMemoRoutesOfSendableWrapperReads`). Where the tree reads
@@ -2584,7 +2673,7 @@ extension DependencyTreeGenerator {
 				// elsewhere the mock, which no other code reads, is never compiled, and the fill is generated as it is.
 				let receivers = origin.receivers.map {
 					DependencyTreeGeneratorError.SeamError.Receiver(property: $0.property, declaringType: $0.declaringType, declarationLocation: $0.declarationLocation, aliasProperty: $0.aliasProperty, isInstantiateMethodParameter: $0.isInstantiateMethodParameter)
-				} + [DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: instantiable.concreteInstantiable, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false)]
+				} + [DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: readerType, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false)]
 				findings.append(.init(hole: hole, kind: .publicMockHandsOptionalWrapperOfRequiredValue(
 					label: property.label,
 					field: field,
@@ -2626,57 +2715,24 @@ extension DependencyTreeGenerator {
 			// fill of a public mock's place that receives a root-level value in another form is judged here only where the
 			// field is an optional wrapper and the fill requires its instance.
 		}
-		/// Checks the receives of `generator`'s scope and queues the scopes beneath it. A fill nested in this one is no scope
-		/// of its own: what it builds is judged for receives as this tree's, and its closers by `validateFills`.
-		func visit(_ generator: ScopeGenerator, parent: Instantiable?, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool) {
-			let childProvidedProperties = providedProperties.union(generator.providedProperties)
-			if let instantiable = generator.builtInstantiable {
-				// A seam's call receives what it passes on to the seam's tree.
-				let passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = if generator.seamCall != nil, let parent, let property = generator.property {
-					.init(callingType: parent.concreteInstantiable, property: property, declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation)
-				} else {
-					nil
-				}
-				for dependency in instantiable.dependencies {
-					switch dependency.source {
-					case let .received(onlyIfAvailable):
-						guard !isProvided(dependency.property, by: providedProperties) else { continue }
-						checkReceive(of: dependency.property, by: instantiable, declaredAt: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: passingCall)
-					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						guard !isProvided(fulfillingProperty, by: childProvidedProperties) else { continue }
-						checkReceive(of: fulfillingProperty, by: instantiable, declaredAt: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable)
-					case .instantiated, .forwarded:
-						continue
-					}
-				}
-				let childFillAncestors = fillAncestors + (generator.property.map { [DependencyTreeGeneratorError.FillFinding.FillAncestor(property: $0, builtType: instantiable.concreteInstantiable)] } ?? [])
-				framesToVisit.append(contentsOf: generator.children.reversed().map { ($0, instantiable, childProvidedProperties, childFillAncestors, judgesClosers) })
-			} else if let parent {
-				framesToVisit.append(contentsOf: generator.children.reversed().map { ($0, parent, childProvidedProperties, fillAncestors, judgesClosers && generator.fillHole == nil) })
-			}
-		}
-		visit(child, parent: nil, providedProperties: [], fillAncestors: [], judgesClosers: true)
-		while let (generator, parent, providedProperties, fillAncestors, judgesClosers) = framesToVisit.popLast() {
-			if generator.closesPropertyCycle {
-				// A scope in the fill that closes a cycle on a property of the seam's path refers to a builder function
-				// the seam's initializer declares, which code generated outside the seam's module cannot refer to.
+		for read in reads.reads {
+			switch read {
+			case let .receive(receive):
+				checkReceive(of: receive.property, by: receive.readerType, declaredAt: receive.declarationLocation, onlyIfAvailable: receive.onlyIfAvailable, passingCall: receive.passingCall)
+			case let .closer(closer):
 				// Where the declaration lies on the path is read from the place judged, whose own fill another place's can stand
 				// for (`ScopeGenerator.FillStoodFor`): the two reach the declaration at depths of their own.
-				if judgesClosers, generator.closesCycleOnFillPath, let property = generator.property, let closedOnDeclaration = generator.closedOnDeclaration,
-				   let declarationsBeneath = hole.fillPathDeclarationsBeneath(closedOnDeclaration)
-				{
+				if let declarationsBeneath = hole.fillPathDeclarationsBeneath(closer.closedOnDeclaration) {
 					findings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
-						closingProperty: property,
-						closingType: parent.concreteInstantiable,
-						declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation,
-						fillAncestors: fillAncestors,
+						closingProperty: closer.property,
+						closingType: closer.closingType,
+						declarationLocation: closer.declarationLocation,
+						fillAncestors: closer.fillAncestors,
 						closedOnDeclaration: hole.declaredSitePath.dropLast(declarationsBeneath + 1).last,
 						closesOnOwnerOfHole: declarationsBeneath == 0,
 						seamModule: seamModule,
 					)))
 				}
-			} else {
-				visit(generator, parent: parent, providedProperties: providedProperties, fillAncestors: fillAncestors, judgesClosers: judgesClosers)
 			}
 		}
 		return findings
