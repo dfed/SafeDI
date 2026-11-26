@@ -2510,6 +2510,9 @@ extension GraphFuzzerFixture {
 		if let probe = publicMockOuterFulfillerProbe(generatedFiles: generatedFiles) {
 			probes.append(probe)
 		}
+		if let probe = publicMockFormNamedApartProbe(generatedFiles: generatedFiles) {
+			probes.append(probe)
+		}
 		let mockFileSuffix = "+SafeDIMock.swift"
 		let typesTakingOwnOptionalName = publicMockTypesTakingOwnOptionalName
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
@@ -2675,6 +2678,29 @@ extension GraphFuzzerFixture {
 		let screenName = typeNamePrefix + "OuterScreen"
 		guard generatedFiles.keys.contains(where: { $0 == "\(screenName)+SafeDIMock.swift" || $0.hasSuffix("/\(screenName)+SafeDIMock.swift") }) else { return nil }
 		return DifferentialValueProbe("\(screenName).mock(outerLabel: \"probe\")")
+	}
+
+	/// A probe calling the generated `mock()` of `FormScreen`, the consumer the public mock corpus's draw of one value in many
+	/// forms beside a call declares, where the called mock takes the label in two forms, one named apart (the draw's
+	/// `FormKey`), with a `FormToken` for the one required parameter it takes, so that the probe compares whether the call
+	/// passes the consumer's `FormMark` on to `FormCacheEntry`, which reads `nil` on a path that omits it. `nil` when the graph
+	/// has no such consumer, the tool generated no mock of it, or its `mock()` requires another parameter, which the probe
+	/// has no value for.
+	private func publicMockFormNamedApartProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
+		let screenName = typeNamePrefix + "FormScreen"
+		let keyName = typeNamePrefix + "FormKey"
+		guard swiftFileContent.contains(where: { $0.contains("final class \(keyName)") }),
+		      let mockFile = generatedFiles.first(where: { $0.key == "\(screenName)+SafeDIMock.swift" || $0.key.hasSuffix("/\(screenName)+SafeDIMock.swift") })?.value,
+		      let signatureStart = mockFile.range(of: "static func mock(\n"),
+		      let signatureEnd = mockFile.range(of: "\n    ) -> ", range: signatureStart.upperBound..<mockFile.endIndex)
+		else { return nil }
+		let requiredLabels = mockFile[signatureStart.upperBound..<signatureEnd.lowerBound]
+			.split(separator: "\n")
+			.map { $0.trimmingCharacters(in: .whitespaces) }
+			.filter { !$0.contains(" = ") }
+			.compactMap { $0.split(separator: ":").first.map(String.init) }
+		guard requiredLabels == ["formToken"] else { return nil }
+		return DifferentialValueProbe("\(screenName).mock(formToken: \(typeNamePrefix)FormToken())")
 	}
 
 	/// A value of `type`, a plain type a host forwards, the same in every run: a standard type's fixed value, or the

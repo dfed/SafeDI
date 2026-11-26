@@ -3180,7 +3180,11 @@ struct GraphFuzzerPublicMockDraw {
 	/// declaring module's mock takes it; or, half the time, it is a plain class no module builds, so the consumer's mock takes
 	/// it too. A sibling now and then receives the label as `FormMark`, another type, which the mock names apart. Two draws in
 	/// five `FormCache` builds `FormCacheEntry`, which receives the label as an optional wrapper only if available, by value,
-	/// or as `FormMark`. Two `.public` consumers in five receive an optional wrapper of it only if available, a
+	/// or as `FormMark`. Three draws in twenty `FormCache` takes the label in two forms its mock names apart instead:
+	/// `FormPromoted`, which it receives, requires it as `FormKey`, which the declaring module builds, and `FormCacheEntry`
+	/// receives it as `FormMark`, required or only if available, while the consumer's first sibling requires `FormMark` and
+	/// is built before the call, so that the call passes the consumer's `FormMark` on, which the value comparator's probe of
+	/// `FormScreen.mock(formToken:)` judges. Two `.public` consumers in five receive an optional wrapper of it only if available, a
 	/// `SendableLazilyInstantiated` half the time in a `Sendable` graph, beside a first sibling that receives `FormMark`. Two
 	/// draws in five `FormScreen` also builds `FormBadge`, a `.public` type of the declaring module with an
 	/// `internal` initializer that takes nothing, whose public mock builds nothing but the type. Every roll is made before
@@ -3238,13 +3242,18 @@ struct GraphFuzzerPublicMockDraw {
 		cache.properties = [cacheFormRoll < 5 ? sessionProperty(form: 0) : cacheFormRoll < 8 ? sessionProperty(form: 1) : sessionProperty(form: 2)]
 		var entry: InstantiableClass?
 		var promoted: InstantiableClass?
+		var key: InstantiableClass?
 		if calledMockTakesFormNamedApart {
-			// The called mock takes the label in two forms, the second named apart (`formSession_FormMark`): `FormPromoted`,
-			// which `FormCache` receives and its mock promotes, requires the value, and `FormCacheEntry`, beneath `FormCache`,
-			// receives it as `FormMark`, required or only if available. A sibling of the consumer's requires `FormMark` too,
-			// so that the consumer holds both forms, and the call passes each its own.
+			// The called mock takes the label in two forms, one named apart: `FormPromoted`, which `FormCache` receives and
+			// its mock promotes, requires it as `FormKey`, a type the declaring module builds, so that the mock builds it when
+			// `nil`, and `FormCacheEntry`, beneath `FormCache`, receives it as `FormMark`, required or only if available. A
+			// sibling of the consumer's requires `FormMark` too, so that the consumer holds both forms, and the call passes
+			// each its own: an only-if-available `FormMark` the call omitted read `nil` where the inline mock reads the
+			// consumer's.
+			let cacheKey = InstantiableClass(name: name("FormKey"), conformances: conformances)
 			var cachePromoted = InstantiableClass(name: name("FormPromoted"), conformances: conformances)
-			cachePromoted.properties = [sessionProperty(form: 0)]
+			cachePromoted.properties = [Property(attribute: "@Received", label: "formSession", type: cacheKey.name)]
+			key = cacheKey
 			var cacheEntry = InstantiableClass(name: name("FormCacheEntry"), conformances: conformances)
 			cacheEntry.properties = [namedApartFormIsOptional
 				? Property(attribute: "@Received(onlyIfAvailable: true)", label: "formSession", type: "\(markName)?")
@@ -3308,12 +3317,20 @@ struct GraphFuzzerPublicMockDraw {
 				: Property(attribute: "@Instantiated", label: "formFeed\(index)", type: sibling.name))
 			consumerDeclarations.append(Self.renderer(of: sibling))
 		}
+		if calledMockTakesFormNamedApart, let callIndex = screen.properties.firstIndex(where: { $0.label == "formHolder" || $0.label == "formCache" }) {
+			// The consumer builds the called type after its siblings, so that the `FormMark` the first one requires is bound
+			// before the call, which passes it on.
+			screen.properties.append(screen.properties.remove(at: callIndex))
+		}
 		var declaringModuleDeclarations = [Self.renderer(of: cache), Self.renderer(of: InstantiableClass(name: markName, conformances: conformances))]
 		if let entry {
 			declaringModuleDeclarations.append(Self.renderer(of: entry))
 		}
 		if let promoted {
 			declaringModuleDeclarations.append(Self.renderer(of: promoted))
+		}
+		if let key {
+			declaringModuleDeclarations.append(Self.renderer(of: key))
 		}
 		if buildsEmptyPublicMock {
 			// A `.public` type that takes nothing and builds nothing, whose public mock is one call of its initializer.

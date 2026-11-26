@@ -9180,7 +9180,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 514, 528, 562, 771, 836, 947],
+			seeds: [103, 106, 167, 251, 322, 351, 514, 528, 562, 771, 820, 836, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
