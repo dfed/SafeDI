@@ -478,11 +478,14 @@ enum GraphFuzzerV3LayoutParity {
 
 /// The v3 engine draws' configured probes, compared with the trees built by hand under the Manual's rule for v3 overrides
 /// beside the agreement oracle's comparison with `.v2` (`GraphFuzzerAPIVersionAgreement`). They need neither side to be
-/// right, so they judge the walk and the engine alike. Hand mutations that must make them fire: share two places whose
-/// configurations differ (drop the per-type key check), which `configuredTypeUnderTwoParents`'s `both` probes see as the
-/// right `ZV3Shared` holding the left's `tag`; make a closer pass `nearest` instead of `parent.field ?? nearest`, which
-/// `twoClosersOfOneCycleTarget`'s later pass sees as `tag: 1` where `tag: 2` is due; and read a D12 builder once per
-/// function, which `unbuildableValueAtTwoPlaces` sees as one `ZV3Gadget` where two are due.
+/// right, so they judge the walk and the engine alike. Each fires under a hand mutation of 2d050ed's walk, every accepted
+/// draw seed tried failing by value: every place of a configured type reading the first place's field (cached per type),
+/// which `configuredTypeUnderTwoParents` sees as the right `ZV3Shared` holding the left's `tag` (seeds 0, 9, 14, 15, 19, 33,
+/// 35, 45, 50, 55, 59, 64, 74, 77, 80, 91, 99, 104, 108, 120, 383, 584, 786 and 1758); a closer passing `nearest` instead of
+/// `parent.field ?? nearest`, which `twoClosersOfOneCycleTarget` sees as another `tag` (seeds 2, 13, 36, 38, 44, 88 and 99);
+/// and a D12 builder called once before every builder function, its value shared, which `unbuildableValueAtTwoPlaces` sees
+/// as one `ZV3Gadget` where two are due (seeds 39, 45, 51, 56, 68, 73, 77, 84, 85, 93, 101, 104, 120 and 1496; 92, 116 and
+/// 117 stop compiling under it, since its shared closure is not `@Sendable`).
 enum GraphFuzzerV3DrawnProbes {
 	/// The draws' own value graph of `seed`'s `.v3Unstable` generated files: each configured probe against the tree built
 	/// by hand (`GraphFuzzerV3EngineDraw.probePairs(prefix:)`), or `nil` where the seed draws none.
