@@ -175,6 +175,10 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                one its parents declare.
   PRS-seam-parents-router      the same screens under a seam `Home` of module `Feature`, whose tree its own module
                                lays out; module `App`: the root, which builds `Home`.
+  BLT-back-links-to-home-at-the-leaves-of-a-tree-of-mocks
+                               one module: a root that instantiates `Instantiator<Home>`, and under `Home` a binary
+                               tree of screens with `generateMock: true`, each with a leaf of its own; every leaf of
+                               the tree receives that `Instantiator`, a back link to the home screen.
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -627,6 +631,24 @@ def shape_parent_router(layers, width=3, seam=False):
     return [("App", [], source)]
 
 
+def shape_back_link_mocks(screens):
+    """One module: a root that instantiates `homeBuilder: Instantiator<Home>`, and `Home` over a binary tree of
+    `screens` screens, each with `generateMock: true`, a leaf of its own and `Instantiator`s of its two children. Every
+    leaf of the tree receives `homeBuilder`: a back link to the home screen, so the mock of every screen above it builds
+    that instantiator, and with it Home's tree."""
+    source = "import SafeDI\n\n"
+    for screen in range(screens):
+        children = [child for child in (2 * screen + 1, 2 * screen + 2) if child < screens]
+        properties = [("@Instantiated", "leaf", f"Leaf{screen}")] + [builder(child) for child in children]
+        if not children:
+            properties.append(("@Received", "homeBuilder", "Instantiator<Home>"))
+        source += declaration("@Instantiable(generateMock: true)", f"Screen{screen}", properties)
+        source += declaration("@Instantiable", f"Leaf{screen}", [])
+    source += declaration("@Instantiable(generateMock: true)", "Home", [builder(0)])
+    source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "homeBuilder", "Instantiator<Home>")])
+    return [("App", [], source)]
+
+
 def shape_w(width):
     """One module: a root over two layers of `width` screens, each first-layer screen holding `Instantiator`s of three
     second-layer screens, from its own position on, and each second-layer screen one of the first-layer screen after
@@ -710,6 +732,15 @@ GROWTH_ROWS = {
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {}),
     "PR-parents-router": (lambda layers: shape_parent_router(layers), 8, {}),
     "PRS-seam-parents-router": (lambda layers: shape_parent_router(layers, seam=True), 8, {}),
+    # Every mock above a back link builds the promoted `homeBuilder` and writes Home's whole tree inside its own body, so M
+    # mocks over a Home tree of n places write M × n places, and Home's own mock writes its tree twice. The copies are in
+    # different mock functions, which one function per type per mock cannot share; one function per type per module,
+    # which each back link calls, removes them. 15 and 31 screens: 244,261 and 881,373 bytes of code (3.61), against
+    # 73,128 and 169,032 (2.31) for the same tree without back links. Its code ratio falls to about that with the fix;
+    # the 2.31 is each mock writing its own subtree, which sharing subtrees between mocks would remove. Time follows the
+    # code it writes: 0.136 s and 0.338 s (2.49), 0.157 s and 0.381 s (2.42) on a loaded machine; memory 42.7 MB and
+    # 46.6 MB (1.09). The time limit leaves room up to the code's own ratio.
+    "BLT-back-links-to-home-at-the-leaves-of-a-tree-of-mocks": (lambda layers: shape_back_link_mocks(2 ** (layers // 2 + 2) - 1), 4, {"time": 4.0, "code": 4.0}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
