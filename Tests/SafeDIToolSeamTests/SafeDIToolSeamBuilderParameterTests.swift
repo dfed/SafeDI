@@ -4803,6 +4803,43 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesFirstCarrierInChildOrder_whenSiblingBuiltAfterCarrierRequiresSixOtherCarriers(requiresAsManyPropertiesAsCarriers: Bool) async {
+		// `Service` builds eight carriers, `p5`, `p3`, `p7`, `p1`, `p6`, `p4`, `p8` and `p2`, and `z` requires six of them,
+		// declared in another order. The carrier the error names is the first of the six in `Service`'s child order,
+		// `p3`, whichever of them `z`'s set of required properties yields first: six candidates, so a carrier taken in the
+		// set's order is another on five runs of six. With two more receives `z` requires as many properties as `Service`
+		// has carriers, and the carriers are compared in child order in place of each required property being looked up.
+		let others = requiresAsManyPropertiesAsCarriers ? ["@Instantiated let other1: Other1", "@Instantiated let other2: Other2"] : []
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`’s dependency tree builds after `p2`, since `Z` requires `p3`, which carries another builder, so SafeDI does not hand it to the builder for `P2`’s `ledger: any Ledger` (`ledger` of `ledgerBuilder`). Declare `z` before `p2` in `Service`, or declare an @Instantiable type that fulfills `Ledger` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Service.swift"]):\(requiresAsManyPropertiesAsCarriers ? 27 : 23):5: note: `Service` declares `z: Z` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Clock {}\npublic protocol Ledger {}",
+						seamFixtureType(named: "P2", declarations: ["@Instantiated let ledger: any Ledger"]),
+						seamFixtureType(named: "Other1", declarations: []),
+						seamFixtureType(named: "Other2", declarations: []),
+						seamFixtureType(named: "Z", declarations: [8, 4, 6, 1, 7, 3].map { "@Received let p\($0): P\($0)" } + (requiresAsManyPropertiesAsCarriers ? ["@Received let other1: Other1", "@Received let other2: Other2"] : [])),
+						seamFixtureType(named: "Service", isSeam: true, declarations: others + [5, 3, 7, 1, 6, 4, 8, 2].map { "@Instantiated let p\($0): P\($0)" } + ["@Instantiated let z: Z"]),
+					] + [1, 3, 4, 5, 6, 7, 8].map { seamFixtureType(named: "P\($0)", declarations: ["@Instantiated let clock: any Clock"]) },
+					app: [
+						Self.fulfillingType(named: "SystemClock", fulfilling: "Clock", declarations: []),
+						Self.fulfillingType(named: "ZLedger", fulfilling: "Ledger", declarations: ["@Received let z: Z"]),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillRequiresValueSeamsTreeReceivesOnlyIfAvailable() async {
