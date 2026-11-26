@@ -1354,10 +1354,18 @@ extension DependencyTreeGenerator {
 			let scopeID = ObjectIdentifier(scope)
 			if let reads = readsByScope[scopeID] {
 				return reads
+			} else {
+				let reads = Self.reads(of: scope, besides: readsByScope)
+				readsByScope[scopeID] = reads
+				return reads
 			}
+		}
+
+		/// What `scope`'s subtree reads, taking that of each scope beneath it from `readsByScope` where it is there.
+		private static func reads(of scope: Scope, besides readsByScope: [ObjectIdentifier: CycleWalkReads]) -> CycleWalkReads {
 			var properties = Set<Property>()
 			var receivedLabels = Set<String>()
-			var visitedScopes: Set<ObjectIdentifier> = [scopeID]
+			var visitedScopes: Set<ObjectIdentifier> = [ObjectIdentifier(scope)]
 			var scopesToVisit = [scope]
 			while let visitedScope = scopesToVisit.popLast() {
 				for dependency in visitedScope.instantiable.dependencies where !dependency.isForwarded && dependency.canCloseDependencyCycle {
@@ -1380,9 +1388,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			}
-			let reads = CycleWalkReads(properties: properties, receivedLabels: receivedLabels)
-			readsByScope[scopeID] = reads
-			return reads
+			return CycleWalkReads(properties: properties, receivedLabels: receivedLabels)
 		}
 	}
 
