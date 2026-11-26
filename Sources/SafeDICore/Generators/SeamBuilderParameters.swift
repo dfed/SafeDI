@@ -1681,20 +1681,20 @@ extension DependencyTreeGenerator {
 						placesByTreePath[treePath] = placesInTree
 					}
 					let placeDeclaration = SeamSignature.Places.Declaration(
-							field: field(of: declaration),
-							isBoundBeforeNextProperty: declaration.isBoundBeforeSite,
-							builtAfter: declaration.builtAfter,
-							reason: declaration.reason,
-							isForwarded: declaration.isForwarded,
-							cycleParameterOrigin: declaration.cycleParameterOrigin,
-							alias: declaration.alias,
-							isBoundFromCallersArgument: declaration.isBoundFromCallersArgument,
-							isCycleParameter: declaration.isCycleParameter,
-							isReboundByBuilderFunction: declaration.isReboundByBuilderFunction,
-							isFieldOfSeamParameter: declaration.isFieldOfSeamParameter,
-							fillFieldHiding: declaration.fillFieldHiding,
-							buildability: buildability,
-						)
+						field: field(of: declaration),
+						isBoundBeforeNextProperty: declaration.isBoundBeforeSite,
+						builtAfter: declaration.builtAfter,
+						reason: declaration.reason,
+						isForwarded: declaration.isForwarded,
+						cycleParameterOrigin: declaration.cycleParameterOrigin,
+						alias: declaration.alias,
+						isBoundFromCallersArgument: declaration.isBoundFromCallersArgument,
+						isCycleParameter: declaration.isCycleParameter,
+						isReboundByBuilderFunction: declaration.isReboundByBuilderFunction,
+						isFieldOfSeamParameter: declaration.isFieldOfSeamParameter,
+						fillFieldHiding: declaration.fillFieldHiding,
+						buildability: buildability,
+					)
 					return SeamPlacesBuilder.DeclarationDraft(
 						declaration: declaration.childFacts.map(placeDeclaration.asChild) ?? placeDeclaration,
 						placesInTree: placesInTree,
