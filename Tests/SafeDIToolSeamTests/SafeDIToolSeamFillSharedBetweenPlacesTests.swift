@@ -140,7 +140,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 	mutating func generate_namesDeclarationClosedOn_whenAnotherPlacesFillStandsForPlaceThatReachesItAtAnotherDepth(buildsFillOfEveryPlace: Bool) async {
 		// `Shell` builds `Panel` beneath `A` and `B`, and one level deeper beneath `C`'s `Mid`, so `Panel`'s `api` is three
 		// places of one case, the third of which has `shellBuilder` one declaration farther up its path. `LiveApi` builds
-		// `shellBuilder` again, which closes a cycle on `Home`'s at every one of them.
+		// `shellBuilder` again, which closes a cycle on `Home`'s at every one of them: one error for the places at each depth,
+		// naming the route through `a`, which `Shell` declares before `b`.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 				try await executeSafeDIToolMultiModuleTest(
@@ -169,8 +170,6 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> a -> A -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> b -> B -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> c -> C -> mid -> Mid -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
 			"""
@@ -180,6 +179,47 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			}
 		}
 		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == (buildsFillOfEveryPlace ? [3, 0] : [2, 1]))
+	}
+
+	@Test(arguments: [["A", "B"], ["B", "A"]])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesRouteThroughFirstDeclaredProperty_whenPlacesOfOneCaseReachDeclarationClosedOnAtOneDepth(typeNamesInDeclarationOrder: [String]) async {
+		// `Shell` builds `Panel` beneath two types at one depth, declared in the order given, so `Panel`'s `api` is two places
+		// of one case that reach `shellBuilder` along routes that differ only in that type. `LiveApi` builds `shellBuilder`
+		// again, which closes a cycle on `Home`'s at both: one error, naming the route through the property `Shell` declares
+		// first, whatever the types and labels are named.
+		let (first, second) = (typeNamesInDeclarationOrder[0], typeNamesInDeclarationOrder[1])
+		let (firstLabel, secondLabel) = (first.lowercased(), second.lowercased())
+		let (_, error) = await fillsOfCalls { filesToDelete in
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: SafeDIToolSeamBuilderParameterTests.modules(
+					feature: [
+						"public protocol Api {}",
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let api: any Api"]),
+						seamFixtureType(named: first, declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: second, declarations: ["@Instantiated let panel: Panel"]),
+						seamFixtureType(named: "Shell", declarations: ["@Instantiated let \(firstLabel): \(first)", "@Instantiated let \(secondLabel): \(second)"]),
+						seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+					],
+					app: [
+						SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let home: Home"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> \(firstLabel) -> \(first) -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			"""
+		}) {
+			if let error {
+				throw error
+			}
+		}
 	}
 
 	@Test(arguments: [false, true])
