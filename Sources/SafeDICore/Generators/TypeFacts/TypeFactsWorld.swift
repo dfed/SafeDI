@@ -134,6 +134,17 @@ struct TypeFactsReceived: Equatable, Sendable {
 	let isRequiredThroughAlias: Bool
 }
 
+/// One receive a node's own type makes: the read it makes, the properties that fulfill it as a run of
+/// `acceptedProperties(of:)`, whether it is required, and the alias it is read through.
+struct TypeFactsReceive: Equatable, Sendable {
+	let read: ReadID
+	let acceptedStart: Int32
+	let acceptedCount: Int32
+	let isRequired: Bool
+	/// The `PropertyID.raw` of the alias the receive is read through, -1 for a direct receive.
+	let alias: Int32
+}
+
 /// An answer to a read, by value: compared by its form and what it provides, never by the declaration that gives it.
 struct TypeFactsAnswer: Equatable, Sendable {
 	enum Form: UInt8, Sendable {
@@ -181,6 +192,11 @@ protocol TypeFactsWorld {
 	func hole(_ declaration: DeclarationID) -> TypeFactsHole?
 	/// The union fact of what the subtree receives from above. Owed by the table-side columns.
 	func received(by declaration: DeclarationID) -> ArraySlice<TypeFactsReceived>
+	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
+	/// table-side columns.
+	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive>
+	/// The properties that fulfill a receive. Owed by the table-side columns.
+	func acceptedProperties(of receive: TypeFactsReceive) -> ArraySlice<PropertyID>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
@@ -188,6 +204,12 @@ protocol TypeFactsWorld {
 	/// The labels the node's subtree reads from above it, each once, in read order.
 	func labels(of declaration: DeclarationID) -> ArraySlice<WorldLabelID>
 
+	/// The roots the world is built from: one tonight. A world of several roots (every production root and seam, or every
+	/// mock root, of one validation call) seeds a variant per root from that root's answers and shares the rest where
+	/// they agree; nothing per root lives on a variant.
+	var rootCount: Int { get }
+	/// The variant a root's body is.
+	func rootVariant(_ root: Int) -> VariantID
 	var variantCount: Int { get }
 	func declaration(of variant: VariantID) -> DeclarationID
 	func family(of variant: VariantID) -> VariantFamily
@@ -195,6 +217,11 @@ protocol TypeFactsWorld {
 	/// answer ID with what a parameter carries left out. A call's own answers are `sources(ofCall:of:)`.
 	func keys(of variant: VariantID) -> ArraySlice<AnswerID>
 	func answer(_ answer: AnswerID) -> TypeFactsAnswer
+	/// The forms an answer's declaration provides, by value, interned apart from the channel that reads them. Owed with
+	/// answers interned by ID (answers are interned by text tonight).
+	func forms(of answer: AnswerID) -> ArraySlice<PropertyID>
+	/// Whether the answer's declaration provides `property`. Owed with `forms(of:)`: `false` until then.
+	func provides(_ answer: AnswerID, _ property: PropertyID) -> Bool
 	/// The variant each edge of the variant's declaration calls, in edge order.
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
@@ -288,6 +315,30 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func received(by _: DeclarationID) -> ArraySlice<TypeFactsReceived> {
 		[]
+	}
+
+	func receives(of _: DeclarationID) -> ArraySlice<TypeFactsReceive> {
+		[]
+	}
+
+	func acceptedProperties(of _: TypeFactsReceive) -> ArraySlice<PropertyID> {
+		[]
+	}
+
+	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {
+		[]
+	}
+
+	func provides(_: AnswerID, _: PropertyID) -> Bool {
+		false
+	}
+
+	var rootCount: Int {
+		1
+	}
+
+	func rootVariant(_: Int) -> VariantID {
+		0
 	}
 
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID> {

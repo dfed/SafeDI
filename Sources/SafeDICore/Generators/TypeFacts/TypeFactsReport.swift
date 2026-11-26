@@ -174,14 +174,16 @@ public struct TypeFactsReport: Sendable {
 			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"
 			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(world.bindings(of: declaration).count)"
 			line += " parents \(world.parents(of: declaration).count) hole \(world.hole(declaration) != nil) received \(world.received(by: declaration).count)"
+			line += " receives \(world.receives(of: declaration).map { world.acceptedProperties(of: $0).count })"
 			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
 			line += " labels \(Array(world.labels(of: declaration)))"
 			lines.append(line)
 		}
+		lines.append("roots \((0..<world.rootCount).map(world.rootVariant))")
 		for index in 0..<world.variantCount {
 			let variant = VariantID(index)
 			var line = "v\(index) d\(world.declaration(of: variant)) \(world.family(of: variant))"
-			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form)" }.joined(separator: ", "))]"
+			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form) \(world.forms(of: $0).count)" }.joined(separator: ", "))]"
 			let calls = world.calls(of: variant)
 			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]"
 			line += world.isCalledOnce(variant) ? " once" : ""
