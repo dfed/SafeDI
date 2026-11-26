@@ -679,7 +679,10 @@ extension DependencyTreeGenerator {
 		let binding: ReceivableAlias.AliasBinding?
 		let declaringType: TypeDescription
 		let lastAliasDeclaringType: TypeDescription
-		let lastAliasDeclaringInstantiationStack: [Property]
+		/// The entries of the last alias's declaring instantiation stack the walk reads (see
+		/// `declaringStackEntriesReadByFulfillingPropertyWalk(of:lastFulfillingProperty:)`): the stack differs on every
+		/// path to the declaring scope.
+		let declaringStackEntriesRead: [Property]
 		/// The one entry of the instantiation stack a walk finds by the length of the last alias's declaring stack, the
 		/// child of the declaring scope the subtree is built inside, where it is the property that alias is bound from:
 		/// a receive that requires the alias is then built inside the alias's own fulfilling sibling.
@@ -1302,6 +1305,30 @@ extension DependencyTreeGenerator {
 		var cleanSubtreeLabelFactsByScope = [Scope: CleanSubtreeLabelFacts]()
 		/// See `cleanSubtreeKeyLabels(of:)`.
 		var cleanSubtreeKeyLabelsByScope = [Scope: CleanSubtreeKeyLabels]()
+		/// See `propertiesReceivedTransitively(from:)`.
+		var propertiesReceivedTransitivelyByProperty = [Property: Set<Property>]()
+		/// `property`, as cycle validation sees it, and every property `validateNoCycleInReceivedProperties` can reach from
+		/// it through the required receives of the scopes of the types it walks, whether or not it stops at one handed to
+		/// the tree: the only entries of an instantiation stack that walk can find.
+		func propertiesReceivedTransitively(from property: Property) -> Set<Property> {
+			if let cached = propertiesReceivedTransitivelyByProperty[property] {
+				return cached
+			} else {
+				let start = property.asValidatedForDependencyCycles
+				var reached: Set<Property> = [start]
+				var pending = [start]
+				while let reachedProperty = pending.popLast() {
+					for requiredReceivedProperty in typeDescriptionToScopeMap[reachedProperty.typeDescription]?.requiredReceivedProperties ?? [] {
+						let receivedProperty = requiredReceivedProperty.property.asValidatedForDependencyCycles
+						if reached.insert(receivedProperty).inserted {
+							pending.append(receivedProperty)
+						}
+					}
+				}
+				propertiesReceivedTransitivelyByProperty[property] = reached
+				return reached
+			}
+		}
 		/// The scopes whose receives a walk of `scope` follows: the scopes of the types it receives or renames.
 		func receivedScopes(of scope: Scope) -> [Scope] {
 			var scopes = [Scope]()
@@ -1637,6 +1664,26 @@ extension DependencyTreeGenerator {
 				return keyLabels
 			}
 		}
+		/// The entries of `alias`'s declaring instantiation stack, nearest first, that a walk of a subtree beneath it reads.
+		/// Elsewhere the walk reads the stack only by its length, to find the child of the declaring scope it is built
+		/// inside, whose comparison `CleanSubtreeAlias.fulfillingSiblingBeingBuilt` holds. A required receive of an
+		/// `onlyIfAvailable` alias bound from a property the tree builds hands the stack to
+		/// `validateNoCycleInReceivedProperties`, which reads its first entry, finds by its first index each entry that
+		/// `propertiesReceivedTransitively(from:)` holds, and reads the entries up to the one it finds: the stack up to the
+		/// farthest entry it holds covers every first index that walk can find, and so decides it. A walk that finds an
+		/// entry raises `memoBlockingEventCount` or throws, but a second receive of the alias along the same stack is spared
+		/// that walk and raises nothing, so a key can be kept from a walk whose check found a builder: an equal key holds
+		/// the entries up to it, and finds it too.
+		func declaringStackEntriesReadByFulfillingPropertyWalk(of alias: ReceivableAlias, lastFulfillingProperty: Property) -> [Property] {
+			if alias.onlyIfAvailable, case .built? = alias.binding {
+				let reachableProperties = propertiesReceivedTransitively(from: lastFulfillingProperty)
+				let stack = alias.lastAliasDeclaringInstantiationStack
+				let farthestIndexFound = stack.lastIndex(where: reachableProperties.contains) ?? 0
+				return Array(stack.prefix(farthestIndexFound + 1))
+			} else {
+				return []
+			}
+		}
 		/// What a walk of `scopeToValidate`'s subtree reads of the path it is reached by (see `CleanSubtreeKey`).
 		func cleanSubtreeKey(of scopeToValidate: ScopeToValidate, rootContextIndex: Int) -> CleanSubtreeKey {
 			let scope = scopeToValidate.scope
@@ -1702,7 +1749,7 @@ extension DependencyTreeGenerator {
 					binding: alias.binding,
 					declaringType: alias.declaringType,
 					lastAliasDeclaringType: alias.lastAliasDeclaringType,
-					lastAliasDeclaringInstantiationStack: alias.lastAliasDeclaringInstantiationStack,
+					declaringStackEntriesRead: declaringStackEntriesReadByFulfillingPropertyWalk(of: alias, lastFulfillingProperty: lastFulfillingProperty),
 					fulfillingSiblingBeingBuilt: formsOnStack(of: lastFulfillingProperty.asValidatedForDependencyCycles).first { $0 == declaringChild },
 				)
 			}
