@@ -129,7 +129,7 @@ struct SafeDIToolGraphFuzzerSharedMockBuilderTests {
 	]
 
 	private static let drawnFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.mockedTypeTwoMocksBuild: 1009,
+		.mockedTypeTwoMocksBuild: 1_009,
 		.mockedTypeTwoMocksBuildBeneathUnmockedType: 509,
 		.mockedTypeBuiltByMockSpellingOtherAttributes: 182,
 		.mockedTypeWithNonisolatedInitializer: 267,
