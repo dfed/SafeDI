@@ -7758,7 +7758,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameter would hide: it keeps its function.
 	private static func inlinedFill(of fill: ScopeGenerator, code: String, leadingMemberWhitespace: String) -> FillDispatcher.InlinedFill? {
 		// A fill is its function's declaration, its body, and the line closing it.
-		let lines = code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		let lines = GeneratedCodeText.lines(of: code)
 		let valuesType = fill.fillHole?.valuesType(qualifiedBy: nil)
 		let carriesPayload = valuesType != nil
 		// A seam's carrier hands the fill the payload's fields as arguments, the first named `scope_<label>`
@@ -7779,9 +7779,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builtProperty = fill.propertiesToGenerate.first?.property
 		let forwardedValueName = fill.fillHole?.forwardedType == nil ? nil : builtProperty.map(Self.forwardedValueParameterName(forBuilding:))
 		let readsForwardedValue = forwardedValueName.map { name in
-			body.contains { line in
-				line.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(name))
-			}
+			body.contains { line in GeneratedCodeText.containsIdentifier(name, in: line) }
 		} ?? false
 		return FillDispatcher.InlinedFill(
 			carriesPayload: carriesPayload,
@@ -7861,7 +7859,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// `code` with each line indented once more.
 	private static func indented(_ code: String) -> String {
-		code.split(separator: "\n", omittingEmptySubsequences: false).map { standardIndent + $0 }.joined(separator: "\n")
+		GeneratedCodeText.indentingLines(of: code, by: standardIndent)
 	}
 
 	/// The arguments a builder function of a type whose `@Forwarded` properties are `forwardedProperties`, in their order,
@@ -9581,7 +9579,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// it under, where that is not the label.
 		var body = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { "\(indent)let \($0.label) = \($0.rootBindingName)" }
 		// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
-		body += GeneratedCode.lines(childCode).spelled().split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		body += GeneratedCodeText.lines(of: GeneratedCode.lines(childCode).spelled())
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
 			// builder the wrapper keeps, spelled as the wrapper's own `Builder`: a function type a value it forwards could not
