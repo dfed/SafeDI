@@ -50,7 +50,7 @@ extension DependencyTreeGenerator {
 		guard !mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &cache) else { return .perPath(.mayHaveUnpassableCycleLabel) }
 		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames)
 		guard let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) else { return .perPath(.noPlan) }
-		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan, labelsDeclaredInComponentByScope: shadow.labelsDeclaredInComponentByScope)
+		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan)
 		if let reason = unplanned.argumentTheLayoutCannotWrite {
 			return .perPath(reason)
 		} else {
