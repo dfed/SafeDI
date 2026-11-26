@@ -670,7 +670,7 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85);
 # M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 47.5 MB and
 # 170.1 MB (3.58), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
-# Q 0.349 s and 2.483 s (7.11); B 0.086 s and 1.576 s (18.37), 34.5 MB and 92.6 MB (2.68); BM 0.079 s and 2.543 s
+# B 0.086 s and 1.576 s (18.37), 34.5 MB and 92.6 MB (2.68); BM 0.079 s and 2.543 s
 # (32.30), 33.7 MB and 179.7 MB (5.34), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
 # code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86); N 0.207 s and 1.365 s (6.60).
 # The tool alone, on the smallest graph, peaks at about 33 MB. K (36.6 MB and 67.4 MB, 1.84) and W (52.4 MB and
@@ -681,7 +681,7 @@ GROWTH_ROWS = {
     "K-mock-at-every-screen": (lambda layers: shape_k(layers), 6, {"time": 6.5, "code": 10.5}),
     "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
     "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
-    "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {"time": 10.5}),
+    "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {}),
     # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
