@@ -565,10 +565,15 @@ extension DependencyTreeGenerator {
 		let declarationLocation: Dependency.DeclarationLocation?
 		/// The closest declaration of the label, whose property differs from `property`.
 		let hidingDeclaration: DependencyTreeGeneratorError.LabelDeclaration
-		/// See `DependencyTreeGeneratorError.HiddenReceivedProperty.enclosingHidingDeclarations`. Chains of one tree that
-		/// pass different declarations of the label above `hidingDeclaration` are reported apart, so relabeling every
-		/// declaration the errors at the receive name leaves none between the receive and what provides it.
-		let enclosingHidingDeclarations: [DependencyTreeGeneratorError.LabelDeclaration]
+		let receiver: TypeDescription
+		let root: TypeDescription
+	}
+
+	/// A required receive nothing fulfills, as one root's tree reaches it: reported once for each root, from the first
+	/// chain the walk meets, whatever number of chains of scopes reach it.
+	private struct UnfulfillableReceiveInTree: Hashable {
+		let property: Property
+		let declarationLocation: Dependency.DeclarationLocation?
 		let receiver: TypeDescription
 		let root: TypeDescription
 	}
@@ -580,6 +585,8 @@ extension DependencyTreeGenerator {
 		let parentStack: [TypeDescription]
 		/// The concrete types of the chain's scopes, beside `parentStack`.
 		let parentTypeStack: [TypeDescription]
+		/// See `DependencyTreeGeneratorError.HiddenReceivedProperty.enclosingHidingDeclarations`: the chain's.
+		let enclosingHidingDeclarations: [DependencyTreeGeneratorError.LabelDeclaration]
 	}
 
 	/// A scope of a tree that a cycle-closing scope builds again, which `validateTreeBuiltAgainByCycle` has yet to walk, with
@@ -832,6 +839,7 @@ extension DependencyTreeGenerator {
 		cyclesOnly: Bool,
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
+		var unfulfillableReceives = Set<UnfulfillableReceiveInTree>()
 		/// Whether an `@Instantiated` declaration of `receivedProperty`'s non-optional form could fulfill it. One the tree
 		/// of the type it builds requires, in either form, would close a dependency cycle wherever it is declared: the
 		/// receive in that tree resolves to the declaration still building it. The tree is walked through the declarations
@@ -2033,7 +2041,6 @@ extension DependencyTreeGenerator {
 					property: receivedProperty,
 					declarationLocation: dependency.declarationLocation,
 					hidingDeclaration: closestDeclaration,
-					enclosingHidingDeclarations: Array(closestDeclaration.enclosingDeclarations.prefix { !$0.fulfills(anyOf: acceptedProperties) }),
 					receiver: scope.instantiable.concreteInstantiable,
 					root: root,
 				)
@@ -2041,6 +2048,7 @@ extension DependencyTreeGenerator {
 					hiddenReceivedProperties[hiddenReceive] = HiddenReceiveChain(
 						parentStack: propertyStack.map(\.typeDescription),
 						parentTypeStack: parentTypeStack,
+						enclosingHidingDeclarations: Array(closestDeclaration.enclosingDeclarations.prefix { !$0.fulfills(anyOf: acceptedProperties) }),
 					)
 				}
 			}
@@ -2625,6 +2633,12 @@ extension DependencyTreeGenerator {
 					// being built is unfulfillable. A non-optional one is a cycle, reported below.
 					// This property is in a dependency tree and is unfulfillable. Record the problem.
 					memoBlockingEventCount += 1
+					guard unfulfillableReceives.insert(UnfulfillableReceiveInTree(
+						property: receivedProperty,
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						receiver: scope.instantiable.concreteInstantiable,
+						root: root,
+					)).inserted else { continue }
 					unfulfillableProperties.insert(.init(
 						property: receivedProperty,
 						declarationLocation: requiredReceivedProperty.declarationLocation,
@@ -2891,7 +2905,7 @@ extension DependencyTreeGenerator {
 					property: hiddenReceive.property,
 					declarationLocation: hiddenReceive.declarationLocation,
 					hidingDeclaration: hiddenReceive.hidingDeclaration,
-					enclosingHidingDeclarations: hiddenReceive.enclosingHidingDeclarations,
+					enclosingHidingDeclarations: chain.enclosingHidingDeclarations,
 					receiver: hiddenReceive.receiver,
 					parentStack: chain.parentStack,
 					root: hiddenReceive.root,
