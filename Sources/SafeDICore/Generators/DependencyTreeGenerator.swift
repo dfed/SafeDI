@@ -891,8 +891,8 @@ public actor DependencyTreeGenerator {
 					// Under the checks every test runs, neither comparison runs for a root whose shape the plan does not admit
 					// (`RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits`).
 					let comparedTree: ScopeGenerator? = if let todaysTree,
-					                                      !RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits
-					                                      || Self.shapeOutsidePerTypePlan(inTreeOf: scope, cache: &receivedPropertiesCache)?.reason == nil
+					                                       !RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits
+					                                       || Self.shapeOutsidePerTypePlan(inTreeOf: scope, cache: &receivedPropertiesCache)?.reason == nil
 					{
 						todaysTree
 					} else {
