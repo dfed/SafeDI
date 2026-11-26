@@ -262,7 +262,8 @@ extension DependencyTreeGenerator {
 		let orderedHoleTypes = holeTypes.sorted { label(of: $0, isSendable: false) < label(of: $1, isSendable: false) }
 		var ownEnums = [SeamSignature.ScopeEnum]()
 		var callRoutes = [SeamSignature.CallRoute]()
-		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
+		var memberBindingNodesByLabel = [String: [ValuesBindingKey: Set<BindingNode>]]()
+		var innerScopeNodesByKey = [InnerScopeKey: Set<BindingNode>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
 		var levels = LevelsOfEveryHoleType(
@@ -304,9 +305,10 @@ extension DependencyTreeGenerator {
 				// calls a member per level, bound under names of their own, and binds no payload. A seam's own internal mock takes
 				// builders of its own (`ScopeGenerator.seamMockBuilders`), whatever this gives the seam's builder.
 				for isSendable in [false, true] {
-					memberBindingKeysByLabel[label(of: holeType, isSendable: isSendable), default: []].formUnion(byType.memberBindingKeysByFamily[isSendable, default: []])
+					memberBindingNodesByLabel[label(of: holeType, isSendable: isSendable), default: [:]].merge(byType.memberBindingKeysByFamily[isSendable, default: [:]]) { $0.union($1) }
 				}
 				callRoutes += byType.callRoutes
+				innerScopeNodesByKey.merge(byType.innerScopeNodesByKey) { $0.union($1) }
 				for (site, enumPlace) in byType.enumPlaceBySite {
 					holesBySite[site]?.enumPlace = enumPlace
 					holesBySite[site]?.scopeTypeName = enumPlace.enumTypeName
@@ -425,9 +427,10 @@ extension DependencyTreeGenerator {
 			let rootBuilderLabel = label(of: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable)
 			innerScopes += callRoute.route.compactMap(\.innerScope).map { ($0, $0.callPath(onRouteTo: callRoute.sitePath), rootBuilderLabel) }
 		}
-		// One per path and case: `__safeDI_<builder>_<case>`, after the label of the builder whose root enum the route starts at.
-		let memberBindingNamesByLabel = memberBindingNames(of: memberBindingKeysByLabel, reservedNames: reservedForBindings)
-		let innerScopeNames = Self.innerScopeNames(of: innerScopes, reservedNames: reservedForBindings)
+		// One per node of the seam's graph and case: `__safeDI_<builder>_<case>`, after the label of the builder whose root enum
+		// the route starts at.
+		let memberBindingNamesByLabel = memberBindingNames(of: memberBindingNodesByLabel, reservedNames: reservedForBindings)
+		let innerScopeNames = Self.innerScopeNames(of: innerScopes, nodesByKey: innerScopeNodesByKey, reservedNames: reservedForBindings)
 		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], to sitePath: [Property], ofHoleType holeType: SeamSignature.HoleType, isSendable: Bool) -> [SeamSignature.Hole.RouteStep] {
 			let memberNameByKey = memberBindingNamesByLabel[label(of: holeType, isSendable: isSendable), default: [:]]
 			return route.map { step in
@@ -528,7 +531,7 @@ extension DependencyTreeGenerator {
 	/// A call whose fill leads to a place, the builder filled, and the type of the scope value it hands: what one inner scope's
 	/// name is per. A public mock hands one inner scope per call and builder, and a seam's builder struct the struct of the
 	/// fill's own level per hole type and family whose places the fill holds.
-	private struct InnerScopeKey: Hashable {
+	struct InnerScopeKey: Hashable {
 		let callPath: [Property]
 		let innerKey: SeamSignature.ScopeEnum.Key
 		let enumType: TypeDescription
@@ -536,52 +539,88 @@ extension DependencyTreeGenerator {
 
 	/// The names the fills of each call and builder in `innerScopes` take the scope value the inner seam handed them under:
 	/// `__safeDI_<call>_<builder>`, followed, where the call hands the fills of one builder more than one, by `_` and the label
-	/// of the builder whose route leads to each, with `_` appended while a name in `reservedNames`, or one of a call on the way
-	/// to this one, has it. Calls are named shortest path first, then in the order of their spelling, so no name depends on
-	/// the order the routes are met in.
-	private static func innerScopeNames(of innerScopes: [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, callPath: [Property], rootBuilderLabel: String)], reservedNames: Set<String>) -> [InnerScopeKey: String] {
-		var builderLabelByKey = [InnerScopeKey: String]()
-		var rootBuilderLabelByKey = [InnerScopeKey: String]()
-		var countByCallAndBuilder = [[Property]: [SeamSignature.ScopeEnum.Key: Set<TypeDescription>]]()
+	/// of the builder whose route leads to each, with `_` appended while a name in `reservedNames`, or one of a call that some
+	/// path reaches on the way to this one, at it or beneath it, has it. A name is a function of the call's node of the seam's
+	/// graph (`nodesByKey`), never of the path to it, as `memberBindingNames(of:reservedNames:)` names payloads: every path to
+	/// a call names its inner scope alike. Calls are named shortest path first, then in the order of their spelling, so no
+	/// name depends on the order the routes are met in.
+	private static func innerScopeNames(
+		of innerScopes: [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, callPath: [Property], rootBuilderLabel: String)],
+		nodesByKey: [InnerScopeKey: Set<BindingNode>],
+		reservedNames: Set<String>,
+	) -> [InnerScopeKey: String] {
+		/// A call's node, the label of its property and the builder filled, and the type of the scope value it hands.
+		struct InnerScopeNode: Hashable {
+			let node: BindingNode
+			let callLabel: String
+			let innerKey: SeamSignature.ScopeEnum.Key
+			let enumType: TypeDescription
+
+			var call: Call {
+				Call(node: node, callLabel: callLabel, innerKey: innerKey)
+			}
+		}
+		struct Call: Hashable {
+			let node: BindingNode
+			let callLabel: String
+			let innerKey: SeamSignature.ScopeEnum.Key
+		}
+		var nodeByKey = [InnerScopeKey: InnerScopeNode]()
+		var builderLabelByNode = [InnerScopeNode: String]()
+		var rootBuilderLabelByNode = [InnerScopeNode: String]()
+		var callPathsByNode = [InnerScopeNode: Set<[Property]>]()
+		var enumTypesByCall = [Call: Set<TypeDescription>]()
 		for (innerScope, callPath, rootBuilderLabel) in innerScopes {
 			let key = InnerScopeKey(callPath: callPath, innerKey: innerScope.innerKey, enumType: innerScope.enumType)
-			builderLabelByKey[key] = innerScope.builderLabel
+			guard let callProperty = callPath.last, let node = nodesByKey[key]?.min(by: { $0.sortKey < $1.sortKey }) else { continue }
+			let innerScopeNode = InnerScopeNode(node: node, callLabel: callProperty.label.spelledWithoutBackticks, innerKey: innerScope.innerKey, enumType: innerScope.enumType)
+			nodeByKey[key] = innerScopeNode
+			builderLabelByNode[innerScopeNode] = innerScope.builderLabel
 			// The label that sorts first, so no name depends on the order the routes are met in.
-			rootBuilderLabelByKey[key] = min(rootBuilderLabelByKey[key] ?? rootBuilderLabel, rootBuilderLabel)
-			countByCallAndBuilder[callPath, default: [:]][innerScope.innerKey, default: []].insert(innerScope.enumType)
+			rootBuilderLabelByNode[innerScopeNode] = min(rootBuilderLabelByNode[innerScopeNode] ?? rootBuilderLabel, rootBuilderLabel)
+			callPathsByNode[innerScopeNode, default: []].insert(callPath)
+			enumTypesByCall[innerScopeNode.call, default: []].insert(innerScope.enumType)
 		}
-		func sortKey(of key: InnerScopeKey) -> String {
-			key.callPath.map(\.asSource).joined(separator: " ") + " " + key.innerKey.spelling + " " + key.enumType.asSource
+		// Each node is spelled once, not once for every pair compared.
+		let keyedNodes = callPathsByNode.map { node, callPaths in
+			(node: node, shortestCallPath: callPaths.map(\.count).min() ?? 0, sortKey: node.node.sortKey + " " + node.callLabel + " " + node.innerKey.spelling + " " + node.enumType.asSource)
 		}
-		// Each key is spelled once, not once for every pair compared.
-		let keyedKeys = builderLabelByKey.keys.map { (key: $0, sortKey: sortKey(of: $0)) }
-		let orderedKeys = keyedKeys.sorted { first, second in
-			first.key.callPath.count != second.key.callPath.count ? first.key.callPath.count < second.key.callPath.count : first.sortKey < second.sortKey
-		}.map(\.key)
+		let orderedNodes = keyedNodes.sorted { first, second in
+			first.shortestCallPath != second.shortestCallPath ? first.shortestCallPath < second.shortestCallPath : first.sortKey < second.sortKey
+		}.map(\.node)
+		// The names of the calls at each call path, and of those anywhere beneath it.
 		var namesByCallPath = [[Property]: Set<String>]()
-		var nameByKey = [InnerScopeKey: String]()
-		for key in orderedKeys {
-			guard let callProperty = key.callPath.last else { continue }
-			// The names are released before this key's is inserted, which would copy the set they share otherwise.
+		var namesBeneathCallPath = [[Property]: Set<String>]()
+		var nameByNode = [InnerScopeNode: String]()
+		for node in orderedNodes {
+			let callPaths = callPathsByNode[node, default: []]
+			// The names are released before this node's is inserted, which would copy the sets they share otherwise.
 			let name: String = {
 				// Each name is asked of each set in turn, never of their union: a union made for every key holds every
 				// payload's name, so naming the inner scopes grew with the square of the seam's places.
-				let taken = GenerationWork.taking(
-					NamesConsultedInTurn([reservedNames] + (1...key.callPath.count).compactMap { namesByCallPath[Array(key.callPath.prefix($0))] }),
-					by: .namingInnerScopes,
-				)
-				let isOneOfSeveral = (countByCallAndBuilder[key.callPath]?[key.innerKey]?.count ?? 0) > 1
-				let rootBuilderSuffix = isOneOfSeveral ? "_\(rootBuilderLabelByKey[key, default: ""].spelledWithoutBackticks)" : ""
-				var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(callProperty.label.spelledWithoutBackticks)_\(builderLabelByKey[key, default: ""])\(rootBuilderSuffix)".spelledAsIdentifier)
+				var sets = [reservedNames]
+				for callPath in callPaths {
+					sets += (1...callPath.count).compactMap { namesByCallPath[Array(callPath.prefix($0))] }
+					sets += namesBeneathCallPath[callPath].map { [$0] } ?? []
+				}
+				let taken = GenerationWork.taking(NamesConsultedInTurn(sets), by: .namingInnerScopes)
+				let isOneOfSeveral = (enumTypesByCall[node.call]?.count ?? 0) > 1
+				let rootBuilderSuffix = isOneOfSeveral ? "_\(rootBuilderLabelByNode[node, default: ""].spelledWithoutBackticks)" : ""
+				var name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(node.callLabel)_\(builderLabelByNode[node, default: ""])\(rootBuilderSuffix)".spelledAsIdentifier)
 				while taken.contains(name) {
 					name = "\(name)_".spelledAsJoinedIdentifier
 				}
 				return name
 			}()
-			nameByKey[key] = name
-			namesByCallPath[key.callPath, default: []].insert(name)
+			nameByNode[node] = name
+			for callPath in callPaths {
+				namesByCallPath[callPath, default: []].insert(name)
+				for length in 1..<callPath.count {
+					namesBeneathCallPath[Array(callPath.prefix(length)), default: []].insert(name)
+				}
+			}
 		}
-		return nameByKey
+		return nodeByKey.compactMapValues { nameByNode[$0] }
 	}
 
 	/// The keys of the enums the enum of `key` reaches among `enumsByKey`, itself included.
