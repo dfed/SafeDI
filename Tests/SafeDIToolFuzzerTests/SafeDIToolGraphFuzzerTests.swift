@@ -2534,7 +2534,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(partialSeeds.count >= 10, "Judged partial trees of seeds \(partialSeeds)")
 	}
 
-	@Test(arguments: [70, 79, 293, 335, 485, 896, 1101, 1342, 1345, 1354, 1419] as [UInt64])
+	@Test(arguments: [70, 79, 293, 335, 485, 896, 1_101, 1_342, 1_345, 1_354, 1_419] as [UInt64])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func queryGraph_marksReceivesGenerateReportsOnceMissingTypesAreDeclared_inBaseCorpusGraphThatHoldsBoth(seed: UInt64) async throws {
 		// A graph that instantiates a type no declaration fulfills and receives a value nothing provides is rare, so the
