@@ -425,6 +425,132 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 		""")
 	}
 
+	/// A `LazilyInstantiated` declaration's instance is built once, at its first read, where the wrapper is passed
+	/// through two functions of a cycle before its reader, and a `LazilyInstantiated` closes that cycle.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsLazilyInstantiatedInstanceOnceAtFirstRead_whenWrapperPassesThroughTwoFunctionsOfCycleLazyWrapperCloses() async throws {
+		let source = """
+		@Instantiable(isRoot: true)
+		public final class PlanLazyRingRoot: Instantiable {
+		    public init(s0Builder: Instantiator<PlanLazyRingS0>) {
+		        self.s0Builder = s0Builder
+		    }
+
+		    @Instantiated public let s0Builder: Instantiator<PlanLazyRingS0>
+		}
+
+		@Instantiable
+		public final class PlanLazyRingS0: Instantiable {
+		    public init(leaf: LazilyInstantiated<PlanLazyRingLeaf>, s1Builder: Instantiator<PlanLazyRingS1>) {
+		        self.leaf = leaf
+		        self.s1Builder = s1Builder
+		    }
+
+		    @Instantiated public let leaf: LazilyInstantiated<PlanLazyRingLeaf>
+		    @Instantiated public let s1Builder: Instantiator<PlanLazyRingS1>
+		}
+
+		@Instantiable
+		public final class PlanLazyRingS1: Instantiable {
+		    public init(s2Builder: Instantiator<PlanLazyRingS2>) {
+		        self.s2Builder = s2Builder
+		    }
+
+		    @Instantiated public let s2Builder: Instantiator<PlanLazyRingS2>
+		}
+
+		@Instantiable
+		public final class PlanLazyRingS2: Instantiable {
+		    public init(readerBuilder: Instantiator<PlanLazyRingReader>, s0: LazilyInstantiated<PlanLazyRingS0>) {
+		        self.readerBuilder = readerBuilder
+		        self.s0 = s0
+		    }
+
+		    @Instantiated public let readerBuilder: Instantiator<PlanLazyRingReader>
+		    @Instantiated public let s0: LazilyInstantiated<PlanLazyRingS0>
+		}
+
+		@Instantiable
+		public final class PlanLazyRingReader: Instantiable {
+		    public init(leaf: PlanLazyRingLeaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Received public let leaf: PlanLazyRingLeaf
+		}
+
+		@Instantiable
+		public final class PlanLazyRingLeaf: Instantiable {
+		    public init() {
+		        PlanLazyRing.leavesBuilt += 1
+		    }
+		}
+
+		public enum PlanLazyRing {
+		    nonisolated(unsafe) public static var leavesBuilt = 0
+
+		    /// The leaves built after the root, after each of the three screens of the ring, after each of two readers
+		    /// beneath the last, and after the first screen is read from the wrapper that closes the ring; then whether
+		    /// the two readers and the first screen hold one leaf, and whether the screen read from the closing wrapper
+		    /// holds another.
+		    public static func leavesBuiltAroundRing() -> [Int] {
+		        leavesBuilt = 0
+		        let root = PlanLazyRingRoot()
+		        var counts = [leavesBuilt]
+		        let s0 = root.s0Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let s1 = s0.s1Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let s2 = s1.s2Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let firstReader = s2.readerBuilder.instantiate()
+		        counts.append(leavesBuilt)
+		        let secondReader = s2.readerBuilder.instantiate()
+		        counts.append(leavesBuilt)
+		        let closingS0 = s2.s0.instance
+		        counts.append(leavesBuilt)
+		        counts.append(firstReader.leaf === secondReader.leaf && firstReader.leaf === s0.leaf.instance ? 1 : 0)
+		        counts.append(leavesBuilt)
+		        counts.append(closingS0.leaf.instance === s0.leaf.instance ? 1 : 0)
+		        counts.append(leavesBuilt)
+		        return counts
+		    }
+		}
+
+		"""
+		let fileName = "PlanLazyRing.swift"
+		let generated = try #require(await PlanValueGraph.generatedCode(ofSource: source, fileName: fileName))
+		#expect(generated.rootsLaidOutFromPlan == ["PlanLazyRingRoot"])
+		let graph = DifferentialValueGraph(
+			name: "lazy ring",
+			feature: DifferentialValuePath(fixtureFiles: [fileName: source], generatedFiles: ["SafeDI.swift": generated.planCode]),
+			knownRight: DifferentialValuePath(fixtureFiles: [fileName: source], generatedFiles: ["SafeDI.swift": generated.todaysCode]),
+			probes: [DifferentialValueProbe("PlanLazyRing.leavesBuiltAroundRing()")],
+		)
+		guard let comparison = try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first else { return }
+		let result = try comparison.result.get()
+		#expect(result.differences.map(\.description) == [])
+		// No screen builds the leaf; the first reader does, the second shares it with the first screen, and reading the
+		// screen the closing wrapper holds builds none until that screen's own leaf is read, which is another instance.
+		#expect(result.featureDescription == """
+		probe PlanLazyRing.leavesBuiltAroundRing()
+		Array<Int>
+		  0: Int 0
+		  1: Int 0
+		  2: Int 0
+		  3: Int 0
+		  4: Int 1
+		  5: Int 1
+		  6: Int 1
+		  7: Int 1
+		  8: Int 1
+		  9: Int 0
+		  10: Int 2
+
+		""")
+	}
+
 	// MARK: Private
 
 	/// Every graph of seeds 0..<23,705 (15,000 laid out from their plans by the long run) whose plan writes other code than

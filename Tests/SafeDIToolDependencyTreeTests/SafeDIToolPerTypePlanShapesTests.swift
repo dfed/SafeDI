@@ -128,6 +128,36 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleForwardsLabelRootDeclaresInAnotherForm() async throws {
+		// The root declares a label as a `LazilyInstantiated`, a screen on a cycle is forwarded it as a value, and the
+		// screen that one opens receives it, so the forwarded form is the one the cycle's functions pass.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: LazilyInstantiated<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: LazilyInstantiated<Leaf>, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Forwarded let leaf: Leaf
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(leaf: Leaf, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsSendableLazilyInstantiated() async throws {
 		// A screen holds a `SendableLazilyInstantiated`.
 		let choices = try await choicesGeneratingTodaysCode(of: """
