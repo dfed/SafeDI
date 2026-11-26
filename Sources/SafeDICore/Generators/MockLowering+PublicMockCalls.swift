@@ -224,11 +224,11 @@ extension MockLowering.Walk {
 	/// The names of the shared fill bodies among `codes`, the fills of a call, that `mock()` declares once before its tree
 	/// (`fillBodies`), each recorded the first time the walk reaches it. A mock declares a body there only where its text is
 	/// the whole function, holding no root function and calling none, and where it is `@Sendable` or the call is inside no
-	/// `@Sendable` function, which calls no function that is not; a body of a name the walk reached with another key stays
-	/// where its fill wrote it.
+	/// `@Sendable` function, which calls no function that is not; a body of a name the walk reached with another key, or
+	/// inside a `@Sendable` function of the fills' own trees where it is not `@Sendable` itself, stays where its fill wrote it.
 	mutating func declareFillBodies(of codes: [GeneratedCode], isInsideSendableFunction: Bool) -> Set<String> {
 		var names = Set<String>()
-		for record in RootFunctionHoisting.records(in: codes) where Self.isDeclaredOnce(record, insideSendableFunction: isInsideSendableFunction) {
+		for record in RootFunctionHoisting.recordsDeclarableWhereReached(in: codes) where Self.isDeclaredOnce(record, insideSendableFunction: isInsideSendableFunction) {
 			if let key = fillBodyKeysByName[record.name] {
 				if key == record.key {
 					names.insert(record.name)

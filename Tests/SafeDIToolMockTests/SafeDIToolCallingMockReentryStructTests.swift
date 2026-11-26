@@ -2761,20 +2761,20 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_fillBody_D8A3E596F997E25C() -> any Store {
-			            func __safeDI_store() -> DefaultStore {
-			                let analytics: any Analytics = analyticsSendableBuilder()
-			                return DefaultStore(analytics: analytics)
-			            }
-			            let store: any Store = __safeDI_store()
-			            return store
-			        }
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 			                @Sendable nonisolated func __safeDI_fillBody_2884AC1BC1C52D0A() -> any Service {
 			                    func __safeDI_service() -> DefaultService {
 			                        func __safeDI_book() -> Book {
 			                            func __safeDI_storeBuilder_Book_store(_ scope: Book.SafeDIMockScope_Store.store_Values) -> any Store {
+			                                func __safeDI_fillBody_D8A3E596F997E25C() -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        let analytics: any Analytics = analyticsSendableBuilder()
+			                                        return DefaultStore(analytics: analytics)
+			                                    }
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
+			                                }
 			                                return __safeDI_fillBody_D8A3E596F997E25C()
 			                            }
 			                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {

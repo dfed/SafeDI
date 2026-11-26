@@ -276,6 +276,14 @@ public enum RootFunctionHoisting {
 		recordsAndConflicts(in: codes).records
 	}
 
+	/// The root functions `codes` hold that can be declared once wherever they are reached, as `records(in:)` lists them:
+	/// none reached with two keys, nor inside a `@Sendable` function where it cannot be declared `@Sendable`, since its
+	/// declaration was written for code that is not `@Sendable`.
+	static func recordsDeclarableWhereReached(in codes: [GeneratedCode]) -> [RootFunctionRecord] {
+		let found = recordsAndConflicts(in: codes)
+		return found.records.filter { !found.conflictingNames.contains($0.name) }
+	}
+
 	/// The root functions `codes` hold, once per name, in the order they are reached; the names reached with two keys, or
 	/// inside a `@Sendable` function where the function cannot be declared `@Sendable`; and, by name, the names of the root
 	/// functions each one's plan holds.
