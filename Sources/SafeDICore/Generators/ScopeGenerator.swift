@@ -187,6 +187,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		holdsCallReenteringEnclosingFill = holeCallArguments.contains { $0.enclosingFillKey != nil } || propertiesToGenerate.contains(where: \.holdsCallReenteringEnclosingFill)
 		treeHoldsCallOrFill = seamCall != nil || publicMockCall != nil || fill != nil || propertiesToGenerate.contains(where: \.treeHoldsCallOrFill)
+		treeHoldsFill = fill != nil || propertiesToGenerate.contains(where: \.treeHoldsFill)
 		typesDeclaredEscaping = Self.typesDeclaredEscaping(
 			instantiable: instantiable,
 			publicMockCall: publicMockCall,
@@ -1335,6 +1336,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
+		treeHoldsFill = false
 		closesCycleOnFillPath = false
 		fillBindsDeferredFieldsFromStruct = false
 		fillEmitsCode = true
@@ -1420,6 +1422,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
+		treeHoldsFill = false
 		fillBindsDeferredFieldsFromStruct = false
 		fillEmitsCode = true
 		fillStructBoundLabelsChangedInTree = false
@@ -1535,6 +1538,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isBuiltByFill = generator.isBuiltByFill
 		fillReturnsWrapperBuilder = generator.fillReturnsWrapperBuilder
 		treeHoldsCallOrFill = generator.treeHoldsCallOrFill
+		treeHoldsFill = generator.treeHoldsFill
 		treeHoldsSendableFunction = generator.treeHoldsSendableFunction
 		containsBuildSite = generator.containsBuildSite
 		placeHoldingProperties = generator.placeHoldingProperties
@@ -1609,6 +1613,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"isBuiltByFill": .copied,
 			"fillReturnsWrapperBuilder": .copied,
 			"treeHoldsCallOrFill": .copied,
+			"treeHoldsFill": .copied,
 			"treeHoldsSendableFunction": .copied,
 			"containsBuildSite": .copied,
 			"placeHoldingProperties": .copied,
@@ -5997,12 +6002,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		memberCallsInsideFunction.map { MockValuesBinding(binding: $0, lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties) }
 	}
 
-	/// Whether this scope, or a scope of its generated subtree, calls another module's seam or public mock or is a fill: only
-	/// such a tree has anything `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:compilesGeneratedMocks:)`
-	/// judges, so its walk skips every other subtree. Set once, bottom-up, by the initializer that builds a scope's generator
-	/// (from `seamCall`, `publicMockCall`, `fill` and the children's flags), and `false` for an alias's or a hole's generator,
-	/// which holds neither; `validateFills` is its only reader.
+	/// Whether this scope, or a scope of its generated subtree, calls another module's seam or public mock or is a fill. Set
+	/// once, bottom-up, by the initializer that builds a scope's generator (from `seamCall`, `publicMockCall`, `fill` and the
+	/// children's flags), and `false` for an alias's or a hole's generator, which holds neither. `Scope` reads it, where a
+	/// tree takes a cycle parameter seed and where a fill's tree hands on what it reads.
 	let treeHoldsCallOrFill: Bool
+
+	/// Whether this scope, or a scope of its generated subtree, is a fill: only such a tree has anything
+	/// `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:compilesGeneratedMocks:)` can report, since each
+	/// finding is made at a fill (`findingsOfFill`, the fill's own or the fill a place stands in for, `FillStoodFor`, which is
+	/// a fill too) or from a call's fills (`findingsOfCasesNestedByType`, which reads only children that are fills), so its
+	/// walk skips every other subtree, also one that calls a seam or public mock whose places it passes up whole. Set once,
+	/// bottom-up, by the initializer that builds a scope's generator (from `fill` and the children's flags), so a tree whose
+	/// calls are reached at every path is asked once per generator, never walked per path; `false` for an alias's or a hole's
+	/// generator, which is no fill and has no children.
+	let treeHoldsFill: Bool
 
 	/// Whether this scope, or a scope of its generated subtree, is or makes a function that can be `@Sendable`: a builder
 	/// function that is, a property of a `Sendable` wrapper (a cycle-closing scope calls its function inside the wrapper's

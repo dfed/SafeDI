@@ -114,6 +114,11 @@ public struct GenerationWork: Sendable {
 		/// the generator's subtree reads it, is skipped and its children are not reached, so the generators and the frames
 		/// their parents are visited in count, not the paths to them.
 		case findingSeamTierOmissions
+		/// Checking what a seam call's or a public mock call's fills read (`DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:compilesGeneratedMocks:)`):
+		/// each generator the walk visits. The walk enters only a subtree that holds a fill (`ScopeGenerator.treeHoldsFill`),
+		/// where it visits each generator once per path; a subtree that calls a seam whose places it passes up whole is not
+		/// entered, however many paths reach it.
+		case checkingFills
 	}
 
 	/// The step that did the work.

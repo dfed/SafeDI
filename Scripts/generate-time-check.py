@@ -139,6 +139,8 @@ alternating runs after one untimed run of each graph. A run still going after 30
   QO-seam-calls-tier-omitting-parameter-at-every-path
                                the same, every last-layer screen also calling the seam `Panel` of module `Library`,
                                whose `public` tier omits a value its tree receives only if available.
+  QC-seam-calls-another-modules-seam-at-every-path
+                               the same, with `Panel`'s tree receiving nothing, so its one tier omits nothing.
   B-cycles-through-instantiators
                                module `Feature`: layers of three screens, each holding `Instantiator`s of the three
                                screens of the next layer and of the screen at its own position in the layer before,
@@ -490,15 +492,19 @@ def shape_q(layers, width=4, received=True):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
 
 
-def shape_qo(layers, width=4):
-    """`shape_q` with module `Library` beneath `Feature`, declaring the seam `Panel`, which instantiates `Badge`, whose
-    internal initializer takes the `token` it receives only if available, an internal `Token`; so `Panel`'s `public`
-    tier omits `token`. Every screen of the last layer calls `Panel`, so the walk that finds the values a tier omits
-    finds a call omitting a parameter at the end of each of the 3^(layers - 1) paths from each seam."""
+def shape_qo(layers, width=4, omitting=True):
+    """`shape_q` with module `Library` beneath `Feature`, declaring the seam `Panel`, which instantiates `Badge`. With
+    `omitting`, `Badge`'s internal initializer takes the `token` it receives only if available, an internal `Token`; so
+    `Panel`'s `public` tier omits `token`. Every screen of the last layer calls `Panel`, so a walk of the calls in a
+    seam's tree meets one at the end of each of the 3^(layers - 1) paths from each seam: the walk that finds the values
+    a tier omits, and, with or without `omitting`, the check of a seam call's fills."""
     library = "import SafeDI\n\n"
     library += declaration("@Instantiable(generateDependencyTree: true)", "Panel", [("@Instantiated", "badge", "Badge")])
-    library += declaration("@Instantiable", "Badge", [("@Received(onlyIfAvailable: true)", "token", "Token?")], initializer_access="")
-    library += declaration("@Instantiable", "Token", [], access="", initializer_access="")
+    if omitting:
+        library += declaration("@Instantiable", "Badge", [("@Received(onlyIfAvailable: true)", "token", "Token?")], initializer_access="")
+        library += declaration("@Instantiable", "Token", [], access="", initializer_access="")
+    else:
+        library += declaration("@Instantiable", "Badge", [])
     feature = "import Library\nimport SafeDI\n\n" + declaration("@Instantiable", "Service", [])
     for layer in range(layers):
         for position in range(width):
@@ -690,8 +696,8 @@ GROWTH_ROWS = {
     "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
     "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
     "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {}),
-    # The check of a seam call's fills still follows every path to each call of `Panel`: 0.36 s and 1.16 s (3.20).
-    "QO-seam-calls-tier-omitting-parameter-at-every-path": (lambda layers: shape_qo(layers), 9, {"time": 4.5}),
+    "QO-seam-calls-tier-omitting-parameter-at-every-path": (lambda layers: shape_qo(layers), 9, {}),
+    "QC-seam-calls-another-modules-seam-at-every-path": (lambda layers: shape_qo(layers, omitting=False), 9, {}),
     # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),

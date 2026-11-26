@@ -194,8 +194,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// four and six layers, 160 and 1,456 visits each.
 		let visits = try await visitsInLayersOfScreens()
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 96, .findingSeamReceivers: 100, .findingSeamTierOmissions: 0],
-			[.collectingBuilderFunctionNames: 160, .findingSeamReceivers: 196, .findingSeamTierOmissions: 0],
+			[.collectingBuilderFunctionNames: 96, .findingSeamReceivers: 100, .findingSeamTierOmissions: 0, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 160, .findingSeamReceivers: 196, .findingSeamTierOmissions: 0, .checkingFills: 0],
 		])
 	}
 
@@ -210,8 +210,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			layer + 1 == layerCount ? ["@Instantiated let screen\(layer)x\(position)Builder: Instantiator<Screen\(layer)x\(position)>"] : []
 		})
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 128, .findingSeamReceivers: 116, .findingSeamTierOmissions: 0],
-			[.collectingBuilderFunctionNames: 192, .findingSeamReceivers: 212, .findingSeamTierOmissions: 0],
+			[.collectingBuilderFunctionNames: 128, .findingSeamReceivers: 116, .findingSeamTierOmissions: 0, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 192, .findingSeamReceivers: 212, .findingSeamTierOmissions: 0, .checkingFills: 0],
 		])
 	}
 
@@ -236,8 +236,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			},
 		)
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 288, .findingSeamReceivers: 196, .findingSeamTierOmissions: 0],
-			[.collectingBuilderFunctionNames: 480, .findingSeamReceivers: 356, .findingSeamTierOmissions: 0],
+			[.collectingBuilderFunctionNames: 288, .findingSeamReceivers: 196, .findingSeamTierOmissions: 0, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 480, .findingSeamReceivers: 356, .findingSeamTierOmissions: 0, .checkingFills: 0],
 		])
 	}
 
@@ -253,8 +253,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			libraryModule: Self.panelModule,
 		)
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 212, .findingSeamTierOmissions: 4],
-			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 404, .findingSeamTierOmissions: 4],
+			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 212, .findingSeamTierOmissions: 4, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 404, .findingSeamTierOmissions: 4, .checkingFills: 0],
 		])
 	}
 
@@ -270,8 +270,8 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			libraryModule: Self.panelModule,
 		)
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 236, .findingSeamTierOmissions: 100],
-			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 428, .findingSeamTierOmissions: 196],
+			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 236, .findingSeamTierOmissions: 100, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 428, .findingSeamTierOmissions: 196, .checkingFills: 0],
 		])
 	}
 
@@ -297,8 +297,60 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			libraryModule: Self.panelModule,
 		)
 		#expect(visits == [
-			[.collectingBuilderFunctionNames: 432, .findingSeamReceivers: 396, .findingSeamTierOmissions: 132],
-			[.collectingBuilderFunctionNames: 560, .findingSeamReceivers: 588, .findingSeamTierOmissions: 228],
+			[.collectingBuilderFunctionNames: 432, .findingSeamReceivers: 396, .findingSeamTierOmissions: 132, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 560, .findingSeamReceivers: 588, .findingSeamTierOmissions: 228, .checkingFills: 0],
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_checksNoFillOfCallsThatPassPlacesUpWhole_whenLastLayerCallsAnotherModulesSeam() async throws {
+		// The layers of screens above, each screen of the last layer calling `Library`'s `Panel`, whose tree has no place and
+		// receives nothing. A call that fills nothing holds nothing the check of what fills read can report, so its walk
+		// enters no screen. It entered every path to a call: at four and six layers, 268 and 2,428 visits.
+		let visits = try await visitsInLayersOfScreens(
+			screenDeclarations: { layer, _, layerCount in layer + 1 == layerCount ? ["@Instantiated let panel: Panel"] : [] },
+			libraryModule: ModuleFixture(
+				name: "Library",
+				packageName: "App",
+				swiftFileContent: [
+					seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					seamFixtureType(named: "Badge", declarations: []),
+				],
+				dependencies: [],
+			),
+		)
+		#expect(visits == [
+			[.collectingBuilderFunctionNames: 108, .findingSeamReceivers: 118, .findingSeamTierOmissions: 0, .checkingFills: 0],
+			[.collectingBuilderFunctionNames: 172, .findingSeamReceivers: 214, .findingSeamTierOmissions: 0, .checkingFills: 0],
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_checksOnlyPathsToFills_whenFirstLayerFillsPlaceOfAnotherModulesSeam() async throws {
+		// The layers of screens above, each screen of the first layer calling `Library`'s `Panel`, whose `tracker` only
+		// `Feature`'s `LiveTracker` fulfills, so each call fills the place. The check of what fills read enters each screen
+		// of the first layer and the fill there, and none of the layers beneath, which hold no fill: the same visits at four
+		// and six layers.
+		let visits = try await visitsInLayersOfScreens(
+			screenDeclarations: { layer, _, _ in layer == 0 ? ["@Instantiated let panel: Panel"] : [] },
+			screenTypes: { layer, position, _ in
+				layer == 0 && position == 0 ? ["@Instantiable(fulfillingAdditionalTypes: [Tracker.self])\npublic struct LiveTracker: Tracker, Instantiable {\n    public init() {}\n}"] : []
+			},
+			libraryModule: ModuleFixture(
+				name: "Library",
+				packageName: "App",
+				swiftFileContent: [
+					seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let tracker: any Tracker"]),
+					"public protocol Tracker {}",
+				],
+				dependencies: [],
+			),
+		)
+		#expect(visits == [
+			[.collectingBuilderFunctionNames: 132, .findingSeamReceivers: 116, .findingSeamTierOmissions: 0, .checkingFills: 12],
+			[.collectingBuilderFunctionNames: 196, .findingSeamReceivers: 212, .findingSeamTierOmissions: 0, .checkingFills: 12],
 		])
 	}
 
@@ -376,7 +428,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				)
 			}
 			continuation.finish()
-			let countedSteps: [GenerationWork.Step] = [.collectingBuilderFunctionNames, .findingSeamReceivers, .findingSeamTierOmissions]
+			let countedSteps: [GenerationWork.Step] = [.collectingBuilderFunctionNames, .findingSeamReceivers, .findingSeamTierOmissions, .checkingFills]
 			var visits = Dictionary(uniqueKeysWithValues: countedSteps.map { ($0, 0) })
 			for await work in stream where countedSteps.contains(work.step) {
 				visits[work.step, default: 0] += work.elementCount

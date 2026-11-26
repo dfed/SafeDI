@@ -1785,8 +1785,10 @@ extension DependencyTreeGenerator {
 		// A seam's two forms of a label are one finding however many of its fills read the label (`SeamTreeReceives`): each fill
 		// records it with no receivers, which `record` merges into one, completed once every fill is walked.
 		var seamTreeReceives = SeamTreeReceives()
-		// A tree that holds no call of another module's seam or public mock, and no fill, has nothing to judge.
-		for root in generators where root.treeHoldsCallOrFill {
+		// A tree that holds no fill has nothing to judge: every finding is made at a fill, or from a seam call's fills
+		// (`ScopeGenerator.treeHoldsFill`). So the walk enters only such subtrees, which it would otherwise visit once per path
+		// that reaches a call whose places are passed up whole.
+		for root in generators where root.treeHoldsFill {
 			// Each generator with what the calls inside every fill of its seam call hide from it, when it is such a fill, the
 			// children of its parent, which are the fills of that call, and what the calls inside the fills of public mock calls
 			// enclosing it hide from the fills of public mock calls nested in those fills (`inheritedCalledCopyDeclarations`).
@@ -1794,6 +1796,7 @@ extension DependencyTreeGenerator {
 			// the place's own hole and what the calls hide from its own key, where the place's own fill would be.
 			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, call: ScopeGenerator?.none, isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]](), placeStoodFor: SeamSignature.Hole?.none)]
 			while let (generator, hidden, call, isFillOfPublicMockCall, inheritedCalledCopyDeclarations, placeStoodFor) = generatorsToVisit.popLast() {
+				GenerationWork.record(1, by: .checkingFills)
 				if let hole = placeStoodFor ?? generator.fillHole, let child = generator.children.first, let call {
 					findingsOfFill(of: hole, fill: generator, child: child, call: call, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
 				}
@@ -1860,7 +1863,7 @@ extension DependencyTreeGenerator {
 					}
 					appendPlacesStoodFor()
 				}
-				generatorsToVisit.append(contentsOf: childrenToVisit.reversed().filter(\.child.treeHoldsCallOrFill).map { child, stoodFor in
+				generatorsToVisit.append(contentsOf: childrenToVisit.reversed().filter(\.child.treeHoldsFill).map { child, stoodFor in
 					var childHidden = (stoodFor?.key ?? child.fillKey).flatMap { hiddenByFillKey[$0] }
 					if generator.publicMockCall != nil, child.fillHole != nil, !childInheritedCalledCopyDeclarations.isEmpty {
 						var merged = childHidden ?? FillReentryHidings()
