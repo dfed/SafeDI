@@ -290,6 +290,7 @@ extension DependencyTreeGenerator {
 					},
 					reenteringCallDeclarations: hole.reenteringCallDeclarations,
 					reenteringPlaceFields: hole.reenteringPlaceFields,
+					access: SeamSignature.Places.Case.Access(level: hole.tierAccess, cause: hole.accessCause),
 				)
 				caseIndexByHole.append(caseIndex)
 				routeByHole.append(route)

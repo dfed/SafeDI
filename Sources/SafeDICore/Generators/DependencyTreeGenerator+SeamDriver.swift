@@ -2065,7 +2065,7 @@ extension DependencyTreeGenerator {
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,
-			holes: holesAndPlaces.holes,
+			holesAndPlaces: holesAndPlaces,
 			parameters: parameters,
 			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
 			proof: proof,

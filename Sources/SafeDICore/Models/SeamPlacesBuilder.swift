@@ -78,6 +78,7 @@ struct SeamPlacesBuilder {
 		var uncarriedReplacedOnPathsToCalls = UnionOfDistinct<SeamSignature.Hole.UncarriedDeclaration>()
 		var reenteringCallDeclarations = UnionOfDistinct<SeamSignature.Hole.ReenteringCallDeclaration>()
 		var reenteringPlaceFields = UnionOfDistinct<SeamSignature.Hole.ReenteringPlaceField>()
+		var narrowestAccess: SeamSignature.Places.Case.Access?
 	}
 
 	private struct CaseKey: Hashable {
@@ -137,7 +138,12 @@ struct SeamPlacesBuilder {
 		uncarriedReplacedOnPathsToCalls: [SeamSignature.Hole.UncarriedDeclaration],
 		reenteringCallDeclarations: [SeamSignature.Hole.ReenteringCallDeclaration],
 		reenteringPlaceFields: [SeamSignature.Hole.ReenteringPlaceField],
+		access: SeamSignature.Places.Case.Access,
 	) {
+		// The first place in site order of the narrowest access keeps its cause.
+		if cases[caseIndex].narrowestAccess.map({ access.level < $0.level }) ?? true {
+			cases[caseIndex].narrowestAccess = access
+		}
 		cases[caseIndex].isPassedOnSendable = cases[caseIndex].isPassedOnSendable || isPassedOnSendable
 		cases[caseIndex].calledCopyDeclarations.add(calledCopyDeclarations)
 		cases[caseIndex].uncarriedReplacedOnPathsToCalls.add(uncarriedReplacedOnPathsToCalls)
@@ -187,6 +193,7 @@ struct SeamPlacesBuilder {
 					reenteringCallDeclarations: draft.reenteringCallDeclarations.elements,
 					reenteringPlaceFields: draft.reenteringPlaceFields.elements,
 					namingRoute: namingRouteByCase[caseIndex] ?? [],
+					narrowestAccess: draft.narrowestAccess,
 				)
 			},
 			declarationLists: declarationLists,
