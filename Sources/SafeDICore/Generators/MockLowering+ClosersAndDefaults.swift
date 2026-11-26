@@ -120,7 +120,7 @@ extension MockLowering {
 	/// that overrides how it is built (`ConstantNode.overridesField`), as a type.
 	static func configurationType(of node: NodeConfiguration) -> TypeDescription {
 		if node.hasConfiguration {
-			.nested(name: "SafeDIMockConfiguration", parentType: node.instantiable.concreteInstantiable, generics: [])
+			node.configurationStructType
 		} else {
 			.optional(node.builderClosureTypeDescription(isSendable: node.requiresSendable))
 		}

@@ -93,12 +93,11 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let panelConfiguration = safeDIOverrides.panel ?? .init()
-		        func __safeDI_panel() -> Panel {
-		            let leaf = if let safeDIBuilder = panelConfiguration.leaf { safeDIBuilder() } else { Leaf() }
-		            return if let safeDIBuilder = panelConfiguration.safeDIBuilder { safeDIBuilder(leaf, panelConfiguration.title) } else { Panel(leaf: leaf, title: panelConfiguration.title) }
+		        func __safeDI_panel(__safeDI_Panel_configuration: Panel.SafeDIOverrides) -> Panel {
+		            let leaf = if let safeDIBuilder = __safeDI_Panel_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(leaf, __safeDI_Panel_configuration.title) } else { Panel(leaf: leaf, title: __safeDI_Panel_configuration.title) }
 		        }
-		        let panel: Panel = __safeDI_panel()
+		        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel ?? .init())
 		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(panel, leaf) } else { Root(panel: panel, leaf: leaf) }
 		    }
@@ -882,17 +881,15 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Page {
-		        let panelConfiguration = safeDIOverrides.panel ?? .init()
-		        func __safeDI_panel() -> Outer {
-		            let panelConfiguration_ = panelConfiguration.panel ?? .init()
-		            func __safeDI_panel() -> Inner {
-		                let leaf = if let safeDIBuilder = panelConfiguration_.leaf { safeDIBuilder() } else { Leaf() }
-		                return if let safeDIBuilder = panelConfiguration_.safeDIBuilder { safeDIBuilder(leaf) } else { Inner(leaf: leaf) }
-		            }
-		            let panel: Inner = __safeDI_panel()
-		            return if let safeDIBuilder = panelConfiguration.safeDIBuilder { safeDIBuilder(panel) } else { Outer(panel: panel) }
+		        func __safeDI_panel_(__safeDI_Inner_configuration: Inner.SafeDIOverrides) -> Inner {
+		            let leaf = if let safeDIBuilder = __safeDI_Inner_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_Inner_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Inner(leaf: leaf) }
 		        }
-		        let panel: Outer = __safeDI_panel()
+		        func __safeDI_panel(__safeDI_Outer_configuration: Outer.SafeDIOverrides) -> Outer {
+		            let panel: Inner = __safeDI_panel_(__safeDI_Inner_configuration: __safeDI_Outer_configuration.panel ?? .init())
+		            return if let safeDIBuilder = __safeDI_Outer_configuration.safeDIBuilder { safeDIBuilder(panel) } else { Outer(panel: panel) }
+		        }
+		        let panel: Outer = __safeDI_panel(__safeDI_Outer_configuration: safeDIOverrides.panel ?? .init())
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(panel) } else { Page(panel: panel) }
 		    }
 		}
@@ -1631,13 +1628,12 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    ) -> Host {
 		        let item = if let item { item } else { Other() }
 		        let sheet = if let sheet { sheet } else { Sheet(item: item) }
-		        let screenConfiguration = safeDIOverrides.screen ?? .init()
-		        func __safeDI_screen() -> Screen {
-		            let item = if let safeDIBuilder = screenConfiguration.item { safeDIBuilder() } else { Item() }
-		            let helper = if let safeDIBuilder = screenConfiguration.helper { safeDIBuilder(sheet) } else { Helper(sheet: sheet) }
-		            return if let safeDIBuilder = screenConfiguration.safeDIBuilder { safeDIBuilder(item, helper) } else { Screen(item: item, helper: helper) }
+		        func __safeDI_screen(__safeDI_Screen_configuration: Screen.SafeDIOverrides) -> Screen {
+		            let item = if let safeDIBuilder = __safeDI_Screen_configuration.item { safeDIBuilder() } else { Item() }
+		            let helper = if let safeDIBuilder = __safeDI_Screen_configuration.helper { safeDIBuilder(sheet) } else { Helper(sheet: sheet) }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(item, helper) } else { Screen(item: item, helper: helper) }
 		        }
-		        let screen: Screen = __safeDI_screen()
+		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen ?? .init())
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(screen) } else { Host(screen: screen) }
 		    }
 		}
@@ -2015,6 +2011,313 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 
 		extension Home {
 		    public enum __safeDI_Home_mock_E9DA13214FF7A522 {}
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsOverridesIntoLocalsBeforeConstruction_whenMockedTypePassesDefaultToSendableAutoclosure() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				extension Ext: Instantiable {
+				    public static func instantiate(token: Token, isEnabled: Bool = false, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3) -> Ext {
+				        Ext(token: token, isEnabled: isEnabled)
+				    }
+				}
+
+				public final class Ext {
+				    public init(token: Token, isEnabled: Bool) {
+				        self.token = token
+				        self.isEnabled = isEnabled
+				    }
+
+				    public let token: Token
+				    public let isEnabled: Bool
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Ext+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Ext {
+		    static func mock(
+		        token: Token? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Ext {
+		        let token = if let token { token } else { Token() }
+		        let __safeDI_mock__safeDIOverrides_isEnabled = safeDIOverrides.isEnabled
+		        let __safeDI_mock__safeDIOverrides_pollInterval = safeDIOverrides.pollInterval
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(token, __safeDI_mock__safeDIOverrides_isEnabled, __safeDI_mock__safeDIOverrides_pollInterval()) } else { Ext.instantiate(token: token, isEnabled: __safeDI_mock__safeDIOverrides_isEnabled, pollInterval: __safeDI_mock__safeDIOverrides_pollInterval()) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Ext {
+		    /// Configures `Ext` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            isEnabled: Bool = false,
+		            pollInterval: @autoclosure @escaping @Sendable () -> Int = 3,
+		            _ safeDIBuilder: ((Token, Bool, Int) -> Ext)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                isEnabled: isEnabled,
+		                pollInterval: pollInterval,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var isEnabled: Bool { __safeDI_storage.isEnabled }
+		        var pollInterval: @Sendable () -> Int { __safeDI_storage.pollInterval }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Token, Bool, Int) -> Ext)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                isEnabled: Bool,
+		                pollInterval: @escaping @Sendable () -> Int,
+		                safeDIBuilder: ((Token, Bool, Int) -> Ext)?
+		            ) {
+		                self.isEnabled = isEnabled
+		                self.pollInterval = pollInterval
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let isEnabled: Bool
+		            let pollInterval: @Sendable () -> Int
+		            let safeDIBuilder: ((Token, Bool, Int) -> Ext)?
+		        }
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsChildsOverridesIntoLocalsBeforeItsBuilderFunction_whenChildPassesDefaultToSendableAutoclosure() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				extension Ext: Instantiable {
+				    public static func instantiate(token: Token, isEnabled: Bool = false, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3) -> Ext {
+				        Ext(token: token, isEnabled: isEnabled)
+				    }
+				}
+
+				public final class Ext {
+				    public init(token: Token, isEnabled: Bool) {
+				        self.token = token
+				        self.isEnabled = isEnabled
+				    }
+
+				    public let token: Token
+				    public let isEnabled: Bool
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(token: Token, ext: Ext) {
+				        self.token = token
+				        self.ext = ext
+				    }
+
+				    @Instantiated let token: Token
+				    @Instantiated let ext: Ext
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Root+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        let extConfiguration = safeDIOverrides.ext ?? .init()
+		        let __safeDI_ext__safeDIBuilder = extConfiguration.safeDIBuilder
+		        let __safeDI_ext__extConfiguration_isEnabled = extConfiguration.isEnabled
+		        let __safeDI_ext__extConfiguration_pollInterval = extConfiguration.pollInterval
+		        func __safeDI_ext() -> Ext {
+		            return if let safeDIBuilder = __safeDI_ext__safeDIBuilder { safeDIBuilder(token, __safeDI_ext__extConfiguration_isEnabled, __safeDI_ext__extConfiguration_pollInterval()) } else { Ext.instantiate(token: token, isEnabled: __safeDI_ext__extConfiguration_isEnabled, pollInterval: __safeDI_ext__extConfiguration_pollInterval()) }
+		        }
+		        let ext: Ext = __safeDI_ext()
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(token, ext) } else { Root(token: token, ext: ext) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Configures `Root` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            ext: Ext.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Token, Ext) -> Root)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                ext: ext,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var ext: Ext.SafeDIOverrides? { __safeDI_storage.ext }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Token, Ext) -> Root)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                ext: Ext.SafeDIOverrides?,
+		                safeDIBuilder: ((Token, Ext) -> Root)?
+		            ) {
+		                self.token = token
+		                self.ext = ext
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let token: (() -> Token)?
+		            let ext: Ext.SafeDIOverrides?
+		            let safeDIBuilder: ((Token, Ext) -> Root)?
+		        }
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsPromotedDependencysOverridesIntoLocalsInsideItsBuilderFunction_whenItPassesDefaultToSendableAutoclosure() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Poller: Instantiable {
+				    public init(pollInterval: @autoclosure @escaping @Sendable () -> Int = 3) {
+				        self.pollInterval = pollInterval()
+				    }
+
+				    let pollInterval: Int
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(poller: Poller) {
+				        self.poller = poller
+				    }
+
+				    @Received let poller: Poller
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Screen+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    static func mock(
+		        poller: SafeDIReceived<Poller, Poller.SafeDIOverrides> = .built(.init()),
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_poller(_ pollerConfiguration: Poller.SafeDIOverrides) -> Poller {
+		            let __safeDI_poller__safeDIBuilder = pollerConfiguration.safeDIBuilder
+		            let __safeDI_poller__pollerConfiguration_pollInterval = pollerConfiguration.pollInterval
+		            return if let safeDIBuilder = __safeDI_poller__safeDIBuilder { safeDIBuilder(__safeDI_poller__pollerConfiguration_pollInterval()) } else { Poller(pollInterval: __safeDI_poller__pollerConfiguration_pollInterval()) }
+		        }
+		        let poller: Poller = switch poller {
+		        case let .instance(poller): poller
+		        case let .built(pollerConfiguration): __safeDI_poller(pollerConfiguration)
+		        }
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(poller) } else { Screen(poller: poller) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Configures `Screen` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            _ safeDIBuilder: ((Poller) -> Screen)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Poller) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                safeDIBuilder: ((Poller) -> Screen)?
+		            ) {
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let safeDIBuilder: ((Poller) -> Screen)?
+		        }
+		    }
 		}
 		#endif
 		""")
