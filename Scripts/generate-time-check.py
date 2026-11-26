@@ -158,6 +158,11 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                every screen of the next layer and receiving `service`, with, at every screen, an
                                `@Instantiated(onlyIfAvailable: true)` that nothing fulfills (O), a receive of the
                                `Instantiator` declared two layers up (R), or a rename of `service` (N).
+  V-renames-in-alternate-layers, VO-only-if-available-renames-in-alternate-layers
+                               one module: layers of four screens, each holding `Instantiator`s of three screens of
+                               the next layer and receiving `service`; every screen of an odd layer renames `service`
+                               and every screen of an even layer below the first receives the rename (V: a required
+                               rename read only if available; VO: an only-if-available rename that is required).
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -526,6 +531,34 @@ def shape_census(layers, variant, width=3):
     return [("App", [], "import SafeDI\n\n" + source)]
 
 
+def shape_alternating_renames(layers, only_if_available, width=4):
+    """One module: a root over `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the
+    next layer and receiving `service`, which the root instantiates. Every screen of an odd layer renames `service` as
+    `renamedService`; every screen of an even layer but the first receives `renamedService`. Without
+    `only_if_available` the rename is required and the receive only if available; with it, the rename is only if
+    available and the receive required. Validation once keyed a subtree by the whole path to the screen whose rename
+    it reads."""
+    if only_if_available:
+        rename = ('@Received(fulfilledByDependencyNamed: "service", ofType: Service.self, onlyIfAvailable: true)', "renamedService", "Service?")
+        read = ("@Received", "renamedService", "Service?")
+    else:
+        rename = ('@Received(fulfilledByDependencyNamed: "service", ofType: Service.self)', "renamedService", "Service")
+        read = ("@Received(onlyIfAvailable: true)", "renamedService", "Service?")
+    source = "import SafeDI\n\n" + declaration("@Instantiable", "Service", [])
+    for layer in range(layers):
+        for position in range(width):
+            children = [f"{layer + 1}x{(position + offset) % width}" for offset in range(3)] if layer + 1 < layers else []
+            properties = [("@Received", "service", "Service")]
+            if layer % 2 == 1:
+                properties.append(rename)
+            elif layer > 0:
+                properties.append(read)
+            properties += [("@Instantiated", f"screen{child}Builder", f"Instantiator<Screen{child}>") for child in children]
+            source += declaration("@Instantiable", f"Screen{layer}x{position}", properties)
+    source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Screen0x0")])
+    return [("App", [], source)]
+
+
 def shape_w(width):
     """One module: a root over two layers of `width` screens, each first-layer screen holding `Instantiator`s of three
     second-layer screens, from its own position on, and each second-layer screen one of the first-layer screen after
@@ -597,6 +630,9 @@ GROWTH_ROWS = {
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {"code": 10.5}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
+    # V 0.45 s and 3.8 s (8.6); VO 0.51 s and 4.6 s (9.2).
+    "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 11.0}),
+    "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {"time": 11.5}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
