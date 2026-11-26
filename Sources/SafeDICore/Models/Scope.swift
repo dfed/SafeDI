@@ -33,6 +33,8 @@ final class Scope: Hashable {
 	///     dependencies and builds nothing. `nil` for every other scope.
 	///   - isUnavailableDependency: Whether the scope stands for an `@Instantiated(onlyIfAvailable: true)` property that
 	///     no production declaration fulfills: it builds nothing, and generated code binds its property to `nil`.
+	///   - isCallPlace: Whether the scope stands, in a body of a tree's plan by declaration, for a child on a cycle: see
+	///     the property.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
@@ -40,8 +42,10 @@ final class Scope: Hashable {
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
 		isUnavailableDependency: Bool = false,
+		isCallPlace: Bool = false,
 	) {
 		self.isUnavailableDependency = isUnavailableDependency
+		self.isCallPlace = isCallPlace
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.builtInlineSeamComment = builtInlineSeamComment
@@ -86,6 +90,13 @@ final class Scope: Hashable {
 	/// fulfill and declares no dependency, and generated code binds the property to `nil`, a declaration of its label like
 	/// the one a fulfilled property gets, so every receive, rename and argument beneath reads it as it reads that one.
 	let isUnavailableDependency: Bool
+
+	/// Whether the scope stands, in a body of a tree's plan by declaration (`DependencyTreeGenerator.CallPlaceShadow`), for
+	/// a child on a cycle: it has no children, `instantiable` receives what the child's whole tree receives from above,
+	/// and it closes no cycle, since a body calls the child's one function at its first build and where a path would
+	/// close on it alike. No seam's or public mock's call (`seamCall`, `publicMockCall`), so no reader of those takes it
+	/// for a seam's leaf.
+	let isCallPlace: Bool
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
@@ -754,8 +765,9 @@ extension ScopeRecord {
 					// Filtered once, for the memo and the parent alike.
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
 					// A call that passes fills reads the caller's declarations for its fills' trees, which the plan has no edge
-					// for yet, so a place whose subtree holds a call or a fill is not compared.
-					if let placeReadLabels, let placeReadsObserver, createdScope.recordsReads, !scopeGenerator.treeHoldsCallOrFill, let built = createdScope.builtProperty {
+					// for yet, so a place whose subtree holds a call or a fill is not compared. Nor is a place inside a fill,
+					// which reads the fields of the place its fill fills: the plan has no node for it.
+					if let placeReadLabels, let placeReadsObserver, createdScope.recordsReads, !scopeGenerator.treeHoldsCallOrFill, !createdScope.isInsideFill, let built = createdScope.builtProperty {
 						placeReadsObserver(
 							createdScope.builtScope.instantiable.concreteInstantiable.asSource,
 							built.property.asSource,
@@ -842,8 +854,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// A scope closes a cycle where validation finds one: it repeats a declaration of the same property, as cycle
 			// validation sees it (a lazily instantiated property as the constant it stands for), built for the same
 			// concrete type. A lazily instantiated declaration's instance is on the stack just inside the declaration.
-			closedOn = contextStack.entryClosedOn(byPropertyID: propertyID, concreteTypeID: scope.concreteTypeID, interner: interner)
-			log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: Self.depth(ofAnswerAt: closedOn?.entry.depth, insideFillOfCallAt: fillCallDepth))
+			// A call place closes on nothing, whatever is above it, so it reads nothing of the stack: its body calls the
+			// function of the declaration it stands for.
+			if !scope.isCallPlace {
+				closedOn = contextStack.entryClosedOn(byPropertyID: propertyID, concreteTypeID: scope.concreteTypeID, interner: interner)
+				log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: Self.depth(ofAnswerAt: closedOn?.entry.depth, insideFillOfCallAt: fillCallDepth))
+			}
 			childContextStack.push(property, id: propertyID, concreteType: scope.instantiable.concreteInstantiable, concreteTypeID: scope.concreteTypeID, depth: depth, interner: interner)
 			// Building the property adds its forms to the nearest declaration of its label, which it reads.
 			let (buildingDeclaration, buildingDepth) = nearestDeclarations.resolving(property.label)
@@ -891,7 +907,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// own label (see `ScopeGenerator.foundCycleParameters`).
 		var cycleParameterUnavailableProperties = Set<Property>()
 		for parameter in closedOnContext?.parameters ?? ownCycleParameters
-			where !parameter.isRequired && Self.binding(of: parameter.property, in: nearestDeclarations, log: &log) == nil
+			where !parameter.isRequired && Self.cycleArgumentBinding(of: parameter.property, in: nearestDeclarations, log: &log) == nil
 		{
 			cycleParameterUnavailableProperties.insert(parameter.property)
 		}
@@ -936,8 +952,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// A receive a mock passes `nil` reads nothing above this scope, though the mock root binds a form of it, since
 		// production always passes it `nil` in this place (see `NearestDeclarations.binding(_:passingNilTo:)`).
 		let concreteType = scope.instantiable.concreteInstantiable
+		// A receive of a property this scope creates itself reads that binding, so it asks nothing of the declarations
+		// above, and logs no read of them: a logged read no answer to which changes the place would only keep places from
+		// sharing a generator, and is a read the plan by declaration has no label for (base corpus seed 1856, a type that
+		// renames its own forwarded property only if available in a mock's tree, fails `PlaceReadsChecks` with the
+		// operands in the other order).
 		func isPassedNilByMock(_ property: Property, receivedBy dependency: Dependency) -> Bool {
-			Self.passesNil(to: property, receivedBy: dependency, on: concreteType, in: nearestDeclarations, log: &log) && scope.createdBinding(of: property) == nil
+			scope.createdBinding(of: property) == nil && Self.passesNil(to: property, receivedBy: dependency, on: concreteType, in: nearestDeclarations, log: &log)
 		}
 		var unavailableOptionalProperties = Set<Property>()
 		var receivesPassedNil = Set<Property>()
@@ -1318,6 +1339,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private static func binding(of property: Property, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> Property? {
 		let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
 		log.record(.binding(property), answer: .binding(binding), depth: depth)
+		return binding
+	}
+
+	/// The binding this scope passes a parameter `property` of the builder function a lazy cycle closes on, among
+	/// `nearestDeclarations`, logged in `log` as a read of what a cycle passes (`ConstructionLog.Read.cycleArgumentBinding`).
+	private static func cycleArgumentBinding(of property: Property, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> Property? {
+		let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
+		log.record(.cycleArgumentBinding(property), answer: .binding(binding), depth: depth)
 		return binding
 	}
 
@@ -2372,6 +2401,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let fillPathStackCount: Int
 	/// See `init(scope:property:contextStack:depth:fillPathStackCount:fillCallDepth:…)`.
 	private let fillCallDepth: Int?
+	/// Whether this scope is built inside a fill, whose tree reads the fields of the place it fills.
+	var isInsideFill: Bool { fillCallDepth != nil }
 
 	/// The depth a read of the stack or of the cycle parameter contexts is logged at, given `answerDepth`, the depth of the
 	/// scope that put the answer there, or `nil` for a miss. Outside a fill, a miss and the path of a seam whose hole is filled

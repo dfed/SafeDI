@@ -54,6 +54,10 @@ struct ConstructionScope: Sendable {
 		record.isUnavailableDependency
 	}
 
+	var isCallPlace: Bool {
+		record.isCallPlace
+	}
+
 	var seamCall: SeamCall? {
 		record.seamCall
 	}
