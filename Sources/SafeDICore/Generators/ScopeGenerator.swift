@@ -9752,8 +9752,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatReceivedProperties: [Property]
 		/// The hand-written mock each of `flatReceivedProperties` whose type has one defaults to.
 		let flatReceivedParameterMockDefaults: [Property: FlatParameterMockDefault]
-		/// The received properties every receiver receives only if available and nothing in the mock provides.
+		/// The received properties every receiver receives only if available and nothing in the mock provides, and
+		/// `unavailableDependencyOverrideProperties`.
 		let onlyIfAvailableReceivedProperties: [Property]
+		/// The properties instantiated only if available that nothing fulfills (`MockTreeNames.unavailableDependencyProperties`)
+		/// that `mock()` takes an override of, which the type that declares one binds it from: each but one of the label and
+		/// type of a value `mock()` already takes, which stays `nil`, since that value is another declaration's.
+		let unavailableDependencyOverrideProperties: Set<Property>
 		/// For an internal mock, those of `onlyIfAvailableReceivedProperties` that only the calls of other modules' public mocks
 		/// in its tree receive, whose overrides are named apart from the builders and the flat received parameters. Empty for a
 		/// public mock, which takes them as parameters that the others are named apart from.
@@ -10456,6 +10461,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let namesDeclaredInBuilderFunctions: Set<String>
 		/// The names of the builder functions of every node of the tree.
 		let builderFunctionNames: Set<String>
+		/// The properties the mocked type and the types of its tree instantiate only if available that nothing fulfills, each
+		/// once, in the order a walk of the tree in generation order first meets them. One a type built inside a `@Sendable`
+		/// builder function declares is left out: it is bound to `nil` there, since the function could not capture an override.
+		var unavailableDependencyProperties = [Property]()
+		/// Every declaration in the tree of a property instantiated only if available that nothing fulfills, those inside a
+		/// `@Sendable` builder function too, which a public mock is rejected for
+		/// (`PublicMockFinding.holdsUnavailableDependency`).
+		var unavailableDependencyDeclarations = [Dependency]()
 		/// The places inside the fills of the tree's calls of other modules' public mocks (`FillPlace`), in the order the calls
 		/// are generated, each a place of a builder `mock()` takes. The query and a public mock's promotion read a tree that
 		/// holds no internal mock's call, so their names leave these four empty (`treeNames(of:readsFills:)`).
@@ -10698,6 +10711,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				flatReceivedProperties.append(receivedProperty)
 			}
 		}
+		// A property instantiated only if available that nothing fulfills takes an override too, which defaults to `nil`, the
+		// value production binds. The type that declares it binds it from the override, so it reads no declaration above it.
+		var unavailableDependencyOverrideProperties = Set<Property>()
+		for property in treeNames.unavailableDependencyProperties
+			where !receivedParameterProperties.contains(property)
+			&& !receivedParameterProperties.contains(property.asUnwrappedProperty)
+			&& !isFulfilledByForwardedProperty(property)
+		{
+			unavailableDependencyOverrideProperties.insert(property)
+			onlyIfAvailableReceivedProperties.append(property)
+		}
+		if !unavailableDependencyOverrideProperties.isEmpty {
+			onlyIfAvailableReceivedProperties.sort(by: { $0.precedesInMockOrder($1) })
+		}
 		// A received dependency the mock cannot build defaults to the hand-written mock its type has, as a forwarded one does.
 		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
 		for property in flatReceivedProperties {
@@ -10824,6 +10851,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			flatReceivedProperties: flatReceivedProperties,
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			onlyIfAvailableReceivedProperties: onlyIfAvailableReceivedProperties,
+			unavailableDependencyOverrideProperties: unavailableDependencyOverrideProperties,
 			onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive: onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive,
 			flatUncoveredParameters: flatUncoveredParameters,
 			uncoveredParameters: uncoveredParameters,

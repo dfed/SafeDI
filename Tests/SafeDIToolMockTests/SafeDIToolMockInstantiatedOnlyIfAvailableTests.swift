@@ -25,10 +25,10 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// A mock of a type whose tree declares `@Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?`, where
-/// no production declaration fulfills `Analytics`. Production binds `analytics` to `nil`, and so does the mock, at every
-/// position, the mocked type's own property included: `mock()` takes no parameter and `SafeDIOverrides` no entry for it.
-/// A `mockOnly` declaration that fulfills the type gives a mock a value; an override defaulting to `nil` could be added
-/// later at every position without breaking a caller.
+/// no production declaration fulfills `Analytics`. Production binds `analytics` to `nil`. A mock binds it where production
+/// does, from an override that defaults to `nil`: an entry of an internal mock's `SafeDIOverrides`, a parameter of a public
+/// mock, one for a label and type. It stays `nil` inside a `@Sendable` builder function, and where `mock()` already takes
+/// a value of the label and type. A `mockOnly` declaration that fulfills the type is built instead.
 struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 	// MARK: Initialization
 
@@ -46,7 +46,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_bindsNilAndTakesNoParameter_whenMockedTypeInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+	mutating func mock_takesOverrideDefaultingToNil_whenMockedTypeInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -73,8 +73,21 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    static func mock() -> Screen {
-		        let analytics: (any Analytics)? = nil
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (any Analytics)? = nil
+		        ) {
+		            self.analytics = analytics
+		        }
+
+		        let analytics: (any Analytics)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics: (any Analytics)? = safeDIOverrides.analytics
 		        return Screen(analytics: analytics)
 		    }
 		}
@@ -84,10 +97,9 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_bindsNilAndTakesNoParameter_whenTypeInMockedTreeInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+	mutating func mock_takesOverrideDefaultingToNil_whenTypeInMockedTreeInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
 		// `Child`, beneath the mocked `Screen`, instantiates `analytics` only if available, and `Footer`, beneath `Child`,
-		// receives it only if available. The mock binds `analytics` to `nil` where production does, inside `Child`'s builder
-		// function.
+		// receives it only if available. The mock takes one override of `analytics`, which `Child` binds and both are passed.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -137,14 +149,17 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            child: Child.SafeDIMockConfiguration = .init()
+		            child: Child.SafeDIMockConfiguration = .init(),
+		            analytics: (any Analytics)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                child: child
 		            )
+		            self.analytics = analytics
 		        }
 
 		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+		        let analytics: (any Analytics)?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -163,7 +178,7 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_child() -> Child {
-		            let analytics: (any Analytics)? = nil
+		            let analytics: (any Analytics)? = safeDIOverrides.analytics
 		            let footer = if let safeDIBuilder = safeDIOverrides.child.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
 		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
 		        }
@@ -173,6 +188,740 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesOneOverride_whenTwoTypesInMockedTreeInstantiateOneLabelOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+		// `Header` and `Footer`, siblings beneath the mocked `Screen`, each instantiate `analytics` only if available.
+		// Production binds each to `nil`; the mock takes one override of the label and type, which both are passed.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(header: Header, footer: Footer) {
+				        self.header = header
+				        self.footer = footer
+				    }
+				    @Instantiated let header: Header
+				    @Instantiated let footer: Footer
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Header: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Footer: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            header: (((any Analytics)?) -> Header)? = nil,
+		            footer: (((any Analytics)?) -> Footer)? = nil,
+		            analytics: (any Analytics)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                header: header,
+		                footer: footer
+		            )
+		            self.analytics = analytics
+		        }
+
+		        var header: (((any Analytics)?) -> Header)? { __safeDI_storage.header }
+		        var footer: (((any Analytics)?) -> Footer)? { __safeDI_storage.footer }
+		        let analytics: (any Analytics)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                header: (((any Analytics)?) -> Header)?,
+		                footer: (((any Analytics)?) -> Footer)?
+		            ) {
+		                self.header = header
+		                self.footer = footer
+		            }
+
+		            let header: (((any Analytics)?) -> Header)?
+		            let footer: (((any Analytics)?) -> Footer)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_header() -> Header {
+		            let analytics: (any Analytics)? = safeDIOverrides.analytics
+		            return if let safeDIBuilder = safeDIOverrides.header { safeDIBuilder(analytics) } else { Header(analytics: analytics) }
+		        }
+		        let header: Header = __safeDI_header()
+		        func __safeDI_footer() -> Footer {
+		            let analytics: (any Analytics)? = safeDIOverrides.analytics
+		            return if let safeDIBuilder = safeDIOverrides.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
+		        }
+		        let footer: Footer = __safeDI_footer()
+		        return Screen(header: header, footer: footer)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNil_whenTypeBeneathForwardedPropertyInstantiatesItsLabelOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+		// The mocked `Screen` forwards `analytics`, and `Child` beneath it instantiates the label only if available.
+		// Production binds `Child`'s to `nil`, and so does the mock: the forwarded value is another declaration's, and
+		// `mock()` takes no second entry of the label and type.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: (any Analytics)?, child: Child) {
+				        self.analytics = analytics
+				        self.child = child
+				    }
+				    @Forwarded let analytics: (any Analytics)?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: (((any Analytics)?) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		        }
+
+		        var child: (((any Analytics)?) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: (((any Analytics)?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: (((any Analytics)?) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        analytics: (any Analytics)?,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_child() -> Child {
+		            let analytics: (any Analytics)? = nil
+		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		        }
+		        let child: Child = __safeDI_child()
+		        return Screen(analytics: analytics, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesOverrideDefaultingToNil_whenTypeBeneathRequiresOptionalInstantiatedOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+		// `Footer`, beneath `Child`, requires the optional `analytics` that `Child` instantiates only if available.
+		// Production passes it `nil`, so the mock's entry still defaults to `nil`: no caller has to pass it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(analytics: (any Analytics)?, footer: Footer) {
+				        self.analytics = analytics
+				        self.footer = footer
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				    @Instantiated let footer: Footer
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Footer: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Received let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: Child.SafeDIMockConfiguration = .init(),
+		            analytics: (any Analytics)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		            self.analytics = analytics
+		        }
+
+		        var child: Child.SafeDIMockConfiguration { __safeDI_storage.child }
+		        let analytics: (any Analytics)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: Child.SafeDIMockConfiguration
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: Child.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_child() -> Child {
+		            let analytics: (any Analytics)? = safeDIOverrides.analytics
+		            let footer = if let safeDIBuilder = safeDIOverrides.child.footer { safeDIBuilder(analytics) } else { Footer(analytics: analytics) }
+		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(analytics, footer) } else { Child(analytics: analytics, footer: footer) }
+		        }
+		        let child: Child = __safeDI_child()
+		        return Screen(child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsOverrideWhereTypeDeclaresIt_whenTypeAboveDeclaresLabelAsAnotherType() async throws {
+		// `Screen` instantiates `analytics: AnalyticsClient`, and `Child` beneath it instantiates `analytics: (any Analytics)?`
+		// only if available. Production binds `Child`'s to `nil` inside its builder function, so the mock binds it there
+		// from an override named apart from `Screen`'s own, and reports no hidden receive.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable
+				public final class AnalyticsClient: Instantiable {
+				    public init() {
+
+				    }
+
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: AnalyticsClient, child: Child) {
+				        self.analytics = analytics
+				        self.child = child
+				    }
+				    @Instantiated let analytics: AnalyticsClient
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> AnalyticsClient)? = nil,
+		            child: (((any Analytics)?) -> Child)? = nil,
+		            analytics_Analytics: (any Analytics)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                child: child
+		            )
+		            self.analytics_Analytics = analytics_Analytics
+		        }
+
+		        var analytics: (() -> AnalyticsClient)? { __safeDI_storage.analytics }
+		        var child: (((any Analytics)?) -> Child)? { __safeDI_storage.child }
+		        let analytics_Analytics: (any Analytics)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> AnalyticsClient)?,
+		                child: (((any Analytics)?) -> Child)?
+		            ) {
+		                self.analytics = analytics
+		                self.child = child
+		            }
+
+		            let analytics: (() -> AnalyticsClient)?
+		            let child: (((any Analytics)?) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { AnalyticsClient() }
+		        func __safeDI_child() -> Child {
+		            let analytics: (any Analytics)? = safeDIOverrides.analytics_Analytics
+		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		        }
+		        let child: Child = __safeDI_child()
+		        return Screen(analytics: analytics, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNil_whenMockAlreadyTakesRequiredValueOfLabelAndType() async throws {
+		// The mocked type requires `analytics: (any Analytics)?`, which `mock()` takes, and `Child` beneath it instantiates the
+		// label only if available. Production binds `Child`'s to `nil` whatever the mocked type receives, so the mock binds
+		// `nil` too: the value `mock()` takes is another declaration's, and it takes no second entry of the label and type.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: (any Analytics)?, child: Child) {
+				        self.analytics = analytics
+				        self.child = child
+				    }
+				    @Received let analytics: (any Analytics)?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: (((any Analytics)?) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		        }
+
+		        var child: (((any Analytics)?) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: (((any Analytics)?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: (((any Analytics)?) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        analytics: (any Analytics)?,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_child() -> Child {
+		            let analytics: (any Analytics)? = nil
+		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		        }
+		        let child: Child = __safeDI_child()
+		        return Screen(analytics: analytics, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNil_whenMockAlreadyTakesOverrideOfLabelAndTypeForReceive() async throws {
+		// The mocked type receives `analytics` only if available, which the mock takes an override of, and `Child` beneath it
+		// instantiates the label only if available. The override is the receive's alone: `Child`'s is `nil`, as in production.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: (any Analytics)?, child: Child) {
+				        self.analytics = analytics
+				        self.child = child
+				    }
+				    @Received(onlyIfAvailable: true) let analytics: (any Analytics)?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: (((any Analytics)?) -> Child)? = nil,
+		            analytics: (any Analytics)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		            self.analytics = analytics
+		        }
+
+		        var child: (((any Analytics)?) -> Child)? { __safeDI_storage.child }
+		        let analytics: (any Analytics)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: (((any Analytics)?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: (((any Analytics)?) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics: (any Analytics)? = safeDIOverrides.analytics
+		        func __safeDI_child() -> Child {
+		            let analytics: (any Analytics)? = nil
+		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		        }
+		        let child: Child = __safeDI_child()
+		        return Screen(analytics: analytics, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNil_whenTypeBuiltInsideSendableFunctionInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+		// `Child` is built inside a `@Sendable` builder function, which could not capture an override of a type that is not
+		// `Sendable`. A deliberate gap: the mock binds `nil` there, as production does, and takes no override.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol Analytics {}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable, Sendable {
+				    public init(childBuilder: SendableInstantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+				    @Instantiated let childBuilder: SendableInstantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable, @unchecked Sendable {
+				    public init(analytics: (any Analytics)?) {
+				        self.analytics = analytics
+				    }
+				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            childBuilder: (@Sendable ((any Analytics)?) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                childBuilder: childBuilder
+		            )
+		        }
+
+		        var childBuilder: (@Sendable ((any Analytics)?) -> Child)? { __safeDI_storage.childBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                childBuilder: (@Sendable ((any Analytics)?) -> Child)?
+		            ) {
+		                self.childBuilder = childBuilder
+		            }
+
+		            let childBuilder: (@Sendable ((any Analytics)?) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
+		            let analytics: (any Analytics)? = nil
+		            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(analytics) } else { Child(analytics: analytics) }
+		        }
+		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
+		        return Screen(childBuilder: childBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPublicMockBuildsDeclaringTypeInsideSendableFunction() async {
+		// The internal mock binds `nil` inside the `@Sendable` builder function; a public mock is rejected there too.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):6:5: error: SafeDI cannot generate the public mock of `Screen`: a public mock cannot hold `analytics: (any Analytics)?` yet, which is instantiated only if available and which no `@Instantiable` declaration this module sees fulfills, since a module that calls the mock may see one. Write `mock()` by hand on `Screen`, or use `generateMock: .internal`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Analytics {}
+					""",
+					"""
+					@Instantiable(generateMock: .public)
+					public final class Screen: Instantiable, Sendable {
+					    public init(childBuilder: SendableInstantiator<Child>) {
+					        self.childBuilder = childBuilder
+					    }
+					    @Instantiated let childBuilder: SendableInstantiator<Child>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, @unchecked Sendable {
+					    public init(analytics: (any Analytics)?) {
+					        self.analytics = analytics
+					    }
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorAtFirstDeclarationInSourceOrder_whenPublicMocksTreeInstantiatesTwoTypesOnlyIfAvailable() async {
+		// The mock builds `right` before `left`, and the error is reported at `Left`’s declaration, the first in source order,
+		// whichever the tree meets first.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Left.swift"]):6:5: error: SafeDI cannot generate the public mock of `Screen`: a public mock cannot hold `analytics: (any Analytics)?` yet, which is instantiated only if available and which no `@Instantiable` declaration this module sees fulfills, since a module that calls the mock may see one. Write `mock()` by hand on `Screen`, or use `generateMock: .internal`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Analytics {}
+					""",
+					"""
+					public protocol Tracker {}
+					""",
+					"""
+					@Instantiable(generateMock: .public)
+					public final class Screen: Instantiable {
+					    public init(right: Right, left: Left) {
+					        self.right = right
+					        self.left = left
+					    }
+					    @Instantiated let right: Right
+					    @Instantiated let left: Left
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Left: Instantiable {
+					    public init(analytics: (any Analytics)?) {
+					        self.analytics = analytics
+					    }
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Right: Instantiable {
+					    public init(analytics: (any Tracker)?) {
+					        self.analytics = analytics
+					    }
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Tracker)?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	@Test
@@ -251,57 +1000,42 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_bindsNilAndTakesNoBuilder_whenPublicMockInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
-		// A public mock takes a builder for an `@Instantiated` type nothing fulfills; for one instantiated only if available
-		// it takes none and binds `nil`.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
+	mutating func mock_throwsError_whenPublicMockInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async {
+		// A module that calls the public mock may see a declaration that fulfills `Analytics`, which production builds at
+		// `Screen`, and a public mock cannot take that value yet, so it is rejected at the declaration. An internal mock takes
+		// an override (the first test of this suite).
+		await assertThrowsError(
+			diagnostics: { fixtures in
 				"""
-				public protocol Analytics {}
-				""",
+				\(fixtures["Screen.swift"]):6:5: error: SafeDI cannot generate the public mock of `Screen`: a public mock cannot hold `analytics: (any Analytics)?` yet, which is instantiated only if available and which no `@Instantiable` declaration this module sees fulfills, since a module that calls the mock may see one. Write `mock()` by hand on `Screen`, or use `generateMock: .internal`.
 				"""
-				@Instantiable(generateMock: .public)
-				public final class Screen: Instantiable {
-				    public init(analytics: (any Analytics)?) {
-				        self.analytics = analytics
-				    }
-				    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension Screen {
-		    public static func mock() -> Screen {
-		        Screen.__safeDI_mock()
-		    }
-
-		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-		    public static func __safeDI_mock() -> Screen {
-		        let analytics: (any Analytics)? = nil
-		        return Screen(analytics: analytics)
-		    }
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Analytics {}
+					""",
+					"""
+					@Instantiable(generateMock: .public)
+					public final class Screen: Instantiable {
+					    public init(analytics: (any Analytics)?) {
+					        self.analytics = analytics
+					    }
+					    @Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_mock_CBF29CE484222325 {}
-		}
-		#endif
-		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_bindsNilAndTakesNoBuilder_whenMockedSeamInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
-		// The seam's initializer takes a builder that returns the optional; its own mock takes none and binds `nil`.
+	mutating func mock_takesOverrideDefaultingToNil_whenMockedSeamInstantiatesTypeOnlyIfAvailableThatNoDeclarationFulfills() async throws {
+		// The seam's initializer takes a builder that returns the optional; its own mock takes an override of the value instead.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -328,8 +1062,21 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    static func mock() -> Screen {
-		        let analytics: (any Analytics)? = nil
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (any Analytics)? = nil
+		        ) {
+		            self.analytics = analytics
+		        }
+
+		        let analytics: (any Analytics)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics: (any Analytics)? = safeDIOverrides.analytics
 		        return Screen(analytics: analytics)
 		    }
 		}

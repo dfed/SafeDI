@@ -1072,6 +1072,19 @@ struct PublicMockFinding: Hashable, Sendable {
 		])
 	}
 
+	/// The tree of `instantiable`'s public mock holds `declaration`, a property instantiated only if available that no
+	/// declaration its module sees fulfills. A module that calls the mock may see one, and production builds the value
+	/// there, at the place that declares it, which a public mock cannot take yet. Reported at the declaration. An internal
+	/// mock takes an override of the property (`MockRootParameters.unavailableDependencyOverrideProperties`).
+	static func holdsUnavailableDependency(_ declaration: Dependency, of instantiable: Instantiable) -> PublicMockFinding {
+		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
+		let property = "`\(declaration.property.asSource)`"
+		let message = "SafeDI cannot generate the public mock of \(typeName): a public mock cannot hold \(property) yet, which is instantiated only if available and which no `@Instantiable` declaration this module sees fulfills, since a module that calls the mock may see one. Write `mock()` by hand on \(typeName), or use `generateMock: .internal`."
+		return PublicMockFinding(sourceDiagnostics: [
+			SourceDiagnostic(severity: .error, location: declaration.declarationLocation, message: message),
+		])
+	}
+
 	/// `publicTierOmitsRequiredParameter`: the `public` tier the mock requires cannot take `parameter`.
 	static func omittedRequiredParameter(_ parameter: OmittedRequiredParameter, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
@@ -1227,6 +1240,12 @@ extension ScopeGenerator {
 		if let holeSiteBoundApartFinding = publicMockHoleSiteBoundApartFinding(of: instantiable, parameters: parameters) {
 			findings.append(holeSiteBoundApartFinding)
 		}
+		// The first in source order, so the error does not depend on the order the tree is walked in.
+		if let unavailableDeclaration = parameters.treeNames.unavailableDependencyDeclarations
+			.min(by: { Dependency.DeclarationLocation.precedesInSourceOrder($0.declarationLocation, $1.declarationLocation) })
+		{
+			findings.append(PublicMockFinding.holdsUnavailableDependency(unavailableDeclaration, of: instantiable))
+		}
 		return findings
 	}
 
@@ -1247,7 +1266,10 @@ extension ScopeGenerator {
 	private func publicMockHoleSiteBoundApartFinding(of instantiable: Instantiable, parameters: MockRootParameters) -> PublicMockFinding? {
 		let namesAliasesAreBoundApartFrom = Self.mockRootTopLevelNames(of: parameters, parameterNames: Self.mockRootParameterNames(of: parameters)).namesAliasesAreBoundApartFrom
 		var boundApartHoleLabels = Set<String>()
-		for property in parameters.treeNames.rootHoleSiteProperties where namesAliasesAreBoundApartFrom.contains(property.label) {
+		// A property instantiated only if available that nothing fulfills is no hole, and has its own finding
+		// (`PublicMockFinding.holdsUnavailableDependency`).
+		let unavailableProperties = Set(parameters.treeNames.unavailableDependencyDeclarations.lazy.map(\.property))
+		for property in parameters.treeNames.rootHoleSiteProperties where namesAliasesAreBoundApartFrom.contains(property.label) && !unavailableProperties.contains(property) {
 			boundApartHoleLabels.insert(property.label)
 		}
 		guard let holeDependency = instantiable.dependencies.first(where: { boundApartHoleLabels.contains($0.property.label) }) else { return nil }
