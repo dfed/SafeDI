@@ -66,7 +66,10 @@ extension MockLowering.Walk {
 
 	/// Ends the level `enterLevel(of:)` started.
 	mutating func leaveLevel() {
-		levelNames.removeLast()
+		let names = levelNames.removeLast()
+		if levelNames.isEmpty {
+			rootLevelNames = names
+		}
 	}
 
 	/// Starts the extraction of the `@Sendable` builder function named `functionName`, which a node of the current level

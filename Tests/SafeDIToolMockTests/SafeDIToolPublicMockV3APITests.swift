@@ -970,21 +970,15 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
-		        let cacheConfiguration = safeDIOverrides.cache ?? .init()
-		        func __safeDI_cache() -> Cache {
-		            return if let safeDIBuilder = cacheConfiguration.safeDIBuilder { safeDIBuilder(cacheConfiguration.capacity, cacheConfiguration.name) } else { Cache(capacity: cacheConfiguration.capacity, name: cacheConfiguration.name) }
+		        func __safeDI_cache(__safeDI_Cache_configuration: __safeDI_App_Cache_MockConfiguration) -> Cache {
+		            if let safeDIBuilder = __safeDI_Cache_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Cache_configuration.capacity, __safeDI_Cache_configuration.name) } else { Cache(capacity: __safeDI_Cache_configuration.capacity, name: __safeDI_Cache_configuration.name) }
 		        }
-		        let cache: Cache = __safeDI_cache()
-		        let screenConfiguration = safeDIOverrides.screen ?? .init()
-		        func __safeDI_screen() -> Screen {
-		            let cacheConfiguration = screenConfiguration.cache ?? .init()
-		            func __safeDI_cache() -> Cache {
-		                return if let safeDIBuilder = cacheConfiguration.safeDIBuilder { safeDIBuilder(cacheConfiguration.capacity, cacheConfiguration.name) } else { Cache(capacity: cacheConfiguration.capacity, name: cacheConfiguration.name) }
-		            }
-		            let cache: Cache = __safeDI_cache()
-		            return if let safeDIBuilder = screenConfiguration.safeDIBuilder { safeDIBuilder(cache) } else { Screen(cache: cache) }
+		        let cache: Cache = __safeDI_cache(__safeDI_Cache_configuration: safeDIOverrides.cache ?? .init())
+		        func __safeDI_screen(__safeDI_Screen_configuration: __safeDI_App_Screen_MockConfiguration) -> Screen {
+		            let cache: Cache = __safeDI_cache(__safeDI_Cache_configuration: __safeDI_Screen_configuration.cache ?? .init())
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache) } else { Screen(cache: cache) }
 		        }
-		        let screen: Screen = __safeDI_screen()
+		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen ?? .init())
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(cache, screen) } else { Home(cache: cache, screen: screen) }
 		    }
 		}

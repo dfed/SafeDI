@@ -169,9 +169,9 @@ extension ScopeGenerator {
 		}
 		let rootReceiverBindingIndex = bindingLines.endIndex
 		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
-		// `.v3Unstable` records no place yet: its configuration reads are not records, so its mocks keep the walk's body.
-		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public && !walk.isV3
+		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
 		walk.recordsPlaces = laysOutWithTypeKey
+		walk.typeKeyRootDeclarations = signature.typeKeyRootDeclarations
 		let nodes = try await walk.children(
 			of: orderedChildren,
 			loops: mockLoweringLoopMemberships,
@@ -185,7 +185,7 @@ extension ScopeGenerator {
 			walk.recordBuiltPlaces()
 		}
 		if laysOutWithTypeKey {
-			let layout = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations)
+			let layout = walk.typeKeyRootLines(declaredAtRoot: walk.typeKeyRootDeclarations + walk.v3PromotedParameterDeclarations)
 			if let typeKeyLines = layout.lines {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
 			}
@@ -511,6 +511,9 @@ extension MockLowering {
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
 		var levelNames = [GeneratedNameAllocator]()
+		/// The names of the mock's root level once the walk has left it, from which the mocked type's own construction claims
+		/// the locals it reads its overrides into (`ScopeGenerator.v3MockWithTree`).
+		var rootLevelNames: GeneratedNameAllocator?
 		/// Whether the walk is inside a `@Sendable` builder function, whose nodes' override closures are `@Sendable`.
 		var isInsideSendableFunction = false
 		/// Whether the nodes the walk is at build what an actor's initializer is handed, outside every lazy wrapper's builder
@@ -529,6 +532,11 @@ extension MockLowering {
 		/// other members and every place beneath a member (`MockLowering+LoopPlaces.swift`).
 		var loopUnitRecords = [[Int]: PlaceRecord]()
 		var pathsCoveredByLoopUnits = Set<[Int]>()
+		/// The values `mock()` takes for the nodes a `.v3Unstable` mock promotes, which their text places read
+		/// (`recordPromotedPlace(_:at:lines:indent:rootDeclarations:)`), as the root declares them.
+		var v3PromotedParameterDeclarations = [Property]()
+		/// What `mock()` binds before its tree, as the type key reads it (`RootSignature.typeKeyRootDeclarations`).
+		var typeKeyRootDeclarations = [Property]()
 		/// The places the walk binds under a name apart from their labels, which keep the walk's body.
 		var pathsNamedApart = Set<[Int]>()
 		/// The receives only if available the node being lowered is passed `nil` for, given the siblings built before it.
@@ -716,7 +724,13 @@ extension MockLowering {
 				let node: TreeNode?
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
+					let nodeLinesStart = lines.endIndex
 					node = try await self.node(of: generator, bindingName: bindingName, inScope: scope, path: path, pathValue: pathValue, indent: indent, lines: &lines)
+					// A node a `.v3Unstable` mock promotes is bound from the value `mock()` is passed for it, which no built record
+					// says, so it is one text place.
+					if recordsPlaces, isV3, bodyLabels.isEmpty, case let .built(builtNode)? = node, builtNode.promotedParameterName != nil {
+						recordPromotedPlace(builtNode, at: childIndexPath, lines: Array(lines[nodeLinesStart...]), indent: indent, rootDeclarations: typeKeyRootDeclarations)
+					}
 				} else if case .alias = generator.scopeData {
 					// A rename the level declares of a member is bound with the loop's wrappers, after
 					// them, and its members' functions bind it again (`MockLowering.loopMembers`).
@@ -1046,7 +1060,13 @@ extension MockLowering {
 				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
 				return .cycleClosing(property, bindingName: isV3 ? property.label : bindingName, concreteType: instantiable.concreteInstantiable)
 			}
+			// A `.v3Unstable` closer hands its function the nearest configurations, which no record holds yet, so its mock keeps
+			// the walk's body.
+			if recordsPlaces, isV3 {
+				unrecordedReasons[childIndexPath] = "v3Closer"
+			}
 			if recordsPlaces,
+			   !isV3,
 			   case let .property(_, _, _, erasedToConcreteExistential, _, _) = generator.scopeData,
 			   let record = closerRecord(of: generator, instantiable: instantiable, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, closedOnFunctionName: closedOnFunctionName)
 			{
@@ -1393,8 +1413,9 @@ extension MockLowering {
 			let readsParentConfiguration = !isCycleNode && !isPruned(spelled: concreteTypeSource, beneath: parentConcreteType)
 			if recordsPlaces {
 				builtPlaceConfigurationContexts[childIndexPath] = MockLowering.BuiltPlaceConfigurationContext(
-					fieldName: bindingName,
+					fieldName: fieldLabel,
 					parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
+					parentFieldIsOptional: isV3,
 					nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
 					ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
 						concreteType: instantiable.concreteInstantiable,
@@ -1527,6 +1548,7 @@ extension MockLowering {
 			// property's label, never by a name a place binds the node apart under.
 			if isV3 {
 				node.v3FieldName = fieldLabel
+				node.v3ConfigurationType = v3ConfigurationNames.typeDescription(of: instantiable.concreteInstantiable)
 			}
 			node.renamedFunctionName = renamedFunctionName
 			node.sendableAutoclosureBindings = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureBindings[$0] }
@@ -1566,7 +1588,6 @@ extension MockLowering {
 			let startsExtraction = startsForSendableFunction || (
 				sendableOverrideExtractor == nil
 					&& !buildsPublicMock
-					&& !isV3
 					&& overrideReachable
 					&& constructionPassesConfigurationReadToSendableAutoclosure(of: instantiable, usesMockInitializer: usesMockInitializer)
 			)
@@ -1914,6 +1935,9 @@ extension MockLowering {
 		let isErased: Bool
 		/// Whether the node builds its type in a wrapper.
 		let isWrapped: Bool
+		/// The configuration struct that configures the node where it `hasConfiguration`, as the mock's API version names it:
+		/// `T.SafeDIMockConfiguration`, or `.v3Unstable`'s `T.SafeDIOverrides` or file-scope name (`V3ConfigurationNames`).
+		let configurationStructType: TypeDescription
 
 		/// The type of the closure that overrides how the node is built, `@Sendable` where `isSendable`, as
 		/// `ConstantNode.builderClosureType` spells it.
@@ -2018,6 +2042,8 @@ extension MockLowering {
 		/// The name of the node's member of the enclosing overrides: in `.v3Unstable` its label, set by the walk, else
 		/// its binding name.
 		var v3FieldName: String?
+		/// In `.v3Unstable`, the type of the node's configuration (`V3ConfigurationNames.typeDescription(of:)`).
+		var v3ConfigurationType: TypeDescription?
 		var fieldName: String {
 			v3FieldName ?? bindingName
 		}
@@ -2083,6 +2109,7 @@ extension MockLowering {
 				hasConfiguration: hasConfiguration,
 				isErased: isErased,
 				isWrapped: isWrapped,
+				configurationStructType: v3ConfigurationType ?? .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
 			)
 		}
 

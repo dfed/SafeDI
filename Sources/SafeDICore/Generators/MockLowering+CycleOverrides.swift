@@ -126,12 +126,16 @@ extension MockLowering {
 		builtWithHandWrittenMock: Bool,
 		configurationType: TypeDescription?,
 		parentConfiguration: ValuePath?,
+		parentFieldIsOptional: Bool,
 		nearestIsProvided: Bool,
 		staysOutsideSendableFunctions: Bool,
 	) -> [PassedArgument] {
 		guard let parameter = configurationParameter(ofPlaceOf: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: configurationType) else { return [] }
 		let value: ValuePath = if let parentConfiguration {
-			.member(label, of: parentConfiguration)
+			// A parent's optional field of a configuration struct is read as a configuration built afresh where it is `nil`.
+			parentFieldIsOptional && parameter.readsConfigurationStruct
+				? .spliced([.value(.member(label, of: parentConfiguration)), .text(" ?? .init()")])
+				: .member(label, of: parentConfiguration)
 		} else {
 			parameter.read(isProvided: nearestIsProvided)
 		}
@@ -172,6 +176,9 @@ extension MockLowering {
 		/// The parent's configuration, read where the place's call is made: the parent's own parameter, or `mock()`'s
 		/// `safeDIOverrides` at the root; `nil` where the parent's configuration has no field for the place.
 		let parentConfiguration: ValuePath?
+		/// Whether the parent's field of the place is optional, as every field of a `.v3Unstable` configuration is: a field
+		/// of a configuration struct is then read as a configuration built afresh where it is `nil`.
+		let parentFieldIsOptional: Bool
 		/// Whether the place, with no field in its parent's configuration, reads the overrides of the nearest place of its
 		/// type around it built the same way.
 		let nearestIsProvided: Bool
@@ -213,6 +220,7 @@ extension MockLowering {
 			builtWithHandWrittenMock: node.usesMockInitializer,
 			configurationType: configurationType,
 			parentConfiguration: context.parentConfiguration,
+			parentFieldIsOptional: context.parentFieldIsOptional,
 			nearestIsProvided: context.nearestIsProvided,
 			staysOutsideSendableFunctions: staysOutsideSendableFunctions,
 		)
@@ -256,7 +264,9 @@ extension MockLowering.Walk {
 		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
 		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the
 		// function, so no `@Sendable` closure around the call captures the configuration.
-		if pathsStartingExtraction.contains(path) {
+		// A `.v3Unstable` place built in a `@Sendable` function is handed its configuration read before the function, as the
+		// walk reads it into a local before it (`v3ConfigurationLine`), since the parent's configuration need not be `Sendable`.
+		if pathsStartingExtraction.contains(path) || (isV3 && record.isSendable) {
 			for index in record.passedArguments.indices where !record.passedArguments[index].staysOutsideSendableFunctions {
 				record.passedArguments[index].bindsBeforeCall = true
 			}

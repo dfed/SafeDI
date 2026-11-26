@@ -99,7 +99,21 @@ extension ScopeGenerator {
 		lines.append(contentsOf: bindingLines)
 		if let initializer = MockLowering.rootConstructionInitializer(of: instantiable) {
 			let dependencyArguments = MockLowering.rootDependencyArguments(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			// A construction that passes a default it reads from the overrides to a `@Sendable` `@autoclosure` reads each into a
+			// local first, as a node's builder function does (`constructionPassesConfigurationReadToSendableAutoclosure`): the
+			// overrides are not `Sendable`, so the autoclosure cannot capture them.
+			let readsOverridesIntoLocals = walk.constructionPassesConfigurationReadToSendableAutoclosure(of: instantiable, usesMockInitializer: usesMockInitializer)
+			if readsOverridesIntoLocals {
+				walk.sendableOverrideExtractor = SendableOverrideExtractor(
+					functionName: ReservedName.publicMockFunctionName,
+					names: walk.rootLevelNames ?? GeneratedNameAllocator(reserving: Set(signature.sendableAutoclosureBindings.values.map(\.localName))),
+				)
+			}
 			let arguments = walk.constructionArguments(of: initializer, given: instantiable, usesMockInitializer: usesMockInitializer, dependencyArguments: dependencyArguments, nodePath: overrides, overrideReachable: true)
+			if let extractor = walk.sendableOverrideExtractor {
+				lines.append(contentsOf: extractor.extractions.map { "\(bodyIndent)let \($0.localName) = \($0.expression)" })
+				walk.sendableOverrideExtractor = nil
+			}
 			let argumentList = arguments.map { $0.label == "_" ? $0.value : "\($0.label): \($0.value)" }.joined(separator: ", ")
 			let construction = MockLowering.rootConstruction(of: instantiable, argumentList: argumentList)
 			let builder = ReservedName.configurationBuilderPropertyName
@@ -263,7 +277,16 @@ extension MockLowering {
 
 		/// The name of the configuration of `type`.
 		func typeName(of type: TypeDescription) -> String {
-			publicNameByType[type] ?? fileScopeNameByType[type] ?? "\(type.asSource).\(ReservedName.mockOverridesTypeName)"
+			typeDescription(of: type).asSource
+		}
+
+		/// The configuration of `type`, as `typeName(of:)` names it.
+		func typeDescription(of type: TypeDescription) -> TypeDescription {
+			if let name = publicNameByType[type] ?? fileScopeNameByType[type] {
+				.simple(name: name, generics: [])
+			} else {
+				.nested(name: ReservedName.mockOverridesTypeName, parentType: type, generics: [])
+			}
 		}
 
 		/// Whether the module configures `type` with a public configuration, which an internal mock builds it through.
@@ -286,5 +309,74 @@ extension MockLowering {
 		private let fileScopeNameByType: [TypeDescription: String]
 		private let publicNameByType: [TypeDescription: String]
 		private let publicMockTypes: Set<TypeDescription>
+	}
+}
+
+extension MockLowering.Walk {
+	/// Records a node a `.v3Unstable` mock promotes at its root's level, written as `nodeLines`, as one text place at `path`:
+	/// its builder function, as the walk writes it, and its binding from the value `mock()` is passed for it, the instance
+	/// or a value built from the configuration it is passed (`ConstantNode.promotedBindingLines(indent:)`), which no built
+	/// record says. Every place beneath the node is its text. `rootDeclarations` are what `mock()` binds before its tree,
+	/// which the text reads by name.
+	mutating func recordPromotedPlace(_ node: MockLowering.ConstantNode, at path: [Int], lines nodeLines: [String], indent: String, rootDeclarations: [Property]) {
+		guard let parameterName = node.promotedParameterName else { return }
+		for placePath in placePathsInWalkOrder where placePath.count > path.count && Array(placePath.prefix(path.count)) == path {
+			pathsCoveredByLoopUnits.insert(placePath)
+		}
+		let valueType = MockLowering.v3ReceivedValueType(of: node.property)
+		let parameterType: TypeDescription = if let configurationTypeName = node.v3ReceivedConfigurationTypeName, node.v3ReceivedConfigurationName != nil {
+			.simple(name: "SafeDIReceived", generics: [valueType, .simple(name: configurationTypeName, generics: [])])
+		} else {
+			.optional(valueType)
+		}
+		v3PromotedParameterDeclarations.append(Property(label: parameterName, typeDescription: parameterType))
+		// The function's lines, then the binding's, which begins with `let` at the node's indent.
+		let bindingIndex = nodeLines.firstIndex { $0.hasPrefix("\(indent)let ") } ?? nodeLines.endIndex
+		let unindented = nodeLines.map { element in
+			element
+				.split(separator: "\n", omittingEmptySubsequences: false)
+				.map { line in line.hasPrefix(indent) ? String(line.dropFirst(indent.count)) : String(line) }
+				.joined(separator: "\n")
+		}
+		var outerTypes = [String: TypeDescription]()
+		for declaration in rootDeclarations + v3PromotedParameterDeclarations {
+			outerTypes[declaration.label] = declaration.typeDescription
+		}
+		let functionText = unindented[..<bindingIndex].joined(separator: "\n")
+		guard let place = MockLowering.textPlace(functionText, outerTypes: outerTypes) else {
+			unrecordedReasons[path] = "promoted:functionText"
+			return
+		}
+		// A name of SafeDI's the text does not declare is a function around it, unless `mock()` binds it before its tree.
+		guard !place.reads.contains(where: { $0.label.hasPrefix(ReservedName.builderFunctionNamePrefix) && outerTypes[$0.label] == nil }) else {
+			unrecordedReasons[path] = "promoted:namesFunctionAround"
+			return
+		}
+		let bindingText = unindented[bindingIndex...].joined(separator: "\n")
+		var reads = place.reads
+		var readNames = Set(reads.map(\.label))
+		// The binding reads the value `mock()` is passed and what a construction in place reads; the configuration its
+		// `.built` case binds, and the functions the text declares, are its own.
+		let namesBoundByBinding = Set([node.bindingName] + [node.v3ReceivedConfigurationName].compactMap(\.self))
+		for token in MockLowering.codeTokens(in: bindingText) where !token.isMember && !token.isLabel && !MockLowering.keywords.contains(token.name) && !place.declaredFunctionNames.contains(token.name) {
+			guard token.name == parameterName || !namesBoundByBinding.contains(token.name),
+			      MockLowering.namesAValue(token.name, outerTypes: outerTypes),
+			      outerTypes[token.name] != nil || token.name.first?.isLowercase == true
+			else { continue }
+			guard !token.name.hasPrefix(ReservedName.builderFunctionNamePrefix) || outerTypes[token.name] != nil else {
+				unrecordedReasons[path] = "promoted:namesFunctionAround"
+				return
+			}
+			if readNames.insert(token.name).inserted {
+				reads.append(MockLowering.valueRead(token.name, outerTypes: outerTypes))
+			}
+		}
+		loopUnitRecords[path] = .alias(AliasPlaceRecord(
+			property: Property(label: node.bindingName, typeDescription: valueType),
+			fulfillingProperty: nil,
+			text: unindented.joined(separator: "\n"),
+			reads: reads,
+			declaredFunctionNames: place.declaredFunctionNames,
+		))
 	}
 }
