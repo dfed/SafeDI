@@ -207,8 +207,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// Rule 1's keys where the answer is a lazy wrapper, one per kind: a receive of the value only if available that a
 	/// wrapper answers reads its instance where the value is read, so the parameter is the wrapper, never the value
-	/// (which, made at the call, would move when the value is built). `nil`, a declaration and one being built still key
-	/// alike within each.
+	/// (which, made at the call, would move when the value is built). A declaration and one being built key alike within
+	/// each; `nil` keys as `optionalParameterKey`, apart from both lazy keys, until rule 3 says whether a `nil` wrapper
+	/// parameter may stand for it.
 	static let optionalLazilyInstantiatedParameterKey: Int32 = -3
 	static let optionalSendableLazilyInstantiatedParameterKey: Int32 = -4
 
