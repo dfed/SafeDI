@@ -736,7 +736,11 @@ extension SeamSignature.Places.Answer {
 	fileprivate static let pendingFunction = -2
 
 	fileprivate var isBoundOutsideSendableFunction: Bool {
-		if case .boundOutsideSendableFunction = self { true } else { false }
+		if case .boundOutsideSendableFunction = self {
+			true
+		} else {
+			false
+		}
 	}
 
 	/// The answer with the function a walk crosses at `level` filled in, where it is still pending.
