@@ -91,40 +91,14 @@ extension DependencyTreeGenerator {
 		)
 	}
 
-	/// Walks, for cycles only, the tree of each foreign seam whose initializer takes a builder, from the seam's root, as
-	/// the seam's own module validates it where it sees the fulfilling declarations: this module's validated scopes
-	/// build the seam inline, with the fills this module generates, but a tree rooted elsewhere reaches a fill with
-	/// another stack, and can close a cycle earlier, on a lazy property above the seam, than the seam's own validation
-	/// does. A fill is generated with the seam's stack, so a constant repeat the seam's walk rejects is rejected here,
-	/// with the diagnostic that walk reports. A seam's tree is walked whether or not this module fills each of its holes:
-	/// a hole this module does not fill has no scope, and the walk stops there. A seam whose builder another seam passes
-	/// up is walked too, so every seam on the chain from the outermost one this module fills down to the one whose tree
-	/// holds the hole is walked from its own root.
-	func validateCyclesFromRootsOfForeignSeamsWithHoles(
-		in typeDescriptionToScopeMap: [TypeDescription: Scope],
-		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
-		receivedPropertiesCache: inout ReceivedPropertiesCache,
-	) throws {
-		let seamTypesWithHoles = foreignSeamTypesWithHoles(among: foreignSeamRoots)
-		guard !seamTypesWithHoles.isEmpty else { return }
-		let rootScopes = seamTypesWithHoles.compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
-			var receivedFromOutside = Set<Property>()
-			for property in Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received {
-				receivedFromOutside.insert(property)
-				if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-					receivedFromOutside.insert(instanceProperty)
-				}
-			}
-			return ValidatedRootScope(scope: scope, boundProperties: [], isMock: false, receivedFromOutside: receivedFromOutside)
-		}
-		try validatePropertiesAreFulfillable(onRootScopes: rootScopes, typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: true)
-	}
-
 	/// Walks, for cycles only, the trees a calling mock's production tree walks: where a mock tree calls another module's
 	/// public mock that has places, the trees of the module's mock roots and of each called type, from its own root, built
 	/// inline with this module's fills (`inlineTypeDescriptionToScopeMap`, the mock scope map built with no call), as
-	/// production builds the called type's seam inline (`validateCyclesFromRootsOfForeignSeamsWithHoles`). The mock roots
-	/// are walked first, then the called types in type order, as production walks its roots before the foreign seams.
+	/// production builds the called type's seam inline. The mock roots are walked first, then the called types in type
+	/// order. Production walks its roots alone: their walk builds every foreign seam inline with the same fills, and
+	/// judges each cycle of a seam's tree as a walk from the seam's own root would, since a cycle is accepted where any
+	/// dependency along it is an instantiator, wherever the walk enters it. Whether that holds for a called type, whose
+	/// mock roots bind what their trees receive from above them, is not shown, so the called types keep their walk.
 	func validateCyclesOfCallsWithPlaces(
 		publicMockCalls: [TypeDescription: PublicMockCall],
 		inlineTypeDescriptionToScopeMap: [TypeDescription: Scope],
