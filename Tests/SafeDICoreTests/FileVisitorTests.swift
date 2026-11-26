@@ -2376,7 +2376,7 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_recordsOnlyClauseMockConditionSelects_whenNoOtherClauseDeclaresAnything() {
-		// PR3 (Dan's shape, the declaring file): the block has no `#else`, or an empty one, so a build where `DEBUG` is
+		// PR3 (a real adopter's shape, the declaring file): the block has no `#else`, or an empty one, so a build where `DEBUG` is
 		// inactive declares nothing here; another file's `#if !DEBUG` may.
 		for elseClause in ["", "#else\n"] {
 			let syntaxTree = Parser.parse(source: """
