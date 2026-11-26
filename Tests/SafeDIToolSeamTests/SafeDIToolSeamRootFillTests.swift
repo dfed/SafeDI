@@ -469,7 +469,179 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		""")
 	}
 
+	/// `Inner`'s fill builds `Reader`, which receives `token` only if available, a value no field hands the fill. `Mid`,
+	/// beneath the root, declares `token` and calls `F0` and `F1`, so each fill reads `Mid`'s `token` and stays in its call,
+	/// where the root declares none (`ScopeGenerator.readsOnlyHandedForms(handedParameters:)`).
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsFillInItsCall_whenFillReadsValueOnlyIfAvailableDeclaredBeneathRoot() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.onlyIfAvailableReadModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Callers)
+		import Callers
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Seam)
+		import Seam
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_mid() -> Mid {
+		            let token = Token()
+		            let service = Service()
+		            func __safeDI_f0() -> F0 {
+		                _ = F0.__safeDI_F0_8A4A2258C5C348BD.self // If this line does not compile, compile the code SafeDI generates for module Callers into Callers: under Bazel, add Callers’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Inner_api() -> any Api {
+		                    func __safeDI_api() -> LiveApi {
+		                        let reader = Reader(token: token)
+		                        return LiveApi(reader: reader)
+		                    }
+		                    let api: any Api = __safeDI_api()
+		                    return api
+		                }
+		                func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
+		                    .init(inner: __safeDI_apiBuilder_Inner())
+		                }
+		                func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { __safeDI_apiBuilder_Inner_api() })
+		                }
+		                return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+		            }
+		            let f0: F0 = __safeDI_f0()
+		            func __safeDI_f1() -> F1 {
+		                _ = F1.__safeDI_F1_455D433B11798DC6.self // If this line does not compile, compile the code SafeDI generates for module Callers into Callers: under Bazel, add Callers’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Inner_api() -> any Api {
+		                    func __safeDI_api() -> LiveApi {
+		                        let reader = Reader(token: token)
+		                        return LiveApi(reader: reader)
+		                    }
+		                    let api: any Api = __safeDI_api()
+		                    return api
+		                }
+		                func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
+		                    .init(inner: __safeDI_apiBuilder_Inner())
+		                }
+		                func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { __safeDI_apiBuilder_Inner_api() })
+		                }
+		                return F1(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
+		            }
+		            let f1: F1 = __safeDI_f1()
+		            return Mid(token: token, service: service, f0: f0, f1: f1)
+		        }
+		        let mid: Mid = __safeDI_mid()
+		        self.init(mid: mid)
+		    }
+		}
+		""")
+	}
+
 	// MARK: Fixtures
+
+	/// The modules of `generate_keepsFillInItsCall_whenFillReadsValueOnlyIfAvailableDeclaredBeneathRoot`.
+	private static let onlyIfAvailableReadModules = [
+		ModuleFixture(name: "Seam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+		import SafeDI
+
+		nonisolated public protocol Api {}
+
+		@Instantiable
+		public final class Service: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Token: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable {
+		    public init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated let api: any Api
+		}
+		"""]),
+		ModuleFixture(name: "Callers", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+		import SafeDI
+		import Seam
+
+		@Instantiable(generateDependencyTree: true)
+		public final class F0: Instantiable {
+		    public init(service: Service, inner: Inner) {
+		        self.service = service
+		        self.inner = inner
+		    }
+
+		    @Received let service: Service
+		    @Instantiated let inner: Inner
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class F1: Instantiable {
+		    public init(service: Service, inner: Inner) {
+		        self.service = service
+		        self.inner = inner
+		    }
+
+		    @Received let service: Service
+		    @Instantiated let inner: Inner
+		}
+		"""], dependencies: ["Seam"]),
+		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+		import Callers
+		import SafeDI
+		import Seam
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+		public final class LiveApi: Api, Instantiable {
+		    public init(reader: Reader) {
+		        self.reader = reader
+		    }
+
+		    @Instantiated let reader: Reader
+		}
+
+		@Instantiable
+		public final class Reader: Instantiable {
+		    public init(token: Token?) {
+		        self.token = token
+		    }
+
+		    @Received(onlyIfAvailable: true) let token: Token?
+		}
+
+		@Instantiable
+		public final class Mid: Instantiable {
+		    public init(token: Token, service: Service, f0: F0, f1: F1) {
+		        self.token = token
+		        self.service = service
+		        self.f0 = f0
+		        self.f1 = f1
+		    }
+
+		    @Instantiated let token: Token
+		    @Instantiated let service: Service
+		    @Instantiated let f0: F0
+		    @Instantiated let f1: F1
+		}
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(mid: Mid) {
+		        self.mid = mid
+		    }
+
+		    @Instantiated let mid: Mid
+		}
+		"""], dependencies: ["Callers", "Seam"]),
+	]
 
 	/// The modules of `generate_keepsFillInItsCall_whenFillReadsAnotherFormOfHandedLabelDeclaredBeneathRoot`.
 	private static let wrapperFormModules = [
