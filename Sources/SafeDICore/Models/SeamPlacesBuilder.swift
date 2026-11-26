@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// Builds a seam's place graph (`SeamSignature.Places`) from the levels today's per-site walk (`fields(of:)` in
 /// `SeamBuilderParameters`) gives each site, root first: a level variant once, however many paths reach it, with an edge
 /// per parent it is reached from, and a case per owner level and family.
