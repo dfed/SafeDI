@@ -1200,11 +1200,13 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let gizmo_Widget: Widget? = safeDIOverrides.gizmo_Widget
-			        func __safeDI_settingsBuilder() -> Settings {
+			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Widget?) -> Settings)?) -> Settings {
 			            let gizmo: Widget? = gizmo_Widget
-			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        let settingsBuilder = Instantiator<Settings> {
+			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
+			        }
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 			    }
 			""",
@@ -1282,11 +1284,13 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let gizmo_Widget: Widget? = safeDIOverrides.gizmo_Widget
-			        func __safeDI_settingsBuilder() -> Settings {
+			        func __safeDI_settingsBuilder(__safeDI_Settings_configuration: ((Widget?) -> Settings)?) -> Settings {
 			            let gizmo: Widget? = gizmo_Widget
-			            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+			            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
-			        let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			        let settingsBuilder = Instantiator<Settings> {
+			            __safeDI_settingsBuilder(__safeDI_Settings_configuration: safeDIOverrides.settingsBuilder)
+			        }
 			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo, gadget: gadget)
 			    }
 			""",
