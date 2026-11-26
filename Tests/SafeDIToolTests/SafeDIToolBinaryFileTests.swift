@@ -725,6 +725,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.Places.CycleReentry.self,
 		SeamSignature.Places.StackEntry.self,
 		SeamSignature.Places.Case.self,
+		SeamSignature.Places.Case.Access.self,
 		SeamSignature.Places.CalledCase.self,
 		TypeAccessProof.Cause.self,
 		TypeAccessProof.Prover.self,
@@ -3053,6 +3054,7 @@ extension SeamSignature.Places.SendableFunctionOpened: BinarySample {}
 extension SeamSignature.Places.CycleReentry: BinarySample {}
 extension SeamSignature.Places.StackEntry: BinarySample {}
 extension SeamSignature.Places.Case: BinarySample {}
+extension SeamSignature.Places.Case.Access: BinarySample {}
 extension SeamSignature.Places.CalledCase: BinarySample {}
 extension TypeAccessProof.Cause: BinarySample {}
 extension TypeAccessProof.Prover: BinarySample {}

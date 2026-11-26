@@ -451,6 +451,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 				BinaryLayoutField("reenteringCallDeclarations", \.reenteringCallDeclarations),
 				BinaryLayoutField("reenteringPlaceFields", \.reenteringPlaceFields),
 				BinaryLayoutField("namingRoute", \.namingRoute),
+				BinaryLayoutField("narrowestAccess", \.narrowestAccess),
 			],
 			unwrittenProperties: [],
 		)
@@ -469,6 +470,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 			reenteringCallDeclarations: reader.read(),
 			reenteringPlaceFields: reader.read(),
 			namingRoute: reader.read(),
+			narrowestAccess: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.Case.Access?,
 		)
 		try fieldFlags.finish()
 	}
@@ -486,6 +488,31 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 		writer.write(reenteringCallDeclarations)
 		writer.write(reenteringPlaceFields)
 		writer.write(namingRoute)
+		writer.writeOptional(narrowestAccess, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
+	}
+}
+
+extension SeamSignature.Places.Case.Access: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("level", \.level),
+				BinaryLayoutField("cause", \.cause),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			level: reader.read(),
+			cause: reader.read() as TypeAccessProof.Cause?,
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(level)
+		writer.write(cause)
 	}
 }
