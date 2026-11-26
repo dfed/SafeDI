@@ -1616,67 +1616,75 @@ extension DependencyTreeGenerator {
 	/// the root's module sees fulfills it, or the one that does is out of the tree's reach because the root's module does
 	/// not list a module on the way to the hole, so the seam call would pass the builder up, which a root cannot – once
 	/// per declaration of the hole's property per root, naming the first chain a declaration-order walk of the root's
-	/// tree meets, the fills the root's module generates included.
-	/// - Parameter viewInstantiablesByModuleName: The declarations of the modules the root's module reads only through
-	///   module info views, by module, among which a module on the way to the hole may fulfill it.
+	/// tree meets, the fills the root's module generates included. A fill that is itself a call of a seam hands that
+	/// call's holes to the root too, at every depth: the walk judges them when it reaches the fill, depth first, in the
+	/// order each call takes its builders, so a hole the root's own seam calls leave unfilled keeps the property and
+	/// chain it was reported at before.
+	/// - Parameters:
+	///   - viewInstantiablesByModuleName: The declarations of the modules the root's module reads only through
+	///     module info views, by module, among which a module on the way to the hole may fulfill it.
+	///   - isOwnFile: Whether a file is one of the module's own files, `nil` when every root is the module's own. Only
+	///     a root the module generates has the calls of its fills judged: another module's root was judged by its own
+	///     module, whose run fills what this run's view of it may not see.
 	static func validateRootsFillEveryHole(
 		roots: [Scope],
 		callerModuleName: String?,
 		instantiables: [TypeDescription: Instantiable],
 		viewInstantiablesByModuleName: [String: [Instantiable]],
 		isReadableFile: (@Sendable (String) -> Bool)?,
+		isOwnFile: (@Sendable (String) -> Bool)?,
 	) throws {
 		var unfilledHoles = [DependencyTreeGeneratorError.UnfilledHole]()
 		for root in roots {
+			let judgesCallsOfFills = isOwnFile.map { isOwnFile in root.instantiable.sourceFilePath.map(isOwnFile) == true } ?? true
 			var reportedDeclarations = Set<HoleDeclaration>()
 			var visitedScopes = Set<ObjectIdentifier>()
-			var checkedCalls = Set<ObjectIdentifier>()
 			// Each scope to visit with the chain of types to it and the root's dependency through which the tree reaches it.
 			var scopesToVisit: [(scope: Scope, chain: [TypeDescription], rootDependency: Dependency?)] = [(root, [root.instantiable.concreteInstantiable], nil)]
 			while let (scope, chain, rootDependency) = scopesToVisit.popLast() {
 				guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
 				var childrenToVisit = [(scope: Scope, chain: [TypeDescription], rootDependency: Dependency?)]()
+				/// Judges each hole `call` takes, reached along `callChain` through `callRootDependency`: a fill's scope is
+				/// visited after the call's, and a hole passed up is reported.
+				func judgeHoles(of call: Scope, callChain: [TypeDescription], callRootDependency: Dependency?) {
+					for holeArgument in call.holeArguments {
+						let hole = holeArgument.hole
+						// The first property on the way is the called seam's, which `callChain` ends with.
+						let holeChain = callChain + (hole.passedUpRoute + hole.declaredSitePath).dropFirst().compactMap(\.declaringType)
+						switch holeArgument {
+						case let .fill(_, fulfillingScope):
+							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], callRootDependency))
+						case .passUp:
+							guard !hole.builtType.isOptional, reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
+							// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
+							// list stops the walk before it meets the hole's type, and a declaration of that type gets no scope.
+							let unlistedModuleNames = hole.typesToOwner
+								.filter { instantiables[$0.type]?.moduleName != $0.moduleName }
+								.compactMap(\.moduleName)
+								.uniqued()
+							unfilledHoles.append(DependencyTreeGeneratorError.UnfilledHole(
+								hole: hole,
+								rootType: root.instantiable.concreteInstantiable,
+								chain: holeChain,
+								location: callRootDependency?.declarationLocation,
+								noteLocation: hole.declarationLocation.flatMap { location in isReadableFile.map { $0(location.filePath) } ?? true ? location : nil },
+								callerModuleName: callerModuleName,
+								unlistedModuleNames: unlistedModuleNames,
+								unreachedFulfillingType: unlistedModuleNames.isEmpty ? nil : fulfillingType(of: hole, seenThroughListing: unlistedModuleNames, in: instantiables, viewInstantiablesByModuleName: viewInstantiablesByModuleName),
+								fulfilledByMockOnlyDeclaration: instantiables[hole.instantiatedType]?.mockOnly == true,
+							))
+						}
+					}
+				}
+				// A scope this walk visits that is a seam call is a fill, since a call reached as a child is judged, never
+				// visited: the fill's call takes holes of its own, which the root fills or reports.
+				if judgesCallsOfFills, scope.seamCall != nil {
+					judgeHoles(of: scope, callChain: chain, callRootDependency: rootDependency)
+				}
 				for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
 					let childRootDependency = rootDependency ?? root.instantiable.dependencies.first { $0.property == property }
 					let childChain = chain + [childScope.instantiable.concreteInstantiable]
-					// A fill whose fulfiller is itself a call that takes builders hands its holes to this call too: the call
-					// fills them or the root reports them, at every depth, so each call's holes are judged, nearest first.
-					var callsToCheck: [(call: Scope, chain: [TypeDescription])] = [(childScope, childChain)]
-					while let (call, callChain) = callsToCheck.popLast() {
-						guard checkedCalls.insert(ObjectIdentifier(call)).inserted else { continue }
-						var fillsToCheck = [(call: Scope, chain: [TypeDescription])]()
-						for holeArgument in call.holeArguments {
-							let hole = holeArgument.hole
-							// The first property on the way is the called seam's, which `callChain` ends with.
-							let holeChain = callChain + (hole.passedUpRoute + hole.declaredSitePath).dropFirst().compactMap(\.declaringType)
-							switch holeArgument {
-							case let .fill(_, fulfillingScope):
-								let fillChain = holeChain + [fulfillingScope.instantiable.concreteInstantiable]
-								childrenToVisit.append((fulfillingScope, fillChain, childRootDependency))
-								fillsToCheck.append((fulfillingScope, fillChain))
-							case .passUp:
-								guard !hole.builtType.isOptional, reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
-								// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
-								// list stops the walk before it meets the hole's type, and a declaration of that type gets no scope.
-								let unlistedModuleNames = hole.typesToOwner
-									.filter { instantiables[$0.type]?.moduleName != $0.moduleName }
-									.compactMap(\.moduleName)
-									.uniqued()
-								unfilledHoles.append(DependencyTreeGeneratorError.UnfilledHole(
-									hole: hole,
-									rootType: root.instantiable.concreteInstantiable,
-									chain: holeChain,
-									location: childRootDependency?.declarationLocation,
-									noteLocation: hole.declarationLocation.flatMap { location in isReadableFile.map { $0(location.filePath) } ?? true ? location : nil },
-									callerModuleName: callerModuleName,
-									unlistedModuleNames: unlistedModuleNames,
-									unreachedFulfillingType: unlistedModuleNames.isEmpty ? nil : fulfillingType(of: hole, seenThroughListing: unlistedModuleNames, in: instantiables, viewInstantiablesByModuleName: viewInstantiablesByModuleName),
-									fulfilledByMockOnlyDeclaration: instantiables[hole.instantiatedType]?.mockOnly == true,
-								))
-							}
-						}
-						callsToCheck.append(contentsOf: fillsToCheck.reversed())
-					}
+					judgeHoles(of: childScope, callChain: childChain, callRootDependency: childRootDependency)
 					if childScope.seamCall == nil {
 						childrenToVisit.append((childScope, childChain, childRootDependency))
 					}

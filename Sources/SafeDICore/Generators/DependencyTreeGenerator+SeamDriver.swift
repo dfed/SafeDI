@@ -477,6 +477,7 @@ extension DependencyTreeGenerator {
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
 			viewInstantiablesByModuleName: viewInstantiablesByModuleName,
 			isReadableFile: emittingModule?.isReadableFile,
+			isOwnFile: emittingModule?.isOwnFile,
 		)
 		// Every tree of the seam world reads its scopes frozen, once.
 		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
