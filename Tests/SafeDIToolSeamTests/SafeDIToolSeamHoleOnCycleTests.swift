@@ -950,14 +950,16 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			    public init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let __safeDI_apiSendableBuilder_a_Sendable = __safeDI_apiSendableBuilder.a_Sendable
-			            @Sendable nonisolated func __safeDI_bBuilder() -> B {
-			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
-			                let a: A = __safeDI_a()
-			                let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
-			                return B(api: api, a: a)
+			            let bBuilder = SendableInstantiator<B> {
+			                __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_apiSendableBuilder_a_Sendable)
 			            }
-			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			            return A(bBuilder: bBuilder)
+			        }
+			        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_apiSendableBuilder_a_Sendable: __safeDI_ApiSendableCarrier_A<any Api>) -> B {
+			            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_a_Sendable.bBuilder()
+			            let a: A = __safeDI_a()
+			            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(a)
+			            return B(api: api, a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)

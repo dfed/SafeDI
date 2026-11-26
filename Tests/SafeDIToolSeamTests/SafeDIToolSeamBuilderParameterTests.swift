@@ -830,16 +830,18 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public init(__safeDI_userServiceSendableBuilder: __safeDI_UserServiceSendableCarrier<any UserService>) {
 		        let analytics = Analytics()
 		        let session = Session()
+		        @Sendable nonisolated func __safeDI_profileBuilder(title: String, __safeDI_userServiceSendableBuilder_screenBuilder_Sendable: __safeDI_UserServiceSendableCarrier_Screen<any UserService>) -> ProfileN {
+		            let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder_screenBuilder_Sendable.profileBuilder()
+		            let analytics = Analytics()
+		            let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService(analytics)
+		            return ProfileN(userService: userService, analytics: analytics, title: title)
+		        }
 		        @Sendable nonisolated func __safeDI_screenBuilder(title: String) -> Screen {
 		            let __safeDI_userServiceSendableBuilder_screenBuilder_Sendable = __safeDI_userServiceSendableBuilder.screenBuilder_Sendable
 		            let cache = Cache()
-		            @Sendable nonisolated func __safeDI_profileBuilder() -> ProfileN {
-		                let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder_screenBuilder_Sendable.profileBuilder()
-		                let analytics = Analytics()
-		                let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService(analytics)
-		                return ProfileN(userService: userService, analytics: analytics, title: title)
+		            let profileBuilder = SendableInstantiator<ProfileN> {
+		                __safeDI_profileBuilder(title: title, __safeDI_userServiceSendableBuilder_screenBuilder_Sendable: __safeDI_userServiceSendableBuilder_screenBuilder_Sendable)
 		            }
-		            let profileBuilder = SendableInstantiator<ProfileN>(__safeDI_profileBuilder)
 		            return Screen(title: title, cache: cache, profileBuilder: profileBuilder)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
@@ -1276,24 +1278,24 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			            .init(home: { values_analytics in __safeDI_userServiceBuilder_Service_Home_Scope(analytics: values_analytics) }, settings: { values_analytics, values_home in __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: values_analytics, session: session) })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Home_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
+			            .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: values_session) })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
+			            .init(userService: {
+			                let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
+			                return userService
+			            })
+			        }
+			        func __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
+			            .init(avatar: { values_theme in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: session) })
+			        }
 			        let session = Session()
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_BC1954D39AB33269.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-			                .init(home: { values_analytics in __safeDI_userServiceBuilder_Service_Home_Scope(analytics: values_analytics) }, settings: { values_analytics, values_home in __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: values_analytics, session: session) })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Home_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Home<any UserService> {
-			                .init(avatar: { values_session in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: values_session) })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Avatar<any UserService> {
-			                .init(userService: {
-			                    let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
-			                    return userService
-			                })
-			            }
-			            func __safeDI_userServiceBuilder_Service_Settings_Scope(analytics: Analytics, session: Session?) -> Service.__safeDI_UserServiceCarrier_Settings<any UserService> {
-			                .init(avatar: { values_theme in __safeDI_userServiceBuilder_Service_Avatar_Scope(analytics: analytics, session: session) })
-			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
