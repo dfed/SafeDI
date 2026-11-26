@@ -81,7 +81,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 				feature: DifferentialValuePath(fixtureFiles: [generated.graph.fileName: generated.graph.source], generatedFiles: ["SafeDI.swift": generated.planCode]),
 				knownRight: DifferentialValuePath(fixtureFiles: [generated.graph.fileName: generated.graph.source], generatedFiles: ["SafeDI.swift": generated.todaysCode]),
 				probes: generated.graph.rootNames.map { DifferentialValueProbe("\($0)()") },
-				samples: generated.graph.forwardingTypeNames.map { DifferentialValueSample(type: "\($0).ForwardedProperties", expression: "7") },
+				samples: generated.graph.samples,
 			)
 		}
 		guard let comparisons = try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete) else { return }
@@ -132,7 +132,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 				feature: DifferentialValuePath(fixtureFiles: [generated.graph.fileName: generated.graph.source], generatedFiles: ["SafeDI.swift": generated.planCode]),
 				knownRight: DifferentialValuePath(fixtureFiles: [generated.graph.fileName: generated.graph.source], generatedFiles: ["SafeDI.swift": generated.todaysCode]),
 				probes: probes,
-				samples: generated.graph.forwardingTypeNames.map { DifferentialValueSample(type: "\($0).ForwardedProperties", expression: "7") },
+				samples: generated.graph.samples,
 			)
 			guard let comparison = try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first else { return }
 			for fileToDelete in filesToDelete {
@@ -225,7 +225,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 					feature: DifferentialValuePath(fixtureFiles: [generated.graph.fileName: generated.graph.source], generatedFiles: ["SafeDI.swift": generated.planCode]),
 					knownRight: DifferentialValuePath(fixtureFiles: [generated.graph.fileName: generated.graph.source], generatedFiles: ["SafeDI.swift": generated.todaysCode]),
 					probes: generated.graph.rootNames.map { DifferentialValueProbe("\($0)()") },
-					samples: generated.graph.forwardingTypeNames.map { DifferentialValueSample(type: "\($0).ForwardedProperties", expression: "7") },
+					samples: generated.graph.samples,
 				)
 			}
 			laidOut = []
@@ -291,9 +291,10 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 
 	/// Every graph of seeds 0..<23,705 (15,000 laid out from their plans by the long run) whose plan writes other code than
 	/// today's tree and whose probes stay within the batch's limits: 31 graphs, which draw each of `PlanValueGraph.shapes`
-	/// but `renames` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
+	/// but `renames` and `escapingName` at least four times. Of seeds 0..<3,483, two graphs that draw a rename write other code than today's:
 	/// 1,981, pinned, and 246, which spends the batch's traversals alike on both paths. The other 214 whose code differs
-	/// spend them too, and are left to the long run.
+	/// spend them too, and are left to the long run. Of seeds 0..<1,200, the 12 accepted graphs that forward a closure
+	/// `@escaping` are all laid out from their plans with today's code, so none is pinned.
 	private static let pinnedSeeds: [UInt64] = [
 		335, 576, 1_100, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
 		6_798, 8_112, 8_776, 9_172, 9_746, 10_419, 10_499, 11_225, 11_856, 13_584, 14_751, 15_247,
@@ -309,8 +310,8 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 /// some of those before it, up to three models, two to seven screens, each receiving some services and models, declaring
 /// some models, forwarding an `Int` about a third of the time and opening one to three screens, and one or two roots
 /// that build every service and open one or two screens, directly or through a type in between. A few graphs draw a
-/// `Sendable` or lazily instantiated wrapper, a value received only if available, or a rename, which keep their roots
-/// on today's tree. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
+/// `Sendable` or lazily instantiated wrapper or a value received only if available, which keep their roots on today's
+/// tree, or a rename or a typealiased closure forwarded and received `@escaping`, which the plan lays out. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
 /// the seed, so that a batch compiles many graphs side by side, and every class stores two counters' values: the
 /// creation stamp the comparator reads (`DifferentialValueCreationStamp`) and `creationOrder`, which it describes.
 struct PlanValueGraph {
@@ -320,12 +321,20 @@ struct PlanValueGraph {
 	/// Each root's labels, in declaration order, which a probe of one property reads.
 	let rootPropertyLabels: [String: [String]]
 	let forwardingTypeNames: [String]
+	/// The types of `forwardingTypeNames` that forward a typealiased closure, declared `@escaping`, in place of an `Int`.
+	let closureForwardingTypeNames: Set<String>
 	/// What the graph draws of the shapes a plan lays out, which `pinnedSeeds` are spread over: `fewScreens`,
 	/// `someScreens` or `manyScreens` (two or three, four or five, six or seven), `forwards`, `opensItself` (a screen
 	/// opens itself), `declaresModel`, `receivesModel` (a screen receives a model it does not declare), `typeBetween`
 	/// (a root opens its screens through a type in between), `screenByValue` (a root holds a screen by value),
-	/// `twoRoots` and `renames` (a screen renames a service).
+	/// `twoRoots`, `renames` (a screen renames a service) and `escapingName` (a screen forwards a typealiased closure
+	/// `@escaping`).
 	let shapes: [String]
+
+	/// A value of each forwarding type's forwarded properties, for the comparator to build its screens with.
+	var samples: [DifferentialValueSample] {
+		forwardingTypeNames.map { DifferentialValueSample(type: "\($0).ForwardedProperties", expression: closureForwardingTypeNames.contains($0) ? "{ _ in }" : "7") }
+	}
 
 	var fileName: String {
 		"PlanValue\(seed).swift"
@@ -393,7 +402,7 @@ struct PlanValueGraph {
 		var declarations = [String]()
 		func declare(_ typeName: String, _ properties: [Property], attribute: String = "@Instantiable") {
 			var lines = [attribute, "public final class \(name(typeName)): Instantiable {"]
-			lines.append("    public init(" + properties.map { "\($0.label): \($0.type)" }.joined(separator: ", ") + ") {")
+			lines.append("    public init(" + properties.map { "\($0.label): \($0.initializerType)" }.joined(separator: ", ") + ") {")
 			lines += properties.map { "        self.\($0.label) = \($0.label)" }
 			lines.append("    }")
 			lines.append("")
@@ -420,13 +429,24 @@ struct PlanValueGraph {
 		let edges = (0..<screenCount).map { _ in random.sample(from: Array(0..<screenCount), count: min(screenCount, random.int(in: 1...3))) }
 		let odd = random.unit()
 		let declaredModels = (0..<screenCount).map { _ in models.filter { _ in random.chance(0.3) } }
+		// A few graphs forward a typealiased closure in place of the `Int`, which each initializer declares `@escaping`,
+		// and have screens receive it.
+		let drawsClosure = odd > 0.70 && odd < 0.76
+		let forwardsClosure = (0..<screenCount).map { screen in drawsClosure && forwards[screen] && random.chance(0.6) }
+		let closureForwarders = (0..<screenCount).filter { forwardsClosure[$0] }
+		let onTap = name("OnTap")
 		var screens = [(String, [Property])]()
 		var receivesModel = false
 		var renames = false
 		for screen in 0..<screenCount {
 			var properties = [Property]()
-			if forwards[screen] {
+			if forwardsClosure[screen] {
+				properties.append(Property(attribute: "@Forwarded", label: "onTap\(screen)", type: onTap, initializerType: "@escaping \(onTap)"))
+			} else if forwards[screen] {
 				properties.append(Property(attribute: "@Forwarded", label: "id\(screen)", type: "Int"))
+			}
+			if let forwarder = closureForwarders.first, forwarder != screen, random.chance(0.4) {
+				properties.append(Property(attribute: "@Received", label: "onTap\(forwarder)", type: onTap, initializerType: "@escaping \(onTap)"))
 			}
 			properties += (0..<serviceCount).compactMap { other in random.chance(0.6) ? Property.received("service\(other)", name("Service\(other)")) : nil }
 			properties += declaredModels[screen].map { Property(attribute: "@Instantiated", label: lowered($0), type: name($0)) }
@@ -462,6 +482,9 @@ struct PlanValueGraph {
 		}
 		if odd > 0.4, odd < 0.5 {
 			declare("Maybe", [])
+		}
+		if !closureForwarders.isEmpty {
+			declarations.append("public typealias \(onTap) = (Int) -> Void")
 		}
 		var rootNames = [String]()
 		var rootPropertyLabels = [String: [String]]()
@@ -508,6 +531,7 @@ struct PlanValueGraph {
 		self.rootNames = rootNames
 		self.rootPropertyLabels = rootPropertyLabels
 		forwardingTypeNames = (0..<screenCount).filter { forwards[$0] }.map { name("S\($0)") }
+		closureForwardingTypeNames = Set(closureForwarders.map { name("S\($0)") })
 		var shapes = [screenCount <= 3 ? "fewScreens" : screenCount <= 5 ? "someScreens" : "manyScreens"]
 		if forwards.contains(true) {
 			shapes.append("forwards")
@@ -533,6 +557,9 @@ struct PlanValueGraph {
 		if renames {
 			shapes.append("renames")
 		}
+		if !closureForwarders.isEmpty {
+			shapes.append("escapingName")
+		}
 		self.shapes = shapes
 	}
 
@@ -540,6 +567,15 @@ struct PlanValueGraph {
 		let attribute: String
 		let label: String
 		let type: String
+		/// The parameter's type in the initializer, which may declare it `@escaping`.
+		let initializerType: String
+
+		init(attribute: String, label: String, type: String, initializerType: String? = nil) {
+			self.attribute = attribute
+			self.label = label
+			self.type = type
+			self.initializerType = initializerType ?? type
+		}
 
 		static func received(_ label: String, _ type: String) -> Property {
 			Property(attribute: "@Received", label: label, type: type)

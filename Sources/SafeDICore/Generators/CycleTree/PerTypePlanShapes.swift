@@ -54,8 +54,6 @@ extension DependencyTreeGenerator {
 		for (index, scope) in scopes.enumerated() where reason == nil {
 			if scope.instantiable.generatesDependencyTree {
 				reason = .buildsSeam
-			} else if scope.instantiable.initializer?.typesDeclaredEscaping.isEmpty == false {
-				reason = .declaresEscapingName
 			}
 			// One label may be declared and received in several forms across the tree: each read takes the form its nearest
 			// declaration provides, on every path, or validation rejects the tree, and a function's body is keyed by the

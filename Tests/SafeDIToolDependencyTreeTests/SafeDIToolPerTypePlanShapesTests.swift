@@ -353,8 +353,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenInitializerDeclaresNameEscaping() async throws {
-		// A screen's initializer declares a forwarded typealias of a function `@escaping`.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenInitializerOnCycleDeclaresNameEscaping() async throws {
+		// A screen's initializer declares a forwarded typealias of a function `@escaping`, which its function's parameter
+		// spells `@escaping` too.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let s0Builder: Instantiator<S0>
@@ -375,7 +376,70 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		public typealias OnTap = () -> Void
 		""")
 
-		#expect(choices == ["Root": .declaresEscapingName])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnNoCycleBeneathCycleDeclaresNameEscaping() async throws {
+		// A screen on the cycle forwards a typealiased closure to a row on no cycle, whose initializer declares it
+		// `@escaping`; the screen only passes it on, so its function takes the parameter `@escaping` from the row.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Forwarded let onTap: OnTap
+		    @Instantiated let row: Row
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(onTap: @escaping OnTap, row: Row, s0Builder: Instantiator<S0>) { self.onTap = onTap; self.row = row; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Row: Instantiable {
+		    @Received let onTap: OnTap
+		    public init(onTap: @escaping OnTap) { self.onTap = onTap }
+		}
+
+		public typealias OnTap = () -> Void
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleReceivesNameItsCycleForwardsEscaping() async throws {
+		// The screen that opens the cycle forwards a typealiased closure `@escaping`, and the screen it opens receives it
+		// and declares it `@escaping` too, so every call of the cycle passes the closure on.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Forwarded let onTap: OnTap
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(onTap: @escaping OnTap, s1Builder: Instantiator<S1>) { self.onTap = onTap; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let onTap: OnTap
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(onTap: @escaping OnTap, s0Builder: Instantiator<S0>) { self.onTap = onTap; self.s0Builder = s0Builder }
+		}
+
+		public typealias OnTap = @MainActor (Int) -> Void
+		""")
+
+		#expect(choices == ["Root": nil])
 	}
 
 	@Test

@@ -43,8 +43,6 @@ public enum RootTreeChoiceObservation {
 		case holdsSendableWrapperOrFunction
 		/// A type on a cycle of the root's tree is instantiated erased.
 		case erasesCycleMember
-		/// An initializer of the root's tree declares a parameter `@escaping` by a name.
-		case declaresEscapingName
 		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
 		case receivesInstantiator
 		/// The root's tree builds a type whose dependency tree its own module generates.
