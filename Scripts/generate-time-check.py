@@ -127,14 +127,10 @@ MEMORY_NOISE_FLOOR_BYTES = 8 * 1024 * 1024
 MAXRSS_BYTES = 1 if sys.platform == "darwin" else 1024
 SIZE_NOISE_FLOOR_BYTES = 4096
 # Sizes accepted for one change, by shape and module: a listed module passes while the head's file is at most this many
-# bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds.
-#
-# M80x80-calling-mocks: the module info now stores each public mock's plan, which lists, for each of its builders, the
-# builder's siblings. Each list is written as a difference from an earlier one, so the file grows with the builders,
-# but a plan of 80 builders is still several times the size of a base file that stores no plan. Once the change that
-# stores the plans is on main, main's own tool is the base and writes files of this size, so the entry is
-# unnecessary: remove it then.
-ACCEPTED_MODULE_INFO_BYTES = {"M80x80-calling-mocks": {"Feat": 36_000, "App": 48_000}}
+# bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds. An entry is
+# for the one change that grows a file on purpose: once that change is on main, main's own tool is the base and
+# writes files of that size, so the entry is removed. None is needed now.
+ACCEPTED_MODULE_INFO_BYTES = {}
 
 
 # MARK: Shapes
