@@ -579,9 +579,9 @@ extension MockLowering {
 		/// Whether the walk writes its body's statements to the lines it is handed. Off for the first walk of a root the type
 		/// key may lay out (`lowerMockRootWithTree(of:context:)`), which writes its body from the walk's records: the walk then
 		/// spells no statement of a place, a tree's largest text, one function per path, which the root would otherwise hold
-		/// until the layout replaces it. A place whose record is made of its text is written whatever this says: a member of
-		/// a loop of builders, with every place beneath it (`recordLoopUnit`), and a call of another module's public mock
-		/// (`recordPublicMockCall`), each into lines of its own that the record copies and the walk then drops.
+		/// until the layout replaces it. A place whose record is made of its text is written whatever this says: a call of
+		/// another module's public mock (`recordPublicMockCall`), into lines of its own that the record copies and the walk
+		/// then drops.
 		var writesText = true
 		/// The records of the closers and defaults the walk lowered (`MockLowering+ClosersAndDefaults.swift`), by their paths of
 		/// child indices, which the plan reads where it writes their places.

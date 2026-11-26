@@ -1353,14 +1353,18 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_nodeBuilder() -> Node {
-			            let middleBuilder: Instantiator<Node> = Instantiator<Node>(__safeDI_nodeBuilder)
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: ((Instantiator<Node>) -> Node)?) -> Node {
+			            let middleBuilder = Instantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			            }
 			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 7)
 			            let childBuilder: Instantiator<Node> = middleBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
+			            return if let safeDIBuilder = __safeDI_Node_configuration { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
-			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        let nodeBuilder = Instantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 7)
 			        let middleBuilder: Instantiator<Node> = nodeBuilder
 			        #sourceLocation()
