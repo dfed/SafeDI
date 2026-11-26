@@ -133,7 +133,10 @@ public struct InjectableMacro: PeerMacro {
 			if BooleanLiteralExprSyntax(onlyIfAvailable) == nil {
 				throw InjectableError.onlyIfAvailableInvalidType
 			}
-			if !variableDecl.bindings.compactMap(\.typeAnnotation).allSatisfy(\.type.typeDescription.isOptional) {
+			// An `@Instantiated` property's type is checked below, with every other rule about its optionality.
+			if variableDecl.attributes.instantiatedMacro == nil,
+			   !variableDecl.bindings.compactMap(\.typeAnnotation).allSatisfy(\.type.typeDescription.isOptional)
+			{
 				context.diagnose(Self.optionalTypeRequired(
 					in: variableDecl,
 					error: .onlyIfAvailableNotOptionalSpelledWithQuestionMark,
@@ -153,7 +156,31 @@ public struct InjectableMacro: PeerMacro {
 			))
 		}
 
-		if variableDecl.attributes.instantiatedMacro != nil {
+		if let instantiatedMacro = variableDecl.attributes.instantiatedMacro, instantiatedMacro.onlyIfAvailableValue {
+			// The property is `nil` where no type that fulfills it is available, so its type is optional exactly once.
+			for binding in variableDecl.bindings {
+				guard let type = binding.typeAnnotation?.type else { continue }
+				let nonOptionalType = Self.nonOptional(instantiatedPropertyType: type) ?? type
+				if let wrapperTypeName = nonOptionalType.typeDescription.propertyType.wrapperTypeName {
+					throw InjectableError.onlyIfAvailableInstantiatedWrapper(wrapperTypeName: wrapperTypeName)
+				}
+				let isOptionalOnce = OptionalTypeSyntax(type).map { Self.nonOptional(instantiatedPropertyType: $0.wrappedType) == nil } ?? false
+				guard !isOptionalOnce else { continue }
+				let optionalType = Self.optional(nonOptionalType)
+				context.diagnose(Diagnostic(
+					node: type,
+					error: FixableInjectableError.instantiatedOnlyIfAvailablePropertyTypeIsNotOptionalOnce(
+						optionalDeclaration: "\(binding.pattern.trimmedDescription): \(optionalType.trimmedDescription)",
+					),
+					changes: [
+						.replace(
+							oldNode: Syntax(type),
+							newNode: Syntax(optionalType),
+						),
+					],
+				))
+			}
+		} else if variableDecl.attributes.instantiatedMacro != nil {
 			for binding in variableDecl.bindings {
 				if let type = binding.typeAnnotation?.type,
 				   let nonOptionalType = Self.nonOptional(instantiatedPropertyType: type)
@@ -170,6 +197,23 @@ public struct InjectableMacro: PeerMacro {
 							),
 						],
 					))
+				}
+				// SafeDI builds a wrapper's value from an `@Instantiable` type, and generated code passes the built
+				// instance where the outer wrapper expects the inner one, which does not compile.
+				if let type = binding.typeAnnotation?.type,
+				   case let .simple(_, generics) = type.typeDescription.unwrapped,
+				   let outerWrapperTypeName = type.typeDescription.propertyType.wrapperTypeName,
+				   let builtTypeIndex = Self.builtTypeIndex(of: type.typeDescription.propertyType),
+				   builtTypeIndex < generics.count,
+				   generics[builtTypeIndex].propertyType.wrapperTypeName != nil
+				{
+					context.addDiagnostics(
+						from: InjectableError.instantiatedWrapperBuildsWrapper(
+							outerWrapperTypeName: outerWrapperTypeName,
+							builtType: generics[builtTypeIndex].unwrapped.asSource,
+						),
+						node: type,
+					)
 				}
 			}
 		}
@@ -267,6 +311,25 @@ public struct InjectableMacro: PeerMacro {
 			\.genericArgumentClause,
 			genericArgumentClause.with(\.arguments, GenericArgumentListSyntax(arguments)),
 		))
+	}
+
+	/// `type`, which is not optional, spelled optional with `?`, in parentheses where the `?` would otherwise bind to
+	/// a part of it, as in `any Service?`.
+	private static func optional(_ type: TypeSyntax) -> TypeSyntax {
+		let needsParentheses = type.is(SomeOrAnyTypeSyntax.self)
+			|| type.is(CompositionTypeSyntax.self)
+			|| type.is(FunctionTypeSyntax.self)
+			|| type.is(AttributedTypeSyntax.self)
+		let wrappedType = if needsParentheses {
+			TypeSyntax(TupleTypeSyntax(elements: TupleTypeElementListSyntax([
+				TupleTypeElementSyntax(type: type.trimmed),
+			])))
+		} else {
+			type.trimmed
+		}
+		return TypeSyntax(OptionalTypeSyntax(wrappedType: wrappedType))
+			.with(\.leadingTrivia, type.leadingTrivia)
+			.with(\.trailingTrivia, type.trailingTrivia)
 	}
 
 	/// The index of the generic argument that a SafeDI wrapper of `propertyType` builds, or `nil` for a constant.
@@ -398,7 +461,13 @@ public struct InjectableMacro: PeerMacro {
 		/// initializers take a function, of a dependency not spelled as a function.
 		case erasedRenameIntoWrapper(wrapperTypeName: String)
 		case erasedInstantiatorUsedWithoutFulfilledByType
+		/// An `@Instantiated` SafeDI wrapper, named `outerWrapperTypeName`, whose built type, spelled `builtType`, is
+		/// itself a SafeDI wrapper.
+		case instantiatedWrapperBuildsWrapper(outerWrapperTypeName: String, builtType: String)
 		case onlyIfAvailableInvalidType
+		/// An `@Instantiated` property declared with `onlyIfAvailable: true` whose type is the SafeDI wrapper named
+		/// `wrapperTypeName`, optional or not.
+		case onlyIfAvailableInstantiatedWrapper(wrapperTypeName: String)
 
 		var description: String {
 			switch self {
@@ -422,8 +491,12 @@ public struct InjectableMacro: PeerMacro {
 				"`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `\(wrapperTypeName)`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency."
 			case .erasedInstantiatorUsedWithoutFulfilledByType:
 				"An @Instantiated `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds."
+			case let .instantiatedWrapperBuildsWrapper(outerWrapperTypeName, builtType):
+				"An @Instantiated `\(outerWrapperTypeName)` cannot build `\(builtType)`, which is itself a SafeDI wrapper: SafeDI builds a wrapper’s value from an `@Instantiable` type. Declare the property as `\(builtType)`, or as a `\(outerWrapperTypeName)` of the type the inner wrapper builds."
 			case .onlyIfAvailableInvalidType:
 				"The argument `onlyIfAvailable` must be a Bool literal (`true` or `false`)."
+			case let .onlyIfAvailableInstantiatedWrapper(wrapperTypeName):
+				"`onlyIfAvailable: true` is not supported on an @Instantiated `\(wrapperTypeName)`. SafeDI instantiates only if available a property whose own type it creates, such as `service: Service?`."
 			}
 		}
 	}

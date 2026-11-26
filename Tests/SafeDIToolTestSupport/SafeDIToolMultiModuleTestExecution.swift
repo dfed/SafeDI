@@ -45,10 +45,9 @@ struct ModuleFixture {
 	///     SwiftPM's `sourceModuleRecursiveDependencies` does. The module's compile can import the transitive
 	///     closure, as rules_swift propagates module visibility.
 	///   - isCheckoutPackage: Whether the module's package is one SwiftPM fetched, laid out under
-	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when the one
-	///     path component above its package directory is `checkouts` (a checkout target nested deeper slips
-	///     past that check, as the example builds showed) and leaves its files out of the CSV of a consumer in another
-	///     package, so such a consumer reads its declarations only through a configuration's
+	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when SwiftPM reports
+	///     its package's origin as a repository or a registry, and leaves its files out of the CSV of a consumer in
+	///     another package, so such a consumer reads its declarations only through a configuration's
 	///     `additionalDirectoriesToInclude`; a consumer that is a module of the same checkout package reads them.
 	///     The harness lays such a module out to match and applies the rule by this flag. Bazel knows no
 	///     checkouts: `.moduleInfo` reads the module's `.safedi` as it does any dependency's.
@@ -525,8 +524,8 @@ func executeSafeDIToolMultiModuleTest(
 			}
 			inputSwiftFilePaths = module.swiftFiles.map(csvEntry(of:))
 			compilerSwiftFilePaths = scansDuringGenerate ? inputSwiftFilePaths : inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
-			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`,
-			// and every one of the module's own package, which is under `checkouts` when that package is fetched.
+			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency of a package that is not
+			// fetched, and every one of the module's own package, which can be fetched.
 			let firstPartyDependencies = module.transitiveDependencies
 				.map { writtenModulesByName[$0]! }
 				.filter { !$0.fixture.isCheckoutPackage || $0.packageDirectory.path == module.packageDirectory.path }
@@ -597,15 +596,17 @@ func executeSafeDIToolMultiModuleTest(
 				// the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
 				// Every seam settled without its confirming signature pass must have the signature that pass finds (`SkippedConfirmingPassChecks`).
 				// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
-				generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-							// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-							// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-								try await ConstructionInternerOrder.applying(.fromEnvironment) {
-									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await tool.generate()
+				generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
+					try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
+						try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+								// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+									try await ConstructionInternerOrder.applying(.fromEnvironment) {
+										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
+											try await tool.generate()
+										}
 									}
 								}
 							}
@@ -629,7 +630,14 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		if let generateOutput {
+			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let writtenFile = moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
 			moduleInfoFile = writtenFile.withoutSeamSignatures

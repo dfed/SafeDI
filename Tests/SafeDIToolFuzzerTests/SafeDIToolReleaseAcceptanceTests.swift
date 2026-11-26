@@ -50,40 +50,158 @@ struct SafeDIToolReleaseAcceptanceTests {
 	/// change that makes it.
 	static let listedSeedsByRelease: [String: [ListedSeed]] = [
 		"2.3.0": [
+			ListedSeed(corpus: .base, seed: 8, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 9, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 91, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 116, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 133, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 141, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 165, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 175, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 195, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 206, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 207, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 210, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 227, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 252, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 290, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 295, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 296, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 351, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 352, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 362, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 434, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 531, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 556, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 565, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 576, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 635, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 644, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 711, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 731, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 881, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 928, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 976, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 1_053, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 1_180, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_248, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 1_269, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_283, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 1_307, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 1_401, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_602, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 1_678, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 1_746, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 1_938, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_013, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_016, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_152, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_157, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 2_254, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_270, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_298, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_388, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_413, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_420, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_611, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_618, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 2_637, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 2_674, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_706, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_735, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_762, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_790, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_824, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_832, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_837, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_881, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_891, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 2_964, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_012, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 3_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_102, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_225, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_269, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_286, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_288, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 3_302, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_344, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 3_405, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_434, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_599, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 3_608, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_854, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_864, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 3_924, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_085, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_087, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_166, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_169, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_179, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_204, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_207, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_211, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_212, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_227, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_356, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_358, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_365, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_387, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_418, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_420, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_522, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
 			ListedSeed(corpus: .base, seed: 4_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_549, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_551, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_613, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_664, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_690, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_732, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_746, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .base, seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_875, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_883, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_885, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_890, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .base, seed: 4_993, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 19, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 68, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 69, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 151, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 155, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 162, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 222, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 227, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 300, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 341, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .seam, seed: 391, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+			ListedSeed(corpus: .seam, seed: 471, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 484, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 500, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 742, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 787, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 819, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 905, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 934, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 967, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 990, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_050, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_059, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_149, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_168, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 			ListedSeed(corpus: .seam, seed: 1_311, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+			ListedSeed(corpus: .seam, seed: 1_501, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 1_536, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_560, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_637, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_773, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_788, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_921, kind: .knownBreak, verdictClass: .currentRejects, reason: fillReadsLabelNestedCyclesDeclareAgainReason),
+			ListedSeed(corpus: .seam, seed: 1_954, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
+			ListedSeed(corpus: .seam, seed: 1_986, kind: .exemption, verdictClass: .valuesDiffer, reason: nearestDeclarationInNestedCycleReason),
 		],
 	]
 
@@ -95,6 +213,38 @@ struct SafeDIToolReleaseAcceptanceTests {
 	static let beyondComparatorReason = "the comparator cannot describe the graph's values within its isolated traversal budget"
 
 	static let mockPassesNilAsProductionDoesReason = "#892, a 2.3.0 mock defect fixed and release-noted"
+
+	/// A type built again through a second lazy cycle received the outer declaration of a label where the nearest one is in scope. Each seed draws that shape (`S<seed>_NestRoot`), and its only difference is that label’s value.
+	static let nearestDeclarationInNestedCycleReason = "#1065, a 2.3.0 defect fixed: a type a second lazy cycle builds again received the outer declaration of a label"
+
+	/// 2.3.0 accepted the graph and handed the fill the same values at every level of the nested cycle, so the type the
+	/// cycle builds again was built with the outer declaration of the label; this tree reports the read instead.
+	static let fillReadsLabelNestedCyclesDeclareAgainReason = "#1115, release-noted under Fixes: a seam fill’s read of a label that nested lazy cycles declare again, which 2.3.0 built with the outer declaration, is now an error"
+
+	@Test(arguments: GraphFuzzerReleaseAcceptanceCorpus.allCases)
+	func releaseAcceptanceFixture_drawsTheCorpusGraphWithoutFeaturesOlderReleaseRejects_whenDrawnForComparison(corpus: GraphFuzzerReleaseAcceptanceCorpus) {
+		// 2.3.0 rejects `@Instantiated(onlyIfAvailable: true)` and the `@Instantiable` actors `addingActorArgumentShapes`
+		// draws, every release rejects the shapes `addingPlaceStoodForShapes` draws, every release before the fix wrote a
+		// call that does not compile for `addingNestedFillHoleShapes`' unfilled gadget, and every release before the fix
+		// rejects the ring `addingSeamRingShapes` draws, so a graph drawing any of them would be class A, compared by nothing.
+		func drawsFeatureOlderReleaseRejects(_ fixture: GraphFuzzerFixture) -> Bool {
+			let text = fixture.swiftFileContent.joined(separator: "\n")
+			return text.contains("@Instantiated(onlyIfAvailable: true") || text.range(of: #"actor \w+: Instantiable"#, options: .regularExpression) != nil || text.contains("_StoodForHome: Instantiable") || text.contains("_NestedFillPanelImpl: Instantiable") && !text.contains("_NestedFillGadgetImpl: Instantiable") || text.contains("_RingSeamA: Instantiable")
+		}
+		var corpusGraphsDrawingOne = 0
+		for seed in UInt64(0)..<300 {
+			let corpusFixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features, storingEveryParameter: true)
+			let comparedFixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features)
+			#expect(!drawsFeatureOlderReleaseRejects(comparedFixture), "seed \(seed)")
+			if drawsFeatureOlderReleaseRejects(corpusFixture) {
+				corpusGraphsDrawingOne += 1
+			} else {
+				// Each left-out draw has a stream of its own, so a graph that draws none of them is the corpus's.
+				#expect(comparedFixture.swiftFileContent == corpusFixture.swiftFileContent, "seed \(seed)")
+			}
+		}
+		#expect(corpusGraphsDrawingOne >= 10, "\(corpus)")
+	}
 
 	@Test
 	func listedSeeds_listEachSeedOnceAsABreak_forEachRelease() {
@@ -258,7 +408,7 @@ struct SafeDIToolReleaseAcceptanceTests {
 	func verdicts_reportNoBreak_whenCurrentTreeIsComparedWithItselfOverGraphsSplitAcrossModules(corpus: GraphFuzzerReleaseAcceptanceCorpus) async throws {
 		guard compileVerificationIsEnabled else { return }
 		let seeds = Self.splitSeeds[corpus] ?? []
-		#expect(seeds.allSatisfy { GraphFuzzerGenerator.fixture(forSeed: $0, features: corpus.features, storingEveryParameter: true).modules != nil })
+		#expect(seeds.allSatisfy { GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: $0, features: corpus.features).modules != nil })
 		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: seeds, of: corpus, older: .currentTree)
 		#expect(verdicts.map(\.seed) == seeds)
 		#expect(verdicts.allSatisfy { $0.verdict.verdictClass == .valuesAgree }, "\(verdicts)")

@@ -36,6 +36,12 @@
 /// changes after `init`, so an object that is `Sendable` stays so without a mutable stored property, and when the object
 /// is deinitialized the slot moves its values out and hands them to `DeferredRelease`, so that no reference to them
 /// outlives the hand-over.
+///
+/// Swift 6.2.3 and 6.3.3, with `-O` or `-Osize` and no whole-module optimization, never run this type's `deinit` for a
+/// slot a class in another file stores: the class's destructor destroys the slot's fields directly, with no diagnostic,
+/// so each level is released from within the one above. Whole-module builds (SwiftPM's release configuration,
+/// Xcode's Release configuration, rules_swift's `-c opt` and exec configuration) and unoptimized builds run it.
+/// SafeDICore is therefore never compiled per file with optimization.
 struct DeferredReleaseSlot<Value: RangeReplaceableCollection & Sendable>: ~Copyable, Sendable {
 	init(_ value: Value) {
 		storage = Storage(value: value)

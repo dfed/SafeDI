@@ -200,6 +200,10 @@ public actor DependencyTreeGenerator {
 		/// The types whose configurations `mockConfigurationCode` declares that the properties they are built for do not
 		/// name, whose modules the header can need.
 		public let mockConfigurationFulfillers: Set<FulfillerImports.Fulfiller>
+		/// The plan of each public mock the module's own files declare, sorted by type, as a module that calls the mock
+		/// reads it, which the module's module info carries (`SeamResolution.ForeignPublicMock.storedPlans`); empty unless
+		/// the request stores them (`MockRequest.storesPublicMockPlans`).
+		public let storedPublicMockPlans: [StoredPublicMockPlan]
 	}
 
 	/// The code a generated file holds, which decides what its header imports.
@@ -280,15 +284,19 @@ public actor DependencyTreeGenerator {
 		///   - currentModuleSourceFilePaths: The module's own files, whose `generateMock` types get a mock, or `nil` when
 		///     every file is the module's.
 		///   - additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
-		public init(mockConditionalCompilation: String?, currentModuleSourceFilePaths: Set<String>? = nil, additionalMocksToGenerate: Set<String> = []) {
+		///   - storesPublicMockPlans: Whether the result holds the plan of each public mock the module declares, which a
+		///     run that writes a module info file stores in it.
+		public init(mockConditionalCompilation: String?, currentModuleSourceFilePaths: Set<String>? = nil, additionalMocksToGenerate: Set<String> = [], storesPublicMockPlans: Bool = false) {
 			self.mockConditionalCompilation = mockConditionalCompilation
 			self.currentModuleSourceFilePaths = currentModuleSourceFilePaths
 			self.additionalMocksToGenerate = additionalMocksToGenerate
+			self.storesPublicMockPlans = storesPublicMockPlans
 		}
 
 		public let mockConditionalCompilation: String?
 		public let currentModuleSourceFilePaths: Set<String>?
 		public let additionalMocksToGenerate: Set<String>
+		public let storesPublicMockPlans: Bool
 	}
 
 	/// What `generate(_:)` generated.
@@ -383,6 +391,7 @@ public actor DependencyTreeGenerator {
 				mockConditionalCompilation: mockRequest.mockConditionalCompilation,
 				currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
 				additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
+				storesPublicMockPlans: mockRequest.storesPublicMockPlans,
 				publicMockContext: declaresPublicMock ? publicMockContext : nil,
 			)
 		}
@@ -403,31 +412,34 @@ public actor DependencyTreeGenerator {
 	/// `rootsOfOtherModules`, the roots another module declares.
 	private func plannedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [PlannedRoot] {
 		let rootScopeGenerators = roots
-		if let ordering = CodeTaskStart.ordering {
-			await ordering.runEveryStart()
-		}
-		let plannedRoots = try await withThrowingTaskGroup(
-			of: PlannedRoot?.self,
-			returning: [PlannedRoot].self,
-		) { taskGroup in
-			for rootInfo in rootScopeGenerators {
-				taskGroup.addTask {
-					let code = try await rootInfo.scopeGenerator.generatePlan()
-					return await PlannedRoot(
-						typeDescription: rootInfo.typeDescription,
-						sourceFilePath: rootInfo.sourceFilePath,
-						code: code,
-						fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
-					)
+		// A seam's root plans its children at once only where the module plans few trees: each tree is planned on a task
+		// of its own, so many trees keep every processor busy, and planning their children at once too only holds more
+		// frames (1,200 seams of two children each held 13% more peak memory, at the same wall time).
+		let seamRootsPlanChildrenAtOnce = rootScopeGenerators.count <= ConcurrentChildCode.maximumChildrenAtOnce
+		let plannedRoots = try await ConcurrentChildCode.$seamRootsPlanChildrenAtOnce.withValue(seamRootsPlanChildrenAtOnce) {
+			try await withThrowingTaskGroup(
+				of: PlannedRoot?.self,
+				returning: [PlannedRoot].self,
+			) { taskGroup in
+				for rootInfo in rootScopeGenerators {
+					taskGroup.addTask {
+						let code = try await rootInfo.scopeGenerator.generatePlan()
+						return await PlannedRoot(
+							typeDescription: rootInfo.typeDescription,
+							sourceFilePath: rootInfo.sourceFilePath,
+							code: code,
+							fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+						)
+					}
 				}
-			}
-			var plannedRoots = [PlannedRoot]()
-			for try await plannedRoot in taskGroup {
-				if let plannedRoot {
-					plannedRoots.append(plannedRoot)
+				var plannedRoots = [PlannedRoot]()
+				for try await plannedRoot in taskGroup {
+					if let plannedRoot {
+						plannedRoots.append(plannedRoot)
+					}
 				}
+				return plannedRoots
 			}
-			return plannedRoots
 		}
 		if let observer = HeldCodeTasks.observer {
 			for rootInfo in rootScopeGenerators {
@@ -617,10 +629,7 @@ public actor DependencyTreeGenerator {
 	///     (`PublicMockContext.unreadTypeComment`).
 	///   - ownAccessProof: The proof of every type's access over the module's declarations, which the signatures of the
 	///     seams this module generates read (`ownAccessProof()`).
-	///   - startsCodeGeneration: Whether each generator of a root's tree starts generating its code as it is created,
-	///     which trees built only to be read skip. Read only where no module holds a seam: a module that holds one always
-	///     generates code.
-	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, startsCodeGeneration: Bool = true) async throws -> DependencyTrees {
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof) async throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -698,7 +707,6 @@ public actor DependencyTreeGenerator {
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
-							startsCodeGeneration: startsCodeGeneration,
 							declaredTypeNames: declaredTypeNames,
 							constructionMemo: &constructionMemo,
 						),

@@ -2271,6 +2271,298 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesSendableClosureForAutoclosureDefault_whenPublicMockTypeTakesSendableAutoclosure() async throws {
+		// A public mock takes a `@Sendable` autoclosure default as an optional `@Sendable` closure, which the `@Sendable` autoclosure the construction is passed can capture.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable, Sendable {
+				    public init(tag: @autoclosure @escaping @Sendable () -> String = "tag") {
+				        self.tag = tag
+				    }
+
+				    let tag: @Sendable () -> String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": generatedFileHeader,
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Screen {
+			    public static func mock(
+			        tag: (@Sendable () -> String)? = nil
+			    ) -> Screen {
+			        Screen.__safeDI_mock(tag: tag)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        tag: (@Sendable () -> String)? = nil
+			    ) -> Screen {
+			        let tag = tag ?? ({ "tag" })
+			        return Screen(tag: tag())
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_CE97C8015E0A28F8 {}
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsSendableAutoclosureDefaultBeforeConstruction_whenTypeIsBuiltInAnotherMocksTree() async throws {
+		// A configuration stores a `@Sendable` autoclosure default as a `@Sendable` closure, and the builder function reads its configuration into locals before it, as a `@Sendable` builder function does, so the `@Sendable` autoclosure the construction is passed captures that closure and not the overrides.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Screen: Instantiable, Sendable {
+				    public init(tag: @autoclosure @escaping @Sendable () -> String = "tag") {
+				        self.tag = tag
+				    }
+
+				    let tag: @Sendable () -> String
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Host: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Screen {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            tag: @autoclosure @escaping @Sendable () -> String = "tag",
+			            _ safeDIBuilder: ((String) -> Screen)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                tag: tag,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var tag: @Sendable () -> String { __safeDI_storage.tag }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((String) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                tag: @escaping @Sendable () -> String,
+			                safeDIBuilder: ((String) -> Screen)?
+			            ) {
+			                self.tag = tag
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let tag: @Sendable () -> String
+			            let safeDIBuilder: ((String) -> Screen)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Host {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            screen: Screen.SafeDIMockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                screen: screen
+			            )
+			        }
+
+			        var screen: Screen.SafeDIMockConfiguration { __safeDI_storage.screen }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                screen: Screen.SafeDIMockConfiguration
+			            ) {
+			                self.screen = screen
+			            }
+
+			            let screen: Screen.SafeDIMockConfiguration
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Host {
+			        let __safeDI_screen__safeDIBuilder = safeDIOverrides.screen.safeDIBuilder
+			        let __safeDI_screen__screen_tag = safeDIOverrides.screen.tag
+			        func __safeDI_screen() -> Screen {
+			            return if let safeDIBuilder = __safeDI_screen__safeDIBuilder { safeDIBuilder(__safeDI_screen__screen_tag()) } else { Screen(tag: __safeDI_screen__screen_tag()) }
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        return Host(screen: screen)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func publicMock_readsSendableAutoclosureDefaultBeforeConstruction_whenTypeIsBuiltInPublicMocksTree() async throws {
+		// A public configuration and the construction function take a `@Sendable` autoclosure default as an optional `@Sendable` closure, which the `@Sendable` autoclosure the construction is passed can capture.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Screen: Instantiable, Sendable {
+				    public init(tag: @autoclosure @escaping @Sendable () -> String = "tag") {
+				        self.tag = tag
+				    }
+
+				    let tag: @Sendable () -> String
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Host: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Screen` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Screen_MockConfiguration {
+			    public init(
+			        tag: (@Sendable () -> String)? = nil,
+			        _ safeDIBuilder: ((String) -> Screen)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            tag: tag,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    /// `nil` keeps the default of `Screen`’s `tag`.
+			    public var tag: (@Sendable () -> String)? { __safeDI_storage.tag }
+			    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: ((String) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            tag: (@Sendable () -> String)?,
+			            safeDIBuilder: ((String) -> Screen)?
+			        ) {
+			            self.tag = tag
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let tag: (@Sendable () -> String)?
+			        let safeDIBuilder: ((String) -> Screen)?
+			    }
+			}
+
+			extension Screen {
+			    static func __safeDI_init(tag: (@Sendable () -> String)?, safeDIBuilder: ((String) -> Screen)?) -> Screen {
+			        let tag = tag ?? ({ "tag" })
+			        return if let safeDIBuilder { safeDIBuilder(tag()) } else { Screen(tag: tag()) }
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Host {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            screen: __safeDI_Screen_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                screen: screen
+			            )
+			        }
+
+			        public var screen: __safeDI_Screen_MockConfiguration { __safeDI_storage.screen }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                screen: __safeDI_Screen_MockConfiguration
+			            ) {
+			                self.screen = screen
+			            }
+
+			            let screen: __safeDI_Screen_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Host {
+			        Host.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Host {
+			        func __safeDI_screen() -> Screen {
+			            return Screen.__safeDI_init(tag: safeDIOverrides.screen.tag, safeDIBuilder: safeDIOverrides.screen.safeDIBuilder)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        return Host(screen: screen)
+			    }
+			}
+
+			extension Host {
+			    public enum __safeDI_Host_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

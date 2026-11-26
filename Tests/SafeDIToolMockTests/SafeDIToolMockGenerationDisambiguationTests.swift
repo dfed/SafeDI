@@ -6048,7 +6048,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		                    #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
 		                    let renamedService: ServiceProtocol? = service
 		                    #sourceLocation()
-		                    return ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder)
+		                    return if let safeDIBuilder = safeDIOverrides.sessionBuilder.anyProfileViewBuilder.safeDIBuilder { safeDIBuilder(profileViewBuilder, renamedService, editor, sessionBuilder) } else { ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder) }
 		                }
 		                let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
 		                #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)

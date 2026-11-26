@@ -47,7 +47,8 @@ public struct ModuleInfoFile: Codable, Sendable {
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
 		instantiableTypeNamesInAnyClause: [String],
 		plainTypeDeclarations: [PlainTypeDeclaration],
-		seamSignatures: [StoredSeamSignature],
+		seamSignatures: ModuleSeamSignatures,
+		publicMockPlans: ModulePublicMockPlans = .empty,
 		view: ModuleInfoView,
 	) {
 		self.moduleName = moduleName
@@ -63,13 +64,58 @@ public struct ModuleInfoFile: Codable, Sendable {
 		self.instantiableTypeNamesInAnyClause = instantiableTypeNamesInAnyClause
 		self.plainTypeDeclarations = plainTypeDeclarations
 		self.seamSignatures = seamSignatures
+		self.publicMockPlans = publicMockPlans
 		self.view = view
+	}
+
+	init(
+		moduleName: String,
+		ownEntryChecksum: UInt64? = nil,
+		packageName: String?,
+		dependencyModuleNames: [String],
+		imports: [ImportStatement],
+		mockImports: [ImportStatement],
+		instantiables: [Instantiable],
+		configurations: [SafeDIConfiguration],
+		filesWithUnexpectedNodes: [String]?,
+		conditionalCompilationDecisions: [ConditionalCompilationDecision],
+		instantiableTypeNamesInAnyClause: [String],
+		plainTypeDeclarations: [PlainTypeDeclaration],
+		seamSignatures: [StoredSeamSignature],
+		view: ModuleInfoView,
+	) {
+		self.init(
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations,
+			seamSignatures: ModuleSeamSignatures(seamSignatures),
+			view: view,
+		)
 	}
 
 	/// The file of `module`, named `moduleName`, which a run that writes a module info file always knows.
 	/// - Parameter storesOwnEntryChecksum: Whether the file stores the checksum of its own entry, which a view that refers to
 	///   the module holds: written by a run whose view refers to modules, so that every file a reference can name has it.
-	public init(module: ModuleInfo, moduleName: String, seamSignatures: [StoredSeamSignature], view: ModuleInfoView, storesOwnEntryChecksum: Bool = false) {
+	/// - Parameter publicMockPlans: The plan the run computed of each public mock the module declares, and whether the
+	///   run compiles the mocks it generates, which the plans depend on.
+	public init(
+		module: ModuleInfo,
+		moduleName: String,
+		seamSignatures: [StoredSeamSignature],
+		publicMockPlans: [StoredPublicMockPlan] = [],
+		compilesGeneratedMocks: Bool = false,
+		view: ModuleInfoView,
+		storesOwnEntryChecksum: Bool = false,
+	) {
 		self.init(
 			moduleName: moduleName,
 			packageName: module.packageName,
@@ -82,7 +128,8 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: module.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: module.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: module.plainTypeDeclarations,
-			seamSignatures: seamSignatures,
+			seamSignatures: ModuleSeamSignatures(seamSignatures),
+			publicMockPlans: ModulePublicMockPlans(publicMockPlans, compilesGeneratedMocks: compilesGeneratedMocks),
 			view: view,
 		)
 		if storesOwnEntryChecksum {
@@ -118,7 +165,10 @@ public struct ModuleInfoFile: Codable, Sendable {
 	let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// The signature of each seam the module declares, sorted by seam, as the module's run computed it: a module that
 	/// calls one reads it here rather than computing it again. Empty for a module that declares no seam.
-	let seamSignatures: [StoredSeamSignature]
+	let seamSignatures: ModuleSeamSignatures
+	/// The plan of each public mock the module declares, sorted by mocked type, as the module's run computed it: a module
+	/// whose mocks call one reads it here rather than computing it again. Empty for a module that declares no public mock.
+	let publicMockPlans: ModulePublicMockPlans
 	/// What the module's dependents need of the modules it depends on, directly or not.
 	let view: ModuleInfoView
 
@@ -166,6 +216,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: plainTypeDeclarations,
 			seamSignatures: seamSignatures,
+			publicMockPlans: publicMockPlans,
 			view: view,
 		)
 	}
@@ -179,11 +230,12 @@ public struct ModuleInfoFile: Codable, Sendable {
 			instantiables: instantiables.map { $0.withoutPositions() },
 			plainTypeDeclarations: plainTypeDeclarations.map { $0.withoutPositions() },
 			seamSignatures: seamSignatures,
+			publicMockPlans: publicMockPlans,
 		)
 	}
 
-	/// This file without the seam signatures it and its view carry, which leaves each module that reads it to compute them
-	/// from the declarations, as a run under the SwiftPM plugin's target graph does: the graph fuzzer compares the two.
+	/// This file without the seam signatures and public mock plans it and its view carry, which leaves each module that
+	/// reads it to compute them from the declarations, as a run under the SwiftPM plugin's target graph does: the graph fuzzer compares the two.
 	public var withoutSeamSignatures: ModuleInfoFile {
 		ModuleInfoFile(
 			moduleName: moduleName,
@@ -198,10 +250,10 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: plainTypeDeclarations,
-			seamSignatures: [],
+			seamSignatures: .empty,
 			view: ModuleInfoView(
 				moduleGraph: view.moduleGraph,
-				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: []) },
+				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: .empty, publicMockPlans: .empty) },
 				references: view.references,
 			),
 		)
@@ -241,7 +293,7 @@ public struct ModuleInfoView: Codable, Sendable {
 
 extension ViewedModule {
 	/// The checksum a reference to this entry's module holds: of the bytes the entry is written as without its seam
-	/// signatures. Each signature follows from the declarations of the module and of the modules its run read, the
+	/// signatures and public mock plans. Each signature, and each plan alike, follows from the declarations of the module and of the modules its run read, the
 	/// signatures of the seams it reaches, and the module graph (each module's dependencies, package and mock condition,
 	/// which the access proofs read). A view that refers to this module refers to those modules as well, and carries the
 	/// module graph as a copy, so a change that changes a signature changes some reference's checksum or the graph; and a
@@ -251,9 +303,9 @@ extension ViewedModule {
 		MergedModuleInfoView.encoded(withoutSeamSignatures).withUnsafeBytes(BinaryFile.checksum(of:))
 	}
 
-	/// This entry with no seam signatures.
+	/// This entry with no seam signatures and no public mock plans.
 	var withoutSeamSignatures: ViewedModule {
-		ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: [])
+		ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: .empty, publicMockPlans: .empty)
 	}
 }
 
@@ -286,7 +338,9 @@ struct ViewedModule: Codable {
 	let instantiables: [Instantiable]
 	let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// See `ModuleInfoFile.seamSignatures`.
-	let seamSignatures: [StoredSeamSignature]
+	let seamSignatures: ModuleSeamSignatures
+	/// See `ModuleInfoFile.publicMockPlans`.
+	let publicMockPlans: ModulePublicMockPlans
 
 	/// Whether the module declares a seam or a public mock.
 	var declaresSeamOrPublicMock: Bool {
@@ -341,8 +395,8 @@ extension ModuleInfoFile {
 		}
 	}
 
-	/// This module as a module info file, as `moduleInfoData` writes it with every position in its seam signatures absent:
-	/// the signatures a run computes carry the positions of the declarations they name, which the file writes as absent
+	/// This module as a module info file, as `moduleInfoData` writes it with every position in its seam signatures and
+	/// public mock plans absent: the signatures and plans a run computes carry the positions of the declarations they name, which the file writes as absent
 	/// (``BinaryWriter/writingPositionsAsAbsent(_:)``). Copying every signature without them instead allocated several
 	/// times the file's size at the run's end, on pages the run had not used yet, which raised its peak resident memory
 	/// by a third on a module of two hundred seams although its peak heap held.
@@ -350,7 +404,10 @@ extension ModuleInfoFile {
 		get throws(BinaryFileWriteError) {
 			try BinaryFile.data(.moduleInfo) { writer in
 				write(to: &writer) { writer in
-					writer.writingPositionsAsAbsent { writer in writer.write(seamSignatures) }
+					writer.writingPositionsAsAbsent { writer in
+						writer.write(seamSignatures)
+						writer.write(publicMockPlans)
+					}
 				}
 			}
 		}
@@ -420,17 +477,14 @@ struct MergedModuleInfoView {
 		}
 		// A module's file and every view carry the same signatures of its seams, without positions.
 		let directModuleNames = Set(directModules.map(\.file.moduleName))
-		// Keyed by seam, so that a run calling every seam of a module looks each up once rather than scanning the module's
-		// signatures per seam. Of two signatures of one seam, the first is kept.
-		var storedSeamSignatures = [String: [TypeDescription: StoredSeamSignature]]()
-		for (moduleName, declaration) in declarations where !declaration.entry.seamSignatures.isEmpty {
-			var signaturesBySeam = [TypeDescription: StoredSeamSignature]()
-			for signature in declaration.entry.seamSignatures where signaturesBySeam[signature.seamType] == nil {
-				signaturesBySeam[signature.seamType] = signature
-			}
-			storedSeamSignatures[moduleName] = signaturesBySeam
-		}
-		storedSeamSignaturesByModuleName = storedSeamSignatures
+		// Each module's signatures stay as read, undecoded, until a run reaches one of the module's seams.
+		storedSeamSignaturesByModuleName = declarations
+			.filter { !$0.value.entry.seamSignatures.isEmpty }
+			.mapValues(\.entry.seamSignatures)
+		// Each module's public mock plans alike, until a run's mocks call one of the module's public mocks.
+		storedPublicMockPlansByModuleName = declarations
+			.filter { !$0.value.entry.publicMockPlans.isEmpty }
+			.mapValues(\.entry.publicMockPlans)
 		identitiesByModuleName = identities.mapValues(\.identity)
 		declarationsByModuleName = declarations.mapValues(\.entry)
 		self.directModuleNames = directModuleNames
@@ -459,9 +513,12 @@ struct MergedModuleInfoView {
 	let declarationsByModuleName: [String: ViewedModule]
 	/// The modules whose files the run was given.
 	let directModuleNames: Set<String>
-	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own,
-	/// with positions, for a module whose file the run was given, each by the seam, as its module's run names it.
-	let storedSeamSignaturesByModuleName: [String: [TypeDescription: StoredSeamSignature]]
+	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own for a
+	/// module whose file the run was given.
+	let storedSeamSignaturesByModuleName: [String: ModuleSeamSignatures]
+	/// The plans each module's own run computed of the public mocks it declares, by module name, for the modules that
+	/// declare one: read from the module's own file or from a view's copy of its entry.
+	let storedPublicMockPlansByModuleName: [String: ModulePublicMockPlans]
 	/// The view the run's own module info file carries.
 	let view: ModuleInfoView
 
@@ -507,5 +564,295 @@ struct UnresolvableModuleReferenceError: Error, CustomStringConvertible {
 
 	var description: String {
 		"SafeDI could not find the module info of module `\(moduleName)`, which \(referringFilePaths.map { "`\($0)`" }.joined(separator: " and ")) \(referringFilePaths.count == 1 ? "refers" : "refer") to: a view that refers to modules is read with the module info of every module beneath, which SafeDI’s Bazel rule passes with `--transitive-module-info-file-path`. Pass the module info of `\(moduleName)` that way, or build the modules without `--module-info-views-refer-to-modules`."
+	}
+}
+
+/// The blocks a module info file stores as encodings of their own, which a run decodes only when it needs one, and
+/// which threw when a run decoded them. A run that throws after reading a stored block runs again computing everything
+/// (`Generate.generate(buildLog:)`), so a block that never decodes changes no output: only this tells a test that the
+/// run read nothing it stored. Handed to `failureObserver`, which the tests set, never the tool.
+public enum StoredBlockDecodeObservation {
+	/// A kind of stored block.
+	public enum Block: Hashable, Sendable {
+		/// A module's seam signatures (`ModuleSeamSignatures`).
+		case seamSignatures
+		/// A module's public mock plans (`ModulePublicMockPlans`).
+		case publicMockPlans
+	}
+
+	/// Called once for each stored block whose decoding threw, when set: by the tests, never by the tool.
+	@TaskLocal public static var failureObserver: (@Sendable (Block) -> Void)?
+
+	/// Returns what `read` decodes of a stored `block`, and tells `failureObserver` when it throws.
+	static func reading<Value>(_ block: Block, _ read: () throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		do {
+			return try read()
+		} catch {
+			failureObserver?(block)
+			throw error
+		}
+	}
+}
+
+extension ModuleInfoFile {
+	/// A stored block of a file, with the bytes the tool writes of what the block decodes to.
+	public struct StoredBlockEncoding: Sendable {
+		public let block: StoredBlockDecodeObservation.Block
+		/// The encoding the file holds.
+		public let held: [UInt8]
+		/// The encoding of the values `held` decodes to.
+		public let ofDecodedValues: [UInt8]
+	}
+
+	/// Each stored block of this file's own module, decoded and encoded again: the two encodings of a block are the same
+	/// bytes for a file SafeDITool wrote, since one layout writes and reads a block. The tests ask this of every file a
+	/// run writes, with real signatures and plans; the tool never does.
+	public var storedBlockEncodings: [StoredBlockEncoding] {
+		get throws {
+			try [
+				StoredBlockEncoding(
+					block: .seamSignatures,
+					held: seamSignatures.encoding(writingPositionsAsAbsent: true),
+					ofDecodedValues: ModuleSeamSignatures(seamSignatures.decoded).encoding(writingPositionsAsAbsent: true),
+				),
+				StoredBlockEncoding(
+					block: .publicMockPlans,
+					held: publicMockPlans.encoding(writingPositionsAsAbsent: true),
+					ofDecodedValues: ModulePublicMockPlans(publicMockPlans.decoded, compilesGeneratedMocks: publicMockPlans.compilesGeneratedMocks).encoding(writingPositionsAsAbsent: true),
+				),
+			]
+		}
+	}
+}
+
+/// The signatures a module info file holds of its module's seams (`ModuleInfoFile.seamSignatures`): the seams, read with
+/// the file, and their signatures, which the file holds as an encoding of their own (``BinaryWriter/writeEncoding(_:)``)
+/// that a run decodes only when it reaches one of the module's seams. A module's file and every view that copies its
+/// declarations carry its signatures, and the module that reads them calls the seams of few of the modules it reads.
+struct ModuleSeamSignatures: Sendable {
+	init(_ signatures: [StoredSeamSignature]) {
+		seamTypes = signatures.map(\.seamType)
+		storage = .decoded(signatures)
+	}
+
+	init(seamTypes: [TypeDescription], encoding: [UInt8]) {
+		self.seamTypes = seamTypes
+		storage = .encoded(encoding)
+	}
+
+	static let empty = ModuleSeamSignatures([])
+
+	/// The seam of each signature, in the order of the signatures.
+	let seamTypes: [TypeDescription]
+
+	var isEmpty: Bool {
+		seamTypes.isEmpty
+	}
+
+	/// The signatures, decoded each time this is read from a file's encoding.
+	var decoded: [StoredSeamSignature] {
+		get throws(BinaryDecodingError) {
+			switch storage {
+			case let .decoded(signatures):
+				signatures
+			case let .encoded(encoding):
+				try Self.signatures(decodingFrom: encoding)
+			}
+		}
+	}
+
+	/// The signatures as a run that reaches one of the module's seams reads them. The file's body checksum covers the
+	/// encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws after
+	/// reading a stored signature runs again computing every signature (`Generate.generate(buildLog:)`).
+	var stored: StoredSeamSignatures {
+		StoredSeamSignatures { try StoredBlockDecodeObservation.reading(.seamSignatures) { () throws(BinaryDecodingError) in try decoded } }
+	}
+
+	/// The encoding the file holds: the bytes read, written back unchanged, or the signatures encoded each type
+	/// description and repeated field once (``BinaryWriter/writeSharingSignatureValues(_:)``), their positions absent when
+	/// `writesPositionsAsAbsent`. Only a run's own signatures hold positions: a file is written with them absent.
+	func encoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
+		switch storage {
+		case let .decoded(signatures):
+			var writer = BinaryWriter()
+			if writesPositionsAsAbsent {
+				writer.writingPositionsAsAbsent { writer in
+					writer.writeSharingSignatureValues { $0.write(signatures) }
+				}
+			} else {
+				writer.writeSharingSignatureValues { $0.write(signatures) }
+			}
+			return writer.encoded
+		case let .encoded(encoding):
+			return encoding
+		}
+	}
+
+	// MARK: Private
+
+	private enum Storage: Sendable {
+		case decoded([StoredSeamSignature])
+		case encoded([UInt8])
+	}
+
+	private let storage: Storage
+
+	private static func signatures(decodingFrom encoding: [UInt8]) throws(BinaryDecodingError) -> [StoredSeamSignature] {
+		// `withUnsafeBytes` rethrows untyped, so the read is carried out of it as a result.
+		try encoding.withUnsafeBytes { bytes in
+			Result { () throws(BinaryDecodingError) in
+				var reader = try BinaryReader(bytes: bytes)
+				let signatures = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in
+					try reader.read() as [StoredSeamSignature]
+				}
+				try reader.finish()
+				return signatures
+			}
+		}.get()
+	}
+}
+
+/// The plans a module info file holds of its module's public mocks (`ModuleInfoFile.publicMockPlans`): the mocked types
+/// and whether the module's run compiled the mocks it generated, read with the file, and the plans, which the file holds
+/// as an encoding of their own (``BinaryWriter/writeEncoding(_:)``) that a run decodes only when one of its mocks calls
+/// one of the module's public mocks, as it decodes a module's seam signatures (`ModuleSeamSignatures`).
+struct ModulePublicMockPlans: Sendable {
+	/// - Parameter compilesGeneratedMocks: Whether the run that computed `plans` compiles the mocks it generates
+	///   (`ConditionalCompilationEvaluator.compilesGeneratedMocks`), which a plan depends on. A module with no plan
+	///   records `false`, so that its file's bytes do not depend on the build's conditions.
+	///
+	/// A plan that names a type nested more deeply than a ``BinaryReader`` reads is left out, so that a module calling
+	/// the mock computes it and the file stays one every run reads: a parameter that takes a type nested as deeply as a
+	/// declaration may as `T? = nil` nests one level deeper. Each plan is checked alone only when the plans together
+	/// nest too deeply.
+	init(_ plans: [StoredPublicMockPlan], compilesGeneratedMocks: Bool) {
+		var readablePlans = plans
+		var encoded = Self.encoding(of: plans, writingPositionsAsAbsent: true)
+		if encoded.nestsTooDeeply {
+			readablePlans = plans.filter { !Self.encoding(of: [$0], writingPositionsAsAbsent: true).nestsTooDeeply }
+			encoded = Self.encoding(of: readablePlans, writingPositionsAsAbsent: true)
+		}
+		mockedTypes = readablePlans.map(\.mockedType)
+		self.compilesGeneratedMocks = compilesGeneratedMocks && !readablePlans.isEmpty
+		storage = .decoded(readablePlans, encodingWithoutPositions: encoded.bytes)
+	}
+
+	init(mockedTypes: [TypeDescription], compilesGeneratedMocks: Bool, encoding: [UInt8]) {
+		self.mockedTypes = mockedTypes
+		self.compilesGeneratedMocks = compilesGeneratedMocks
+		storage = .encoded(encoding)
+	}
+
+	static let empty = ModulePublicMockPlans([], compilesGeneratedMocks: false)
+
+	/// The mocked type of each plan, in the order of the plans.
+	let mockedTypes: [TypeDescription]
+	/// Whether the run that computed the plans compiles the mocks it generates. A run that differs in this computes the
+	/// plans itself.
+	let compilesGeneratedMocks: Bool
+
+	var isEmpty: Bool {
+		mockedTypes.isEmpty
+	}
+
+	/// The plans, decoded each time this is read from a file's encoding.
+	var decoded: [StoredPublicMockPlan] {
+		get throws(BinaryDecodingError) {
+			switch storage {
+			case let .decoded(plans, _):
+				plans
+			case let .encoded(encoding):
+				try Self.plans(decodingFrom: encoding)
+			}
+		}
+	}
+
+	/// The plans as a run whose mocks call one of the module's public mocks reads them. The file's body checksum covers
+	/// the encoding, so only a SafeDITool that wrote a malformed one makes the read throw, never trap; a run that throws
+	/// after it was handed a stored plan runs again computing every plan (`Generate.generate(buildLog:)`).
+	var stored: StoredPublicMockPlans {
+		StoredPublicMockPlans(compilesGeneratedMocks: compilesGeneratedMocks) { try StoredBlockDecodeObservation.reading(.publicMockPlans) { () throws(BinaryDecodingError) in try decoded } }
+	}
+
+	/// The encoding the file holds: the bytes read, written back unchanged, or the plans encoded each type description
+	/// and repeated field once (``BinaryWriter/writeSharingSignatureValues(_:)``), their positions absent when
+	/// `writesPositionsAsAbsent`. Only a run's own plans hold positions: a file is written with them absent.
+	func encoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
+		switch storage {
+		case let .decoded(plans, encodingWithoutPositions):
+			writesPositionsAsAbsent ? encodingWithoutPositions : Self.encoding(of: plans, writingPositionsAsAbsent: false).bytes
+		case let .encoded(encoding):
+			encoding
+		}
+	}
+
+	// MARK: Private
+
+	private enum Storage: Sendable {
+		/// The plans a run computed, with the encoding a file holds of them, made once.
+		case decoded([StoredPublicMockPlan], encodingWithoutPositions: [UInt8])
+		case encoded([UInt8])
+	}
+
+	private let storage: Storage
+
+	/// The encoding of `plans`, each type description and repeated field written once
+	/// (``BinaryWriter/writeSharingSignatureValues(_:)``), and whether it holds a value nested more deeply than a
+	/// ``BinaryReader`` reads.
+	private static func encoding(of plans: [StoredPublicMockPlan], writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> (bytes: [UInt8], nestsTooDeeply: Bool) {
+		var writer = BinaryWriter()
+		if writesPositionsAsAbsent {
+			writer.writingPositionsAsAbsent { writer in
+				writer.writeSharingSignatureValues { $0.write(plans) }
+			}
+		} else {
+			writer.writeSharingSignatureValues { $0.write(plans) }
+		}
+		return (writer.encoded, writer.isNestedTooDeeply)
+	}
+
+	private static func plans(decodingFrom encoding: [UInt8]) throws(BinaryDecodingError) -> [StoredPublicMockPlan] {
+		// `withUnsafeBytes` rethrows untyped, so the read is carried out of it as a result.
+		try encoding.withUnsafeBytes { bytes in
+			Result { () throws(BinaryDecodingError) in
+				var reader = try BinaryReader(bytes: bytes)
+				let plans = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in
+					try reader.read() as [StoredPublicMockPlan]
+				}
+				try reader.finish()
+				return plans
+			}
+		}.get()
+	}
+}
+
+extension ModulePublicMockPlans: Codable {
+	init(from decoder: any Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		try self.init(container.decode([StoredPublicMockPlan].self, forKey: .plans), compilesGeneratedMocks: container.decode(Bool.self, forKey: .compilesGeneratedMocks))
+	}
+
+	/// Encodes the plans, as `SafeDITool dump` prints them.
+	func encode(to encoder: any Encoder) throws {
+		var container = encoder.container(keyedBy: CodingKeys.self)
+		try container.encode(compilesGeneratedMocks, forKey: .compilesGeneratedMocks)
+		try container.encode(decoded, forKey: .plans)
+	}
+
+	private enum CodingKeys: String, CodingKey {
+		case compilesGeneratedMocks
+		case plans
+	}
+}
+
+extension ModuleSeamSignatures: Codable {
+	init(from decoder: any Decoder) throws {
+		try self.init(decoder.singleValueContainer().decode([StoredSeamSignature].self))
+	}
+
+	/// Encodes the signatures, as `SafeDITool dump` prints them.
+	func encode(to encoder: any Encoder) throws {
+		var container = encoder.singleValueContainer()
+		try container.encode(decoded)
 	}
 }

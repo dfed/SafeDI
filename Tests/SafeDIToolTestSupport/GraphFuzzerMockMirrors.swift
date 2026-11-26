@@ -189,6 +189,7 @@ struct GraphFuzzerMockMirrorModel {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	init(fixture: GraphFuzzerFixture, readsExistentialAndQualifiedSpellings: Bool = false) {
 		self.readsExistentialAndQualifiedSpellings = readsExistentialAndQualifiedSpellings
+		actorTypeNames = GraphFuzzerSourceLine.actorTypeNames(in: fixture.swiftFileContent)
 		var types = [String: TypeDeclaration]()
 		var typeOrder = [String]()
 		var pendingArguments: String?
@@ -399,6 +400,9 @@ struct GraphFuzzerMockMirrorModel {
 	/// module's `erasedToConcreteExistential` declarations erase to it, keyed by both forms of a lazily instantiated one.
 	let erasedToConcreteType: [String: String]
 	let readsExistentialAndQualifiedSpellings: Bool
+	/// The graph's `actor` types, whose mirrors hand their initializers values a region check cannot follow
+	/// (`GraphFuzzerMockMirror.argumentBindings`).
+	let actorTypeNames: Set<String>
 
 	/// The concrete type whose scope builds `type`, or `nil` when no declaration fulfills it.
 	func scopeTypeName(of type: String) -> String? {
@@ -927,6 +931,11 @@ struct GraphFuzzerMockMirror: Equatable {
 	let declarations: [Declaration]
 	/// The expression building the mocked type from the declarations.
 	let construction: String
+	/// The locals the construction reads for an actor's arguments, each declared `nonisolated(unsafe)` before it: the
+	/// mirror's values are in its initializer's region, which Swift 6 does not let it send to an actor's initializer,
+	/// though the mirror, as production, hands the actor each value and keeps none it uses afterwards. Empty for a type
+	/// that is no actor.
+	var argumentBindings = [String]()
 	let shapes: Set<GraphFuzzerValueOracleShape>
 	/// The arguments of the mock's required parameters, each a sample value, in the mock's order: empty for a mock that
 	/// takes none.
@@ -983,7 +992,15 @@ struct GraphFuzzerMockMirror: Equatable {
 		}
 		lines.append("\tpublic init(\(declarations.map { "\($0.property.label): \(GraphFuzzerSpelling.escapingType(of: $0.property.type))" }.joined(separator: ", "))) {")
 		lines += declarations.map { "\t\tself.\($0.property.label) = \($0.property.label)" }
-		lines.append("\t\t\(Self.valueLabel) = \(construction)")
+		if argumentBindings.isEmpty {
+			lines.append("\t\t\(Self.valueLabel) = \(construction)")
+		} else {
+			lines.append("\t\t// Swift 6 does not let the mirror send the actor values in its initializer’s region, so each argument is a local.")
+			lines.append("\t\tdo {")
+			lines += argumentBindings.map { "\t\t\tnonisolated(unsafe) let \($0)" }
+			lines.append("\t\t\t\(Self.valueLabel) = \(construction)")
+			lines.append("\t\t}")
+		}
 		lines.append("\t}")
 		lines.append("")
 		lines += declarations.map { "\t\($0.attribute) let \($0.property.label): \($0.property.type)" }
@@ -1169,7 +1186,9 @@ extension GraphFuzzerMockMirrorModel {
 		for dependency in mockedType.dependencies {
 			let argument: String? = switch dependency.source {
 			case .instantiated:
-				Self.argument(for: dependency.property, isRequired: true, from: declarations)
+				// An optional instantiated property is instantiated only if available, since the macro rejects every other
+				// one: where nothing the mock builds fulfills it, the mock binds `nil`, as production does.
+				Self.argument(for: dependency.property, isRequired: !dependency.property.isOptional, from: declarations)
 			case let .aliased(_, onlyIfAvailable):
 				Self.argument(for: dependency.property, isRequired: !onlyIfAvailable, from: declarations)
 			case let .received(onlyIfAvailable):
@@ -1181,6 +1200,15 @@ extension GraphFuzzerMockMirrorModel {
 				return .failure(.modelDisagrees("The mirror declares nothing it can pass `\(typeName)` for `\(dependency.property)`, which the mock passes without a required parameter."))
 			}
 			arguments.append("\(dependency.property.label): \(argument)")
+		}
+		// An actor's initializer is handed each argument through a local of its own (`argumentBindings`).
+		var argumentBindings = [String]()
+		if actorTypeNames.contains(typeName) {
+			for (index, dependency) in mockedType.dependencies.enumerated() {
+				let local = "mirrorArgument\(index)"
+				argumentBindings.append("\(local): \(dependency.property.type) = \(arguments[index].dropFirst(dependency.property.label.count + 2))")
+				arguments[index] = "\(dependency.property.label): \(local)"
+			}
 		}
 		// A mocked type's generated `mock()` calls through to its hand-written mock, passing what that mock takes, so the
 		// mirror calls the same method.
@@ -1201,6 +1229,7 @@ extension GraphFuzzerMockMirrorModel {
 			name: name,
 			declarations: declarations,
 			construction: construction,
+			argumentBindings: argumentBindings,
 			shapes: shapes(of: mockRoot, mockedTypeName: typeName),
 		))
 	}
@@ -1438,6 +1467,37 @@ extension GraphFuzzerMockMirrorModel {
 		{
 			overrideCount += 1
 		}
+		// As `mockRootParameters`: an override too for each property a type of the tree instantiates only if available that
+		// nothing fulfills, outside every `@Sendable` builder function, but one of the label and type of a value `mock()`
+		// already takes. An optional instantiated property is instantiated only if available, since the macro rejects every
+		// other one.
+		var unavailableProperties = Set<GraphFuzzerMirrorProperty>()
+		var visitedTypes = Set<String>()
+		var typesToVisit = [(typeName: mockedTypeName, children: mockRoot.children, isInsideSendableFunction: false)]
+		while let visit = typesToVisit.popLast() {
+			guard visitedTypes.insert("\(visit.typeName) \(visit.isInsideSendableFunction)").inserted else { continue }
+			if !visit.isInsideSendableFunction {
+				let builtProperties = propertiesToGenerate(ofTypeNamed: visit.typeName).map(\.property)
+				for dependency in types[visit.typeName]?.dependencies ?? [] {
+					guard case .instantiated = dependency.source, dependency.property.isOptional, !builtProperties.contains(dependency.property) else { continue }
+					unavailableProperties.insert(dependency.property)
+				}
+			}
+			for case let .instantiated(property, scopeTypeName, _) in visit.children {
+				typesToVisit.append((
+					typeName: scopeTypeName,
+					children: propertiesToGenerate(ofTypeNamed: scopeTypeName),
+					isInsideSendableFunction: visit.isInsideSendableFunction || property.unwrapped.type.hasPrefix("Sendable"),
+				))
+			}
+		}
+		for property in unavailableProperties
+			where !receivedParameterProperties.contains(property)
+			&& !receivedParameterProperties.contains(property.unwrapped)
+			&& !isFulfilledByForwardedProperty(property)
+		{
+			overrideCount += 1
+		}
 		return overrideCount
 	}
 
@@ -1629,6 +1689,7 @@ struct GraphFuzzerValueOraclePlan {
 		self.fixture = fixture
 		self.storingFixture = storingFixture ?? GraphFuzzerGenerator.fixture(forSeed: fixture.seed, storingEveryParameter: true)
 		rootTypeNames = model.typeOrder.filter { model.types[$0]?.isRoot == true }
+		actorTypeNames = model.actorTypeNames
 		let mockFileSuffix = "+SafeDIMock.swift"
 		var mirrors = [GraphFuzzerMockMirror]()
 		var skips = [(typeName: String, skip: GraphFuzzerMirrorSkip)]()
@@ -1722,6 +1783,7 @@ struct GraphFuzzerValueOraclePlan {
 				knownRightExpression: "\(fixture.typeNamePrefix)\(Self.pinnedPlaceRootName)().pinHost.pinMiddle.pinScreen",
 			)
 			: nil
+		nestedCycleShape = NestedCycleShape(of: fixture)
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -1729,6 +1791,8 @@ struct GraphFuzzerValueOraclePlan {
 	let storingFixture: GraphFuzzerFixture
 	/// The graph's roots, in declaration order.
 	let rootTypeNames: [String]
+	/// The graph's `actor` types, which no override sentinel builds.
+	let actorTypeNames: Set<String>
 	/// The mock files the tool generated for the graph as drawn, by name, which the value-oracle run must generate alike
 	/// (R6).
 	let drawnMockFiles: [String: String]
@@ -1762,6 +1826,127 @@ struct GraphFuzzerValueOraclePlan {
 	/// production does, and the other the `PinToken` it builds. `nil` in every other graph.
 	let pinnedPlacePair: DifferentialValueProbePair?
 
+	/// In a graph that draws a type built again through a second lazy cycle (`addingTypeBuiltAgainThroughSecondLazyCycle`),
+	/// what the draw drew of `NestRoot`'s tree, read from the graph's source. `nil` in every other graph.
+	let nestedCycleShape: NestedCycleShape?
+
+	/// `NestRoot`'s production build against the same tree built by hand to the Manual's rule, a `@Received` property
+	/// takes the nearest declaration above it, by `ZNestMirror.build()`, which only the value-oracle fixture declares:
+	/// a mock of `NestRoot` and its production build pass a label through the functions lazy cycles close on by one rule,
+	/// so the root's own pair cannot tell a wrong rule from a right one. `nil` in every graph without the draw.
+	var nestedCyclePair: DifferentialValueProbePair? {
+		guard nestedCycleShape != nil else { return nil }
+		return DifferentialValueProbePair(
+			name: "\(fixture.typeNamePrefix)NestRoot() against a tree built by hand",
+			featureExpression: "\(fixture.typeNamePrefix)NestRoot()",
+			knownRightExpression: "\(fixture.typeNamePrefix)\(Self.nestedCycleMirrorName).build()",
+		)
+	}
+
+	/// The name, after the graph's prefix, of the type whose `build()` builds `NestRoot`'s tree by hand in the
+	/// value-oracle fixture of a graph with a `nestedCyclePair`. It sorts after every type name of the graph, as a
+	/// mirror's does.
+	static let nestedCycleMirrorName = "ZNestMirror"
+
+	/// What `addingTypeBuiltAgainThroughSecondLazyCycle` drew, read from a graph's source.
+	struct NestedCycleShape: Equatable {
+		/// `nil` for a graph without `NestRoot`.
+		init?(of fixture: GraphFuzzerFixture) {
+			let prefix = fixture.typeNamePrefix
+			var propertiesByTypeName = [String: [(label: String, type: String)]]()
+			var currentTypeName = ""
+			for line in fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentTypeName = name
+				case let .property(_, label, type):
+					propertiesByTypeName[currentTypeName, default: []].append((label, type))
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+			guard let rootProperties = propertiesByTypeName["\(prefix)NestRoot"],
+			      let innerProperties = propertiesByTypeName["\(prefix)NestInner"]
+			else { return nil }
+			closesFirstCycleFirst = innerProperties.first?.label == "nestOuterBuilder"
+			hasThirdCycle = propertiesByTypeName["\(prefix)NestThird"] != nil
+			receivesOnlyIfAvailable = !rootProperties.contains { $0.label == "nestLabel" }
+			isSendable = rootProperties.contains { $0.type.hasPrefix("SendableInstantiator<") }
+		}
+
+		/// `NestInner` declares the instantiator of `NestOuter`, which closes the first cycle, before the one that opens
+		/// the second.
+		let closesFirstCycleFirst: Bool
+		/// `NestThird` sits between `NestInner` and `NestRedeclarer`, which builds it again.
+		let hasThirdCycle: Bool
+		/// `NestReader` receives `nestLabel` only if available, and `NestRoot` declares none.
+		let receivesOnlyIfAvailable: Bool
+		/// Every instantiator of the tree is a `SendableInstantiator`.
+		let isSendable: Bool
+
+		/// The file of `ZNestMirror`, which names itself (`GraphFuzzerFixture.fileNameMarker`), as it declares no
+		/// `@Instantiable` type, and whose `build()` builds `NestRoot`'s tree by hand: each function takes the
+		/// `nestLabel` of the nearest `NestRedeclarer` above the type it builds, or `NestRoot`'s, and each `NestReader`
+		/// is handed it.
+		func mirrorSource(typeNamePrefix prefix: String) -> String {
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let function = isSendable ? "@Sendable func" : "func"
+			let labelType = "\(prefix)NestLabel" + (receivesOnlyIfAvailable ? "?" : "")
+			let outerBuilder = "nestOuterBuilder: \(instantiator)<\(prefix)NestOuter> { outer(nestLabel: nestLabel) }"
+			let secondCycleBuilder = hasThirdCycle
+				? "nestThirdBuilder: \(instantiator)<\(prefix)NestThird> { third(nestLabel: nestLabel) }"
+				: "nestRedeclarerBuilder: \(instantiator)<\(prefix)NestRedeclarer> { redeclarer() }"
+			var lines = [
+				"\(GraphFuzzerFixture.fileNameMarker)\(prefix)\(GraphFuzzerValueOraclePlan.nestedCycleMirrorName).swift",
+				"enum \(prefix)\(GraphFuzzerValueOraclePlan.nestedCycleMirrorName) {",
+				"\tstatic func build() -> \(prefix)NestRoot {",
+				"\t\t\(function) outer(nestLabel: \(labelType)) -> \(prefix)NestOuter {",
+				"\t\t\t\(prefix)NestOuter(",
+				"\t\t\t\tnestInnerBuilder: \(instantiator)<\(prefix)NestInner> { inner(nestLabel: nestLabel) },",
+				"\t\t\t\tnestReaderBuilder: \(instantiator)<\(prefix)NestReader> { \(prefix)NestReader(nestLabel: nestLabel) }",
+				"\t\t\t)",
+				"\t\t}",
+				"\t\t\(function) inner(nestLabel: \(labelType)) -> \(prefix)NestInner {",
+				"\t\t\t\(prefix)NestInner(",
+				"\t\t\t\t\(closesFirstCycleFirst ? outerBuilder : secondCycleBuilder),",
+				"\t\t\t\t\(closesFirstCycleFirst ? secondCycleBuilder : outerBuilder)",
+				"\t\t\t)",
+				"\t\t}",
+			]
+			if hasThirdCycle {
+				lines += [
+					"\t\t\(function) third(nestLabel: \(labelType)) -> \(prefix)NestThird {",
+					"\t\t\t\(prefix)NestThird(",
+					"\t\t\t\tnestRedeclarerBuilder: \(instantiator)<\(prefix)NestRedeclarer> { redeclarer() },",
+					"\t\t\t\tnestInnerBuilder: \(instantiator)<\(prefix)NestInner> { inner(nestLabel: nestLabel) }",
+					"\t\t\t)",
+					"\t\t}",
+				]
+			}
+			lines += [
+				"\t\t\(function) redeclarer() -> \(prefix)NestRedeclarer {",
+				"\t\t\tlet nestLabel = \(prefix)NestLabel()",
+				"\t\t\treturn \(prefix)NestRedeclarer(",
+				"\t\t\t\tnestLabel: nestLabel,",
+				hasThirdCycle
+					? "\t\t\t\tnestThirdBuilder: \(instantiator)<\(prefix)NestThird> { third(nestLabel: nestLabel) }"
+					: "\t\t\t\tnestInnerBuilder: \(instantiator)<\(prefix)NestInner> { inner(nestLabel: nestLabel) }",
+				"\t\t\t)",
+				"\t\t}",
+			]
+			if receivesOnlyIfAvailable {
+				lines.append("\t\treturn \(prefix)NestRoot(nestOuterBuilder: \(instantiator)<\(prefix)NestOuter> { outer(nestLabel: nil) })")
+			} else {
+				lines += [
+					"\t\tlet nestLabel = \(prefix)NestLabel()",
+					"\t\treturn \(prefix)NestRoot(nestLabel: nestLabel, nestOuterBuilder: \(instantiator)<\(prefix)NestOuter> { outer(nestLabel: nestLabel) })",
+				]
+			}
+			lines += ["\t}", "}"]
+			return lines.joined(separator: "\n") + "\n"
+		}
+	}
+
 	/// The name, after the graph's prefix, of the root that builds `PinHost` in the value-oracle fixture of a graph with
 	/// a `pinnedPlacePair`. It is no root of the graph, whose mock the value oracle would make: a root's mock rejects
 	/// `PinHost`'s tree by design. It sorts after every type name of the graph, as a mirror's does.
@@ -1782,6 +1967,9 @@ struct GraphFuzzerValueOraclePlan {
 		swiftFileContent += mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
 		if pinnedPlacePair != nil {
 			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp))
+		}
+		if let nestedCycleShape {
+			swiftFileContent.append(nestedCycleShape.mirrorSource(typeNamePrefix: fixture.typeNamePrefix))
 		}
 		if storingEveryParameter {
 			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
@@ -1807,13 +1995,16 @@ struct GraphFuzzerValueOraclePlan {
 	}
 
 	/// The pairs the oracle compares: each root's mock with its production build, then each mirrored mock with its
-	/// mirror's value, then `pinnedPlacePair`. Never a mirror itself, which builds the mocked type's dependencies the
+	/// mirror's value, then `pinnedPlacePair` and `nestedCyclePair`. Never a mirror itself, which builds the mocked type's dependencies the
 	/// mocked type does not hold.
 	var probePairs: [DifferentialValueProbePair] {
 		var pairs = rootTypeNames.map { DifferentialValueProbePair(name: "\($0).mock()", featureExpression: "\($0).mock()", knownRightExpression: "\($0)()") }
 		pairs += mirrors.map { DifferentialValueProbePair(name: "\($0.mockedTypeName).mock()", featureExpression: $0.featureExpression, knownRightExpression: $0.knownRightExpression) }
 		if let pinnedPlacePair {
 			pairs.append(pinnedPlacePair)
+		}
+		if let nestedCyclePair {
+			pairs.append(nestedCyclePair)
 		}
 		return pairs
 	}
@@ -2065,14 +2256,28 @@ extension GraphFuzzerMockOverrides {
 	/// `contents`, a generated mock file, as the corpus run and the value-oracle run of one graph both generate it: without
 	/// its configuration blocks (`removingConfigurations(from:)`), and reading a configuration's default-valued field as a
 	/// value where a configuration that is `@Sendable`-typed calls its `@Sendable` autoclosure
-	/// (`safeDIOverrides.ext.retryCount()`). A root's mock that builds a type inside a `Sendable` builder makes the type's
-	/// configuration `@Sendable`-typed for every mock, so a drawn mock reads the same default through the autoclosure, and a
-	/// drawn mock's `SafeDIOverrides` that holds that configuration keeps its fields in storage that is `Sendable`
+	/// (`safeDIOverrides.ext.retryCount()`), or through a local a `@Sendable` function's caller reads it into
+	/// (`let __safeDI_ext__ext_retryCount = safeDIOverrides.ext.retryCount`, then `__safeDI_ext__ext_retryCount()`; base
+	/// corpus seed 1029). A root's mock that builds a type inside a `Sendable` builder makes the type's configuration
+	/// `@Sendable`-typed for every mock, so a drawn mock reads the same default through the autoclosure, and a drawn mock's
+	/// `SafeDIOverrides` that holds that configuration keeps its fields in storage that is `Sendable`
 	/// (`ConfigurationStorage`), so the storage is read without its conformance.
 	static func comparableWithAnotherRunsMocks(_ contents: String) -> String {
-		removingConfigurations(from: contents)
+		var comparable = removingConfigurations(from: contents)
 			.replacingOccurrences(of: #"(safeDIOverrides(\.[A-Za-z0-9_]+)+)\(\)"#, with: "$1", options: .regularExpression)
 			.replacingOccurrences(of: "private final class __safeDI_Storage: Sendable {", with: "private final class __safeDI_Storage {")
+		for local in localsReadingOverrides(in: comparable) {
+			comparable = comparable.replacingOccurrences(of: #"\b\#(local)\(\)"#, with: local, options: .regularExpression)
+		}
+		return comparable
+	}
+
+	/// The names of the locals `contents` binds to a read of the mock's overrides (`let <name> = safeDIOverrides.<path>`).
+	private static func localsReadingOverrides(in contents: String) -> [String] {
+		guard let expression = try? NSRegularExpression(pattern: #"let ([A-Za-z0-9_]+) = safeDIOverrides(\.[A-Za-z0-9_]+)+\n"#) else { return [] }
+		return expression.matches(in: contents, range: NSRange(contents.startIndex..., in: contents)).compactMap { match in
+			Range(match.range(at: 1), in: contents).map { String(contents[$0]) }
+		}
 	}
 }
 
@@ -2102,6 +2307,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	/// The compared pairs of a mock of a type built twice with differing pins against production's build of it
 	/// (`GraphFuzzerValueOraclePlan.pinnedPlacePair`).
 	var pinnedPlacePairCount = 0
+	/// The compared pairs of a production build of a type built again through a second lazy cycle against the tree built
+	/// by hand (`GraphFuzzerValueOraclePlan.nestedCyclePair`).
+	var nestedCyclePairCount = 0
 
 	/// Counts the skips and the drawn mock files R6 normalizes of a graph the value oracle inspected and, when its
 	/// value-oracle graph was compared, its pairs and their shapes.
@@ -2135,6 +2343,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		if plan.pinnedPlacePair != nil {
 			pinnedPlacePairCount += 1
 		}
+		if plan.nestedCyclePair != nil {
+			nestedCyclePairCount += 1
+		}
 	}
 
 	/// The counts as one report field, `key=value` separated by commas, every key present: what
@@ -2155,6 +2366,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields.append("overridePairsSum=0x\(String(overridePairsSum.value, radix: 16, uppercase: true))")
 		fields += GraphFuzzerOverrideFieldKind.allCases.map { "override.\($0.rawValue)=\(overrideFieldKindCounts[$0, default: 0])" }
 		fields.append("pinnedPlacePairs=\(pinnedPlacePairCount)")
+		fields.append("nestedCyclePairs=\(nestedCyclePairCount)")
 		return fields.joined(separator: ",")
 	}
 

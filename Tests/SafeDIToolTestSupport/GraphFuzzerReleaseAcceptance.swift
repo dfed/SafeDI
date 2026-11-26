@@ -445,7 +445,7 @@ enum GraphFuzzerReleaseAcceptance {
 			for seed in seeds {
 				group.addTask {
 					var filesToDelete = [URL]()
-					let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features, storingEveryParameter: true)
+					let fixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features)
 					let olderRun = try await run(older, over: fixture, filesToDelete: &filesToDelete)
 					let currentRun = try await run(current, over: fixture, filesToDelete: &filesToDelete)
 					let classification = classify(older: olderRun, current: currentRun) { fixture.differentialValueProbes(generatedFiles: $0) }

@@ -37,14 +37,19 @@ extension AttributeListSyntax.Element {
 		attributeIfNameEquals(Dependency.Source.forwardedRawValue)
 	}
 
+	/// This attribute when it names SafeDI's macro `expectedName`, spelled alone (`@Instantiable`) or qualified by SafeDI's
+	/// module name (`@SafeDI.Instantiable`).
 	private func attributeIfNameEquals(_ expectedName: String) -> AttributeSyntax? {
-		if case let .attribute(attribute) = self,
-		   let identifier = IdentifierTypeSyntax(attribute.attributeName),
-		   identifier.name.text == expectedName
-		{
-			attribute
-		} else {
-			nil
-		}
+		guard case let .attribute(attribute) = self else { return nil }
+		let qualifiedName = MemberTypeSyntax(attribute.attributeName).flatMap { $0.baseType.namesSafeDIModule ? $0.name : nil }
+		let name = IdentifierTypeSyntax(attribute.attributeName)?.name ?? qualifiedName
+		return name?.text == expectedName ? attribute : nil
+	}
+}
+
+extension TypeSyntax {
+	/// Whether this type is the bare name of SafeDI's module, `SafeDI`, as it qualifies one of SafeDI's names.
+	var namesSafeDIModule: Bool {
+		IdentifierTypeSyntax(self).map { $0.genericArgumentClause == nil && $0.name.text == Dependency.safeDIModuleName } ?? false
 	}
 }

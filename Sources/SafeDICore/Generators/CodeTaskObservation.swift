@@ -18,62 +18,28 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A task on which the code of a dependency tree’s scopes starts generating as soon as the tree exists, rather than when
-/// the scope above each asks for it. A running task holds its code’s async frames, so starting every scope’s code at
-/// once ran the frames of most of a tree together; the tests count the tasks to check that only scopes of large
-/// subtrees start early, each on a task of its own, and the small subtrees directly beneath them in groups, one task
-/// each. Handed to `observer`, which the tests set, never the tool.
-public enum CodeTaskStart {
-	/// Called once for each task that starts scopes’ code early, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable () -> Void)?
-
-	/// Tells `observer`, when set, that a task started scopes’ code early.
-	static func record() {
-		if let observer {
-			observer()
-		}
-	}
-
-	/// Orders the early starts, when set: by the tests, never by the tool, which check that the order in which the
-	/// early starts finish never reaches what `generate` reports.
-	@TaskLocal public static var ordering: (any CodeTaskStartOrdering)?
-}
-
-/// Holds each early start until its turn, and the roots’ code until every early start has finished, so a test can
-/// force the order in which the early starts finish. Set as `CodeTaskStart.ordering` by the tests, never by the tool.
-public protocol CodeTaskStartOrdering: Sendable {
-	/// Called once for each scope whose code starts early, as it starts.
-	func registerStart()
-	/// Awaited by each early start before it generates its code; `finish` is called once it has.
-	func waitForTurn() async -> Int
-	/// Called once the early start that `waitForTurn` returned `turn` to has generated its code, or thrown.
-	func finish(_ turn: Int) async
-	/// Awaited before the roots’ code is asked for: lets each registered start take its turn, in the order the test
-	/// chooses, and returns once every one has finished.
-	func runEveryStart() async
-}
-
 /// The code tasks the generators of a root’s dependency tree still hold once its code is generated. A task keeps the
 /// memory its async frames took until it is released, so a generator that kept each finished task held that memory for
-/// every scope of the tree until the tree’s code was done. A scope that starts its code early starts it for the context
-/// of a root; where the scope above asks for another, the early task finishes on its own and releases itself, and the
-/// count includes it while it runs. Handed to `observer`, which the tests set, never the tool.
+/// every scope of the tree until the tree’s code was done. Handed to `observer`, which the tests set, never the tool.
 public enum HeldCodeTasks {
 	/// Called with the count for each root’s tree, in the order of the roots, once every root’s code is generated, when
 	/// set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
 }
 
-/// The children a production body plans at once, each on a task of its own
-/// (`ScopeGenerator.appendConcurrentChildCode(to:codeGeneration:leadingMemberWhitespace:fillPlaceBindings:)`): a root
-/// the type key lays out starts no code early, so its tree is planned in parallel this way. Each body's count is handed to `observer`, which the tests set,
-/// never the tool.
+/// The children a root's body plans at once, each on a task of its own
+/// (`ScopeGenerator.appendConcurrentChildCode(to:codeGeneration:leadingMemberWhitespace:fillPlaceBindings:)`), the one
+/// way a tree is planned in parallel. Each body's count is handed to `observer`, which the tests set, never the tool.
 public enum ConcurrentChildCode {
-	/// Whether the body being planned plans its children at once: set while a root of the dependency tree, whose tree
-	/// starts no code early, plans its children, and cleared for each of those children, whose bodies plan one child after
-	/// another. A seam's tree and a mock's, which start their large subtrees' code early, keep planning one child after
-	/// another.
+	/// Whether the body being planned plans its children at once: set while a root of the dependency tree, or a seam's
+	/// root in its own module where `seamRootsPlanChildrenAtOnce` holds, plans its children, and cleared for each of those
+	/// children, whose bodies plan one child after another. A mock's tree plans one child after another throughout.
 	@TaskLocal static var plansChildrenAtOnce = false
+
+	/// Whether a seam's root, planned in its own module, plans its children at once: set where the module plans no more
+	/// trees than `maximumChildrenAtOnce`, since each tree is planned on a task of its own and many trees already keep
+	/// every processor busy.
+	@TaskLocal static var seamRootsPlanChildrenAtOnce = false
 
 	/// The most children a body plans at once. Every plan in flight holds its own frames, so a bound per processor would
 	/// grow memory with the machine. Measured on E6d-600, E6d-600-inline and issue646-16, four in flight hold main's peak

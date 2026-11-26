@@ -146,10 +146,9 @@ struct SafeDIToolSeamTreeReuseTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reusesSeamsTreeStartingItsCodeEarly_whenTreeIsLarge() async throws {
-		// `Home`, a seam, instantiates seventy leaves and holds a place of `Api`: a tree of more scopes than
-		// `ScopeGeneratorUnderConstruction.scopeCountOfLargeSubtree`, whose root starts its own code and that of its small
-		// subtrees, in groups, as soon as it is made again.
+	mutating func generate_reusesSeamsTree_whenTreeIsLarge() async throws {
+		// `Home`, a seam, instantiates seventy leaves and holds a place of `Api`: a tree of many scopes, each made again
+		// beneath the final seam root.
 		let leafLabels = (1...70).map { "leaf\($0)" }
 		let reusedTree = try await reusedTree(
 			ofSeam: "Home",

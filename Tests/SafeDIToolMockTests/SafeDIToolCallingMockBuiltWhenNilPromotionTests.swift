@@ -176,7 +176,169 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		"""])
 	}
 
+	/// `Step`, in `Flow`, calls the public mocks of `Alpha` and `Beta`, which each build `clock` when passed `nil`. `Flow`
+	/// cannot construct `Meter`, `package` in another package, so `Step`'s mock takes `clock` and passes it on. `App`, in
+	/// `Meter`'s package, can construct it, so `Screen`'s mock builds one `Meter` and both mocks receive it, whether `App`
+	/// reads `Step`'s plan from `Flow`'s module info or computes it.
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsDependencyCalledMocksBuildWhenNilOnce_whenModuleBetweenCannotConstructItAndCallingModuleCan(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.clockChainModules, integration: integration, filesToDelete: &filesToDelete)
+
+		let generatedCode = try #require(output.modules["App"]?.generatedFiles.values.sorted().joined(separator: "\n"))
+		let guardComment = switch integration {
+		case .moduleInfo:
+			"compile the code SafeDI generates for module Flow into Flow: under Bazel, add Flow’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+		case .swiftPackagePlugin:
+			"add the SafeDI plugin to the target that declares Step."
+		}
+		#expect(Self.mockFunction(in: generatedCode) == """
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let clock: any Clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { Meter() }
+		        _ = Step.__safeDI_Step_mock_8588565361AFA7ED.self // If this line does not compile, \(guardComment)
+		        let step = Step.__safeDI_mock(clock: clock, safeDIOverrides: safeDIOverrides.step)
+		        return Screen(step: step)
+		    }
+		""")
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsBothCalledMocksCallingModulesOneFake_whenModuleBetweenCannotConstructWhatTheyBuildWhenNil(integration: MultiModuleIntegration) async throws {
+		let modules = Self.clockChainModules.map { module in
+			guard module.name == "App" else { return module }
+			var files = module.swiftFileContentByFilePath
+			files["FakeClock.swift"] = """
+			import Core
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [Clock.self], mockOnly: true)
+			public final class FakeClock: Clock, Instantiable {
+			    public init() {}
+
+			    public static func mock() -> FakeClock {
+			        FakeClock()
+			    }
+			}
+			"""
+			return ModuleFixture(name: module.name, packageName: module.packageName, swiftFileContentByFilePath: files, dependencies: module.dependencies, activeCompilationConditions: module.activeCompilationConditions)
+		}
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
+
+		let generatedCode = try #require(output.modules["App"]?.generatedFiles.values.sorted().joined(separator: "\n"))
+		let guardComment = switch integration {
+		case .moduleInfo:
+			"compile the code SafeDI generates for module Flow into Flow: under Bazel, add Flow’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+		case .swiftPackagePlugin:
+			"add the SafeDI plugin to the target that declares Step."
+		}
+		#expect(Self.mockFunction(in: generatedCode) == """
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let clock: any Clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { FakeClock.mock() }
+		        _ = Step.__safeDI_Step_mock_8588565361AFA7ED.self // If this line does not compile, \(guardComment)
+		        let step = Step.__safeDI_mock(clock: clock, safeDIOverrides: safeDIOverrides.step)
+		        return Screen(step: step)
+		    }
+		""")
+
+		// The values: one module that declares every type and mocks each internally builds one `FakeClock` for both.
+		let moduleNames = modules.map(\.name)
+		var inlineFiles = [String: String]()
+		for module in modules {
+			for (fileName, content) in module.swiftFileContentByFilePath {
+				inlineFiles["\(module.name)_\(fileName)"] = content
+					.split(separator: "\n", omittingEmptySubsequences: false)
+					.filter { line in !moduleNames.contains { line == "import \($0)" } }
+					.joined(separator: "\n")
+					.replacingOccurrences(of: "generateMock: .public", with: "generateMock: true")
+			}
+		}
+		let inlineModules = [ModuleFixture(name: "App", packageName: "shop", swiftFileContentByFilePath: inlineFiles, activeCompilationConditions: ["DEBUG"])]
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		func path(of modules: [ModuleFixture], output: MultiModuleTestOutput) throws -> DifferentialValuePath {
+			try DifferentialValuePath(modules: modules.map { module in
+				try DifferentialValueModule(
+					name: module.name,
+					packageName: module.packageName,
+					dependencyModuleNames: module.dependencies,
+					fixtureFiles: module.swiftFileContentByFilePath,
+					generatedFiles: #require(output.modules[module.name]).generatedFiles,
+				)
+			})
+		}
+		try await expectDifferentialValuesAgree(
+			feature: path(of: modules, output: output),
+			knownRight: path(of: inlineModules, output: inlineOutput),
+			probes: [DifferentialValueProbe("Screen.mock()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	private static let clockChainModules = [
+		ModuleFixture(name: "Core", packageName: "shop", swiftFileContentByFilePath: ["CoreTypes.swift": """
+		import SafeDI
+
+		public protocol Clock: AnyObject {}
+
+		@Instantiable(fulfillingAdditionalTypes: [Clock.self])
+		package final class Meter: Clock, Instantiable {
+		    package init() {}
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Alpha: Instantiable {
+		    init(clock: any Clock) { self.clock = clock }
+		    @Received public let clock: any Clock
+		}
+
+		@Instantiable(generateMock: .public)
+		public struct Beta: Instantiable {
+		    init(clock: any Clock) { self.clock = clock }
+		    @Received public let clock: any Clock
+		}
+		"""], activeCompilationConditions: ["DEBUG"]),
+		ModuleFixture(name: "Flow", packageName: "flow", swiftFileContentByFilePath: ["FlowTypes.swift": """
+		import Core
+		import SafeDI
+
+		@Instantiable(generateMock: .public)
+		public struct Step: Instantiable {
+		    init(alpha: Alpha, beta: Beta) {
+		        self.alpha = alpha
+		        self.beta = beta
+		    }
+
+		    @Instantiated public let alpha: Alpha
+		    @Instantiated public let beta: Beta
+		}
+		"""], dependencies: ["Core"], activeCompilationConditions: ["DEBUG"]),
+		ModuleFixture(name: "App", packageName: "shop", swiftFileContentByFilePath: ["AppTypes.swift": """
+		import Core
+		import Flow
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(step: Step) { self.step = step }
+		    @Instantiated public let step: Step
+		}
+		"""], dependencies: ["Core", "Flow"], activeCompilationConditions: ["DEBUG"]),
+	]
+
+	/// `mock()` of the one mock `generatedCode` declares, from its declaration to the brace that closes it.
+	private static func mockFunction(in generatedCode: String) -> String {
+		let lines = generatedCode.components(separatedBy: "\n")
+		guard let start = lines.firstIndex(where: { $0.hasPrefix("    static func mock(") }),
+		      let end = lines[start...].firstIndex(of: "    }")
+		else { return generatedCode }
+		return lines[start...end].joined(separator: "\n")
+	}
 }

@@ -68,6 +68,47 @@ struct TypeDescriptionTests {
 	}
 
 	@Test(arguments: [
+		("SafeDI.Instantiator<Screen>", "Instantiator<Screen>"),
+		("SafeDI.ErasedInstantiator<User, Screen>", "ErasedInstantiator<User, Screen>"),
+		("SafeDI.SendableInstantiator<Screen>", "SendableInstantiator<Screen>"),
+		("SafeDI.SendableErasedInstantiator<User, Screen>", "SendableErasedInstantiator<User, Screen>"),
+		("SafeDI.LazilyInstantiated<Screen>", "LazilyInstantiated<Screen>"),
+		("SafeDI.SendableLazilyInstantiated<Screen>", "SendableLazilyInstantiated<Screen>"),
+		("SafeDI.Instantiator<Screen>.Builder", "Instantiator<Screen>.Builder"),
+		("SafeDI.Instantiator<Screen>?", "Instantiator<Screen>?"),
+	])
+	func typeDescription_isBareWrapper_whenWrapperIsQualifiedBySafeDI(source: String, bare: String) {
+		#expect(Self.parsedType(source) == Self.parsedType(bare))
+	}
+
+	@Test(arguments: ["Kit.Instantiator<Screen>", "SafeDI.Screen", "SafeDI<Int>.Instantiator<Screen>", "Kit.SafeDI.Instantiator<Screen>", "[Int].Instantiator<Screen>"])
+	func typeDescription_isNested_whenMemberIsNoWrapperQualifiedBySafeDIAlone(source: String) {
+		guard case .nested = Self.parsedType(source) else {
+			Issue.record("\(source) is not read as a nested type")
+			return
+		}
+	}
+
+	@Test(arguments: [
+		("SafeDI.Instantiator<Screen>.self", "Instantiator<Screen>"),
+		("SafeDI.ErasedInstantiator<User, Screen>.self", "ErasedInstantiator<User, Screen>"),
+		("SafeDI.LazilyInstantiated.self", "LazilyInstantiated"),
+	])
+	func typeDescription_ofExpression_isBareWrapper_whenWrapperIsQualifiedBySafeDI(source: String, bare: String) {
+		var parser = Parser(source)
+		#expect(ExprSyntax.parse(from: &parser).typeDescription == Self.parsedType(bare))
+	}
+
+	@Test(arguments: ["Kit.Instantiator<Screen>.self", "Kit.LazilyInstantiated.self"])
+	func typeDescription_ofExpression_isNested_whenWrapperIsQualifiedByAnotherName(source: String) {
+		var parser = Parser(source)
+		guard case .nested = ExprSyntax.parse(from: &parser).typeDescription else {
+			Issue.record("\(source) is not read as a nested type")
+			return
+		}
+	}
+
+	@Test(arguments: [
 		("Void", "Void"),
 		("()", "()"),
 		("Swift.Int", "_._"),

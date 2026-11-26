@@ -87,14 +87,14 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi()
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_59C182C3751C58E0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi()
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -165,13 +165,15 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        let navigator = Navigator()
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(navigator, logger)
+		        func __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_ApiCarrier_Leaf<any Api>) -> Leaf {
+		            let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
+		            return Leaf(api: api)
+		        }
 		        func __safeDI_detailBuilder() -> Detail {
 		            let __safeDI_apiBuilder_leafBuilder = __safeDI_apiBuilder_detailBuilder.leafBuilder
-		            func __safeDI_leafBuilder() -> Leaf {
-		                let api: any Api = __safeDI_apiBuilder_leafBuilder.api()
-		                return Leaf(api: api)
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(__safeDI_apiBuilder_leafBuilder: __safeDI_apiBuilder_leafBuilder)
 		            }
-		            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 		            return Detail(leafBuilder: leafBuilder)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -190,20 +192,20 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(detailBuilder: { values_navigator, values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger) })
+		        }
+		        func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(leafBuilder: __safeDI_apiBuilder_Home_Leaf_Scope(logger: logger))
+		        }
+		        func __safeDI_apiBuilder_Home_Leaf_Scope(logger: Logger) -> Home.__safeDI_ApiCarrier_Leaf<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi(logger: logger)
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_74C2C250104CF6FF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(detailBuilder: { values_navigator, values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger) })
-		            }
-		            func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(leafBuilder: __safeDI_apiBuilder_Home_Leaf_Scope(logger: logger))
-		            }
-		            func __safeDI_apiBuilder_Home_Leaf_Scope(logger: Logger) -> Home.__safeDI_ApiCarrier_Leaf<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi(logger: logger)
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -279,15 +281,15 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
+		        @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_workerBuilder() -> Worker {
 		            let __safeDI_apiSendableBuilder_workerBuilder = __safeDI_apiSendableBuilder.workerBuilder()
 		            let logger = Logger()
 		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_workerBuilder.detail(logger)
-		            func __safeDI_detail() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                return Detail(api: api)
-		            }
-		            let detail: Detail = __safeDI_detail()
+		            let detail: Detail = __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
 		            return Worker(logger: logger, detail: detail)
 		        }
 		        let workerBuilder = SendableInstantiator<Worker>(__safeDI_workerBuilder)
@@ -306,20 +308,20 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
+		            .init(workerBuilder: { __safeDI_apiBuilder_Home_Worker_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Worker_Scope() -> Home.__safeDI_ApiCarrier_Worker<any Api> {
+		            .init(detail: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger) })
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi(logger: logger)
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_73325E56E192F598.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
-		                .init(workerBuilder: { __safeDI_apiBuilder_Home_Worker_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Worker_Scope() -> Home.__safeDI_ApiCarrier_Worker<any Api> {
-		                .init(detail: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger) })
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi(logger: logger)
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -396,19 +398,21 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
+		        @Sendable nonisolated func __safeDI_innerBuilder(__safeDI_apiSendableBuilder_outerBuilder_Sendable: __safeDI_ApiSendableCarrier_Outer<any Api>) -> Inner {
+		            let __safeDI_apiSendableBuilder_innerBuilder = __safeDI_apiSendableBuilder_outerBuilder_Sendable.innerBuilder()
+		            let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_innerBuilder.detail
+		            let detail: Detail = __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_apiSendableBuilder_detail)
+		            return Inner(detail: detail)
+		        }
+		        @Sendable nonisolated func __safeDI_detail(__safeDI_apiSendableBuilder_detail: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detail.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_outerBuilder() -> Outer {
 		            let __safeDI_apiSendableBuilder_outerBuilder_Sendable = __safeDI_apiSendableBuilder.outerBuilder_Sendable
-		            @Sendable nonisolated func __safeDI_innerBuilder() -> Inner {
-		                let __safeDI_apiSendableBuilder_innerBuilder = __safeDI_apiSendableBuilder_outerBuilder_Sendable.innerBuilder()
-		                let __safeDI_apiSendableBuilder_detail = __safeDI_apiSendableBuilder_innerBuilder.detail
-		                func __safeDI_detail() -> Detail {
-		                    let api: any Api = __safeDI_apiSendableBuilder_detail.api()
-		                    return Detail(api: api)
-		                }
-		                let detail: Detail = __safeDI_detail()
-		                return Inner(detail: detail)
+		            let innerBuilder = SendableInstantiator<Inner> {
+		                __safeDI_innerBuilder(__safeDI_apiSendableBuilder_outerBuilder_Sendable: __safeDI_apiSendableBuilder_outerBuilder_Sendable)
 		            }
-		            let innerBuilder = SendableInstantiator<Inner>(__safeDI_innerBuilder)
 		            return Outer(innerBuilder: innerBuilder)
 		        }
 		        let outerBuilder = SendableInstantiator<Outer>(__safeDI_outerBuilder)
@@ -427,23 +431,23 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
+		            .init(outerBuilder_Sendable: __safeDI_apiSendableBuilder_Home_Outer_Scope())
+		        }
+		        @Sendable nonisolated func __safeDI_apiSendableBuilder_Home_Outer_Scope() -> Home.__safeDI_ApiSendableCarrier_Outer<any Api> {
+		            .init(innerBuilder: { __safeDI_apiBuilder_Home_Inner_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Inner_Scope() -> Home.__safeDI_ApiCarrier_Inner<any Api> {
+		            .init(detail: __safeDI_apiBuilder_Home_Detail_Scope())
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope() -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi()
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_0C122015F6A26564.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
-		                .init(outerBuilder_Sendable: __safeDI_apiSendableBuilder_Home_Outer_Scope())
-		            }
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home_Outer_Scope() -> Home.__safeDI_ApiSendableCarrier_Outer<any Api> {
-		                .init(innerBuilder: { __safeDI_apiBuilder_Home_Inner_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Inner_Scope() -> Home.__safeDI_ApiCarrier_Inner<any Api> {
-		                .init(detail: __safeDI_apiBuilder_Home_Detail_Scope())
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope() -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi()
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -546,20 +550,20 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(innermost: __safeDI_serviceBuilder_Innermost())
+		        }
+		        func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
+		            .init(detailBuilder: { values_logger in __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: values_logger) })
+		        }
+		        func __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: Logger) -> Innermost.__safeDI_ServiceCarrier_Detail<any Service> {
+		            .init(service: {
+		                let service: any Service = DefaultService(logger: logger)
+		                return service
+		            })
+		        }
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_6B37CE7AAF7A1362.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(innermost: __safeDI_serviceBuilder_Innermost())
-		            }
-		            func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
-		                .init(detailBuilder: { values_logger in __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: values_logger) })
-		            }
-		            func __safeDI_serviceBuilder_Innermost_Detail_Scope(logger: Logger) -> Innermost.__safeDI_ServiceCarrier_Detail<any Service> {
-		                .init(service: {
-		                    let service: any Service = DefaultService(logger: logger)
-		                    return service
-		                })
-		            }
 		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
 		        }
 		        let inner: Inner = __safeDI_inner()
@@ -729,27 +733,27 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Shell() -> Shell.__safeDI_ApiCarrier<any Api> {
+		            .init(hub: __safeDI_apiBuilder_Hub())
+		        }
+		        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+		            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() })
+		        }
+		        func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
+		            .init(
+		                cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
+		                api: { scope_mark, scope_reader, scope_cBuilder in
+		                    let mark = scope_mark
+		                    let api: any Api = LiveApi(mark: mark)
+		                    return api
+		                }
+		            )
+		        }
+		        func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+		            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
+		        }
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_E29A93ED17334408.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Shell() -> Shell.__safeDI_ApiCarrier<any Api> {
-		                .init(hub: __safeDI_apiBuilder_Hub())
-		            }
-		            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-		                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() })
-		            }
-		            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
-		                .init(
-		                    cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
-		                    api: { scope_mark, scope_reader, scope_cBuilder in
-		                        let mark = scope_mark
-		                        let api: any Api = LiveApi(mark: mark)
-		                        return api
-		                    }
-		                )
-		            }
-		            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
-		                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
-		            }
 		            return Shell(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Shell())
 		        }
 		        let shell: Shell = __safeDI_shell()
@@ -811,7 +815,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
+		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -825,7 +829,7 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -931,22 +935,22 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: Int?, tag: Tag) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
+		            .init(gadget: { _ in
+		                let gadget: any Gadget = LiveGadget(tag: tag, id: id)
+		                return gadget
+		            })
+		        }
+		        func __safeDI_gadgetBuilder_Outer_Inner(id: Int?, tag: Tag) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(screenBuilder: __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: tag), service: { values_screenBuilder in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: id, tag: tag) })
+		        }
+		        func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: Tag) -> Inner.__safeDI_ServiceCarrier_Screen<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+		            .init(service: { values_id in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: values_id, tag: tag) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_3FF816B8F02AA356.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
 		                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(id: nil, tag: values.tag) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: Int?, tag: Tag) -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
-		                .init(gadget: { _ in
-		                    let gadget: any Gadget = LiveGadget(tag: tag, id: id)
-		                    return gadget
-		                })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner(id: Int?, tag: Tag) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(screenBuilder: __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: tag), service: { values_screenBuilder in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: id, tag: tag) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner_Screen_Scope(tag: Tag) -> Inner.__safeDI_ServiceCarrier_Screen<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-		                .init(service: { values_id in __safeDI_gadgetBuilder_Outer_DefaultService_Scope(id: values_id, tag: tag) })
 		            }
 		            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 		        }
@@ -1032,17 +1036,17 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(builder: __safeDI_apiBuilder_Home_Part_Scope())
+		        }
+		        func __safeDI_apiBuilder_Home_Part_Scope() -> Home.__safeDI_ApiCarrier_Part<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi()
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_D9E21EF59D1896E5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(builder: __safeDI_apiBuilder_Home_Part_Scope())
-		            }
-		            func __safeDI_apiBuilder_Home_Part_Scope() -> Home.__safeDI_ApiCarrier_Part<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi()
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -1110,6 +1114,12 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi()
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_D6805EB8C483DFEA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_livePanel_PanelBuilder_Home_panelBuilder() -> ErasedInstantiator<String, any Panel>.Builder {
@@ -1117,12 +1127,6 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		                    LivePanel(title: title)
 		                }
 		                return { forwarded in __safeDI_panelBuilder(title: forwarded) }
-		            }
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi()
-		                    return api
-		                })
 		            }
 		            func __safeDI_livePanel_PanelBuilder_Home() -> Home.__safeDI_LivePanel_PanelCarrier<any Panel> {
 		                .init(panelBuilder: { values_api in __safeDI_livePanel_PanelBuilder_Home_panelBuilder() })
@@ -1203,17 +1207,17 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(detail: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger) })
+		        }
+		        func __safeDI_apiBuilder_Home_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi(logger: logger.instance)
+		                return api
+		            })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_E40E910FA85D3F21.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(detail: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger) })
-		            }
-		            func __safeDI_apiBuilder_Home_Detail_Scope(logger: LazilyInstantiated<Logger>) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi(logger: logger.instance)
-		                    return api
-		                })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -1295,15 +1299,17 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder
+		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        func __safeDI_aBuilder() -> A {
 		            let logger = Logger()
 		            let tag = Tag()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_aBuilder.detailBuilder(logger, tag)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return A(logger: logger, tag: tag, detailBuilder: detailBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
@@ -1311,11 +1317,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		        func __safeDI_bBuilder() -> B {
 		            let logger = Logger()
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_bBuilder.detailBuilder(logger)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return B(logger: logger, detailBuilder: detailBuilder)
 		        }
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
@@ -1334,22 +1338,22 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
+		            .init(detailBuilder: { values_logger, values_tag in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: values_tag) })
+		        }
+		        func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger, tag: Tag?) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = LiveApi(logger: logger, tag: tag)
+		                return api
+		            })
+		        }
+		        func __safeDI_apiBuilder_Home_B_Scope(tag: Tag?) -> Home.__safeDI_ApiCarrier_B<any Api> {
+		            .init(detailBuilder: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: tag) })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_06E948B543409F8C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
 		                .init(aBuilder: __safeDI_apiBuilder_Home_A_Scope(), bBuilder: { values_aBuilder in __safeDI_apiBuilder_Home_B_Scope(tag: nil) })
-		            }
-		            func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
-		                .init(detailBuilder: { values_logger, values_tag in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: values_tag) })
-		            }
-		            func __safeDI_apiBuilder_Home_Detail_Scope(logger: Logger, tag: Tag?) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
-		                    let api: any Api = LiveApi(logger: logger, tag: tag)
-		                    return api
-		                })
-		            }
-		            func __safeDI_apiBuilder_Home_B_Scope(tag: Tag?) -> Home.__safeDI_ApiCarrier_B<any Api> {
-		                .init(detailBuilder: { values_logger in __safeDI_apiBuilder_Home_Detail_Scope(logger: values_logger, tag: tag) })
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
@@ -1409,18 +1413,18 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>) -> Screen {
+		            let api: any Api = __safeDI_apiBuilder_next.api(id)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
+		            }
+		            return Screen(id: id, api: api, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id)
 		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_screenBuilder.next(id, api)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let api: any Api = __safeDI_apiBuilder_next.api(id)
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, api: api, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_apiBuilder_next: __safeDI_apiBuilder_next)
 		            }
 		            return Screen(id: id, api: api, next: next)
 		        }
@@ -1442,21 +1446,21 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
+		        }
+		        func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
+		            .init(
+		                api: { scope_id in
+		                    let id = scope_id
+		                    let api: any Api = Live(id: id)
+		                    return api
+		                },
+		                next: { values_id, values_api in __safeDI_apiBuilder_Home_Screen_Scope() }
+		            )
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_76AC111056905E55.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
-		            }
-		            func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(
-		                    api: { scope_id in
-		                        let id = scope_id
-		                        let api: any Api = Live(id: id)
-		                        return api
-		                    },
-		                    next: { values_id, values_api in __safeDI_apiBuilder_Home_Screen_Scope() }
-		                )
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -1558,24 +1562,30 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Step {
+		            let mark = Mark()
+		            let api: any Api = __safeDI_apiBuilder_stepBuilder.api(mark)
+		            let __safeDI_apiBuilder_next = __safeDI_apiBuilder_stepBuilder.next(mark, api)
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(__safeDI_apiBuilder_next: __safeDI_apiBuilder_next, __safeDI_apiBuilder_stepBuilder: __safeDI_apiBuilder_stepBuilder)
+		            }
+		            return Step(api: api, mark: mark, next: next)
+		        }
+		        func __safeDI_next(__safeDI_apiBuilder_next: __safeDI_ApiCarrier_Screen<any Api>, __safeDI_apiBuilder_stepBuilder: __safeDI_ApiCarrier_Step<any Api>) -> Screen {
+		            let cache = Cache()
+		            let monitor: any Api = __safeDI_apiBuilder_next.monitor(cache)
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_apiBuilder_stepBuilder)
+		            }
+		            return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
+		        }
 		        func __safeDI_screenBuilder() -> Screen {
 		            let cache = Cache()
 		            let monitor: any Api = __safeDI_apiBuilder_screenBuilder.monitor(cache)
 		            let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder_screenBuilder.stepBuilder(cache, monitor)
-		            func __safeDI_stepBuilder() -> Step {
-		                let mark = Mark()
-		                let api: any Api = __safeDI_apiBuilder_stepBuilder.api(mark)
-		                let __safeDI_apiBuilder_next = __safeDI_apiBuilder_stepBuilder.next(mark, api)
-		                func __safeDI_next() -> Screen {
-		                    let cache = Cache()
-		                    let monitor: any Api = __safeDI_apiBuilder_next.monitor(cache)
-		                    let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		                    return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
-		                }
-		                let next = Instantiator<Screen>(__safeDI_next)
-		                return Step(api: api, mark: mark, next: next)
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_apiBuilder_stepBuilder: __safeDI_apiBuilder_stepBuilder)
 		            }
-		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(cache: cache, monitor: monitor, stepBuilder: stepBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
@@ -1594,29 +1604,29 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Home_Screen_Scope(mark: Mark?) -> Home.__safeDI_ApiCarrier_Screen<any Api> {
+		            .init(
+		                monitor: { scope_cache in
+		                    let monitor: any Api = Live(mark: mark)
+		                    return monitor
+		                },
+		                stepBuilder: { values_cache, values_monitor in __safeDI_apiBuilder_Home_Step_Scope() }
+		            )
+		        }
+		        func __safeDI_apiBuilder_Home_Step_Scope() -> Home.__safeDI_ApiCarrier_Step<any Api> {
+		            .init(
+		                api: { scope_mark in
+		                    let mark = scope_mark
+		                    let api: any Api = Live(mark: mark)
+		                    return api
+		                },
+		                next: { values_mark, values_api in __safeDI_apiBuilder_Home_Screen_Scope(mark: values_mark) }
+		            )
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_0BA0C1690AADBEE1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
 		                .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope(mark: nil))
-		            }
-		            func __safeDI_apiBuilder_Home_Screen_Scope(mark: Mark?) -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(
-		                    monitor: { scope_cache in
-		                        let monitor: any Api = Live(mark: mark)
-		                        return monitor
-		                    },
-		                    stepBuilder: { values_cache, values_monitor in __safeDI_apiBuilder_Home_Step_Scope() }
-		                )
-		            }
-		            func __safeDI_apiBuilder_Home_Step_Scope() -> Home.__safeDI_ApiCarrier_Step<any Api> {
-		                .init(
-		                    api: { scope_mark in
-		                        let mark = scope_mark
-		                        let api: any Api = Live(mark: mark)
-		                        return api
-		                    },
-		                    next: { values_mark, values_api in __safeDI_apiBuilder_Home_Screen_Scope(mark: values_mark) }
-		                )
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
@@ -1861,14 +1871,16 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		    public convenience init(__safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let tag = Tag()
 		        let __safeDI_serviceBuilder_child = __safeDI_serviceBuilder.child(tag)
+		        func __safeDI_child_(__safeDI_serviceBuilder_child_: __safeDI_ServiceCarrier_Y<any Service>) -> Y {
+		            let service: any Service = __safeDI_serviceBuilder_child_.service()
+		            return Y(service: service)
+		        }
 		        func __safeDI_child() -> X {
 		            let logger = Logger()
 		            let __safeDI_serviceBuilder_child_ = __safeDI_serviceBuilder_child.child(logger)
-		            func __safeDI_child() -> Y {
-		                let service: any Service = __safeDI_serviceBuilder_child_.service()
-		                return Y(service: service)
+		            let child = Instantiator<Y> {
+		                __safeDI_child_(__safeDI_serviceBuilder_child_: __safeDI_serviceBuilder_child_)
 		            }
-		            let child = Instantiator<Y>(__safeDI_child)
 		            return X(logger: logger, child: child)
 		        }
 		        let child = Instantiator<X>(__safeDI_child)
@@ -1887,23 +1899,23 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(innermost: __safeDI_serviceBuilder_Innermost())
+		        }
+		        func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
+		            .init(child: { values_tag in __safeDI_serviceBuilder_Innermost_X_Scope(tag: values_tag) })
+		        }
+		        func __safeDI_serviceBuilder_Innermost_X_Scope(tag: Tag) -> Innermost.__safeDI_ServiceCarrier_X<any Service> {
+		            .init(child: { values_logger in __safeDI_serviceBuilder_Innermost_Y_Scope(logger: values_logger, tag: tag) })
+		        }
+		        func __safeDI_serviceBuilder_Innermost_Y_Scope(logger: Logger, tag: Tag) -> Innermost.__safeDI_ServiceCarrier_Y<any Service> {
+		            .init(service: {
+		                let service: any Service = DefaultService(tag: tag, logger: logger)
+		                return service
+		            })
+		        }
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_479DA0C117074FF9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(innermost: __safeDI_serviceBuilder_Innermost())
-		            }
-		            func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
-		                .init(child: { values_tag in __safeDI_serviceBuilder_Innermost_X_Scope(tag: values_tag) })
-		            }
-		            func __safeDI_serviceBuilder_Innermost_X_Scope(tag: Tag) -> Innermost.__safeDI_ServiceCarrier_X<any Service> {
-		                .init(child: { values_logger in __safeDI_serviceBuilder_Innermost_Y_Scope(logger: values_logger, tag: tag) })
-		            }
-		            func __safeDI_serviceBuilder_Innermost_Y_Scope(logger: Logger, tag: Tag) -> Innermost.__safeDI_ServiceCarrier_Y<any Service> {
-		                .init(service: {
-		                    let service: any Service = DefaultService(tag: tag, logger: logger)
-		                    return service
-		                })
-		            }
 		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
 		        }
 		        let inner: Inner = __safeDI_inner()
@@ -1987,18 +1999,18 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
+		            .init(innermost: __safeDI_serviceBuilder_Innermost())
+		        }
+		        func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
+		            .init(`my leaf`: { scope_logger in
+		                let logger = scope_logger
+		                let `my leaf`: any Service = DefaultService(logger: logger)
+		                return `my leaf`
+		            })
+		        }
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_F7306DD1F42AB631.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_serviceBuilder_Inner() -> Inner.__safeDI_ServiceCarrier<any Service> {
-		                .init(innermost: __safeDI_serviceBuilder_Innermost())
-		            }
-		            func __safeDI_serviceBuilder_Innermost() -> Innermost.__safeDI_ServiceCarrier<any Service> {
-		                .init(`my leaf`: { scope_logger in
-		                    let logger = scope_logger
-		                    let `my leaf`: any Service = DefaultService(logger: logger)
-		                    return `my leaf`
-		                })
-		            }
 		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
 		        }
 		        let inner: Inner = __safeDI_inner()
@@ -2151,27 +2163,27 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Shell() -> Shell.__safeDI_ApiCarrier<any Api> {
+		            .init(hub: __safeDI_apiBuilder_Hub())
+		        }
+		        func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+		            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() })
+		        }
+		        func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
+		            .init(
+		                cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
+		                `my leaf`: { scope_mark, scope_reader, scope_cBuilder in
+		                    let mark = scope_mark
+		                    let `my leaf`: any Api = LiveApi(mark: mark)
+		                    return `my leaf`
+		                }
+		            )
+		        }
+		        func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
+		            .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
+		        }
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F5CADF3967808332.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Shell() -> Shell.__safeDI_ApiCarrier<any Api> {
-		                .init(hub: __safeDI_apiBuilder_Hub())
-		            }
-		            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
-		                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() }, cBuilder: { values_mark, values_tBuilder in __safeDI_apiBuilder_Hub_C_Scope() })
-		            }
-		            func __safeDI_apiBuilder_Hub_T_Scope() -> Hub.__safeDI_ApiCarrier_T<any Api> {
-		                .init(
-		                    cBuilder: { values_mark, values_reader in __safeDI_apiBuilder_Hub_C_Scope() },
-		                    `my leaf`: { scope_mark, scope_reader, scope_cBuilder in
-		                        let mark = scope_mark
-		                        let `my leaf`: any Api = LiveApi(mark: mark)
-		                        return `my leaf`
-		                    }
-		                )
-		            }
-		            func __safeDI_apiBuilder_Hub_C_Scope() -> Hub.__safeDI_ApiCarrier_C<any Api> {
-		                .init(tBuilder: { values_mark in __safeDI_apiBuilder_Hub_T_Scope() })
-		            }
 		            return Shell(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Shell())
 		        }
 		        let shell: Shell = __safeDI_shell()
@@ -2324,27 +2336,27 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Shell() -> Shell.__safeDI_ApiCarrier<any Api> {
+		            .init(hub: `__safeDI_apiBuilder_My Hub`())
+		        }
+		        func `__safeDI_apiBuilder_My Hub`() -> `My Hub`.__safeDI_ApiCarrier<any Api> {
+		            .init(tBuilder: { values_mark in `__safeDI_apiBuilder_My Hub_T_Scope`() }, cBuilder: { values_mark, values_tBuilder in `__safeDI_apiBuilder_My Hub_C_Scope`() })
+		        }
+		        func `__safeDI_apiBuilder_My Hub_T_Scope`() -> `My Hub`.__safeDI_ApiCarrier_T<any Api> {
+		            .init(
+		                cBuilder: { values_mark, values_reader in `__safeDI_apiBuilder_My Hub_C_Scope`() },
+		                api: { scope_mark, scope_reader, scope_cBuilder in
+		                    let mark = scope_mark
+		                    let api: any Api = LiveApi(mark: mark)
+		                    return api
+		                }
+		            )
+		        }
+		        func `__safeDI_apiBuilder_My Hub_C_Scope`() -> `My Hub`.__safeDI_ApiCarrier_C<any Api> {
+		            .init(tBuilder: { values_mark in `__safeDI_apiBuilder_My Hub_T_Scope`() })
+		        }
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F1889E3A79BA09C0.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Shell() -> Shell.__safeDI_ApiCarrier<any Api> {
-		                .init(hub: `__safeDI_apiBuilder_My Hub`())
-		            }
-		            func `__safeDI_apiBuilder_My Hub`() -> `My Hub`.__safeDI_ApiCarrier<any Api> {
-		                .init(tBuilder: { values_mark in `__safeDI_apiBuilder_My Hub_T_Scope`() }, cBuilder: { values_mark, values_tBuilder in `__safeDI_apiBuilder_My Hub_C_Scope`() })
-		            }
-		            func `__safeDI_apiBuilder_My Hub_T_Scope`() -> `My Hub`.__safeDI_ApiCarrier_T<any Api> {
-		                .init(
-		                    cBuilder: { values_mark, values_reader in `__safeDI_apiBuilder_My Hub_C_Scope`() },
-		                    api: { scope_mark, scope_reader, scope_cBuilder in
-		                        let mark = scope_mark
-		                        let api: any Api = LiveApi(mark: mark)
-		                        return api
-		                    }
-		                )
-		            }
-		            func `__safeDI_apiBuilder_My Hub_C_Scope`() -> `My Hub`.__safeDI_ApiCarrier_C<any Api> {
-		                .init(tBuilder: { values_mark in `__safeDI_apiBuilder_My Hub_T_Scope`() })
-		            }
 		            return Shell(__safeDI_mark: nil, __safeDI_apiBuilder: __safeDI_apiBuilder_Shell())
 		        }
 		        let shell: Shell = __safeDI_shell()

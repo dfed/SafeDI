@@ -215,14 +215,14 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		        let navigator = Navigator()
 		        let theme = Theme()
 		        let __safeDI_liveGadget_AnyGadgetBuilder_shell = __safeDI_liveGadget_AnyGadgetBuilder.shell(navigator, theme)
+		        func __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_LiveGadget_AnyGadgetCarrier_Toolbar<AnyGadget>) -> Toolbar {
+		            let panelBuilder = ErasedInstantiator<String, AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder_toolbar.panelBuilder())
+		            return Toolbar(panelBuilder: panelBuilder)
+		        }
 		        func __safeDI_shell() -> Shell {
 		            let style = Style()
 		            let __safeDI_liveGadget_AnyGadgetBuilder_toolbar = __safeDI_liveGadget_AnyGadgetBuilder_shell.toolbar(style)
-		            func __safeDI_toolbar() -> Toolbar {
-		                let panelBuilder = ErasedInstantiator<String, AnyGadget>(__safeDI_liveGadget_AnyGadgetBuilder_toolbar.panelBuilder())
-		                return Toolbar(panelBuilder: panelBuilder)
-		            }
-		            let toolbar: Toolbar = __safeDI_toolbar()
+		            let toolbar: Toolbar = __safeDI_toolbar(__safeDI_liveGadget_AnyGadgetBuilder_toolbar: __safeDI_liveGadget_AnyGadgetBuilder_toolbar)
 		            return Shell(style: style, toolbar: toolbar)
 		        }
 		        let shell: Shell = __safeDI_shell()
@@ -2019,18 +2019,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_liveGadget_GadgetBuilder_screenBuilder = __safeDI_liveGadget_GadgetBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
+		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
+		            }
+		            return Screen(id: id, panel: panel, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_screenBuilder.panel(id))
 		            let __safeDI_liveGadget_GadgetBuilder_next = __safeDI_liveGadget_GadgetBuilder_screenBuilder.next(id, panel)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, panel: panel, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
 		            }
 		            return Screen(id: id, panel: panel, next: next)
 		        }
@@ -2128,18 +2128,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_liveGadget_GadgetBuilder: __safeDI_LiveGadget_GadgetCarrier<any Gadget>) {
 		        let __safeDI_liveGadget_GadgetBuilder_screenBuilder = __safeDI_liveGadget_GadgetBuilder.screenBuilder
+		        func __safeDI_next(id: Int, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_LiveGadget_GadgetCarrier_Screen<any Gadget>) -> Screen {
+		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
+		            let next = Instantiator<Screen> {
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
+		            }
+		            return Screen(id: id, panel: panel, next: next)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_screenBuilder.panel(id))
 		            let __safeDI_liveGadget_GadgetBuilder_next = __safeDI_liveGadget_GadgetBuilder_screenBuilder.next(id, panel)
-		            func __safeDI_next(id: Int) -> Screen {
-		                let panel = ErasedInstantiator<String, any Gadget>(__safeDI_liveGadget_GadgetBuilder_next.panel(id))
-		                let next = Instantiator<Screen> {
-		                    __safeDI_next(id: $0)
-		                }
-		                return Screen(id: id, panel: panel, next: next)
-		            }
 		            let next = Instantiator<Screen> {
-		                __safeDI_next(id: $0)
+		                __safeDI_next(id: $0, __safeDI_liveGadget_GadgetBuilder_next: __safeDI_liveGadget_GadgetBuilder_next)
 		            }
 		            return Screen(id: id, panel: panel, next: next)
 		        }

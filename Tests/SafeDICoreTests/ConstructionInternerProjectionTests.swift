@@ -150,7 +150,7 @@ struct ConstructionInternerProjectionTests {
 	static let propertyTypes = [
 		"Service", "any Service", "Service?", "LazilyInstantiated<Service>", "LazilyInstantiated<any Service>",
 		"LazilyInstantiated<Service>?", "LazilyInstantiated<Service?>", "SendableLazilyInstantiated<Service>",
-		"SafeDI.LazilyInstantiated<Service>", "Instantiator<Service>",
+		"Kit.LazilyInstantiated<Service>", "Instantiator<Service>",
 	]
 
 	static var properties: [Property] {

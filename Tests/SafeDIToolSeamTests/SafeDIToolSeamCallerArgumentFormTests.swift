@@ -54,32 +54,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
+		            .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
+		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Panel_Scope(token: Token) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
+		            .init(api: {
+		                let api: any Api = DefaultApi(token: token)
+		                return api
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_4AC6D9478D1F32DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
-		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
-		                .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Panel_Scope(token: Token) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
-		                .init(api: {
-		                    let api: any Api = DefaultApi(token: token)
-		                    return api
-		                })
-		            }
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_apiBuilder: __safeDI_apiBuilder_Office(), __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -102,6 +102,27 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
+		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Panel_Scope(token: Token) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
+		            .init(api: {
+		                let api: any Api = DefaultApi(token: token)
+		                return api
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
 		        func __safeDI_token() -> Token {
 		            Token()
 		        }
@@ -110,27 +131,6 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		            _ = Office.__safeDI_Office_4AC6D9478D1F32DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
 		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token.instance) })
-		            }
-		            func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
-		                .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Panel_Scope(token: Token) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
-		                .init(api: {
-		                    let api: any Api = DefaultApi(token: token)
-		                    return api
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
-		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_apiBuilder: __safeDI_apiBuilder_Office(), __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -151,32 +151,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
+		            .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
+		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Panel_Scope(token: Token) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
+		            .init(api: {
+		                let api: any Api = DefaultApi(token: token)
+		                return api
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_4AC6D9478D1F32DF.self // If this line does not compile, add the SafeDI plugin to the target that declares Office.
-		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
-		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
-		                .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Panel_Scope(token: Token) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
-		                .init(api: {
-		                    let api: any Api = DefaultApi(token: token)
-		                    return api
-		                })
-		            }
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_apiBuilder: __safeDI_apiBuilder_Office(), __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -212,29 +212,29 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_E3AB70E00E078B7A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -257,32 +257,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
+		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_683A32EED72C8BDB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(wing: __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>({ token }), token_Token: token))
-		            }
-		            func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
-		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -303,6 +303,27 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
+		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        func __safeDI_token() -> Token {
 		            Token()
 		        }
@@ -311,27 +332,6 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		            _ = Office.__safeDI_Office_683A32EED72C8BDB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(wing: __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: token, token_Token: token.instance))
-		            }
-		            func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
-		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -352,32 +352,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Wing_Scope(token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
+		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_SendableLazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_D7B91EB4BAA7E3D5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(wing: __safeDI_userServiceBuilder_Office_Wing_Scope(token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>({ token }), token_Token: token))
-		            }
-		            func __safeDI_userServiceBuilder_Office_Wing_Scope(token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
-		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_SendableLazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -399,32 +399,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token_Optional: LazilyInstantiated<Token>?, token_Token_Optional: Token?) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
+		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token_Optional) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token_Optional) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token?.instance)
+		                return userService
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token?) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_683A32EED72C8BDB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(wing: __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token_Optional: LazilyInstantiated<Token>({ token }), token_Token_Optional: token))
-		            }
-		            func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token_Optional: LazilyInstantiated<Token>?, token_Token_Optional: Token?) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
-		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token_Optional) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token_Optional) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token?.instance)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token?) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -445,32 +445,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
+		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token.instance)
+		                return userService
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_683A32EED72C8BDB.self // If this line does not compile, add the SafeDI plugin to the target that declares Office.
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(wing: __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>({ token }), token_Token: token))
-		            }
-		            func __safeDI_userServiceBuilder_Office_Wing_Scope(token_LazilyInstantiated__Token: LazilyInstantiated<Token>, token_Token: Token) -> Office.__safeDI_UserServiceCarrier_Wing<any UserService> {
-		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token_LazilyInstantiated__Token) }, shelf: { values_desk, values_model in __safeDI_userServiceBuilder_Office_Shelf_Scope() }, bench: { values_desk, values_model, values_shelf in __safeDI_userServiceBuilder_Office_Bench_Scope(token: token_Token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token.instance)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -500,6 +500,15 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
+		            .init(bench: { values_token_Token, values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token, token_Token: values_token_Token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token, token_Token: Other) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token, token_Token: token_Token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        let token_Token = Other()
 		        func __safeDI_office() -> Office {
@@ -516,15 +525,6 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
 		                .init(userService: {
 		                    let userService: any UserService = DefaultUserService(token: token.instance, token_Token: token_Token)
-		                    return userService
-		                })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Shelf_Scope() -> Office.__safeDI_UserServiceCarrier_Shelf<any UserService> {
-		                .init(bench: { values_token_Token, values_token in __safeDI_userServiceBuilder_Office_Bench_Scope(token: values_token, token_Token: values_token_Token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Bench_Scope(token: Token, token_Token: Other) -> Office.__safeDI_UserServiceCarrier_Bench<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token, token_Token: token_Token)
 		                    return userService
 		                })
 		            }
@@ -550,32 +550,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
+		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Panel_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
+		            .init(api: {
+		                let api: any Api = DefaultApi(token: token.instance)
+		                return api
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_ADA6ADCD860C9DDE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
 		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: LazilyInstantiated<Token>({ token })) })
 		            }
-		            func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
-		                .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Panel_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
-		                .init(api: {
-		                    let api: any Api = DefaultApi(token: token.instance)
-		                    return api
-		                })
-		            }
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: nil) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_apiBuilder: __safeDI_apiBuilder_Office(), __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -596,32 +596,32 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
+		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
+		        }
+		        func __safeDI_apiBuilder_Office_Panel_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
+		            .init(api: {
+		                let api: any Api = DefaultApi(token: token.instance)
+		                return api
+		            })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+		        }
+		        func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+		            .init(userService: {
+		                let userService: any UserService = DefaultUserService(token: token)
+		                return userService
+		            })
+		        }
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_ADA6ADCD860C9DDE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
 		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: LazilyInstantiated<Token>({ token })) })
 		            }
-		            func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
-		                .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
-		            }
-		            func __safeDI_apiBuilder_Office_Panel_Scope(token: LazilyInstantiated<Token>) -> Office.__safeDI_ApiCarrier_Panel<any Api> {
-		                .init(api: {
-		                    let api: any Api = DefaultApi(token: token.instance)
-		                    return api
-		                })
-		            }
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: nil) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-		                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-		            }
-		            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-		                .init(userService: {
-		                    let userService: any UserService = DefaultUserService(token: token)
-		                    return userService
-		                })
 		            }
 		            return Office(__safeDI_apiBuilder: __safeDI_apiBuilder_Office(), __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }

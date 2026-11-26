@@ -25,8 +25,7 @@ import Foundation
 ///
 /// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
-/// spelled once (`spelled()`), each line written with the indentation of every level around it. A small subtree started
-/// early is spelled while the rest of the tree is generated (`Node.spelled`), and the root's spelling copies its text. The bytes are the ones
+/// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
 /// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own, and
@@ -47,10 +46,14 @@ struct GeneratedCode: Sendable {
 		/// no line feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty
 		/// `indentation` writes `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
 		case indented(GeneratedCode, by: String)
-		/// Code spelled while the rest of the tree was being generated, written as its text, with no plan kept.
-		case spelled(String)
 		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 		case place(PlacePlan)
+		/// A function the root may declare once at its top (`RootFunctionHoisting`), written as `inPlace` where it does not.
+		case rootFunction(RootFunctionRecord, inPlace: GeneratedCode)
+		/// The body of a `@Sendable` function, written as it is, which calls only functions that are `@Sendable` too.
+		case sendableFunction(GeneratedCode)
+		/// `code` without the root functions named `names`, which the root declares at its top.
+		case omittingRootFunctions(GeneratedCode, named: Set<String>)
 	}
 
 	/// Text, written as it is.
@@ -73,18 +76,76 @@ struct GeneratedCode: Sendable {
 		GeneratedCode(storage: .children(Children(.indented(indentation), [code])))
 	}
 
-	/// `code`'s text, which a writer writes as it is (`Node.spelled`). The plan is dropped once it is spelled.
-	static func spelled(_ code: GeneratedCode) -> GeneratedCode {
-		GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
+	/// The text of the code without its root functions, and the names of those it holds, in the order it reaches them: the
+	/// text a place's record holds where the root declares them from the place's plan.
+	func spelledWithoutRootFunctions() -> (text: String, rootFunctionNames: [String]) {
+		let names = RootFunctionHoisting.records(in: [self]).map(\.name)
+		return (GeneratedCode.omittingRootFunctions(self, named: Set(names)).spelled(), names)
 	}
 
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 	static func place(_ plan: PlacePlan) -> GeneratedCode {
-		GeneratedCode(storage: .children(Children(.place(record: plan.record), [plan.code])))
+		GeneratedCode(storage: .children(Children(.place(record: plan.record, laysOut: TypeKeyLayout.laysOut(placeRecordedAs: plan.record)), [plan.code])))
+	}
+
+	/// A function the root may declare once at its top, written as the call declares it where the root does not
+	/// (`Node.rootFunction`).
+	static func rootFunction(_ record: RootFunctionRecord) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.rootFunction(record), [.text(record.spelled(isSendable: record.isSendable))])))
+	}
+
+	/// The body of a `@Sendable` function (`Node.sendableFunction`).
+	static func sendableFunction(_ code: GeneratedCode) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.sendableFunction, [code])))
+	}
+
+	/// `code` without the root functions named `names` (`Node.omittingRootFunctions`).
+	static func omittingRootFunctions(_ code: GeneratedCode, named names: Set<String>) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.omittingRootFunctions(names), [code])))
 	}
 
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
+
+	/// Whether the plan holds a root function (`Node.rootFunction`), which its levels record as they are built.
+	var holdsRootFunction: Bool {
+		switch storage {
+		case .text:
+			false
+		case let .children(children):
+			children.holdsRootFunction
+		}
+	}
+
+	/// Whether this level, under the indentations around it, is a place the type key can lay out with every place of its
+	/// tree (`TypeKeyLayout.laysOut(_:)`), which the place records as it is built.
+	var isPlaceTheTypeKeyLaysOut: Bool {
+		guard case let .children(children) = unindented.storage, case let .place(_, laysOut) = children.kind else { return false }
+		return laysOut
+	}
+
+	/// Whether the type key can lay out every statement this level stands for in a body, as `TypeKeyLayout.statementCodes(of:)`
+	/// reads it: the place it is, or each place of a sequence of places, from what each place recorded as it was built. It
+	/// reads the levels' storage, so asking it makes nothing: every place is built with it.
+	///
+	/// A level that is no sequence is one statement: a place, or a piece that is no place. A body's statements hold no other
+	/// node: `.lines` and `.sendableFunction` stand only inside a builder function's own code, beneath its place
+	/// (`BuilderFunctionGraph`), `.omittingRootFunctions` only around a root's body, and `.rootFunction` only among the
+	/// statements of a body that makes a seam call, whose place the type key never plans.
+	var statementsAreLaidOutByTypeKey: Bool {
+		guard case let .children(children) = unindented.storage, case .sequence = children.kind else { return isPlaceTheTypeKeyLaysOut }
+		// A sequence that holds anything but places is one statement, with no record, as a piece that is no place is.
+		return children.codes.allSatisfy(\.isPlaceTheTypeKeyLaysOut)
+	}
+
+	/// This level without the indentations around it.
+	private var unindented: GeneratedCode {
+		var code = self
+		while case let .children(children) = code.storage, case .indented = children.kind {
+			code = children.codes[0]
+		}
+		return code
+	}
 
 	/// What this level of the plan is.
 	var node: Node {
@@ -99,10 +160,14 @@ struct GeneratedCode: Sendable {
 				.lines(children.codes)
 			case let .indented(indentation):
 				.indented(children.codes[0], by: indentation)
-			case let .spelled(text):
-				.spelled(text)
-			case let .place(record):
+			case let .place(record, _):
 				.place(PlacePlan(code: children.codes[0], record: record))
+			case let .rootFunction(record):
+				.rootFunction(record, inPlace: children.codes[0])
+			case .sendableFunction:
+				.sendableFunction(children.codes[0])
+			case let .omittingRootFunctions(names):
+				.omittingRootFunctions(children.codes[0], named: names)
 			}
 		}
 	}
@@ -112,9 +177,9 @@ struct GeneratedCode: Sendable {
 		// Text no level indents is written as it is, so it is its own spelling: a mock's text, tens of megabytes on a deep
 		// chain, is not copied into the writer's bytes, which grow by doubling, and then into a string again.
 		switch node {
-		case let .text(text), let .spelled(text):
+		case let .text(text):
 			return text
-		case .sequence, .lines, .indented, .place:
+		case .sequence, .lines, .indented, .place, .rootFunction, .sendableFunction, .omittingRootFunctions:
 			break
 		}
 		var writer = GeneratedCodeWriter()
@@ -134,16 +199,29 @@ struct GeneratedCode: Sendable {
 			case sequence
 			case lines
 			case indented(String)
-			case spelled(String)
-			case place(record: PlaceRecord?)
+			/// `laysOut`: whether the type key can lay out every place of the tree beneath, its own included, which the
+			/// places beneath recorded as they were built, so no walk of the tree asks it.
+			case place(record: PlaceRecord?, laysOut: Bool)
+			case rootFunction(RootFunctionRecord)
+			case sendableFunction
+			case omittingRootFunctions(Set<String>)
 		}
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
 			self.kind = kind
+			holdsRootFunction = switch kind {
+			case .rootFunction:
+				true
+			case .sequence, .lines, .indented, .place, .sendableFunction, .omittingRootFunctions:
+				codes.contains(where: \.holdsRootFunction)
+			}
 			slot = DeferredReleaseSlot(codes)
 		}
 
 		let kind: Kind
+		/// Whether the level or a level beneath it is a root function, decided as the level is built from the levels beneath
+		/// it, so a walk for root functions skips every level that holds none. Held as long as the level.
+		let holdsRootFunction: Bool
 		var codes: [GeneratedCode] {
 			slot.value
 		}
@@ -197,12 +275,16 @@ private struct GeneratedCodeWriter {
 		case lineFeed
 		/// The end of the innermost level's code. A line feed after its last line is left out with the empty line it begins.
 		case endOfLevel
+		/// The end of the innermost `Node.omittingRootFunctions`.
+		case endOfOmission
 	}
 
 	private var bytes = [UInt8]()
 	private var levels = [Level]()
 	/// The indentation of every level, outermost first, so that the indentations a line begins with are one run of it.
 	private var indentations = [UInt8]()
+	/// The names of the root functions the root declares at its top, which are not written where they are reached.
+	private var omittedRootFunctionNames = [Set<String>]()
 
 	var text: String {
 		String(decoding: bytes, as: UTF8.self)
@@ -214,7 +296,7 @@ private struct GeneratedCodeWriter {
 			switch next {
 			case let .code(code):
 				switch code.node {
-				case let .text(text), let .spelled(text):
+				case let .text(text):
 					write(text)
 				case let .sequence(pieces):
 					for piece in pieces.reversed() {
@@ -238,12 +320,24 @@ private struct GeneratedCodeWriter {
 					}
 				case let .place(plan):
 					work.append(.code(plan.code))
+				case let .rootFunction(record, inPlace):
+					if !omittedRootFunctionNames.contains(where: { $0.contains(record.name) }) {
+						work.append(.code(inPlace))
+					}
+				case let .sendableFunction(code):
+					work.append(.code(code))
+				case let .omittingRootFunctions(code, names):
+					omittedRootFunctionNames.append(names)
+					work.append(.endOfOmission)
+					work.append(.code(code))
 				}
 			case .lineFeed:
 				writeLineFeed(ofLevelAt: levels.count - 1)
 			case .endOfLevel:
 				levels.removeLast()
 				indentations.removeLast(indentations.count - (levels.last?.indentationEnd ?? 0))
+			case .endOfOmission:
+				omittedRootFunctionNames.removeLast()
 			}
 		}
 	}

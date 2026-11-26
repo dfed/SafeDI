@@ -171,7 +171,7 @@ extension AttributeSyntax {
 	}
 
 	/// The `generateMock:` argument: `.none` when it is absent, and `nil` when it is spelled other than as a boolean
-	/// literal, `.none`, `.internal`, `.public`, or `MockGeneration.` followed by one of those cases.
+	/// literal, `.none`, `.internal`, `.public`, or `MockGeneration.` or `SafeDI.MockGeneration.` followed by one of those cases.
 	public var mockGenerationValue: MockGeneration? {
 		guard let generateMock else {
 			return MockGeneration.none
@@ -180,7 +180,7 @@ extension AttributeSyntax {
 	}
 
 	/// The `MockGeneration` an argument spells: a boolean literal, `.none`, `.internal`, `.public`, or `MockGeneration.`
-	/// followed by one of those cases. `nil` for any other spelling.
+	/// or `SafeDI.MockGeneration.` followed by one of those cases. `nil` for any other spelling.
 	public static func mockGeneration(spelledAs expression: ExprSyntax) -> MockGeneration? {
 		if let boolLiteral = BooleanLiteralExprSyntax(expression) {
 			return boolLiteral.literal.tokenKind == .keyword(.true) ? .internal : MockGeneration.none
@@ -191,10 +191,7 @@ extension AttributeSyntax {
 			return nil
 		}
 		if let base = memberAccess.base {
-			guard let baseReference = DeclReferenceExprSyntax(base),
-			      baseReference.argumentNames == nil,
-			      baseReference.baseName.text == "MockGeneration"
-			else {
+			guard base.namesMockGeneration else {
 				return nil
 			}
 		}
@@ -359,5 +356,22 @@ extension AttributeSyntax {
 			return false
 		}
 		return onlyIfAvailable.literal.text == "true"
+	}
+}
+
+extension ExprSyntax {
+	/// Whether this expression names SafeDI's `MockGeneration`, alone or qualified by SafeDI's module name.
+	fileprivate var namesMockGeneration: Bool {
+		if let reference = DeclReferenceExprSyntax(self) {
+			reference.argumentNames == nil && reference.baseName.text == "MockGeneration"
+		} else if let memberAccess = MemberAccessExprSyntax(self),
+		          memberAccess.declName.argumentNames == nil,
+		          memberAccess.declName.baseName.text == "MockGeneration",
+		          let base = memberAccess.base.flatMap(DeclReferenceExprSyntax.init)
+		{
+			base.argumentNames == nil && base.baseName.text == Dependency.safeDIModuleName
+		} else {
+			false
+		}
 	}
 }

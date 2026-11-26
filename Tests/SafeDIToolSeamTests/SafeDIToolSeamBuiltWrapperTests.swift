@@ -1330,7 +1330,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1348,7 +1348,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.inner_widgetSendableBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(inner_widgetSendableBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -1650,16 +1650,16 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init(__safeDI_gadgetBuilder: __safeDI_GadgetCarrier<any Gadget>) {
 		        let __safeDI_gadgetBuilder_again = __safeDI_gadgetBuilder.again
 		        func __safeDI_again() -> Middle {
-		            func __safeDI_beneath() -> Beneath {
-		                let again = Instantiator<Middle>(__safeDI_again)
-		                return Beneath(again: again)
-		            }
 		            let beneath: Beneath = __safeDI_beneath()
 		            func __safeDI_again_Gadget() -> any Gadget {
 		                __safeDI_gadgetBuilder_again.again(beneath)
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle(again: again, beneath: beneath)
+		        }
+		        func __safeDI_beneath() -> Beneath {
+		            let again = Instantiator<Middle>(__safeDI_again)
+		            return Beneath(again: again)
 		        }
 		        let again = Instantiator<Middle>(__safeDI_again)
 		        self.init(again: again)
@@ -1725,7 +1725,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.part = { _ in __safeDI_builder }
+			                self.init(part: { _ in __safeDI_builder })
 			            }
 			        }
 			    }
@@ -1844,7 +1844,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.again = { _ in __safeDI_builder() }
+		                    self.init(again: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -1858,7 +1858,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.again = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(again: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2520,7 +2520,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.part = { _ in __safeDI_builder }
+			                self.init(part: { _ in __safeDI_builder })
 			            }
 			        }
 			    }
@@ -2870,6 +2870,101 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	// MARK: A cycle closed beneath a hole’s wrapper function
+
+	@Test
+	mutating func generate_closesCycleOnItsOwnBuilderFunction_whenItsLabelSpellsTheFunctionAHoleSiteBuildsItsWrapperAround() async throws {
+		// The site of `trackerBuilder` names its wrapper’s function `__safeDI_trackerBuilder_`, apart from the builder it
+		// calls, which is the name of the function `trackerBuilder_` builds `B` with, and `D` closes the cycle on that one.
+		let feature = [
+			"public protocol Tracker {}",
+			seamFixtureType(named: "Feature", isSeam: true, declarations: ["@Instantiated let trackerBuilder_: Instantiator<B>"]),
+			seamFixtureType(named: "B", declarations: ["@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "C", declarations: ["@Instantiated let trackerBuilder: LazilyInstantiated<any Tracker>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "D", declarations: ["@Instantiated let trackerBuilder_: Instantiator<B>"]),
+		]
+		let app = [
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultTracker", fulfilling: "Tracker", declarations: []),
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feature: Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			extension Feature {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_TrackerCarrier<__safeDI_Built> {
+			        public let trackerBuilder_: __safeDI_TrackerCarrier_B<__safeDI_Built>
+
+			        public init(trackerBuilder_: __safeDI_TrackerCarrier_B<__safeDI_Built>) {
+			            self.trackerBuilder_ = trackerBuilder_
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(trackerBuilder_: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_TrackerCarrier_B<__safeDI_Built> {
+			        public let cBuilder: __safeDI_TrackerCarrier_C<__safeDI_Built>
+
+			        public init(cBuilder: __safeDI_TrackerCarrier_C<__safeDI_Built>) {
+			            self.cBuilder = cBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(cBuilder: .init(__safeDI_noScope: __safeDI_builder))
+			        }
+			    }
+
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_TrackerCarrier_C<__safeDI_Built> {
+			        public let trackerBuilder: (Instantiator<D>) -> __safeDI_Built
+
+			        public init(trackerBuilder: @escaping (Instantiator<D>) -> __safeDI_Built) {
+			            self.trackerBuilder = trackerBuilder
+			        }
+
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(trackerBuilder: { _ in __safeDI_builder() })
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_trackerBuilder: __safeDI_TrackerCarrier<any Tracker>) {
+			        let __safeDI_trackerBuilder_trackerBuilder_ = __safeDI_trackerBuilder.trackerBuilder_
+			        func __safeDI_trackerBuilder_() -> B {
+			            let __safeDI_trackerBuilder_cBuilder = __safeDI_trackerBuilder_trackerBuilder_.cBuilder
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_trackerBuilder_cBuilder)
+			            }
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder(__safeDI_trackerBuilder_cBuilder: __safeDI_TrackerCarrier_C<any Tracker>) -> C {
+			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			            func __safeDI_trackerBuilder__Tracker() -> any Tracker {
+			                __safeDI_trackerBuilder_cBuilder.trackerBuilder(dBuilder)
+			            }
+			            let trackerBuilder = LazilyInstantiated<any Tracker>(__safeDI_trackerBuilder__Tracker)
+			            return C(trackerBuilder: trackerBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_dBuilder() -> D {
+			            let trackerBuilder_ = Instantiator<B>(__safeDI_trackerBuilder_)
+			            return D(trackerBuilder_: trackerBuilder_)
+			        }
+			        let trackerBuilder_ = Instantiator<B>(__safeDI_trackerBuilder_)
+			        self.init(trackerBuilder_: trackerBuilder_)
+			    }
+			}
+
+			extension Feature {
+			    public enum __safeDI_Feature_099A0C5D8D989C5E {}
+			}
+			""",
+		])
 	}
 
 	// MARK: Private

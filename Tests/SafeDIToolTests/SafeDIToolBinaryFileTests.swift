@@ -217,6 +217,146 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesEachStringOnce_whenManyStringsRepeatInTheirOwnStorageAndInAnother() throws {
+		// Short strings, held as their bytes, and long ones, held in storage: each is written a second time from the same
+		// storage and a third time from a copy in storage of its own.
+		let strings = (0..<200).flatMap { ["s\($0)", "a string longer than fifteen bytes, number \($0)"] }
+		let copies = strings.map { String(decoding: Array($0.utf8), as: UTF8.self) }
+		var writer = BinaryWriter()
+		writer.write(strings + strings + copies)
+		let encoded = writer.encoded
+
+		let readStrings: [String] = try read(encoded)
+
+		var expected = Self.unsigned(UInt64(strings.count))
+		for string in strings {
+			expected += Self.unsigned(UInt64(string.utf8.count)) + Array(string.utf8)
+		}
+		expected += Self.unsigned(UInt64(strings.count * 3))
+		for _ in 0..<3 {
+			expected += strings.indices.flatMap { Self.unsigned(UInt64($0)) }
+		}
+		#expect(encoded == expected)
+		#expect(readStrings == strings + strings + copies)
+	}
+
+	@Test
+	func binaryWriter_writesEachTypeDescriptionOnce_whenManyTypesRepeatAsTheSameValuesAndAsEqualOnes() throws {
+		// Each type is written a second time as the same value and a third time as an equal value made apart from it.
+		let types = (0..<200).map { TypeDescription.simple(name: "Type\($0)") }
+		let equalTypes = (0..<200).map { TypeDescription.simple(name: "Type\($0)") }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(types + types + equalTypes))
+		let encoded = writer.encoded
+
+		let readTypes: BinarySharingSignatureValues<[TypeDescription]> = try read(encoded)
+
+		var expected = Self.unsigned(UInt64(types.count))
+		for index in types.indices {
+			expected += Self.unsigned(UInt64("Type\(index)".utf8.count)) + Array("Type\(index)".utf8)
+		}
+		expected += Self.unsigned(UInt64(types.count * 3))
+		// In full: no reference, the tag of `simple`, the name, no generics.
+		expected += types.indices.flatMap { [0, TypeDescription.Tag.simple.rawValue] + Self.unsigned(UInt64($0)) + [0] }
+		for _ in 0..<2 {
+			expected += types.indices.flatMap { Self.unsigned(UInt64($0 + 1)) }
+		}
+		#expect(encoded == expected)
+		#expect(readTypes.value.map(\.asSource) == (types + types + equalTypes).map(\.asSource))
+	}
+
+	@Test
+	func binaryWriter_writesValueOnce_whenValueTooLargeToFindByItsRepresentationRepeats() {
+		// Four words, more than the writer finds a value by: each write is compared by its bytes.
+		let value: (UInt64, UInt64, UInt64, UInt64) = (1, 2, 3, 4)
+		var writer = BinaryWriter()
+		for _ in 0..<2 {
+			writer.writeSharedByBytes(value) { $0.writeUnsigned(7) }
+		}
+
+		// The value in full, then a reference to it.
+		#expect(writer.bytes == [0, 7, 1])
+	}
+
+	@Test
+	func binaryReader_readsEachProperty_whenPropertiesRepeatInsideSignatureValues() throws {
+		// A property is a label and a type: the first names its type in full, the second repeats both, and the others
+		// share only one of the two with it.
+		let properties = [
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+			Property(label: "other", typeDescription: .simple(name: "Service")),
+			Property(label: "service", typeDescription: .any(.simple(name: "Service"))),
+			Property(label: "service", typeDescription: .simple(name: "Service")),
+			Property(label: "service", typeDescription: .any(.simple(name: "Service"))),
+		]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(properties))
+
+		let readProperties: BinarySharingSignatureValues<[Property]> = try read(writer.encoded)
+
+		#expect(readProperties.value.map(\.asSource) == ["service: Service", "service: Service", "other: Service", "service: any Service", "service: Service", "service: any Service"])
+		#expect(readProperties.value == properties)
+		#expect(readProperties.value.map(\.hashValue) == properties.map(\.hashValue))
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenListOfFewerThanEightBytesRepeatsInsideSignatureValues() throws {
+		// `[1, 2]` is three bytes: its count and its elements.
+		let lists: [[UInt64]] = [[1, 2], [3], [1, 2], [1, 2, 3], [], [1, 2], []]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == [0, 1, 0, 3, 4, 0, 4])
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenListsOfEightBytesOrMoreBeginWithTheSameBytes() throws {
+		// The second list has the first's length and first eight bytes, and the third only its first eight bytes.
+		let first: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+		let second: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 8, 10]
+		let third: [UInt64] = [1, 2, 3, 4, 5, 6, 7, 300, 9]
+		let lists = [first, second, third, second, first, third, first]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == [0, 1, 2, 1, 0, 2, 0])
+	}
+
+	@Test
+	func binaryReader_readsRepeatedListOnce_whenMoreListsBeginWithTheSameBytesThanAReaderTriesLengthsOf() throws {
+		// Twenty lists of twenty elements that begin with the same seven: list `index` writes `index` of the others in
+		// two bytes each, so each list has a length of its own. Then each list again, in reverse.
+		let distinctLists: [[UInt64]] = (0..<20).map { index in
+			Array(repeating: 1, count: 20 - index) + Array(repeating: 200, count: index)
+		}
+		let lists = distinctLists + distinctLists.reversed()
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists: BinarySharingSignatureValues<[[UInt64]]> = try read(writer.encoded)
+
+		#expect(readLists.value == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists.value) == Array(0..<20) + Array((0..<20).reversed()))
+	}
+
+	@Test
+	func binaryReader_readsEachListByItself_whenListsRepeatOutsideSignatureValues() throws {
+		let lists: [[UInt64]] = [[1, 2], [1, 2], [1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9]]
+
+		let readLists: [[UInt64]] = try read(Self.encoded(lists))
+
+		#expect(readLists == lists)
+		#expect(Self.indicesOfFirstListInSameStorage(readLists) == [0, 1, 2, 3])
+	}
+
+	@Test
 	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
 		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
 		// list does. The second list refers to the first.
@@ -477,25 +617,31 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			)
 		}
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
-		// still made those copies. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
+		// own; the public mock plans that follow the signatures were added by hand, as were the two fields a cycle re-entry
+		// declaration gained (no called seam, and a place in no further `@Sendable` function), and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
-			0x04, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x08, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E,
-			0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44, 0x49, 0x5F, 0x64, 0x69, 0x73, 0x74,
-			0x69, 0x6E, 0x63, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x02, 0x00, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x02, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-			0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0x01,
-			0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01,
-			0x02, 0x00, 0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x01, 0x02, 0x01, 0x01, 0x01,
-			0x01, 0x01, 0x01, 0x02, 0x00, 0x02, 0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-			0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x01, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x00, 0x01, 0x02,
-			0x02, 0x02, 0x02, 0x01, 0x01, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00,
-			0x02, 0x01, 0x02, 0x02, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x01, 0x03, 0x02, 0x02, 0x01, 0x02, 0x02, 0x01, 0x00, 0x00, 0x01, 0x02, 0x02, 0x02, 0x02, 0x01,
-			0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x00, 0x02, 0x02,
-			0x01, 0x02, 0x01, 0x01, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-			0x00,
+			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xED, 0x01, 0x03, 0x00, 0x08,
+			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
+			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
+			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00,
+			0x01, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x02,
+			0x01, 0x02, 0x01, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x02,
+			0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x01,
+			0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02,
+			0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02,
+			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00,
+			0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
+			0x00, 0x00, 0x02, 0x00, 0x00,
+			// The empty view.
+			0x00, 0x00, 0x00,
 		]
 		// A module info file's header is its first 30 bytes.
 		let headerLength = 30
@@ -521,9 +667,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
-	/// The types a module info file writes only inside the signature of a seam its module declares.
+	/// The types a module info file writes only inside the signature of a seam, or the plan of a public mock, its module
+	/// declares.
 	private static let seamSignatureMembers: [any BinarySchemaMember.Type] = [
 		StoredSeamSignature.self,
+		StoredPublicMockPlan.self,
+		StoredPublicMockPlan.Parameter.self,
+		StoredPublicMockPlan.Role.self,
+		StoredPublicMockPlan.NestedOmission.self,
+		StoredPublicMockPlan.Receiver.self,
 		SeamSignature.self,
 		SeamSignature.Receiver.self,
 		SeamSignature.NestedSeamCall.self,
@@ -771,7 +923,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFormatVersionDiffers() async throws {
 		try await assertDumpThrows(
-			"The scan cache is in format version 3, but this SafeDITool reads format version 2.",
+			"The scan cache is in format version 3, but this SafeDITool reads format version 4.",
 			whenCacheIs: { cache in
 				var cache = cache
 				cache[cache.startIndex + 4] = 3
@@ -1115,8 +1267,41 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
 		let written = try #require(seamModule.moduleInfoFile)
-		#expect(dumped.seamSignatures.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
-		#expect(reflectedDescription(of: dumped.seamSignatures) == reflectedDescription(of: written.seamSignatures))
+		#expect(try dumped.seamSignatures.decoded.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
+		#expect(try reflectedDescription(of: dumped.seamSignatures.decoded) == reflectedDescription(of: written.seamSignatures.decoded))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dump_printsEveryPublicMockPlanModuleInfoFileHoldsAsJSON() async throws {
+		// `Host`'s public mock takes a builder for `service`, which its module does not fulfill, so its plan holds a hole.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Host: Instantiable {
+				    init(service: any Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: any Service
+				}
+				""",
+			])],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		let mockModule = try #require(output.modules["Feature"])
+
+		let json = try Dump.parse([#require(mockModule.moduleInfoOutputPath)]).json()
+
+		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
+		let written = try #require(mockModule.moduleInfoFile)
+		#expect(dumped.publicMockPlans.mockedTypes.map(\.asSource) == ["Host"])
+		#expect(dumped.publicMockPlans.compilesGeneratedMocks == written.publicMockPlans.compilesGeneratedMocks)
+		#expect(try dumped.publicMockPlans.decoded.map { $0.holes.map(\.builderLabel) } == [["serviceBuilder"]])
+		#expect(try reflectedDescription(of: dumped.publicMockPlans.decoded) == reflectedDescription(of: written.publicMockPlans.decoded))
 	}
 
 	@Test
@@ -1236,6 +1421,722 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenDependentModuleInfoFileIsInAnEarlierFormatVersion() async throws {
+		// A project upgrades SafeDI in every module at once, so a file an earlier SafeDITool wrote is reported, with the
+		// remedy that regenerates it, and never read as this version's layout: format version 3 wrote whole the lists this
+		// version reads as differences from one another.
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamServiceSource],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
+		// The format version is the two bytes after the magic, least significant first.
+		moduleInfo[moduleInfo.startIndex + 4] = 3
+		try moduleInfo.write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
+
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The module info file is in format version 3, but this SafeDITool reads format version 4. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.downstreamRootSource],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameCodeAsFromIntactFile_whenSeamSignatureEncodingOfReachedModuleIsCutShort() async throws {
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamSeamSource],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		let upstreamModuleInfoURL = try URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath)
+		let intact = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamSeamCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Example"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: upstreamModuleInfoURL))
+		#expect(file.seamSignatures.seamTypes.map(\.asSource) == ["UpstreamSeam"])
+		// A file whose checksum holds over a signature encoding cut short, which only a SafeDITool that wrote a malformed
+		// encoding could make: the file reads, the encoding throws when the downstream tree reaches the seam, and the run
+		// computes the seam's signature from its module's declarations, as any run that throws after reading one does.
+		try ModuleInfoFile(
+			moduleName: file.moduleName,
+			ownEntryChecksum: file.ownEntryChecksum,
+			packageName: file.packageName,
+			dependencyModuleNames: file.dependencyModuleNames,
+			imports: file.imports,
+			mockImports: file.mockImports,
+			instantiables: file.instantiables,
+			configurations: file.configurations,
+			filesWithUnexpectedNodes: file.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: file.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: file.instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: file.plainTypeDeclarations,
+			seamSignatures: ModuleSeamSignatures(seamTypes: file.seamSignatures.seamTypes, encoding: file.seamSignatures.encoding(writingPositionsAsAbsent: true).dropLast()),
+			view: file.view,
+		).moduleInfoData.write(to: upstreamModuleInfoURL)
+
+		// The run tells of the one block that threw, which is all that shows it computed again what the file stores.
+		let (failedBlocks, failedBlocksContinuation) = AsyncStream<StoredBlockDecodeObservation.Block>.makeStream()
+		let cutShort = try await StoredBlockDecodeObservation.$failureObserver.withValue({ failedBlocksContinuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.downstreamSeamCallerSource],
+				dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Example"],
+			)
+		}
+		failedBlocksContinuation.finish()
+
+		var blocksThatThrew = [StoredBlockDecodeObservation.Block]()
+		for await block in failedBlocks {
+			blocksThatThrew.append(block)
+		}
+		#expect(blocksThatThrew == [.seamSignatures])
+		#expect(cutShort.combinedOutput == intact.combinedOutput)
+		#expect(cutShort.combinedOutput == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public init() {
+		        let upstreamSeam = UpstreamSeam()
+		        self.init(upstreamSeam: upstreamSeam)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	func moduleSeamSignatures_throwsRatherThanTraps_whenEncodingIsCutShortAtAnyByte() throws {
+		let encoding = try ModuleSeamSignatures([StoredSeamSignature.sample(isDistinct: true), StoredSeamSignature.sample(isDistinct: false)]).encoding(writingPositionsAsAbsent: true)
+
+		for length in 0..<encoding.count {
+			let cutShort = ModuleSeamSignatures(seamTypes: [], encoding: Array(encoding.prefix(length)))
+			#expect(throws: BinaryDecodingError.self, "cut short at \(length) of \(encoding.count) bytes") { try cutShort.decoded }
+		}
+		#expect(try ModuleSeamSignatures(seamTypes: [], encoding: encoding).decoded.count == 2)
+	}
+
+	@Test
+	func modulePublicMockPlans_throwsRatherThanTraps_whenEncodingIsCutShortAtAnyByte() throws {
+		let encoding = try ModulePublicMockPlans([StoredPublicMockPlan.sample(isDistinct: true), StoredPublicMockPlan.sample(isDistinct: false)], compilesGeneratedMocks: true).encoding(writingPositionsAsAbsent: true)
+
+		for length in 0..<encoding.count {
+			let cutShort = ModulePublicMockPlans(mockedTypes: [], compilesGeneratedMocks: true, encoding: Array(encoding.prefix(length)))
+			#expect(throws: BinaryDecodingError.self, "cut short at \(length) of \(encoding.count) bytes") { try cutShort.decoded }
+		}
+		#expect(try ModulePublicMockPlans(mockedTypes: [], compilesGeneratedMocks: true, encoding: encoding).decoded.count == 2)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameCodeAsFromIntactFile_whenPublicMockPlanEncodingOfReachedModuleIsCutShort() async throws {
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamPublicMockSource],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
+		)
+		let upstreamModuleInfoURL = try URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath)
+		let intact = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.downstreamPublicMockCallerSource],
+			dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Other"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: upstreamModuleInfoURL))
+		#expect(file.publicMockPlans.mockedTypes.map(\.asSource) == ["UpstreamService"])
+		// A file whose checksum holds over a plan encoding cut short, which only a SafeDITool that wrote a malformed
+		// encoding could make: the file reads, the encoding throws when the downstream mock calls the public mock, and the
+		// run computes the plan from its module's declarations, as any run that throws after reading one does.
+		try ModuleInfoFile(
+			moduleName: file.moduleName,
+			ownEntryChecksum: file.ownEntryChecksum,
+			packageName: file.packageName,
+			dependencyModuleNames: file.dependencyModuleNames,
+			imports: file.imports,
+			mockImports: file.mockImports,
+			instantiables: file.instantiables,
+			configurations: file.configurations,
+			filesWithUnexpectedNodes: file.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: file.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: file.instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: file.plainTypeDeclarations,
+			seamSignatures: file.seamSignatures,
+			publicMockPlans: ModulePublicMockPlans(mockedTypes: file.publicMockPlans.mockedTypes, compilesGeneratedMocks: file.publicMockPlans.compilesGeneratedMocks, encoding: file.publicMockPlans.encoding(writingPositionsAsAbsent: true).dropLast()),
+			view: file.view,
+		).moduleInfoData.write(to: upstreamModuleInfoURL)
+
+		// The run tells of the one block that threw, which is all that shows it computed again what the file stores.
+		let (failedBlocks, failedBlocksContinuation) = AsyncStream<StoredBlockDecodeObservation.Block>.makeStream()
+		let cutShort = try await StoredBlockDecodeObservation.$failureObserver.withValue({ failedBlocksContinuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.downstreamPublicMockCallerSource],
+				dependentModuleInfoPaths: [upstreamModuleInfoURL.path],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Downstream", "--package-name", "Other"],
+			)
+		}
+		failedBlocksContinuation.finish()
+
+		var blocksThatThrew = [StoredBlockDecodeObservation.Block]()
+		for await block in failedBlocks {
+			blocksThatThrew.append(block)
+		}
+		#expect(blocksThatThrew == [.publicMockPlans])
+		#expect(cutShort.combinedOutput == intact.combinedOutput)
+		#expect(cutShort.combinedOutput == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Upstream)
+		import Upstream
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            upstreamService: UpstreamService.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                upstreamService: upstreamService
+		            )
+		        }
+
+		        var upstreamService: UpstreamService.SafeDIOverrides { __safeDI_storage.upstreamService }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                upstreamService: UpstreamService.SafeDIOverrides
+		            ) {
+		                self.upstreamService = upstreamService
+		            }
+
+		            let upstreamService: UpstreamService.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = UpstreamService.__safeDI_UpstreamService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Upstream into Upstream: under Bazel, add Upstream’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let upstreamService = UpstreamService.__safeDI_mock(safeDIOverrides: safeDIOverrides.upstreamService)
+		        return Screen(upstreamService: upstreamService)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	/// A module whose public mock takes a builder for each of `builderCount` values no type of the module fulfills, so
+	/// that each builder's place lists the values bound before it and those bound after it.
+	private static func publicMockSource(builderCount: Int) -> String {
+		var source = (0..<builderCount).map { "public protocol Api\($0) {}" }.joined(separator: "\n")
+		source += "\n\n@Instantiable(generateMock: .public)\npublic struct Home: Instantiable {\n    public init("
+		source += (0..<builderCount).map { "api\($0): any Api\($0)" }.joined(separator: ", ")
+		source += ") {}\n\n"
+		source += (0..<builderCount).map { "    @Instantiated let api\($0): any Api\($0)" }.joined(separator: "\n")
+		source += "\n}"
+		return source
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func publicMockPlans(ofModuleWithBuilderCount builderCount: Int) async throws -> ModulePublicMockPlans {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.publicMockSource(builderCount: builderCount)],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		return try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath))).publicMockPlans
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesPublicMockPlanThatGrowsWithItsBuilders_whenEachBuildersPlaceListsEveryOtherBuilder() async throws {
+		// Each of N places lists its N - 1 siblings, as fields or as declarations bound after it. Written in full, forty
+		// builders took 3.5 times the bytes of twenty; written as differences, each place adds what it adds to another's.
+		let twentyBuilders = try await publicMockPlans(ofModuleWithBuilderCount: 20).encoding(writingPositionsAsAbsent: true).count
+		let fortyBuilders = try await publicMockPlans(ofModuleWithBuilderCount: 40).encoding(writingPositionsAsAbsent: true).count
+
+		#expect(fortyBuilders * 2 < twentyBuilders * 5, "\(twentyBuilders) bytes at twenty builders, \(fortyBuilders) at forty")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsBackEachPlacesSiblings_whenPublicMockPlanWritesThemAsDifferences() async throws {
+		// Twelve builders, whose places are stored in the order of their labels (`api0Builder`, `api10Builder`, `api11Builder`, `api1Builder`),
+		// so that a place's lists differ from those of a place written long before it.
+		let builderCount = 12
+		let plan = try #require(try await publicMockPlans(ofModuleWithBuilderCount: builderCount).decoded.first)
+
+		let labels = (0..<builderCount).map { "api\($0)" }
+		let indicesInLabelOrder = (0..<builderCount).sorted { labels[$0] + "Builder" < labels[$1] + "Builder" }
+		#expect(plan.holes.map(\.property.label) == indicesInLabelOrder.map { labels[$0] })
+		for (hole, index) in zip(plan.holes, indicesInLabelOrder) {
+			#expect(hole.fields.map(\.property.label) == Array(labels[..<index]), "fields of \(labels[index])")
+			#expect(hole.fields.map(\.property.typeDescription.asSource) == (0..<index).map { "any Api\($0)" }, "fields of \(labels[index])")
+			#expect(hole.enumPlace?.values.map(\.property.label) == Array(labels[..<index]), "values of \(labels[index])")
+			#expect(hole.uncarriedDeclarations.map(\.property.label) == Array(labels[index...]), "declarations bound after \(labels[index])")
+			#expect(hole.uncarriedDeclarations.map(\.builtAfter?.label) == [nil] + Array(repeating: labels[index], count: builderCount - index - 1), "declarations bound after \(labels[index])")
+			#expect(hole.uncarriedDeclarations.map(\.labelsHeldAboveSeam) == labels[index...].map { [$0] }, "declarations bound after \(labels[index])")
+		}
+		// A place's fields, its case's payload and its scope's are one list, written in one slot, so they are one storage
+		// once read: of the last place here, whose list is long enough to be written as a difference.
+		func storage(_ fields: [SeamSignature.Hole.Field]) -> UnsafeRawPointer? {
+			fields.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		let lastPlace = try #require(indicesInLabelOrder.firstIndex(of: builderCount - 1))
+		let lastHole = plan.holes[lastPlace]
+		#expect(lastHole.fields.count == builderCount - 1)
+		#expect(try storage(#require(lastHole.enumPlace).values) == storage(lastHole.fields))
+		#expect(try storage(#require(plan.scopeEnums[lastPlace].cases.first?.values).fields) == storage(lastHole.fields))
+		#expect(plan.scopeEnums.count == builderCount)
+		for (scopeEnum, index) in zip(plan.scopeEnums, indicesInLabelOrder) {
+			let values = try #require(scopeEnum.cases.first?.values)
+			#expect(values.fields.map(\.property.label) == Array(labels[..<index]), "case of \(labels[index])")
+			#expect(values.labelsBoundLater == Set(labels[index...]), "case of \(labels[index])")
+		}
+	}
+
+	@Test
+	func binaryWriter_readsBackEachList_whenListsAreWrittenAsDifferencesFromOneAnother() throws {
+		// Every list of up to eight of three strings, three thousand of them in an order a fixed generator draws, so that
+		// a list follows one it extends, one it is the start or the end of, one it shares nothing with, and itself.
+		var state: UInt64 = 0x9E3779B97F4A7C15
+		func next(below bound: UInt64) -> Int {
+			state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+			return Int((state >> 33) % bound)
+		}
+		let strings = ["first", "second", "third"]
+		var lists = [ListWrittenAsDifference]()
+		for _ in 0..<3_000 {
+			lists.append(ListWrittenAsDifference(list: (0..<next(below: 9)).map { _ in strings[next(below: 3)] }))
+		}
+		// A chain as a public mock's places write: each list the one before plus an element, then each less its first.
+		let chain = (0..<40).map { "element\($0)" }
+		lists += (0...40).map { ListWrittenAsDifference(list: Array(chain[..<$0])) }
+		lists += (0...40).map { ListWrittenAsDifference(list: Array(chain[$0...])) }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+
+		#expect(readLists == lists)
+	}
+
+	@Test
+	func uncarriedDeclarations_readBackEveryField_whenListsOfThemAreWrittenAsDifferencesFromOneAnother() throws {
+		// A declaration for each field, with a sample distinct from the rest in that field alone, so that a field read
+		// in another's place, or dropped where a list is written without `builtAfter`, reads back as other bytes.
+		typealias Declaration = SeamSignature.Hole.UncarriedDeclaration
+		guard case let .structure(fields, _) = Declaration.binaryLayout else {
+			Issue.record("An uncarried declaration's layout lists cases")
+			return
+		}
+		var declarations = [Declaration]()
+		for distinctField in fields {
+			var writer = BinaryWriter()
+			try writeFieldSamples(of: Declaration.self, fields: fields, to: &writer) { $0.name == distinctField.name }
+			try declarations.append(read(writer.encoded))
+		}
+		#expect(Set(declarations.map(Self.encoded)).count == fields.count)
+		let declarationsBuiltAfterNoPlace = declarations.filter { $0.builtAfter == nil }
+		// Each list a place writes: every declaration, then the lists that drop one from either end, and the first again.
+		// The one declaration built after a place is written last too, and the lists are written reversed as well, so that
+		// each declaration is read both before a run of `builtAfter` ends and after the last run.
+		declarations += declarations.filter { $0.builtAfter != nil }
+		#expect(declarations.last?.builtAfter != nil)
+		var lists = [DeclarationsWrittenAsDifference(declarations: declarations)]
+		lists.append(DeclarationsWrittenAsDifference(declarations: declarations.reversed()))
+		lists += declarations.indices.map { DeclarationsWrittenAsDifference(declarations: Array(declarations[$0...])) }
+		lists += declarations.indices.map { DeclarationsWrittenAsDifference(declarations: Array(declarations[..<$0])) }
+		lists.append(DeclarationsWrittenAsDifference(declarations: declarations))
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[DeclarationsWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+
+		#expect(readLists.map { $0.declarations.map(Self.encoded) } == lists.map { $0.declarations.map(Self.encoded) })
+
+		// A list none of whose declarations is built after a place is the list read, so two places' equal lists are one
+		// storage, as two equal lists a signature held were before lists were written as differences.
+		let equalLists = [declarationsBuiltAfterNoPlace, Array(declarationsBuiltAfterNoPlace.dropLast()), declarationsBuiltAfterNoPlace].map(DeclarationsWrittenAsDifference.init)
+		var equalListsWriter = BinaryWriter()
+		equalListsWriter.write(BinarySharingSignatureValues(equalLists))
+		let readEqualLists = try equalListsWriter.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[DeclarationsWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+		func storage(_ index: Int) -> UnsafeRawPointer? {
+			readEqualLists[index].declarations.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		#expect(declarationsBuiltAfterNoPlace.count == fields.count - 1)
+		#expect(storage(2) == storage(0))
+		#expect(storage(1) != storage(0))
+	}
+
+	@Test
+	func uncarriedDeclarations_areOneStorage_whenPlacesHoldSameDeclarationsBuiltAfterSamePlaces() throws {
+		// A seam's places come again in every signature that reaches them, each with the same declarations built after
+		// the same place, and a declaration is some 460 bytes: such lists are one storage once read, as they were when
+		// each was written whole and the same bytes came again. The same declarations built after no place are another
+		// list, which is read from the first one's, whose declarations hold a place.
+		typealias Declaration = SeamSignature.Hole.UncarriedDeclaration
+		guard case let .structure(fields, _) = Declaration.binaryLayout else {
+			Issue.record("An uncarried declaration's layout lists cases")
+			return
+		}
+		var sampleWriter = BinaryWriter()
+		try writeFieldSamples(of: Declaration.self, fields: fields, to: &sampleWriter) { $0.name == "builtAfter" }
+		let builtAfterPlace: Declaration = try read(sampleWriter.encoded)
+		let builtAfterNoPlace = Declaration(
+			storing: builtAfterPlace.property,
+			declaringType: builtAfterPlace.declaringType,
+			declarationLocation: builtAfterPlace.declarationLocation,
+			parameterTakingType: builtAfterPlace.parameterTakingType,
+			builtAfter: nil,
+			reason: builtAfterPlace.reason,
+			isBoundFromCallersArgument: builtAfterPlace.isBoundFromCallersArgument,
+			isBuildableAboveSeam: builtAfterPlace.isBuildableAboveSeam,
+			labelsHeldAboveSeam: builtAfterPlace.labelsHeldAboveSeam,
+			placesInTree: builtAfterPlace.placesInTree,
+			holdsPlaceFilledElsewhere: builtAfterPlace.holdsPlaceFilledElsewhere,
+		)
+		#expect(builtAfterPlace.builtAfter != nil)
+		let afterPlace = DeclarationsWrittenAsDifference(declarations: [builtAfterPlace, builtAfterPlace, builtAfterNoPlace])
+		let afterNoPlace = DeclarationsWrittenAsDifference(declarations: [builtAfterNoPlace, builtAfterNoPlace, builtAfterNoPlace])
+		// The place a declaration is built after names its type for the first time in the first list, in full, and by a
+		// reference afterwards, so the second list built after it is the one every later list is.
+		let lists = [afterPlace, afterNoPlace, afterPlace, afterNoPlace, afterPlace, afterNoPlace]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[DeclarationsWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+
+		#expect(readLists.map { $0.declarations.map(Self.encoded) } == lists.map { $0.declarations.map(Self.encoded) })
+		func storage(_ index: Int) -> UnsafeRawPointer? {
+			readLists[index].declarations.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		#expect(storage(4) == storage(2))
+		#expect(storage(3) == storage(1))
+		#expect(storage(5) == storage(1))
+		#expect(storage(1) != storage(0))
+		#expect(storage(1) != storage(2))
+	}
+
+	@Test
+	func binaryReader_handsBackOneStorage_whenListsOfSameElementsAreWrittenAsDifferences() throws {
+		// A signature holds one list of a scope's fields at every place of the scope. Each list comes again after lists
+		// that share its start and its end: `middle` when the last list shares nothing with it and a longer one starts as
+		// it does, so that only the first list of the same elements is the list it is; `short`, too short to be written
+		// as a difference, by the bytes it is written whole as.
+		let long = ListWrittenAsDifference(list: ["a", "b", "c", "d", "e", "f"])
+		let middle = ListWrittenAsDifference(list: ["a", "b", "c", "d"])
+		let short = ListWrittenAsDifference(list: ["a", "b"])
+		let lists = [long, middle, short, ListWrittenAsDifference(list: ["e", "f"]), long, short, short, ListWrittenAsDifference(list: ["x", "y", "z", "w"]), middle]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+
+		func storage(_ index: Int) -> UnsafeRawPointer? {
+			readLists[index].list.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+		}
+		#expect(readLists == lists)
+		#expect(storage(4) == storage(0))
+		#expect(storage(5) == storage(2))
+		#expect(storage(6) == storage(2))
+		#expect(storage(8) == storage(1))
+	}
+
+	@Test
+	func binaryWriter_writesChainOfListsInBytesThatGrowWithItsLength_whenEachListIsAnotherPlusOrMinusOneElement() {
+		func encodedCount(ofChainOfLength length: Int) -> Int {
+			let chain = (0..<length).map { "element\($0)" }
+			// In the order of the labels, as a signature's places are written.
+			let lengths = (0...length).sorted { "\($0)" < "\($1)" }
+			var writer = BinaryWriter()
+			writer.write(BinarySharingSignatureValues(lengths.map { ListWrittenAsDifference(list: Array(chain[..<$0])) } + lengths.map { ListWrittenAsDifference(list: Array(chain[$0...])) }))
+			return writer.encoded.count
+		}
+
+		let hundred = encodedCount(ofChainOfLength: 100)
+		let twoHundred = encodedCount(ofChainOfLength: 200)
+
+		#expect(twoHundred * 2 < hundred * 5, "\(hundred) bytes at a hundred, \(twoHundred) at two hundred")
+	}
+
+	@Test
+	func binaryReader_readsEachList_whenTwoListsAreWrittenAsSameBytesThatDifferFromDifferentLists() throws {
+		// The second and fourth lists are each the list before with its last element replaced, so each is written as the
+		// same bytes, inside a list of one that a reader hands back for the bytes of one it read before.
+		let lists = [
+			["a", "b", "c", "d", "e", "f", "g"],
+			["a", "b", "c", "d", "e", "f", "z"],
+			["q", "r", "s", "t", "u", "v", "w"],
+			["q", "r", "s", "t", "u", "v", "z"],
+		].map { [ListWrittenAsDifference(list: $0)] }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(lists))
+
+		let readLists = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readLists: BinarySharingSignatureValues<[[ListWrittenAsDifference]]> = try reader.read()
+			try reader.finish()
+			return readLists.value
+		}
+
+		#expect(readLists == lists)
+	}
+
+	@Test
+	func binaryReader_throws_whenListDiffersFromListNoneBeforeItHolds() {
+		// An empty string table, one list, which differs from the list one back in its slot: none was read.
+		let bytes: [UInt8] = [0, 1, 1, 1, 0, 0]
+
+		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 2)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryReader_throws_whenListKeepsMoreElementsThanListItDiffersFromHolds() {
+		// The string "a", then two lists: one of that string, and one that keeps the first two elements of it.
+		let bytes: [UInt8] = [1, 1, 0x61, 2, 2, 0, 1, 1, 2, 0]
+
+		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 6)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryReader_throws_whenListCountsMoreElementsOfItsOwnThanBytesRemain() {
+		// The string "a", then two lists: one of that string, and one that keeps its element and counts two hundred of
+		// its own after it, with no byte after the counts.
+		let bytes: [UInt8] = [1, 1, 0x61, 2, 2, 0, 0x91, 0x03, 1, 1, 0]
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 200, offset: 6)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryReader_throws_whenListWrittenWholeCountsMoreElementsThanBytesRemain() {
+		// An empty string table, then one list of two hundred elements, and no byte after its count.
+		let bytes: [UInt8] = [0, 1, 0x90, 0x03]
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 200, offset: 2)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingSignatureValues<[ListWrittenAsDifference]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryReader_throws_whenRunOfDeclarationsBuiltAfterOnePlaceIsLongerThanDeclarations() {
+		// An empty string table, no declaration, then one run of one declaration built after nothing.
+		let bytes: [UInt8] = [0, 0, 1, 1, 0]
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 1, offset: 3)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				_ = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in
+					try SeamSignature.Hole.UncarriedDeclaration.listReadAsDifference(from: &reader)
+				}
+			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSamePublicMockPlanEncoding_whenBlankLineIsAddedAboveDeclarationThatReceivesOmittableParameter() async throws {
+		/// The module's plan encoding and the path of its source file, which the encoding names: each run's fixture is in a
+		/// directory of its own, where a build's file stays where it is.
+		func planEncoding(ofSource source: String) async throws -> (encoding: [UInt8], sourceFilePath: String) {
+			let output = try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Home.swift": source],
+				buildCombinedOutput: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+			)
+			let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+			// The plan holds the receive of `theme`, whose declaration the blank line moves.
+			#expect(try file.publicMockPlans.decoded.map { $0.receivers.map(\.declaringType.asSource) } == [["Home"]])
+			return try (file.publicMockPlans.encoding(writingPositionsAsAbsent: true), #require(file.plainTypeDeclarations.first?.sourceFilePath))
+		}
+
+		let original = try await planEncoding(ofSource: Self.publicMockReceivingPackageTypeSource)
+		let moved = try await planEncoding(ofSource: "\n" + Self.publicMockReceivingPackageTypeSource)
+
+		#expect(original.sourceFilePath.utf8.count == moved.sourceFilePath.utf8.count)
+		let movedEncodingAtOriginalPath = Array(Data(moved.encoding).replacing(Data(moved.sourceFilePath.utf8), with: Data(original.sourceFilePath.utf8)))
+		#expect(original.encoding == movedEncodingAtOriginalPath)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesNoPlanThatNamesTypeNestedMoreDeeplyThanReaderReads_whenPublicMockTakesDeepestTypeAsOptional() async throws {
+		// `Deep` nests as deeply as a reader reads, and `Home`'s mock takes it as `Deep?`, one level deeper, which only
+		// the plan names. `Shallow`'s plan names no such type. Each enclosing type is declared in an extension of the one
+		// around it, since a parser in a debug build reads fewer nested declarations than that.
+		let enclosingNames = (1..<BinaryReader.maximumNestingDepth).map { "Level\($0)" }
+		var deepSource = "public enum \(enclosingNames[0]) {}"
+		for index in enclosingNames.indices.dropFirst() {
+			deepSource += "\n\nextension \(enclosingNames[..<index].joined(separator: ".")) {\n    public enum \(enclosingNames[index]) {}\n}"
+		}
+		deepSource += "\n\nextension \(enclosingNames.joined(separator: ".")) {\n    @Instantiable\n    public struct Deep: Instantiable {\n        public init() {}\n    }\n}"
+		let deepType = (enclosingNames + ["Deep"]).joined(separator: ".")
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				deepSource,
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Home: Instantiable {
+				    public init(deep: \(deepType)) {
+				        self.deep = deep
+				    }
+
+				    @Received let deep: \(deepType)
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Shallow: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+
+		#expect(file.publicMockPlans.mockedTypes.map(\.asSource) == ["Shallow"])
+		#expect(try file.publicMockPlans.decoded.map(\.mockedType.asSource) == ["Shallow"])
+	}
+
+	@Test(arguments: [4, 6, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_storesEachReceiverOfOmittableParameterOnce_whenTreeReachesItOnEveryPathOfLayeredDiamond(layerCount: Int) async throws {
+		// `Home` instantiates `A1` and `B1`, each of which instantiates `A2` and `B2`, down to the last layer, whose two
+		// types receive `theme`: two declarations on two to the power of `layerCount` paths.
+		var source = """
+		package struct Theme {}
+
+		@Instantiable(generateMock: .public)
+		public struct Home: Instantiable {
+		    package init(a1: A1, b1: B1) {}
+
+		    @Instantiated let a1: A1
+		    @Instantiated let b1: B1
+		}
+		"""
+		for layer in 1...layerCount {
+			for name in ["A", "B"] {
+				if layer == layerCount {
+					source += """
+
+
+					@Instantiable
+					package struct \(name)\(layer): Instantiable {
+					    package init(theme: Theme?) {}
+
+					    @Received(onlyIfAvailable: true) let theme: Theme?
+					}
+					"""
+				} else {
+					source += """
+
+
+					@Instantiable
+					package struct \(name)\(layer): Instantiable {
+					    package init(a\(layer + 1): A\(layer + 1), b\(layer + 1): B\(layer + 1)) {}
+
+					    @Instantiated let a\(layer + 1): A\(layer + 1)
+					    @Instantiated let b\(layer + 1): B\(layer + 1)
+					}
+					"""
+				}
+			}
+		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [source],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Feature", "--package-name", "Shop"],
+		)
+		let file = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
+
+		#expect(try file.publicMockPlans.decoded.map { $0.receivers.map(\.declaringType.asSource) } == [["A\(layerCount)", "B\(layerCount)"]])
+	}
+
+	@Test
+	func binaryReader_throws_whenEncodingCountsMoreBytesThanRemain() throws {
+		var writer = BinaryWriter()
+		writer.write(BinaryEncoding(bytes: [1, 2, 3]))
+		let cutShort = Array(writer.encoded.dropLast())
+
+		#expect(throws: BinaryDecodingError.countExceedsRemainingBytes(count: 3, offset: 1)) {
+			let _: BinaryEncoding = try read(cutShort)
+		}
+	}
+
 	// MARK: Private
 
 	/// `café` with a precomposed `é` (U+00E9), the spelling Unicode Normalization Form C produces.
@@ -1261,6 +2162,64 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@Instantiable
 	public struct UpstreamService: Instantiable {
 	    public init() {}
+	}
+	"""
+
+	private static let upstreamPublicMockSource = """
+	@Instantiable(generateMock: .public)
+	public struct UpstreamService: Instantiable {
+	    init(store: Store) {
+	        self.store = store
+	    }
+
+	    @Instantiated let store: Store
+	}
+
+	@Instantiable
+	struct Store: Instantiable {
+	    init() {}
+	}
+	"""
+
+	private static let downstreamPublicMockCallerSource = """
+	import Upstream
+
+	@Instantiable(generateMock: true)
+	public struct Screen: Instantiable {
+	    public init(upstreamService: UpstreamService) {
+	        self.upstreamService = upstreamService
+	    }
+
+	    @Instantiated let upstreamService: UpstreamService
+	}
+	"""
+
+	private static let publicMockReceivingPackageTypeSource = """
+	package struct Theme {}
+
+	@Instantiable(generateMock: .public)
+	public struct Home: Instantiable {
+	    package init(theme: Theme?) {}
+
+	    @Received(onlyIfAvailable: true) let theme: Theme?
+	}
+	"""
+
+	private static let upstreamSeamSource = """
+	@Instantiable(generateDependencyTree: true)
+	public struct UpstreamSeam: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	private static let downstreamSeamCallerSource = """
+	@Instantiable(isRoot: true)
+	public struct Root: Instantiable {
+	    public init(upstreamSeam: UpstreamSeam) {
+	        self.upstreamSeam = upstreamSeam
+	    }
+
+	    @Instantiated let upstreamSeam: UpstreamSeam
 	}
 	"""
 
@@ -1365,6 +2324,22 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		case let .enumeration(cases):
 			cases.count
 		}
+	}
+
+	/// For each list, the index of the first list that holds its elements in the same storage, or its own index when it
+	/// holds none.
+	private static func indicesOfFirstListInSameStorage(_ lists: [[UInt64]]) -> [Int] {
+		let storages = lists.map { list in list.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) } }
+		return lists.indices.map { index in
+			storages[index] == nil ? lists.firstIndex(of: lists[index]) ?? index : storages.firstIndex(of: storages[index]) ?? index
+		}
+	}
+
+	/// `value` as a variable-length integer.
+	private static func unsigned(_ value: UInt64) -> [UInt8] {
+		var writer = BinaryWriter()
+		writer.writeUnsigned(value)
+		return writer.bytes
 	}
 
 	/// `value` with a string table holding the strings it writes.
@@ -1971,6 +2946,20 @@ extension TypeDescription.VoidSpelling: BinarySample {}
 extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
 extension StoredSeamSignature: BinarySample {}
+extension ModuleSeamSignatures: BinarySample {}
+extension ModulePublicMockPlans: BinarySample {}
+extension StoredPublicMockPlan: BinarySample {}
+extension StoredPublicMockPlan.Parameter: BinarySample {}
+extension StoredPublicMockPlan.Role: BinarySample {}
+extension StoredPublicMockPlan.NestedOmission: BinarySample {}
+extension StoredPublicMockPlan.Receiver: BinarySample {}
+
+extension BinaryEncoding: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinaryEncoding {
+		BinaryEncoding(bytes: isDistinct ? [1] : [])
+	}
+}
+
 extension SeamSignature: BinarySample {}
 extension SeamSignature.Receiver: BinarySample {}
 extension SeamSignature.NestedSeamCall: BinarySample {}
@@ -2011,3 +3000,37 @@ extension TypeAccessProof.Prover: BinarySample {}
 extension TypeAccessProof.MemberKind: BinarySample {}
 extension ModuleIdentity: BinarySample {}
 extension AccessRequirement: BinarySample {}
+
+/// A place's uncarried declarations, written as a seam signature writes them.
+private struct DeclarationsWrittenAsDifference: BinaryCodable {
+	init(declarations: [SeamSignature.Hole.UncarriedDeclaration]) {
+		self.declarations = declarations
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		declarations = try SeamSignature.Hole.UncarriedDeclaration.listReadAsDifference(from: &reader)
+	}
+
+	let declarations: [SeamSignature.Hole.UncarriedDeclaration]
+
+	func write(to writer: inout BinaryWriter) {
+		SeamSignature.Hole.UncarriedDeclaration.writeAsDifference(declarations, to: &writer)
+	}
+}
+
+/// A list written as its difference from one written before it (`BinaryWriter.writeDifference(of:in:)`).
+private struct ListWrittenAsDifference: BinaryCodable, Equatable {
+	init(list: [String]) {
+		self.list = list
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		list = try reader.readDifference(in: .labelsBoundLater)
+	}
+
+	let list: [String]
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeDifference(of: list, in: .labelsBoundLater)
+	}
+}

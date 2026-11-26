@@ -55,7 +55,7 @@ public struct LoggedInView: View, Instantiable {
 
 Three steps to integrate:
 
-1. Add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4")` to your `Package.swift` dependencies.
+1. Add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0")` to your `Package.swift` dependencies.
 2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
 3. Decorate your app's root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
 
@@ -67,8 +67,8 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 
 - ``Instantiable(isRoot:generateDependencyTree:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedInitializerAttributes:mockAttributes:generateMock:customMockName:)``
 - ``Instantiable(isRoot:generateDependencyTree:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedAttributes:generateMock:customMockName:)``
-- ``Instantiated()``
-- ``Instantiated(fulfilledByType:erasedToConcreteExistential:)``
+- ``Instantiated(onlyIfAvailable:)``
+- ``Instantiated(fulfilledByType:erasedToConcreteExistential:onlyIfAvailable:)``
 - ``Received(onlyIfAvailable:)``
 - ``Received(fulfilledByDependencyNamed:ofType:erasedToConcreteExistential:onlyIfAvailable:)``
 - ``Forwarded()``

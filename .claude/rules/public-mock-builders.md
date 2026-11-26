@@ -2,8 +2,7 @@
 paths:
   - "Sources/SafeDICore/Generators/**/*"
   - "Sources/SafeDICore/Models/{Scope,ReservedName}.swift"
-  - "Tests/**/*PublicMock*.swift"
-  - "Tests/**/*SeamOwnMock*.swift"
+  - "Tests/**/*{PublicMock,SeamOwnMock}*.swift"
   - "Tests/SafeDIToolTestSupport/GraphFuzzerPublicMocks.swift"
 ---
 

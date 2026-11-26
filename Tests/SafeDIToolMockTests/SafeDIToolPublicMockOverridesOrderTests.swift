@@ -104,7 +104,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.payments = { _ in __safeDI_builder() }
+		                    self.init(payments: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -118,7 +118,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.banner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(banner: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -234,7 +234,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
+		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -248,7 +248,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.own = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(own: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -265,7 +265,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(inner: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -383,7 +383,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.own = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(own: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -400,7 +400,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
+		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -414,7 +414,7 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.shelf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(shelf: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }

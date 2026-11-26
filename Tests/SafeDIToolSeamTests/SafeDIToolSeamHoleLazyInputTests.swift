@@ -148,18 +148,18 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_uploaderBuilder_ExportFeature() -> ExportFeature.__safeDI_UploaderCarrier<any Uploader> {
+			            .init(uploader: { scope_exportService, scope_screenBuilder in
+			                let uploader: any Uploader = DefaultUploader()
+			                return uploader
+			            })
+			        }
 			        func __safeDI_exportService() -> ExportService {
 			            ExportService()
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
 			            _ = ExportFeature.__safeDI_ExportFeature_FF2BE1522AF7694B.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature() -> ExportFeature.__safeDI_UploaderCarrier<any Uploader> {
-			                .init(uploader: { scope_exportService, scope_screenBuilder in
-			                    let uploader: any Uploader = DefaultUploader()
-			                    return uploader
-			                })
-			            }
 			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature())
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
@@ -1183,7 +1183,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.uploader = { _ in __safeDI_builder() }
+			                self.init(uploader: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -1299,7 +1299,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.uploader = { _ in __safeDI_builder() }
+			                self.init(uploader: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }

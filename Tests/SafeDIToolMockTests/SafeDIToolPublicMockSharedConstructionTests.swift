@@ -5844,11 +5844,12 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 	}
 
 	@Test(arguments: [
-		"@_spi(Testing) public init(limit: Int = 3)",
-		"@backDeployed(before: macOS 99) public init(limit: Int = 3)",
+		("@_spi(Testing) public init(limit: Int = 3)", "let limit: Int"),
+		// A `@backDeployed` function's body can read only `public` declarations on Apple platforms.
+		("@backDeployed(before: macOS 99) public init(limit: Int = 3)", "public let limit: Int"),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_declaresConstructionFunctionWithoutAttributeOnlyPublicDeclarationsTake_whenInitializerSpellsIt(initializer: String) async throws {
+	mutating func generate_declaresConstructionFunctionWithoutAttributeOnlyPublicDeclarationsTake_whenInitializerSpellsIt(initializer: String, property: String) async throws {
 		// `@_spi` and `@backDeployed` apply only to a `public` declaration, and a construction function is `internal`, so it
 		// repeats every attribute of the initializer but these.
 		let modules = [
@@ -5870,7 +5871,7 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			        self.limit = limit
 			    }
 
-			    let limit: Int
+			    \(property)
 			}
 			"""]),
 		]

@@ -196,6 +196,8 @@ func executeSafeDIToolTest(
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
 	// A module info file names the module it describes, so the run writes one only when the test names its module.
+	// The module the run generates, which an issue of its stored blocks names.
+	let moduleName = moduleMembershipArguments.firstIndex(of: "--module-name").flatMap { moduleMembershipArguments.indices.contains($0 + 1) ? moduleMembershipArguments[$0 + 1] : nil }
 	let moduleInfoOutput: URL? = moduleMembershipArguments.contains("--module-name") ? URL.temporaryFile.appendingPathExtension("safedi") : nil
 	let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
@@ -338,15 +340,17 @@ func executeSafeDIToolTest(
 			// the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
 			// Every seam settled without its confirming signature pass must have the signature that pass finds (`SkippedConfirmingPassChecks`).
 			// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
-			generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-				try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-					try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-						// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-						// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-						try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-							try await ConstructionInternerOrder.applying(.fromEnvironment) {
-								try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-									try await tool.generate()
+			generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
+				try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
+					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+							// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+							// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+								try await ConstructionInternerOrder.applying(.fromEnvironment) {
+									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
+										try await tool.generate()
+									}
 								}
 							}
 						}
@@ -356,6 +360,8 @@ func executeSafeDIToolTest(
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
 		}
+		// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+		StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
 
 		filesToDelete.append(swiftFileCSV)
 		filesToDelete.append(swiftFixtureDirectory)
@@ -412,6 +418,9 @@ func executeSafeDIToolTest(
 		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: moduleInfoFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if let recordDirectory {
 			// Recorded before compiling, so a compile that fails still leaves the outputs it was given.
 			var outputs = (generatedFiles ?? [:]).sorted { $0.key < $1.key }.map {
