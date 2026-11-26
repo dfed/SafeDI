@@ -49,7 +49,7 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 		var elementsPerNodeAndEdge = [Double]()
 		for layerCount in [4, 8] {
 			var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let layer: Layer1"])]
-			for layer in 1 ... layerCount {
+			for layer in 1...layerCount {
 				let declarations = layer == layerCount
 					? ["@Received let session: Session"]
 					: ["@Received let session: Session", "@Instantiated let first: Layer\(layer + 1)", "@Instantiated let second: Layer\(layer + 1)"]

@@ -211,7 +211,7 @@ enum TypeFactsChecks {
 		var closingAwareRoute = [Int: [Int]]()
 		var stack: [(node: Int, edge: Int)] = [(0, 0)]
 		var route = [0]
-		var descended: Set<Int> = [0]
+		var descended: Set = [0]
 		closingAwareRoute[0] = [0]
 		while let frame = stack.last {
 			let edges = report.nodes[frame.node].edges

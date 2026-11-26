@@ -118,7 +118,7 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 
 	/// The targets of the node's edges, in the order its edges were given.
 	func edges(from index: Int) -> ArraySlice<Int32> {
-		edgeTargets[Int(edgeOffsets[index]) ..< Int(edgeOffsets[index + 1])]
+		edgeTargets[Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])]
 	}
 
 	/// How many edges the graph has, duplicates included.

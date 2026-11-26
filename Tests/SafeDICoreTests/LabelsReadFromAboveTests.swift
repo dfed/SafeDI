@@ -103,7 +103,7 @@ struct LabelsReadFromAboveTests {
 		// graph (node, edge, read and bound label) must not.
 		var wordsPerElement = [Double]()
 		var workPerElement = [Double]()
-		for (features, labelsPerFeature, sharedTypes) in [(50, 5, 250), (200, 20, 1000)] {
+		for (features, labelsPerFeature, sharedTypes) in [(50, 5, 250), (200, 20, 1_000)] {
 			let shape = FeaturesOverSharedTree(features: features, labelsPerFeature: labelsPerFeature, sharedTypes: sharedTypes)
 			let graph = OrderedGraph(root: 0, edges: shape.edges(from:))
 			let labels = LabelsReadFromAbove(
@@ -129,7 +129,7 @@ struct LabelsReadFromAboveTests {
 /// The nodes of the growth row's graph: 0 the root; then per feature its node, its label types and its 3 screens; then
 /// the shared types, a binary tree.
 private struct FeaturesOverSharedTree {
-	static let services = (0 ..< 6).map { "service\($0)" }
+	static let services = (0..<6).map { "service\($0)" }
 
 	let features: Int
 	let labelsPerFeature: Int
@@ -144,19 +144,19 @@ private struct FeaturesOverSharedTree {
 	}
 
 	func labels(ofFeature feature: Int) -> [String] {
-		(0 ..< labelsPerFeature).map { "feature\(feature)Label\($0)" }
+		(0..<labelsPerFeature).map { "feature\(feature)Label\($0)" }
 	}
 
 	func edges(from node: Int) -> [Int] {
 		if node == 0 {
-			return (0 ..< features).map(feature)
+			return (0..<features).map(feature)
 		} else if node >= firstSharedType {
 			let child = (node - firstSharedType) * 2 + 1
 			return [child, child + 1].filter { $0 < sharedTypes }.map { firstSharedType + $0 }
 		} else {
 			let (feature, offset) = (node - 1).quotientAndRemainder(dividingBy: nodesPerFeature)
 			if offset == 0 {
-				return (1 ... labelsPerFeature + 3).map { node + $0 }
+				return (1...labelsPerFeature + 3).map { node + $0 }
 			} else if offset <= labelsPerFeature {
 				return []
 			} else if offset == labelsPerFeature + 3 {

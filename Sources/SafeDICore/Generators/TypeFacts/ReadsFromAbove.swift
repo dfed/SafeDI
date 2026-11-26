@@ -29,7 +29,7 @@ struct BitRows: Sendable {
 	init(rowCount: Int, columnCount: Int, columnsOfRow: (_ row: Int, _ insert: (Int32) -> Void) -> Void) {
 		var accumulator = RowAccumulator(columnCount: columnCount)
 		self.init(columnCount: columnCount)
-		for row in 0 ..< rowCount {
+		for row in 0..<rowCount {
 			columnsOfRow(row) { column in
 				let (word, bit) = Int(column).quotientAndRemainder(dividingBy: 64)
 				_ = accumulator.add(1 << UInt64(bit), toWord: Int32(word))
@@ -46,7 +46,7 @@ struct BitRows: Sendable {
 
 	func contains(_ column: Int32, inRow row: Int) -> Bool {
 		let (word, bit) = Int(column).quotientAndRemainder(dividingBy: 64)
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) where wordIndices[index] == Int32(word) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) where wordIndices[index] == Int32(word) {
 			return wordBits[index] & 1 << UInt64(bit) != 0
 		}
 		return false
@@ -55,7 +55,7 @@ struct BitRows: Sendable {
 	/// The columns set in a row, in increasing order.
 	func columns(inRow row: Int) -> [Int32] {
 		var columns = [Int32]()
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
 			var word = wordBits[index]
 			while word != 0 {
 				columns.append(wordIndices[index] * 64 + Int32(word.trailingZeroBitCount))
@@ -77,7 +77,7 @@ struct BitRows: Sendable {
 
 	/// Adds each word of `row` to `accumulator`.
 	fileprivate func add(row: Int, to accumulator: inout RowAccumulator) {
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
 			_ = accumulator.add(wordBits[index], toWord: wordIndices[index])
 		}
 	}
@@ -86,7 +86,7 @@ struct BitRows: Sendable {
 	/// accumulator lacked.
 	fileprivate func add(row: Int, to accumulator: inout RowAccumulator, excluding mask: RowAccumulator) -> Bool {
 		var changed = false
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
 			let word = wordIndices[index]
 			if accumulator.add(wordBits[index] & ~mask.bits(ofWord: word), toWord: word) {
 				changed = true
@@ -200,7 +200,7 @@ struct ReadsFromAbove: Sendable {
 		for index in graph.nodes.indices {
 			componentStarts[Int(graph.componentByNode[index]) + 1] += 1
 		}
-		for component in 0 ..< graph.componentCount {
+		for component in 0..<graph.componentCount {
 			componentStarts[component + 1] += componentStarts[component]
 		}
 		var nextSlotByComponent = componentStarts
@@ -216,8 +216,8 @@ struct ReadsFromAbove: Sendable {
 		var work = 0
 		// A component's number is lower than that of every component that reaches it, so every target outside the
 		// component is complete when the component starts.
-		for component in 0 ..< graph.componentCount {
-			let members = nodesByComponent[Int(componentStarts[component]) ..< Int(componentStarts[component + 1])]
+		for component in 0..<graph.componentCount {
+			let members = nodesByComponent[Int(componentStarts[component])..<Int(componentStarts[component + 1])]
 			if members.count == 1, let index = members.first.map(Int.init), !graph.isOnCycle(index) {
 				mask.load(row: index, of: hidden)
 				own.add(row: index, to: &accumulator)
