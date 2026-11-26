@@ -2166,11 +2166,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			\(childConstruction)
-			        func __safeDI_panel() -> Panel {
-			            let gauge = if let safeDIBuilder = safeDIOverrides.panel.gauge { safeDIBuilder() } else { Gauge() }
-			            return if let safeDIBuilder = safeDIOverrides.panel.safeDIBuilder { safeDIBuilder(gauge) } else { Panel(gauge: gauge) }
+			        func __safeDI_panel(__safeDI_Panel_configuration: Panel.SafeDIMockConfiguration) -> Panel {
+			            let gauge = if let safeDIBuilder = __safeDI_Panel_configuration.gauge { safeDIBuilder() } else { Gauge() }
+			            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(gauge) } else { Panel(gauge: gauge) }
 			        }
-			        let panel: Panel = __safeDI_panel()
+			        let panel: Panel = __safeDI_panel(__safeDI_Panel_configuration: safeDIOverrides.panel)
 			        return Root(child: child, panel: panel)
 			    }
 			}
@@ -2558,10 +2558,10 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	    static func mock(
 	        safeDIOverrides: SafeDIOverrides = .init()
 	    ) -> Root {
-	        func __safeDI_child() -> Child {
-	            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(safeDIOverrides.child.date) } else { Child(date: safeDIOverrides.child.date) }
+	        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+	            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.date) } else { Child(date: __safeDI_Child_configuration.date) }
 	        }
-	        let child: Child = __safeDI_child()
+	        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 	        return Root(child: child)
 	    }
 	}

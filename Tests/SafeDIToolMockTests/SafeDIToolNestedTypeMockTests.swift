@@ -117,11 +117,11 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_consumer() -> Feature.Consumer {
-		            let service = if let safeDIBuilder = safeDIOverrides.consumer.service { safeDIBuilder() } else { Feature.Service() }
-		            return if let safeDIBuilder = safeDIOverrides.consumer.safeDIBuilder { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
+		        func __safeDI_consumer(__safeDI_Feature_Consumer_mockConfiguration: Feature.Consumer.SafeDIMockConfiguration) -> Feature.Consumer {
+		            let service = if let safeDIBuilder = __safeDI_Feature_Consumer_mockConfiguration.service { safeDIBuilder() } else { Feature.Service() }
+		            return if let safeDIBuilder = __safeDI_Feature_Consumer_mockConfiguration.safeDIBuilder { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
 		        }
-		        let consumer: Feature.Consumer = __safeDI_consumer()
+		        let consumer: Feature.Consumer = __safeDI_consumer(__safeDI_Feature_Consumer_mockConfiguration: safeDIOverrides.consumer)
 		        return Root(consumer: consumer)
 		    }
 		}
@@ -720,7 +720,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
-		        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
+		        let consumer: Feature.Consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
 		        return Root(consumer: consumer)
 		    }
 		}
@@ -817,7 +817,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
-		        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
+		        let consumer: Feature.Consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
 		        return Root(consumer: consumer)
 		    }
 		}

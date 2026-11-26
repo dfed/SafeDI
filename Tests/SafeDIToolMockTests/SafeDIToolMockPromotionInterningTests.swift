@@ -141,10 +141,12 @@ struct SafeDIToolMockPromotionInterningTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_service() -> any Service {
-		            if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { DefaultService() }
+		        func __safeDI_service(__safeDI_DefaultService_configuration: (() -> any Service)?) -> any Service {
+		            if let safeDIBuilder = __safeDI_DefaultService_configuration { safeDIBuilder() } else { DefaultService() }
 		        }
-		        let service = LazilyInstantiated<any Service>(__safeDI_service)
+		        let service = LazilyInstantiated<any Service> {
+		            __safeDI_service(__safeDI_DefaultService_configuration: safeDIOverrides.service)
+		        }
 		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child(service: service) }
 		        return Screen(service: service.instance, child: child)
 		    }

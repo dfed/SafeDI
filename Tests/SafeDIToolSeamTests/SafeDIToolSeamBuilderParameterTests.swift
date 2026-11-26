@@ -5908,11 +5908,11 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_profile() -> Profile {
+		        func __safeDI_profile(__safeDI_Profile_configuration: ((any UserService, Analytics) -> Profile)?) -> Profile {
 		            let userService: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService, analytics) } else { Profile(userService: userService, analytics: analytics) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService, analytics) } else { Profile(userService: userService, analytics: analytics) }
 		        }
-		        let profile: Profile = __safeDI_profile()
+		        let profile: Profile = __safeDI_profile(__safeDI_Profile_configuration: safeDIOverrides.profile)
 		        return Service(analytics: analytics, profile: profile)
 		    }
 		}

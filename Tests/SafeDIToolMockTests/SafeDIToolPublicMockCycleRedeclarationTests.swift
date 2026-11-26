@@ -584,19 +584,25 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_holder() -> Holder {
+		        func __safeDI_cache() -> Cache {
 		            _ = Cache.__safeDI_Cache_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let cache = if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
-		            func __safeDI_holderBuilder() -> Holder {
-		                _ = Cache.__safeDI_Cache_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                let cache = if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
-		                let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
-		                return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
-		            }
-		            let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
+		            return if let safeDIBuilder = safeDIOverrides.holder.cache { safeDIBuilder() } else { Cache.__safeDI_mock() }
 		        }
-		        let holder: Holder = __safeDI_holder()
+		        func __safeDI_holderBuilder(__safeDI_Holder_configuration: Holder.SafeDIMockConfiguration) -> Holder {
+		            let cache: Cache = __safeDI_cache()
+		            let holderBuilder = Instantiator<Holder> {
+		                __safeDI_holderBuilder(__safeDI_Holder_configuration: __safeDI_Holder_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Holder_configuration.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
+		        }
+		        func __safeDI_holder(__safeDI_Holder_configuration: Holder.SafeDIMockConfiguration) -> Holder {
+		            let cache: Cache = __safeDI_cache()
+		            let holderBuilder = Instantiator<Holder> {
+		                __safeDI_holderBuilder(__safeDI_Holder_configuration: __safeDI_Holder_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Holder_configuration.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
+		        }
+		        let holder: Holder = __safeDI_holder(__safeDI_Holder_configuration: safeDIOverrides.holder)
 		        return Screen(holder: holder)
 		    }
 		}

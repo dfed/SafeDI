@@ -196,26 +196,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_session() -> Session {
-		            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        func __safeDI_session(__safeDI_Session_configuration: (() -> Session)?) -> Session {
+		            if let safeDIBuilder = __safeDI_Session_configuration { safeDIBuilder() } else { Session() }
 		        }
-		        let session = LazilyInstantiated<Session>(__safeDI_session)
-		        func __safeDI_t3Builder(session: Session) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                func __safeDI_session() -> Session {
-		                    if let safeDIBuilder = safeDIOverrides.t3Builder.t0Builder.session { safeDIBuilder() } else { Session() }
-		                }
-		                let session = LazilyInstantiated<Session>(__safeDI_session)
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: session.instance)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.t3Builder.t0Builder.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
+		        let session = LazilyInstantiated<Session> {
+		            __safeDI_session(__safeDI_Session_configuration: safeDIOverrides.session)
+		        }
+		        func __safeDI_t3Builder(session: LazilyInstantiated<Session>, __safeDI_T3_configuration: T3.SafeDIMockConfiguration) -> T3 {
+		            let t0Builder = Instantiator<T0> {
+		                __safeDI_t0Builder(__safeDI_T0_configuration: __safeDI_T3_configuration.t0Builder, __safeDI_T3_configuration_nearest: __safeDI_T3_configuration)
 		            }
-		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-		            return if let safeDIBuilder = safeDIOverrides.t3Builder.safeDIBuilder { safeDIBuilder(session, t0Builder) } else { T3(session: session, t0Builder: t0Builder) }
+		            return if let safeDIBuilder = __safeDI_T3_configuration.safeDIBuilder { safeDIBuilder(session.instance, t0Builder) } else { T3(session: session.instance, t0Builder: t0Builder) }
+		        }
+		        func __safeDI_t0Builder(__safeDI_T0_configuration: T0.SafeDIMockConfiguration, __safeDI_T3_configuration_nearest: T3.SafeDIMockConfiguration?) -> T0 {
+		            let session = LazilyInstantiated<Session> {
+		                __safeDI_session(__safeDI_Session_configuration: __safeDI_T0_configuration.session)
+		            }
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(session: session, __safeDI_T3_configuration: __safeDI_T3_configuration_nearest ?? T3.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_T0_configuration.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
 		        }
 		        let t3Builder = Instantiator<T3> {
-		            __safeDI_t3Builder(session: session.instance)
+		            __safeDI_t3Builder(session: session, __safeDI_T3_configuration: safeDIOverrides.t3Builder)
 		        }
 		        return Root(session: session, t3Builder: t3Builder)
 		    }
@@ -1026,20 +1029,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        func __safeDI_screenBuilder(session: Session) -> Screen {
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session { safeDIBuilder() } else { Session() }
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		        func __safeDI_screenBuilder(session: Session, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_Step_configuration: __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
 		            }
-		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		            let reader = if let safeDIBuilder = safeDIOverrides.screenBuilder.reader { safeDIBuilder(session) } else { Reader(session: session) }
-		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { safeDIBuilder(stepBuilder, reader) } else { Screen(stepBuilder: stepBuilder, reader: reader) }
+		            let reader = if let safeDIBuilder = __safeDI_Screen_configuration.reader { safeDIBuilder(session) } else { Reader(session: session) }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(stepBuilder, reader) } else { Screen(stepBuilder: stepBuilder, reader: reader) }
+		        }
+		        func __safeDI_stepBuilder(__safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
+		            let session = if let safeDIBuilder = __safeDI_Step_configuration.session { safeDIBuilder() } else { Session() }
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
 		        }
 		        let screenBuilder = Instantiator<Screen> {
-		            __safeDI_screenBuilder(session: session)
+		            __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
 		        }
 		        return Root(session: session, screenBuilder: screenBuilder)
 		    }
@@ -1132,20 +1137,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        let __safeDI_screenBuilder__overrides = safeDIOverrides.screenBuilder
-		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session) -> Screen {
-		            @Sendable nonisolated func __safeDI_stepBuilder() -> Step {
-		                let session = if let safeDIBuilder = __safeDI_screenBuilder__overrides.stepBuilder.session { safeDIBuilder() } else { Session() }
-		                let screenBuilder = SendableInstantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return if let safeDIBuilder = __safeDI_screenBuilder__overrides.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let stepBuilder = SendableInstantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_Step_configuration: __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
 		            }
-		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
-		            return if let safeDIBuilder = __safeDI_screenBuilder__overrides.safeDIBuilder { safeDIBuilder(session, stepBuilder) } else { Screen(session: session, stepBuilder: stepBuilder) }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(session, stepBuilder) } else { Screen(session: session, stepBuilder: stepBuilder) }
 		        }
+		        @Sendable nonisolated func __safeDI_stepBuilder(__safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
+		            let session = if let safeDIBuilder = __safeDI_Step_configuration.session { safeDIBuilder() } else { Session() }
+		            let screenBuilder = SendableInstantiator<Screen> {
+		                __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		        }
+		        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
 		        let screenBuilder = SendableInstantiator<Screen> {
-		            __safeDI_screenBuilder(session: session)
+		            __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
 		        }
 		        return App(session: session, screenBuilder: screenBuilder)
 		    }
@@ -1268,19 +1275,21 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        func __safeDI_screenBuilder(count: Int, name: String, session: Session) -> AnyScreen {
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session { safeDIBuilder() } else { Session() }
-		                let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
-		                    __safeDI_screenBuilder(count: $0.count, name: $0.name, session: session)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		        func __safeDI_screenBuilder(count: Int, name: String, session: Session, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> AnyScreen {
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_Step_configuration: __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
 		            }
-		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { AnyScreen(safeDIBuilder(name, count, session, stepBuilder)) } else { AnyScreen(Screen(name: name, count: count, session: session, stepBuilder: stepBuilder)) }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { AnyScreen(safeDIBuilder(name, count, session, stepBuilder)) } else { AnyScreen(Screen(name: name, count: count, session: session, stepBuilder: stepBuilder)) }
+		        }
+		        func __safeDI_stepBuilder(__safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
+		            let session = if let safeDIBuilder = __safeDI_Step_configuration.session { safeDIBuilder() } else { Session() }
+		            let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		                __safeDI_screenBuilder(count: $0.count, name: $0.name, session: session, __safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
 		        }
 		        let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
-		            __safeDI_screenBuilder(count: $0.count, name: $0.name, session: session)
+		            __safeDI_screenBuilder(count: $0.count, name: $0.name, session: session, __safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
 		        }
 		        return App(session: session, screenBuilder: screenBuilder)
 		    }
@@ -1399,35 +1408,39 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
-		        func __safeDI_screenBuilder(session: Session) -> Screen {
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session { safeDIBuilder() } else { Session() }
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		        func __safeDI_screenBuilder(session: Session, __safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let stepBuilder = Instantiator<Step> {
+		                __safeDI_stepBuilder(__safeDI_Step_configuration: __safeDI_Screen_configuration.stepBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
 		            }
-		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		            func __safeDI_otherBuilder() -> Other {
-		                func __safeDI_innerBuilder(session: Session) -> Inner {
-		                    let screenBuilder = Instantiator<Screen> {
-		                        __safeDI_screenBuilder(session: session)
-		                    }
-		                    return if let safeDIBuilder = safeDIOverrides.screenBuilder.otherBuilder.innerBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Inner(session: session, screenBuilder: screenBuilder) }
-		                }
-		                let innerBuilder = Instantiator<Inner> {
-		                    __safeDI_innerBuilder(session: $0)
-		                }
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.otherBuilder.safeDIBuilder { safeDIBuilder(innerBuilder, screenBuilder) } else { Other(innerBuilder: innerBuilder, screenBuilder: screenBuilder) }
+		            let otherBuilder = Instantiator<Other> {
+		                __safeDI_otherBuilder(session: session, __safeDI_Other_configuration: __safeDI_Screen_configuration.otherBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration)
 		            }
-		            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { safeDIBuilder(session, stepBuilder, otherBuilder) } else { Screen(session: session, stepBuilder: stepBuilder, otherBuilder: otherBuilder) }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(session, stepBuilder, otherBuilder) } else { Screen(session: session, stepBuilder: stepBuilder, otherBuilder: otherBuilder) }
+		        }
+		        func __safeDI_stepBuilder(__safeDI_Step_configuration: Step.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Step {
+		            let session = if let safeDIBuilder = __safeDI_Step_configuration.session { safeDIBuilder() } else { Session() }
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Step_configuration.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		        }
+		        func __safeDI_otherBuilder(session: Session, __safeDI_Other_configuration: Other.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Other {
+		            let innerBuilder = Instantiator<Inner> {
+		                __safeDI_innerBuilder(session: $0, __safeDI_Inner_configuration: __safeDI_Other_configuration.innerBuilder, __safeDI_Screen_configuration_nearest: __safeDI_Screen_configuration_nearest)
+		            }
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Other_configuration.safeDIBuilder { safeDIBuilder(innerBuilder, screenBuilder) } else { Other(innerBuilder: innerBuilder, screenBuilder: screenBuilder) }
+		        }
+		        func __safeDI_innerBuilder(session: Session, __safeDI_Inner_configuration: Inner.SafeDIMockConfiguration, __safeDI_Screen_configuration_nearest: Screen.SafeDIMockConfiguration?) -> Inner {
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: __safeDI_Screen_configuration_nearest ?? Screen.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Inner_configuration.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Inner(session: session, screenBuilder: screenBuilder) }
 		        }
 		        let screenBuilder = Instantiator<Screen> {
-		            __safeDI_screenBuilder(session: session)
+		            __safeDI_screenBuilder(session: session, __safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
 		        }
 		        return App(session: session, screenBuilder: screenBuilder)
 		    }
@@ -1657,26 +1670,29 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_t1Builder() -> T1 {
-			            if let safeDIBuilder = safeDIOverrides.t1Builder { safeDIBuilder() } else { T1() }
+			        func __safeDI_t1Builder(__safeDI_T1_configuration: (() -> T1)?) -> T1 {
+			            if let safeDIBuilder = __safeDI_T1_configuration { safeDIBuilder() } else { T1() }
 			        }
-			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			        func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
-			            func __safeDI_t0Builder() -> T0 {
-			                func __safeDI_t1Builder() -> T1 {
-			                    if let safeDIBuilder = safeDIOverrides.t3Builder.t0Builder.t1Builder { safeDIBuilder() } else { T1() }
-			                }
-			                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			                let t3Builder = Instantiator<T3> {
-			                    __safeDI_t3Builder(t1Builder: t1Builder)
-			                }
-			                return if let safeDIBuilder = safeDIOverrides.t3Builder.t0Builder.safeDIBuilder { safeDIBuilder(t1Builder, t3Builder) } else { T0(t1Builder: t1Builder, t3Builder: t3Builder) }
+			        let t1Builder = Instantiator<T1> {
+			            __safeDI_t1Builder(__safeDI_T1_configuration: safeDIOverrides.t1Builder)
+			        }
+			        func __safeDI_t3Builder(t1Builder: Instantiator<T1>, __safeDI_T3_configuration: T3.SafeDIMockConfiguration) -> T3 {
+			            let t0Builder = Instantiator<T0> {
+			                __safeDI_t0Builder(__safeDI_T0_configuration: __safeDI_T3_configuration.t0Builder, __safeDI_T3_configuration_nearest: __safeDI_T3_configuration)
 			            }
-			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-			            return if let safeDIBuilder = safeDIOverrides.t3Builder.safeDIBuilder { safeDIBuilder(t0Builder, t1Builder) } else { T3(t0Builder: t0Builder, t1Builder: t1Builder) }
+			            return if let safeDIBuilder = __safeDI_T3_configuration.safeDIBuilder { safeDIBuilder(t0Builder, t1Builder) } else { T3(t0Builder: t0Builder, t1Builder: t1Builder) }
+			        }
+			        func __safeDI_t0Builder(__safeDI_T0_configuration: T0.SafeDIMockConfiguration, __safeDI_T3_configuration_nearest: T3.SafeDIMockConfiguration?) -> T0 {
+			            let t1Builder = Instantiator<T1> {
+			                __safeDI_t1Builder(__safeDI_T1_configuration: __safeDI_T0_configuration.t1Builder)
+			            }
+			            let t3Builder = Instantiator<T3> {
+			                __safeDI_t3Builder(t1Builder: t1Builder, __safeDI_T3_configuration: __safeDI_T3_configuration_nearest ?? T3.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_T0_configuration.safeDIBuilder { safeDIBuilder(t1Builder, t3Builder) } else { T0(t1Builder: t1Builder, t3Builder: t3Builder) }
 			        }
 			        let t3Builder = Instantiator<T3> {
-			            __safeDI_t3Builder(t1Builder: t1Builder)
+			            __safeDI_t3Builder(t1Builder: t1Builder, __safeDI_T3_configuration: safeDIOverrides.t3Builder)
 			        }
 			        return Root(t1Builder: t1Builder, t3Builder: t3Builder)
 			    }
@@ -1762,26 +1778,30 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
-		        let __safeDI_hostBuilder__overrides = safeDIOverrides.hostBuilder
-		        @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
-		            let session = if let safeDIBuilder = __safeDI_hostBuilder__overrides.session { safeDIBuilder() } else { Session() }
-		            @Sendable nonisolated func __safeDI_t3Builder(session: Session) -> T3 {
-		                @Sendable nonisolated func __safeDI_t0Builder() -> T0 {
-		                    let session = if let safeDIBuilder = __safeDI_hostBuilder__overrides.t3Builder.t0Builder.session { safeDIBuilder() } else { Session() }
-		                    let t3Builder = SendableInstantiator<T3> {
-		                        __safeDI_t3Builder(session: session)
-		                    }
-		                    return if let safeDIBuilder = __safeDI_hostBuilder__overrides.t3Builder.t0Builder.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
-		                }
-		                let t0Builder = SendableInstantiator<T0>(__safeDI_t0Builder)
-		                return if let safeDIBuilder = __safeDI_hostBuilder__overrides.t3Builder.safeDIBuilder { safeDIBuilder(session, t0Builder, __safeDI_hostBuilder__overrides.t3Builder.flag()) } else { T3(session: session, t0Builder: t0Builder, flag: __safeDI_hostBuilder__overrides.t3Builder.flag()) }
+		        @Sendable nonisolated func __safeDI_t3Builder(session: Session, __safeDI_T3_configuration: T3.SafeDIMockConfiguration) -> T3 {
+		            let t0Builder = SendableInstantiator<T0> {
+		                __safeDI_t0Builder(__safeDI_T0_configuration: __safeDI_T3_configuration.t0Builder, __safeDI_T3_configuration_nearest: __safeDI_T3_configuration)
 		            }
-		            let t3Builder = SendableInstantiator<T3> {
-		                __safeDI_t3Builder(session: session)
-		            }
-		            return if let safeDIBuilder = __safeDI_hostBuilder__overrides.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { Host(session: session, t3Builder: t3Builder) }
+		            return if let safeDIBuilder = __safeDI_T3_configuration.safeDIBuilder { safeDIBuilder(session, t0Builder, __safeDI_T3_configuration.flag()) } else { T3(session: session, t0Builder: t0Builder, flag: __safeDI_T3_configuration.flag()) }
 		        }
-		        let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
+		        @Sendable nonisolated func __safeDI_t0Builder(__safeDI_T0_configuration: T0.SafeDIMockConfiguration, __safeDI_T3_configuration_nearest: T3.SafeDIMockConfiguration?) -> T0 {
+		            let session = if let safeDIBuilder = __safeDI_T0_configuration.session { safeDIBuilder() } else { Session() }
+		            let t3Builder = SendableInstantiator<T3> {
+		                __safeDI_t3Builder(session: session, __safeDI_T3_configuration: __safeDI_T3_configuration_nearest ?? T3.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_T0_configuration.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
+		        }
+		        @Sendable nonisolated func __safeDI_hostBuilder(__safeDI_Host_configuration: Host.SafeDIMockConfiguration) -> Host {
+		            let session = if let safeDIBuilder = __safeDI_Host_configuration.session { safeDIBuilder() } else { Session() }
+		            let t3Builder = SendableInstantiator<T3> {
+		                __safeDI_t3Builder(session: session, __safeDI_T3_configuration: __safeDI_Host_configuration.t3Builder)
+		            }
+		            return if let safeDIBuilder = __safeDI_Host_configuration.safeDIBuilder { safeDIBuilder(session, t3Builder) } else { Host(session: session, t3Builder: t3Builder) }
+		        }
+		        let __safeDI_hostBuilder____safeDI_Host_configuration: Host.SafeDIMockConfiguration = safeDIOverrides.hostBuilder
+		        let hostBuilder = SendableInstantiator<Host> {
+		            __safeDI_hostBuilder(__safeDI_Host_configuration: __safeDI_hostBuilder____safeDI_Host_configuration)
+		        }
 		        return App(hostBuilder: hostBuilder)
 		    }
 		}
@@ -2926,19 +2946,21 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed: X? = safeDIOverrides.renamed
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        func __safeDI_aBuilder(renamed: X?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let renamed = if let safeDIBuilder = __safeDI_Mid_configuration.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(aBuilder: aBuilder)
 		    }
@@ -3028,22 +3050,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                }
-		                let renamed = LazilyInstantiated<X>(__safeDI_renamed)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed.instance)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        func __safeDI_aBuilder(renamed: LazilyInstantiated<X>, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed.instance, midBuilder) } else { A(renamed: renamed.instance, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let renamed = LazilyInstantiated<X> {
+		                __safeDI_renamed(__safeDI_X_configuration: __safeDI_Mid_configuration.renamed)
+		            }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        }
+		        func __safeDI_renamed(__safeDI_X_configuration: ((X?) -> X)?) -> X {
+		            if let safeDIBuilder = __safeDI_X_configuration { safeDIBuilder(nil) } else { X(renamed: nil) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: LazilyInstantiated<X> { renamed }, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(renamed: renamed, aBuilder: aBuilder)
 		    }
@@ -3135,28 +3161,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_renamed() -> X {
-		            let leaf = if let safeDIBuilder = safeDIOverrides.renamed.leaf { safeDIBuilder(nil) } else { Leaf(renamed: nil) }
-		            return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(leaf) } else { X(leaf: leaf) }
+		        func __safeDI_renamed(__safeDI_X_configuration: X.SafeDIMockConfiguration) -> X {
+		            let leaf = if let safeDIBuilder = __safeDI_X_configuration.leaf { safeDIBuilder(nil) } else { Leaf(renamed: nil) }
+		            return if let safeDIBuilder = __safeDI_X_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { X(leaf: leaf) }
 		        }
-		        let renamed: X = __safeDI_renamed()
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    let leaf = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf { safeDIBuilder(nil) } else { Leaf(renamed: nil) }
-		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.safeDIBuilder { safeDIBuilder(leaf) } else { X(leaf: leaf) }
-		                }
-		                let renamed: X = __safeDI_renamed()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        let renamed: X = __safeDI_renamed(__safeDI_X_configuration: safeDIOverrides.renamed)
+		        func __safeDI_aBuilder(renamed: X?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let renamed: X = __safeDI_renamed(__safeDI_X_configuration: __safeDI_Mid_configuration.renamed)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(renamed: renamed, aBuilder: aBuilder)
 		    }
@@ -3251,24 +3275,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                func __safeDI_sibling() -> Sibling {
-		                    let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.sibling.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.sibling.safeDIBuilder { safeDIBuilder(renamed) } else { Sibling(renamed: renamed) }
-		                }
-		                let sibling: Sibling = __safeDI_sibling()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(renamed, sibling, aBuilder) } else { Mid(renamed: renamed, sibling: sibling, aBuilder: aBuilder) }
+		        func __safeDI_aBuilder(renamed: X?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let renamed = if let safeDIBuilder = __safeDI_Mid_configuration.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            let sibling: Sibling = __safeDI_sibling(__safeDI_Sibling_configuration: __safeDI_Mid_configuration.sibling)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, sibling, aBuilder) } else { Mid(renamed: renamed, sibling: sibling, aBuilder: aBuilder) }
+		        }
+		        func __safeDI_sibling(__safeDI_Sibling_configuration: Sibling.SafeDIMockConfiguration) -> Sibling {
+		            let renamed = if let safeDIBuilder = __safeDI_Sibling_configuration.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            return if let safeDIBuilder = __safeDI_Sibling_configuration.safeDIBuilder { safeDIBuilder(renamed) } else { Sibling(renamed: renamed) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(renamed: renamed, aBuilder: aBuilder)
 		    }
@@ -3371,28 +3397,30 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_bBuilder(renamed: X?) -> B {
-		                func __safeDI_midBuilder() -> Mid {
-		                    let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                    let bBuilder = Instantiator<B> {
-		                        __safeDI_bBuilder(renamed: renamed)
-		                    }
-		                    let aBuilder = Instantiator<A> {
-		                        __safeDI_aBuilder(renamed: renamed)
-		                    }
-		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.midBuilder.safeDIBuilder { safeDIBuilder(renamed, bBuilder, aBuilder) } else { Mid(renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder) }
-		                }
-		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { B(renamed: renamed, midBuilder: midBuilder) }
-		            }
+		        func __safeDI_aBuilder(renamed: X?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            let bBuilder = Instantiator<B> {
-		                __safeDI_bBuilder(renamed: renamed)
+		                __safeDI_bBuilder(renamed: renamed, __safeDI_B_configuration: __safeDI_A_configuration.bBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, bBuilder) } else { A(renamed: renamed, bBuilder: bBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, bBuilder) } else { A(renamed: renamed, bBuilder: bBuilder) }
+		        }
+		        func __safeDI_bBuilder(renamed: X?, __safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_B_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest, __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { B(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> Mid {
+		            let renamed = if let safeDIBuilder = __safeDI_Mid_configuration.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: renamed, __safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration(), __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+		            }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, bBuilder, aBuilder) } else { Mid(renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(renamed: renamed, aBuilder: aBuilder)
 		    }
@@ -4192,19 +4220,21 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
 		        let renamed: X? = other
 		        #sourceLocation()
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
+		        func __safeDI_aBuilder(renamed: X?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+		            let midBuilder = Instantiator<Mid> {
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let renamed = if let safeDIBuilder = __safeDI_Mid_configuration.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+		            }
+		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(renamed, aBuilder) } else { Mid(renamed: renamed, aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 		        }
 		        return Root(other: other, renamed: renamed, aBuilder: aBuilder)
 		    }
