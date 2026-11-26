@@ -8216,7 +8216,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// where only a property instantiated only if available is a hole, since validation reports any other: no builder
 			// reaches a root, so the property is `nil` there, as in a module that generates no seam.
 			guard let site else {
-				return property.typeDescription.isOptional ? Self.textPlace("let \(property.asSource) = nil") : .empty
+				guard property.typeDescription.isOptional else { return .empty }
+				return .place(PlacePlan(code: .text("let \(property.asSource) = nil"), record: .alias(Self.recordOfPropertyBoundToNil(property))))
 			}
 			// The seam side of hosting seam code as text, a hole's site here and a seam's root in
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
@@ -8265,6 +8266,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// The four functions below build a place's record, a struct of many fields, in a frame of their own: inlined into
 	// `generatePropertyCode`, whose async frame every task planning a scope holds, the record's temporaries grew that frame
 	// by about 5.6 KB, and the peak memory of a module of 1,200 seams by about 15 MB.
+
+	/// The record of the place of `property`, instantiated only if available, where nothing fulfills it. Its `nil` reads
+	/// nothing, which the record lists, so the type key lays it out as written, as it does an alias bound to `nil`: a place
+	/// that records nothing would keep the bodies of the root's tree one per path.
+	private static func recordOfPropertyBoundToNil(_ property: Property) -> AliasPlaceRecord {
+		AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.asSource) = nil", reads: [])
+	}
 
 	/// A place that records nothing, written as `text`.
 	@inline(never)
@@ -8917,6 +8925,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// builder function holds the guard line, which the type key's constructions do not write.
 			let record: PlaceRecord? = if seamCall != nil {
 				try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+			} else if isUnavailableDependency {
+				.alias(Self.recordOfPropertyBoundToNil(property))
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: hasGeneratedContent)
 			}
