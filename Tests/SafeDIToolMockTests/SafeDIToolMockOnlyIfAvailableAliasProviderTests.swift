@@ -233,7 +233,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
-			        func __safeDI_child() -> Child {
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
 			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
@@ -242,9 +242,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(leafBuilderAlias) } else { Sibling(leafBuilderAlias: leafBuilderAlias) }
 			        return Root(child: child, sibling: sibling)
 			    }
@@ -310,11 +310,13 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
-			        func __safeDI_leafBuilder() -> Leaf {
-			            if let safeDIBuilder = safeDIOverrides.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
+			        func __safeDI_leafBuilder_(__safeDI_Leaf_configuration: ((Instantiator<Leaf>?) -> Leaf)?) -> Leaf {
+			            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			        func __safeDI_child() -> Child {
+			        let leafBuilder = Instantiator<Leaf> {
+			            __safeDI_leafBuilder_(__safeDI_Leaf_configuration: safeDIOverrides.leafBuilder)
+			        }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
 			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
@@ -323,9 +325,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        return Root(leafBuilder: leafBuilder, child: child)
 			    }
 			}
@@ -586,7 +588,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
-			        func __safeDI_child() -> Child {
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
 			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
@@ -595,9 +597,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(leafBuilderAlias) } else { Sibling(leafBuilderAlias: leafBuilderAlias) }
 			        return Holder(child: child, sibling: sibling)
 			    }
@@ -661,11 +663,13 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
-			        func __safeDI_leafBuilder() -> Leaf {
-			            if let safeDIBuilder = safeDIOverrides.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
+			        func __safeDI_leafBuilder_(__safeDI_Leaf_configuration: ((Instantiator<Leaf>?) -> Leaf)?) -> Leaf {
+			            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			        func __safeDI_child() -> Child {
+			        let leafBuilder = Instantiator<Leaf> {
+			            __safeDI_leafBuilder_(__safeDI_Leaf_configuration: safeDIOverrides.leafBuilder)
+			        }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
 			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
@@ -674,9 +678,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        return Holder(leafBuilder: leafBuilder, child: child)
 			    }
 			}
@@ -840,7 +844,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
-			        func __safeDI_child() -> Child {
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
 			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
@@ -849,9 +853,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(leafBuilderAlias) } else { Sibling(leafBuilderAlias: leafBuilderAlias) }
 			        return Root(child: child, sibling: sibling)
 			    }
@@ -1022,7 +1026,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
-			        func __safeDI_child() -> Child {
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
 			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
@@ -1031,9 +1035,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(leafBuilderAlias) } else { Sibling(leafBuilderAlias: leafBuilderAlias) }
 			        return Holder(child: child, sibling: sibling)
 			    }

@@ -214,13 +214,16 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesMock_whenTypeWhoseMockIsGeneratedStartsAChainOfFifteenHundredFeaturesEachInstantiatingTheNext() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: Self.featureChain(depth: 1_500, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
-			skipCompileVerification: true,
-		)
+		// The walk's body, which the type key's layout replaces by default; its laid-out twin is below.
+		let output = try await MockLowering.$laysOutWithTypeKey.withValue(false) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.featureChain(depth: 1_500, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
+				skipCompileVerification: true,
+			)
+		}
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.instantiatorChainMock(depth: 1_500))
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 1_500))
@@ -284,11 +287,14 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesMockThatCompiles_whenTypeWhoseMockIsGeneratedStartsAChainOfTwentyFeaturesEachInstantiatingTheNext() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
+		// The walk's body, which the type key's layout replaces by default; its laid-out twin is above.
+		let output = try await MockLowering.$laysOutWithTypeKey.withValue(false) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.instantiatorChainMock(depth: 20))
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 20))

@@ -2765,21 +2765,23 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_leaf() -> Leaf {
-		            if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		        func __safeDI_leaf(__safeDI_Leaf_configuration: (() -> Leaf)?) -> Leaf {
+		            if let safeDIBuilder = __safeDI_Leaf_configuration { safeDIBuilder() } else { Leaf() }
 		        }
-		        let leaf = LazilyInstantiated<Leaf>(__safeDI_leaf)
-		        func __safeDI_promoted() -> Promoted {
-		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let lazyLeaf: LazilyInstantiated<Leaf> = leaf
-		                #sourceLocation()
-		                return if let safeDIBuilder = safeDIOverrides.promoted.child { safeDIBuilder(lazyLeaf) } else { Child(lazyLeaf: lazyLeaf) }
-		            }
-		            let child: Child = __safeDI_child()
-		            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(leaf.instance, child) } else { Promoted(leaf: leaf.instance, child: child) }
+		        let leaf = LazilyInstantiated<Leaf> {
+		            __safeDI_leaf(__safeDI_Leaf_configuration: safeDIOverrides.leaf)
 		        }
-		        let promoted: Promoted = __safeDI_promoted()
+		        func __safeDI_child(__safeDI_Child_configuration: ((LazilyInstantiated<Leaf>) -> Child)?) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let lazyLeaf: LazilyInstantiated<Leaf> = leaf
+		            #sourceLocation()
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(lazyLeaf) } else { Child(lazyLeaf: lazyLeaf) }
+		        }
+		        func __safeDI_promoted(__safeDI_Promoted_configuration: Promoted.SafeDIMockConfiguration) -> Promoted {
+		            let child: Child = __safeDI_child(__safeDI_Child_configuration: __safeDI_Promoted_configuration.child)
+		            return if let safeDIBuilder = __safeDI_Promoted_configuration.safeDIBuilder { safeDIBuilder(leaf.instance, child) } else { Promoted(leaf: leaf.instance, child: child) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted(__safeDI_Promoted_configuration: safeDIOverrides.promoted)
 		        return Screen(promoted: promoted)
 		    }
 		}
@@ -3066,19 +3068,19 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-		        func __safeDI_promoted() -> Promoted {
-		            let leaf: Unbuildable = leaf_Unbuildable
-		            func __safeDI_middle() -> Middle {
-		                let leaf = if let safeDIBuilder = safeDIOverrides.promoted.middle.leaf { safeDIBuilder() } else { Leaf() }
-		                #sourceLocation(file: "\(output.fixtures["Middle.swift"])", line: 5)
-		                let renamedLeaf: Leaf = leaf
-		                #sourceLocation()
-		                return if let safeDIBuilder = safeDIOverrides.promoted.middle.safeDIBuilder { safeDIBuilder(leaf, renamedLeaf) } else { Middle(leaf: leaf, renamedLeaf: renamedLeaf) }
-		            }
-		            let middle: Middle = __safeDI_middle()
-		            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(leaf, middle) } else { Promoted(leaf: leaf, middle: middle) }
+		        func __safeDI_middle(__safeDI_Middle_configuration: Middle.SafeDIMockConfiguration) -> Middle {
+		            let leaf = if let safeDIBuilder = __safeDI_Middle_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            #sourceLocation(file: "\(output.fixtures["Middle.swift"])", line: 5)
+		            let renamedLeaf: Leaf = leaf
+		            #sourceLocation()
+		            return if let safeDIBuilder = __safeDI_Middle_configuration.safeDIBuilder { safeDIBuilder(leaf, renamedLeaf) } else { Middle(leaf: leaf, renamedLeaf: renamedLeaf) }
 		        }
-		        let promoted: Promoted = __safeDI_promoted()
+		        func __safeDI_promoted(__safeDI_Promoted_configuration: Promoted.SafeDIMockConfiguration) -> Promoted {
+		            let leaf: Unbuildable = leaf_Unbuildable
+		            let middle: Middle = __safeDI_middle(__safeDI_Middle_configuration: __safeDI_Promoted_configuration.middle)
+		            return if let safeDIBuilder = __safeDI_Promoted_configuration.safeDIBuilder { safeDIBuilder(leaf, middle) } else { Promoted(leaf: leaf, middle: middle) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted(__safeDI_Promoted_configuration: safeDIOverrides.promoted)
 		        return Screen(leaf: leaf, promoted: promoted)
 		    }
 		}
@@ -4722,22 +4724,22 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		    ) -> Screen {
 		        let user_Draft: Draft? = safeDIOverrides.user_Draft
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-		        func __safeDI_promoted() -> Promoted {
-		            func __safeDI_middle() -> Middle {
-		                let user: Draft? = user_Draft
-		                func __safeDI_child() -> Child {
-		                    #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                    let draft: Draft? = user_Draft
-		                    #sourceLocation()
-		                    return if let safeDIBuilder = safeDIOverrides.promoted.middle.child { safeDIBuilder(draft) } else { Child(draft: draft) }
-		                }
-		                let child: Child = __safeDI_child()
-		                return if let safeDIBuilder = safeDIOverrides.promoted.middle.safeDIBuilder { safeDIBuilder(user, child) } else { Middle(user: user, child: child) }
-		            }
-		            let middle: Middle = __safeDI_middle()
-		            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(middle) } else { Promoted(middle: middle) }
+		        func __safeDI_middle(__safeDI_Middle_configuration: Middle.SafeDIMockConfiguration) -> Middle {
+		            let user: Draft? = user_Draft
+		            let child: Child = __safeDI_child(__safeDI_Child_configuration: __safeDI_Middle_configuration.child)
+		            return if let safeDIBuilder = __safeDI_Middle_configuration.safeDIBuilder { safeDIBuilder(user, child) } else { Middle(user: user, child: child) }
 		        }
-		        let promoted: Promoted = __safeDI_promoted()
+		        func __safeDI_child(__safeDI_Child_configuration: ((Draft?) -> Child)?) -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let draft: Draft? = user_Draft
+		            #sourceLocation()
+		            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(draft) } else { Child(draft: draft) }
+		        }
+		        func __safeDI_promoted(__safeDI_Promoted_configuration: Promoted.SafeDIMockConfiguration) -> Promoted {
+		            let middle: Middle = __safeDI_middle(__safeDI_Middle_configuration: __safeDI_Promoted_configuration.middle)
+		            return if let safeDIBuilder = __safeDI_Promoted_configuration.safeDIBuilder { safeDIBuilder(middle) } else { Promoted(middle: middle) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted(__safeDI_Promoted_configuration: safeDIOverrides.promoted)
 		        return Screen(user: user, promoted: promoted)
 		    }
 		}
