@@ -277,20 +277,23 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() -> SendableErasedInstantiator<Int, any Widget>.Builder {
+			            return __safeDI_fillBody_2766CFCBD48DBBAE()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_2766CFCBD48DBBAE() -> SendableErasedInstantiator<Int, any Widget>.Builder {
+			            @Sendable nonisolated func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
+			                DefaultWidget(id: id)
+			            }
+			            return { forwarded in __safeDI_widgetBuilder(id: forwarded) }
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell<any Widget> {
+			            .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_00A8B34CF50EF9A9.self // \(Self.moduleInfoComment)
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() -> SendableErasedInstantiator<Int, any Widget>.Builder {
-			                @Sendable nonisolated func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
-			                    DefaultWidget(id: id)
-			                }
-			                return { forwarded in __safeDI_widgetBuilder(id: forwarded) }
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell<any Widget> {
-			                .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() })
-			            }
 			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1454,20 +1457,23 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
+			            return __safeDI_fillBody_4CFCCAACE99E98C4()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_4CFCCAACE99E98C4() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
+			            @Sendable nonisolated func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
+			                DefaultWidget(scope: scope)
+			            }
+			            return { forwarded in __safeDI_widgetBuilder(scope: forwarded) }
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_())
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<any Widget> {
+			            .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_F60E1113BFAC8782.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
-			                @Sendable nonisolated func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
-			                    DefaultWidget(scope: scope)
-			                }
-			                return { forwarded in __safeDI_widgetBuilder(scope: forwarded) }
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_())
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<any Widget> {
-			                .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() })
-			            }
 			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()

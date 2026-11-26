@@ -1066,19 +1066,22 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let analytics: any Analytics = analyticsBuilder()
-			                    func __safeDI_book() -> Book {
-			                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                func __safeDI_fillBody_9013A43973AE868C() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        let analytics: any Analytics = analyticsBuilder()
+			                        func __safeDI_book() -> Book {
+			                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                            }
+			                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                        }
-			                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                        let book: Book = __safeDI_book()
+			                        return DefaultService(analytics: analytics, book: book)
 			                    }
-			                    let book: Book = __safeDI_book()
-			                    return DefaultService(analytics: analytics, book: book)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_9013A43973AE868C()
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -1137,31 +1140,37 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func __safeDI_fillBody_0DAEF01FD74B416E() -> any Logger {
+			            func __safeDI_logger() -> DefaultLogger {
+			                let analytics: any Analytics = analyticsBuilder()
+			                return DefaultLogger(analytics: analytics)
+			            }
+			            let logger: any Logger = __safeDI_logger()
+			            return logger
+			        }
 			        func __safeDI_page() -> Page {
 			            func __safeDI_loggerBuilder_Page_logger() -> any Logger {
-			                func __safeDI_logger() -> DefaultLogger {
-			                    let analytics: any Analytics = analyticsBuilder()
-			                    return DefaultLogger(analytics: analytics)
-			                }
-			                let logger: any Logger = __safeDI_logger()
-			                return logger
+			                return __safeDI_fillBody_0DAEF01FD74B416E()
 			            }
 			            func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_book() -> Book {
-			                        func __safeDI_loggerBuilder_Book() -> Book.SafeDIMockScope_Logger.__safeDI_Builder<any Logger> {
-			                            .init(pageBuilder: { _ in __safeDI_loggerBuilder_Page() })
+			                func __safeDI_fillBody_64AD32E01C30A114() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_book() -> Book {
+			                            func __safeDI_loggerBuilder_Book() -> Book.SafeDIMockScope_Logger.__safeDI_Builder<any Logger> {
+			                                .init(pageBuilder: { _ in __safeDI_loggerBuilder_Page() })
+			                            }
+			                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                            }
+			                            return Book.__safeDI_mock(loggerBuilder: loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Book(), serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                        }
-			                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
-			                        }
-			                        return Book.__safeDI_mock(loggerBuilder: loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Book(), serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                        let book: Book = __safeDI_book()
+			                        return DefaultService(book: book)
 			                    }
-			                    let book: Book = __safeDI_book()
-			                    return DefaultService(book: book)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_64AD32E01C30A114()
 			            }
 			            func __safeDI_loggerBuilder_Page() -> Page.SafeDIMockScope_Logger.__safeDI_Builder<any Logger> {
 			                .init(logger: { _ in __safeDI_loggerBuilder_Page_logger() })
@@ -1223,31 +1232,37 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func __safeDI_fillBody_7A4282A6233F20A6() -> any Store {
+			            func __safeDI_store() -> DefaultStore {
+			                let analytics: any Analytics = analyticsBuilder()
+			                return DefaultStore(analytics: analytics)
+			            }
+			            let store: any Store = __safeDI_store()
+			            return store
+			        }
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_book() -> Book {
-			                        func __safeDI_storeBuilder_Book_store(_ scope: Book.SafeDIMockScope_Store.store_Values) -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                let analytics: any Analytics = analyticsBuilder()
-			                                return DefaultStore(analytics: analytics)
+			                func __safeDI_fillBody_ABDD7A8AE1FD4F3D() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_book() -> Book {
+			                            func __safeDI_storeBuilder_Book_store(_ scope: Book.SafeDIMockScope_Store.store_Values) -> any Store {
+			                                return __safeDI_fillBody_7A4282A6233F20A6()
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                            }
+			                            func __safeDI_storeBuilder_Book() -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { scope in __safeDI_storeBuilder_Book_store(scope) })
+			                            }
+			                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(), storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book())
 			                        }
-			                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
-			                        }
-			                        func __safeDI_storeBuilder_Book() -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { scope in __safeDI_storeBuilder_Book_store(scope) })
-			                        }
-			                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(), storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book())
+			                        let book: Book = __safeDI_book()
+			                        return DefaultService(book: book)
 			                    }
-			                    let book: Book = __safeDI_book()
-			                    return DefaultService(book: book)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_ABDD7A8AE1FD4F3D()
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -1308,33 +1323,39 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_chapter() -> Chapter {
-			                        func __safeDI_storeBuilder_Chapter_store() -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                let analytics: any Analytics = analyticsBuilder()
-			                                func __safeDI_book() -> Book {
-			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                func __safeDI_fillBody_9FA7FE6C20392026() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_chapter() -> Chapter {
+			                            func __safeDI_storeBuilder_Chapter_store() -> any Store {
+			                                func __safeDI_fillBody_281138D97E1BD668() -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        let analytics: any Analytics = analyticsBuilder()
+			                                        func __safeDI_book() -> Book {
+			                                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                                            }
+			                                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                        }
+			                                        let book: Book = __safeDI_book()
+			                                        return DefaultStore(analytics: analytics, book: book)
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
 			                                }
-			                                let book: Book = __safeDI_book()
-			                                return DefaultStore(analytics: analytics, book: book)
+			                                return __safeDI_fillBody_281138D97E1BD668()
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
+			                            }
+			                            return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                        }
-			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
-			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
+			                        let chapter: Chapter = __safeDI_chapter()
+			                        return DefaultService(chapter: chapter)
 			                    }
-			                    let chapter: Chapter = __safeDI_chapter()
-			                    return DefaultService(chapter: chapter)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_9FA7FE6C20392026()
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -1395,33 +1416,39 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let analytics: any Analytics = analyticsBuilder()
-			                    func __safeDI_chapter() -> Chapter {
-			                        func __safeDI_storeBuilder_Chapter_store() -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                func __safeDI_book() -> Book {
-			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
-			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                func __safeDI_fillBody_3FE65A0A32DDD18D() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        let analytics: any Analytics = analyticsBuilder()
+			                        func __safeDI_chapter() -> Chapter {
+			                            func __safeDI_storeBuilder_Chapter_store() -> any Store {
+			                                func __safeDI_fillBody_DFD3164C2D7376B8() -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        func __safeDI_book() -> Book {
+			                                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
+			                                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                                            }
+			                                            return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                        }
+			                                        let book: Book = __safeDI_book()
+			                                        return DefaultStore(book: book)
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
 			                                }
-			                                let book: Book = __safeDI_book()
-			                                return DefaultStore(book: book)
+			                                return __safeDI_fillBody_DFD3164C2D7376B8()
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
+			                            }
+			                            return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                        }
-			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
-			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
+			                        let chapter: Chapter = __safeDI_chapter()
+			                        return DefaultService(analytics: analytics, chapter: chapter)
 			                    }
-			                    let chapter: Chapter = __safeDI_chapter()
-			                    return DefaultService(analytics: analytics, chapter: chapter)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_3FE65A0A32DDD18D()
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -1481,16 +1508,19 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let analytics: any Analytics = analyticsBuilder()
-			                    func __safeDI_pageBuilder() -> Page {
-			                        Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page())
+			                func __safeDI_fillBody_DB702CB0C9292CEF() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        let analytics: any Analytics = analyticsBuilder()
+			                        func __safeDI_pageBuilder() -> Page {
+			                            Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page())
+			                        }
+			                        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
+			                        return DefaultService(analytics: analytics, pageBuilder: pageBuilder)
 			                    }
-			                    let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
-			                    return DefaultService(analytics: analytics, pageBuilder: pageBuilder)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_DB702CB0C9292CEF()
 			            }
 			            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -2562,19 +2592,22 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let analytics: any Analytics = analyticsSendableBuilder()
-			                    func __safeDI_book() -> Book {
-			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
-			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                @Sendable nonisolated func __safeDI_fillBody_C0107B9F186DE8FC() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        let analytics: any Analytics = analyticsSendableBuilder()
+			                        func __safeDI_book() -> Book {
+			                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+			                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                            }
+			                            return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 			                        }
-			                        return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+			                        let book: Book = __safeDI_book()
+			                        return DefaultService(analytics: analytics, book: book)
 			                    }
-			                    let book: Book = __safeDI_book()
-			                    return DefaultService(analytics: analytics, book: book)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_C0107B9F186DE8FC()
 			            }
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -2635,31 +2668,37 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        @Sendable nonisolated func __safeDI_fillBody_1840214493D1661E() -> any Logger {
+			            func __safeDI_logger() -> DefaultLogger {
+			                let analytics: any Analytics = analyticsSendableBuilder()
+			                return DefaultLogger(analytics: analytics)
+			            }
+			            let logger: any Logger = __safeDI_logger()
+			            return logger
+			        }
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_loggerBuilder_Page_logger() -> any Logger {
-			                func __safeDI_logger() -> DefaultLogger {
-			                    let analytics: any Analytics = analyticsSendableBuilder()
-			                    return DefaultLogger(analytics: analytics)
-			                }
-			                let logger: any Logger = __safeDI_logger()
-			                return logger
+			                return __safeDI_fillBody_1840214493D1661E()
 			            }
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_book() -> Book {
-			                        @Sendable nonisolated func __safeDI_loggerSendableBuilder_Book() -> Book.SafeDISendableMockScope_Logger.__safeDI_Builder<any Logger> {
-			                            .init(pageBuilder: { _ in __safeDI_loggerBuilder_Page() })
+			                @Sendable nonisolated func __safeDI_fillBody_7E91881DEAED4A9A() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_book() -> Book {
+			                            @Sendable nonisolated func __safeDI_loggerSendableBuilder_Book() -> Book.SafeDISendableMockScope_Logger.__safeDI_Builder<any Logger> {
+			                                .init(pageBuilder: { _ in __safeDI_loggerBuilder_Page() })
+			                            }
+			                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+			                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                            }
+			                            return Book.__safeDI_mock(loggerSendableBuilder: loggerSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerSendableBuilder_Book(), serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 			                        }
-			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
-			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
-			                        }
-			                        return Book.__safeDI_mock(loggerSendableBuilder: loggerSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerSendableBuilder_Book(), serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+			                        let book: Book = __safeDI_book()
+			                        return DefaultService(book: book)
 			                    }
-			                    let book: Book = __safeDI_book()
-			                    return DefaultService(book: book)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_7E91881DEAED4A9A()
 			            }
 			            @Sendable nonisolated func __safeDI_loggerBuilder_Page() -> Page.SafeDIMockScope_Logger.__safeDI_Builder<any Logger> {
 			                .init(logger: { _ in __safeDI_loggerBuilder_Page_logger() })
@@ -2724,29 +2763,35 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_book() -> Book {
-			                        func __safeDI_storeBuilder_Book_store(_ scope: Book.SafeDIMockScope_Store.store_Values) -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                let analytics: any Analytics = analyticsSendableBuilder()
-			                                return DefaultStore(analytics: analytics)
+			                @Sendable nonisolated func __safeDI_fillBody_2884AC1BC1C52D0A() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_book() -> Book {
+			                            func __safeDI_storeBuilder_Book_store(_ scope: Book.SafeDIMockScope_Store.store_Values) -> any Store {
+			                                func __safeDI_fillBody_D8A3E596F997E25C() -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        let analytics: any Analytics = analyticsSendableBuilder()
+			                                        return DefaultStore(analytics: analytics)
+			                                    }
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
+			                                }
+			                                return __safeDI_fillBody_D8A3E596F997E25C()
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+			                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                            }
+			                            func __safeDI_storeBuilder_Book() -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { scope in __safeDI_storeBuilder_Book_store(scope) })
+			                            }
+			                            return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(), storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book())
 			                        }
-			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
-			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
-			                        }
-			                        func __safeDI_storeBuilder_Book() -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { scope in __safeDI_storeBuilder_Book_store(scope) })
-			                        }
-			                        return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(), storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book())
+			                        let book: Book = __safeDI_book()
+			                        return DefaultService(book: book)
 			                    }
-			                    let book: Book = __safeDI_book()
-			                    return DefaultService(book: book)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_2884AC1BC1C52D0A()
 			            }
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -2808,33 +2853,39 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    func __safeDI_chapter() -> Chapter {
-			                        func __safeDI_storeBuilder_Chapter_store() -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                let analytics: any Analytics = analyticsSendableBuilder()
-			                                func __safeDI_book() -> Book {
-			                                    @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
-			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                @Sendable nonisolated func __safeDI_fillBody_2ECF7B6C972FBF90() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        func __safeDI_chapter() -> Chapter {
+			                            func __safeDI_storeBuilder_Chapter_store() -> any Store {
+			                                func __safeDI_fillBody_64E0D0D8D6FF3B6A() -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        let analytics: any Analytics = analyticsSendableBuilder()
+			                                        func __safeDI_book() -> Book {
+			                                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+			                                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                                            }
+			                                            return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+			                                        }
+			                                        let book: Book = __safeDI_book()
+			                                        return DefaultStore(analytics: analytics, book: book)
 			                                    }
-			                                    return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
 			                                }
-			                                let book: Book = __safeDI_book()
-			                                return DefaultStore(analytics: analytics, book: book)
+			                                return __safeDI_fillBody_64E0D0D8D6FF3B6A()
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
+			                            }
+			                            return Chapter.__safeDI_mock(storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                        }
-			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
-			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
+			                        let chapter: Chapter = __safeDI_chapter()
+			                        return DefaultService(chapter: chapter)
 			                    }
-			                    let chapter: Chapter = __safeDI_chapter()
-			                    return DefaultService(chapter: chapter)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_2ECF7B6C972FBF90()
 			            }
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -2896,33 +2947,39 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let analytics: any Analytics = analyticsSendableBuilder()
-			                    func __safeDI_chapter() -> Chapter {
-			                        func __safeDI_storeBuilder_Chapter_store() -> any Store {
-			                            func __safeDI_store() -> DefaultStore {
-			                                func __safeDI_book() -> Book {
-			                                    @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
-			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                @Sendable nonisolated func __safeDI_fillBody_C424596329B791AF() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        let analytics: any Analytics = analyticsSendableBuilder()
+			                        func __safeDI_chapter() -> Chapter {
+			                            func __safeDI_storeBuilder_Chapter_store() -> any Store {
+			                                func __safeDI_fillBody_75592E19438B5498() -> any Store {
+			                                    func __safeDI_store() -> DefaultStore {
+			                                        func __safeDI_book() -> Book {
+			                                            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
+			                                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
+			                                            }
+			                                            return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+			                                        }
+			                                        let book: Book = __safeDI_book()
+			                                        return DefaultStore(book: book)
 			                                    }
-			                                    return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
+			                                    let store: any Store = __safeDI_store()
+			                                    return store
 			                                }
-			                                let book: Book = __safeDI_book()
-			                                return DefaultStore(book: book)
+			                                return __safeDI_fillBody_75592E19438B5498()
 			                            }
-			                            let store: any Store = __safeDI_store()
-			                            return store
+			                            func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
+			                                .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
+			                            }
+			                            return Chapter.__safeDI_mock(storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                        }
-			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
-			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
-			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
+			                        let chapter: Chapter = __safeDI_chapter()
+			                        return DefaultService(analytics: analytics, chapter: chapter)
 			                    }
-			                    let chapter: Chapter = __safeDI_chapter()
-			                    return DefaultService(analytics: analytics, chapter: chapter)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_C424596329B791AF()
 			            }
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
@@ -2983,16 +3040,19 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let analytics: any Analytics = analyticsSendableBuilder()
-			                    @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
-			                        Page.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page())
+			                @Sendable nonisolated func __safeDI_fillBody_26A91F1DBB8DA799() -> any Service {
+			                    func __safeDI_service() -> DefaultService {
+			                        let analytics: any Analytics = analyticsSendableBuilder()
+			                        @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
+			                            Page.__safeDI_mock(serviceBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page())
+			                        }
+			                        let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
+			                        return DefaultService(analytics: analytics, pageBuilder: pageBuilder)
 			                    }
-			                    let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
-			                    return DefaultService(analytics: analytics, pageBuilder: pageBuilder)
+			                    let service: any Service = __safeDI_service()
+			                    return service
 			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_26A91F1DBB8DA799()
 			            }
 			            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })

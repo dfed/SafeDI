@@ -110,23 +110,29 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_Type() -> any Gadget {
+		            return __safeDI_fillBody_9A592AE130AF0FC8()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_9A592AE130AF0FC8() -> any Gadget {
+		            @Sendable nonisolated func __safeDI_Type() -> LiveGadget {
+		                LiveGadget()
+		            }
+		            return __safeDI_Type()
+		        }
+		        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_Protocol() -> any Gadget {
+		            return __safeDI_fillBody_0FBEC6A0C3EC7A7C()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_0FBEC6A0C3EC7A7C() -> any Gadget {
+		            @Sendable nonisolated func __safeDI_Protocol() -> LiveGadget {
+		                LiveGadget()
+		            }
+		            return __safeDI_Protocol()
+		        }
+		        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host() -> Host.__safeDI_GadgetSendableCarrier<any Gadget> {
+		            .init(Type: { __safeDI_gadgetSendableBuilder_Host_Type() }, Protocol: { __safeDI_gadgetSendableBuilder_Host_Protocol() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_0B387B46EEF2D9C4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_Type() -> any Gadget {
-		                @Sendable nonisolated func __safeDI_Type() -> LiveGadget {
-		                    LiveGadget()
-		                }
-		                return __safeDI_Type()
-		            }
-		            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_Protocol() -> any Gadget {
-		                @Sendable nonisolated func __safeDI_Protocol() -> LiveGadget {
-		                    LiveGadget()
-		                }
-		                return __safeDI_Protocol()
-		            }
-		            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host() -> Host.__safeDI_GadgetSendableCarrier<any Gadget> {
-		                .init(Type: { __safeDI_gadgetSendableBuilder_Host_Type() }, Protocol: { __safeDI_gadgetSendableBuilder_Host_Protocol() })
-		            }
 		            return Host(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()

@@ -36,22 +36,20 @@ enum TypeKeyBody {
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
 	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
+	/// - Parameter hoisting: The root functions `rootBody` reaches (`RootFunctionHoisting.hoisting(_:indentation:)`), which a
+	///   caller that keeps the path key's body where this returns `nil` reads once for both.
+	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], hoisting: RootFunctionHoisting.Hoisting? = nil, indentation: String = rootStatementIndentation) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
-		// them (`RootFunctionHoisting`); a root that keeps one in place keeps the path key's body, since the type key spells
-		// a place written as text without them.
-		let rootFunctionNames = Set(RootFunctionHoisting.records(in: rootBody).map(\.name))
-		var rootFunctionDeclarations = [GeneratedCode]()
-		if !rootFunctionNames.isEmpty {
-			let hoisted = RootFunctionHoisting.hoisted(rootBody, indentation: rootStatementIndentation)
-			guard let body = hoisted.last, case let .omittingRootFunctions(_, declaredNames) = body.node, declaredNames == rootFunctionNames else { return nil }
-			rootFunctionDeclarations = hoisted.dropLast()
-			layout.rootFunctionNames = rootFunctionNames
-			layout.namesInScope.formUnion(rootFunctionNames)
-		}
+		// them (`RootFunctionHoisting`). A statement of the root's body that holds one the path key keeps in place keeps the
+		// path key's code, which declares it where its call does, and every other statement is laid out by type.
+		let hoisting = hoisting ?? RootFunctionHoisting.hoisting(rootBody, indentation: rootStatementIndentation)
+		let rootFunctionDeclarations = hoisting.declarations
+		layout.rootFunctionNames = hoisting.declaredNames
+		layout.keptRootFunctionNames = hoisting.rootFunctionNames.subtracting(hoisting.declaredNames)
+		layout.namesInScope.formUnion(hoisting.rootFunctionNames)
 		guard layout.read(rootBody) else { return nil }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
 		guard layout.computeReads() else { return nil }
@@ -63,8 +61,25 @@ enum TypeKeyBody {
 		      layout.checkValuePaths()
 		else { return nil }
 		layout.computeDecoratorsAndNames()
-		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements() else { return nil }
+		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements(indentation: indentation) else { return nil }
 		return rootFunctionDeclarations + statements
+	}
+
+	/// The statements of a function the root declares whose body is one tree's statements (`ScopeGenerator.generateFillCode`
+	/// makes one), in the type key's layout, each indented by `indentation`, or `nil` where the function keeps `functionBody`,
+	/// its tree's statements in the path key's layout. `outerDeclarations` are the function's parameters. The root functions
+	/// the tree declares that the root declares beside the function, `declaredNames`, are left out, as the root's own
+	/// statements leave them out; every other one stays where the tree declares it: a statement that holds one keeps the path
+	/// key's code.
+	static func statements(ofFunctionBody functionBody: [GeneratedCode], outerDeclarations: [Property], omittingRootFunctionsNamed declaredNames: Set<String>, indentation: String) -> [GeneratedCode]? {
+		let heldNames = Set(RootFunctionHoisting.records(in: functionBody).map(\.name))
+		return statements(
+			ofRootBody: functionBody,
+			outerDeclarations: outerDeclarations,
+			namesInScope: Set(outerDeclarations.map(\.label)),
+			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: heldNames.intersection(declaredNames), declarations: [], body: functionBody),
+			indentation: indentation,
+		)
 	}
 
 	/// The indentation of a root's statements, which every root body is written after.
@@ -127,6 +142,9 @@ struct TypeKeyLayout {
 		let domainLabels: Set<String>
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
+		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
+		/// apart from the labels the statements bind, so no read of a label resolves to a function.
+		var positionsByDeclaredFunction = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
 
@@ -166,6 +184,9 @@ struct TypeKeyLayout {
 	/// The root functions the root declares before its statements, which the text of a statement kept as the path key's code
 	/// leaves out.
 	var rootFunctionNames = Set<String>()
+	/// The root functions the path key keeps where their calls declare them (`RootFunctionHoisting`): a statement of the
+	/// root's body that holds one keeps the path key's code.
+	var keptRootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
 	/// The views other than the root's in post-order of the view DAG.
@@ -185,6 +206,8 @@ struct TypeKeyLayout {
 	var classByBody = [Int]()
 	/// Each class's members, in walk order.
 	var membersByClass = [[Int]]()
+	/// The labels each class's function is handed (`BuiltPlaceRecord.parameterProperties`), empty for the root's.
+	var parameterLabelsByClass = [Set<String>]()
 	/// The classes each class's body calls, and the call sites of each class.
 	var calleesByClass = [Set<Int>]()
 	var callSitesByClass = [Set<CallSite>]()
@@ -206,6 +229,9 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
+	/// The local each call binds a passed argument to before it calls (`PassedArgument.bindsBeforeCall`), by the call's
+	/// site and the parameter's name.
+	var boundArgumentNames = [CallSite: [String: String]]()
 }
 
 extension AliasPlaceRecord {

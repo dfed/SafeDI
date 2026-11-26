@@ -2507,14 +2507,17 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_6E0C0CA2ACF9D10F() -> any Api {
+		            func __safeDI_api() -> Live {
+		                let tracker = Tracker()
+		                return Live(tracker: tracker)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_apiBuilder_Page_Leaf_Scope_api(_ scope: Page.SafeDIMockScope_Api.Leaf_Scope.api_Values) -> any Api {
-		                func __safeDI_api() -> Live {
-		                    let tracker = Tracker()
-		                    return Live(tracker: tracker)
-		                }
-		                let api: any Api = __safeDI_api()
-		                return api
+		                return __safeDI_fillBody_6E0C0CA2ACF9D10F()
 		            }
 		            func __safeDI_apiBuilder_Page() -> Page.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { _ in __safeDI_apiBuilder_Page_Detail_Scope() })
@@ -2951,10 +2954,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_D559B1DD4A7F3625() -> any Api {
+		            let api: any Api = Live()
+		            return api
+		        }
 		        func __safeDI_detail() -> Detail {
 		            func __safeDI_apiBuilder_Detail_api() -> any Api {
-		                let api: any Api = Live()
-		                return api
+		                return __safeDI_fillBody_D559B1DD4A7F3625()
 		            }
 		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { _ in __safeDI_apiBuilder_Detail_api() })
@@ -4227,12 +4233,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        liveGadget_AnyGadgetBuilder: (() -> AnyGadget)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        func __safeDI_fillBody_03F6D374C8322DA3() -> ErasedInstantiator<(), AnyGadget>.Builder {
+		            func __safeDI_gadgetBuilder() -> LiveGadget {
+		                LiveGadget()
+		            }
+		            return { _ in AnyGadget(__safeDI_gadgetBuilder()) }
+		        }
 		        func __safeDI_panel() -> Panel {
 		            func __safeDI_liveGadget_AnyGadgetBuilder_Panel_gadgetBuilder() -> ErasedInstantiator<(), AnyGadget>.Builder {
-		                func __safeDI_gadgetBuilder() -> LiveGadget {
-		                    LiveGadget()
-		                }
-		                return { _ in AnyGadget(__safeDI_gadgetBuilder()) }
+		                return __safeDI_fillBody_03F6D374C8322DA3()
 		            }
 		            func __safeDI_apiBuilder_Panel() -> Panel.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { _ in
@@ -5359,12 +5368,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
 		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    let tracker = Tracker()
-		                    return DefaultService(tracker: tracker)
+		                func __safeDI_fillBody_C3BC80AAD1E754D7() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        let tracker = Tracker()
+		                        return DefaultService(tracker: tracker)
+		                    }
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_C3BC80AAD1E754D7()
 		            }
 		            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
@@ -5472,12 +5484,15 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
 		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
-		                func __safeDI_service() -> DefaultService {
-		                    let tracker = Tracker()
-		                    return DefaultService(tracker: tracker)
+		                func __safeDI_fillBody_C3BC80AAD1E754D7() -> any Service {
+		                    func __safeDI_service() -> DefaultService {
+		                        let tracker = Tracker()
+		                        return DefaultService(tracker: tracker)
+		                    }
+		                    let service: any Service = __safeDI_service()
+		                    return service
 		                }
-		                let service: any Service = __safeDI_service()
-		                return service
+		                return __safeDI_fillBody_C3BC80AAD1E754D7()
 		            }
 		            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })

@@ -221,6 +221,38 @@ extension ScopeGenerator {
 /// Stage D1's lowering of lane E's family: the calls of other modules' public mocks, their fills, override closures and
 /// optional builders.
 extension MockLowering.Walk {
+	/// The names of the shared fill bodies among `codes`, the fills of a call, that `mock()` declares once before its tree
+	/// (`fillBodies`), each recorded the first time the walk reaches it. A mock declares a body there only where its text is
+	/// the whole function, holding no root function and calling none, and where it is `@Sendable` or the call is inside no
+	/// `@Sendable` function, which calls no function that is not; a body of a name the walk reached with another key, or
+	/// inside a `@Sendable` function of the fills' own trees where it is not `@Sendable` itself, stays where its fill wrote it.
+	mutating func declareFillBodies(of codes: [GeneratedCode], isInsideSendableFunction: Bool) -> Set<String> {
+		var names = Set<String>()
+		for record in RootFunctionHoisting.recordsDeclarableWhereReached(in: codes) where Self.isDeclaredOnce(record, insideSendableFunction: isInsideSendableFunction) {
+			if let key = fillBodyKeysByName[record.name] {
+				if key == record.key {
+					names.insert(record.name)
+				}
+			} else {
+				fillBodyKeysByName[record.name] = record.key
+				fillBodies.append(record)
+				names.insert(record.name)
+			}
+		}
+		return names
+	}
+
+	/// Whether `record` is a shared fill body `mock()` may declare once (`declareFillBodies(of:isInsideSendableFunction:)`):
+	/// only a shared body's record (`ScopeGenerator.sharedFillBodyFunction`) is declared so, never a fill or a dispatcher.
+	/// Whether the body is `@Sendable` is its fill's own flag (`ScopeGenerator.buildsInSendableFunction(ofFill:)`), never the
+	/// called seam's case facts (`SeamSignature.Places.Case.isBuiltInSendableFunction`, `isPassedOnSendable`): the flag also
+	/// holds where a `@Sendable` function of the caller's own tree refers to the fill, which no case of the called seam's
+	/// place graph sees, and a body declared from the case facts alone would not be `@Sendable` there.
+	private static func isDeclaredOnce(_ record: RootFunctionRecord, insideSendableFunction: Bool) -> Bool {
+		guard case let .fillBody(function, _) = record.declaration, record.calls.isEmpty, record.isSendable || !insideSendableFunction else { return false }
+		return !function.pathCode.holdsRootFunction
+	}
+
 	/// The node of `generator`, `publicMockCall` of another module's public mock building `built`, whose statements are
 	/// appended to `lines`. The call names the mock's guard where it is made and passes the mock its own `SafeDIOverrides`,
 	/// which the calling mock's overrides hold under the node's label.
@@ -461,7 +493,18 @@ extension MockLowering.Walk {
 			}
 			return .publicMockCall(node)
 		}
-		let fillCode = try await generator.mockLoweringFillCode(propertiesGeneratedLater: filledCall.propertiesGeneratedLater, fillPlaceBindings: filledCallBuilders.fillPlaceBindings).joined(separator: "\n")
+		let fillCodes = try await generator.mockLoweringFillCode(propertiesGeneratedLater: filledCall.propertiesGeneratedLater, fillPlaceBindings: filledCallBuilders.fillPlaceBindings)
+		// The fills' shared bodies `mock()` declares once, before its tree, which the fills call by name.
+		let declaredFillBodyNames = declareFillBodies(of: fillCodes, isInsideSendableFunction: isInsideSendableFunction || generator.buildsInSendableFunction)
+		let fillCode = fillCodes.map { code in
+			guard !declaredFillBodyNames.isEmpty else { return code.spelled() }
+			// Written inside a level, which leaves out the empty line an omitted body begins, then unindented again.
+			let marker = "\t"
+			return GeneratedCode.indented(.omittingRootFunctions(code, named: declaredFillBodyNames), by: marker).spelled()
+				.split(separator: "\n", omittingEmptySubsequences: false)
+				.map { $0.dropFirst(marker.count) }
+				.joined(separator: "\n")
+		}.joined(separator: "\n")
 		lines.append(contentsOf: extractionLines)
 		let functionDeclaration = "\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {"
 		// The statements of the call's builder function before its call, unindented.

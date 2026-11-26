@@ -1081,13 +1081,16 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        widgetBuilder: (() -> any Widget)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func __safeDI_fillBody_8C77719E5F641260() -> any Widget {
+			            let widget: any Widget = DefaultWidget()
+			            return widget
+			        }
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    func __safeDI_gadget() -> Gadget {
 			                        func __safeDI_widgetBuilder_Gadget_widget() -> any Widget {
-			                            let widget: any Widget = DefaultWidget()
-			                            return widget
+			                            return __safeDI_fillBody_8C77719E5F641260()
 			                        }
 			                        func __safeDI_widgetBuilder_Gadget() -> Gadget.SafeDIMockScope_Widget.__safeDI_Builder<any Widget> {
 			                            .init(widget: { _ in __safeDI_widgetBuilder_Gadget_widget() })
@@ -1104,8 +1107,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			                func __safeDI_service() -> DefaultService {
 			                    func __safeDI_gadget() -> Gadget {
 			                        func __safeDI_widgetBuilder_Gadget_widget() -> any Widget {
-			                            let widget: any Widget = DefaultWidget()
-			                            return widget
+			                            return __safeDI_fillBody_8C77719E5F641260()
 			                        }
 			                        func __safeDI_widgetBuilder_Gadget() -> Gadget.SafeDIMockScope_Widget.__safeDI_Builder<any Widget> {
 			                            .init(widget: { _ in __safeDI_widgetBuilder_Gadget_widget() })
@@ -1823,22 +1825,20 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func __safeDI_fillBody_A303510A72F6F6C4() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let gizmo: any Gizmo = gizmoBuilder()
+			                return DefaultService(gizmo: gizmo)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gizmo: any Gizmo = gizmoBuilder()
-			                    return DefaultService(gizmo: gizmo)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_A303510A72F6F6C4()
 			            }
 			            func __safeDI_serviceBuilder_Panel_Row_Scope_service(_ scope: Panel.SafeDIMockScope_Service.Row_Scope.service_Values) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gizmo: any Gizmo = gizmoBuilder()
-			                    return DefaultService(gizmo: gizmo)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_A303510A72F6F6C4()
 			            }
 			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: { scope in __safeDI_serviceBuilder_Panel_service(scope) })
@@ -1904,22 +1904,20 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func __safeDI_fillBody_1EE633BCDB83ED5E() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let gizmo: any Gizmo = FakeGizmo.mock()
+			                return DefaultService(gizmo: gizmo)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gizmo: any Gizmo = FakeGizmo.mock()
-			                    return DefaultService(gizmo: gizmo)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_1EE633BCDB83ED5E()
 			            }
 			            func __safeDI_serviceBuilder_Panel_Row_Scope_service(_ scope: Panel.SafeDIMockScope_Service.Row_Scope.service_Values) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gizmo: any Gizmo = FakeGizmo.mock()
-			                    return DefaultService(gizmo: gizmo)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_1EE633BCDB83ED5E()
 			            }
 			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: { scope in __safeDI_serviceBuilder_Panel_service(scope) })
@@ -3866,18 +3864,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        tapService_AnyServiceSendableBuilder: SendableErasedInstantiator<OnTap, AnyService>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HostScreen {
+		        func __safeDI_fillBody_39362D083D546AA9() -> ErasedInstantiator<OnTap, AnyService>.Builder {
+		            func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
+		                TapService(onTap: onTap)
+		            }
+		            return { forwarded in AnyService(__safeDI_maker(onTap: forwarded)) }
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_83516D7732B0AE27() -> SendableErasedInstantiator<OnTap, AnyService>.Builder {
+		            @Sendable nonisolated func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
+		                TapService(onTap: onTap)
+		            }
+		            return { forwarded in AnyService(__safeDI_sendableMaker(onTap: forwarded)) }
+		        }
 		        func __safeDI_host() -> Host {
 		            func __safeDI_tapService_AnyServiceBuilder_Host_maker() -> ErasedInstantiator<OnTap, AnyService>.Builder {
-		                func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
-		                    TapService(onTap: onTap)
-		                }
-		                return { forwarded in AnyService(__safeDI_maker(onTap: forwarded)) }
+		                return __safeDI_fillBody_39362D083D546AA9()
 		            }
 		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() -> SendableErasedInstantiator<OnTap, AnyService>.Builder {
-		                @Sendable nonisolated func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
-		                    TapService(onTap: onTap)
-		                }
-		                return { forwarded in AnyService(__safeDI_sendableMaker(onTap: forwarded)) }
+		                return __safeDI_fillBody_83516D7732B0AE27()
 		            }
 		            func __safeDI_tapService_AnyServiceBuilder_Host() -> Host.SafeDIMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
 		                .init(maker: { _ in __safeDI_tapService_AnyServiceBuilder_Host_maker() })
@@ -3954,10 +3958,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+			            let service: any Service = DefaultService(token: token)
+			            return service
+			        }
 			        func __safeDI_office() -> Office {
 			            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-			                let service: any Service = DefaultService(token: token)
-			                return service
+			                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 			            }
 			            func __safeDI_serviceBuilder_Office(token: Token?) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope(token: token) })
@@ -4026,10 +4033,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+			            let service: any Service = DefaultService(token: token)
+			            return service
+			        }
 			        func __safeDI_office() -> Office {
 			            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-			                let service: any Service = DefaultService(token: token)
-			                return service
+			                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 			            }
 			            func __safeDI_serviceBuilder_Office(token: Token?) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope(token: token) }, desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() })
@@ -4098,10 +4108,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+			            let service: any Service = DefaultService(token: token)
+			            return service
+			        }
 			        func __safeDI_office() -> Office {
 			            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-			                let service: any Service = DefaultService(token: token)
-			                return service
+			                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 			            }
 			            func __safeDI_serviceBuilder_Office(token: Token?) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(token: token) })
@@ -4170,10 +4183,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+			            let service: any Service = DefaultService(token: token)
+			            return service
+			        }
 			        func __safeDI_office() -> Office {
 			            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-			                let service: any Service = DefaultService(token: token)
-			                return service
+			                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 			            }
 			            func __safeDI_serviceBuilder_Office(token: Token?) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(token: token) }, lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() })
@@ -4242,10 +4258,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+			            let service: any Service = DefaultService(token: token)
+			            return service
+			        }
 			        func __safeDI_office() -> Office {
 			            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-			                let service: any Service = DefaultService(token: token)
-			                return service
+			                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 			            }
 			            func __safeDI_serviceBuilder_Office(token: Token?) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(model: { _ in __safeDI_serviceBuilder_Office_Model_Scope(token: token) }, lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() })
@@ -4314,10 +4333,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OfficeScreen {
 			        let token: Token? = safeDIOverrides.token
+			        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+			            let service: any Service = DefaultService(token: token)
+			            return service
+			        }
 			        func __safeDI_office() -> Office {
 			            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-			                let service: any Service = DefaultService(token: token)
-			                return service
+			                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 			            }
 			            func __safeDI_serviceBuilder_Office(token: Token?) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(model: { _ in __safeDI_serviceBuilder_Office_Model_Scope(token: token) }, desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() })
@@ -4740,10 +4762,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+		            let service: any Service = DefaultService(token: token)
+		            return service
+		        }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-		                let service: any Service = DefaultService(token: token)
-		                return service
+		                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Office() -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, model: { values in __safeDI_serviceBuilder_Office_Model_Scope_(token: values.token) })
@@ -5201,10 +5226,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+		            let service: any Service = DefaultService(token: token)
+		            return service
+		        }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-		                let service: any Service = DefaultService(token: token)
-		                return service
+		                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Office() -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() })
@@ -5702,14 +5730,16 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        func __safeDI_fillBody_844767B6FCEEC270(token: Token?) -> any Service {
+		            let service: any Service = DefaultService(token: token)
+		            return service
+		        }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token?) -> any Service {
-		                let service: any Service = DefaultService(token: token)
-		                return service
+		                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Office_Gauge_Scope_service(_ scope: Office.SafeDIMockScope_Service.Gauge_Scope.service_Values, token: Token?) -> any Service {
-		                let service: any Service = DefaultService(token: token)
-		                return service
+		                return __safeDI_fillBody_844767B6FCEEC270(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Office() -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(lobbyBuilder: { _ in __safeDI_serviceBuilder_Office_Lobby_Scope() }, wing: { values in __safeDI_serviceBuilder_Office_Wing_Scope(token: values.token) })
@@ -6591,13 +6621,16 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        defaultPart_PartBuilder: ErasedInstantiator<String, any Part>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HubScreen {
+		        func __safeDI_fillBody_D86F3AB3ABFBA8E3(token: Token) -> ErasedInstantiator<String, any Part>.Builder {
+		            func __safeDI_part(name: String) -> DefaultPart {
+		                DefaultPart(name: name, token: token)
+		            }
+		            return { forwarded in __safeDI_part(name: forwarded) }
+		        }
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_defaultPart_PartBuilder_Hub_Model_Scope_part(token: Token) -> ErasedInstantiator<String, any Part>.Builder {
-		                func __safeDI_part(name: String) -> DefaultPart {
-		                    DefaultPart(name: name, token: token)
-		                }
-		                return { forwarded in __safeDI_part(name: forwarded) }
+		                return __safeDI_fillBody_D86F3AB3ABFBA8E3(token: token)
 		            }
 		            func __safeDI_defaultPart_PartBuilder_Hub(token: Token) -> Hub.SafeDIMockScope_DefaultPart_Part.__safeDI_Builder<any Part> {
 		                .init(page: { _ in __safeDI_defaultPart_PartBuilder_Hub_Page_Scope() }, model: { _ in __safeDI_defaultPart_PartBuilder_Hub_Model_Scope(token: token) })

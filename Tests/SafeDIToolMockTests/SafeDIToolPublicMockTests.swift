@@ -8495,30 +8495,32 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        defaultUserService_AnyUserServiceBuilder: (() -> AnyUserService)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        func __safeDI_fillBody_6B474E1CCEDD49C1(analytics: Analytics) -> AnyUserService {
+		            func __safeDI_userService() -> DefaultUserService {
+		                func __safeDI_t3Builder(logger: Logger?) -> T3 {
+		                    func __safeDI_t0Builder() -> T0 {
+		                        let logger = Logger(t3Builder: nil)
+		                        let t3Builder = Instantiator<T3> {
+		                            __safeDI_t3Builder(logger: logger)
+		                        }
+		                        return T0(t3Builder: t3Builder, logger: logger)
+		                    }
+		                    let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+		                    return T3.mock(logger: logger, t0Builder: t0Builder)
+		                }
+		                let t3Builder = Instantiator<T3> {
+		                    __safeDI_t3Builder(logger: nil)
+		                }
+		                let logger = Logger(t3Builder: t3Builder)
+		                return DefaultUserService(analytics: analytics, logger: logger, t3Builder: t3Builder)
+		            }
+		            let userService = AnyUserService(__safeDI_userService())
+		            return userService
+		        }
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
-		                let analytics = scope.analytics
-		                func __safeDI_userService() -> DefaultUserService {
-		                    func __safeDI_t3Builder(logger: Logger?) -> T3 {
-		                        func __safeDI_t0Builder() -> T0 {
-		                            let logger = Logger(t3Builder: nil)
-		                            let t3Builder = Instantiator<T3> {
-		                                __safeDI_t3Builder(logger: logger)
-		                            }
-		                            return T0(t3Builder: t3Builder, logger: logger)
-		                        }
-		                        let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-		                        return T3.mock(logger: logger, t0Builder: t0Builder)
-		                    }
-		                    let t3Builder = Instantiator<T3> {
-		                        __safeDI_t3Builder(logger: nil)
-		                    }
-		                    let logger = Logger(t3Builder: t3Builder)
-		                    return DefaultUserService(analytics: analytics, logger: logger, t3Builder: t3Builder)
-		                }
-		                let userService = AnyUserService(__safeDI_userService())
-		                return userService
+		                return __safeDI_fillBody_6B474E1CCEDD49C1(analytics: scope.analytics)
 		            }
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service() -> Service.SafeDIMockScope_DefaultUserService_AnyUserService.__safeDI_Builder<AnyUserService> {
 		                .init(userService: { scope in __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(scope) })
@@ -8665,21 +8667,24 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        router_AnyRoutingBuilder: (() -> AnyRouting)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        func __safeDI_fillBody_568BD8F59A10016B(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
+		            func __safeDI_routerBuilder(analytics: Analytics) -> Router {
+		                func __safeDI_tBuilder() -> T {
+		                    let analytics = Analytics()
+		                    let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                        AnyRouting(__safeDI_routerBuilder(analytics: analytics))
+		                    }
+		                    return T(analytics: analytics, routerBuilder: routerBuilder)
+		                }
+		                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		                return Router(analytics: analytics, tBuilder: tBuilder)
+		            }
+		            return { _ in AnyRouting(__safeDI_routerBuilder(analytics: analytics)) }
+		        }
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
-		                func __safeDI_routerBuilder(analytics: Analytics) -> Router {
-		                    func __safeDI_tBuilder() -> T {
-		                        let analytics = Analytics()
-		                        let routerBuilder = ErasedInstantiator<(), AnyRouting> {
-		                            AnyRouting(__safeDI_routerBuilder(analytics: analytics))
-		                        }
-		                        return T(analytics: analytics, routerBuilder: routerBuilder)
-		                    }
-		                    let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-		                    return Router(analytics: analytics, tBuilder: tBuilder)
-		                }
-		                return { _ in AnyRouting(__safeDI_routerBuilder(analytics: analytics)) }
+		                return __safeDI_fillBody_568BD8F59A10016B(analytics: analytics)
 		            }
 		            func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIMockScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
 		                .init(routerBuilder: { values in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: values.analytics) })
@@ -9911,17 +9916,18 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        defaultUserService_AnyUserServiceBuilder __safeDI_defaultUserService_AnyUserServiceBuilder: (() -> AnyUserService)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        func __safeDI_fillBody_F4A533D7D2D12CA3(filter: any FilterProtocol, analytics: Analytics) -> AnyUserService {
+		            func __safeDI_userService() -> DefaultUserService {
+		                let cache = Cache.__safeDI_mock(filter: filter)
+		                return DefaultUserService(analytics: analytics, cache: cache)
+		            }
+		            let userService = AnyUserService(__safeDI_userService())
+		            return userService
+		        }
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
-		                let filter = scope.filter
-		                let analytics = scope.analytics
-		                func __safeDI_userService() -> DefaultUserService {
-		                    let cache = Cache.__safeDI_mock(filter: filter)
-		                    return DefaultUserService(analytics: analytics, cache: cache)
-		                }
-		                let userService = AnyUserService(__safeDI_userService())
-		                return userService
+		                return __safeDI_fillBody_F4A533D7D2D12CA3(filter: scope.filter, analytics: scope.analytics)
 		            }
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service() -> Service.SafeDIMockScope_DefaultUserService_AnyUserService.__safeDI_Builder<AnyUserService> {
 		                .init(userService: { scope in __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(scope) })
@@ -10936,14 +10942,17 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
-		                func __safeDI_routerBuilder() -> Router {
-		                    func __safeDI_serviceBuilder() -> Service {
-		                        Service.__safeDI_mock(router_AnyRoutingBuilder: router_AnyRoutingBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_router_AnyRoutingBuilder_Service(), analytics: analytics)
+		                func __safeDI_fillBody_B267913DA626F03B(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
+		                    func __safeDI_routerBuilder() -> Router {
+		                        func __safeDI_serviceBuilder() -> Service {
+		                            Service.__safeDI_mock(router_AnyRoutingBuilder: router_AnyRoutingBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_router_AnyRoutingBuilder_Service(), analytics: analytics)
+		                        }
+		                        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+		                        return Router(serviceBuilder: serviceBuilder)
 		                    }
-		                    let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
-		                    return Router(serviceBuilder: serviceBuilder)
+		                    return { _ in AnyRouting(__safeDI_routerBuilder()) }
 		                }
-		                return { _ in AnyRouting(__safeDI_routerBuilder()) }
+		                return __safeDI_fillBody_B267913DA626F03B(analytics: analytics)
 		            }
 		            func __safeDI_router_AnyRoutingBuilder_Service() -> Service.SafeDIMockScope_Router_AnyRouting.__safeDI_Builder<AnyRouting> {
 		                .init(routerBuilder: { values in __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: values.analytics) })

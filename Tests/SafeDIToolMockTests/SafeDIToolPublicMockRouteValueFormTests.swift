@@ -353,11 +353,14 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        func __safeDI_fillBody_BAAEDC2976A78CDB(token: Token) -> any Service {
+		            let service: any Service = DefaultService(token: token)
+		            return service
+		        }
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token) -> any Service {
-		                let service: any Service = DefaultService(token: token)
-		                return service
+		                return __safeDI_fillBody_BAAEDC2976A78CDB(token: token)
 		            }
 		            func __safeDI_serviceBuilder_Office(token: Token) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(token: token) })
@@ -734,11 +737,14 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        func __safeDI_fillBody_E48F8216DD37ED7C(passUp: Token) -> any Service {
+		            let service: any Service = DefaultService(passUp: passUp)
+		            return service
+		        }
 		        let passUp = if let safeDIBuilder = safeDIOverrides.passUp { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, passUp: Token) -> any Service {
-		                let service: any Service = DefaultService(passUp: passUp)
-		                return service
+		                return __safeDI_fillBody_E48F8216DD37ED7C(passUp: passUp)
 		            }
 		            func __safeDI_serviceBuilder_Office(passUp: Token) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(passUp: passUp) })
@@ -887,11 +893,14 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
+		        func __safeDI_fillBody_0CD96B58A603BBE7(up: Token) -> any Service {
+		            let service: any Service = DefaultService(up: up)
+		            return service
+		        }
 		        let up = if let safeDIBuilder = safeDIOverrides.up { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, up: Token) -> any Service {
-		                let service: any Service = DefaultService(up: up)
-		                return service
+		                return __safeDI_fillBody_0CD96B58A603BBE7(up: up)
 		            }
 		            func __safeDI_serviceBuilder_Office(up: Token) -> Office.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(desk: { _ in __safeDI_serviceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_serviceBuilder_Office_Model_Scope_(up: up) })
