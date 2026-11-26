@@ -102,6 +102,12 @@ extension DependencyTreeGenerator {
 					todaysUnavailableOptionalProperties.map(\.asSource).sorted(),
 					bodies.bodies[body].generator.unavailableOptionalProperties.map(\.asSource).sorted(),
 				)
+				// The places inside the fills of a seam's or a public mock's call, built in the body as today's place builds them.
+				if let variantBodyObserver {
+					for (place, today, bodys) in Self.fillPlaces(ofCallBuiltToday: context.generator, inBody: bodies.bodies[body].generator, describedAs: context.place) {
+						variantBodyObserver(place, today.unavailableOptionalProperties.map(\.asSource).sorted(), bodys.unavailableOptionalProperties.map(\.asSource).sorted())
+					}
+				}
 			}
 		}
 		// The bodies the plan builds with no tree of today's: the root's, then the body of each call place a

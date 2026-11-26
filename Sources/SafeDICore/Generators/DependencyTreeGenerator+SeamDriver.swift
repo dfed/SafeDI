@@ -501,20 +501,35 @@ extension DependencyTreeGenerator {
 		)
 		var constructionMemo = ConstructionMemo()
 		var rootScopeGenerators = [RootScopeInfo]()
+		// The received properties of the seam world's scopes, read only where a test compares a root's bodies: a scope
+		// whose tree calls a seam receives what the call's fills read of the declarations enclosing it, since the body of
+		// a place above the call answers those labels as today's place does.
+		var receivedPropertiesCache = ReceivedPropertiesCache(walksSeamCallFills: true)
 		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
-			try rootScopeGenerators.append(RootScopeInfo(
+			let scopeGenerator = try record.createScopeGenerator(
+				in: table,
+				lazilyInstantiatedInstanceProperties: [],
+				erasedToConcreteExistential: false,
+				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
+			)
+			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				scopeGenerator: record.createScopeGenerator(
-					in: table,
-					lazilyInstantiatedInstanceProperties: [],
-					erasedToConcreteExistential: false,
-					declaredTypeNames: declaredTypeNames,
-					constructionMemo: &constructionMemo,
-				),
+				scopeGenerator: scopeGenerator,
 			))
+			// Each place of the root's tree against the bodies of its plan, built only where a test compares the two: a
+			// seam's call and the fills it passes are built in a body as today's place builds them. A seam's own tree, below,
+			// is not compared yet: its places read the builders and levels of its signature, which no body is built beneath.
+			try Self.compareBodies(
+				ofRoot: scope,
+				todaysTree: scopeGenerator,
+				frozenScopeMap: seamWorld.frozenScopeMap,
+				declaredTypeNames: declaredTypeNames,
+				cache: &receivedPropertiesCache,
+			)
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot

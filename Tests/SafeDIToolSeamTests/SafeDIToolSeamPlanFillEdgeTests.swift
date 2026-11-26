@@ -104,6 +104,28 @@ struct SafeDIToolSeamPlanFillEdgeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFillInBodyBeneathAnswersOfFillsReads_whenFillInsideCycleReceivesCallersValue() async throws {
+		// `App` is a seam world: its `A` calls `Service`, whose fill `DefaultUserService` receives `Root`'s `theme` only if
+		// available. The body of each place above the call is keyed by what the call's fills read of the declarations
+		// enclosing it, so its fill reads `Root`'s `theme`, as today's place does, rather than passing it `nil`.
+		let bodies = try await bodies(of: Self.modules(
+			service: ["@Instantiated let userService: any UserService"],
+			userService: ["@Received(onlyIfAvailable: true) let theme: Theme?"],
+		))
+
+		#expect(bodies == [
+			Bodies(place: "\"theme: Theme\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"aBuilder: Instantiator<A>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"service: Service\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"userService: any UserService\" in a fill of \"service: Service\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"aBuilder: Instantiator<A>\" called by \"aBuilder: Instantiator<A>\" in \"aBuilder: Instantiator<A>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"service: Service\" called by \"aBuilder: Instantiator<A>\" in \"aBuilder: Instantiator<A>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"userService: any UserService\" in a fill of \"service: Service\" called by \"aBuilder: Instantiator<A>\" in \"aBuilder: Instantiator<A>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+		])
+	}
+
 	// MARK: Private
 
 	private struct Reads: Equatable {
@@ -111,6 +133,12 @@ struct SafeDIToolSeamPlanFillEdgeTests: ~Copyable {
 		let property: String
 		let labelsRead: [String]
 		let labelsPlanned: [String]
+	}
+
+	private struct Bodies: Equatable {
+		let place: String
+		let todaysUnavailableProperties: [String]
+		let bodysUnavailableProperties: [String]
 	}
 
 	private var filesToDelete: [URL]
@@ -188,5 +216,23 @@ struct SafeDIToolSeamPlanFillEdgeTests: ~Copyable {
 			projections.append(projection)
 		}
 		return projections
+	}
+
+	/// Each distinct comparison of a place of a root's tree with its body (`VariantBodyObservation`) the tool hands on while
+	/// it generates `modules`, in the order first handed on.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func bodies(of modules: [ModuleFixture]) async throws -> [Bodies] {
+		let (stream, continuation) = AsyncStream.makeStream(of: Bodies.self)
+		try await VariantBodyObservation.$observer.withValue({ place, todaysUnavailableProperties, bodysUnavailableProperties in
+			continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
+		}) {
+			_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var bodies = [Bodies]()
+		for await body in stream where !bodies.contains(body) {
+			bodies.append(body)
+		}
+		return bodies
 	}
 }

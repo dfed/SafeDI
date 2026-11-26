@@ -140,3 +140,34 @@ struct FillEdges: Sendable {
 	/// The labels the call reads of the declarations enclosing it for its fills, in the order its fills first read them.
 	let labelsReadOfCaller: [String]
 }
+
+extension DependencyTreeGenerator {
+	/// The places inside the fills a call passes, each in today's build of the call beside the same place in a body's build
+	/// of it: a fill's tree reads what its place's struct does not carry from the declarations enclosing the call, so a body
+	/// built beneath the answers its path gives passes `nil` there only where today's place does if the labels it is keyed
+	/// by hold those reads. A call builds its fills as its children, each holding the fulfilling type's tree, so the two
+	/// builds, made of one scope, pair their places by position. Walks each fill's tree on a stack of its own, since a fill's
+	/// tree can be as deep as the module has types.
+	/// - Parameters:
+	///   - todaysCall: Today's generator of a place of a seam's or a public mock's call.
+	///   - bodysCall: A body's generator of the same call.
+	///   - place: How the call's place is described.
+	static func fillPlaces(
+		ofCallBuiltToday todaysCall: ScopeGenerator,
+		inBody bodysCall: ScopeGenerator,
+		describedAs place: String,
+	) -> [(place: String, today: ScopeGenerator, body: ScopeGenerator)] {
+		var fillPlaces = [(place: String, today: ScopeGenerator, body: ScopeGenerator)]()
+		var pairs = [(today: ScopeGenerator, body: ScopeGenerator)]()
+		for (todaysFill, bodysFill) in zip(todaysCall.propertiesToGenerate, bodysCall.propertiesToGenerate).reversed() where todaysFill.fillHole != nil {
+			pairs.append((todaysFill, bodysFill))
+		}
+		while let (today, body) = pairs.popLast() {
+			fillPlaces.append(("\(today.scopeData.asDOTNode) in a fill of \(place)", today, body))
+			for (todaysChild, bodysChild) in zip(today.propertiesToGenerate, body.propertiesToGenerate).reversed() {
+				pairs.append((todaysChild, bodysChild))
+			}
+		}
+		return fillPlaces
+	}
+}

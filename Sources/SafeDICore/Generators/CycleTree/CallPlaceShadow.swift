@@ -243,12 +243,21 @@ extension DependencyTreeGenerator {
 			var calledScopeByCallPlace = [ObjectIdentifier: Scope]()
 			for (index, identifier) in graph.nodes.enumerated() {
 				if let scope = scopeByIdentifier[identifier] {
-					copyByIdentifier[identifier] = Scope(
+					// A copy of a seam's or a public mock's call keeps the call and the fills it passes, which its body builds as
+					// today's place does (`FillEdges` carries what they read of the caller). A call builds no child, so it is on
+					// no cycle and never a call place.
+					let copy = Scope(
 						instantiable: scope.instantiable,
 						dependenciesLeftOut: scope.dependenciesLeftOut,
 						builtInlineSeamComment: scope.builtInlineSeamComment,
+						seamCall: scope.seamCall,
+						publicMockCall: scope.publicMockCall,
 						isUnavailableDependency: scope.isUnavailableDependency,
 					)
+					copy.holeArguments = scope.holeArguments
+					copy.fillReceivedProperties = scope.fillReceivedProperties
+					copy.fillLabelsReadOnlyIfAvailable = scope.fillLabelsReadOnlyIfAvailable
+					copyByIdentifier[identifier] = copy
 					if graph.isOnCycle(index) {
 						let callPlace = Scope(instantiable: callPlaceInstantiable(of: scope, receiving: collectReceivedProperties(from: scope, cache: &cache)), isCallPlace: true)
 						callPlaceByIdentifier[identifier] = callPlace
