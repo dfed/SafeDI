@@ -5826,13 +5826,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// declares before the call, generated with `propertiesGeneratedLater` and `fillPlaceBindings`, the names the mock root
 	/// hands the call: each builds the hole's property as the module that declares the fulfilling type builds it. Stored
 	/// nowhere, since mock roots that share the call each hand it their own names (`construction-memo-calls.md`).
-	func mockLoweringFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws -> [String] {
+	func mockLoweringFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws -> [GeneratedCode] {
 		try await generateProperties(
 			propertiesGeneratedLater: propertiesGeneratedLater,
 			enclosingFunctionNames: [:],
 			leadingMemberWhitespace: "",
 			fillPlaceBindings: fillPlaceBindings,
-		).map { $0.spelled() }
+		)
 	}
 
 	/// Every argument of `generatePropertyCode` but `codeGeneration`, which is `.dependencyTree` wherever the key is made,
@@ -7571,7 +7571,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
 		builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(body.overrideFillKeys.contains) ?? false
 		// A fill a dispatcher's case may hold in place keeps no function, so it shares none (`append(_:ofChildAt:to:…)`).
-		if seamCall != nil,
+		if seamCall != nil || publicMockCall != nil,
 		   let key = child.generator.fillKey,
 		   !body.fillInlining.mayHold(key) || body.fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
 		{

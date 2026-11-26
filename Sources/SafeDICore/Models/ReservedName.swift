@@ -157,8 +157,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// (`ScopeGenerator.generateFillCode`), after the hash of the function's text: every fill whose tree writes that text
 	/// calls one function, which the root declares once (`RootFunctionHoisting`).
 	static func fillBodyFunctionName(hash: String) -> String {
-		"\(builderFunctionNamePrefix)fillBody_\(hash)"
+		"\(fillBodyFunctionNamePrefix)\(hash)"
 	}
+
+	/// What every `fillBodyFunctionName(hash:)` starts with.
+	static let fillBodyFunctionNamePrefix = "\(builderFunctionNamePrefix)fillBody_"
 
 	/// The start of the name of each private final class a seam declares beside its initializers when its tree holds a
 	/// loop's levels in one box, which the hash of what the class holds follows (`ScopeGenerator.LoopLevelsType`).
