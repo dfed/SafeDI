@@ -237,7 +237,7 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsEachCallsDispatcherInItsCall_whenTwoCallsDeclareDispatchersOfOneNameCallingTheirOwnFills() async throws {
 		let (output, disagreements) = try await collectingRootFunctionKeyDisagreements {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules(callsInnerThroughOuterSeam: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 
 		#expect(disagreements == [])
@@ -307,12 +307,93 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		""")
 	}
 
+	/// The same seams, but the root calls `Inner` only inside the calls of two seams of `OuterSeam`: `InnerHost`, which
+	/// instantiates it, and `Outer`, which opens it through an instantiator. Each call declares a dispatcher named for
+	/// `Inner`'s level, and the two call different fills.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsEachCallsDispatcherInItsCall_whenTwoSeamsOfOneModuleCallAnotherModulesSeam() async throws {
+		let (output, disagreements) = try await collectingRootFunctionKeyDisagreements {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingCallModules(callsInnerThroughOuterSeam: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+
+		#expect(disagreements == [])
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(InnerSeam)
+		import InnerSeam
+		#endif
+		#if canImport(OuterSeam)
+		import OuterSeam
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_apiBuilder_Inner_api(_ scope_service: Service) -> any Api {
+		            let service = scope_service
+		            func __safeDI_api() -> LiveApi {
+		                let detail = Detail(service: service)
+		                return LiveApi(service: service, detail: detail)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        func __safeDI_apiBuilder_Outer_api(_ scope_service: Service, _ scope_innerBuilder: Instantiator<Inner>) -> any Api {
+		            let service = scope_service
+		            func __safeDI_api() -> LiveApi {
+		                let detail = Detail(service: service)
+		                return LiveApi(service: service, detail: detail)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        func __safeDI_apiBuilder_Inner_Inner_api(_ scope_service: Service) -> any Api {
+		            let service = scope_service
+		            func __safeDI_api() -> LiveApi {
+		                let detail = Detail(service: service)
+		                return LiveApi(service: service, detail: detail)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        let service = Service()
+		        func __safeDI_innerHost() -> InnerHost {
+		            _ = InnerHost.__safeDI_InnerHost_44A0EA0C8BC24872.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_InnerHost() -> InnerHost.__safeDI_ApiCarrier<any Api> {
+		                .init(inner: __safeDI_apiBuilder_Inner())
+		            }
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_service in __safeDI_apiBuilder_Inner_api(scope_service) })
+		            }
+		            return InnerHost(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_InnerHost())
+		        }
+		        let innerHost: InnerHost = __safeDI_innerHost()
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_3B95A2880DC768BE.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_service, scope_innerBuilder in __safeDI_apiBuilder_Outer_api(scope_service, scope_innerBuilder) }, innerBuilder: __safeDI_apiBuilder_Inner())
+		            }
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_service in __safeDI_apiBuilder_Inner_Inner_api(scope_service) })
+		            }
+		            return Outer(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(service: service, innerHost: innerHost, outer: outer)
+		    }
+		}
+		""")
+	}
+
 	// MARK: Fixtures
 
 	/// `Inner`, a seam of module `InnerSeam` whose `api` only `App` fills; `Outer`, a seam of module `OuterSeam` whose `api`
-	/// only `App` fills too and whose tree opens `Inner`; and `App`, whose `LiveApi` fills both, instantiating `Detail`, and whose root instantiates
-	/// `Inner` and `Outer`.
-	private static let siblingCallModules = [
+	/// only `App` fills too and whose tree opens `Inner`; and `App`, whose `LiveApi` fills both, instantiating `Detail`, and
+	/// whose root instantiates `Outer` and, where `callsInnerThroughOuterSeam`, `InnerHost`, a seam of `OuterSeam` that
+	/// instantiates `Inner`, else `Inner` itself.
+	private static func siblingCallModules(callsInnerThroughOuterSeam: Bool) -> [ModuleFixture] { [
 		ModuleFixture(name: "InnerSeam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
 		import SafeDI
 
@@ -350,7 +431,20 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		    @Instantiated let api: any Api
 		    @Instantiated let innerBuilder: Instantiator<Inner>
 		}
-		"""], dependencies: ["InnerSeam"]),
+		""" + (callsInnerThroughOuterSeam ? """
+
+
+		@Instantiable(generateDependencyTree: true)
+		public final class InnerHost: Instantiable {
+		    public init(service: Service, inner: Inner) {
+		        self.service = service
+		        self.inner = inner
+		    }
+
+		    @Received let service: Service
+		    @Instantiated let inner: Inner
+		}
+		""" : "")], dependencies: ["InnerSeam"]),
 		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
 		import InnerSeam
 		import OuterSeam
@@ -378,18 +472,19 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 
 		@Instantiable(isRoot: true)
 		public final class Root: Instantiable {
-		    public init(service: Service, inner: Inner, outer: Outer) {
+		    public init(service: Service, \(callsInnerThroughOuterSeam ? "innerHost: InnerHost" : "inner: Inner"), outer: Outer) {
 		        self.service = service
-		        self.inner = inner
+		        \(callsInnerThroughOuterSeam ? "self.innerHost = innerHost" : "self.inner = inner")
 		        self.outer = outer
 		    }
 
 		    @Instantiated let service: Service
-		    @Instantiated let inner: Inner
+		    @Instantiated let \(callsInnerThroughOuterSeam ? "innerHost: InnerHost" : "inner: Inner")
 		    @Instantiated let outer: Outer
 		}
 		"""], dependencies: ["InnerSeam", "OuterSeam"]),
 	]
+	}
 
 	/// `Last`, a seam whose `screenBuilder` only `App` can fill, and `App`, whose `AppScreen` fills it and opens `Last`
 	/// again, and whose root opens both. Where `readingToken`, `AppScreen` receives `token`, which only the root declares.
