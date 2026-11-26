@@ -214,6 +214,75 @@ extension GraphFuzzerFixture {
 		}
 		return probes
 	}
+
+	/// Probes of each generated mock that takes a required parameter, every one of which is a required optional (`nil`
+	/// for `label: T?`), an instantiator of a type the fixture builds with `T()` (`Instantiator<T> { T() }`), or a value the
+	/// mock cannot build (`unbuildableTypeNames`), and at least one of which is not that last kind, which the D12 probes
+	/// judge (`unbuildableBuilderProbes`): the comparator's own probes call only a mock that takes no required parameter.
+	/// `.v3Unstable` takes the same parameters, a value the mock cannot build as a builder, which the probe hands one
+	/// instance made before the call, as `.v2`'s mock is handed it, so the two agree only where both put that instance and
+	/// every other value where the other does. A mock whose `.v3Unstable` parameters differ otherwise has no probe. Hand
+	/// mutations of `.v3Unstable`'s laid-out mocks fail through these probes alone: `S59_T2` reading its builder of `t2` for
+	/// `t3` (seed 59), and `S33_T2` handing its `lazyT5` the `S33_T5` its `t4` holds (seed 33).
+	func requiredArgumentProbes(v2GeneratedFiles: [String: String], v3GeneratedFiles: [String: String]) -> [DifferentialValueProbe] {
+		let unbuildable = Set(unbuildableTypeNames)
+		let mockFileSuffix = "+SafeDIMock.swift"
+		var probes = [DifferentialValueProbe]()
+		for (fileName, v2Contents) in v2GeneratedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) {
+			let v2Required = GraphFuzzerMockOverrides.requiredParameters(v2Contents)
+			guard !v2Required.isEmpty, let v3Contents = v3GeneratedFiles[fileName] else { continue }
+			let v3Required = GraphFuzzerMockOverrides.requiredParameters(v3Contents)
+			guard v3Required.map(\.label) == v2Required.map(\.label) else { continue }
+			var localBindings = [String]()
+			var v2Arguments = [String]()
+			var v3Arguments = [String]()
+			var argumentKinds = [String]()
+			for (v2Parameter, v3Parameter) in zip(v2Required, v3Required) {
+				let v3Type = v3Parameter.type.replacingOccurrences(of: "@Sendable ", with: "")
+				if v2Parameter.type.hasSuffix("?"), v3Type == v2Parameter.type {
+					v2Arguments.append("\(v2Parameter.label): nil")
+					v3Arguments.append("\(v2Parameter.label): nil")
+					argumentKinds.append("\(v2Parameter.label): nil")
+				} else if v2Parameter.type.hasPrefix("Instantiator<"), v2Parameter.type.hasSuffix(">"), v3Type == v2Parameter.type,
+				          case let builtType = String(v2Parameter.type.dropFirst("Instantiator<".count).dropLast()),
+				          isBuiltWithoutArguments(builtType)
+				{
+					v2Arguments.append("\(v2Parameter.label): \(v2Parameter.type) { \(builtType)() }")
+					v3Arguments.append("\(v2Parameter.label): \(v2Parameter.type) { \(builtType)() }")
+					argumentKinds.append("\(v2Parameter.label): instantiator")
+				} else if unbuildable.contains(v2Parameter.type), v3Type == "() -> \(v2Parameter.type)" {
+					localBindings.append("let \(v2Parameter.label) = \(v2Parameter.type)()")
+					v2Arguments.append("\(v2Parameter.label): \(v2Parameter.label)")
+					v3Arguments.append("\(v2Parameter.label): { \(v2Parameter.label) }")
+					argumentKinds.append("\(v2Parameter.label): value")
+				} else {
+					break
+				}
+			}
+			guard argumentKinds.count == v2Required.count, localBindings.count < v2Required.count else { continue }
+			let mockedType = String(fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? "")
+			func expression(_ arguments: [String]) -> String {
+				let call = "\(mockedType).mock(\(arguments.joined(separator: ", ")))"
+				return localBindings.isEmpty ? "{ () -> Any in \(call) }()" : "{ () -> Any in \(localBindings.joined(separator: "; ")); return \(call) }()"
+			}
+			probes.append(DifferentialValueProbe(
+				name: "\(mockedType).mock(\(argumentKinds.joined(separator: ", ")))",
+				expression: expression(v3Arguments),
+				knownRightExpression: expression(v2Arguments),
+			))
+		}
+		return probes
+	}
+
+	/// Whether the fixture declares `typeName` a class that conforms to `Instantiable` by hand and declares no initializer,
+	/// so that `typeName()` builds it.
+	private func isBuiltWithoutArguments(_ typeName: String) -> Bool {
+		swiftFileContent.contains { content in
+			let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+			guard let start = lines.firstIndex(where: { $0.hasSuffix("final class \(typeName): Instantiable {") && !$0.contains("@") }) else { return false }
+			return !lines[start...].prefix { $0 != "}" }.contains { $0.contains("init(") }
+		}
+	}
 }
 
 /// The v2/v3 value-agreement oracle and the D12 per-instance oracle, over the base corpus.
@@ -327,11 +396,14 @@ enum GraphFuzzerAPIVersionAgreement {
 			return SeedRun(seed: seed, classification: classification, graphs: [], unbuildableBuilderProbeCount: 0, filesToDelete: filesToDelete)
 		}
 		let samples = corpus.forwardedPropertiesSamples(of: v2Fixture)
+		// A mock with a required parameter the comparator's own probes have no value for, called with values both versions
+		// take alike (`requiredArgumentProbes`).
+		let requiredArgumentProbes = judgesUnbuildableBuilders ? v2Fixture.requiredArgumentProbes(v2GeneratedFiles: v2GeneratedFiles, v3GeneratedFiles: v3GeneratedFiles) : []
 		var graphs = [DifferentialValueGraph(
 			name: "seed \(seed)",
 			feature: DifferentialValuePath(fixture: v3Fixture, generatedFiles: v3GeneratedFiles),
 			knownRight: DifferentialValuePath(fixture: v2Fixture, generatedFiles: v2GeneratedFiles),
-			probes: probes,
+			probes: probes + requiredArgumentProbes,
 			samples: samples,
 		)]
 		// The v3 engine draws' configured probes, each against the tree built by hand (`GraphFuzzerV3EngineDraw`).
@@ -495,8 +567,10 @@ extension GraphFuzzerAPIVersionAgreement {
 	/// only if available fails seeds 23, 85 and 88 as values that differ; one whose `.v3Unstable` builder of an unbuildable
 	/// dependency is called twice per instance fails seeds 2, 7, 13, 45, 62, 73 and 90 in their D12 graphs; one whose
 	/// builder is called once and its value handed to every instance fails seeds 2, 7, 13, 45, 62 and 73, whose
-	/// `ZTwiceHost` builds the owner twice (`addingTwiceBuiltUnbuildableOwner`).
-	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 117]
+	/// `ZTwiceHost` builds the owner twice (`addingTwiceBuiltUnbuildableOwner`). Seed 93 holds a loop of builders inside
+	/// a type the type key builds in a function of its own: where the loop keeps its text though it reads that type's
+	/// configuration, which the key names apart (`recordLoopUnit`), its `.v3Unstable` mock does not compile.
+	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 93, 117]
 
 	/// The public mock corpus's smoke seeds: graphs whose `.v2` and `.v3Unstable` public mocks agree, together holding at
 	/// least ten compared graphs, among them seeds whose probes pass a leaf its own `name` (31) or a consumer a value its mock

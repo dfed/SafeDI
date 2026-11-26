@@ -119,6 +119,14 @@ extension MockLowering.Walk {
 				reads.append(MockLowering.valueRead(token.name, outerTypes: outerTypes))
 			}
 		}
+		// In `.v3Unstable`, a configuration the walk binds around the loop is a function's parameter or a local the type key
+		// names apart, which the loop's text, copied as written, would name as the walk does: the loop keeps the walk's body.
+		// The mock's overrides keep their name.
+		let configurationNamesAround = Set(v3ConfigurationsInScope.values.joined().map(\.expression)).subtracting([ReservedName.mockOverridesParameterName])
+		guard !reads.contains(where: { configurationNamesAround.contains($0.label) }) else {
+			unrecordedReasons[first.path] = "loop:readsConfigurationAround"
+			return
+		}
 		guard let property = bindings.first else {
 			unrecordedReasons[first.path] = "loop:noBinding"
 			return
