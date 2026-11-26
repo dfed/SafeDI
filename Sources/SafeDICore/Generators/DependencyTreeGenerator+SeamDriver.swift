@@ -1085,6 +1085,7 @@ extension DependencyTreeGenerator {
 						ownScopeEnums: ownScopeEnums,
 						generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
 						declaredTypeNames: declaredTypeNames,
+						unsettledSeams: component,
 					)
 					if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 						changed = true
@@ -1968,7 +1969,9 @@ extension DependencyTreeGenerator {
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
 	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
 	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
+	/// - Parameter unsettledSeams: The seams whose signatures are computed beside this one's, the seams of its component,
+	///   whose holes this seam names from their sites when it passes them up (`holes(of:…)`).
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames, unsettledSeams: Set<TypeDescription>) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -2160,7 +2163,7 @@ extension DependencyTreeGenerator {
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,
-			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables),
+			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables, unsettledSeams: unsettledSeams),
 			parameters: parameters,
 			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
 			proof: proof,
