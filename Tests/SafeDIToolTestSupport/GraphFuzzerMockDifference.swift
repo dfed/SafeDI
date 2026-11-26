@@ -439,6 +439,8 @@ private struct Rendering {
 			return statementsText(of: list, in: scope)
 		} else if let list = node.as(LabeledExprListSyntax.self), scope.isInFunctionBody {
 			return argumentsText(of: list, in: scope)
+		} else if let clause = node.as(InitializerClauseSyntax.self), let text = textReadingNoDroppedField(of: clause, in: scope) {
+			return text
 		} else if let expression = node.as(IfExprSyntax.self), let elseStatements = elseStatementsOfDroppedOverride(expression, in: scope) {
 			return expression.leadingTrivia.description + statementsText(of: elseStatements, in: scope) + expression.trailingTrivia.description
 		} else {
@@ -789,14 +791,38 @@ private struct Rendering {
 	/// argument is `nil`, so its text is compared as it is.
 	private func textReadingNoDroppedField(of argument: LabeledExprSyntax, in list: LabeledExprListSyntax, scope: Scope) -> String? {
 		guard let argumentLabel = argument.label?.text,
-		      argumentLabel.hasPrefix(Self.builderFunctionPrefix),
-		      argumentLabel.hasSuffix(Self.hoistedConfigurationParameterSuffix),
 		      let callee = list.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-		      callee.hasPrefix(Self.builderFunctionPrefix)
+		      callee.hasPrefix(Self.builderFunctionPrefix),
+		      let text = expressionTextReadingNoDroppedField(of: argument.expression, handedAs: argumentLabel, toBuilderOf: String(callee.dropFirst(Self.builderFunctionPrefix.count)), at: Syntax(argument), in: scope)
+		else { return nil }
+		return "\(argumentLabel): \(text)"
+	}
+
+	/// The text of `clause` as the other outcome writes it, when it binds before a hoisted builder function's wrapper the
+	/// configuration a dropped field holds, `let __safeDI_<label>____safeDI_<T>_configuration: … = <nearest> ?? <owner>.<label>`,
+	/// which the other outcome binds to a configuration built afresh. Any other clause is `nil`, so its text is compared as it is.
+	private func textReadingNoDroppedField(of clause: InitializerClauseSyntax, in scope: Scope) -> String? {
+		guard scope.isInFunctionBody,
+		      let name = clause.parent?.as(PatternBindingSyntax.self)?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+		      name.hasPrefix(Self.builderFunctionPrefix),
+		      let separator = name.range(of: "__\(Self.builderFunctionPrefix)", range: name.index(name.startIndex, offsetBy: Self.builderFunctionPrefix.count)..<name.endIndex),
+		      let text = expressionTextReadingNoDroppedField(of: clause.value, handedAs: String(name[name.index(separator.lowerBound, offsetBy: 2)...]), toBuilderOf: String(name[name.index(name.startIndex, offsetBy: Self.builderFunctionPrefix.count)..<separator.lowerBound]), at: Syntax(clause), in: scope)
+		else { return nil }
+		return "\(clause.equal.leadingTrivia)\(clause.equal.text)\(clause.equal.trailingTrivia)\(text)\(clause.trailingTrivia)"
+	}
+
+	/// `expression`, handed to the builder function of `builtName` as `parameterLabel`, as the other outcome writes it,
+	/// when it reads the configuration a dropped field holds: `<owner>.<label>` or `<nearest> ?? <owner>.<label>`, where
+	/// the function builds `label` and `parameterLabel` is `__safeDI_<T>_configuration` for the field's type,
+	/// `T.SafeDIMockConfiguration`. The other outcome's configuration has no such field, so it hands the function a
+	/// configuration built afresh, `T.SafeDIMockConfiguration()`. Any other expression is `nil`.
+	private func expressionTextReadingNoDroppedField(of expression: ExprSyntax, handedAs parameterLabel: String, toBuilderOf builtName: String, at position: Syntax, in scope: Scope) -> String? {
+		guard parameterLabel.hasPrefix(Self.builderFunctionPrefix),
+		      parameterLabel.hasSuffix(Self.hoistedConfigurationParameterSuffix)
 		else { return nil }
 		let nearest: ExprSyntax?
 		let read: ExprSyntax
-		if let sequence = argument.expression.as(SequenceExprSyntax.self) {
+		if let sequence = expression.as(SequenceExprSyntax.self) {
 			let elements = Array(sequence.elements)
 			guard elements.count == 3,
 			      elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "??"
@@ -805,21 +831,20 @@ private struct Rendering {
 			read = elements[2]
 		} else {
 			nearest = nil
-			read = argument.expression
+			read = expression
 		}
 		guard let member = read.as(MemberAccessExprSyntax.self),
 		      let base = member.base?.as(DeclReferenceExprSyntax.self),
-		      let owner = configurationOwnerRead(byName: base.baseName.text, at: Syntax(argument), in: scope)
+		      let owner = configurationOwnerRead(byName: base.baseName.text, at: position, in: scope)
 		else { return nil }
 		let label = member.declName.baseName.text
-		let builtName = String(callee.dropFirst(Self.builderFunctionPrefix.count))
 		guard builtName == label || builtName.hasPrefix("\(label)_"),
 		      let field = fields[owner]?[label],
 		      droppedFields.contains(field),
-		      argumentLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)",
-		      field.type.hasSuffix(".\(mockConfigurationStructName)")
+		      field.type.hasSuffix(".\(mockConfigurationStructName)"),
+		      parameterLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)"
 		else { return nil }
-		return "\(argumentLabel): \(nearest.map { "\($0.trimmedDescription) ?? " } ?? "")\(field.type)()"
+		return "\(nearest.map { "\($0.trimmedDescription) ?? " } ?? "")\(field.type)()"
 	}
 
 	/// The configuration owner that the value named `name` holds at `position`: the mock's overrides for `safeDIOverrides`,
