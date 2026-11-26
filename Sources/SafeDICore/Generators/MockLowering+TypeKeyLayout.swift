@@ -165,13 +165,25 @@ extension MockLowering.Walk {
 		}
 		// The first record made of each key, whose node every alike place takes (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`).
 		var sharedRecordsByKey = [MockLowering.SharedRecordKey: BuiltPlaceRecord]()
-		// Walk order starts a place before the places beneath it, so the reverse finishes them first.
-		for path in placePathsInWalkOrder.reversed() {
+		// Walk order starts a place before the places beneath it, so the reverse finishes them first. Where the walk shared a
+		// subtree, the place that holds its records is recorded before the meetings that take them, depth first.
+		let subtreeSharing = subtreeSharing.flatMap { $0.sharedMeetings > 0 ? $0 : nil }
+		let recordingOrder = subtreeSharing == nil ? Array(placePathsInWalkOrder.reversed()) : placePathsRecordingSharedSubtreesFirst()
+		// The first unrecorded place in walk order, whatever order the places are recorded in.
+		var walkIndexByPath = [[Int]: Int]()
+		if subtreeSharing != nil {
+			for (index, path) in placePathsInWalkOrder.enumerated() {
+				walkIndexByPath[path] = index
+			}
+		}
+		for path in recordingOrder {
 			defer {
 				builtPlaceCalls[path] = nil
 				builtPlaceConfigurationContexts[path] = nil
 				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil, loopUnitRecords[path] == nil, !pathsCoveredByLoopUnits.contains(path) {
-					firstUnrecordedPath = path
+					if firstUnrecordedPath.map({ (walkIndexByPath[$0] ?? 0) < (walkIndexByPath[path] ?? 0) }) != true {
+						firstUnrecordedPath = path
+					}
 					for depth in 1..<max(path.count, 1) {
 						pathsAboveUnrecordedPlace.insert(Array(path.prefix(depth)))
 					}
@@ -202,7 +214,13 @@ extension MockLowering.Walk {
 				unrecordedReasons[path] = "namedApart"
 				continue
 			}
-			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:)) : []
+			// A meeting of a subtree met before takes that meeting's child records.
+			let childCodes = subtreeSharing?.sourcePathByPath[path].flatMap { subtreeSharing?.childCodesBySourcePath[$0] }
+				?? (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:))
+			if let subtreeSharing, subtreeSharing.sourcePaths.contains(path) {
+				subtreeSharing.childCodesBySourcePath[path] = childCodes
+			}
+			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + childCodes : []
 			// The record made below holds its children's, so the walk's tables let go of them, and of what the walk kept to
 			// record this place, as soon as they are read: the tables then hold the places still waiting for their parents,
 			// never every place of the tree at once.
@@ -320,6 +338,7 @@ extension MockLowering.Walk {
 		builtPlaceConfigurationContexts = [:]
 		closerParentFieldReads = [:]
 		publicMockCallPlanNodes = [:]
+		subtreeSharing?.releaseTables()
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
