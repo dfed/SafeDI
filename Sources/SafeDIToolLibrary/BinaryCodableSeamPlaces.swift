@@ -65,6 +65,7 @@ extension SeamSignature.Places.LevelKey: BinarySchemaMember {
 				BinaryLayoutField("isSeamRoot", \.isSeamRoot),
 				BinaryLayoutField("isInFill", \.isInFill),
 				BinaryLayoutField("filledType", \.filledType),
+				BinaryLayoutField("filledCase", \.filledCase),
 			],
 			unwrittenProperties: [],
 		)
@@ -78,6 +79,7 @@ extension SeamSignature.Places.LevelKey: BinarySchemaMember {
 			isSeamRoot: fieldFlags.next(),
 			isInFill: fieldFlags.next(),
 			filledType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
+			filledCase: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.CalledCase?,
 		)
 		try fieldFlags.finish()
 	}
@@ -90,6 +92,7 @@ extension SeamSignature.Places.LevelKey: BinarySchemaMember {
 		fieldFlags.append(isSeamRoot)
 		fieldFlags.append(isInFill)
 		writer.writeOptional(filledType, flaggedIn: &fieldFlags)
+		writer.writeOptional(filledCase, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }

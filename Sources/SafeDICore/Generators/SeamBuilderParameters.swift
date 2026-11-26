@@ -431,6 +431,17 @@ extension DependencyTreeGenerator {
 			namingRouteByCase[caseIndexByHole[index]] = routeByHole[index].levels
 		}
 		let places = placesBuilder.places(namingRouteByCase: namingRouteByCase)
+		// The graphs of the seams the calls on the places' paths fill places of, which a fill level's case refers into, after the
+		// graphs of the calls that present places, once per seam.
+		var calledPlaces = callPresentations.map { SeamSignature.Places.Observation.CalledPlaces(seamType: $0.innerSeamType, isPublicMock: $0.innerIsPublicMock, places: $0.innerPlaces, placesOfSeamsBeneath: $0.placesOfSeamsBeneath) }
+		for site in sites {
+			for frame in site.frames {
+				guard let calledBuilders = frame.generator.calledBuilders, let seamType = frame.generator.builtInstantiable?.concreteInstantiable else { continue }
+				let isPublicMock = frame.generator.publicMockCall != nil
+				guard !calledPlaces.contains(where: { $0.seamType == seamType && $0.isPublicMock == isPublicMock }) else { continue }
+				calledPlaces.append(SeamSignature.Places.Observation.CalledPlaces(seamType: seamType, isPublicMock: isPublicMock, places: calledBuilders.places, placesOfSeamsBeneath: calledBuilders.placesOfSeamsBeneath))
+			}
+		}
 		// The place graph rides on the levels' observer, which the caller hands on once the routes are computed, so the tests set
 		// no task-local value of their own around `generate()` (`serialization.md`: one more made the tests' release build abort
 		// on Linux).
@@ -440,7 +451,7 @@ extension DependencyTreeGenerator {
 			siteHoles: sortedHoles,
 			caseIndexBySite: order.map { caseIndexByHole[$0] },
 			routeBySite: order.map { routeByHole[$0] },
-			calledPlaces: callPresentations.map { SeamSignature.Places.Observation.CalledPlaces(seamType: $0.innerSeamType, isPublicMock: $0.innerIsPublicMock, places: $0.innerPlaces, placesOfSeamsBeneath: $0.placesOfSeamsBeneath) },
+			calledPlaces: calledPlaces,
 		)
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		for (hole, caseIndex) in zip(holes, caseIndexByHole) where caseIndex >= 0 {
@@ -1298,12 +1309,12 @@ extension DependencyTreeGenerator {
 		// Each declaration a fill's field hides, by label, with the level of the fill that binds the field.
 		var hiddenByFillFields = [String: (declaration: SeamSignature.Hole.DeclarationHiddenByField, fieldLevel: Int)]()
 		var levelOpensSendableFunction = false
-		func endLevel(builtType: TypeDescription?, nextProperty: Property?, filledType: TypeDescription? = nil, fillBaseStack: [SeamSignature.Places.StackEntry] = [], fillOwnerType: TypeDescription? = nil, nextPosition: Int? = nil, nextLoop: Int? = nil) {
+		func endLevel(builtType: TypeDescription?, nextProperty: Property?, filledType: TypeDescription? = nil, filledCase: SeamSignature.Places.CalledCase? = nil, fillBaseStack: [SeamSignature.Places.StackEntry] = [], fillOwnerType: TypeDescription? = nil, nextPosition: Int? = nil, nextLoop: Int? = nil) {
 			var level = SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations)
 			level.opensSendableFunction = levelOpensSendableFunction
 			if draftsPlaceLevels {
 				placeLevelsInProgress.append(PlaceLevelInProgress(
-					key: SeamSignature.Places.LevelKey(builtType: builtType, nextProperty: nextProperty, isSeamRoot: levels.isEmpty, isInFill: isInFill, filledType: filledType),
+					key: SeamSignature.Places.LevelKey(builtType: builtType, nextProperty: nextProperty, isSeamRoot: levels.isEmpty, isInFill: isInFill, filledType: filledType, filledCase: filledCase),
 					declarations: levelPathDeclarations,
 					opensSendableFunction: levelOpensFunction,
 					fillBaseStack: fillBaseStack,
@@ -1500,10 +1511,15 @@ extension DependencyTreeGenerator {
 					declare(fieldDeclaration)
 					levelDeclarations[levelDeclarations.count - 1].isFieldOfSeamParameter = field.isSeamParameter
 				}
+				let call = site.frames[level - 1].generator
 				endLevel(
 					builtType: nil,
 					nextProperty: frame.orderedChildren[frame.nextPosition - 1].generator.property,
-					filledType: site.frames[level - 1].generator.builtInstantiable?.concreteInstantiable,
+					filledType: call.builtInstantiable?.concreteInstantiable,
+					// The called seam's case of the place the fill fills, which a call whose seam's graph was not built names none of.
+					filledCase: call.calledBuilders?.caseIndexBySite[filledHole.site].map {
+						SeamSignature.Places.CalledCase(seamType: call.builtInstantiable?.concreteInstantiable ?? filledHole.scopeSeamType, isPublicMock: call.publicMockCall != nil, caseIndex: $0)
+					},
 					fillBaseStack: zip(filledHole.fillPropertyStack, filledHole.fillConcreteTypeStack).map { SeamSignature.Places.StackEntry(property: $0, concreteType: $1) },
 					fillOwnerType: filledHole.ownerType,
 				)

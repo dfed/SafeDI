@@ -246,7 +246,7 @@ struct SeamPlacesBuilder {
 	/// The index of the declaration list of every level that has every fact of `draft`'s but its next property.
 	private mutating func declarationListIndex(of draft: LevelDraft) -> Int {
 		let projection = ListProjection(
-			key: SeamSignature.Places.LevelKey(builtType: draft.key.builtType, nextProperty: nil, isSeamRoot: draft.key.isSeamRoot, isInFill: draft.key.isInFill, filledType: draft.key.filledType),
+			key: SeamSignature.Places.LevelKey(builtType: draft.key.builtType, nextProperty: nil, isSeamRoot: draft.key.isSeamRoot, isInFill: draft.key.isInFill, filledType: draft.key.filledType, filledCase: draft.key.filledCase),
 			declarations: draft.declarations.map(\.declaration),
 			opensSendableFunction: draft.opensSendableFunction,
 			cycleReentries: draft.cycleReentries,

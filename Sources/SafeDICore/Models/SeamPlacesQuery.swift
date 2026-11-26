@@ -853,6 +853,40 @@ extension SeamSignature.Places {
 		/// into it, so its memos are shared between them.
 		public func calledCase(of caseIndex: Int) -> ResolvedCase? {
 			guard let reference = places.cases[caseIndex].passedUp else { return nil }
+			return resolved(reference)
+		}
+
+		/// The fills on the routes to the case at `caseIndex`, each with the case of the called seam's graph it fills a place of,
+		/// in the order a walk up the routes from the case's owner first meets each fill. A place inside a fill reads, past the
+		/// fill's tree, what the called seam's tree declares on its routes to that case, and past those what the scopes that
+		/// enclose the call declare; the called case's answers of a label (`answers(ofLabel:at:)` on its query) say which of its
+		/// routes declare it. A fill whose called seam's graph the run does not hold is left out.
+		public func filledCases(onRoutesTo caseIndex: Int) -> [(fillLevel: Int, filledCase: ResolvedCase)] {
+			guard let start = startState(of: places.cases[caseIndex]) else { return [] }
+			struct Visit: Hashable {
+				let level: Int
+				let state: RouteState
+			}
+			var filledCases = [(fillLevel: Int, filledCase: ResolvedCase)]()
+			var seenLevels = Set<Int>()
+			var seen: Set = [Visit(level: places.cases[caseIndex].ownerLevel, state: start)]
+			var toVisit = Array(seen)
+			var visitIndex = 0
+			while visitIndex < toVisit.count {
+				let visited = toVisit[visitIndex]
+				visitIndex += 1
+				if let reference = places.levels[visited.level].key.filledCase, seenLevels.insert(visited.level).inserted, let filledCase = resolved(reference) {
+					filledCases.append((visited.level, filledCase))
+				}
+				for (parent, state) in transitions(from: visited.level, state: visited.state) where seen.insert(Visit(level: parent, state: state)).inserted {
+					toVisit.append(Visit(level: parent, state: state))
+				}
+			}
+			return filledCases
+		}
+
+		/// `reference` resolved in the called seam's graph, or `nil` where the run holds none of it.
+		private func resolved(_ reference: SeamSignature.Places.CalledCase) -> ResolvedCase? {
 			let key = CalledSeam(seamType: reference.seamType, isPublicMock: reference.isPublicMock)
 			let query: Query
 			if let known = calledQueries[key] {
