@@ -669,7 +669,7 @@ public actor DependencyTreeGenerator {
 	/// The number of places a production root's tree per path may hold before it is abandoned and the root is laid out
 	/// from its plan by type, where it has one. A root within the limit is built, checked and generated as before any
 	/// root was planned by type, at the same cost; only a tree that grows with its paths passes it.
-	static let scopeGeneratorLimitOfTodaysTree = 1500
+	static let scopeGeneratorLimitOfTodaysTree = 1_500
 
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
 	/// this module calls or generates once, here, and handing them down.
