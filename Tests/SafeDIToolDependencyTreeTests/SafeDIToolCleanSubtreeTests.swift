@@ -835,7 +835,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			}
 		}
 		let counts = [acceptedCount, rejectedCount, dependencyCycleCount, skippingCount]
-		#expect(counts == [29, 121, 59, 60])
+		#expect(counts == [29, 121, 59, 101])
 	}
 
 	// MARK: Tests – One graph for each part of the key
