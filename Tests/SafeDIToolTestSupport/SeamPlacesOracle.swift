@@ -576,7 +576,13 @@ public enum SeamPlacesOracle {
 				// label, so one a seam beneath also binds, or the holding seam's own tree declares, is never read.
 				if !boundAbove.isEmpty {
 					report.passedUpDeclarationsBehindNearerSeams += 1
-				} else if answers.contains(where: { if case .ofHoldingSeam = $0 { true } else { false } }) {
+				} else if answers.contains(where: {
+					if case .ofHoldingSeam = $0 {
+						true
+					} else {
+						false
+					}
+				}) {
 					report.passedUpDeclarationsBehindHoldingSeams += 1
 				} else {
 					report.record("presented place \(sitePath): today \(boundKey(declaration)) is bound by a seam that passes the place up, and the graph says nothing declares its label on a way to the place")
