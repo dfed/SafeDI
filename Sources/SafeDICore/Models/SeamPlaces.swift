@@ -53,12 +53,13 @@ extension SeamSignature {
 		/// Which level of which type a level is. A build of one type before one property is one key, however many paths reach
 		/// it.
 		public struct LevelKey: Codable, Hashable, Sendable {
-			public init(builtType: TypeDescription?, nextProperty: Property?, isSeamRoot: Bool, isInFill: Bool, filledType: TypeDescription?) {
+			public init(builtType: TypeDescription?, nextProperty: Property?, isSeamRoot: Bool, isInFill: Bool, filledType: TypeDescription?, filledCase: CalledCase? = nil) {
 				self.builtType = builtType
 				self.nextProperty = nextProperty
 				self.isSeamRoot = isSeamRoot
 				self.isInFill = isInFill
 				self.filledType = filledType
+				self.filledCase = filledCase
 			}
 
 			/// The type the scope builds, or `nil` for a fill of a seam the tree calls.
@@ -72,6 +73,10 @@ extension SeamSignature {
 			public let isInFill: Bool
 			/// For a fill, the type the level before it builds, which the fill fills a place of.
 			public let filledType: TypeDescription?
+			/// For a fill, the case of the called seam that holds the place it fills, so that a question about the routes to
+			/// the place continues into that seam's graph; `nil` where the call's graph was not built, and for every other level.
+			/// Two fills of places of different cases are different levels, however alike their trees.
+			public let filledCase: CalledCase?
 		}
 
 		/// One entry of the stack a place's owner is built with: a property and the concrete type it is built for.
@@ -359,7 +364,7 @@ extension SeamSignature {
 
 		/// A place another seam's tree holds, which a call in this seam's tree presents: a reference to that seam's case,
 		/// never a copy of its levels.
-		public struct CalledCase: Codable, Sendable {
+		public struct CalledCase: Codable, Hashable, Sendable {
 			public init(seamType: TypeDescription, isPublicMock: Bool, caseIndex: Int) {
 				self.seamType = seamType
 				self.isPublicMock = isPublicMock
