@@ -962,11 +962,21 @@ struct SafeDIToolGraphFuzzerTests {
 		let modules = try #require(fixture.modules)
 		let lists = fixture.dependencyLists(modules: modules, integration: .moduleInfo, listsTransitiveDependencies: false)
 		let modulesListingEveryModuleBeneath = fixture.modulesListingEveryModuleBeneath
+		// The one import past the module directly beneath: where `drawFulfillerOnlyCallingModuleCanBuild` lands, the file of
+		// the seam's module that declares `OuterFakeClock`, a `mockOnly` fake of `OuterClock`, a protocol of `FuzzCore`,
+		// imports `FuzzCore` too.
+		// Of these seeds the draw lands on the public mock corpus's 208 alone, so a stray import on any other still fails.
+		let outerFulfillerDrawLanded = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture).contains(.outerFulfillerPublicMockCall)
+		#expect(outerFulfillerDrawLanded == (seed == 208 && feature == .generateMockPublic), "Seed \(seed)")
 		for (module, content) in zip(modules, fixture.swiftFileContent) {
 			let importedModuleNames = content.split(separator: "\n").filter { $0.hasPrefix("import Fuzz") }.map { String($0.dropFirst("import ".count)) }
 			#expect(Set(importedModuleNames).isSubset(of: (lists[module] ?? []).map(\.name)), "Seed \(seed), \(module.name)")
 			if !modulesListingEveryModuleBeneath.contains(module) {
-				#expect(importedModuleNames == module.dependencies.filter(modules.contains).map(\.name), "Seed \(seed), \(module.name)")
+				var expectedModuleNames = module.dependencies.filter(modules.contains).map(\.name)
+				if outerFulfillerDrawLanded, module == .seamModule, content.contains("OuterFakeClock") {
+					expectedModuleNames.append(GraphFuzzerModule.seamDependencyBase.name)
+				}
+				#expect(importedModuleNames == expectedModuleNames, "Seed \(seed), \(module.name)")
 			}
 		}
 		#expect(!GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture).isEmpty, "Seed \(seed): no caller reads through the seam's module's view")
@@ -9364,6 +9374,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,
+		.outerFulfillerPublicMockCall: 135,
 		.holeLabelReceivedByPromotedSibling: 8,
 		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 2,
 		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 3,
