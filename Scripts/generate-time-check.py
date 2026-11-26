@@ -133,6 +133,16 @@ alternating runs after one untimed run of each graph. A run still going after 30
   MH-public-mock-hole-at-every-screen
                                the same, with every screen also instantiating `any Tracker`, which only `LiveTracker`
                                in `App` fulfills, so every screen is a place of the mock's builder.
+  Q-seam-own-module-paths      module `Feature`: layers of four screens, each receiving `service` and holding
+                               `Instantiator`s of three screens of the next layer, every screen of the first layer a
+                               seam, and no hole; module `App`: the root, which instantiates the first seam.
+  B-cycles-through-instantiators
+                               module `Feature`: layers of three screens, each holding `Instantiator`s of the three
+                               screens of the next layer and of the screen at its own position in the layer before,
+                               the last layer's of a first-layer screen instead, so the graph is cycles through
+                               `Instantiator`s; module `App`: the root, which builds the tree.
+  BM-mocks-of-cycles-through-instantiators
+                               the same graph with `generateMock: true` on every screen and on the root.
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -401,6 +411,43 @@ def shape_public_mock_layers(layers, hole, width=4):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
 
 
+def shape_q(layers, width=4, received=True):
+    """Module `Feature`: `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the next
+    layer; every screen of the first layer is a seam, and, with `received`, every screen receives `service`. No hole:
+    every type the tree instantiates is declared in `Feature`. Module `App`: the root, which instantiates `service` and
+    the first seam. 3^(layers - 1) paths reach the last layer from each seam (red-team finding F5)."""
+    feature = "import SafeDI\n\n" + declaration("@Instantiable", "Service", [])
+    for layer in range(layers):
+        for position in range(width):
+            children = [f"Screen{layer + 1}x{(position + offset) % width}" for offset in range(3)] if layer + 1 < layers else []
+            properties = [("@Received", "service", "Service")] if received else []
+            properties += [("@Instantiated", f"screen{child[6:]}Builder", f"Instantiator<{child}>") for child in children]
+            attribute = "@Instantiable(generateDependencyTree: true)" if layer == 0 else "@Instantiable"
+            feature += declaration(attribute, f"Screen{layer}x{position}", properties)
+    root = [("@Instantiated", "service", "Service")] if received else []
+    root += [("@Instantiated", "home", "Screen0x0")]
+    app = declaration("@Instantiable(isRoot: true)", "Root", root)
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+
+
+def shape_b(layers, mocks, width=3):
+    """Module `Feature`: `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the next
+    layer and, past the first layer, of the screen at its own position in the layer before; a screen of the last
+    layer holds one of a first-layer screen instead, so the graph is cycles through `Instantiator`s. With `mocks`,
+    every screen has `generateMock: true`. Module `App`: the root, which builds the tree, with a generated mock when
+    `mocks`."""
+    feature = "import SafeDI\n\n" + declaration("@Instantiable", "Service", [])
+    for layer in range(layers):
+        for position in range(width):
+            children = [f"{layer + 1}x{(position + offset) % width}" for offset in range(3)] if layer + 1 < layers else []
+            if layer > 0:
+                children.append(f"0x{(position + 1) % width}" if layer == layers - 1 else f"{layer - 1}x{position}")
+            properties = [("@Instantiated", f"screen{child}Builder", f"Instantiator<Screen{child}>") for child in dict.fromkeys(children)]
+            feature += declaration("@Instantiable(generateMock: true)" if mocks else "@Instantiable", f"Screen{layer}x{position}", properties)
+    root = declaration("@Instantiable(isRoot: true, generateMock: true)" if mocks else "@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Screen0x0")])
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + root)]
+
+
 SHAPES = {
     "E16-seam": lambda: shape_e(16, seam=True),
     "E24-seam": lambda: shape_e(24, seam=True),
@@ -434,13 +481,20 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # P 0.376 s and 3.313 s (8.82), 57.0 MB and 220.2 MB (3.86), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
 # L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85);
 # M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 51.2 MB and
-# 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26).
+# 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
+# Q 0.349 s and 2.483 s (7.11); B 0.086 s and 1.576 s (18.37), 38.2 MB and 90.6 MB (2.37); BM 0.079 s and 2.543 s
+# (32.30), 93.0 MB and 173.9 MB (1.87), 108,891 and 28,647,642 bytes of code (263.09).
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
     "K-mock-at-every-screen": (lambda layers: shape_k(layers), 6, {"time": 6.5, "code": 10.5}),
     "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
     "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
+    "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {"time": 10.5}),
+    # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
+    # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
+    "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
+    "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 3.0, "code": 275.0}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
