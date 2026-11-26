@@ -82,6 +82,24 @@ public enum ReservedName: Hashable, Sendable {
 		"\(builderFunctionNamePrefix)nearest_\(typeIdentifier)"
 	}
 
+	/// The local type a `.v3Unstable` mock declares when the builder functions its cycles close on take the nearest
+	/// configurations above them as one value: one optional field per configured type of the cycles.
+	static let nearestConfigurationsTypeName = "\(builderFunctionNamePrefix)NearestConfigurations"
+	/// The name of the parameter through which such a builder function takes that value.
+	static let nearestConfigurationsParameterName = "\(builderFunctionNamePrefix)nearestConfigurations"
+
+	/// The field of that value holding the nearest configuration a builder function takes under `parameterName`, which
+	/// begins with `builderFunctionNamePrefix`: the name without the prefix, which ends in `_configuration` or
+	/// `_mockConfiguration`, so it is never a keyword.
+	static func nearestConfigurationsFieldName(ofParameterNamed parameterName: String) -> String {
+		removingBuilderFunctionNamePrefix(from: parameterName)
+	}
+
+	/// The method of that value that returns a copy of it with `field` set.
+	static func nearestConfigurationsSetterName(ofField field: String) -> String {
+		"setting_\(field)"
+	}
+
 	/// The name of the parameter through which a generated `mock()` takes its overrides. Callers of a generated
 	/// `mock()` spell it, so it never changes.
 	public static let mockOverridesParameterName = "safeDIOverrides"

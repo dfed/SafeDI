@@ -567,6 +567,10 @@ extension MockLowering {
 		/// What the walk hands production's record function at each built place, which `recordBuiltPlaces()` calls once the
 		/// walk is done, by its path of child indices.
 		var builtPlaceCalls = [[Int]: MockLowering.BuiltPlaceCall]()
+		/// The declaration of the value the builder functions a cycle closes on take their nearest configurations through
+		/// (`MockLowering.NearestConfigurations.OneValue`), which the type key's body begins with; empty where they take none
+		/// or one parameter per configuration.
+		var nearestConfigurationsDeclarationLines = [String]()
 		/// The first place in walk order that `recordBuiltPlaces()` left with no record, which keeps the walk's body for the
 		/// root: the records of the places beneath the root's own are released as their parents take them, so no later pass
 		/// can look for it.

@@ -115,6 +115,7 @@ extension MockLowering.Walk {
 			break
 		}
 		let nearest: MockLowering.NearestConfigurations? = buildsPublicMock || !closesCycle ? nil : nearestConfigurations(childPathsByParent: childPathsByParent)
+		nearestConfigurationsDeclarationLines = nearest?.oneValue?.declarationLines(indentation: TypeKeyBody.rootStatementIndentation) ?? []
 		var parentFieldsReadByBuiltPlaces = Set<ParentFieldRead>()
 		if nearest != nil {
 			for context in builtPlaceConfigurationContexts.values {
@@ -282,7 +283,7 @@ extension MockLowering.Walk {
 							context.parentConfiguration.map { ValuePath.member(context.fieldName, of: $0) }
 						}
 						let value = if isV3, let parentField {
-							Self.fieldFirst(parentField, nearest: nearestRead, own: own)
+							Self.fieldFirst(parentField, nearest: nearestRead, nearestIsOptional: nearestRead == nearest.handedNearest(of: own), own: own)
 						} else {
 							Self.nearestFirst(nearestRead, orElse: first.value, own: own)
 						}
@@ -328,6 +329,7 @@ extension MockLowering.Walk {
 		builtPlaceConfigurationContexts = [:]
 		closerParentFieldReads = [:]
 		publicMockCallPlanNodes = [:]
+		nearestConfigurationsDeclarationLines = []
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
@@ -336,10 +338,11 @@ extension MockLowering.Walk {
 	/// or `nil`.
 	/// What a configured place, or a closer, hands its configuration parameter in `.v3Unstable`: its parent's field of it, else
 	/// the nearest place of its type's configuration, else, for a configuration struct, one built afresh.
-	static func fieldFirst(_ parentField: ValuePath, nearest: ValuePath, own: MockLowering.ConfigurationParameter) -> ValuePath {
+	static func fieldFirst(_ parentField: ValuePath, nearest: ValuePath, nearestIsOptional: Bool, own: MockLowering.ConfigurationParameter) -> ValuePath {
 		var segments: [ValueSegment] = [.value(parentField), .text(" ?? "), .value(nearest)]
-		// The nearest configuration a function was handed is optional; its own, and the mock's `safeDIOverrides`, are not.
-		if own.readsConfigurationStruct, nearest == .passedArgument(MockLowering.NearestConfigurations.nearestName(of: own)) {
+		// The nearest configuration a function was handed is optional (`nearestIsOptional`); its own, and the mock's
+		// `safeDIOverrides`, are not.
+		if own.readsConfigurationStruct, nearestIsOptional {
 			segments.append(.text(" ?? .init()"))
 		}
 		return .spliced(segments)
@@ -443,8 +446,11 @@ extension MockLowering.Walk {
 		if let label = Self.unresolvedRead(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))) {
 			return (nil, "readUnresolved:\(label)")
 		}
-		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody) else { return (nil, "engineRefused") }
-		var lines = [String]()
+		// No function the layout declares is named as the value a cycle's functions take their nearest configurations
+		// through, or its type, which the body declares first.
+		let namesInScope: Set<String> = nearestConfigurationsDeclarationLines.isEmpty ? [] : [ReservedName.nearestConfigurationsParameterName, ReservedName.nearestConfigurationsTypeName]
+		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody, namesInScope: namesInScope) else { return (nil, "engineRefused") }
+		var lines = nearestConfigurationsDeclarationLines
 		for statement in statements {
 			let spelled = statement.spelled()
 			guard !spelled.allSatisfy(\.isWhitespace) else { continue }

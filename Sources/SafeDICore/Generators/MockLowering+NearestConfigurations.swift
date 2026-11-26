@@ -34,6 +34,58 @@ extension MockLowering {
 		/// In `.v3Unstable`, the name of the configuration parameter of the mocked type, whose nearest configuration at the
 		/// root is the mock's `safeDIOverrides`; `nil` in `.v2`, where the root hands none.
 		let rootConfigurationName: String?
+		/// In `.v3Unstable`, the one value every function takes its nearest configurations through, where it holds any and
+		/// they are all `Sendable` or all not; `nil` where each function takes one parameter per configuration.
+		let oneValue: OneValue?
+
+		/// The value a `.v3Unstable` mock's functions take their nearest configurations through: a local struct with one
+		/// optional field per configuration any function takes, `nil` by default, so a call hands one argument where it
+		/// handed one per configuration. A function hands on the value it was handed, or a copy with its own configuration
+		/// set where the function it calls takes that one; a call at the root makes one with the fields it sets. A field a
+		/// function does not take can hold a farther place's configuration, which neither it nor any function it calls reads:
+		/// a function's list holds every configuration a function it calls takes but its own.
+		///
+		/// The struct is `Sendable` exactly where its configurations are, so it crosses into a `@Sendable` function wherever
+		/// they each did: a mock whose configurations differ in that keeps one parameter per configuration.
+		struct OneValue {
+			/// The configurations, one field each, in the order the walk first reaches a place of each.
+			let fields: [ConfigurationParameter]
+			/// Whether the configurations are `Sendable`.
+			let isSendable: Bool
+			/// The configurations of functions that hand a copy with their own set, which the struct declares a setter of.
+			let setFields: Set<ConfigurationParameter>
+
+			/// The struct's type.
+			static var type: TypeDescription {
+				.simple(name: ReservedName.nearestConfigurationsTypeName)
+			}
+
+			/// The struct's field of `parameter`.
+			static func field(of parameter: ConfigurationParameter) -> String {
+				ReservedName.nearestConfigurationsFieldName(ofParameterNamed: parameter.name)
+			}
+
+			/// The struct's declaration, as lines indented by `indentation`: `nonisolated`, since a module whose declarations
+			/// default to the main actor would otherwise isolate it, and every function that takes it is nonisolated.
+			func declarationLines(indentation: String) -> [String] {
+				let memberIndentation = indentation + "    "
+				var lines = ["\(indentation)nonisolated struct \(ReservedName.nearestConfigurationsTypeName)\(isSendable ? ": Sendable" : "") {"]
+				for parameter in fields {
+					lines.append("\(memberIndentation)var \(Self.field(of: parameter)): \(NearestConfigurations.nearestType(of: parameter).asSource) = nil")
+				}
+				for parameter in fields where setFields.contains(parameter) {
+					let field = Self.field(of: parameter)
+					lines.append("")
+					lines.append("\(memberIndentation)func \(ReservedName.nearestConfigurationsSetterName(ofField: field))(_ value: \(parameter.type.asSource)) -> Self {")
+					lines.append("\(memberIndentation)    var copy = self")
+					lines.append("\(memberIndentation)    copy.\(field) = value")
+					lines.append("\(memberIndentation)    return copy")
+					lines.append("\(memberIndentation)}")
+				}
+				lines.append("\(indentation)}")
+				return lines
+			}
+		}
 
 		/// The name of the parameter a function takes the nearest configuration of `parameter` under.
 		static func nearestName(of parameter: ConfigurationParameter) -> String {
@@ -54,7 +106,16 @@ extension MockLowering {
 			guard let callerParameter = ownParameterByPath[callerPath] else {
 				return rootNearest(of: parameter) ?? .spliced([.text("nil")])
 			}
-			return .passedArgument(callerParameter == parameter ? parameter.name : Self.nearestName(of: parameter))
+			return callerParameter == parameter ? .passedArgument(parameter.name) : handedNearest(of: parameter)
+		}
+
+		/// The nearest configuration of `parameter` a function that takes it was handed, which is optional.
+		func handedNearest(of parameter: ConfigurationParameter) -> ValuePath {
+			if oneValue != nil {
+				.member(OneValue.field(of: parameter), of: .passedArgument(ReservedName.nearestConfigurationsParameterName))
+			} else {
+				.passedArgument(Self.nearestName(of: parameter))
+			}
 		}
 
 		/// The nearest configuration of `parameter` a function of the place at `callerPath` was handed, where it takes one.
@@ -65,14 +126,24 @@ extension MockLowering {
 			guard callerParameter != parameter,
 			      parametersByKey[callerParameter.name, default: []].contains(parameter)
 			else { return nil }
-			return .passedArgument(Self.nearestName(of: parameter))
+			return handedNearest(of: parameter)
 		}
 
 		/// The passed arguments a call made at `path` hands the nearest configurations the function of `calleeParameter`
 		/// takes.
 		func nearestArguments(ofCallTo calleeParameter: ConfigurationParameter, at path: [Int]) -> [PassedArgument] {
 			let callerPath = Array(path.dropLast())
-			return parametersByKey[calleeParameter.name, default: []].map { parameter in
+			let calleeParameters = parametersByKey[calleeParameter.name, default: []]
+			if let oneValue {
+				guard !calleeParameters.isEmpty else { return [] }
+				return [PassedArgument(
+					parameterName: ReservedName.nearestConfigurationsParameterName,
+					type: OneValue.type,
+					value: oneValueHanded(toFunctionTaking: calleeParameters, calledFrom: callerPath),
+					staysOutsideSendableFunctions: !oneValue.isSendable,
+				)]
+			}
+			return calleeParameters.map { parameter in
 				PassedArgument(
 					parameterName: Self.nearestName(of: parameter),
 					type: Self.nearestType(of: parameter),
@@ -80,6 +151,34 @@ extension MockLowering {
 					staysOutsideSendableFunctions: staysOutsideSendableFunctionsByName[parameter.name] ?? true,
 				)
 			}
+		}
+
+		/// The one value a call made in the function of the place at `callerPath` hands a function that takes
+		/// `calleeParameters`: the value the caller was handed, or a copy with the caller's own configuration set where the
+		/// callee takes it; and, at the root or where the caller takes none, one made with the fields it sets.
+		private func oneValueHanded(toFunctionTaking calleeParameters: [ConfigurationParameter], calledFrom callerPath: [Int]) -> ValuePath {
+			let structParameter = ValuePath.passedArgument(ReservedName.nearestConfigurationsParameterName)
+			let setField: (parameter: ConfigurationParameter, value: ValuePath)?
+			if let callerParameter = ownParameterByPath[callerPath] {
+				setField = calleeParameters.contains(callerParameter) ? (callerParameter, .passedArgument(callerParameter.name)) : nil
+				if !parametersByKey[callerParameter.name, default: []].isEmpty {
+					guard let setField else { return structParameter }
+					return .spliced([
+						.value(structParameter),
+						.text(".\(ReservedName.nearestConfigurationsSetterName(ofField: OneValue.field(of: setField.parameter)))("),
+						.value(setField.value),
+						.text(")"),
+					])
+				}
+			} else {
+				setField = calleeParameters.lazy.compactMap { parameter in rootNearest(of: parameter).map { (parameter, $0) } }.first
+			}
+			guard let setField else { return .emptyInitialization(OneValue.type) }
+			return .spliced([
+				.text("\(ReservedName.nearestConfigurationsTypeName)(\(OneValue.field(of: setField.parameter)): "),
+				.value(setField.value),
+				.text(")"),
+			])
 		}
 
 		/// The nearest configuration of `parameter` at the root: in `.v3Unstable`, the mock's `safeDIOverrides` for the
@@ -96,12 +195,12 @@ extension MockLowering {
 			let callerPath = Array(path.dropLast())
 			if rootConfigurationName != nil, let parentField {
 				let nearest: ValuePath? = if let callerParameter = ownParameterByPath[callerPath] {
-					callerParameter == closedOn ? .passedArgument(closedOn.name) : .passedArgument(Self.nearestName(of: closedOn))
+					callerParameter == closedOn ? .passedArgument(closedOn.name) : handedNearest(of: closedOn)
 				} else {
 					rootNearest(of: closedOn)
 				}
 				guard let nearest else { return nil }
-				return MockLowering.Walk.fieldFirst(parentField, nearest: nearest, own: closedOn)
+				return MockLowering.Walk.fieldFirst(parentField, nearest: nearest, nearestIsOptional: nearest == handedNearest(of: closedOn), own: closedOn)
 			}
 			guard let callerParameter = ownParameterByPath[callerPath] else { return nil }
 			if callerParameter == closedOn {
@@ -211,13 +310,32 @@ extension MockLowering.Walk {
 				}
 			}
 		}
+		func inWalkOrder(_ parameters: some Sequence<MockLowering.ConfigurationParameter>) -> [MockLowering.ConfigurationParameter] {
+			parameters.sorted { (firstReachedIndexByName[$0.name] ?? .max) < (firstReachedIndexByName[$1.name] ?? .max) }
+		}
+		// In `.v3Unstable` the functions take their nearest configurations as one value where every configuration is
+		// `Sendable` or none is (`NearestConfigurations.OneValue`).
+		var oneValue: MockLowering.NearestConfigurations.OneValue?
+		if isV3 {
+			let fields = inWalkOrder(parametersByName.values.reduce(into: Set()) { $0.formUnion($1) })
+			let staysOutside = Set(fields.map { staysOutsideSendableFunctionsByName[$0.name] ?? true })
+			if let fieldsStayOutside = staysOutside.first, staysOutside.count == 1 {
+				// A function hands a copy with its own configuration set where a function it calls takes that one.
+				var setFields = Set<MockLowering.ConfigurationParameter>()
+				for (name, own) in ownParameterByName where !parametersByName[name, default: []].isEmpty {
+					for calledName in calledNamesByName[name, default: []] where parametersByName[calledName, default: []].contains(own) {
+						setFields.insert(own)
+					}
+				}
+				oneValue = MockLowering.NearestConfigurations.OneValue(fields: fields, isSendable: !fieldsStayOutside, setFields: setFields)
+			}
+		}
 		return MockLowering.NearestConfigurations(
-			parametersByKey: parametersByName.mapValues { parameters in
-				parameters.sorted { (firstReachedIndexByName[$0.name] ?? .max) < (firstReachedIndexByName[$1.name] ?? .max) }
-			},
+			parametersByKey: parametersByName.mapValues(inWalkOrder),
 			ownParameterByPath: ownParameterByPath,
 			staysOutsideSendableFunctionsByName: staysOutsideSendableFunctionsByName,
 			rootConfigurationName: rootConfigurationName,
+			oneValue: oneValue,
 		)
 	}
 }

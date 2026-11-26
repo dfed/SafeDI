@@ -396,21 +396,37 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> List {
-		        func __safeDI_detailBuilder(__safeDI_Detail_configuration: Detail.SafeDIOverrides, __safeDI_List_configuration_nearest: List.SafeDIOverrides?) -> Detail {
+		        nonisolated struct __safeDI_NearestConfigurations {
+		            var Detail_configuration: Detail.SafeDIOverrides? = nil
+		            var List_configuration: List.SafeDIOverrides? = nil
+
+		            func setting_Detail_configuration(_ value: Detail.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.Detail_configuration = value
+		                return copy
+		            }
+
+		            func setting_List_configuration(_ value: List.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.List_configuration = value
+		                return copy
+		            }
+		        }
+		        func __safeDI_detailBuilder(__safeDI_Detail_configuration: Detail.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Detail {
 		            let leaf = if let safeDIBuilder = __safeDI_Detail_configuration.leaf { safeDIBuilder() } else { Leaf() }
 		            let listBuilder = Instantiator<List> {
-		                __safeDI_listBuilder(__safeDI_List_configuration: __safeDI_Detail_configuration.listBuilder ?? __safeDI_List_configuration_nearest ?? .init(), __safeDI_Detail_configuration_nearest: __safeDI_Detail_configuration)
+		                __safeDI_listBuilder(__safeDI_List_configuration: __safeDI_Detail_configuration.listBuilder ?? __safeDI_nearestConfigurations.List_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Detail_configuration(__safeDI_Detail_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(leaf, listBuilder) } else { Detail(leaf: leaf, listBuilder: listBuilder) }
 		        }
-		        func __safeDI_listBuilder(__safeDI_List_configuration: List.SafeDIOverrides, __safeDI_Detail_configuration_nearest: Detail.SafeDIOverrides?) -> List {
+		        func __safeDI_listBuilder(__safeDI_List_configuration: List.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> List {
 		            let detailBuilder = Instantiator<Detail> {
-		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_List_configuration.detailBuilder ?? __safeDI_Detail_configuration_nearest ?? .init(), __safeDI_List_configuration_nearest: __safeDI_List_configuration)
+		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_List_configuration.detailBuilder ?? __safeDI_nearestConfigurations.Detail_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_List_configuration(__safeDI_List_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_List_configuration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		        }
 		        let detailBuilder = Instantiator<Detail> {
-		            __safeDI_detailBuilder(__safeDI_Detail_configuration: safeDIOverrides.detailBuilder ?? .init(), __safeDI_List_configuration_nearest: safeDIOverrides)
+		            __safeDI_detailBuilder(__safeDI_Detail_configuration: safeDIOverrides.detailBuilder ?? .init(), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations(List_configuration: safeDIOverrides))
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		    }
@@ -476,29 +492,52 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIOverrides, __safeDI_B_configuration_nearest: B.SafeDIOverrides?, __safeDI_C_configuration_nearest: C.SafeDIOverrides?) -> A {
+		        nonisolated struct __safeDI_NearestConfigurations {
+		            var A_configuration: A.SafeDIOverrides? = nil
+		            var B_configuration: B.SafeDIOverrides? = nil
+		            var C_configuration: C.SafeDIOverrides? = nil
+
+		            func setting_A_configuration(_ value: A.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.A_configuration = value
+		                return copy
+		            }
+
+		            func setting_B_configuration(_ value: B.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.B_configuration = value
+		                return copy
+		            }
+
+		            func setting_C_configuration(_ value: C.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.C_configuration = value
+		                return copy
+		            }
+		        }
+		        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> A {
 		            let bBuilder = Instantiator<B> {
-		                __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_A_configuration.bBuilder ?? __safeDI_B_configuration_nearest ?? .init(), __safeDI_A_configuration_nearest: __safeDI_A_configuration, __safeDI_C_configuration_nearest: __safeDI_C_configuration_nearest)
+		                __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_A_configuration.bBuilder ?? __safeDI_nearestConfigurations.B_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_A_configuration(__safeDI_A_configuration))
 		            }
 		            let cBuilder = Instantiator<C> {
-		                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_A_configuration.cBuilder ?? __safeDI_C_configuration_nearest ?? .init(), __safeDI_A_configuration_nearest: __safeDI_A_configuration, __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest)
+		                __safeDI_cBuilder(__safeDI_C_configuration: __safeDI_A_configuration.cBuilder ?? __safeDI_nearestConfigurations.C_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_A_configuration(__safeDI_A_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(bBuilder, cBuilder, __safeDI_A_configuration.title) } else { A(bBuilder: bBuilder, cBuilder: cBuilder, title: __safeDI_A_configuration.title) }
 		        }
-		        func __safeDI_bBuilder(__safeDI_B_configuration: B.SafeDIOverrides, __safeDI_A_configuration_nearest: A.SafeDIOverrides?, __safeDI_C_configuration_nearest: C.SafeDIOverrides?) -> B {
+		        func __safeDI_bBuilder(__safeDI_B_configuration: B.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> B {
 		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_B_configuration.aBuilder ?? __safeDI_A_configuration_nearest ?? .init(), __safeDI_B_configuration_nearest: __safeDI_B_configuration, __safeDI_C_configuration_nearest: __safeDI_C_configuration_nearest)
+		                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_B_configuration.aBuilder ?? __safeDI_nearestConfigurations.A_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_B_configuration(__safeDI_B_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 		        }
-		        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIOverrides, __safeDI_A_configuration_nearest: A.SafeDIOverrides?, __safeDI_B_configuration_nearest: B.SafeDIOverrides?) -> C {
+		        func __safeDI_cBuilder(__safeDI_C_configuration: C.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> C {
 		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_C_configuration.aBuilder ?? __safeDI_A_configuration_nearest ?? .init(), __safeDI_B_configuration_nearest: __safeDI_B_configuration_nearest, __safeDI_C_configuration_nearest: __safeDI_C_configuration)
+		                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_C_configuration.aBuilder ?? __safeDI_nearestConfigurations.A_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_C_configuration(__safeDI_C_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_C_configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { C(aBuilder: aBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder ?? .init(), __safeDI_B_configuration_nearest: nil, __safeDI_C_configuration_nearest: nil)
+		            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder ?? .init(), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations())
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(aBuilder) } else { Root(aBuilder: aBuilder) }
 		    }
@@ -551,6 +590,164 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(aBuilder: .init(bBuilder: .init(aBuilder: .init(title: \"b\")), title: \"root\"))).aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().cBuilder.instantiate().aBuilder.instantiate().title"),
 			DifferentialValueProbe(name: "the override of the outer B builds the B the cycle builds again beneath it", expression: "{ () -> Int in var count = 0; let root = Root.mock(safeDIOverrides: .init(aBuilder: .init(bBuilder: .init(aBuilder: nil, { aBuilder in count += 1; return B(aBuilder: aBuilder) })))); _ = root.aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().bBuilder.instantiate(); return count }()"),
 		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesEachNearestConfigurationApart_whenCyclesConfigurationsDifferInSendability() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Ping: Instantiable, Sendable {
+				    public init(pongBuilder: SendableInstantiator<Pong>) {
+				        self.pongBuilder = pongBuilder
+				    }
+
+				    @Instantiated let pongBuilder: SendableInstantiator<Pong>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Pong: Instantiable, Sendable {
+				    public init(pingBuilder: SendableInstantiator<Ping>) {
+				        self.pingBuilder = pingBuilder
+				    }
+
+				    @Instantiated let pingBuilder: SendableInstantiator<Ping>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class List: Instantiable {
+				    public init(detailBuilder: Instantiator<Detail>) {
+				        self.detailBuilder = detailBuilder
+				    }
+
+				    @Instantiated let detailBuilder: Instantiator<Detail>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(listBuilder: Instantiator<List>) {
+				        self.listBuilder = listBuilder
+				    }
+
+				    @Instantiated let listBuilder: Instantiator<List>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(ping: Ping, list: List) {
+				        self.ping = ping
+				        self.list = list
+				    }
+
+				    @Instantiated let ping: Ping
+				    @Instantiated let list: List
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Root+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        @Sendable nonisolated func __safeDI_pongBuilder(__safeDI_Pong_configuration: Pong.SafeDIOverrides, __safeDI_Ping_configuration_nearest: Ping.SafeDIOverrides?) -> Pong {
+		            let __safeDI_pingBuilder____safeDI_Ping_configuration: Ping.SafeDIOverrides = __safeDI_Pong_configuration.pingBuilder ?? __safeDI_Ping_configuration_nearest ?? .init()
+		            let pingBuilder = SendableInstantiator<Ping> {
+		                __safeDI_pingBuilder(__safeDI_Ping_configuration: __safeDI_pingBuilder____safeDI_Ping_configuration, __safeDI_Pong_configuration_nearest: __safeDI_Pong_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Pong_configuration.safeDIBuilder { safeDIBuilder(pingBuilder) } else { Pong(pingBuilder: pingBuilder) }
+		        }
+		        @Sendable nonisolated func __safeDI_pingBuilder(__safeDI_Ping_configuration: Ping.SafeDIOverrides, __safeDI_Pong_configuration_nearest: Pong.SafeDIOverrides?) -> Ping {
+		            let pongBuilder = SendableInstantiator<Pong> {
+		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_Ping_configuration.pongBuilder ?? __safeDI_Pong_configuration_nearest ?? .init(), __safeDI_Ping_configuration_nearest: __safeDI_Ping_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(pongBuilder) } else { Ping(pongBuilder: pongBuilder) }
+		        }
+		        func __safeDI_ping(__safeDI_Ping_configuration: Ping.SafeDIOverrides, __safeDI_Pong_configuration_nearest: Pong.SafeDIOverrides?) -> Ping {
+		            let __safeDI_pongBuilder____safeDI_Pong_configuration: Pong.SafeDIOverrides = __safeDI_Ping_configuration.pongBuilder ?? __safeDI_Pong_configuration_nearest ?? .init()
+		            let pongBuilder = SendableInstantiator<Pong> {
+		                __safeDI_pongBuilder(__safeDI_Pong_configuration: __safeDI_pongBuilder____safeDI_Pong_configuration, __safeDI_Ping_configuration_nearest: __safeDI_Ping_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(pongBuilder) } else { Ping(pongBuilder: pongBuilder) }
+		        }
+		        let ping: Ping = __safeDI_ping(__safeDI_Ping_configuration: safeDIOverrides.ping ?? .init(), __safeDI_Pong_configuration_nearest: nil)
+		        func __safeDI_list(__safeDI_List_configuration: List.SafeDIOverrides, __safeDI_Detail_configuration_nearest: Detail.SafeDIOverrides?) -> List {
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_List_configuration.detailBuilder ?? __safeDI_Detail_configuration_nearest ?? .init(), __safeDI_List_configuration_nearest: __safeDI_List_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_List_configuration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
+		        }
+		        func __safeDI_detailBuilder(__safeDI_Detail_configuration: Detail.SafeDIOverrides, __safeDI_List_configuration_nearest: List.SafeDIOverrides?) -> Detail {
+		            let listBuilder = Instantiator<List> {
+		                __safeDI_list(__safeDI_List_configuration: __safeDI_Detail_configuration.listBuilder ?? __safeDI_List_configuration_nearest ?? .init(), __safeDI_Detail_configuration_nearest: __safeDI_Detail_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(listBuilder) } else { Detail(listBuilder: listBuilder) }
+		        }
+		        let list: List = __safeDI_list(__safeDI_List_configuration: safeDIOverrides.list ?? .init(), __safeDI_Detail_configuration_nearest: nil)
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(ping, list) } else { Root(ping: ping, list: list) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Configures `Root` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            ping: Ping.SafeDIOverrides? = nil,
+		            list: List.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Ping, List) -> Root)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                ping: ping,
+		                list: list,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var ping: Ping.SafeDIOverrides? { __safeDI_storage.ping }
+		        var list: List.SafeDIOverrides? { __safeDI_storage.list }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Ping, List) -> Root)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                ping: Ping.SafeDIOverrides?,
+		                list: List.SafeDIOverrides?,
+		                safeDIBuilder: ((Ping, List) -> Root)?
+		            ) {
+		                self.ping = ping
+		                self.list = list
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let ping: Ping.SafeDIOverrides?
+		            let list: List.SafeDIOverrides?
+		            let safeDIBuilder: ((Ping, List) -> Root)?
+		        }
+		    }
+		}
+		#endif
+		""")
 	}
 
 	@Test
@@ -2507,22 +2704,38 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Panel {
 		        let __safeDI_token_Token = token_Token
-		        func __safeDI_rowBuilder(__safeDI_Row_configuration: Row.SafeDIOverrides, __safeDI_Panel_configuration_nearest: Panel.SafeDIOverrides?) -> Row {
+		        nonisolated struct __safeDI_NearestConfigurations {
+		            var Row_configuration: Row.SafeDIOverrides? = nil
+		            var Panel_configuration: Panel.SafeDIOverrides? = nil
+
+		            func setting_Row_configuration(_ value: Row.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.Row_configuration = value
+		                return copy
+		            }
+
+		            func setting_Panel_configuration(_ value: Panel.SafeDIOverrides) -> Self {
+		                var copy = self
+		                copy.Panel_configuration = value
+		                return copy
+		            }
+		        }
+		        func __safeDI_rowBuilder(__safeDI_Row_configuration: Row.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Row {
 		            let token_Token = __safeDI_token_Token()
 		            let panelBuilder = Instantiator<Panel> {
-		                __safeDI_panelBuilder(token_Token: token_Token, __safeDI_Panel_configuration: __safeDI_Row_configuration.panelBuilder ?? __safeDI_Panel_configuration_nearest ?? .init(), __safeDI_Row_configuration_nearest: __safeDI_Row_configuration)
+		                __safeDI_panelBuilder(token_Token: token_Token, __safeDI_Panel_configuration: __safeDI_Row_configuration.panelBuilder ?? __safeDI_nearestConfigurations.Panel_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Row_configuration(__safeDI_Row_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_Row_configuration.safeDIBuilder { safeDIBuilder(panelBuilder, token_Token) } else { Row(panelBuilder: panelBuilder, token: token_Token) }
 		        }
-		        func __safeDI_panelBuilder(token_Token: Token, __safeDI_Panel_configuration: Panel.SafeDIOverrides, __safeDI_Row_configuration_nearest: Row.SafeDIOverrides?) -> Panel {
+		        func __safeDI_panelBuilder(token_Token: Token, __safeDI_Panel_configuration: Panel.SafeDIOverrides, __safeDI_nearestConfigurations: __safeDI_NearestConfigurations) -> Panel {
 		            let token: Token? = token_Token
 		            let rowBuilder = Instantiator<Row> {
-		                __safeDI_rowBuilder(__safeDI_Row_configuration: __safeDI_Panel_configuration.rowBuilder ?? __safeDI_Row_configuration_nearest ?? .init(), __safeDI_Panel_configuration_nearest: __safeDI_Panel_configuration)
+		                __safeDI_rowBuilder(__safeDI_Row_configuration: __safeDI_Panel_configuration.rowBuilder ?? __safeDI_nearestConfigurations.Row_configuration ?? .init(), __safeDI_nearestConfigurations: __safeDI_nearestConfigurations.setting_Panel_configuration(__safeDI_Panel_configuration))
 		            }
 		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(rowBuilder, token) } else { Panel(rowBuilder: rowBuilder, token: token) }
 		        }
 		        let rowBuilder = Instantiator<Row> {
-		            __safeDI_rowBuilder(__safeDI_Row_configuration: safeDIOverrides.rowBuilder ?? .init(), __safeDI_Panel_configuration_nearest: safeDIOverrides)
+		            __safeDI_rowBuilder(__safeDI_Row_configuration: safeDIOverrides.rowBuilder ?? .init(), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations(Panel_configuration: safeDIOverrides))
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(rowBuilder, token) } else { Panel(rowBuilder: rowBuilder, token: token) }
 		    }
