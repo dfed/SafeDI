@@ -31,7 +31,9 @@ import Testing
 /// `@Sendable` function that is not `@Sendable` itself keeps its attributes, so each fill declares it.
 ///
 /// `Feature` declares `F0` and `F1`, seams that receive `service` and instantiate `api: any Api`, a hole `App` fills with
-/// `LiveApi`, whose tree builds `C`.
+/// `LiveApi`, whose tree builds `C`. Where a test has `F0` and `F1` call `Inner`, a seam that defers `token` and passes its
+/// `api` place up, the place's field of `token` is a memo, which a body that reads the value takes, while a tree that reads
+/// another form of `token` reads the caller's declaration and keeps its body in its fill.
 struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 	// MARK: Initialization
 
@@ -610,6 +612,153 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		        }
 		        let f1: F1 = __safeDI_f1()
 		        self.init(service: service, f0: f0, f1: f1)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsCallersWrapperInEachFill_whenFillOfPassedUpPlaceReadsWrapperOfLabelInnerSeamDefers() async throws {
+		let seamDeclarations = ["@Received public let service: Service", "@Instantiated public let inner: Inner"]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Fixture(
+				featureTypes: [
+					"@Instantiable public final class Token: Instantiable, Sendable { public init() {} }",
+					Fixture.type(named: "Leaf", attribute: "@Instantiable", conformances: "", declarations: ["@Received public let token: Token"]),
+					Fixture.type(named: "Inner", attribute: "@Instantiable(generateDependencyTree: true)", conformances: "", declarations: ["@Instantiated public let leafBuilder: Instantiator<Leaf>", "@Instantiated public let api: any Api"]),
+				],
+				f0Declarations: seamDeclarations,
+				f1Declarations: seamDeclarations,
+				appTypes: [Fixture.type(named: "Reader", attribute: "@Instantiable", conformances: ", Sendable", declarations: ["@Received let token: SendableLazilyInstantiated<Token>"])],
+				liveApiDeclarations: ["@Instantiated let readerBuilder: SendableInstantiator<Reader>"],
+				rootDeclarations: ["@Instantiated let token: SendableLazilyInstantiated<Token>"] + Fixture.rootDeclarations,
+			).modules,
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_token() -> Token {
+		            Token()
+		        }
+		        let token = SendableLazilyInstantiated<Token>(__safeDI_token)
+		        let service = Service()
+		        func __safeDI_f0() -> F0 {
+		            _ = F0.__safeDI_F0_E666CFA02F65FBFB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		                func __safeDI_api() -> LiveApi {
+		                    @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
+		                        Reader(token: token)
+		                    }
+		                    let readerBuilder = SendableInstantiator<Reader>(__safeDI_readerBuilder)
+		                    return LiveApi(readerBuilder: readerBuilder)
+		                }
+		                let api: any Api = __safeDI_api()
+		                return api
+		            }
+		            func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
+		                .init(inner: __safeDI_apiBuilder_Inner())
+		            }
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		            }
+		            return F0(__safeDI_service: service, __safeDI_token: token.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+		        }
+		        let f0: F0 = __safeDI_f0()
+		        func __safeDI_f1() -> F1 {
+		            _ = F1.__safeDI_F1_662E4FC5D4A33B62.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		                func __safeDI_api() -> LiveApi {
+		                    @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
+		                        Reader(token: token)
+		                    }
+		                    let readerBuilder = SendableInstantiator<Reader>(__safeDI_readerBuilder)
+		                    return LiveApi(readerBuilder: readerBuilder)
+		                }
+		                let api: any Api = __safeDI_api()
+		                return api
+		            }
+		            func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
+		                .init(inner: __safeDI_apiBuilder_Inner())
+		            }
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		            }
+		            return F1(__safeDI_service: service, __safeDI_token: token.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
+		        }
+		        let f1: F1 = __safeDI_f1()
+		        self.init(token: token, service: service, f0: f0, f1: f1)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresFillBodyTakingMemo_whenFillOfPassedUpPlaceReadsValueInnerSeamDefers() async throws {
+		let seamDeclarations = ["@Received public let service: Service", "@Instantiated public let inner: Inner"]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Fixture(
+				featureTypes: [
+					"@Instantiable public final class Token: Instantiable { public init() {} }",
+					Fixture.type(named: "Leaf", attribute: "@Instantiable", conformances: "", declarations: ["@Received public let token: Token"]),
+					Fixture.type(named: "Inner", attribute: "@Instantiable(generateDependencyTree: true)", conformances: "", declarations: ["@Instantiated public let leafBuilder: Instantiator<Leaf>", "@Instantiated public let api: any Api"]),
+				],
+				f0Declarations: seamDeclarations,
+				f1Declarations: seamDeclarations,
+				appTypes: [Fixture.type(named: "Reader", attribute: "@Instantiable", conformances: "", declarations: ["@Received let token: Token"])],
+				liveApiDeclarations: ["@Instantiated let reader: Reader"],
+				rootDeclarations: ["@Instantiated let token: Token"] + Fixture.rootDeclarations,
+			).modules,
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		            return __safeDI_fillBody_E477729F92E9E05D(token: scope_token)
+		        }
+		        func __safeDI_fillBody_E477729F92E9E05D(token: LazilyInstantiated<Token>) -> any Api {
+		            func __safeDI_api() -> LiveApi {
+		                let reader = Reader(token: token.instance)
+		                return LiveApi(reader: reader)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
+		            .init(inner: __safeDI_apiBuilder_Inner())
+		        }
+		        func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		            .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		        }
+		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
+		            .init(inner: __safeDI_apiBuilder_Inner())
+		        }
+		        let token = Token()
+		        let service = Service()
+		        func __safeDI_f0() -> F0 {
+		            _ = F0.__safeDI_F0_E666CFA02F65FBFB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return F0(__safeDI_service: service, __safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+		        }
+		        let f0: F0 = __safeDI_f0()
+		        func __safeDI_f1() -> F1 {
+		            _ = F1.__safeDI_F1_662E4FC5D4A33B62.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return F1(__safeDI_service: service, __safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
+		        }
+		        let f1: F1 = __safeDI_f1()
+		        self.init(token: token, service: service, f0: f0, f1: f1)
 		    }
 		}
 		"""])
