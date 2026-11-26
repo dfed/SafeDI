@@ -2447,6 +2447,10 @@ extension DependencyTreeGenerator {
 				queriesByExclusion[excluded] = made
 				return made
 			}
+			// A route along declarations a module viewed without their positions orders by nothing the graph holds: the places
+			// judge the case's closers themselves, ordered by their messages.
+			var closerFindings = [DependencyTreeGeneratorError.FillFinding]()
+			var routeLacksPositions = false
 			for read in reads.reads {
 				guard case let .openScope(scope) = read else { continue }
 				let scopeQuery = excludingQuery(closingEntriesAbove(scope.fillAncestors))
@@ -2454,7 +2458,8 @@ extension DependencyTreeGenerator {
 					for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where closingAtSomeRoute.contains(entry) {
 						for (depth, route) in scopeQuery.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) {
 							let hole = routedHole(casePlace(at: caseIndex), along: route, in: scopeQuery)
-							findings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
+							routeLacksPositions = routeLacksPositions || hole.declaredSitePath.contains { $0.declarationLocation == nil }
+							closerFindings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
 								closingProperty: scope.property,
 								closingType: scope.closingType,
 								declarationLocation: scope.declarationLocation,
@@ -2473,6 +2478,14 @@ extension DependencyTreeGenerator {
 						}
 					}
 				}
+			}
+			if routeLacksPositions {
+				for entry in group {
+					guard let child = entry.fill.children.first else { continue }
+					findings += findingsOfFill(of: entry.hole, fill: entry.fill, reads: FillTreeReads(walking: child).keeping { if case .closer = $0 { true } else { false } }, call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+				}
+			} else {
+				findings += closerFindings
 			}
 			var labels = [String]()
 			for read in reads.reads {
