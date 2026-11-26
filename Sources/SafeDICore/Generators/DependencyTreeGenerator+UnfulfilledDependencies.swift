@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// A dependency `query graph` sets aside so that the trees build while it cannot be fulfilled: a received dependency or
 /// alias nothing provides, or an instantiated dependency no declaration fulfills.
 public struct UnfulfilledDependency: Hashable, Sendable {
