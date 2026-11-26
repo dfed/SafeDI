@@ -122,20 +122,25 @@ extension DependencyTreeGenerator {
 		switch property.propertyType {
 		case .sendableLazilyInstantiated:
 			return .holdsLazilyInstantiated
-		case .sendableErasedInstantiator,
-		     .sendableInstantiator:
-			return .holdsSendableWrapperOrFunction
 		case .constant,
 		     .erasedInstantiator,
 		     .instantiator,
-		     .lazilyInstantiated:
+		     .lazilyInstantiated,
+		     .sendableErasedInstantiator,
+		     .sendableInstantiator:
+			// A `Sendable` instantiator is laid out: its builder function is `@Sendable`, which the plan's code can make
+			// capture a wrapper that is not `Sendable` where today's tree reports the capture. So the root choice walks the
+			// plan's bodies for such a capture (`WrittenVariantPlan.Unplanned.mayCaptureNonSendableWrapper()`), and a root
+			// whose bodies may make one keeps its tree per path (`mayCaptureNonSendableWrapper`), which reports today's
+			// error. A lift that admits a `SendableLazilyInstantiated`, or a `@Sendable` function below, keeps that walk
+			// reading what it builds in the same change.
 			break
 		}
 		if property.typeDescription.isOptional {
 			return .holdsValueOnlyIfAvailable
 		} else if property.typeDescription.isSendableFunction {
 			// Read from the type's structure, never from its spelling: a type whose name holds the word is no such value.
-			return .holdsSendableWrapperOrFunction
+			return .holdsSendableFunction
 		} else {
 			return nil
 		}

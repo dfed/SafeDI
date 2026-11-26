@@ -54,8 +54,9 @@ extension DependencyTreeGenerator {
 
 	/// Hands `PlanCaptureObservation` each root of `roots` whose code is laid out from its per-type plan, where today's tree
 	/// of it is built too, with what today's `@Sendable` capture walk finds in that tree. The walk reads no root laid out
-	/// from its plan: such a root's tree holds no `Sendable` wrapper (`shapeOutsidePerTypePlan(of:)`), so it builds nothing
-	/// in a `@Sendable` function and captures nothing. Does nothing where no test observes it.
+	/// from its plan: the root choice walks such a root's bodies for a capture instead, and keeps a root whose bodies may
+	/// make one per path (`WrittenVariantPlan.Unplanned.mayCaptureNonSendableWrapper()`), so a root laid out from its plan
+	/// captures nothing today's walk would report. Does nothing where no test observes it.
 	func observePlanCaptures(of roots: [RootScopeInfo]) async {
 		guard let observer = PlanCaptureObservation.observer else { return }
 		for root in roots {

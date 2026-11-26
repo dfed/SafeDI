@@ -102,16 +102,22 @@ struct SafeDIToolGraphFuzzerPerTypePlanDrawTests {
 		case receivesModelCycleDeclaresAgain
 		/// A screen receives a service only the root declares.
 		case receivesServiceOnlyRootDeclares
+		/// A screen builds `PlanJob` through a `SendableInstantiator`.
+		case buildsJobInSendableFunction
+		/// `PlanJob` receives a service, which the `@Sendable` builder function that builds it captures.
+		case sendableFunctionCapturesService
 	}
 
 	private static let drawnShapeCounts: [Shape: Int] = [
 		.drawn: 227,
 		.opensScreenBeyondRing: 168,
-		.forwardsValue: 144,
-		.buildsPaneOnCycle: 152,
+		.forwardsValue: 147,
+		.buildsPaneOnCycle: 106,
 		.buildsTreeOutsideCycle: 70,
-		.receivesModelCycleDeclaresAgain: 210,
+		.receivesModelCycleDeclaresAgain: 207,
 		.receivesServiceOnlyRootDeclares: 212,
+		.buildsJobInSendableFunction: 51,
+		.sendableFunctionCapturesService: 23,
 	]
 
 	/// How many of the first drawn seeds the tool runs over, more than the floor, since another draw of the graph can have
@@ -138,11 +144,16 @@ struct SafeDIToolGraphFuzzerPerTypePlanDrawTests {
 					shapes.insert(.drawn)
 				}
 			case let .property(attribute, label, _):
+				if currentTypeName == "\(prefix)PlanJob", attribute == "@Received", label.hasPrefix("planService") {
+					shapes.insert(.sendableFunctionCapturesService)
+				}
 				guard currentTypeName.hasPrefix("\(prefix)PlanScreen") else { continue }
 				if attribute == "@Instantiated", label.hasPrefix("planScreen") {
 					screenBuildersOfCurrentType += 1
 				} else if attribute == "@Forwarded" {
 					shapes.insert(.forwardsValue)
+				} else if attribute == "@Instantiated", label == "planJobBuilder" {
+					shapes.insert(.buildsJobInSendableFunction)
 				} else if attribute == "@Instantiated", label.hasPrefix("planPane") {
 					shapes.insert(.buildsPaneOnCycle)
 				} else if attribute == "@Instantiated", label == "planDetail" {

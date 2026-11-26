@@ -3537,6 +3537,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// Whether a `@Sendable` builder function in this body of a root's per-type plan may capture an `Instantiator`,
+	/// `ErasedInstantiator`, or `LazilyInstantiated` declared outside it: the walk of
+	/// `nonSendableWrapperCaptures(ofTreeRootedAt:)` over the body's tree, each label the body reads from above declared,
+	/// outside every `@Sendable` function of the body, as each of `answers` binds it. It may find a capture the plan's
+	/// code does not make, where a `@Sendable` function reads a parameter of its own: the root then keeps its tree per
+	/// path, whose walk judges it.
+	///
+	/// - Parameters:
+	///   - instantiable: The type the body builds.
+	///   - answers: The declarations that answer the labels the body reads from above.
+	func mayCaptureNonSendableWrapper(asBodyOf instantiable: Instantiable, answeredBy answers: [NearestDeclaration]) async -> Bool {
+		var declarationsByLabel = [String: [VisibleDeclaration]]()
+		for answer in answers {
+			for (form, declaredProperty) in answer.bindings.sorted(by: { $0.key < $1.key }) {
+				declarationsByLabel[form.label, default: []].append(VisibleDeclaration(
+					property: declaredProperty,
+					instanceProperty: form == declaredProperty ? nil : form,
+					declaringType: nil,
+					declarationLocation: nil,
+					sendableBuilderDepth: 0,
+				))
+			}
+		}
+		return await !nonSendableWrapperCaptures(
+			of: instantiable,
+			unavailableProperties: unavailableProperties(
+				isGeneratedBefore: { _ in false },
+				propertiesGeneratedLater: [],
+			),
+			propertiesGeneratedLater: [],
+			declarationsByLabel: declarationsByLabel,
+			enclosingSendableBuilders: [],
+			chain: [],
+		).isEmpty
+	}
+
 	/// A value the tree holds for a parameter of a seam's generated initializer that the tier it calls omits, which
 	/// the call passes `nil` for although the receivers inside the seam, built inline, would be handed the value.
 	struct SeamTierOmission: Sendable {
