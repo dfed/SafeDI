@@ -462,7 +462,17 @@ struct SafeDIToolReleaseAcceptanceTests {
 			return
 		}
 		let start = Date()
-		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release, current: configuration.current, drawsEveryFeature: configuration.drawsEveryFeature)
+		for (index, directory) in configuration.fixtureDirectories.enumerated() {
+			report.append("fixture \(index) \(directory)")
+		}
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(
+			forSeeds: Array(configuration.seeds),
+			of: configuration.corpus,
+			older: configuration.release,
+			current: configuration.current,
+			drawsEveryFeature: configuration.drawsEveryFeature,
+			fixtureFilesBySeed: configuration.fixtureFilesBySeed,
+		)
 		let listedSeeds = (Self.listedSeedsByRelease[configuration.release.name] ?? []).filter { $0.corpus == configuration.corpus }
 		let listedSeedBySeed = Dictionary(grouping: listedSeeds, by: \.seed).compactMapValues(\.first)
 		var classCounts = [GraphFuzzerReleaseAcceptanceClass: Int]()
@@ -565,6 +575,11 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	/// Whether each graph is drawn with the features 2.3.0 rejects too (`SAFEDI_RELEASE_ACCEPTANCE_DRAWS_EVERY_FEATURE`),
 	/// for an older release that accepts them.
 	let drawsEveryFeature: Bool
+	/// Directories of hand-written fixtures judged in place of the corpus (`SAFEDI_RELEASE_ACCEPTANCE_FIXTURES`, separated
+	/// by `:`), each one module of the files its `l.csv` lists or, without one, of every `.swift` file directly in it but
+	/// `main.swift` and generated `*.gen.swift` files, judged as seed `<index>`; empty for the corpus.
+	let fixtureDirectories: [String]
+	let fixtureFilesBySeed: [UInt64: [String]]?
 	let corpus: GraphFuzzerReleaseAcceptanceCorpus
 	let seeds: Range<UInt64>
 	let reportPath: String
@@ -627,6 +642,34 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				problems.append("SAFEDI_RELEASE_ACCEPTANCE_SHARD must be `<index>/<count>` naming a shard with at least one seed.")
 			}
 		}
+		var fixtureDirectories = [String]()
+		var fixtureFilesBySeed: [UInt64: [String]]?
+		if let fixturesDescription = environment["SAFEDI_RELEASE_ACCEPTANCE_FIXTURES"], !fixturesDescription.isEmpty {
+			var filesBySeed = [UInt64: [String]]()
+			for directory in fixturesDescription.split(separator: ":").map(String.init) {
+				// A directory whose `l.csv` lists the files a probe's tool was handed holds those files, by name, beside
+				// the probe's own outputs; any other directory holds its fixture's files alone.
+				let listedNames = (try? String(contentsOfFile: "\(directory)/l.csv", encoding: .utf8)).map { list in
+					list.split(whereSeparator: { $0 == "\n" || $0 == "," }).compactMap { $0.split(separator: "/").last.map(String.init) }
+				}
+				let names = listedNames ?? ((try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? [])
+					.filter { $0.hasSuffix(".swift") && $0 != "main.swift" && !$0.hasSuffix(".gen.swift") && !$0.hasPrefix(".") }
+					.sorted()
+				// Each file names itself on its first line (`GraphFuzzerFixture.fileNameMarker`), since a hand-written
+				// file need not spell its first type's `@Instantiable` on a line of its own, by which the harness names one.
+				let files = names.compactMap { name in
+					(try? String(contentsOfFile: "\(directory)/\(name)", encoding: .utf8)).map { GraphFuzzerFixture.fileNameMarker + name + "\n" + $0 }
+				}
+				guard !files.isEmpty, files.count == names.count else {
+					problems.append("SAFEDI_RELEASE_ACCEPTANCE_FIXTURES names \(directory), which holds no readable fixture file.")
+					continue
+				}
+				filesBySeed[UInt64(fixtureDirectories.count)] = files
+				fixtureDirectories.append(directory)
+			}
+			fixtureFilesBySeed = filesBySeed
+			seeds = 0..<UInt64(fixtureDirectories.count)
+		}
 		var current = GraphFuzzerRelease.currentTree
 		if environment["SAFEDI_RELEASE_ACCEPTANCE_CURRENT_TOOL"] != nil {
 			if let currentTool = existingPath("SAFEDI_RELEASE_ACCEPTANCE_CURRENT_TOOL"),
@@ -651,6 +694,8 @@ struct ReleaseAcceptanceLongRunConfiguration {
 			),
 			current: current,
 			drawsEveryFeature: environment["SAFEDI_RELEASE_ACCEPTANCE_DRAWS_EVERY_FEATURE"] == "1",
+			fixtureDirectories: fixtureDirectories,
+			fixtureFilesBySeed: fixtureFilesBySeed,
 			corpus: corpus,
 			seeds: seeds,
 			reportPath: reportPath,

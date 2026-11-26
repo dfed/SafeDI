@@ -2545,15 +2545,35 @@ extension GraphFuzzerFixture {
 		}
 		let mockFileSuffix = "+SafeDIMock.swift"
 		let typesTakingOwnOptionalName = publicMockTypesTakingOwnOptionalName
-		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
-			// A split graph's generated files are keyed by their module's name.
-			let mockedType = String(fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? "")
-			probes.append(DifferentialValueProbe("\(mockedType).mock()"))
-			if typesTakingOwnOptionalName.contains(mockedType) {
-				probes.append(DifferentialValueProbe("\(mockedType).mock(name: \"probe\")"))
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) {
+			// A file declaring several types is named after its first, so each mock is read from the extension that
+			// declares it, in the file's order: one per type in a fuzzer graph, whose files each declare one type.
+			for (mockedType, section) in Self.mockSections(of: contents) where GraphFuzzerMockOverrides.takesNoRequiredParameter(section) {
+				probes.append(DifferentialValueProbe("\(mockedType).mock()"))
+				if typesTakingOwnOptionalName.contains(mockedType) {
+					probes.append(DifferentialValueProbe("\(mockedType).mock(name: \"probe\")"))
+				}
 			}
 		}
 		return probes
+	}
+
+	/// Each top-level extension of `contents` that declares a generated `mock()`, as the type it extends and the
+	/// extension's text, in the file's order.
+	static func mockSections(of contents: String) -> [(typeName: String, section: String)] {
+		var sections = [(typeName: String, lines: [Substring])]()
+		for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+			if line.hasPrefix("extension ") || line.hasPrefix("public extension ") || line.hasPrefix("package extension ") {
+				let name = line.split(separator: "extension ", maxSplits: 1).last?.prefix { $0 != " " && $0 != "{" && $0 != ":" } ?? ""
+				sections.append((typeName: String(name), lines: [line]))
+			} else if !sections.isEmpty {
+				sections[sections.count - 1].lines.append(line)
+			}
+		}
+		return sections.compactMap { section in
+			let text = section.lines.joined(separator: "\n")
+			return text.contains("static func mock(") ? (typeName: section.typeName, section: text) : nil
+		}
 	}
 
 	/// What the name of the probe that builds the seam corpus's `RetainHome` through a hand-written builder ends with,

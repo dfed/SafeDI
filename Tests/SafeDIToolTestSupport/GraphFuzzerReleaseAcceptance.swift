@@ -396,7 +396,12 @@ enum GraphFuzzerReleaseAcceptance {
 	) async throws -> GraphFuzzerReleaseRun {
 		let toolOutcome: GraphFuzzerToolOutcome = switch release.tool {
 		case .inProcess:
-			try await GraphFuzzerOracle.toolOutcome(of: fixture)
+			// A hand-written fixture's files each name themselves on their first line, which the harness names a corpus
+			// graph's files by only where they declare no `@Instantiable` type.
+			try await GraphFuzzerOracle.toolOutcome(
+				of: fixture,
+				fileNames: fixture.swiftFileContent.allSatisfy { $0.hasPrefix(GraphFuzzerFixture.fileNameMarker) } ? fixture.fileNames : nil,
+			)
 		case let .executable(toolURL):
 			if let modules = fixture.modules {
 				try await executableSplitToolOutcome(of: fixture, modules: modules, toolURL: toolURL, filesToDelete: &filesToDelete)
@@ -447,16 +452,19 @@ enum GraphFuzzerReleaseAcceptance {
 		older: GraphFuzzerRelease,
 		current: GraphFuzzerRelease = .currentTree,
 		drawsEveryFeature: Bool = false,
+		fixtureFilesBySeed: [UInt64: [String]]? = nil,
 		batchSize: Int = 25,
 		batchLimits: DifferentialValueLimits = DifferentialValueLimits(),
 	) async throws -> [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)] {
 		await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
+		// Hand-written fixtures share no type-name prefix, so each compiles in a batch of its own.
+		let batchSize = fixtureFilesBySeed == nil ? batchSize : 1
 		let batches = stride(from: 0, to: seeds.count, by: batchSize).map { Array(seeds[$0..<min($0 + batchSize, seeds.count)]) }
 		var verdicts = [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)]()
 		try await withThrowingTaskGroup(of: [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)].self) { group in
 			for batch in batches {
 				group.addTask {
-					try await batchVerdicts(forSeeds: batch, of: corpus, older: older, current: current, drawsEveryFeature: drawsEveryFeature, limits: batchLimits)
+					try await batchVerdicts(forSeeds: batch, of: corpus, older: older, current: current, drawsEveryFeature: drawsEveryFeature, fixtureFilesBySeed: fixtureFilesBySeed, limits: batchLimits)
 				}
 			}
 			for try await batchVerdicts in group {
@@ -473,6 +481,7 @@ enum GraphFuzzerReleaseAcceptance {
 		older: GraphFuzzerRelease,
 		current: GraphFuzzerRelease,
 		drawsEveryFeature: Bool,
+		fixtureFilesBySeed: [UInt64: [String]]?,
 		limits: DifferentialValueLimits,
 	) async throws -> [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)] {
 		var filesToDelete = [URL]()
@@ -485,7 +494,8 @@ enum GraphFuzzerReleaseAcceptance {
 			for seed in seeds {
 				group.addTask {
 					var filesToDelete = [URL]()
-					let fixture = GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features, omitsDrawsOlderReleasesReject: !drawsEveryFeature)
+					let fixture = fixtureFilesBySeed?[seed].map { GraphFuzzerFixture(seed: seed, swiftFileContent: $0) }
+						?? GraphFuzzerGenerator.releaseAcceptanceFixture(forSeed: seed, features: corpus.features, omitsDrawsOlderReleasesReject: !drawsEveryFeature)
 					let olderRun = try await run(older, over: fixture, filesToDelete: &filesToDelete)
 					let currentRun = try await run(current, over: fixture, filesToDelete: &filesToDelete)
 					let classification = withOverrideProbes(
