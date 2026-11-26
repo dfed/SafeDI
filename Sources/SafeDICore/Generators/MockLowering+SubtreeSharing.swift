@@ -323,9 +323,10 @@ extension MockLowering {
 				}
 			case .root, .hole, .fill:
 				// No test reaches this arm. The root is never beneath a generator on several paths; a hole is only in a public
-				// mock's tree, which shares nothing (`Walk.sharesSubtrees(of:)`); and the construction memo builds a call that
-				// fills a builder, with its fills, afresh on each path, so no fill is beneath a generator on several paths.
-				// The last is the memo's choice, not a refusal of sharing: a memo that shared such a call would reach it.
+				// mock's tree, which shares nothing (`Walk.sharesSubtrees(of:)`); and a fill is beneath the call of another
+				// module's public mock that passes it, which one tree holds at most once (`ConstructionMemo.reuse(of:in:
+				// besideCallGenerators:drawing:)` refuses an entry holding a call generator the tree holds), so no generator
+				// above a fill is on several paths. A mock builds another module's seam inline, with no call.
 				isClosed = false
 			}
 			for child in children {
