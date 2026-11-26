@@ -107,6 +107,24 @@ struct TypeFactsVariantsTests {
 	}
 
 	@Test
+	func init_handsCollapsedKeyDownUnchanged_whenReadPassesThroughTwoCallsBelowTheCollapse() {
+		// 1 and 2 bind 11 and 12 for 3, which the key collapses to 101; 3 and 4 hand it through to 5. The key is not
+		// idempotent (101 would key as 110), so a fold that applied it again to a passed-through key would split 4 and 5
+		// from 3 or tell their keys apart: one variant per node, and the same key at each depth.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1, 2], 1: [3], 2: [3], 3: [4], 4: [5]][node, default: []]
+		}
+		let variants = makeVariants(graph: graph, own: [[], [], [], [], [], [0]], bindings: [
+			Edge(node: 1, index: 0): [0: VariantBinding(answer: 11, declaration: 1)],
+			Edge(node: 2, index: 0): [0: VariantBinding(answer: 12, declaration: 2)],
+		], key: { _, answer in answer < 0 ? answer : 100 + answer / 10 })
+
+		#expect(variants.count == 6)
+		#expect((3..<6).map { Array(variants.keys(of: $0)) } == [[101], [101], [101]])
+		#expect(Array(variants.sources(ofCall: variants.callOffset(of: 4))) == [.passedThrough(0)])
+	}
+
+	@Test
 	func init_makesVariantPerFamily_whenOneEdgeOpensSendableFunction() {
 		let graph = OrderedGraph(root: 0) { node in
 			[0: [1, 2], 1: [3], 2: [3]][node, default: []]

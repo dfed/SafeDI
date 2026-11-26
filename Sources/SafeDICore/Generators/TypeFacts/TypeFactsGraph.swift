@@ -137,6 +137,29 @@ struct TypeFactsGraph: Sendable {
 		self.reads = reads
 		readTable = readInterner.reads
 		labelTexts = labels.labels
+		var readColumn = [Int32]()
+		var readOffsets = [Int32]()
+		var labelColumn = [Int32]()
+		var labelOffsets = [Int32]()
+		var labelSeen = [Int32](repeating: -1, count: labels.labels.count)
+		for index in graph.nodes.indices {
+			readOffsets.append(Int32(readColumn.count))
+			labelOffsets.append(Int32(labelColumn.count))
+			reads.rows.forEachColumn(inRow: index) { read, _ in
+				readColumn.append(read)
+				let label = readInterner.reads[Int(read)].label
+				if label >= 0, labelSeen[Int(label)] != Int32(index) {
+					labelSeen[Int(label)] = Int32(index)
+					labelColumn.append(label)
+				}
+			}
+		}
+		readOffsets.append(Int32(readColumn.count))
+		labelOffsets.append(Int32(labelColumn.count))
+		self.readColumn = readColumn
+		self.readOffsets = readOffsets
+		self.labelColumn = labelColumn
+		self.labelOffsets = labelOffsets
 		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.reads, labels: labels)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerTexts = answers.texts
@@ -156,6 +179,14 @@ struct TypeFactsGraph: Sendable {
 
 	/// Each node's cycle identity (A4), interned from its cycle key in first-reach order.
 	let cycleIDs: [Int32]
+
+	/// Each node's reads from above, in increasing read ID, one run per node at `readOffsets`: what `reads(of:)` slices.
+	let readColumn: [Int32]
+	let readOffsets: [Int32]
+
+	/// Each node's labels read from above, each once, in read order, one run per node at `labelOffsets`.
+	let labelColumn: [Int32]
+	let labelOffsets: [Int32]
 
 	/// Each answer ID's key: the answer without what a parameter carries.
 	let answerKeys: [Int32]
@@ -311,6 +342,7 @@ struct TypeFactsGraph: Sendable {
 	/// word of a bit set counts two), which a test counts per node and per edge.
 	var columnElementCount: Int {
 		graph.columnElementCount + instantiatedEdgeCounts.count + constructions.count + readTable.count + 2 * reads.rows.wordCount
+			+ cycleIDs.count + readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 	}
 
 	/// The graph as text, a line per node: its position, its declaration, `cycle` where it is on one, what its subtree reads
@@ -376,13 +408,16 @@ struct TypeFactsGraph: Sendable {
 		return reads
 	}
 
+	/// A required receive reads the nearest declaration of its label; one only if available reads only whether it is
+	/// handed a value or `nil` (rule 1: its whole answer, form included, is an optional parameter the caller passes).
 	private static func appendReceiveReads(of label: Int32, onlyIfAvailable: Bool, forMockGeneration: Bool, to reads: inout [Read]) {
-		reads.append(Read(.value, label: label))
-		if onlyIfAvailable {
-			reads.append(Read(.optional, label: label))
-			if forMockGeneration {
-				reads.append(Read(.mock, label: label))
-			}
+		guard onlyIfAvailable else {
+			reads.append(Read(.value, label: label))
+			return
+		}
+		reads.append(Read(.optional, label: label))
+		if forMockGeneration {
+			reads.append(Read(.mock, label: label))
 		}
 	}
 

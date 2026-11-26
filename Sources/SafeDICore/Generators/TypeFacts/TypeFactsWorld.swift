@@ -21,7 +21,9 @@
 // The interface every track builds against, frozen 2026-11-26 at 9 PM PT. Each ID is a dense 32-bit position in the
 // order the world's walk first reaches it, so nothing sorts by name. A column owed by the table-side columns lane
 // (lanes/per-type-facts/step0-columns-brief.md) or the mock track (lanes/per-type-facts/track-d-columns.md) is declared
-// here with its final type and answers empty until that lane fills it; its doc comment says which.
+// here with its final type and answers empty until that lane fills it; its doc comment says which. One part is not
+// frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label,
+// and the override-reach read about nothing, a key `key` never projects away (track D, "Settled by the design thread").
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
@@ -42,6 +44,22 @@ typealias ModuleID = Int32
 typealias ComponentID = Int32
 /// A cycle's identity (A4): the property as cycle validation sees it with the concrete type built.
 typealias CycleID = Int32
+
+/// What one read of a variant comes to in its body (the outcomes fold, `TypeFactsOutcomes`, lanes/per-type-facts: the
+/// outcomes lane fills it; track D reads it).
+enum TypeFactsOutcome: UInt8, Sendable {
+	/// Nothing answers the read: the body is passed `nil`, or the read has no value.
+	case none
+	/// The body reads the value its enclosing body binds, by capture.
+	case captured
+	/// The value is bound before the `@Sendable` function that would capture it, outside that function
+	/// (`boundBefore(of:)` names the edge that opens it).
+	case readBeforeSendableFunction
+	/// The body takes the value as a parameter of its function.
+	case parameter
+	/// The answer keys the variant and is no value the body is handed (family, carrier, what a mock root pins).
+	case keysVariant
+}
 
 /// What a declaration's property is: its form, beside how its type is built (`TypeFactsConstruction`).
 enum TypeFactsKind: UInt8, Sendable {
@@ -160,10 +178,10 @@ protocol TypeFactsWorld {
 	func received(by declaration: DeclarationID) -> ArraySlice<TypeFactsReceived>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
-	func reads(of declaration: DeclarationID) -> [ReadID]
+	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
 	func read(_ read: ReadID) -> Read
 	/// The labels the node's subtree reads from above it, each once, in read order.
-	func labels(of declaration: DeclarationID) -> [WorldLabelID]
+	func labels(of declaration: DeclarationID) -> ArraySlice<WorldLabelID>
 
 	var variantCount: Int { get }
 	func declaration(of variant: VariantID) -> DeclarationID
@@ -178,6 +196,12 @@ protocol TypeFactsWorld {
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
+	/// What each read of the variant comes to, parallel to `keys(of:)`. Owed by the outcomes fold.
+	func outcomes(of variant: VariantID) -> ArraySlice<TypeFactsOutcome>
+	/// For each read of the variant, parallel to `keys(of:)`: the offset of the edge that opens the `@Sendable` function a
+	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome. Owed by the
+	/// outcomes fold.
+	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -185,6 +209,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		graph.nodes.count
 	}
 
+	/// Never `alias` or `hole` yet, and `constant` for the root: aliases and holes become nodes with the table-side
+	/// columns (step0-columns-brief.md), so a switch over kinds has those cases with nothing behind them until then.
 	func kind(of declaration: DeclarationID) -> TypeFactsKind {
 		guard let property = graph.nodes[Int(declaration)].property else {
 			return .constant
@@ -259,24 +285,16 @@ extension TypeFactsGraph: TypeFactsWorld {
 		[]
 	}
 
-	func reads(of declaration: DeclarationID) -> [ReadID] {
-		reads.reads(of: Int(declaration))
+	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID> {
+		readColumn[Int(readOffsets[Int(declaration)])..<Int(readOffsets[Int(declaration) + 1])]
 	}
 
 	func read(_ read: ReadID) -> Read {
 		readTable[Int(read)]
 	}
 
-	func labels(of declaration: DeclarationID) -> [WorldLabelID] {
-		var labels = [WorldLabelID]()
-		var seen = Set<WorldLabelID>()
-		for read in reads.reads(of: Int(declaration)) {
-			let label = readTable[Int(read)].label
-			if label >= 0, seen.insert(label).inserted {
-				labels.append(label)
-			}
-		}
-		return labels
+	func labels(of declaration: DeclarationID) -> ArraySlice<WorldLabelID> {
+		labelColumn[Int(labelOffsets[Int(declaration)])..<Int(labelOffsets[Int(declaration) + 1])]
 	}
 
 	var variantCount: Int {
@@ -312,5 +330,13 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func isCalledOnce(_ variant: VariantID) -> Bool {
 		variants.isCalledOnce[Int(variant)]
+	}
+
+	func outcomes(of _: VariantID) -> ArraySlice<TypeFactsOutcome> {
+		[]
+	}
+
+	func boundBefore(of _: VariantID) -> ArraySlice<Int32> {
+		[]
 	}
 }
