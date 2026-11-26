@@ -738,13 +738,20 @@ public actor DependencyTreeGenerator {
 					}
 					// Each place of the root's tree against the bodies of its plan, built only where a test compares the two.
 					if let todaysTree = roots.last?.scopeGenerator {
-						try Self.compareBodies(
+						if let unplannedPlan = try Self.compareBodies(
 							ofRoot: scope,
 							todaysTree: todaysTree,
 							frozenScopeMap: validatedWorld.frozenScopeMap,
 							declaredTypeNames: declaredTypeNames,
 							cache: &receivedPropertiesCache,
-						)
+						), let planCodeObserver = PlanCodeObservation.observer {
+							// The root's body laid out from the plan's bodies: one function per body, which the root declares.
+							let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplannedPlan))
+							try planCodeObserver(
+								scope.instantiable.concreteInstantiable.asSource,
+								statements.map { try ScopeGenerator.rootCode(of: scope.instantiable, writing: $0).spelled() },
+							)
+						}
 					}
 				}
 				rootScopeGenerators = roots

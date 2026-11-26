@@ -69,24 +69,31 @@ extension TypeKeyLayout {
 		var outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
 		for owner in membersByClass.indices.dropFirst() {
 			for label in reads[membersByClass[owner][0]] {
-				var declarations = [TypeDeclaration]()
-				for member in membersByClass[owner] {
-					declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
-					for closer in closersByTarget[member] ?? [] {
-						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
-					}
-				}
-				let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
-					.none
-				} else if let first = declarations.first,
-				          declarations.allSatisfy({ $0 == first }),
-				          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
-				{
-					.captured(first)
+				// A variant of the per-type plan captures nothing: every label it reads from above is a parameter, which each of
+				// its calls passes (`CycleVariantRecord.parameters`), or one its body was built with `nil` for, which it reads
+				// as `nil` (`variantsReadOnlyTheirCycleParameters`).
+				if let variant = membersByClass[owner].first(where: { variantBodies.contains($0) }) {
+					outcomes[owner][label] = bodies[variant].cycleParameterLabels.contains(label) ? .passed : ReadOutcome.none
 				} else {
-					.passed
+					var declarations = [TypeDeclaration]()
+					for member in membersByClass[owner] {
+						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
+						for closer in closersByTarget[member] ?? [] {
+							declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
+						}
+					}
+					let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
+						.none
+					} else if let first = declarations.first,
+					          declarations.allSatisfy({ $0 == first }),
+					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
+					{
+						.captured(first)
+					} else {
+						.passed
+					}
+					outcomes[owner][label] = outcome
 				}
-				outcomes[owner][label] = outcome
 			}
 		}
 		self.outcomes = outcomes
@@ -127,29 +134,35 @@ extension TypeKeyLayout {
 			var changed = false
 			for owner in membersByClass.indices.dropFirst() {
 				for label in reads[membersByClass[owner][0]] where outcomes[owner][label] == .passed {
-					var types = [TypeDescription?]()
-					var isComplete = true
-					for site in callSitesByClass[owner].sorted(by: { ($0.owner, $0.index) < ($1.owner, $1.index) }) {
-						let declaration = typeLookUp(label, inClass: site.owner, before: site.index)
-						if case .read = declaration, type(of: declaration) == nil {
-							// A parameter whose type is not known yet passes a value of some type, never `nil`: it is
-							// left out until it is known, so it never makes this parameter optional.
-							isComplete = false
-						} else {
-							types.append(type(of: declaration))
+					// A variant's parameter takes the type of the declaration its body's answer names, which every call passes,
+					// since bodies are told apart by their answers.
+					if let parameter = variantParameter(labeled: label, inClass: owner) {
+						parameterTypes[owner][label] = parameter.typeDescription
+					} else {
+						var types = [TypeDescription?]()
+						var isComplete = true
+						for site in callSitesByClass[owner].sorted(by: { ($0.owner, $0.index) < ($1.owner, $1.index) }) {
+							let declaration = typeLookUp(label, inClass: site.owner, before: site.index)
+							if case .read = declaration, type(of: declaration) == nil {
+								// A parameter whose type is not known yet passes a value of some type, never `nil`: it is
+								// left out until it is known, so it never makes this parameter optional.
+								isComplete = false
+							} else {
+								types.append(type(of: declaration))
+							}
 						}
-					}
-					guard isComplete || parameterTypes[owner][label] == nil else { continue }
-					var combined = Self.parameterType(combining: types)
-					// A value nothing in the function requires is taken optionally, as the path key types a cycle's parameter.
-					if let value = combined, !value.isOptional, value.lazilyInstantiatedInstanceType == nil,
-					   !membersByClass[owner].contains(where: { requiredReads[$0].contains(label) })
-					{
-						combined = .optional(value)
-					}
-					if let combined, parameterTypes[owner][label]?.asSource != combined.asSource {
-						parameterTypes[owner][label] = combined
-						changed = true
+						guard isComplete || parameterTypes[owner][label] == nil else { continue }
+						var combined = Self.parameterType(combining: types)
+						// A value nothing in the function requires is taken optionally, as the path key types a cycle's parameter.
+						if let value = combined, !value.isOptional, value.lazilyInstantiatedInstanceType == nil,
+						   !membersByClass[owner].contains(where: { requiredReads[$0].contains(label) })
+						{
+							combined = .optional(value)
+						}
+						if let combined, parameterTypes[owner][label]?.asSource != combined.asSource {
+							parameterTypes[owner][label] = combined
+							changed = true
+						}
 					}
 				}
 			}
@@ -161,6 +174,14 @@ extension TypeKeyLayout {
 			}
 		}
 		return true
+	}
+
+	/// The parameter labeled `label` of the variant of the per-type plan among the members of class `owner`, if any.
+	func variantParameter(labeled label: String, inClass owner: Int) -> Property? {
+		membersByClass[owner].lazy
+			.filter { variantBodies.contains($0) }
+			.compactMap { self.bodies[$0].cycleParameters.first(where: { $0.label == label }) }
+			.first
 	}
 
 	/// The parameter type that takes each of `types`, `nil` for a call that passes `nil`; `nil` where none does.

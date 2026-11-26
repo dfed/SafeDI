@@ -64,6 +64,17 @@ extension TypeKeyLayout {
 	mutating func normalizeCycleParameters() {
 		for body in bodies.indices.dropFirst() {
 			guard let record = bodies[body].record else { continue }
+			if variantBodies.contains(body) {
+				// A variant of the per-type plan is called only by closing statements, each passing every cycle parameter.
+				let calls = closersByTarget[body] ?? []
+				for label in bodies[body].cycleParameterLabels.sorted() {
+					let values = calls.map { normalized(closerValue(of: label, closing: $0, onPlace: body)) }
+					if let first = values.first, values.allSatisfy({ $0 == first }) {
+						normalizedCycleParameters[body, default: [:]][label] = first
+					}
+				}
+				continue
+			}
 			// The call passes each cycle parameter one argument of its label (`ScopeGenerator.cycleParameterReads`).
 			for argument in record.callCycleArguments {
 				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))

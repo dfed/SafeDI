@@ -3213,6 +3213,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The places of this scope's body, its children's code in the order it builds them, as a root's body holds them: what
+	/// the type key lays out of a body of the per-type plan (`TypeKeyBody.statements(ofPlan:)`).
+	func generateChildPlans() async throws -> [GeneratedCode] {
+		try await generateProperties(
+			propertiesGeneratedLater: [],
+			enclosingFunctionNames: BuilderFunctionNames().enclosingFunctionNames,
+			leadingMemberWhitespace: "        ",
+			fillPlaceBindings: .none,
+		)
+	}
+
+	/// The extension a root of the dependency tree declares around `statements`, the body the type key laid out; nothing
+	/// for a root without dependencies.
+	static func rootCode(of instantiable: Instantiable, writing statements: [GeneratedCode]) throws -> GeneratedCode {
+		try rootInitializer(of: instantiable)?.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim))) ?? .empty
+	}
+
 	/// This scope's unavailable properties as the root of what is generated, with nothing generated before it.
 	private var rootUnavailableProperties: Set<Property> {
 		unavailableProperties(
@@ -8233,7 +8250,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
 				.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
 			} else {
-				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode))
+				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode, readsOnlyIfAvailable: fulfillingBindingIsOptional))
 			}
 		} else {
 			nil
