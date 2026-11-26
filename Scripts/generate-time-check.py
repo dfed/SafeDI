@@ -77,8 +77,11 @@ plus system, of the tool's processes) is printed beside it, since a wall time al
 busier machine. A shape fails only when the head's median is also more than 0.1 s above the base's, because below
 that the time is the processes starting, not the generator.
 
-Peak memory is each `generate` process's maximum resident set size, which the operating system reports for the child
-when it exits (`getrusage` through `os.wait4`); a shape's figure is the largest of its modules', and the figure compared
+Peak memory is each `generate` process's maximum resident set size, which the operating system reports for a child
+when it exits (`getrusage` through `os.wait4`). That figure starts at the resident size of the process the child was
+started from, so the tool is started from a small launcher (`LAUNCHER`, a fresh Python of about 10 MB) that waits for
+it and writes what it used, never from this process, whose own size would otherwise be every small run's peak. A
+shape's figure is the largest of its modules', and the figure compared
 is its median over the timed runs. Its limit is tighter than time's: a shape fails when the
 head's median peak is MEMORY-LIMIT times the base's or more, and also more than 8 MB above it, because below that the
 peak is the process's own start, not the generator's work.
@@ -188,6 +191,7 @@ files that grow with the types a module declares) and checks each verdict above.
 import hashlib
 import os
 import random
+import signal
 import statistics
 import subprocess
 import sys
@@ -198,6 +202,18 @@ NOISE_FLOOR_SECONDS = 0.1
 MEMORY_NOISE_FLOOR_BYTES = 8 * 1024 * 1024
 # `ru_maxrss` is in kilobytes on Linux and in bytes on macOS.
 MAXRSS_BYTES = 1 if sys.platform == "darwin" else 1024
+
+# Starts the command after its first argument, waits for it, writes its user seconds, system seconds and maximum
+# resident set size to the file its first argument names, and exits as the command did. It runs in a Python of its
+# own, so the command's peak memory starts at this small process's, not at the check's.
+LAUNCHER = """import os, sys
+process = os.posix_spawn(sys.argv[2], sys.argv[2:], os.environ)
+_, status, usage = os.wait4(process, 0)
+with open(sys.argv[1], "w") as handle:
+    handle.write(f"{usage.ru_utime} {usage.ru_stime} {usage.ru_maxrss}")
+code = os.waitstatus_to_exitcode(status)
+sys.exit(code if code >= 0 else 128 - code)
+"""
 SIZE_NOISE_FLOOR_BYTES = 4096
 # Sizes accepted for one change, by shape and module: a listed module passes while the head's file is at most this many
 # bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds.
@@ -656,13 +672,15 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # so that the row holds what has been gained until the change that removes the growth deletes the entry.
 #
 # Measured on a four-core Linux machine with a release build of the tool, the smaller graph's figure first:
-# P 0.376 s and 3.313 s (8.82), 57.0 MB and 220.2 MB (3.86), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
+# P 0.376 s and 3.313 s (8.82), 50.7 MB and 213.5 MB (4.21), 341,899 and 3,966,895 bytes of `.safedi` (11.60);
 # L 0.335 s and 2.553 s (7.63); K 0.069 s and 0.290 s (4.18), 972,037 and 9,574,045 bytes of code (9.85);
-# M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 51.2 MB and
-# 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
-# B 0.086 s and 1.576 s (18.37), 38.2 MB and 90.6 MB (2.37); BM 0.079 s and 2.543 s
-# (32.30), 93.0 MB and 173.9 MB (1.87), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
+# M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 47.5 MB and
+# 170.1 MB (3.58), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
+# B 0.086 s and 1.576 s (18.37), 34.5 MB and 92.6 MB (2.68); BM 0.079 s and 2.543 s
+# (32.30), 33.7 MB and 179.7 MB (5.34), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
 # code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86).
+# The tool alone, on the smallest graph, peaks at about 33 MB. K (36.6 MB and 67.4 MB, 1.84) and W (52.4 MB and
+# 94.9 MB, 1.74 to 1.82 in five runs) stay under the default limit without room to spare.
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
@@ -676,10 +694,10 @@ GROWTH_ROWS = {
     "W-ring-of-screens-that-open-each-other": (lambda width: shape_w(width), 10, {"time": 4.0}),
     "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 6.5, "code": 275.0}),
     # Three and five modules, not four and six: at six this row alone takes 21 s and 1.2 GB on main today (30 times
-    # four's time). 0.26 s and 3.17 s (12.4), 42 MB and 199 MB (4.7), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
+    # four's time). 0.26 s and 3.17 s (12.4), 38 MB and 196 MB (5.1), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
     # 282,609 and 4,967,332 bytes of code (17.6).
     "F9-public-mock-seam-chain": (lambda layers: shape_public_mock_seam_chain(layers), 3, {"time": 16.0, "memory": 6.0, "size": 36.0, "code": 19.0}),
-    # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 39 MB and 78 MB (2.00), 25,811 and 1,406,899 bytes of `.safedi`
+    # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 35 MB and 74 MB (2.13), 25,811 and 1,406,899 bytes of `.safedi`
     # (54.5), 31,432 and 126,780 bytes of code (4.03). Starts at three layers: at six, Feature alone takes 9.8 s.
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
@@ -736,28 +754,31 @@ def generate(tool, modules, sources, output, variables={}, time_limit=None):
                         "--transitive-module-info-file-path", f"{output}/{name}.transitive.csv"]
         with open(f"{output}/{name}.log", "wb") as log:
             started = time.monotonic()
-            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=environment)
+            # A session of its own, so that stopping it stops the launcher and the tool together.
+            process = subprocess.Popen([sys.executable, "-I", "-S", "-c", LAUNCHER, f"{output}/{name}.usage"] + command,
+                                       stdout=log, stderr=subprocess.STDOUT, env=environment, start_new_session=True)
             stopped = threading.Event()
 
             def stop():
                 stopped.set()
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL)
 
             timer = threading.Timer(time_limit, stop) if time_limit else None
             if timer:
                 timer.start()
-            _, status, usage = os.wait4(process.pid, 0)
+            process.wait()
             wall += time.monotonic() - started
-            process.returncode = os.waitstatus_to_exitcode(status)
             if timer:
                 timer.cancel()
             if stopped.is_set():
                 raise Failure(f"`generate` of module {name} was still running after {time_limit:g} s and was stopped")
-        cpu += usage.ru_utime + usage.ru_stime
-        peak = max(peak, usage.ru_maxrss * MAXRSS_BYTES)
         if process.returncode != 0:
             with open(f"{output}/{name}.log", errors="replace") as log:
                 raise Failure(f"`generate` of module {name} exited {process.returncode}: {log.read().strip()[-1500:]}")
+        with open(f"{output}/{name}.usage") as handle:
+            user, system, maximum_resident_set_size = handle.read().split()
+        cpu += float(user) + float(system)
+        peak = max(peak, int(maximum_resident_set_size) * MAXRSS_BYTES)
     return wall, cpu, peak
 
 
@@ -1078,6 +1099,13 @@ def self_test(directory):
     _, _, peak = generate(tool("footprint", sleep=0), large, f"{footprint}/sources", f"{footprint}/output")
     if lengths != [len("// a line of generated code\n") * 4_000_000] * len(large) or peak > 64 * 1024 * 1024:
         failures.append(f"reading {lengths} characters of generated code left a later run's peak at {megabytes(peak)}")
+    # A child of a known size, measured while this process is several times larger: the peak is the child's own, a
+    # stand-in that allocates 20 MB on top of its interpreter, not this process's size when it started the child.
+    ballast = bytearray(b"x") * (256 * 1024 * 1024)
+    _, _, peak = generate(tool("known-size", sleep=0, allocates=20 * 1024 * 1024), large, f"{footprint}/sources", f"{directory}/known-size")
+    del ballast
+    if not 20 * 1024 * 1024 <= peak <= 48 * 1024 * 1024:
+        failures.append(f"a child that allocates 20 MB, started from a process holding 256 MB, measured {megabytes(peak)}")
     for failure in failures:
         print(f"self-test failed: {failure}")
     print("self-test " + ("failed" if failures else "passed"))
