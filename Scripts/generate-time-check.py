@@ -77,8 +77,11 @@ plus system, of the tool's processes) is printed beside it, since a wall time al
 busier machine. A shape fails only when the head's median is also more than 0.1 s above the base's, because below
 that the time is the processes starting, not the generator.
 
-Peak memory is each `generate` process's maximum resident set size, which the operating system reports for the child
-when it exits (`getrusage` through `os.wait4`); a shape's figure is the largest of its modules', and the figure compared
+Peak memory is each `generate` process's maximum resident set size, which the operating system reports for a child
+when it exits (`getrusage` through `os.wait4`). That figure starts at the resident size of the process the child was
+started from, so the tool is started from a small launcher (`LAUNCHER`, a fresh Python of about 10 MB) that waits for
+it and writes what it used, never from this process, whose own size would otherwise be every small run's peak. A
+shape's figure is the largest of its modules', and the figure compared
 is its median over the timed runs. Its limit is tighter than time's: a shape fails when the
 head's median peak is MEMORY-LIMIT times the base's or more, and also more than 8 MB above it, because below that the
 peak is the process's own start, not the generator's work.
@@ -186,6 +189,7 @@ files that grow with the types a module declares) and checks each verdict above.
 import hashlib
 import os
 import random
+import signal
 import statistics
 import subprocess
 import sys
@@ -196,6 +200,18 @@ NOISE_FLOOR_SECONDS = 0.1
 MEMORY_NOISE_FLOOR_BYTES = 8 * 1024 * 1024
 # `ru_maxrss` is in kilobytes on Linux and in bytes on macOS.
 MAXRSS_BYTES = 1 if sys.platform == "darwin" else 1024
+
+# Starts the command after its first argument, waits for it, writes its user seconds, system seconds and maximum
+# resident set size to the file its first argument names, and exits as the command did. It runs in a Python of its
+# own, so the command's peak memory starts at this small process's, not at the check's.
+LAUNCHER = """import os, sys
+process = os.posix_spawn(sys.argv[2], sys.argv[2:], os.environ)
+_, status, usage = os.wait4(process, 0)
+with open(sys.argv[1], "w") as handle:
+    handle.write(f"{usage.ru_utime} {usage.ru_stime} {usage.ru_maxrss}")
+code = os.waitstatus_to_exitcode(status)
+sys.exit(code if code >= 0 else 128 - code)
+"""
 SIZE_NOISE_FLOOR_BYTES = 4096
 # Sizes accepted for one change, by shape and module: a listed module passes while the head's file is at most this many
 # bytes, whatever its ratio to the base's. Above it, and for every other module, the ratio limit holds.
@@ -729,28 +745,31 @@ def generate(tool, modules, sources, output, variables={}, time_limit=None):
                         "--transitive-module-info-file-path", f"{output}/{name}.transitive.csv"]
         with open(f"{output}/{name}.log", "wb") as log:
             started = time.monotonic()
-            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=environment)
+            # A session of its own, so that stopping it stops the launcher and the tool together.
+            process = subprocess.Popen([sys.executable, "-I", "-S", "-c", LAUNCHER, f"{output}/{name}.usage"] + command,
+                                       stdout=log, stderr=subprocess.STDOUT, env=environment, start_new_session=True)
             stopped = threading.Event()
 
             def stop():
                 stopped.set()
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL)
 
             timer = threading.Timer(time_limit, stop) if time_limit else None
             if timer:
                 timer.start()
-            _, status, usage = os.wait4(process.pid, 0)
+            process.wait()
             wall += time.monotonic() - started
-            process.returncode = os.waitstatus_to_exitcode(status)
             if timer:
                 timer.cancel()
             if stopped.is_set():
                 raise Failure(f"`generate` of module {name} was still running after {time_limit:g} s and was stopped")
-        cpu += usage.ru_utime + usage.ru_stime
-        peak = max(peak, usage.ru_maxrss * MAXRSS_BYTES)
         if process.returncode != 0:
             with open(f"{output}/{name}.log", errors="replace") as log:
                 raise Failure(f"`generate` of module {name} exited {process.returncode}: {log.read().strip()[-1500:]}")
+        with open(f"{output}/{name}.usage") as handle:
+            user, system, maximum_resident_set_size = handle.read().split()
+        cpu += float(user) + float(system)
+        peak = max(peak, int(maximum_resident_set_size) * MAXRSS_BYTES)
     return wall, cpu, peak
 
 
@@ -1071,6 +1090,13 @@ def self_test(directory):
     _, _, peak = generate(tool("footprint", sleep=0), large, f"{footprint}/sources", f"{footprint}/output")
     if lengths != [len("// a line of generated code\n") * 4_000_000] * len(large) or peak > 64 * 1024 * 1024:
         failures.append(f"reading {lengths} characters of generated code left a later run's peak at {megabytes(peak)}")
+    # A child of a known size, measured while this process is several times larger: the peak is the child's own, a
+    # stand-in that allocates 20 MB on top of its interpreter, not this process's size when it started the child.
+    ballast = bytearray(b"x") * (256 * 1024 * 1024)
+    _, _, peak = generate(tool("known-size", sleep=0, allocates=20 * 1024 * 1024), large, f"{footprint}/sources", f"{directory}/known-size")
+    del ballast
+    if not 20 * 1024 * 1024 <= peak <= 48 * 1024 * 1024:
+        failures.append(f"a child that allocates 20 MB, started from a process holding 256 MB, measured {megabytes(peak)}")
     for failure in failures:
         print(f"self-test failed: {failure}")
     print("self-test " + ("failed" if failures else "passed"))
