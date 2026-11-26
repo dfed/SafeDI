@@ -438,113 +438,113 @@ struct SafeDIToolSeamSharedFillBodyTests: ~Copyable {
 		case .moduleInfo:
 			let cPath = app.fixtures["C.swift"]
 			expectGeneratedFiles(app.generatedFiles, ["App.swift": generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
-		        }
-		        func __safeDI_fillBody_DA998F868C342499(service: Service) -> any Api {
-		            func __safeDI_api() -> LiveApi {
-		                func __safeDI_c() -> C {
-		                    #sourceLocation(file: "\(cPath)", line: 5)
-		                    let renamedService: Service = service
-		                    #sourceLocation()
-		                    func __safeDI_f0Builder() -> F0 {
-		                        _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                        return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
-		                    }
-		                    let f0Builder = Instantiator<F0>(__safeDI_f0Builder)
-		                    return C(renamedService: renamedService, f0Builder: f0Builder)
-		                }
-		                let c: C = __safeDI_c()
-		                return LiveApi(service: service, c: c)
-		            }
-		            let api: any Api = __safeDI_api()
-		            return api
-		        }
-		        func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
-		            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
-		        }
-		        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
-		        }
-		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
-		            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
-		        }
-		        let service = Service()
-		        func __safeDI_f0() -> F0 {
-		            _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
-		        }
-		        let f0: F0 = __safeDI_f0()
-		        func __safeDI_f1() -> F1 {
-		            _ = F1.__safeDI_F1_3FF9291B1DFF77D6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F1(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
-		        }
-		        let f1: F1 = __safeDI_f1()
-		        self.init(service: service, f0: f0, f1: f1)
-		    }
-		}
-		"""])
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
+			            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
+			        }
+			        func __safeDI_fillBody_DA998F868C342499(service: Service) -> any Api {
+			            func __safeDI_api() -> LiveApi {
+			                func __safeDI_c() -> C {
+			                    #sourceLocation(file: "\(cPath)", line: 5)
+			                    let renamedService: Service = service
+			                    #sourceLocation()
+			                    func __safeDI_f0Builder() -> F0 {
+			                        _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                        return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+			                    }
+			                    let f0Builder = Instantiator<F0>(__safeDI_f0Builder)
+			                    return C(renamedService: renamedService, f0Builder: f0Builder)
+			                }
+			                let c: C = __safeDI_c()
+			                return LiveApi(service: service, c: c)
+			            }
+			            let api: any Api = __safeDI_api()
+			            return api
+			        }
+			        func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
+			            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
+			        }
+			        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
+			            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
+			        }
+			        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
+			            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
+			        }
+			        let service = Service()
+			        func __safeDI_f0() -> F0 {
+			            _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+			        }
+			        let f0: F0 = __safeDI_f0()
+			        func __safeDI_f1() -> F1 {
+			            _ = F1.__safeDI_F1_3FF9291B1DFF77D6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return F1(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
+			        }
+			        let f1: F1 = __safeDI_f1()
+			        self.init(service: service, f0: f0, f1: f1)
+			    }
+			}
+			"""])
 		case .swiftPackagePlugin:
 			let cPath = app.fixtures.compilerPath(of: "C.swift")
 			expectGeneratedFiles(app.generatedFiles, ["Root+SafeDI.swift": generatedFileHeader + """
-		#if canImport(Feature)
-		import Feature
-		#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
-		        }
-		        func __safeDI_fillBody_DA998F868C342499(service: Service) -> any Api {
-		            func __safeDI_api() -> LiveApi {
-		                func __safeDI_c() -> C {
-		                    #sourceLocation(file: "\(cPath)", line: 5)
-		                    let renamedService: Service = service
-		                    #sourceLocation()
-		                    func __safeDI_f0Builder() -> F0 {
-		                        _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, add the SafeDI plugin to the target that declares F0.
-		                        return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
-		                    }
-		                    let f0Builder = Instantiator<F0>(__safeDI_f0Builder)
-		                    return C(renamedService: renamedService, f0Builder: f0Builder)
-		                }
-		                let c: C = __safeDI_c()
-		                return LiveApi(service: service, c: c)
-		            }
-		            let api: any Api = __safeDI_api()
-		            return api
-		        }
-		        func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
-		            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
-		        }
-		        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
-		            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
-		        }
-		        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
-		            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
-		        }
-		        let service = Service()
-		        func __safeDI_f0() -> F0 {
-		            _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, add the SafeDI plugin to the target that declares F0.
-		            return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
-		        }
-		        let f0: F0 = __safeDI_f0()
-		        func __safeDI_f1() -> F1 {
-		            _ = F1.__safeDI_F1_3FF9291B1DFF77D6.self // If this line does not compile, add the SafeDI plugin to the target that declares F1.
-		            return F1(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
-		        }
-		        let f1: F1 = __safeDI_f1()
-		        self.init(service: service, f0: f0, f1: f1)
-		    }
-		}
-		"""])
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_apiBuilder_F0_api(_ scope_service: Service) -> any Api {
+			            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
+			        }
+			        func __safeDI_fillBody_DA998F868C342499(service: Service) -> any Api {
+			            func __safeDI_api() -> LiveApi {
+			                func __safeDI_c() -> C {
+			                    #sourceLocation(file: "\(cPath)", line: 5)
+			                    let renamedService: Service = service
+			                    #sourceLocation()
+			                    func __safeDI_f0Builder() -> F0 {
+			                        _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, add the SafeDI plugin to the target that declares F0.
+			                        return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+			                    }
+			                    let f0Builder = Instantiator<F0>(__safeDI_f0Builder)
+			                    return C(renamedService: renamedService, f0Builder: f0Builder)
+			                }
+			                let c: C = __safeDI_c()
+			                return LiveApi(service: service, c: c)
+			            }
+			            let api: any Api = __safeDI_api()
+			            return api
+			        }
+			        func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
+			            .init(api: { scope_service in __safeDI_apiBuilder_F0_api(scope_service) })
+			        }
+			        func __safeDI_apiBuilder_F1_api(_ scope_service: Service) -> any Api {
+			            return __safeDI_fillBody_DA998F868C342499(service: scope_service)
+			        }
+			        func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
+			            .init(api: { scope_service in __safeDI_apiBuilder_F1_api(scope_service) })
+			        }
+			        let service = Service()
+			        func __safeDI_f0() -> F0 {
+			            _ = F0.__safeDI_F0_D025DDBE59384E69.self // If this line does not compile, add the SafeDI plugin to the target that declares F0.
+			            return F0(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+			        }
+			        let f0: F0 = __safeDI_f0()
+			        func __safeDI_f1() -> F1 {
+			            _ = F1.__safeDI_F1_3FF9291B1DFF77D6.self // If this line does not compile, add the SafeDI plugin to the target that declares F1.
+			            return F1(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
+			        }
+			        let f1: F1 = __safeDI_f1()
+			        self.init(service: service, f0: f0, f1: f1)
+			    }
+			}
+			"""])
 		}
 	}
 
