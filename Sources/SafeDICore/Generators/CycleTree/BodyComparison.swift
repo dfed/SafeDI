@@ -43,8 +43,7 @@ extension DependencyTreeGenerator {
 		declaredTypeNames: DeclaredTypeNames,
 		cache: inout ReceivedPropertiesCache,
 	) throws -> PerTypePlanChoice? {
-		guard let shapeOutsidePlan = shapeOutsidePerTypePlan(inTreeOf: scope, cache: &cache) else { return nil }
-		guard let shadow = CallPlaceShadow(root: scope, cache: &cache) else { return nil }
+		guard let shapeOutsidePlan = shapeOutsidePerTypePlan(inTreeOf: scope, cache: &cache), let shadow = CallPlaceShadow(root: scope, cache: &cache) else { return nil }
 		if let reason = shapeOutsidePlan.reason {
 			return .perPath(reason)
 		}
