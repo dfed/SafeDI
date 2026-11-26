@@ -159,8 +159,9 @@ struct AliasPlaceRecord: Sendable {
 	let property: Property
 	/// The property the rename reads, or `nil` where it is bound to `nil`.
 	let fulfillingProperty: Property?
-	/// The place's code, its lines unindented.
-	let text: String
+	/// The place's code, its lines unindented, without the root functions the root declares at its top: a call that keeps a
+	/// root function in place has its text spelled again with it (`TypeKeyLayout.read(_:)`).
+	var text: String
 	/// Every read the text makes, as the path key resolves it; `nil` where the emitter cannot list them, which keeps the
 	/// place and the bodies enclosing it one per path, unless the place is a rename, whose one read is `fulfillingProperty`.
 	var reads: [PlaceRead]?

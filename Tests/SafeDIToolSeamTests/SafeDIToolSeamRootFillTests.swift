@@ -828,36 +828,36 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		            return api
 		        }
 		        let token = Token()
-		        func __safeDI_mid() -> Mid {
-		            func __safeDI_apiBuilder_Inner_api() -> Extra {
-		                let part = Part()
-		                return Extra(part: part)
-		            }
-		            let apiBuilder_Inner_api: Extra = __safeDI_apiBuilder_Inner_api()
-		            func __safeDI_child() -> Child {
-		                func __safeDI_inner() -> Inner {
-		                    _ = Inner.__safeDI_Inner_058A9DC2CD763CF7.self // If this line does not compile, compile the code SafeDI generates for module InnerSeam into InnerSeam: under Bazel, add InnerSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                    func __safeDI_apiBuilder_Inner_api(_ scope_token: Token) -> any Api {
-		                        let token = scope_token
-		                        func __safeDI_api() -> LiveApi {
-		                            func __safeDI_extra() -> Extra {
-		                                let part = Part()
-		                                return Extra(part: part)
-		                            }
-		                            let extra: Extra = __safeDI_extra()
-		                            return LiveApi(token: token, extra: extra)
+		        func __safeDI_apiBuilder_Inner_api_() -> Extra {
+		            let part = Part()
+		            return Extra(part: part)
+		        }
+		        func __safeDI_child() -> Child {
+		            func __safeDI_inner() -> Inner {
+		                _ = Inner.__safeDI_Inner_058A9DC2CD763CF7.self // If this line does not compile, compile the code SafeDI generates for module InnerSeam into InnerSeam: under Bazel, add InnerSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Inner_api(_ scope_token: Token) -> any Api {
+		                    let token = scope_token
+		                    func __safeDI_api() -> LiveApi {
+		                        func __safeDI_extra() -> Extra {
+		                            let part = Part()
+		                            return Extra(part: part)
 		                        }
-		                        let api: any Api = __safeDI_api()
-		                        return api
+		                        let extra: Extra = __safeDI_extra()
+		                        return LiveApi(token: token, extra: extra)
 		                    }
-		                    func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
-		                        .init(api: { scope_token in __safeDI_apiBuilder_Inner_api(scope_token) })
-		                    }
-		                    return Inner(__safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_Inner())
+		                    let api: any Api = __safeDI_api()
+		                    return api
 		                }
-		                let inner: Inner = __safeDI_inner()
-		                return Child(inner: inner)
+		                func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { scope_token in __safeDI_apiBuilder_Inner_api(scope_token) })
+		                }
+		                return Inner(__safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_Inner())
 		            }
+		            let inner: Inner = __safeDI_inner()
+		            return Child(inner: inner)
+		        }
+		        func __safeDI_mid() -> Mid {
+		            let apiBuilder_Inner_api: Extra = __safeDI_apiBuilder_Inner_api_()
 		            let child: Child = __safeDI_child()
 		            func __safeDI_outer() -> Outer {
 		                _ = Outer.__safeDI_Outer_5F0A5BAD4C94F93A.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.

@@ -48,7 +48,7 @@ extension TypeKeyLayout {
 			// which reads only the root's declarations before it, as the type key's code declares them: functions are all
 			// declared in the root's body, so no function beneath it could keep reads it does not list. A closer is never one:
 			// it lays out, and its code holds no root function.
-			let keepsPathKeyCode = body == 0 && (keptStatementIndices.contains(frame.next) || !Self.laysOut(frame.children[frame.next]) || holdsKeptRootFunction(frame.children[frame.next]))
+			let keepsPathKeyCode = body == 0 && (keptStatementIndices.contains(frame.next) || !Self.laysOut(frame.children[frame.next]))
 			let position = bodies[body].statements.count
 			let statement: Statement
 			let label: String
@@ -130,7 +130,16 @@ extension TypeKeyLayout {
 				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
 				label = alias.property.label
 				namesInScope.formUnion(alias.declaredFunctionNames)
-				statement = .alias(alias)
+				// A call whose fill or dispatcher the root keeps in place declares it in its own text, as the path key does:
+				// a root function captures nothing, and calls only the functions the root declares at its top or that its
+				// call declares, so the text still reads only what it lists.
+				if !keptRootFunctionNames.isEmpty, alias.calledRootFunctionNames.contains(where: keptRootFunctionNames.contains), let code = Self.placeCode(of: frame.children[frame.next]) {
+					var spelledAlias = alias
+					spelledAlias.text = GeneratedCode.omittingRootFunctions(code, named: rootFunctionNames).spelled()
+					statement = .alias(spelledAlias)
+				} else {
+					statement = .alias(alias)
+				}
 			}
 			bodies[body].statements.append(statement)
 			bodies[body].positionsByLabel[label, default: []].append(position)
@@ -241,10 +250,14 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// Whether `code`, a statement of the root's body, holds a root function the path key keeps in place
-	/// (`keptRootFunctionNames`).
-	func holdsKeptRootFunction(_ code: GeneratedCode) -> Bool {
-		!keptRootFunctionNames.isEmpty && RootFunctionHoisting.records(in: [code]).contains { keptRootFunctionNames.contains($0.name) }
+	/// The code of a place's plan, as a body holds it: indented, around the plan.
+	static func placeCode(of code: GeneratedCode) -> GeneratedCode? {
+		var code = code
+		while case let .indented(inner, _) = code.node {
+			code = inner
+		}
+		guard case let .place(plan) = code.node else { return nil }
+		return plan.code
 	}
 
 	/// The text of a statement of the root's body without the indentation the root gives it, which the type key's spelling

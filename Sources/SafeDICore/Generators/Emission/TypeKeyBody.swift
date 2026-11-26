@@ -163,8 +163,8 @@ struct TypeKeyLayout {
 	/// The root functions the root declares before its statements, which the text of a statement kept as the path key's code
 	/// leaves out.
 	var rootFunctionNames = Set<String>()
-	/// The root functions the path key keeps where their calls declare them (`RootFunctionHoisting`): a statement of the
-	/// root's body that holds one keeps the path key's code.
+	/// The root functions the path key keeps where their calls declare them (`RootFunctionHoisting`): a call that holds one
+	/// declares it in its text.
 	var keptRootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()

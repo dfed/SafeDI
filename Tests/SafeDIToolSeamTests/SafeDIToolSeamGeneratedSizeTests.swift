@@ -94,6 +94,29 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 		}
 	}
 
+	/// A root reaches a filled call of seam `Inner` on every path through layers of three screens, where the root keeps the
+	/// call's fill or dispatcher in the call (`KeptCallShape`). The call's text then declares it, and the root's statement is
+	/// still laid out by type, so a layer adds the same lines however many paths reach the call. When a statement holding
+	/// a kept function was written with one function per path, a layer tripled the root's code.
+	@Test(arguments: KeptCallShape.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_addsSameLinesPerLayer_whenRootKeepsFilledCallsFunctionInTheCallOnEveryPath(shape: KeptCallShape) async throws {
+		var lineCounts = [Int]()
+		for layerCount in [2, 3, 4] {
+			try await lineCounts.append(appLineCount(layerCount: layerCount, shape: shape, compileVerification: layerCount == 2 ? .recordingIssues : .skipped))
+		}
+		#expect(lineCounts[2] - lineCounts[1] == lineCounts[1] - lineCounts[0], "\(lineCounts)")
+	}
+
+	/// Why the root keeps the fill or dispatcher of its calls of `Inner` in each call.
+	enum KeptCallShape: CaseIterable {
+		/// The root builds its screens through a `SendableInstantiator`, inside whose `@Sendable` function the root cannot
+		/// declare the plain fill.
+		case sendableInstantiatorAboveTheCall
+		/// The root also calls seam `Outer`, which calls `Inner` too, so the two calls' dispatchers of one name differ.
+		case secondCallWithDispatcherOfTheSameName
+	}
+
 	/// Where the screens `Home` builds are declared.
 	enum ScreenPlacement: CaseIterable {
 		/// Each screen is a seam of module `Screens`, whose places `Home` passes up: the adopter's wide seam.
@@ -176,6 +199,62 @@ struct SafeDIToolSeamGeneratedSizeTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let generated = try #require(output.modules["Feat"]?.generatedFiles["Feat.swift"])
+		return generated.components(separatedBy: "\n").count
+	}
+
+	/// The number of lines `App` generates for `Root`, which builds `Tabs`, whose layers of three screens each build every
+	/// screen of the next layer through an instantiator, the last layer's screens each calling seam `Inner` of module
+	/// `InnerSeam`, whose `api: any Api` `App`'s `LiveApi` fills, with `shape` keeping the fill or dispatcher in each call.
+	private mutating func appLineCount(layerCount: Int, shape: KeptCallShape, compileVerification: MultiModuleCompileVerification) async throws -> Int {
+		let screenCount = 3
+		let screens = (0..<layerCount).flatMap { layer in
+			(0..<screenCount).map { screen in
+				Self.type(
+					named: "Layer\(layer)Screen\(screen)",
+					properties: layer == layerCount - 1
+						? ["@Instantiated let inner: Inner"]
+						: (0..<screenCount).map { "@Instantiated let screen\($0)Builder: Instantiator<Layer\(layer + 1)Screen\($0)>" },
+				)
+			}
+		}
+		let tabsProperties = (0..<screenCount).map { "@Instantiated let screen\($0)Builder: Instantiator<Layer0Screen\($0)>" }
+		let app: [String] = [
+			"@Instantiable(fulfillingAdditionalTypes: [(any Api).self])\npublic final class LiveApi: Api, Instantiable {\n    public init(part: Part) {\n        self.part = part\n    }\n\n    @Instantiated let part: Part\n}",
+			Self.type(named: "Part", properties: []),
+		] + screens + {
+			switch shape {
+			case .sendableInstantiatorAboveTheCall:
+				[
+					Self.type(named: "Tabs", properties: tabsProperties),
+					Self.type(named: "Root", attributes: "@Instantiable(isRoot: true)", properties: ["@Instantiated let tabsBuilder: SendableInstantiator<Tabs>"]),
+				]
+			case .secondCallWithDispatcherOfTheSameName:
+				[
+					Self.type(named: "Tabs", properties: tabsProperties + ["@Instantiated let outer: Outer"]),
+					Self.type(named: "Root", attributes: "@Instantiable(isRoot: true)", properties: ["@Instantiated let tabsBuilder: Instantiator<Tabs>"]),
+				]
+			}
+		}()
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "InnerSeam",
+					packageName: "Shop",
+					swiftFileContent: ["public protocol Api {}", Self.type(named: "Inner", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let api: any Api"])],
+				),
+				ModuleFixture(
+					name: "OuterSeam",
+					packageName: "Shop",
+					swiftFileContent: ["import InnerSeam\n\n" + Self.type(named: "Outer", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let api: any Api", "@Instantiated let innerBuilder: Instantiator<Inner>"])],
+					dependencies: ["InnerSeam"],
+				),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import InnerSeam\nimport OuterSeam\n\n" + $0 }, dependencies: ["InnerSeam", "OuterSeam"]),
+			],
+			integration: .moduleInfo,
+			compileVerification: compileVerification,
+			filesToDelete: &filesToDelete,
+		)
+		let generated = try #require(output.modules["App"]?.generatedFiles["App.swift"])
 		return generated.components(separatedBy: "\n").count
 	}
 
