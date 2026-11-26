@@ -1152,6 +1152,8 @@ extension MockLowering {
 			/// In `.v3Unstable`, the lines of a loop member's prelude before its payloads: its configuration's.
 			let v3PreludeLineCount: Int
 			let declarationIndex: Int
+			/// The index of the first line of the node's builder function's body.
+			let functionBodyIndex: Int
 			let insertedAncestor: Bool
 			let cycleNodeKey: String
 			let siblingLabels: Set<String>
@@ -1192,6 +1194,7 @@ extension MockLowering {
 				valuesBindingLines: [String],
 				v3PreludeLineCount: Int,
 				declarationIndex: Int,
+				functionBodyIndex: Int,
 				insertedAncestor: Bool,
 				cycleNodeKey: String,
 				siblingLabels: Set<String>,
@@ -1231,6 +1234,7 @@ extension MockLowering {
 				self.valuesBindingLines = valuesBindingLines
 				self.v3PreludeLineCount = v3PreludeLineCount
 				self.declarationIndex = declarationIndex
+				self.functionBodyIndex = functionBodyIndex
 				self.insertedAncestor = insertedAncestor
 				self.cycleNodeKey = cycleNodeKey
 				self.siblingLabels = siblingLabels
@@ -1651,6 +1655,7 @@ extension MockLowering {
 				pathsWithUnplannedLines.insert(childIndexPath)
 			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
+			let functionBodyIndex = lines.count
 			lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(indent)\(ScopeGenerator.standardIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 			lines.append(contentsOf: rebindingLines)
 			lines.append(contentsOf: node.receiverBindingLines(indent: indent))
@@ -1733,6 +1738,7 @@ extension MockLowering {
 				valuesBindingLines: valuesBindingLines,
 				v3PreludeLineCount: isV3LoopMember && v3ConfigurationLine != nil ? 1 : 0,
 				declarationIndex: declarationIndex,
+				functionBodyIndex: functionBodyIndex,
 				insertedAncestor: insertedAncestor,
 				cycleNodeKey: cycleNodeKey,
 				siblingLabels: siblingLabels,
@@ -1831,10 +1837,14 @@ extension MockLowering {
 			if startsExtraction, !isWrapped, readsConfiguration {
 				node.arguments = readingDefaultsInsideFunction()
 			}
-			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
+			// A node a `.v3Unstable` mock promotes takes its configuration as its builder function's parameter, so the function
+			// reads the configuration's fields into locals at its top.
+			let readsOverridesInsideFunction = node.v3ReceivedConfigurationName != nil
+			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: readsOverridesInsideFunction ? "\(indent)\(ScopeGenerator.standardIndent)" : indent) : []
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
 			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead?.text)
-			lines.insert(contentsOf: preludeLines, at: declarationIndex)
+			lines.insert(contentsOf: preludeLines, at: readsOverridesInsideFunction ? descending.functionBodyIndex : declarationIndex)
+			node.readsOverridesInsideFunction = readsOverridesInsideFunction && !preludeLines.isEmpty
 			let configuredNode = node.configured(byChildren: children)
 			if recordsPlaces {
 				leaveClosedOnPlace(of: configuredNode, readsOverride: overrideRead != nil)
@@ -2026,6 +2036,9 @@ extension MockLowering {
 		// Also the places it instantiates that a builder of `mock()` builds.
 		/// The `@Sendable` autoclosure parameters and builders whose values the node's builder function binds.
 		var sendableAutoclosureBindings = [ScopeGenerator.SendableAutoclosureParameter]()
+		/// Whether the node's builder function reads its configuration's fields into locals at its top, as a node a
+		/// `.v3Unstable` mock promotes does where its construction hands one to a `@Sendable` autoclosure.
+		var readsOverridesInsideFunction = false
 		// A place of another module's public mock built inline.
 		/// The builder `mock()` takes that the node reads where it is a place of another module's public mock the tree builds
 		/// inline, with the read of its override outside its builder function.
@@ -2191,7 +2204,7 @@ extension MockLowering {
 			let builder = ReservedName.configurationBuilderPropertyName
 			let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 			// A constant's builder function always returns its construction (`BuilderBody`).
-			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || !isWrapped ? "return " : ""
+			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || readsOverridesInsideFunction || !isWrapped ? "return " : ""
 			// A configuration's builder returns the concrete type, which an erased node wraps as its construction does.
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 			var lines = ["\(bodyIndent)\(returnPrefix)\(readingInlinePlaceBuilder(constructionReading(override: overridePath, builderCall: builderCall), override: overridePath))"]
