@@ -665,9 +665,9 @@ extension DependencyTreeGenerator {
 	private enum CleanSubtreeStackToken: Hashable {
 		/// The labels the subtree reads whose closest declaration is made by the scope the next entry is built in.
 		case declarations([String])
-		/// An entry whose label the subtree reads, with the concrete type of the scope built for it.
+		/// An entry the subtree can compare a property with, with the concrete type of the scope built for it.
 		case entry(Property, TypeDescription)
-		/// One entry or more whose labels the subtree does not read.
+		/// One entry or more the subtree compares nothing with.
 		case gap
 	}
 
@@ -707,8 +707,11 @@ extension DependencyTreeGenerator {
 		var declaredLabels = Set<String>()
 		/// The labels `validateTreeBuiltAgainByCycle` can judge in the tree of a scope built for an instantiator.
 		var labelsJudgedInTreesBuiltByInstantiators = Set<String>()
+		/// The concrete types of the scopes.
+		var builtTypes = Set<TypeDescription>()
 
 		mutating func record(_ scope: Scope, labelsJudgedInTree: (Scope) -> Set<String>) {
+			builtTypes.insert(scope.instantiable.concreteInstantiable)
 			for dependency in scope.instantiable.dependencies {
 				let label = dependency.property.label
 				switch dependency.source {
@@ -756,13 +759,21 @@ extension DependencyTreeGenerator {
 			forwardedOrReceivedPropertiesByLabel.merge(other.forwardedOrReceivedPropertiesByLabel) { $0.union($1) }
 			declaredLabels.formUnion(other.declaredLabels)
 			labelsJudgedInTreesBuiltByInstantiators.formUnion(other.labelsJudgedInTreesBuiltByInstantiators)
+			builtTypes.formUnion(other.builtTypes)
 		}
 	}
 
-	/// The labels the key of a scope that reaches a cycle of instantiators holds (`cleanSubtreeKey(of:rootContextIndex:)`).
+	/// The labels the key of a scope holds (`cleanSubtreeKey(of:rootContextIndex:)`): `receivableLabels` for every scope,
+	/// the others only for one that reaches a cycle of instantiators.
 	private struct CleanSubtreeKeyLabels {
-		/// The labels whose receivable properties a walk of the subtree reads.
+		/// The labels whose receivable properties a walk of the subtree looks up.
 		let receivableLabels: Set<String>
+		/// The labels a scope beneath receives or renames a property of, whose entries are compared with the property
+		/// received; and those one forwards, kept though no comparison reads them.
+		let labelsComparedWithEntries: Set<String>
+		/// The concrete types of the scopes beneath, the scope's own included: an entry built for one is compared where a
+		/// scope beneath builds that type again for the entry's property.
+		let builtTypes: Set<TypeDescription>
 		/// The labels only instantiators are built for beneath the scope, whose trees no scope beneath it can change the
 		/// judgement of: an entry of one, on the scope's path, only ever ends the walk where an instantiator of it is met.
 		let labelsOnlyInstantiatorsBuild: Set<String>
@@ -1559,13 +1570,18 @@ extension DependencyTreeGenerator {
 				cache: &cleanSubtreeLabelFactsByScope,
 			)
 		}
-		/// The labels the key of `scope`, which reaches a cycle of instantiators, holds. A walk of its subtree reads less of
-		/// its path than `labelsDeclaredOrRead(beneath:)` allows for, and what it does not read differs on every path through a
-		/// cycle:
+		/// The labels the key of `scope` holds. A walk of its subtree reads less of its path than
+		/// `labelsDeclaredOrRead(beneath:)` allows for, and what it does not read differs on every path through a cycle, and on
+		/// every path through screens that each declare one label with a type of their own. The first three hold for every
+		/// scope; the last is read only of a scope that reaches a cycle of instantiators:
 		/// - The receivable properties of a label no scope beneath receives or renames are read by no judgement.
 		/// - Nor are those of a label the scopes beneath only forward and require, as one non-optional property, where every
 		///   receive of it is beneath a scope that forwards it (`labelsReadFromAbove(by:)` holds it not): that scope makes the
 		///   property receivable whatever is above.
+		/// - An entry of the instantiation stack is compared with the property a scope receives or renames, by its label, or
+		///   with the property a scope builds a scope for, which closes a cycle only on an entry built for the same concrete
+		///   type (`indexOfEntryClosedOn`). An entry of a label nothing beneath receives or renames, built for a type no scope
+		///   beneath is of, equals neither: builders that share a label down a path otherwise give every path another key.
 		/// - An entry of a label only instantiators are built for beneath `scope` is compared only where a scope builds an
 		///   instantiator of it, which then closes a cycle: the walk does not enter the tree, and
 		///   `validateTreeBuiltAgainByCycle` returns at once unless a label it can judge in that tree is declared, or made
@@ -1590,6 +1606,8 @@ extension DependencyTreeGenerator {
 				let judgedLabels = facts.labelsJudgedInTreesBuiltByInstantiators
 				let keyLabels = CleanSubtreeKeyLabels(
 					receivableLabels: receivableLabels,
+					labelsComparedWithEntries: Set(facts.usesByLabel.lazy.filter { !$0.value.isDisjoint(with: [.read, .readOtherThanByRequiredReceive, .forwarded]) }.map(\.key)),
+					builtTypes: facts.builtTypes,
 					labelsOnlyInstantiatorsBuild: judgedLabels.isDisjoint(with: facts.declaredLabels)
 						? Set(facts.usesByLabel.lazy.filter { $0.value == .builtByInstantiator }.map(\.key))
 						: [],
@@ -1604,7 +1622,8 @@ extension DependencyTreeGenerator {
 			let scope = scopeToValidate.scope
 			let labelsBeneath = labelsDeclaredOrRead(beneath: scope)
 			let labelsReadAbove = labelsReadFromAbove(by: scope)
-			let cycleKeyLabels = reachesInstantiationCycle(from: scope) ? cleanSubtreeKeyLabels(of: scope) : nil
+			let keyLabels = cleanSubtreeKeyLabels(of: scope)
+			let cycleKeyLabels = reachesInstantiationCycle(from: scope) ? keyLabels : nil
 			// The first index, root first, of the entries no declaration or receivable property that
 			// `validateTreeBuiltAgainByCycle` can judge is deeper than: a tree built again on one of them changes no judgement.
 			var firstEntryIndexNothingJudgedIsDeeperThan = 0
@@ -1641,6 +1660,7 @@ extension DependencyTreeGenerator {
 					stack.append(.declarations(labels.sorted()))
 				}
 				if labelsBeneath.contains(entryProperty.label),
+				   keyLabels.builtTypes.contains(entryType) || keyLabels.labelsComparedWithEntries.contains(entryProperty.label),
 				   !(depth >= firstEntryIndexNothingJudgedIsDeeperThan && cycleKeyLabels?.labelsOnlyInstantiatorsBuild.contains(entryProperty.label) == true)
 				{
 					stack.append(.entry(entryProperty, entryType))
@@ -1664,7 +1684,7 @@ extension DependencyTreeGenerator {
 				scope: scope,
 				property: scopeToValidate.property,
 				rootContextIndex: rootContextIndex,
-				receivableProperties: scopeToValidate.receivableProperties.properties(labeledAnyOf: cycleKeyLabels?.receivableLabels ?? labelsBeneath),
+				receivableProperties: scopeToValidate.receivableProperties.properties(labeledAnyOf: keyLabels.receivableLabels),
 				closestDeclarations: closestDeclarations,
 				stack: stack,
 				receivableAliases: receivableAliases,
