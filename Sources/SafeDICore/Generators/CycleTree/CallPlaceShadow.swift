@@ -40,6 +40,9 @@ extension DependencyTreeGenerator {
 		let generator: ScopeGenerator
 		let scope: Scope
 		let property: Property
+		/// The scope that builds the place, and whether it erases what the place builds to a concrete existential.
+		let builder: Scope
+		let erasedToConcreteExistential: Bool
 		let nearestDeclarations: NearestDeclarations
 		/// The declarations of the scope that builds the place, before the place's own property is being built.
 		let enclosingNearestDeclarations: NearestDeclarations
@@ -59,6 +62,8 @@ extension DependencyTreeGenerator {
 		let generator: ScopeGenerator
 		let scope: Scope
 		let property: Property
+		let builder: Scope
+		let erasedToConcreteExistential: Bool
 	}
 
 	/// A walk of the places of a tree as today builds it, each with its context. A place's children are its scope's, index
@@ -140,7 +145,7 @@ extension DependencyTreeGenerator {
 				.filter { !scope.declaredLabels.contains($0.label) }
 				.union(scope.declaredLazilyInstantiatedInstanceProperties)
 			for child in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) where scope.propertiesToGenerate.indices.contains(child.index) {
-				if case let .instantiated(property, childScope, _) = scope.propertiesToGenerate[child.index] {
+				if case let .instantiated(property, childScope, erasedToConcreteExistential) = scope.propertiesToGenerate[child.index] {
 					// What the place of `function`, built by `child`'s call of it, is given: a member of a loop of builders
 					// makes each wrapper its tree receives inside the loop again at the top of its function, its own included,
 					// so that rebinding is the nearest declaration beneath it, and is not being built.
@@ -155,6 +160,8 @@ extension DependencyTreeGenerator {
 							generator: function.generator,
 							scope: function.scope,
 							property: function.property,
+							builder: function.builder,
+							erasedToConcreteExistential: function.erasedToConcreteExistential,
 							nearestDeclarations: placeNearestDeclarations,
 							enclosingNearestDeclarations: childNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
@@ -163,7 +170,7 @@ extension DependencyTreeGenerator {
 						)
 					}
 					if case .property(_, _, _, _, false, _) = child.generator.scopeData {
-						let function = FunctionPlace(generator: child.generator, scope: childScope, property: property)
+						let function = FunctionPlace(generator: child.generator, scope: childScope, property: property, builder: scope, erasedToConcreteExistential: erasedToConcreteExistential)
 						// The first property a path builds a twin value as is the one a call of the value beneath closes on.
 						let twinValue = TwinValue(concreteType: childScope.instantiable.concreteInstantiable, property: property.asValidatedForDependencyCycles)
 						var childTwinsBeingBuilt = place.twinsBeingBuilt
@@ -243,7 +250,7 @@ extension DependencyTreeGenerator {
 						isUnavailableDependency: scope.isUnavailableDependency,
 					)
 					if graph.isOnCycle(index) {
-						let callPlace = Scope(instantiable: callPlaceInstantiable(of: scope, receiving: collectReceivedProperties(from: scope, cache: &cache)))
+						let callPlace = Scope(instantiable: callPlaceInstantiable(of: scope, receiving: collectReceivedProperties(from: scope, cache: &cache)), isCallPlace: true)
 						callPlaceByIdentifier[identifier] = callPlace
 						calledScopeByCallPlace[ObjectIdentifier(callPlace)] = scope
 					}

@@ -733,134 +733,15 @@ public actor DependencyTreeGenerator {
 							}
 						}
 					}
-					// Each place of the root's tree against a body built from its scope's copy beneath the answers its path
-					// gives the labels the scope's tree receives, built only where a test compares the two.
-					// A tree with a label no one parameter can pass is rejected (`validateCycleLabelsArePassable`), and is not
-					// compared: a body beneath a call's own answers passes a value there that today's parameter cannot carry.
-					let variantBodyObserver = VariantBodyObservation.observer
-					let planBodiesObserver = PlanBodiesObservation.observer
-					if variantBodyObserver != nil || planBodiesObserver != nil,
-					   let todaysTree = roots.last?.scopeGenerator,
-					   todaysTree.unpassableCycleLabelsInTree.isEmpty,
-					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
-					{
-						var bodies = VariantBodies(frozenScopeMap: validatedWorld.frozenScopeMap, declaredTypeNames: declaredTypeNames)
-						// The calls of each function already compared, each by the answers its call's path gives the labels the
-						// function's tree receives: the places beneath a call answered alike are given the same declarations.
-						var callsCompared = [ObjectIdentifier: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, labelsPassedNil: Set<String>)]]()
-						// The bodies today's places of scopes on a cycle take, in the order the walk first meets each.
-						var todaysBodies = [Int]()
-						var walk = PlaceContextWalk(ofTodaysTree: todaysTree, builtFrom: scope, twinValues: shadow.twinValues)
-						while let (context, isCalledByCycleClosingScope) = walk.next() {
-							if let copy = shadow.copy(of: context.scope) {
-								var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &receivedPropertiesCache).received.map(\.label))
-								labelSet.insert(context.property.label)
-								let labels = labelSet.sorted()
-								let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
-								let body = try bodies.body(
-									of: copy,
-									as: key,
-									keyedBy: labels,
-									answering: labels,
-									beneath: context.nearestDeclarations,
-									lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
-								)
-								// Today's place reads a parameter of a function it is built in where the call's path declares the
-								// label, and the parameter is `nil` where the call passes `nil`: every receive of that label is then
-								// `nil`, as in a body no declaration answers the label for.
-								var todaysUnavailableOptionalProperties = context.generator.unavailableOptionalProperties
-								if !context.labelsPassedNil.isDisjoint(with: labelSet) {
-									let bodyWithoutAnswers = try bodies.body(
-										of: copy,
-										as: key,
-										keyedBy: labels,
-										answering: labels.filter { !context.labelsPassedNil.contains($0) },
-										beneath: context.nearestDeclarations,
-										lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
-									)
-									todaysUnavailableOptionalProperties = todaysUnavailableOptionalProperties
-										.filter { !context.labelsPassedNil.contains($0.label) }
-										.union(bodies.bodies[bodyWithoutAnswers].generator.unavailableOptionalProperties.filter { context.labelsPassedNil.contains($0.label) })
-								}
-								if isCalledByCycleClosingScope {
-									let call = (
-										nearestDeclarations: bodies.bodies[body].answers,
-										lazilyInstantiatedInstanceProperties: bodies.bodies[body].lazilyInstantiatedInstanceProperties,
-										labelsPassedNil: context.labelsPassedNil.intersection(labelSet),
-									)
-									guard callsCompared[ObjectIdentifier(context.generator)]?.contains(where: { $0 == call }) != true else { continue }
-									callsCompared[ObjectIdentifier(context.generator), default: []].append(call)
-									walk.followCall()
-								}
-								if shadow.isOnCycle(context.scope), !todaysBodies.contains(body) {
-									todaysBodies.append(body)
-								}
-								variantBodyObserver?(
-									context.place,
-									todaysUnavailableOptionalProperties.map(\.asSource).sorted(),
-									bodies.bodies[body].generator.unavailableOptionalProperties.map(\.asSource).sorted(),
-								)
-							}
-						}
-						// The bodies the plan builds with no tree of today's: the root's, then the body of each call place a
-						// body holds, beneath the answers that body's path gives it.
-						if let planBodiesObserver, let rootCopy = shadow.copy(of: scope) {
-							var bodiesOfPlan = [Int]()
-							var bodiesToWalk = try [bodies.body(
-								of: rootCopy,
-								as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
-								keyedBy: [],
-								answering: [],
-								beneath: NearestDeclarations(),
-								lazilyInstantiatedInstanceProperties: [],
-							)]
-							while let bodyToWalk = bodiesToWalk.popLast() {
-								let body = bodies.bodies[bodyToWalk]
-								var bodyWalk = PlaceContextWalk(
-									ofTodaysTree: body.generator,
-									builtFrom: body.copy,
-									beneath: body.nearestDeclarations,
-									lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
-									twinValues: shadow.twinValues,
-									twinsBeingBuilt: body.key.twinsBeingBuilt,
-								)
-								while let (context, _) = bodyWalk.next() {
-									if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
-										var labelSet = Set(Self.collectReceivedProperties(from: calledScope, cache: &receivedPropertiesCache).received.map(\.label))
-										labelSet.insert(context.property.label)
-										let labels = labelSet.sorted()
-										// A call is of the function's property: where the path is building the value the call place
-										// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
-										// cycle on that property's function, beneath the calling scope's declarations.
-										let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
-										let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
-										var calledNearestDeclarations = context.nearestDeclarations
-										if functionProperty != context.property {
-											calledNearestDeclarations = context.enclosingNearestDeclarations
-											calledNearestDeclarations.build(functionProperty)
-										}
-										let calledBody = try bodies.body(
-											of: calledCopy,
-											as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
-											keyedBy: labels,
-											answering: labels,
-											beneath: calledNearestDeclarations,
-											lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
-										)
-										if !bodiesOfPlan.contains(calledBody) {
-											bodiesOfPlan.append(calledBody)
-											bodiesToWalk.append(calledBody)
-										}
-									}
-								}
-							}
-							planBodiesObserver(
-								scope.instantiable.concreteInstantiable.asSource,
-								bodiesOfPlan.map { bodies.bodies[$0].description },
-								todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
-								shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
-							)
-						}
+					// Each place of the root's tree against the bodies of its plan, built only where a test compares the two.
+					if let todaysTree = roots.last?.scopeGenerator {
+						try Self.compareBodies(
+							ofRoot: scope,
+							todaysTree: todaysTree,
+							frozenScopeMap: validatedWorld.frozenScopeMap,
+							declaredTypeNames: declaredTypeNames,
+							cache: &receivedPropertiesCache,
+						)
 					}
 				}
 				rootScopeGenerators = roots
