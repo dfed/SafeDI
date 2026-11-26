@@ -670,13 +670,7 @@ extension ScopeGenerator {
 		while let visit = visits.popLast() {
 			guard case let .property(nodeInstantiable, nodeProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = visit.generator.scopeData else { continue }
 			let key = NodeKey(generator: ObjectIdentifier(visit.generator), isInsideSendableFunction: visit.isInsideSendableFunction)
-			if let visitedNodeIndex = visitedNodeIndexByKey[key] {
-				laterMeetingsByVisitedNodeIndex[visitedNodeIndex, default: []].append(visit.nodeIndex)
-				continue
-			}
-			visitedNodeIndexByKey[key] = visit.nodeIndex
-			propertyNodeIndexByNodeIndex[visit.nodeIndex] = propertyNodes.count
-			propertyNodes.append(ScopeGenerator.MockTreeNames.PropertyNode(
+			let propertyNode = ScopeGenerator.MockTreeNames.PropertyNode(
 				parentIndex: nodes[visit.nodeIndex].parentIndex.flatMap { propertyNodeIndexByNodeIndex[$0] },
 				property: nodeProperty,
 				instantiable: nodeInstantiable,
@@ -684,7 +678,19 @@ extension ScopeGenerator {
 				isPropertyCycle: isPropertyCycle,
 				generator: visit.generator,
 				isInsideSendableFunction: visit.isInsideSendableFunction,
-			))
+			)
+			if let visitedNodeIndex = visitedNodeIndexByKey[key] {
+				laterMeetingsByVisitedNodeIndex[visitedNodeIndex, default: []].append(visit.nodeIndex)
+				// A child of the root keeps a node of its own, met first beneath another child or not: the public mock's plan
+				// and `query needs` read the root's children from the nodes without a parent. Its subtree is walked once.
+				if nodes[visit.nodeIndex].parentIndex == nil {
+					propertyNodes.append(propertyNode)
+				}
+				continue
+			}
+			visitedNodeIndexByKey[key] = visit.nodeIndex
+			propertyNodeIndexByNodeIndex[visit.nodeIndex] = propertyNodes.count
+			propertyNodes.append(propertyNode)
 			builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: nodeProperty.label))
 			let publicMockCall = visit.generator.publicMockCall
 			if publicMockCall != nil, visit.generator.fillsABuilder {
