@@ -773,15 +773,15 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			            let anyX: AnyX? = (x as X?).map { AnyX($0) }
 			            #sourceLocation()
 			            let grand = Grand(anyX: anyX)
-			            func __safeDI_midBuilder() -> Mid {
-			                let x = X()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(x: x)
-			                }
-			                return Mid(x: x, aBuilder: aBuilder)
-			            }
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 			            return A(anyX: anyX, grand: grand, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)
@@ -851,15 +851,15 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			            let anyX: AnyX? = (x as X?).map { AnyX($0) }
 			            #sourceLocation()
 			            let grand = Grand(anyX: anyX)
-			            func __safeDI_midBuilder() -> Mid {
-			                let x = X()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(x: x)
-			                }
-			                return Mid(x: x, aBuilder: aBuilder)
-			            }
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 			            return A(anyX: anyX, grand: grand, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)

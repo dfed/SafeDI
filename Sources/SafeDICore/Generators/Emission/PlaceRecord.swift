@@ -166,6 +166,11 @@ struct AliasPlaceRecord: Sendable {
 	var reads: [PlaceRead]?
 	/// The labels the text binds besides `property`, which code after it may read.
 	var otherBindings = [Property]()
+	/// Whether the rename reads `fulfillingProperty` only if available where the path key binds it optionally, so the
+	/// text takes `nil` and requires nothing of the function it is in: the path key takes that cycle parameter
+	/// optionally. A rename only if available of a value the path holds non-optional is written for that value, and
+	/// requires it.
+	var readsOnlyIfAvailable = false
 	/// The names of the functions the text calls, compared as text: where sharing would name a callee apart, the engine
 	/// rewrites the name in the text or keeps the place one per path, never assuming the name stays.
 	var calledFunctionNames = [String]()
