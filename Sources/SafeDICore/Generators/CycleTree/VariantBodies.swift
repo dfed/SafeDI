@@ -292,7 +292,7 @@ extension DependencyTreeGenerator {
 				)
 				while let (context, _) = bodyWalk.next() {
 					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
-						let calledTree = calledTree(of: calledScope, cache: &cache)
+						let calledTree = calledTree(of: calledScope)
 						let labels = calledTree.sortedReceivedLabels.contains(context.property.label)
 							? calledTree.sortedReceivedLabels
 							: (calledTree.sortedReceivedLabels + [context.property.label]).sorted()
@@ -455,7 +455,7 @@ extension DependencyTreeGenerator {
 			let labelsInOrderFirstReceived: [String]
 		}
 
-		private mutating func calledTree(of scope: Scope, cache: inout ReceivedPropertiesCache) -> CalledTree {
+		private mutating func calledTree(of scope: Scope) -> CalledTree {
 			if let calledTree = calledTreesByScope[ObjectIdentifier(scope)] {
 				return calledTree
 			} else {
