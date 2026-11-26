@@ -1805,17 +1805,111 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return caseFields
 	}
 
+	/// What one fill binds for every place of the cases at `caseIndices` of `query`'s place graph, the graph's cases of one
+	/// case nested by type (a case of the graph per owner level and family), whose emitting place is `hole`, by the rule
+	/// `caseFields(of:)` states, read over every route to those cases instead of over their places: a label's fields are
+	/// the distinct field answers of its routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`), each case's
+	/// representative route's first, and a label some route answers with no level's field is read from the caller's scope
+	/// there. The labels are in the order `hole` carries them, then in the order the graph first reaches the others, as
+	/// `caseFields(of:)` takes the first place's first. No case is a place the call passes up, which is no case of the
+	/// graph yet: its fields are its own.
+	static func caseFields(ofCasesAt caseIndices: [Int], hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> CaseFields {
+		guard !caseIndices.isEmpty else { return caseFields(of: [hole]) }
+		var caseFields = CaseFields()
+		let payloadLabels = Set((hole.enumPlace?.values ?? []).map(\.property.label))
+		var labels = hole.fields.map(\.property.label)
+		var seenLabels = Set(labels)
+		for caseIndex in caseIndices {
+			for label in query.labels(reaching: caseIndex) where seenLabels.insert(label).inserted {
+				labels.append(label)
+			}
+		}
+		for label in labels {
+			var answers = [SeamSignature.Places.Answer]()
+			var seenAnswers = Set<SeamSignature.Places.Answer>()
+			for caseIndex in caseIndices {
+				for answer in query.answers(ofLabel: label, at: caseIndex) where seenAnswers.insert(answer).inserted {
+					answers.append(answer)
+				}
+			}
+			let held = answers.compactMap { answer -> SeamSignature.Hole.Field? in
+				guard case let .field(level, declaration) = answer else { return nil }
+				return query.places.declaration(level: level, declaration: declaration).field
+			}
+			guard let firstField = held.first else { continue }
+			guard !payloadLabels.contains(label) else {
+				caseFields.fields.append(firstField)
+				continue
+			}
+			let heldByLevels = held.filter { !$0.isDeferredParameter }
+			guard let firstHeld = heldByLevels.first else {
+				caseFields.fields.append(firstField)
+				continue
+			}
+			caseFields.fields.append(heldByLevels.first { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == firstHeld.property.asUnwrappedProperty } ?? firstHeld)
+			if heldByLevels.count < answers.count || innerRoutesLack(label, atCasesAt: caseIndices, in: query) {
+				caseFields.callerReadLabels.insert(label)
+			}
+		}
+		return caseFields
+	}
+
+	/// Whether a route to one of the cases at `caseIndices` reads `label` past a fill on it, in the called seam's tree, where
+	/// some route of the filled case holds it and another does not: on that other route inline reads the declaration
+	/// enclosing the call. A route reads past the fill where its nearest declaration is the fill's own level, which holds
+	/// what the called seam hands the fill, or where no level of its own holds the label.
+	private static func innerRoutesLack(_ label: String, atCasesAt caseIndices: [Int], in query: SeamSignature.Places.Query) -> Bool {
+		caseIndices.contains { caseIndex in
+			let ownAnswers = query.answers(ofLabel: label, at: caseIndex)
+			let readsPastEveryFill = ownAnswers.contains { !isHeldByLevel($0, in: query) }
+			return query.filledCases(onRoutesTo: caseIndex).contains { fillLevel, filledCase in
+				guard readsPastEveryFill || ownAnswers.contains(where: { answer in
+					guard case let .field(level, _) = answer else { return false }
+					return level == fillLevel
+				}) else { return false }
+				let innerAnswers = filledCase.query.answers(ofLabel: label, at: filledCase.caseIndex)
+				return innerAnswers.contains { isHeldByLevel($0, in: filledCase.query) } && innerAnswers.contains { !isHeldByLevel($0, in: filledCase.query) }
+			}
+		}
+	}
+
+	/// Whether `answer` is a field of a level of `query`'s graph not bound from a deferred parameter.
+	private static func isHeldByLevel(_ answer: SeamSignature.Places.Answer, in query: SeamSignature.Places.Query) -> Bool {
+		guard case let .field(level, declaration) = answer else { return false }
+		return !query.places.declaration(level: level, declaration: declaration).field.isDeferredParameter
+	}
+
 	/// The fields of `places`, the places of one case nested by type, whose label some of them carry in forms that differ in
 	/// more than optionality, from levels: one fill cannot take them as one parameter. Each label's forms in the order of
 	/// their declarations' locations, so the one a diagnostic is reported at never depends on a type's name.
 	static func irreconcilableFields(of places: [SeamSignature.Hole]) -> [String: [SeamSignature.Hole.Field]] {
 		guard let firstPlace = places.first else { return [:] }
-		let payloadLabels = Set((firstPlace.enumPlace?.values ?? []).map(\.property.label))
-		var fieldsByLabel = [String: [Property: SeamSignature.Hole.Field]]()
-		for place in places {
-			for field in place.fields where !field.isDeferredParameter && !payloadLabels.contains(field.property.label) {
-				fieldsByLabel[field.property.label, default: [:]][field.property] = fieldsByLabel[field.property.label]?[field.property] ?? field
+		return irreconcilableFields(among: places.flatMap(\.fields), payloadOf: firstPlace)
+	}
+
+	/// `irreconcilableFields(of:)` read over every route to the cases at `caseIndices` of `query`'s place graph, the graph's
+	/// cases of one case nested by type whose emitting place is `hole`: the field answers of each label's routes
+	/// (`SeamSignature.Places.Query.answers(ofLabel:at:)`) in place of the fields of its places.
+	static func irreconcilableFields(ofCasesAt caseIndices: [Int], hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> [String: [SeamSignature.Hole.Field]] {
+		var fields = [SeamSignature.Hole.Field]()
+		for caseIndex in caseIndices {
+			for label in query.labels(reaching: caseIndex) {
+				for answer in query.answers(ofLabel: label, at: caseIndex) {
+					guard case let .field(level, declaration) = answer else { continue }
+					fields.append(query.places.declaration(level: level, declaration: declaration).field)
+				}
 			}
+		}
+		return irreconcilableFields(among: fields, payloadOf: hole)
+	}
+
+	/// The fields among `fields` whose label they carry in forms that differ in more than optionality, from levels, beside the
+	/// payload of `place`'s enum case (`irreconcilableFields(of:)`).
+	private static func irreconcilableFields(among fields: [SeamSignature.Hole.Field], payloadOf place: SeamSignature.Hole) -> [String: [SeamSignature.Hole.Field]] {
+		let payloadLabels = Set((place.enumPlace?.values ?? []).map(\.property.label))
+		var fieldsByLabel = [String: [Property: SeamSignature.Hole.Field]]()
+		for field in fields where !field.isDeferredParameter && !payloadLabels.contains(field.property.label) {
+			fieldsByLabel[field.property.label, default: [:]][field.property] = fieldsByLabel[field.property.label]?[field.property] ?? field
 		}
 		return fieldsByLabel.compactMapValues { fieldsByProperty in
 			guard Set(fieldsByProperty.keys.map(\.asUnwrappedProperty)).count > 1 else { return nil }
@@ -3339,42 +3433,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return await child.generateDOT()
 		} else {
 			let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
-			// A place whose fill another place's stands for (`FillStoodFor`) is drawn where its own fill would be, among
-			// the call's fills in the order the call met their places, with the tree of the fill that stands for it: the
-			// tree its own fill would build. So the drawing does not depend on which fills the call built.
+			// A place with no fill of its own among the call's (`placesDrawnWithAnotherFill`) is drawn where its own fill
+			// would be, among the call's fills in the order the call met their places, with the tree of the fill drawn for
+			// it: the tree its own fill would build. So the drawing does not depend on which fills the call built, and a
+			// seam reached along many paths is drawn with a place per path.
 			var fillsByKey = [String: ScopeGenerator]()
-			if !fillsStoodFor.isEmpty {
-				for child in orderedPropertiesToGenerate {
-					if let fillKey = child.fillKey {
-						fillsByKey[fillKey] = child
-					}
-				}
-			}
-			// The fills count in the order the call built them, which `FillStoodFor.builtFillCountBefore` counts in. The fill
-			// of a place stood for would hold no place (`Scope.nextFill()`), so it would be drawn among the fills that start
-			// with their siblings, before the first of them built after it and before every fill that starts last
-			// (`startsAsCarrier(_:)`).
+			// The fills count in the order the call built them, which `PlaceDrawnWithAnotherFill.builtFillCountBefore` counts
+			// in.
 			var builtFillIndexByKey = [String: Int]()
-			if !fillsStoodFor.isEmpty {
+			var placesToDraw = [PlaceDrawnWithAnotherFill]()[...]
+			var placesToDrawLast = [PlaceDrawnWithAnotherFill]()[...]
+			if !fillsStoodFor.isEmpty || calledBuilders?.everyPlace != nil {
 				for child in propertiesToGenerate {
 					if let fillKey = child.fillKey {
+						fillsByKey[fillKey] = child
 						builtFillIndexByKey[fillKey] = builtFillIndexByKey.count
 					}
 				}
+				// A fill that holds no place would be drawn among the fills that start with their siblings, before the first
+				// of them built after it and before every fill that starts last (`startsAsCarrier(_:)`); one that holds a
+				// place, among those, before the first of them built after it.
+				let places = placesDrawnWithAnotherFill()
+				placesToDraw = places.filter { place in fillsByKey[place.fillKey].map(startsAsCarrier) != true }[...]
+				placesToDrawLast = places.filter { place in fillsByKey[place.fillKey].map(startsAsCarrier) == true }[...]
 			}
 			var drawn = [(node: String, generator: ScopeGenerator?)]()
-			var fillsStoodForToDraw = fillsStoodFor[...]
 			for orderedPropertyToGenerate in orderedPropertiesToGenerate {
 				if let builtFillIndex = orderedPropertyToGenerate.fillKey.flatMap({ builtFillIndexByKey[$0] }) {
-					while let fillStoodFor = fillsStoodForToDraw.first, startsAsCarrier(orderedPropertyToGenerate) || fillStoodFor.builtFillCountBefore <= builtFillIndex {
-						fillsStoodForToDraw.removeFirst()
-						drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
+					let startsLast = startsAsCarrier(orderedPropertyToGenerate)
+					while let place = placesToDraw.first, startsLast || place.builtFillCountBefore <= builtFillIndex {
+						placesToDraw.removeFirst()
+						drawn.append(("\"\(place.property.asSource)\"", fillsByKey[place.fillKey]))
+					}
+					while startsLast, let place = placesToDrawLast.first, place.builtFillCountBefore <= builtFillIndex {
+						placesToDrawLast.removeFirst()
+						drawn.append(("\"\(place.property.asSource)\"", fillsByKey[place.fillKey]))
 					}
 				}
 				drawn.append((orderedPropertyToGenerate.scopeData.asDOTNode, orderedPropertyToGenerate))
 			}
-			for fillStoodFor in fillsStoodForToDraw {
-				drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
+			for place in placesToDraw + placesToDrawLast {
+				drawn.append(("\"\(place.property.asSource)\"", fillsByKey[place.fillKey]))
 			}
 			let instantiatedProperties = drawn.map(\.node)
 			var childDOTs = [String]()
@@ -3390,6 +3489,59 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"    \(root) -- \($0)"
 			} + childDOTs).joined(separator: "\n")
 		}
+	}
+
+	/// A place of this scope's seam call with no fill of its own among the call's children, as the drawing of the tree
+	/// lists it (`generateDOT()`).
+	private struct PlaceDrawnWithAnotherFill {
+		/// The place's property, which its edge names.
+		let property: Property
+		/// The key of the fill among the call's children whose tree is drawn for it.
+		let fillKey: String
+		/// How many fills the call built before the place, in the order of the call's arguments.
+		let builtFillCountBefore: Int
+	}
+
+	/// The places of this scope's seam call with no fill of their own among its children, in the order of the call's
+	/// arguments: a place another place's fill stands for (`FillStoodFor`), drawn with that fill, and a place the call
+	/// was not handed, because it holds one place per case (`SeamCall.EveryPlace`), drawn with the fill its
+	/// case's place is drawn with. A place of a case the call fills no place of, which it passes up, is not drawn.
+	///
+	/// Work and memory: one entry per place of the called seam, so per path to its places, made only where a run draws
+	/// the tree and dropped with the drawing.
+	private func placesDrawnWithAnotherFill() -> [PlaceDrawnWithAnotherFill] {
+		let fillsStoodFor = fillsStoodFor
+		guard let everyPlace = calledBuilders?.everyPlace else {
+			return fillsStoodFor.map { PlaceDrawnWithAnotherFill(property: $0.hole.property, fillKey: $0.standInKey, builtFillCountBefore: $0.builtFillCountBefore) }
+		}
+		// The fills the call built, in the order it built them, each by its place.
+		var builtFillBySite = [SeamSignature.Hole.Site: (key: String, index: Int)]()
+		for child in propertiesToGenerate {
+			if let site = child.fillHole?.site, let fillKey = child.fillKey {
+				builtFillBySite[site] = (fillKey, builtFillBySite.count)
+			}
+		}
+		let fillStoodForBySite = Dictionary(fillsStoodFor.map { ($0.hole.site, $0) }, uniquingKeysWith: { first, _ in first })
+		var places = [PlaceDrawnWithAnotherFill]()
+		var builtFillCount = 0
+		var casesMet = Set<Int>()
+		// The key of the fill drawn for the place the call holds of each case; none where the call fills no place of it.
+		var drawnFillKeyByCase = [Int: String]()
+		for (hole, caseIndex) in zip(everyPlace.holes, everyPlace.caseIndexByHole) {
+			if caseIndex >= 0, !casesMet.insert(caseIndex).inserted {
+				// A place the call was not handed: its case's place came before it.
+				if let drawnFillKey = drawnFillKeyByCase[caseIndex] {
+					places.append(PlaceDrawnWithAnotherFill(property: hole.property, fillKey: drawnFillKey, builtFillCountBefore: builtFillCount))
+				}
+			} else if let builtFill = builtFillBySite[hole.site] {
+				builtFillCount = builtFill.index + 1
+				drawnFillKeyByCase[caseIndex] = builtFill.key
+			} else if let fillStoodFor = fillStoodForBySite[hole.site] {
+				places.append(PlaceDrawnWithAnotherFill(property: hole.property, fillKey: fillStoodFor.standInKey, builtFillCountBefore: fillStoodFor.builtFillCountBefore))
+				drawnFillKeyByCase[caseIndex] = fillStoodFor.standInKey
+			}
+		}
+		return places
 	}
 
 	/// A dependency that a type receives inside a `@Sendable` builder function from an `Instantiator`,
@@ -3424,6 +3576,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let wrapperDeclaringType: TypeDescription?
 		/// Where `wrapperProperty` is declared, when a type in the tree declares it.
 		let wrapperDeclarationLocation: Dependency.DeclarationLocation?
+
+		/// This capture of the same wrapper declared by `declaringType` at `declarationLocation`.
+		func readingWrapper(declaredBy declaringType: TypeDescription, at declarationLocation: Dependency.DeclarationLocation?) -> NonSendableWrapperCapture {
+			NonSendableWrapperCapture(
+				receivedProperty: receivedProperty,
+				declarationLocation: self.declarationLocation,
+				chain: chain,
+				sendableBuilder: sendableBuilder,
+				sendableBuilderDeclaringType: sendableBuilderDeclaringType,
+				capturingSeamType: capturingSeamType,
+				capturingFillSeamType: capturingFillSeamType,
+				capturingFillIsPassedOn: capturingFillIsPassedOn,
+				wrapperProperty: wrapperProperty,
+				wrapperDeclaringType: declaringType,
+				wrapperDeclarationLocation: declarationLocation,
+			)
+		}
 	}
 
 	/// The dependencies in the tree rooted at this scope that a `@Sendable` builder function would capture an
@@ -4711,7 +4880,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if builtChild.generator.buildsInSendableFunction {
 			sendableBuilders.append(SendableBuilder(property: builtProperty, declaringType: hole.ownerType))
 		}
-		return await builtChild.generator.nonSendableWrapperCaptures(
+		let captures = await builtChild.generator.nonSendableWrapperCaptures(
 			of: builtInstantiable,
 			unavailableProperties: builtChild.unavailableProperties,
 			propertiesGeneratedLater: builtChild.generator.bodyPropertiesGeneratedLater(builtChild.propertiesGeneratedLater),
@@ -4719,6 +4888,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingSendableBuilders: sendableBuilders,
 			chain: chain,
 		)
+		return capturesOnEveryRoute(of: captures, readingFieldsOf: hole)
+	}
+
+	/// EXPERIMENT: `captures`, the captures of the fill of `hole`, with each capture of a field `hole` carries made again of
+	/// that label's field on every route of the place graph to `hole`'s case that another type declares: one fill fills the
+	/// case for every route, and each capture names the declaration it reads. Found only where a capture is, so a fill that
+	/// captures nothing asks the graph nothing.
+	private func capturesOnEveryRoute(of captures: [NonSendableWrapperCapture], readingFieldsOf hole: SeamSignature.Hole) -> [NonSendableWrapperCapture] {
+		guard !captures.isEmpty,
+		      let calledBuilders,
+		      !calledBuilders.places.cases.isEmpty,
+		      let caseIndex = calledBuilders.ownCaseIndex(ofSite: hole.site)
+		else { return captures }
+		let query = SeamSignature.Places.Query(of: calledBuilders.places)
+		var everyRoute = captures
+		for capture in captures {
+			guard let declaringType = capture.wrapperDeclaringType,
+			      hole.fields.contains(where: { $0.property == capture.wrapperProperty && $0.declaringType == declaringType && $0.declarationLocation == capture.wrapperDeclarationLocation })
+			else { continue }
+			for answer in query.answers(ofLabel: capture.wrapperProperty.label, at: caseIndex) {
+				guard case let .field(level, declaration) = answer else { continue }
+				let field = query.places.declaration(level: level, declaration: declaration).field
+				guard field.property == capture.wrapperProperty,
+				      field.declaringType != declaringType || field.declarationLocation != capture.wrapperDeclarationLocation
+				else { continue }
+				let routeCapture = capture.readingWrapper(declaredBy: field.declaringType, at: field.declarationLocation)
+				if !everyRoute.contains(routeCapture) {
+					everyRoute.append(routeCapture)
+				}
+			}
+		}
+		return everyRoute
 	}
 
 	enum ScopeData {

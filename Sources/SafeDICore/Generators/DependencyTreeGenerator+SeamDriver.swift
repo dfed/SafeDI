@@ -704,9 +704,11 @@ extension DependencyTreeGenerator {
 		}
 	}
 
-	/// The enums `seamRoot`'s signature declares itself, rather than carries from a seam it reaches.
+	/// The enums `seamRoot`'s signature declares itself, rather than carries from a seam it reaches, as a module that
+	/// calls the seam is handed them (`SeamSignature.placesHandedToCallers`): a seam that carries them hands on the
+	/// places its own call of the seam held, and no other.
 	private static func ownScopeEnums(of seamRoot: ScopeGenerator.SeamRoot) -> [SeamSignature.ScopeEnum] {
-		seamRoot.signature.scopeEnums.filter { $0.key.seamType == seamRoot.signature.seamType }
+		seamRoot.signature.placesHandedToCallers.scopeEnums.filter { $0.key.seamType == seamRoot.signature.seamType }
 	}
 
 	/// The passes a strongly connected component of `seamCount` seams may take to settle before
@@ -1511,14 +1513,15 @@ extension DependencyTreeGenerator {
 				// or a public mock; from outside that package the generated code does not compile (row 4b's B4.10b,
 				// M8.35b): a stated limit, never pinned.
 				let unreachableTierIsReported = reachedTier == nil && checkingModule != nil
+				let handed = signature.placesHandedToCallers
 				scope = Scope(
 					instantiable: leafInstantiable,
 					builtInlineSeamComment: builtInlineSeamComment(leafInstantiable),
 					seamCall: SeamCall(
 						parameters: signature.parameters(ofTierAt: tier),
-						holes: signature.holes.map { $0.atTier(tier) },
+						holes: handed.holes.map { $0.atTier(tier) },
 						builders: signature.builders.map { $0.atTier(tier) },
-						scopeEnums: signature.scopeEnums,
+						scopeEnums: handed.scopeEnums,
 						guardTypeName: signature.guardTypeName,
 						comment: seams.foreignSeams[instantiable.concreteInstantiable]?.callComment ?? .noComment,
 						unreachableTierIsReported: unreachableTierIsReported,
@@ -1532,8 +1535,9 @@ extension DependencyTreeGenerator {
 						seamPackageName: instantiable.packageName,
 						callerPackageName: callerModule.packageName,
 						places: signature.places,
-						caseIndexByHole: signature.caseIndexByHole,
+						caseIndexByHole: handed.caseIndexByHole,
 						placesOfSeamsBeneath: { calledBySeam[$0.seamType] },
+						everyPlace: handed.everyPlace,
 					),
 				)
 			} else {

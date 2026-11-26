@@ -1073,8 +1073,17 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
 			// caller's declaration, as for a label one place of the case carries and another does not.
 			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+			// The call holds one place per case of the called seam's place graph, and reads what every route to the case
+			// hands from the graph (`SeamSignature.placesHandedToCallers`). A place the call passes up is no case of the
+			// graph yet, and a call whose graph was not built holds every place: both read their places.
+			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: { [placesOfSeamsBeneath = $0.placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places }) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var caseFields = ScopeGenerator.caseFields(of: places)
+				let caseIndices = places.compactMap { scope.calledBuilders?.ownCaseIndex(ofSite: $0.site) }
+				var caseFields = if let placesQuery, let firstPlace = places.first, caseIndices.count == places.count {
+					ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: placesQuery)
+				} else {
+					ScopeGenerator.caseFields(of: places)
+				}
 				if let innerScopeReaders {
 					let fieldLabels = Set(caseFields.fields.map(\.property.label))
 					for place in places {
@@ -1082,6 +1091,45 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					}
 				}
 				return caseFields
+			}
+			// Test only, deleted before merge: the same fields read from the call's place graph, for the tests' oracle, which
+			// rides on the levels' observer (`SeamPlaceLevels.caseFieldsMismatches`).
+			if let observer = SeamPlaceLevels.observer, let calledBuilders = scope.calledBuilders, !calledBuilders.places.cases.isEmpty {
+				let query = SeamSignature.Places.Query(of: calledBuilders.places, calledPlaces: { calledBuilders.placesOfSeamsBeneath($0)?.places })
+				var mismatches = [String]()
+				func spelled(_ fields: [SeamSignature.Hole.Field]) -> [String] {
+					fields.map { "\($0.property.label): \($0.property.typeDescription.asSource)\($0.isDeferredParameter ? " (deferred)" : "")" }
+				}
+				for (caseKey, places) in placesByCaseKey.sorted(by: { $0.key < $1.key }) {
+					guard let firstPlace = places.first, let perPlace = caseFieldsByCaseKey[caseKey] else { continue }
+					var caseIndices = [Int]()
+					for place in places {
+						if let caseIndex = calledBuilders.ownCaseIndex(ofSite: place.site), !caseIndices.contains(caseIndex) {
+							caseIndices.append(caseIndex)
+						}
+					}
+					guard !caseIndices.isEmpty else { continue }
+					let passedUpCount = places.count(where: { calledBuilders.ownCaseIndex(ofSite: $0.site) == nil })
+					guard passedUpCount == 0 else {
+						mismatches.append("case \(caseKey): \(passedUpCount) of its places passed up beside graph cases \(caseIndices)")
+						continue
+					}
+					let byGraph = ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: query)
+					if spelled(perPlace.fields).sorted() != spelled(byGraph.fields).sorted() {
+						mismatches.append("case \(caseKey): fields per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
+					} else if spelled(perPlace.fields) != spelled(byGraph.fields) {
+						mismatches.append("case \(caseKey): field order per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
+					}
+					if perPlace.callerReadLabels != byGraph.callerReadLabels {
+						let withoutInnerRoutes = ScopeGenerator.caseFields(of: places).callerReadLabels
+						mismatches.append("case \(caseKey) (graph cases \(caseIndices)): caller-read labels per place \(perPlace.callerReadLabels.sorted()) (\(withoutInnerRoutes.sorted()) without inner routes), by graph \(byGraph.callerReadLabels.sorted())")
+					}
+				}
+				if !mismatches.isEmpty {
+					var observation = SeamPlaceLevels(seamType: .simple(name: "", generics: []), places: [])
+					observation.caseFieldsMismatches = [(["case fields read from the place graph differ from those read per place"] + mismatches).joined(separator: "\n")]
+					observer(observation)
+				}
 			}
 			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
 			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
