@@ -85,6 +85,12 @@ public struct GenerationWork: Sendable {
 		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
 		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
 		case collectingTypesOfATree
+		/// Collecting what the scopes of a lazy cycle in a seam's tree declare between the builder function the cycle closes
+		/// on and the scopes that call it again (`DependencyTreeGenerator.declarationsBetween(closedOnScope:closedOnDeclaration:)`):
+		/// each generator a walk reads. A walk reads a generator once, so the generators count, not the paths through
+		/// them; walked along every path, layers of screens that each build every screen of the next layer were read
+		/// once per path.
+		case collectingDeclarationsOfACycle
 		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
 		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
 		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
