@@ -360,7 +360,6 @@ extension MockLowering.Walk {
 			readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
 		)
 		lines.append(GeneratedCodeText.indentingNonEmptyLines(of: siteCode, by: indent))
-		recordPublicHoleSite(text: siteCode, of: property, at: site, functionName: holeFunctionName, readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties)
 		// The site binds its property from the builder, as an alias binds its own: no override reads it.
 		return .alias(MockLowering.AliasBinding(
 			property: property,

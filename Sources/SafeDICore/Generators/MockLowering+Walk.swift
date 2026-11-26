@@ -502,15 +502,6 @@ extension MockLowering {
 		var builtPlaceInputs = [[Int]: BuiltPlaceInputs]()
 		/// The records production's record function makes of the built places, by their paths of child indices.
 		var builtRecords = [[Int]: PlaceRecord]()
-		/// The records of the sites of holes a public mock's walk lowered, by their paths of child indices
-		/// (`MockLowering+PublicRecords.swift`).
-		var publicHoleSiteRecords = [[Int]: PlaceRecord]()
-		/// The construction function each of a public mock's configured places calls instead, by its path of child indices
-		/// (`MockLowering+PublicRecords.swift`), kept apart from `builtPlaceInputs` so that an internal mock's places do not
-		/// carry room for it.
-		var publicConstructionInputs = [[Int]: MockLowering.PublicConstructionInputs]()
-		/// What a public mock's records hold, by kind.
-		var publicRecordCounts = PublicRecordCounts()
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
@@ -1615,7 +1606,6 @@ extension MockLowering {
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
-			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead?.text)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			if recordsPlaces {

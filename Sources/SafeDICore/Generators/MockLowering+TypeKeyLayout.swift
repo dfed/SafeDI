@@ -259,8 +259,7 @@ extension MockLowering.Walk {
 				if record == nil, unrecordedReasons[path] == nil {
 					unrecordedReasons[path] = "noRecord"
 				}
-				// A public mock's configured place calls its type's construction function (`MockLowering+PublicRecords.swift`).
-				builtRecords[path] = record.flatMap { publicRecord(of: $0, at: path) }
+				builtRecords[path] = record
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.nodeConfiguration)
 				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
 					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
@@ -316,7 +315,6 @@ extension MockLowering.Walk {
 		builtPlaceConfigurationContexts = [:]
 		closerParentFieldReads = [:]
 		publicMockCallPlanNodes = [:]
-		publicConstructionInputs = [:]
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
