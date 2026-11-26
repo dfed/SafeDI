@@ -164,6 +164,74 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 		#expect(gates == [Gate(root: "Root", letsWalkRun: false, todaysWalkFindsCapture: false)])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_letsCaptureWalkRun_whenCycleOfSendableInstantiatorsReceivesInstanceOfRootsLazilyInstantiated() async throws {
+		// The cycle plan review's capture graph: a plan of `A`'s body would take `theme` as the instance of `Root`'s
+		// `LazilyInstantiated`, read inside `aBuilder`'s `@Sendable` function. Today's walk reports the capture, so the
+		// gate must keep today's tree.
+		let (gates, error) = await gates(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let theme: LazilyInstantiated<Theme>
+			    @Instantiated let aBuilder: SendableInstantiator<A>
+			    public init(theme: LazilyInstantiated<Theme>, aBuilder: SendableInstantiator<A>) { self.theme = theme; self.aBuilder = aBuilder }
+			}
+
+			@Instantiable public final class A: Instantiable {
+			    @Received let theme: Theme
+			    @Instantiated let bBuilder: SendableInstantiator<B>
+			    public init(theme: Theme, bBuilder: SendableInstantiator<B>) { self.theme = theme; self.bBuilder = bBuilder }
+			}
+
+			@Instantiable public final class B: Instantiable {
+			    @Instantiated let aBuilder: SendableInstantiator<A>
+			    public init(aBuilder: SendableInstantiator<A>) { self.aBuilder = aBuilder }
+			}
+
+			@Instantiable public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""")
+
+		#expect(error != nil)
+		#expect(gates == [Gate(root: "Root", letsWalkRun: true, todaysWalkFindsCapture: true)])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_letsCaptureWalkRun_whenTypeBuiltAgainByCycleDeclaresLazilyInstantiatedItsSendableFunctionReads() async throws {
+		// The review's second capture graph: the wrapper is declared in `A`, a body the cycle calls, not in the root's
+		// body, so a walk of the root body's own tree would not see it. `B`, built in `A`'s `@Sendable` function,
+		// receives its instance, and builds `A` again.
+		let (gates, error) = await gates(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let aBuilder: Instantiator<A>
+			    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+			}
+
+			@Instantiable public final class A: Instantiable {
+			    @Instantiated let theme: LazilyInstantiated<Theme>
+			    @Instantiated let bBuilder: SendableInstantiator<B>
+			    public init(theme: LazilyInstantiated<Theme>, bBuilder: SendableInstantiator<B>) { self.theme = theme; self.bBuilder = bBuilder }
+			}
+
+			@Instantiable public final class B: Instantiable {
+			    @Received let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			    public init(theme: Theme, aBuilder: Instantiator<A>) { self.theme = theme; self.aBuilder = aBuilder }
+			}
+
+			@Instantiable public final class Theme: Instantiable {
+			    public init() {}
+			}
+			""")
+
+		#expect(error != nil)
+		#expect(gates == [Gate(root: "Root", letsWalkRun: true, todaysWalkFindsCapture: true)])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
