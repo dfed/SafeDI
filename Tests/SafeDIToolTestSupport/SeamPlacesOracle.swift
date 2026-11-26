@@ -20,7 +20,6 @@
 
 import Foundation
 import SafeDICore
-import Testing
 
 /// Test only, deleted before merge: the differential oracle of a seam's places by case. Today's per-site walk gives each
 /// place's lists in full records (`SeamSignature.Hole`); the place graph (`SeamSignature.Places`) gives them per case, through
@@ -95,6 +94,7 @@ public enum SeamPlacesOracle {
 
 		// 1. Per site, along its route.
 		var routeAnswersBySite = [Int: RouteAnswers]()
+		var siteFacts = [Int: SiteFacts]()
 		for (site, caseIndex) in observation.caseIndexBySite.enumerated() where caseIndex >= 0 && places.cases.indices.contains(caseIndex) {
 			let hole = holes[site]
 			let route = observation.routeBySite[site]
@@ -111,8 +111,34 @@ public enum SeamPlacesOracle {
 			compare("stack", at: path, today: todayStack, graph: query.stack(along: route).map { "\($0.property.asSource)@\($0.concreteType.asSource)" }, into: &report)
 
 			compare("fields", at: path, today: hole.fields.map { json($0) }, graph: answers.fields.map { json($0) }, into: &report)
+			// The place's own uncarried declarations come first, a public mock's root declaration bound from its caller's
+			// argument replaced where a path to a call that presents the place binds its label; then those the calls and the
+			// called copies add (`SeamSignature.Places.Case`'s stored facts).
+			let placeCase = places.cases[caseIndex]
 			let graphUncarried = answers.uncarried.compactMap { query.uncarriedDeclaration(of: $0, at: caseIndex) }
-			compare("uncarried declarations", at: path, today: hole.uncarriedDeclarations.map { uncarriedJSON($0) }, graph: graphUncarried.map { uncarriedJSON($0) }, into: &report)
+			let ownGraph = graphUncarried.map { uncarriedJSON($0) }
+			let today = hole.uncarriedDeclarations.map { uncarriedJSON($0) }
+			let replacedOfCase = Set(placeCase.uncarriedReplacedOnPathsToCalls.map { uncarriedJSON($0) })
+			let calledCopiesOfCase = Set(placeCase.calledCopyDeclarations.map { uncarriedJSON($0) })
+			var ownToday = [(label: String, json: String)]()
+			var replaced = [String]()
+			var ownMatches = today.count >= ownGraph.count
+			for (index, graphJSON) in ownGraph.enumerated() where index < today.count {
+				let label = hole.uncarriedDeclarations[index].property.label
+				if today[index] == graphJSON {
+					ownToday.append((label, graphJSON))
+				} else if graphUncarried[index].isBoundFromCallersArgument, replacedOfCase.contains(today[index]) {
+					ownToday.append((label, graphJSON))
+					replaced.append(today[index])
+				} else {
+					ownMatches = false
+				}
+			}
+			let added = Array(today.dropFirst(ownGraph.count))
+			if !ownMatches || !added.allSatisfy(calledCopiesOfCase.contains) {
+				report.record("uncarried declarations at \(path): today \(today) graph \(ownGraph) then of the case's called copies \(placeCase.calledCopyDeclarations.map { uncarriedJSON($0) })")
+			}
+			siteFacts[site] = SiteFacts(ownUncarried: ownToday, calledCopies: added, replaced: replaced)
 			// The cases of the places a tree the seam's caller could build holds, in the order the tree reaches them.
 			for (uncarried, answer) in zip(hole.uncarriedDeclarations, answers.uncarried) where uncarried.isBuildableAboveSeam {
 				var todayCases = [String]()
@@ -142,12 +168,12 @@ public enum SeamPlacesOracle {
 			compare("labels reaching the case", at: path, today: routeLabels.sorted(), graph: Set(query.labels(reaching: caseIndex)).sorted(), into: &report)
 
 			for label in routeLabels.sorted() {
-				let today = Set(siteHoles.map { hole -> String in
+				let today = Set(zip(sites, siteHoles).map { site, hole -> String in
 					if let field = hole.fields.first(where: { $0.property.label == label }) {
 						return json(field)
 					}
-					if let uncarried = hole.uncarriedDeclarations.first(where: { $0.property.label == label }) {
-						return uncarriedJSON(uncarried)
+					if let uncarried = siteFacts[site]?.ownUncarried.first(where: { $0.label == label }) {
+						return uncarried.json
 					}
 					return "none"
 				})
@@ -163,6 +189,13 @@ public enum SeamPlacesOracle {
 				})
 				compare("answers of \(label)", at: path, today: today.sorted(), graph: graph.sorted(), into: &report)
 			}
+
+			// The facts stored per case: the union over its sites in site order, the first of each equal entry.
+			compare("called copy declarations", at: path, today: firstOfEach(sites.flatMap { siteFacts[$0]?.calledCopies ?? [] }), graph: places.cases[caseIndex].calledCopyDeclarations.map { uncarriedJSON($0) }, into: &report)
+			compare("declarations replaced on paths to calls", at: path, today: firstOfEach(sites.flatMap { siteFacts[$0]?.replaced ?? [] }), graph: places.cases[caseIndex].uncarriedReplacedOnPathsToCalls.map { uncarriedJSON($0) }, into: &report)
+			compare("re-entering call declarations", at: path, today: firstOfEach(siteHoles.flatMap { $0.reenteringCallDeclarations.map { json($0) } }), graph: places.cases[caseIndex].reenteringCallDeclarations.map { json($0) }, into: &report)
+			compare("re-entering place fields", at: path, today: firstOfEach(siteHoles.flatMap { $0.reenteringPlaceFields.map { json($0) } }), graph: places.cases[caseIndex].reenteringPlaceFields.map { json($0) }, into: &report)
+			compare("passed on @Sendable", at: path, today: String(siteHoles.contains(where: \.isSendable)), graph: String(places.cases[caseIndex].isPassedOnSendable), into: &report)
 
 			var reentryLabels = Set(siteHoles.flatMap { $0.cycleReentryDeclarations.map(\.property.label) })
 			for site in sites {
@@ -196,15 +229,19 @@ public enum SeamPlacesOracle {
 		return ["The place graph of `\(report.seamType)` answers \(report.mismatchCount) questions otherwise than the per-site walk (\(report.sites) sites, \(report.cases) cases): " + report.mismatches.joined(separator: "; ")]
 	}
 
-	/// An observer that records an issue for each observation the graph answers otherwise than the per-site walk, then hands
-	/// it to `enclosingObserver`.
-	public static func recordingMismatches(handingOn enclosingObserver: (@Sendable (SeamSignature.Places.Observation) -> Void)?) -> @Sendable (SeamSignature.Places.Observation) -> Void {
-		{ observation in
-			for mismatch in mismatches(of: observation) {
-				Issue.record(Comment(rawValue: mismatch))
-			}
-			enclosingObserver?(observation)
-		}
+	/// What the per-site comparison found of a site's uncarried declarations, for the per-case one.
+	private struct SiteFacts {
+		/// The place's own uncarried declarations, each replaced one as the route declares it.
+		let ownUncarried: [(label: String, json: String)]
+		/// Those the calls and called copies added after them.
+		let calledCopies: [String]
+		/// The declarations that stand in place of one the route declares.
+		let replaced: [String]
+	}
+
+	private static func firstOfEach(_ entries: [String]) -> [String] {
+		var seen = Set<String>()
+		return entries.filter { seen.insert($0).inserted }
 	}
 
 	// MARK: Cases
