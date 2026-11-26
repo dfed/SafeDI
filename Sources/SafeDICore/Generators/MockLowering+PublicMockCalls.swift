@@ -473,16 +473,13 @@ extension MockLowering.Walk {
 		// the values it reads by name listed. A call that passes anything else keeps the walk's body, since the type key lays
 		// out no place whose reads it cannot list (`TypeKeyLayout.read`).
 		if !recordsPlaces {
-			// Places are recorded only where the type key lays the mock out.
+			// Places are recorded only where the type key lays the mock out, which is never a public mock (`lowerMockRoot`),
+			// so no call recorded here is one a public mock promotes at its root (`isPromoted`).
 		} else if loopMembership != nil {
 			unrecordedReasons[childIndexPath] = "publicMockCall:loop"
-		} else if isPromoted {
-			unrecordedReasons[childIndexPath] = "publicMockCall:promoted"
-		} else if !extractionLines.isEmpty, boundOverride == nil {
-			unrecordedReasons[childIndexPath] = "publicMockCall:sendableExtraction"
 		} else if boundOverride == nil, readsOverride, publicMockCall.takesOverrides || overrideBuilders != nil, MockLowering.overrideReadPath(overrideRead) == nil {
-			// The call reads its override through a local an enclosing `@Sendable` function's extractor binds, which the type
-			// key, reading overrides by their paths, does not declare. Its own function's extraction is handed it (`boundOverride`).
+			// The call reads its override through a local a `@Sendable` function's extractor binds, which the type key, reading
+			// overrides by their paths, does not declare. Its own function's extraction is handed it (`boundOverride`).
 			unrecordedReasons[childIndexPath] = "publicMockCall:extractedOverrideRead"
 		} else if filledCall != nil || !passesOnlyReads || overrideBuilders != nil || boundOverride != nil {
 			// A call that passes builders is a built place with a function of its own (`recordPublicMockCallPlace`).
@@ -563,11 +560,9 @@ extension MockLowering.Walk {
 				bodyLines.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
 			}
 		}
-		if generator.memberCallsInsideBuilderFunction.isEmpty {
-			recordPlace(bodyLines: bodyLines)
-		} else if recordsAsPlace {
-			unrecordedReasons[childIndexPath] = "publicMockCall:memberCalls"
-		}
+		// Only a tree with a mock root's builders makes member calls in a builder function (`SeamHoles`), which is a public
+		// mock's, and a public mock records no places (`lowerMockRoot`), so a recorded call's body holds none.
+		recordPlace(bodyLines: bodyLines)
 		// A call on a loop of builders first rebinds the members its tree receives, and its level binds its wrapper where it
 		// reads it outside the loop (`MockLowering+Loops.swift`).
 		if let loopMembership {

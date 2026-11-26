@@ -927,6 +927,69 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 		#expect(mocks.laidOut.mockFiles == mocks.walk.mockFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_laysOutWithTypeKey_whenNothingSetsWhetherMocksAreLaidOut() async throws {
+		let fixtureFiles = [
+			"Parent.swift": """
+			@Instantiable(generateMock: true)
+			public struct Parent: Instantiable {
+			    public init(child: Child) {
+			        self.child = child
+			    }
+			    @Instantiated let child: Child
+			}
+			""",
+			"Child.swift": """
+			@Instantiable
+			public struct Child: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		// No value of `MockLowering.$laysOutWithTypeKey` is set here, as none is where SafeDITool runs.
+		_ = try await MockLowering.$typeKeyLayoutObserver.withValue({ mockedType, outcome in continuation.yield("\(mockedType): \(outcome)") }) {
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var outcomes = [String]()
+		for await outcome in stream {
+			outcomes.append(outcome)
+		}
+
+		#expect(outcomes == ["Parent: laidOut"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenPlaceReadsInstanceOfLazyWrapperMockNamesApart() async throws {
+		// `Root`'s tree receives `x` as the `LazilyInstantiated<X>` `A` reads, as the `Instantiator<X>` `E` reads, and as the
+		// `Draft?` `C` reads only if available, so the mock binds the first two apart (`x_LazilyInstantiated__X`,
+		// `x_Instantiator__X`). `N` receives `x: X?` only if available, which is the instance of the wrapper named apart.
+		let fixtureFiles = [
+			"Root.swift": seamFixtureType(named: "Root", isFinalClass: true, declarations: ["@Instantiated let n: N", "@Instantiated let e: E", "@Instantiated let a: A"])
+				.replacingOccurrences(of: "@Instantiable", with: "@Instantiable(generateMock: true)"),
+			"N.swift": seamFixtureType(named: "N", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let c: C"]),
+			"C.swift": seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: Draft?"]),
+			"E.swift": seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Received let x: Instantiator<X>"]),
+			"A.swift": seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received let x: LazilyInstantiated<X>"]),
+			"X.swift": seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			"Draft.swift": """
+			public final class Draft {
+			    public init() {}
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixtureFiles)
+
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixtureFiles, probes: [
+			DifferentialValueProbe("{ let x = X(); return Root.mock(safeDIOverrides: .init(x_LazilyInstantiated__X: { x })).n.x === x }()"),
+			DifferentialValueProbe("{ let root = Root.mock(); return root.n.x === root.a.x.instance }()"),
+			DifferentialValueProbe("{ let draft = Draft(); return Root.mock(safeDIOverrides: .init(x: draft)).n.c.x === draft }()"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

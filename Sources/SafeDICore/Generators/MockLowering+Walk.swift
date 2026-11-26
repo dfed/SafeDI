@@ -662,9 +662,10 @@ extension MockLowering {
 						lines.append(memberLines.removeFirst())
 					}
 				}
-				if !recordsPlaces {
-					// The walk records nothing.
-				} else if let node {
+				// A child that builds no node is a hole without a site or a fill, which only a public mock's tree holds
+				// (`createMockTypeDescriptionToScopeMapping`'s `buildsHoles`), and a public mock records no places
+				// (`lowerMockRoot`).
+				if recordsPlaces, let node {
 					recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
 					// A node the level binds under a name apart from its label is read by that name, which a record spelled
 					// from its property does not bind.
@@ -679,8 +680,6 @@ extension MockLowering {
 						case .cycleClosing: closerAndDefaultRecords[childIndexPath] == nil ? "closerUnrecorded" : "closer"
 						}
 					}
-				} else {
-					unrecordedReasons[childIndexPath] = "noNode"
 				}
 				childIndexPath.removeLast()
 				loopMembership = nil
@@ -1259,7 +1258,6 @@ extension MockLowering {
 					fieldName: bindingName,
 					parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
 					nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
-					pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
 				)
 			}
 			// The node's builder function binds again under its label each receive named apart, from the names its own
@@ -1324,6 +1322,7 @@ extension MockLowering {
 					MockLowering.OverrideRead(
 						text: hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
 						path: hasConfiguration ? .member(builder, of: nodePathValue) : nodePathValue,
+						configuration: nodePathValue,
 					),
 					localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
 				)

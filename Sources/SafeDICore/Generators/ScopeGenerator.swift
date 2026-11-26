@@ -1622,7 +1622,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"constructsWithHandWrittenMock": .copied,
 			"unavailablePropertiesToGenerateCodeTask": .startsEmpty,
 			"unavailablePropertiesToGeneratedCode": .startsEmpty,
-			"planNodeByContext": .startsEmpty,
 			"orderedPropertyToGenerateIndices": .copied,
 			"$__lazy_storage_$_orderedIndexByUnwrappedProperty": .startsEmpty,
 			"$__lazy_storage_$_firstOrderedIndexByProperty": .startsEmpty,
@@ -5835,34 +5834,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// This scope's finished dependency tree code for each context.
 	private var unavailablePropertiesToGeneratedCode = [UnavailablePropertiesCacheKey: GeneratedCode]()
 
-	/// The plan node of this scope's place in each context it writes its code for (`BuiltPlaceRecord.node`). Every place
-	/// that shares this generator in one context shares one node, whether its code comes from the cache or is written
-	/// again for that place with inputs of its own (a mock's body, `CodeGeneration.configurable`), which no context key
-	/// holds. Holds one node per context for as long as the generator lives.
-	private var planNodeByContext = [UnavailablePropertiesCacheKey: PlanNode]()
-
-	/// The plan node of this scope's place in the context the arguments name, made the first time it is asked for.
-	private func planNode(
-		unavailableProperties: Set<Property>,
-		propertiesGeneratedLater: Set<Property>,
-		builderFunctionNames: BuilderFunctionNames,
-		fillPlaceBindings: FillPlaceBindings,
-	) -> PlanNode {
-		let context = UnavailablePropertiesCacheKey(
-			unavailableProperties: unavailableProperties,
-			propertiesGeneratedLater: propertiesGeneratedLater,
-			builderFunctionNames: builderFunctionNames,
-			fillPlaceBindings: fillPlaceBindings,
-		)
-		if let node = planNodeByContext[context] {
-			return node
-		} else {
-			let node = PlanNode()
-			planNodeByContext[context] = node
-			return node
-		}
-	}
-
 	/// The children of this scope in the order their code is emitted: every child
 	/// follows the siblings it depends on.
 	///
@@ -7206,9 +7177,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			concreteType: instantiable.concreteInstantiable,
 			isExtension: instantiable.declarationType.isExtension,
 			target: constructionTarget(of: instantiable),
+			// A read production passes `nil` reads no declaration, whatever name the walk reads there.
 			arguments: arguments.map { read in
-				guard let name = readNames[read.property] else { return read }
-				return PlaceRead(argumentLabel: read.argumentLabel, label: name, property: read.property, source: read.source.renamed(from: read.label, to: name))
+				guard let name = readNames[read.property], read.source != .nil else { return read }
+				return PlaceRead(argumentLabel: read.argumentLabel, label: name, property: read.property, source: read.source.renamed(to: name))
 			},
 			forwardedProperties: forwardedProperties.sorted(),
 			cycleParameters: cycleParameters.map(\.property),
@@ -8364,7 +8336,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				seamCall: seamCall,
 				argumentList: argumentList,
 				unavailableProperties: unavailableProperties,
-				propertiesGeneratedLater: propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
 			)
@@ -8466,19 +8437,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamCall: SeamCall?,
 		argumentList: String,
 		unavailableProperties: Set<Property>,
-		propertiesGeneratedLater: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
 	) throws(Initializer.GenerationError) -> GeneratedCode {
 		let valuesBindingPlaces = valuesBindingPlaces(builderFunctionNames: builderFunctionNames)
 		let plan = try propertyCode(
 			around: childCode,
-			planNode: planNode(
-				unavailableProperties: unavailableProperties,
-				propertiesGeneratedLater: propertiesGeneratedLater,
-				builderFunctionNames: builderFunctionNames,
-				fillPlaceBindings: fillPlaceBindings,
-			),
+			// A scope's code is written once for each context (`generateCode`'s cache), so each writing is a place of its own
+			// node, which every place that holds the cached code shares.
+			planNode: PlanNode(),
 			instantiable: instantiable,
 			property: property,
 			forwardedProperties: forwardedProperties,

@@ -97,10 +97,10 @@ extension MockLowering.Walk {
 				reads.append(MockLowering.valueRead(token.name, outerTypes: outerTypes))
 			}
 		}
-		guard let property = bindings.first else {
-			unrecordedReasons[first.path] = "loop:noBinding"
-			return
-		}
+		// A loop is promoted, or declared by its level's type, because something outside it reads a member, which the
+		// unit then binds (`ScopeGenerator.loopMembersReadOnlyInsideTheirLoop`); a unit that bound none would keep the
+		// walk's text, as every place without a record does.
+		guard let property = bindings.first else { return }
 		loopUnitRecords[first.path] = .alias(AliasPlaceRecord(
 			property: property,
 			fulfillingProperty: nil,
