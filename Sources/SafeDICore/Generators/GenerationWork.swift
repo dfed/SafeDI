@@ -80,6 +80,24 @@ public struct GenerationWork: Sendable {
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
+		/// Collecting the types a tree builds, for the imports of its file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`)
+		/// and for the public mocks a mock tree reaches (`concreteTypesOfTree()`): each generator the walk visits. A walk
+		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
+		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
+		case collectingTypesOfATree
+		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
+		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
+		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
+		/// until one is found. Scanned for in every case, every carrier of the scope was compared for every later
+		/// child of every site, so a seam whose own type builds n children that each hold a place compared n carriers n²
+		/// times.
+		case findingCarrierASiblingRequires
+		/// Finding the fill of a seam call that stands for a place (`ScopeGenerator.FillStoodFor`): each place of a call
+		/// and each set of fills of the place's case with one tree's reads that its lookup asks (`Scope.nextFill()`), and,
+		/// where the capture walk reaches the call, each place stood for that it gathers under its fill and each that a
+		/// fill then takes. Scanned for, the fills of a case were compared for every place of it, and the places stood
+		/// for for every fill.
+		case findingFillThatStandsForPlace
 	}
 
 	/// The step that did the work.

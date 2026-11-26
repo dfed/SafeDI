@@ -2,9 +2,7 @@
 paths:
   - "Sources/SafeDICore/Generators/**/*"
   - "Sources/SafeDI/**/*"
-  - "Tests/**/*Seam*.swift"
-  - "Tests/**/*Hole*.swift"
-  - "Tests/**/*PublicMock*.swift"
+  - "Tests/**/*{Seam,Hole,PublicMock}*.swift"
 ---
 
 # The contract for seams and public mocks
