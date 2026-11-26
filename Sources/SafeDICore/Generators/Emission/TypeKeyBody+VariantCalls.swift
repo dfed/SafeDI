@@ -140,7 +140,8 @@ extension TypeKeyBody {
 			return nil
 		}
 		let labels = plan.labels(of: call.calledBody)
-		guard labels.count == call.arguments.count else { return nil }
+		let answers = plan.answers(of: call.calledBody)
+		guard labels.count == call.arguments.count, answers.count == call.arguments.count else { return nil }
 		var closer = ClosingPlaceRecord(
 			callingVariant: call.calledBody - 1,
 			property: call.property,
@@ -148,6 +149,7 @@ extension TypeKeyBody {
 			isExtension: isExtension,
 			forwardedProperties: forwardedProperties,
 			labels: labels,
+			answers: answers,
 			arguments: call.arguments,
 		)
 		// A place that hands the function it calls passed arguments (`BuiltPlaceRecord.passedArguments`) hands its own,

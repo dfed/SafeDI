@@ -73,4 +73,7 @@ enum PerPathReason: Hashable, Sendable {
 	case tierOmissionFinding
 	/// A label no one parameter can pass, which is reported at its first receive in the body.
 	case unpassableCycleLabel
+	/// The bodies of one declaration, built as one property, differ in more answers than a bound allows
+	/// (`VariantBodies.bodiesPerKeyLimit`): a label no optional parameter merges, such as one declared in two forms.
+	case bodiesOfOneDeclarationPassBound
 }

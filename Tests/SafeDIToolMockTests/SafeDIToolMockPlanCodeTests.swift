@@ -698,6 +698,127 @@ struct SafeDIToolMockPlanCodeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsRootPerPath_whenBodiesOfOneDeclarationPassTheirBound() async throws {
+		// Each member declares its label lazily, which `Leaf` reads only if available through the wrapper's instance, so
+		// no optional parameter takes it and the hub's bodies double with each member: sixteen at four, past the bound on
+		// one key's bodies. The root keeps the walk's body whole, as a production root past the bound keeps today's tree.
+		let fixtureFiles = [
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(hubBuilder: Instantiator<Hub>) {
+			        self.hubBuilder = hubBuilder
+			    }
+
+			    @Instantiated public let hubBuilder: Instantiator<Hub>
+			}
+			""",
+			"Cycle.swift": """
+			@Instantiable
+			public final class Hub: Instantiable {
+			    public init(member0Builder: Instantiator<Member0>, member1Builder: Instantiator<Member1>, member2Builder: Instantiator<Member2>, member3Builder: Instantiator<Member3>, leaf: Leaf) {
+						        self.member0Builder = member0Builder
+			        self.member1Builder = member1Builder
+			        self.member2Builder = member2Builder
+			        self.member3Builder = member3Builder
+			        self.leaf = leaf
+			    }
+
+						    @Instantiated public let member0Builder: Instantiator<Member0>
+			    @Instantiated public let member1Builder: Instantiator<Member1>
+			    @Instantiated public let member2Builder: Instantiator<Member2>
+			    @Instantiated public let member3Builder: Instantiator<Member3>
+			    @Instantiated public let leaf: Leaf
+			}
+
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init(label0: Label0?, label1: Label1?, label2: Label2?, label3: Label3?) {
+						        self.label0 = label0
+			        self.label1 = label1
+			        self.label2 = label2
+			        self.label3 = label3
+			    }
+
+						    @Received(onlyIfAvailable: true) public let label0: Label0?
+			    @Received(onlyIfAvailable: true) public let label1: Label1?
+			    @Received(onlyIfAvailable: true) public let label2: Label2?
+			    @Received(onlyIfAvailable: true) public let label3: Label3?
+			}
+
+			@Instantiable
+			public final class Member0: Instantiable {
+			    public init(label0: LazilyInstantiated<Label0>, hubBuilder: Instantiator<Hub>) {
+			        self.label0 = label0
+			        self.hubBuilder = hubBuilder
+			    }
+
+			    @Instantiated public let label0: LazilyInstantiated<Label0>
+			    @Instantiated public let hubBuilder: Instantiator<Hub>
+			}
+
+			@Instantiable
+			public final class Label0: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Member1: Instantiable {
+			    public init(label1: LazilyInstantiated<Label1>, hubBuilder: Instantiator<Hub>) {
+			        self.label1 = label1
+			        self.hubBuilder = hubBuilder
+			    }
+
+			    @Instantiated public let label1: LazilyInstantiated<Label1>
+			    @Instantiated public let hubBuilder: Instantiator<Hub>
+			}
+
+			@Instantiable
+			public final class Label1: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Member2: Instantiable {
+			    public init(label2: LazilyInstantiated<Label2>, hubBuilder: Instantiator<Hub>) {
+			        self.label2 = label2
+			        self.hubBuilder = hubBuilder
+			    }
+
+			    @Instantiated public let label2: LazilyInstantiated<Label2>
+			    @Instantiated public let hubBuilder: Instantiator<Hub>
+			}
+
+			@Instantiable
+			public final class Label2: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Member3: Instantiable {
+			    public init(label3: LazilyInstantiated<Label3>, hubBuilder: Instantiator<Hub>) {
+			        self.label3 = label3
+			        self.hubBuilder = hubBuilder
+			    }
+
+			    @Instantiated public let label3: LazilyInstantiated<Label3>
+			    @Instantiated public let hubBuilder: Instantiator<Hub>
+			}
+
+			@Instantiable
+			public final class Label3: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixtureFiles)
+
+		#expect(mocks.outcomes == ["Root": "bodiesOfOneDeclarationPassBound"])
+		#expect(mocks.laidOut.mockFiles == mocks.walk.mockFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsRootPerPath_whenTypeOnCycleReceivesInstantiatorBuildingIt() async throws {
 		// `Next` receives `screenBuilder`, the instantiator that builds it, so the walk lays the loop out as one text: the root
 		// keeps the walk's body whole, as a production root that holds a loop of builders keeps its path key's.

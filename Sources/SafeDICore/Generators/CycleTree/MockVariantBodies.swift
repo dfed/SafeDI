@@ -132,11 +132,25 @@ extension DependencyTreeGenerator {
 					callsCompared[ObjectIdentifier(context.generator), default: []].append(call)
 					walk.followCall()
 				}
-				if shadow.isOnCycle(context.scope), !todaysBodies.contains(body) {
-					todaysBodies.append(body)
+				// The plan's body for today's place, which takes optionally each label every call passes its own answer.
+				let planBody = try bodies.calledBody(
+					of: copy,
+					calledScope: context.scope,
+					as: key,
+					keyedBy: labels,
+					answering: answeredLabels,
+					beneath: context.nearestDeclarations,
+					lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+					makingAgain: context.labelsMadeAgainAtCall,
+					takingOptionallyAmong: shadow.parameterLabels(ofFunctionOf: context.scope),
+					builtBy: (context.builder, context.erasedToConcreteExistential),
+					cache: &cache,
+				).body
+				if shadow.isOnCycle(context.scope), !todaysBodies.contains(planBody) {
+					todaysBodies.append(planBody)
 				}
 				if laysOutPlan {
-					todaysPathsByBody[body, default: []].append(context.path)
+					todaysPathsByBody[planBody, default: []].append(context.path)
 				}
 				observer?(
 					mockRoot,
@@ -148,14 +162,18 @@ extension DependencyTreeGenerator {
 		}
 		// The bodies the plan builds with no tree of today's: the root's, beneath every binding the mock gives its tree,
 		// then the body of each call place a body holds, beneath the answers that body's path gives it.
-		guard planObserver != nil || laysOutPlan, let plan = try bodies.plan(
+		guard planObserver != nil || laysOutPlan else { return nil }
+		guard let plan = try bodies.plan(
 			ofMockRoot: mockRootScope,
 			keyedBy: Set(boundProperties.map(\.label)).sorted(),
 			beneath: rootNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			shadow: shadow,
 			cache: &cache,
-		) else { return nil }
+		) else {
+			// The bodies of one key passed their bound: the root keeps the walk's body whole, counted.
+			return laysOutPlan ? bodies.keptPerPathBecause.map { MockCyclePlan(keptPerPathBecause: "\($0)") } : nil
+		}
 		planObserver?(
 			mockRoot,
 			plan.calledBodies.map { bodies.description(of: $0) },
