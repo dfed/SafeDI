@@ -58,7 +58,10 @@ extension DependencyTreeGenerator {
 	) throws {
 		let observer = MockVariantBodyObservation.observer
 		let planObserver = MockVariantBodyObservation.planObserver
+		// A tree that calls another module's public mock is not compared: the call reads the caller's declarations for its
+		// fills' trees, as a production root's seam call does, and a body has no edge for a fill.
 		guard observer != nil || planObserver != nil,
+		      !reachesCallOfPublicMock(from: mockRootScope),
 		      let shadow = CallPlaceShadow(root: mockRootScope, cache: &cache)
 		else { return }
 		let mockRoot = instantiable.concreteInstantiable.asSource
@@ -186,6 +189,20 @@ extension DependencyTreeGenerator {
 				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
 			)
 		}
+	}
+
+	/// Whether `scope`'s tree instantiates a call of another module's public mock.
+	private static func reachesCallOfPublicMock(from scope: Scope) -> Bool {
+		var visited = Set<ObjectIdentifier>()
+		var scopesToVisit = [scope]
+		while let scope = scopesToVisit.popLast() {
+			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
+			guard scope.publicMockCall == nil else { return true }
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+				scopesToVisit.append(childScope)
+			}
+		}
+		return false
 	}
 
 	/// The labels a body of `scope` built as `property` is keyed by: those its tree receives, and its own.
