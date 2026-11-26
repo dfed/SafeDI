@@ -2722,7 +2722,15 @@ extension DependencyTreeGenerator {
 		parts.append(String(describing: hole.fields.filter { $0.property.label == label }))
 		parts.append(String(describing: hole.uncarriedDeclarations.filter { $0.property.label == label }))
 		parts.append(String(describing: hole.cycleReentryDeclarations.filter { $0.property.label == label }))
+		parts.append(String(describing: hole.reenteringCallDeclarations.filter { $0.property.label == label }))
+		parts.append(String(describing: hole.reenteringPlaceFields.filter { $0.carried.field.property.label == label }))
 		parts.append(String(describing: hole.declarationsHiddenByFields.filter { $0.property.label == label }))
+		parts.append(String(describing: entry.hidden.pathDeclarations[label]))
+		parts.append(String(describing: entry.hidden.calledCopyDeclarations[label]))
+		parts.append(String(describing: entry.hidden.fieldsOfReenteringPlaces[label]))
+		// What the place's own fill binds in the field's place, which its generator, not the hole, says.
+		parts.append(String(describing: entry.fill.fillMemoOriginsByLabel[label]))
+		parts.append(String(describing: entry.fill.fillBoundFields.filter { $0.property.label == label }))
 		for read in reads.reads {
 			if case let .receive(receive) = read {
 				parts.append("\(receive.property)@\(receive.readerType.asSource)@\(String(describing: receive.declarationLocation))@\(receive.onlyIfAvailable)@\(String(describing: receive.passingCall))")
