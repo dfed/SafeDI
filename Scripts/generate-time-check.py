@@ -679,8 +679,8 @@ GROWTH_ROWS = {
     "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {}),
-    # V 0.122 s and 0.302 s (2.47); VO 0.111 s and 0.361 s (3.26): what is left once a subtree's key holds, of a
-    # rename's declaring path, no more than the one entry beneath it.
+    # V 0.122 s and 0.302 s (2.47); VO 0.111 s and 0.361 s (3.26), down from 8.6 and 9.2: what is left while a subtree's
+    # key holds the whole path to the scope that declares a rename read beneath it.
     "V-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=False), 10, {"time": 4.5}),
     "VO-only-if-available-renames-in-alternate-layers": (lambda layers: shape_alternating_renames(layers, only_if_available=True), 10, {"time": 4.5}),
     # PR 0.33 s and 3.0 s (9.1), 52 MB and 179 MB (3.5); its code grows with the graph.

@@ -1690,9 +1690,9 @@ extension DependencyTreeGenerator {
 			}
 			var receivableAliases = [Property: CleanSubtreeAlias]()
 			let usesByLabel = scopeToValidate.receivableAliases.isEmpty ? [:] : cleanSubtreeLabelFacts(of: scope).usesByLabel
+			// The walk's instantiation stack, nearest first, starts with the property `scope` is built for.
+			let instantiationStack = usesByLabel.isEmpty ? [] : (scopeToValidate.property.map { [$0] } ?? []) + scopeToValidate.propertyStack
 			for (aliasProperty, alias) in scopeToValidate.receivableAliases where usesByLabel[aliasProperty.label, default: []].contains(.read) {
-				// The walk's instantiation stack, nearest first, starts with the property `scope` is built for.
-				let instantiationStack = (scopeToValidate.property.map { [$0] } ?? []) + scopeToValidate.propertyStack
 				let declaringChild = instantiationStack.dropFirst(instantiationStack.count - alias.lastAliasDeclaringInstantiationStack.count - 1).first
 				let lastFulfillingProperty = alias.fulfillingOnlyIfAvailableAliases.last?.fulfillingProperty ?? alias.fulfillingProperty
 				receivableAliases[aliasProperty] = CleanSubtreeAlias(

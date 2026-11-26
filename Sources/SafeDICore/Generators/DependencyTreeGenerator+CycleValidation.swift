@@ -1231,12 +1231,10 @@ extension DependencyTreeGenerator {
 		}
 
 		/// Completes this scope's received properties in `cache` from the complete ones of the scopes walked from it,
-		/// taking nothing from one that has none yet, as a copy of this walk that has walked nothing finds them.
-		/// - Returns: Whether the scope had none, or others, before.
-		/// Completes the scope's received properties in `cache` from its children's there, as one pass of
-		/// `completeReceivedPropertiesByComponent`.
-		/// - Returns: Whether that changed them, and whether a receiver in a child's tree then requires an
-		///   `onlyIfAvailable` alias the scope declares.
+		/// taking nothing from one that has none yet, as a copy of this walk that has walked nothing finds them: one pass
+		/// of `completeReceivedPropertiesByComponent`.
+		/// - Returns: Whether the scope had none, or others, before, and whether a receiver in a child's tree then
+		///   requires an `onlyIfAvailable` alias the scope declares.
 		func completing(in cache: inout ReceivedPropertiesCache) -> (changed: Bool, requiresOwnOnlyIfAvailableAlias: Bool) {
 			var walk = self
 			func record(_ scope: Scope) {
