@@ -65,18 +65,19 @@ enum TypeKeyBody {
 		return rootFunctionDeclarations + statements
 	}
 
-	/// The statements of the function a fill of a seam call calls with what it binds (`ScopeGenerator.generateFillCode`), in
-	/// the type key's layout, each indented by `indentation`, or `nil` where the fill keeps `fillBody`, its tree's statements
-	/// in the path key's layout. `outerDeclarations` are the function's parameters. The root functions the tree declares
-	/// that the root declares beside the function, `declaredNames`, are left out, as the root's own statements leave them
-	/// out; every other one stays where the tree declares it: a statement that holds one keeps the path key's code.
-	static func statements(ofFillBody fillBody: [GeneratedCode], outerDeclarations: [Property], omittingRootFunctionsNamed declaredNames: Set<String>, indentation: String) -> [GeneratedCode]? {
-		let heldNames = Set(RootFunctionHoisting.records(in: fillBody).map(\.name))
+	/// The statements of a function the root declares whose body is one tree's statements (`ScopeGenerator.generateFillCode`
+	/// makes one), in the type key's layout, each indented by `indentation`, or `nil` where the function keeps `functionBody`,
+	/// its tree's statements in the path key's layout. `outerDeclarations` are the function's parameters. The root functions
+	/// the tree declares that the root declares beside the function, `declaredNames`, are left out, as the root's own
+	/// statements leave them out; every other one stays where the tree declares it: a statement that holds one keeps the path
+	/// key's code.
+	static func statements(ofFunctionBody functionBody: [GeneratedCode], outerDeclarations: [Property], omittingRootFunctionsNamed declaredNames: Set<String>, indentation: String) -> [GeneratedCode]? {
+		let heldNames = Set(RootFunctionHoisting.records(in: functionBody).map(\.name))
 		return statements(
-			ofRootBody: fillBody,
+			ofRootBody: functionBody,
 			outerDeclarations: outerDeclarations,
 			namesInScope: Set(outerDeclarations.map(\.label)),
-			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: heldNames.intersection(declaredNames), declarations: [], body: fillBody),
+			hoisting: RootFunctionHoisting.Hoisting(rootFunctionNames: heldNames, declaredNames: heldNames.intersection(declaredNames), declarations: [], body: functionBody),
 			indentation: indentation,
 		)
 	}

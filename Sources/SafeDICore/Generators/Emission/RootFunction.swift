@@ -387,7 +387,7 @@ struct FillBodyLayout: Sendable {
 	/// statement the type key keeps in the path key's code is written as text, which no omission around it reaches.
 	func laidOutStatements(omittingRootFunctionsNamed declaredNames: Set<String>) -> [GeneratedCode] {
 		guard leading.isEmpty,
-		      let statements = TypeKeyBody.statements(ofFillBody: tree, outerDeclarations: outerDeclarations, omittingRootFunctionsNamed: declaredNames, indentation: ScopeGenerator.standardIndent)
+		      let statements = TypeKeyBody.statements(ofFunctionBody: tree, outerDeclarations: outerDeclarations, omittingRootFunctionsNamed: declaredNames, indentation: ScopeGenerator.standardIndent)
 		else { return pathStatements }
 		return statements + trailing
 	}
