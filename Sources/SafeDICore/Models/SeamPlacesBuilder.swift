@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
 
 /// Builds a seam's place graph (`SeamSignature.Places`) from the levels today's per-site walk (`fields(of:)` in
 /// `SeamBuilderParameters`) gives each site, root first: a level variant once, however many paths reach it, with an edge
@@ -53,6 +52,13 @@ struct SeamPlacesBuilder {
 		var draft: LevelDraft
 		var parents = [Int]()
 		var declaredSegmentByParent = [[SeamSignature.Hole.DeclaredProperty]]()
+		/// The sites already in each declaration's `placesInTree`, so a site reached on many routes is listed once.
+		var placesInTreeSeen: [Set<SeamSignature.Hole.Site>]
+
+		init(draft: LevelDraft) {
+			self.draft = draft
+			placesInTreeSeen = draft.declarations.map { Set($0.placesInTree) }
+		}
 	}
 
 	private struct CaseDraft {
@@ -60,10 +66,10 @@ struct SeamPlacesBuilder {
 		let isBuiltInSendableFunction: Bool
 		let siteOpensSendableFunction: Bool
 		var isPassedOnSendable = false
-		var calledCopyDeclarations = UnionOfEncoded<SeamSignature.Hole.UncarriedDeclaration>()
-		var uncarriedReplacedOnPathsToCalls = UnionOfEncoded<SeamSignature.Hole.UncarriedDeclaration>()
-		var reenteringCallDeclarations = UnionOfEncoded<SeamSignature.Hole.ReenteringCallDeclaration>()
-		var reenteringPlaceFields = UnionOfEncoded<SeamSignature.Hole.ReenteringPlaceField>()
+		var calledCopyDeclarations = UnionOfDistinct<SeamSignature.Hole.UncarriedDeclaration>()
+		var uncarriedReplacedOnPathsToCalls = UnionOfDistinct<SeamSignature.Hole.UncarriedDeclaration>()
+		var reenteringCallDeclarations = UnionOfDistinct<SeamSignature.Hole.ReenteringCallDeclaration>()
+		var reenteringPlaceFields = UnionOfDistinct<SeamSignature.Hole.ReenteringPlaceField>()
 	}
 
 	private struct CaseKey: Hashable {
@@ -77,7 +83,7 @@ struct SeamPlacesBuilder {
 	}
 
 	private var variants = [LevelVariant]()
-	private var variantIndexByProjection = [Data: Int]()
+	private var variantIndexByProjection = [VariantProjection: Int]()
 	private var edges = Set<EdgeKey>()
 	private var cases = [CaseDraft]()
 	private var caseIndexByKey = [CaseKey: Int]()
@@ -174,7 +180,7 @@ struct SeamPlacesBuilder {
 	/// The index of the variant `draft` is of: every fact of the level but the sites of the places in a declaration's tree,
 	/// which differ by path and become one case, and the edge it was reached by.
 	private mutating func variantIndex(of draft: LevelDraft) -> Int {
-		let projection = Self.encoded(VariantProjection(
+		let projection = VariantProjection(
 			key: draft.key,
 			declarations: draft.declarations.map(\.declaration),
 			opensSendableFunction: draft.opensSendableFunction,
@@ -183,12 +189,14 @@ struct SeamPlacesBuilder {
 			fillOwnerType: draft.fillOwnerType,
 			pathSegment: draft.pathSegment,
 			pathTypes: draft.pathTypes,
-		))
+		)
 		if let known = variantIndexByProjection[projection] {
 			// A declaration's tree holds the places of every route through the level: a place's family, and so its case, can
 			// differ by the route above.
 			for (index, declaration) in draft.declarations.enumerated() {
-				variants[known].draft.declarations[index].placesInTree.append(contentsOf: declaration.placesInTree)
+				for site in declaration.placesInTree where variants[known].placesInTreeSeen[index].insert(site).inserted {
+					variants[known].draft.declarations[index].placesInTree.append(site)
+				}
 			}
 			return known
 		}
@@ -197,7 +205,11 @@ struct SeamPlacesBuilder {
 		return variants.count - 1
 	}
 
-	private struct VariantProjection: Encodable {
+	/// Every fact of a level but its declarations' places in their trees, source locations included. Types compare as types
+	/// (`any Service` equals `Service`), not as spelled: every fact of a level comes from the declarations of its type and of
+	/// the edge above it, which spell each type once, so two routes to one level spell its types alike. The tests' oracle
+	/// compares every place's fields, spelling included, with the per-site walk's.
+	private struct VariantProjection: Hashable {
 		let key: SeamSignature.Places.LevelKey
 		let declarations: [SeamSignature.Places.Declaration]
 		let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
@@ -207,23 +219,15 @@ struct SeamPlacesBuilder {
 		let pathSegment: [Property]
 		let pathTypes: [SeamSignature.Hole.PathType]
 	}
-
-	/// Equal records encode equal bytes, keys sorted; a set inside a record can encode its elements in another order, which
-	/// at worst keeps two equal variants apart, never joins two that differ.
-	fileprivate static func encoded(_ value: some Encodable) -> Data {
-		let encoder = JSONEncoder()
-		encoder.outputFormatting = .sortedKeys
-		return (try? encoder.encode(value)) ?? Data()
-	}
 }
 
-/// The distinct elements added, in the order first added, compared by their encoding.
-private struct UnionOfEncoded<Element: Encodable> {
+/// The distinct elements added, in the order first added.
+private struct UnionOfDistinct<Element: Hashable> {
 	private(set) var elements = [Element]()
-	private var seen = Set<Data>()
+	private var seen = Set<Element>()
 
 	mutating func add(_ newElements: [Element]) {
-		for element in newElements where seen.insert(SeamPlacesBuilder.encoded(element)).inserted {
+		for element in newElements where seen.insert(element).inserted {
 			elements.append(element)
 		}
 	}

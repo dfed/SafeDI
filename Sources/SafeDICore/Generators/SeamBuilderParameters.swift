@@ -279,14 +279,14 @@ extension DependencyTreeGenerator {
 					siteOpensSendableFunction: property.propertyType.isSendable,
 				)
 				// The uncarried declarations the presentation appends after the place's own, and those it puts in place of one the
-				// place's own list holds.
+				// place's own list holds: a declaration bound from the caller's argument that a path to a call binds otherwise.
 				let ownCount = content.uncarriedDeclarations.count
 				placesBuilder.addPresentation(
 					ofCase: caseIndex,
 					isPassedOnSendable: hole.isSendable,
 					calledCopyDeclarations: Array(hole.uncarriedDeclarations.dropFirst(ownCount)),
 					uncarriedReplacedOnPathsToCalls: zip(content.uncarriedDeclarations, hole.uncarriedDeclarations.prefix(ownCount)).compactMap { own, presented in
-						own.isBoundFromCallersArgument ? presented : nil
+						own.isBoundFromCallersArgument && presented != own ? presented : nil
 					},
 					reenteringCallDeclarations: hole.reenteringCallDeclarations,
 					reenteringPlaceFields: hole.reenteringPlaceFields,
