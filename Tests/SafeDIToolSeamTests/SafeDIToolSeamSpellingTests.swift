@@ -605,9 +605,8 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		// A pass-through whose type comes from a third module, `Core`, which neither the seam's module nor its caller
 		// declares: both compute the parameter's type from the declaration they read and spell it alike, so the guard
 		// hashes match and the call compiles, under both integrations and for each spelling. A `.safedi` records no
-		// top-level `public` declaration of `Core`'s, so under `.moduleInfo` such a type is one SafeDI reads no declaration
-		// of, which the comment names; it records `Catalog.Entry`, a `public` type nested in another, which the module
-		// that reads it names only through that record, so the nested spelling names no unread type.
+		// `public` declaration of `Core`'s, so under `.moduleInfo` the type is one SafeDI reads no declaration of, which the
+		// comment names.
 		let type = spelling.type
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
@@ -693,6 +692,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
+					    // SafeDI counts `Catalog.Entry` as `public`: no module it reads declares it narrower. If `Catalog.Entry` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> Catalog.Entry) {
