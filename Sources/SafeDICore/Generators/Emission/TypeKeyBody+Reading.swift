@@ -24,7 +24,7 @@ extension TypeKeyLayout {
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
 	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
 	mutating func declareOuter(_ properties: [Property]) {
-		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], outerView: [:], forwardedLabels: [], cycleParameterLabels: []))
+		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], outerView: [:], forwardedLabels: [], cycleParameters: []))
 		for property in properties {
 			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
 			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
@@ -97,7 +97,7 @@ extension TypeKeyLayout {
 							domainLabels: labels,
 							outerView: outerView,
 							forwardedLabels: Set(built.parameterProperties.map(\.label)),
-							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
+							cycleParameters: built.cycleParameters,
 						))
 						viewsByKey[key] = newBody
 						statement = .built(body: newBody)
@@ -109,12 +109,40 @@ extension TypeKeyLayout {
 				}
 			case let .closer(closer):
 				label = closer.property.label
-				// The function a closing scope calls is the nearest enclosing one of its name, as Swift resolves it.
-				var target = body
-				while target != 0, bodies[target].record?.functionName != closer.closedOnFunctionName {
-					target = bodies[target].parent
+				let target: Int
+				if let index = closer.targetVariant {
+					guard variants.indices.contains(index) else { return false }
+					let variant = variants[index]
+					// A call place of the per-type plan calls its variant's one function, declared in the root's body; the walk
+					// reads the variant's body where it first reaches a call of it, so bodies are numbered as a walk of the
+					// places would number them.
+					if let reached = variantBodiesByIndex[index] {
+						target = reached
+					} else {
+						target = bodies.count
+						bodies.append(Body(
+							parent: body,
+							position: position,
+							record: variant.record,
+							isInSendableFamily: variant.isInSendableFamily,
+							domainLabels: [],
+							outerView: [:],
+							forwardedLabels: Set(variant.record.parameterProperties.map(\.label)),
+							cycleParameters: variant.parameters,
+						))
+						variantBodiesByIndex[index] = target
+						variantBodies.insert(target)
+						frames.append((body: target, children: Self.statementCodes(of: variant.record.children), next: 0))
+					}
+				} else {
+					// The function a closing scope calls is the nearest enclosing one of its name, as Swift resolves it.
+					var enclosing = body
+					while enclosing != 0, bodies[enclosing].record?.functionName != closer.closedOnFunctionName {
+						enclosing = bodies[enclosing].parent
+					}
+					guard enclosing != 0 else { return false }
+					target = enclosing
 				}
-				guard target != 0 else { return false }
 				statement = .closer(closer, target: target)
 				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .alias(alias):
@@ -193,7 +221,10 @@ extension TypeKeyLayout {
 					boundBefore.insert(childBuilt.property.label)
 				case let .closer(closer):
 					closer.callSiteReads.forEach(lookUp)
-					close(closer.closedOnFunctionName)
+					// A call of a variant passes what the variant reads as its cycle arguments, which the call site's reads hold.
+					if closer.targetVariant == nil {
+						close(closer.closedOnFunctionName)
+					}
 					boundBefore.insert(closer.property.label)
 				case let .alias(alias):
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
@@ -360,8 +391,13 @@ extension TypeKeyLayout {
 	/// The declaration the place whose function is `body` resolves `label` to where it is called from its parent: what its
 	/// binding passes a cycle parameter, else the first declaration outside it its reads of the label resolve to, `.none`
 	/// where they all read `nil`, else the nearest declaration at its binding.
+	/// A variant of the per-type plan has no place of its own, so it resolves a label where its first call is made.
 	func resolution(of label: String, atPlace body: Int) -> PathValue {
-		if bodies[body].cycleParameterLabels.contains(label) {
+		// A variant reads only its cycle parameters (`variantsReadOnlyTheirCycleParameters`), and its body is read where its
+		// first call is.
+		if variantBodies.contains(body), bodies[body].cycleParameterLabels.contains(label), let firstCall = closersByTarget[body]?.first {
+			closerValue(of: label, closing: firstCall, onPlace: body)
+		} else if bodies[body].cycleParameterLabels.contains(label) {
 			bodies[body].record?.callCycleArguments.first(where: { $0.label == label }).map {
 				pathValue(of: $0, inBody: bodies[body].parent, before: bodies[body].position)
 			} ?? .none
