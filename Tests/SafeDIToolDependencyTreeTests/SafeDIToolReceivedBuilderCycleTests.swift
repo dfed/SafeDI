@@ -133,6 +133,58 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_rebindsBuildersInTheOrderTheBodyFirstReceivesThem_whenTwoChildrenBuildOneTypeThatReceivesALaterMember() async throws {
+		// `A`'s body first receives `cBuilder`, in the `Shared` its first child builds, then `bBuilder`, in its second child,
+		// which builds `Shared` again: the function rebinds them in that order, which neither their labels nor the root's
+		// declaration order give.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>"),
+			Self.type("A", "@Instantiated let left: Left", "@Instantiated let right: Right"),
+			Self.type("Left", "@Instantiated let shared: Shared"),
+			Self.type("Right", "@Received let bBuilder: Instantiator<B>", "@Instantiated let shared: Shared"),
+			Self.type("Shared", "@Received let cBuilder: Instantiator<C>"),
+			Self.type("B", "@Received let aBuilder: Instantiator<A>"),
+			Self.type("C", "@Received let aBuilder: Instantiator<A>"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            func __safeDI_left() -> Left {
+			                let shared = Shared(cBuilder: cBuilder)
+			                return Left(shared: shared)
+			            }
+			            let left: Left = __safeDI_left()
+			            func __safeDI_right() -> Right {
+			                let shared = Shared(cBuilder: cBuilder)
+			                return Right(bBuilder: bBuilder, shared: shared)
+			            }
+			            let right: Right = __safeDI_right()
+			            return A(left: left, right: right)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        func __safeDI_cBuilder() -> C {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return C(aBuilder: aBuilder)
+			        }
+			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_rebindsBuilderInsideItsOwnFunction_whenConstantInsideItsTreeReceivesIt() async throws {
 		let output = try await executeSafeDIToolTest(swiftFileContent: [
 			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let aBuilder: Instantiator<A>"),
