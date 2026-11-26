@@ -24,9 +24,9 @@ import Foundation
 /// `SeamBuilderParameters`) gives each site, root first: a level variant once, however many paths reach it, with an edge
 /// per parent it is reached from, and a case per owner level and family.
 ///
-/// A step of the change that holds places by case: it reads the per-site walk, so it is as costly as that walk, and runs
-/// only while a test observes the graph (`SeamPlaceLevels.observer`). The walk that builds the graph directly, once per
-/// level variant, replaces it. It holds its drafts for one computation of a seam's holes.
+/// A step of the change that holds places by case: it reads the per-site walk, so it is as costly as that walk, and adds to
+/// its cost the encoding of each level of each site's path. The walk that builds the graph directly, once per level variant,
+/// replaces it. It holds its drafts for one computation of a seam's holes.
 struct SeamPlacesBuilder {
 	/// A declaration of a level, with the sites of the places of the tree it instantiates where a type above the seam could
 	/// build that tree, which become cases once every site has one.
@@ -129,8 +129,9 @@ struct SeamPlacesBuilder {
 		cases[caseIndex].reenteringPlaceFields.add(reenteringPlaceFields)
 	}
 
-	/// The graph, each declaration's places in its tree mapped to their cases, a site of no case left out.
-	func places() -> SeamSignature.Places {
+	/// The graph, each declaration's places in its tree mapped to their cases, a site of no case left out, and each case
+	/// named by the route in `namingRouteByCase`.
+	func places(namingRouteByCase: [Int: [Int]]) -> SeamSignature.Places {
 		let levels = variants.map { variant in
 			SeamSignature.Places.Level(
 				key: variant.draft.key,
@@ -153,7 +154,7 @@ struct SeamPlacesBuilder {
 		}
 		return SeamSignature.Places(
 			levels: levels,
-			cases: cases.map { draft in
+			cases: cases.enumerated().map { caseIndex, draft in
 				SeamSignature.Places.Case(
 					ownerLevel: draft.ownerLevel,
 					isBuiltInSendableFunction: draft.isBuiltInSendableFunction,
@@ -164,6 +165,7 @@ struct SeamPlacesBuilder {
 					uncarriedReplacedOnPathsToCalls: draft.uncarriedReplacedOnPathsToCalls.elements,
 					reenteringCallDeclarations: draft.reenteringCallDeclarations.elements,
 					reenteringPlaceFields: draft.reenteringPlaceFields.elements,
+					namingRoute: namingRouteByCase[caseIndex] ?? [],
 				)
 			},
 		)
@@ -183,6 +185,11 @@ struct SeamPlacesBuilder {
 			pathTypes: draft.pathTypes,
 		))
 		if let known = variantIndexByProjection[projection] {
+			// A declaration's tree holds the places of every route through the level: a place's family, and so its case, can
+			// differ by the route above.
+			for (index, declaration) in draft.declarations.enumerated() {
+				variants[known].draft.declarations[index].placesInTree.append(contentsOf: declaration.placesInTree)
+			}
 			return known
 		}
 		variantIndexByProjection[projection] = variants.count

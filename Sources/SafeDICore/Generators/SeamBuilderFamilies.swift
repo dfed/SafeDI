@@ -76,6 +76,10 @@ extension DependencyTreeGenerator {
 		var holesWithBuilders = [(hole: SeamSignature.Hole, builder: SeamSignature.Builder)]()
 		/// How the seam's tree hands each inner seam's enum up from a call whose case is nested by type.
 		var callRoutes = [SeamSignature.CallRoute]()
+		/// The step of each case on a route, by its edge (`ScopeEnumsByType.routeStepByEdge`), of every hole type.
+		var routeStepByEdge = [RouteEdge: SeamSignature.Hole.RouteStep]()
+		/// Each route beside its steps by edge, of every hole type, while the tests observe the seam's places.
+		var routeStepObservations = [SeamRouteStepObservation]()
 	}
 
 	/// What the scope types a seam or a public mock declares for its builders are named by, and how its builders spell them.
@@ -262,6 +266,8 @@ extension DependencyTreeGenerator {
 		let orderedHoleTypes = holeTypes.sorted { label(of: $0, isSendable: false) < label(of: $1, isSendable: false) }
 		var ownEnums = [SeamSignature.ScopeEnum]()
 		var callRoutes = [SeamSignature.CallRoute]()
+		var routeStepByEdge = [RouteEdge: SeamSignature.Hole.RouteStep]()
+		var routeStepObservations = [SeamRouteStepObservation]()
 		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
@@ -307,6 +313,9 @@ extension DependencyTreeGenerator {
 					memberBindingKeysByLabel[label(of: holeType, isSendable: isSendable), default: []].formUnion(byType.memberBindingKeysByFamily[isSendable, default: []])
 				}
 				callRoutes += byType.callRoutes
+				// An edge names its hole type, so no two hole types' steps share one.
+				routeStepByEdge.merge(byType.routeStepByEdge) { first, _ in first }
+				routeStepObservations += byType.routeStepObservations
 				for (site, enumPlace) in byType.enumPlaceBySite {
 					holesBySite[site]?.enumPlace = enumPlace
 					holesBySite[site]?.scopeTypeName = enumPlace.enumTypeName
@@ -522,7 +531,7 @@ extension DependencyTreeGenerator {
 				keysToVisit.append(contentsOf: innerKeys.reversed())
 			}
 		}
-		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes)
+		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes, routeStepByEdge: routeStepByEdge, routeStepObservations: routeStepObservations)
 	}
 
 	/// A call whose fill leads to a place, the builder filled, and the type of the scope value it hands: what one inner scope's

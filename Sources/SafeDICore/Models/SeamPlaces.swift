@@ -291,7 +291,9 @@ extension SeamSignature {
 				uncarriedReplacedOnPathsToCalls: [Hole.UncarriedDeclaration] = [],
 				reenteringCallDeclarations: [Hole.ReenteringCallDeclaration] = [],
 				reenteringPlaceFields: [Hole.ReenteringPlaceField] = [],
+				namingRoute: [Int] = [],
 			) {
+				self.namingRoute = namingRoute
 				self.ownerLevel = ownerLevel
 				self.isBuiltInSendableFunction = isBuiltInSendableFunction
 				self.siteOpensSendableFunction = siteOpensSendableFunction
@@ -313,6 +315,10 @@ extension SeamSignature {
 			public let siteOpensSendableFunction: Bool
 			/// For a place a call presents, the inner seam's case it stands for.
 			public let passedUp: PassedUpReference?
+			/// The levels, root first, of the route of the case's first place in builder-label order: the place a name made from a
+			/// path, or a diagnostic that names one place, names, as each did when a seam held a hole per site. Stored, since the
+			/// order of the places is the generated code's, which the levels' parents do not keep.
+			public let namingRoute: [Int]
 
 			// What the calls on the paths to the places, and the fills those paths run through, add to the places, stored per
 			// case: they come from calls and fills, which the levels do not hold, and each is bounded by the declarations, not by

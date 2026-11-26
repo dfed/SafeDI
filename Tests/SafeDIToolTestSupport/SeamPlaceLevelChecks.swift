@@ -94,7 +94,7 @@ extension SeamPlaceLevels {
 	static func checkingPathStructs(handingOn enclosingObserver: (@Sendable (SeamPlaceLevels) -> Void)?) -> @Sendable (SeamPlaceLevels) -> Void {
 		{ placeLevels in
 			// Test only, deleted before merge: the place graph must answer as the per-site walk (`SeamPlacesOracle`).
-			for mismatch in placeLevels.pathStructMismatches + placeLevels.placesOracleMismatches {
+			for mismatch in placeLevels.pathStructMismatches + placeLevels.placesOracleMismatches + placeLevels.routeStepMismatches {
 				Issue.record(Comment(rawValue: mismatch))
 			}
 			enclosingObserver?(placeLevels)
@@ -116,7 +116,7 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches + placeLevels.placesOracleMismatches)
+		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches + placeLevels.placesOracleMismatches + placeLevels.routeStepMismatches)
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()

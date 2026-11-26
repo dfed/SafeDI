@@ -576,7 +576,7 @@ extension DependencyTreeGenerator {
 			Self.shapedBuilders(
 				of: instantiable,
 				generator: generator,
-				holes: holes,
+				holes: holes.holes,
 				parameters: rootLevel.parameters,
 				// The root level's fields are parameters of `mock()` already named apart by `parameters`.
 				otherParameters: otherParameters.filter { !rootLevelLabels.contains($0.label) },
@@ -590,6 +590,7 @@ extension DependencyTreeGenerator {
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
+		holes.handOnObservedPlaceLevels(with: builders)
 		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
@@ -606,7 +607,7 @@ extension DependencyTreeGenerator {
 		let enumsByKey = Dictionary(buildersNamedApart.scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		let errors = buildersNamedApart.builders.flatMap { builder in
 			let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey)
-			return Self.placesForwardingOtherValuesErrors(of: instantiable, places: holes.filter { reachedSites.contains($0.site) }, holeType: builder.enumKey.holeType, isSendable: builder.enumKey.isSendable, instantiables: typeDescriptionToFulfillingInstantiableMap, declaredTypeNames: declaredTypeNames)
+			return Self.placesForwardingOtherValuesErrors(of: instantiable, places: holes.holes.filter { reachedSites.contains($0.site) }, holeType: builder.enumKey.holeType, isSendable: builder.enumKey.isSendable, instantiables: typeDescriptionToFulfillingInstantiableMap, declaredTypeNames: declaredTypeNames)
 		}
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
