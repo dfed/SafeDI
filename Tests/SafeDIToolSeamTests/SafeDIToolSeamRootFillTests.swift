@@ -799,7 +799,6 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		"""], dependencies: ["Core"]),
 	]
 
-
 	/// The modules of `generate_laysOutRootByType_whenFilledCallReadsValueOnlyIfAvailableDeclaredBeneathRoot`.
 	private static let onlyIfAvailableLayoutModules = [
 		ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
@@ -891,7 +890,6 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		}
 		"""], dependencies: ["Core"]),
 	]
-
 
 	/// The modules of `generate_keepsFillInItsCall_whenFillReadsValueOnlyIfAvailableDeclaredBeneathRoot`.
 	private static let onlyIfAvailableReadModules = [
