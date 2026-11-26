@@ -48,7 +48,7 @@ extension TypeKeyLayout {
 			// which reads only the root's declarations before it, as the type key's code declares them: functions are all
 			// declared in the root's body, so no function beneath it could keep reads it does not list. A closer is never one:
 			// it lays out, and its code holds no root function.
-			let keepsPathKeyCode = body == 0 && (!Self.laysOut(frame.children[frame.next]) || holdsKeptRootFunction(frame.children[frame.next]))
+			let keepsPathKeyCode = body == 0 && (keptStatementIndices.contains(frame.next) || !Self.laysOut(frame.children[frame.next]) || holdsKeptRootFunction(frame.children[frame.next]))
 			let position = bodies[body].statements.count
 			let statement: Statement
 			let label: String

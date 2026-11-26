@@ -534,7 +534,364 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		""")
 	}
 
+	/// `Home`'s fill builds `LiveApi`, which receives `logger` only if available. `Feature`, beneath the root, declares
+	/// `logger`, so the call lists the read of a `Logger?` property while its declaration is a `Logger`. The text reads the
+	/// label at every place that shares it, so the label is required and the root is laid out by type: `Panel`'s function
+	/// takes `logger` as a `Logger`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootByType_whenFilledCallReadsValueOnlyIfAvailableDeclaredBeneathRoot() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.onlyIfAvailableLayoutModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_panel(logger: Logger) -> Panel {
+		            func __safeDI_home() -> Home {
+		                _ = Home.__safeDI_Home_59C182C3751C58E0.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: {
+		                        let api: any Api = LiveApi(logger: logger)
+		                        return api
+		                    })
+		                }
+		                return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
+		            }
+		            let home: Home = __safeDI_home()
+		            return Panel(home: home)
+		        }
+		        func __safeDI_feature() -> Feature {
+		            let logger = Logger()
+		            let panel: Panel = __safeDI_panel(logger: logger)
+		            return Feature(logger: logger, panel: panel)
+		        }
+		        let feature: Feature = __safeDI_feature()
+		        func __safeDI_left() -> Left {
+		            let shared = Shared()
+		            return Left(shared: shared)
+		        }
+		        let left: Left = __safeDI_left()
+		        func __safeDI_right() -> Right {
+		            let shared = Shared()
+		            return Right(shared: shared)
+		        }
+		        let right: Right = __safeDI_right()
+		        self.init(feature: feature, left: left, right: right)
+		    }
+		}
+		""")
+	}
+
+	/// `W` is built again through `T3`'s instantiator, so its function is called with `v1` as the root's `V1` and, beneath
+	/// `T0`, as `T0`'s `LazilyInstantiated<V1>`, while the call of `S0` inside it reads `v1` as a value: no one parameter
+	/// type answers both, so the statement that builds `wBuilder` keeps the path key's code. `Left` and `Right` reach no
+	/// such place and are still laid out by type: `Shared`'s function is declared once for both.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutOtherRootStatementsByType_whenOneStatementReachesFilledCallTheTypeKeyCannotShare() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.lazyCycleFallbackModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_liveApi_ApiBuilder_S0_In0_Scope_apiBuilder() -> ErasedInstantiator<(), any Api>.Builder {
+		            func __safeDI_apiBuilder() -> LiveApi {
+		                LiveApi()
+		            }
+		            return { _ in __safeDI_apiBuilder() }
+		        }
+		        func __safeDI_liveApi_ApiBuilder_S0() -> S0.__safeDI_LiveApi_ApiCarrier<any Api> {
+		            .init(in0: { values_v1 in __safeDI_liveApi_ApiBuilder_S0_In0_Scope() })
+		        }
+		        func __safeDI_liveApi_ApiBuilder_S0_In0_Scope() -> S0.__safeDI_LiveApi_ApiCarrier_In0<any Api> {
+		            .init(apiBuilder: { __safeDI_liveApi_ApiBuilder_S0_In0_Scope_apiBuilder() })
+		        }
+		        let v1 = V1()
+		        func __safeDI_wBuilder(v1: V1) -> W {
+		            func __safeDI_t0() -> T0 {
+		                func __safeDI_v1() -> V1 {
+		                    V1()
+		                }
+		                let v1 = LazilyInstantiated<V1>(__safeDI_v1)
+		                func __safeDI_t3() -> T3 {
+		                    let wBuilder = Instantiator<W> {
+		                        __safeDI_wBuilder(v1: v1.instance)
+		                    }
+		                    return T3(wBuilder: wBuilder)
+		                }
+		                let t3: T3 = __safeDI_t3()
+		                return T0(v1: v1, t3: t3)
+		            }
+		            let t0: T0 = __safeDI_t0()
+		            func __safeDI_t3() -> T3 {
+		                let wBuilder = Instantiator<W> {
+		                    __safeDI_wBuilder(v1: v1)
+		                }
+		                return T3(wBuilder: wBuilder)
+		            }
+		            let t3: T3 = __safeDI_t3()
+		            func __safeDI_s0() -> S0 {
+		                _ = S0.__safeDI_S0_B89382A9F3250846.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                return S0(__safeDI_v1: v1, __safeDI_liveApi_ApiBuilder: __safeDI_liveApi_ApiBuilder_S0())
+		            }
+		            let s0: S0 = __safeDI_s0()
+		            return W(t0: t0, t3: t3, s0: s0)
+		        }
+		        let wBuilder = Instantiator<W> {
+		            __safeDI_wBuilder(v1: v1)
+		        }
+		        func __safeDI_shared() -> Shared {
+		            let leaf = Leaf()
+		            return Shared(leaf: leaf)
+		        }
+		        func __safeDI_left() -> Left {
+		            let shared: Shared = __safeDI_shared()
+		            return Left(shared: shared)
+		        }
+		        let left: Left = __safeDI_left()
+		        func __safeDI_right() -> Right {
+		            let shared: Shared = __safeDI_shared()
+		            return Right(shared: shared)
+		        }
+		        let right: Right = __safeDI_right()
+		        self.init(v1: v1, wBuilder: wBuilder, left: left, right: right)
+		    }
+		}
+		""")
+	}
+
 	// MARK: Fixtures
+
+	/// The modules of `generate_laysOutOtherRootStatementsByType_whenOneStatementReachesFilledCallTheTypeKeyCannotShare`.
+	private static let lazyCycleFallbackModules = [
+		ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+		import SafeDI
+
+		nonisolated public protocol Api {}
+
+		@Instantiable
+		public final class V1: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class In0: Instantiable {
+		    public init(apiBuilder: ErasedInstantiator<(), any Api>, v1: V1) {
+		        self.apiBuilder = apiBuilder
+		        self.v1 = v1
+		    }
+
+		    @Instantiated(fulfilledByType: "LiveApi") let apiBuilder: ErasedInstantiator<(), any Api>
+		    @Received let v1: V1
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class S0: Instantiable {
+		    public init(in0: In0) {
+		        self.in0 = in0
+		    }
+
+		    @Instantiated let in0: In0
+		}
+		"""]),
+		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+		import Core
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+		public final class LiveApi: Api, Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class T3: Instantiable {
+		    public init(wBuilder: Instantiator<W>) {
+		        self.wBuilder = wBuilder
+		    }
+
+		    @Instantiated let wBuilder: Instantiator<W>
+		}
+
+		@Instantiable
+		public final class T0: Instantiable {
+		    public init(v1: LazilyInstantiated<V1>, t3: T3) {
+		        self.v1 = v1
+		        self.t3 = t3
+		    }
+
+		    @Instantiated let v1: LazilyInstantiated<V1>
+		    @Instantiated let t3: T3
+		}
+
+		@Instantiable
+		public final class W: Instantiable {
+		    public init(t0: T0, t3: T3, s0: S0) {
+		        self.t0 = t0
+		        self.t3 = t3
+		        self.s0 = s0
+		    }
+
+		    @Instantiated let t0: T0
+		    @Instantiated let t3: T3
+		    @Instantiated let s0: S0
+		}
+
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Shared: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+
+		@Instantiable
+		public final class Left: Instantiable {
+		    public init(shared: Shared) {
+		        self.shared = shared
+		    }
+
+		    @Instantiated let shared: Shared
+		}
+
+		@Instantiable
+		public final class Right: Instantiable {
+		    public init(shared: Shared) {
+		        self.shared = shared
+		    }
+
+		    @Instantiated let shared: Shared
+		}
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(v1: V1, wBuilder: Instantiator<W>, left: Left, right: Right) {
+		        self.v1 = v1
+		        self.wBuilder = wBuilder
+		        self.left = left
+		        self.right = right
+		    }
+
+		    @Instantiated let v1: V1
+		    @Instantiated let wBuilder: Instantiator<W>
+		    @Instantiated let left: Left
+		    @Instantiated let right: Right
+		}
+		"""], dependencies: ["Core"]),
+	]
+
+
+	/// The modules of `generate_laysOutRootByType_whenFilledCallReadsValueOnlyIfAvailableDeclaredBeneathRoot`.
+	private static let onlyIfAvailableLayoutModules = [
+		ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+		import SafeDI
+
+		nonisolated public protocol Api {}
+
+		@Instantiable
+		public final class Logger: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Home: Instantiable {
+		    public init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated let api: any Api
+		}
+		"""]),
+		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+		import Core
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+		public final class LiveApi: Api, Instantiable {
+		    public init(logger: Logger?) {
+		        self.logger = logger
+		    }
+
+		    @Received(onlyIfAvailable: true) let logger: Logger?
+		}
+
+		@Instantiable
+		public final class Panel: Instantiable {
+		    public init(home: Home) {
+		        self.home = home
+		    }
+
+		    @Instantiated let home: Home
+		}
+
+		@Instantiable
+		public final class Feature: Instantiable {
+		    public init(logger: Logger, panel: Panel) {
+		        self.logger = logger
+		        self.panel = panel
+		    }
+
+		    @Instantiated let logger: Logger
+		    @Instantiated let panel: Panel
+		}
+
+		@Instantiable
+		public final class Shared: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Left: Instantiable {
+		    public init(shared: Shared) {
+		        self.shared = shared
+		    }
+
+		    @Instantiated let shared: Shared
+		}
+
+		@Instantiable
+		public final class Right: Instantiable {
+		    public init(shared: Shared) {
+		        self.shared = shared
+		    }
+
+		    @Instantiated let shared: Shared
+		}
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(feature: Feature, left: Left, right: Right) {
+		        self.feature = feature
+		        self.left = left
+		        self.right = right
+		    }
+
+		    @Instantiated let feature: Feature
+		    @Instantiated let left: Left
+		    @Instantiated let right: Right
+		}
+		"""], dependencies: ["Core"]),
+	]
+
 
 	/// The modules of `generate_keepsFillInItsCall_whenFillReadsValueOnlyIfAvailableDeclaredBeneathRoot`.
 	private static let onlyIfAvailableReadModules = [

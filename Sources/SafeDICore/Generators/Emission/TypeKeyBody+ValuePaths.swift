@@ -190,8 +190,10 @@ extension TypeKeyLayout {
 
 	/// Whether every value path of every place names only passed arguments its function takes, the root's names none, and
 	/// each ordinary read in a path reads in the type key's code what it reads in the path key's.
-	func checkValuePaths() -> Bool {
+	mutating func checkValuePaths() -> Bool {
 		for body in bodies.indices {
+			failedBody = body
+			failedIndex = nil
 			let owner = classByBody[body]
 			let takenNames = Set(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
 			let statements = bodies[body].statements
@@ -211,6 +213,7 @@ extension TypeKeyLayout {
 				}
 			}
 			for index in statements.indices {
+				failedIndex = index
 				if case let .inline(record) = statements[index] {
 					guard record.argumentValues.keys.allSatisfy({ $0 < record.arguments.count }) else { return false }
 					for path in record.argumentValues.values {
@@ -233,9 +236,10 @@ extension TypeKeyLayout {
 
 	/// Whether no value that stays outside `@Sendable` functions is read, or handed on, by a class whose function is
 	/// `@Sendable`.
-	func checkSendableMarks() -> Bool {
+	mutating func checkSendableMarks() -> Bool {
 		for owner in membersByClass.indices.dropFirst() where isDecorated[owner] {
 			for member in membersByClass[owner] {
+				failedBody = member
 				guard let record = bodies[member].record,
 				      !record.constructionReads.contains(where: \.staysOutsideSendableFunctions),
 				      !record.passedArguments.contains(where: \.staysOutsideSendableFunctions)

@@ -158,7 +158,11 @@ extension TypeKeyLayout {
 				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional {
 					required.insert(fulfillingProperty.label)
 				}
-				record.listedReads.forEach(note)
+				// A text place's text reads each label it lists at every place that shares it, whatever its receiver's
+				// optionality, so the function is handed the declaration's own type.
+				for read in record.listedReads where read.source != .nil {
+					required.insert(read.label)
+				}
 			}
 		}
 		return required.intersection(reads[body])

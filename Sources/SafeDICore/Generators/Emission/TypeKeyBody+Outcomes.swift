@@ -170,7 +170,10 @@ extension TypeKeyLayout {
 		}
 		for owner in membersByClass.indices.dropFirst() {
 			for label in reads[membersByClass[owner][0]] where outcomes[owner][label] == .passed {
-				guard parameterTypes[owner][label] != nil else { return false }
+				guard parameterTypes[owner][label] != nil else {
+					failedBody = membersByClass[owner][0]
+					return false
+				}
 			}
 		}
 		return true

@@ -475,16 +475,16 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 				            return LivePayments(cart: cart.instance, retryBuilder: retryBuilder)
 				        }
 				        let payments: any Payments = __safeDI_payments()
-				        func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
-				            func __safeDI_payments() -> LivePayments {
-				                func __safeDI_retryBuilder() -> Checkout {
-				                    _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
-				                    return Checkout(__safeDI_cart: cart)
-				                }
-				                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-				                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+				        func __safeDI_payments_(cart: Cart) -> LivePayments {
+				            func __safeDI_retryBuilder() -> Checkout {
+				                _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
+				                return Checkout(__safeDI_cart: cart)
 				            }
-				            let payments: any Payments = __safeDI_payments()
+				            let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+				            return LivePayments(cart: cart, retryBuilder: retryBuilder)
+				        }
+				        func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
+				            let payments: any Payments = __safeDI_payments_(cart: cart)
 				            return CartScreen(cart: cart, payments: payments)
 				        }
 				        let cartScreenBuilder = Instantiator<CartScreen> {

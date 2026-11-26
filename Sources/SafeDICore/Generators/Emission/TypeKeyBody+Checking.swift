@@ -85,6 +85,8 @@ extension TypeKeyLayout {
 		// answer is the class's, and asking it for every member walked every member again.
 		var isNilByRead = [NilReadKey: Bool]()
 		for body in bodies.indices {
+			failedBody = body
+			failedIndex = nil
 			let owner = classByBody[body]
 			let statements = bodies[body].statements
 			if let record = bodies[body].record {
@@ -96,6 +98,7 @@ extension TypeKeyLayout {
 				}
 			}
 			for (index, statement) in statements.enumerated() {
+				failedIndex = index
 				switch statement {
 				case let .inline(record):
 					for position in record.arguments.indices where record.argumentValues[position] == nil {

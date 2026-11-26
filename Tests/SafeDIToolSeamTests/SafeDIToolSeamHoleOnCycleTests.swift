@@ -343,14 +343,16 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        func __safeDI_cBuilder() -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
-			                let reader = MarkReader(mark: mark)
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
-			                return T(reader: reader, cBuilder: cBuilder, api: api)
+			            let tBuilder = Instantiator<T> {
+			                __safeDI_tBuilder_(mark: mark, __safeDI_apiBuilder_tBuilder: __safeDI_apiBuilder_tBuilder)
 			            }
-			            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			            return C(mark: mark, tBuilder: tBuilder)
+			        }
+			        func __safeDI_tBuilder_(mark: Mark, __safeDI_apiBuilder_tBuilder: __safeDI_ApiCarrier_T<any Api>) -> T {
+			            let reader = MarkReader(mark: mark)
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
+			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        self.init(tBuilder: tBuilder, cBuilder: cBuilder)
@@ -492,36 +494,32 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        func __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>) -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
-			                let reader = MarkReader(mark: mark)
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
-			                return T(reader: reader, cBuilder: cBuilder, api: api)
+			            let tBuilder = Instantiator<T> {
+			                __safeDI_tBuilder_(mark: mark, __safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder, __safeDI_apiBuilder_tBuilder: __safeDI_apiBuilder_tBuilder)
 			            }
-			            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			            return C(mark: mark, tBuilder: tBuilder)
 			        }
-			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			        func __safeDI_tBuilder_(mark: Mark, __safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>, __safeDI_apiBuilder_tBuilder: __safeDI_ApiCarrier_T<any Api>) -> T {
+			            let reader = MarkReader(mark: mark)
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
+			            }
+			            let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
+			            return T(reader: reader, cBuilder: cBuilder, api: api)
+			        }
+			        let cBuilder = Instantiator<C> {
+			            __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
+			        }
 			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(mark, tBuilder, cBuilder)
 			        func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
 			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(mark.instance, reader)
-			            func __safeDI_cBuilder() -> C {
-			                let mark = Mark()
-			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			                func __safeDI_tBuilder() -> T {
-			                    let reader = MarkReader(mark: mark)
-			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
-			                    return T(reader: reader, cBuilder: cBuilder, api: api)
-			                }
-			                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-			                return C(mark: mark, tBuilder: tBuilder)
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
 			            }
-			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            let api: any Api = __safeDI_apiBuilder_t.api(mark.instance, reader, cBuilder)
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }
@@ -668,36 +666,32 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            __safeDI_tBuilder(mark: mark.instance)
 			        }
 			        let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder.cBuilder(mark, tBuilder)
-			        func __safeDI_cBuilder() -> C {
+			        func __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>) -> C {
 			            let mark = Mark()
 			            let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			            func __safeDI_tBuilder() -> T {
-			                let reader = MarkReader(mark: mark)
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
-			                return T(reader: reader, cBuilder: cBuilder, api: api)
+			            let tBuilder = Instantiator<T> {
+			                __safeDI_tBuilder_(mark: mark, __safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder, __safeDI_apiBuilder_tBuilder: __safeDI_apiBuilder_tBuilder)
 			            }
-			            let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 			            return C(mark: mark, tBuilder: tBuilder)
 			        }
-			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			        func __safeDI_tBuilder_(mark: Mark, __safeDI_apiBuilder_cBuilder: __safeDI_ApiCarrier_C<any Api>, __safeDI_apiBuilder_tBuilder: __safeDI_ApiCarrier_T<any Api>) -> T {
+			            let reader = MarkReader(mark: mark)
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
+			            }
+			            let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
+			            return T(reader: reader, cBuilder: cBuilder, api: api)
+			        }
+			        let cBuilder = Instantiator<C> {
+			            __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
+			        }
 			        let __safeDI_apiBuilder_t = __safeDI_apiBuilder.t(mark, tBuilder, cBuilder)
 			        func __safeDI_t() -> T {
 			            let reader = MarkReader(mark: mark.instance)
 			            let __safeDI_apiBuilder_cBuilder = __safeDI_apiBuilder_t.cBuilder(mark.instance, reader)
-			            func __safeDI_cBuilder() -> C {
-			                let mark = Mark()
-			                let __safeDI_apiBuilder_tBuilder = __safeDI_apiBuilder_cBuilder.tBuilder(mark)
-			                func __safeDI_tBuilder() -> T {
-			                    let reader = MarkReader(mark: mark)
-			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                    let api: any Api = __safeDI_apiBuilder_tBuilder.api(mark, reader, cBuilder)
-			                    return T(reader: reader, cBuilder: cBuilder, api: api)
-			                }
-			                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
-			                return C(mark: mark, tBuilder: tBuilder)
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_apiBuilder_cBuilder: __safeDI_apiBuilder_cBuilder)
 			            }
-			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            let api: any Api = __safeDI_apiBuilder_t.api(mark.instance, reader, cBuilder)
 			            return T(reader: reader, cBuilder: cBuilder, api: api)
 			        }

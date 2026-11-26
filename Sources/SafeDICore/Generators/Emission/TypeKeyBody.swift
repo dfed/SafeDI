@@ -39,30 +39,29 @@ enum TypeKeyBody {
 	/// - Parameter hoisting: The root functions `rootBody` reaches (`RootFunctionHoisting.hoisting(_:indentation:)`), which a
 	///   caller that keeps the path key's body where this returns `nil` reads once for both.
 	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], hoisting: RootFunctionHoisting.Hoisting? = nil) -> [GeneratedCode]? {
-		var layout = TypeKeyLayout()
-		layout.declareOuter(outerDeclarations)
-		layout.namesInScope = namesInScope
 		// The root functions the plan's places call are declared once, before every statement, as the path key declares
 		// them (`RootFunctionHoisting`). A statement of the root's body that holds one the path key keeps in place keeps the
 		// path key's code, which declares it where its call does, and every other statement is laid out by type.
 		let hoisting = hoisting ?? RootFunctionHoisting.hoisting(rootBody, indentation: rootStatementIndentation)
-		let rootFunctionDeclarations = hoisting.declarations
-		layout.rootFunctionNames = hoisting.declaredNames
-		layout.keptRootFunctionNames = hoisting.rootFunctionNames.subtracting(hoisting.declaredNames)
-		layout.namesInScope.formUnion(hoisting.rootFunctionNames)
-		guard layout.read(rootBody) else { return nil }
-		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
-		guard layout.computeReads() else { return nil }
-		layout.computeClasses()
-		guard layout.computePlacement() else { return nil }
-		layout.computeOutcomes()
-		guard layout.computeParameterTypes(),
-		      layout.checkEveryRead(),
-		      layout.checkValuePaths()
-		else { return nil }
-		layout.computeDecoratorsAndNames()
-		guard layout.checkSendableMarks(), let statements = layout.spelledRootStatements() else { return nil }
-		return rootFunctionDeclarations + statements
+		// A check that fails at a place keeps the path key's code for the root's statements that reach it, and the rest is
+		// laid out again, so one place the type key cannot share costs its own statements, never the root's others. Each
+		// pass keeps at least one statement more, or the root keeps the path key's body.
+		var keptStatementIndices = Set<Int>()
+		while true {
+			var layout = TypeKeyLayout()
+			layout.declareOuter(outerDeclarations)
+			layout.namesInScope = namesInScope
+			layout.keptStatementIndices = keptStatementIndices
+			switch layout.layOut(rootBody, hoisting: hoisting) {
+			case let .laidOut(statements):
+				return hoisting.declarations + statements
+			case .keepsPathKeyBody:
+				return nil
+			case let .keepsPathKeyCode(ofStatements: indices):
+				guard !indices.isSubset(of: keptStatementIndices) else { return nil }
+				keptStatementIndices.formUnion(indices)
+			}
+		}
 	}
 
 	/// The indentation of a root's statements, which every root body is written after.
@@ -169,6 +168,12 @@ struct TypeKeyLayout {
 	var keptRootFunctionNames = Set<String>()
 	/// The names bound around the root's body, which no function the layout declares takes.
 	var namesInScope = Set<String>()
+	/// The positions, among the root's body's statements (`statementCodes(of:)`), of those that keep the path key's code
+	/// because a check failed at a place they reach (`TypeKeyBody.statements(ofRootBody:outerDeclarations:namesInScope:hoisting:)`).
+	var keptStatementIndices = Set<Int>()
+	/// The body, and for the root's body the statement, a check last failed at (`rootStatementsReachingFailure()`).
+	var failedBody: Int?
+	var failedIndex: Int?
 	/// The views other than the root's in post-order of the view DAG.
 	var postOrder = [Int]()
 	/// The domain of each plan node the walk reached.
@@ -220,5 +225,60 @@ extension AliasPlaceRecord {
 	/// The reads the place's text lists, which a rename's read is not among.
 	var listedReads: [PlaceRead] {
 		reads ?? []
+	}
+}
+
+extension TypeKeyLayout {
+	/// What laying out a root's body gives.
+	enum Outcome {
+		/// The root's statements in the type key's layout.
+		case laidOut([GeneratedCode])
+		/// The root keeps the path key's body.
+		case keepsPathKeyBody
+		/// A check failed at a place the root's statements at these positions reach, which keep the path key's code in the
+		/// next pass.
+		case keepsPathKeyCode(ofStatements: Set<Int>)
+	}
+
+	/// Lays out `rootBody`, after `declareOuter(_:)` declared it, with the root functions `hoisting` declares at its top.
+	mutating func layOut(_ rootBody: [GeneratedCode], hoisting: RootFunctionHoisting.Hoisting) -> Outcome {
+		rootFunctionNames = hoisting.declaredNames
+		keptRootFunctionNames = hoisting.rootFunctionNames.subtracting(hoisting.declaredNames)
+		namesInScope.formUnion(hoisting.rootFunctionNames)
+		guard read(rootBody) else { return .keepsPathKeyBody }
+		GenerationWork.record(bodies.count - 1, by: .layingOutTypeKeyViews)
+		guard computeReads() else { return .keepsPathKeyBody }
+		computeClasses()
+		guard computePlacement() else { return .keepsPathKeyBody }
+		computeOutcomes()
+		guard computeParameterTypes(), checkEveryRead(), checkValuePaths() else { return failedOutcome() }
+		computeDecoratorsAndNames()
+		guard checkSendableMarks() else { return failedOutcome() }
+		guard let statements = spelledRootStatements() else { return .keepsPathKeyBody }
+		return .laidOut(statements)
+	}
+
+	/// The outcome of a check that failed at `failedBody`: the root's statements that reach any body of its class, or its
+	/// own statement where it is the root's.
+	private func failedOutcome() -> Outcome {
+		guard let failedBody else { return .keepsPathKeyBody }
+		guard failedBody != 0 else {
+			guard let failedIndex, failedIndex >= outerDeclarationCount else { return .keepsPathKeyBody }
+			return .keepsPathKeyCode(ofStatements: [failedIndex - outerDeclarationCount])
+		}
+		var indices = Set<Int>()
+		var visited = Set<Int>()
+		var pending = membersByClass[classByBody[failedBody]]
+		while let body = pending.popLast() {
+			guard visited.insert(body).inserted else { continue }
+			for edge in bodies[body].edges {
+				if edge.parent == 0 {
+					indices.insert(edge.position - outerDeclarationCount)
+				} else {
+					pending.append(edge.parent)
+				}
+			}
+		}
+		return .keepsPathKeyCode(ofStatements: indices)
 	}
 }
