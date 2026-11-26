@@ -1706,7 +1706,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
-		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        let token: Token? = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Board.__safeDI_Board_mock_50A6478EF5665EF8.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let board = Board.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.board)
 		        return BoardScreen(board: board)
@@ -1768,7 +1768,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
-		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        let token: Token? = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Board.__safeDI_Board_mock_CD8B9B1996BC3E03.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let board = Board.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.board)
 		        return BoardScreen(board: board)

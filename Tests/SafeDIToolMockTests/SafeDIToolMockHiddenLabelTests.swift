@@ -2673,7 +2673,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        func __safeDI_token(__safeDI_Token_configuration: (() -> Token)?) -> Token {
 		            if let safeDIBuilder = __safeDI_Token_configuration { safeDIBuilder() } else { Token() }
 		        }
-		        let token = Instantiator<Token> {
+		        let token: Instantiator<Token>? = Instantiator<Token> {
 		            __safeDI_token(__safeDI_Token_configuration: safeDIOverrides.token)
 		        }
 		        _ = Screen.__safeDI_Screen_mock_65AF11639C4ED97D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
