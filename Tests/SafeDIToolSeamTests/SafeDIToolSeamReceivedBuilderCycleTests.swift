@@ -163,11 +163,11 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            return A(bBuilder: bBuilder)
 			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        func __safeDI_bBuilder() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            return B(aBuilder: aBuilder)
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }
@@ -212,13 +212,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 		        }
 		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-		        func __safeDI_t4() -> T4 {
-		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
-		            let t4BuilderAlias: Instantiator<T4> = t4Builder
-		            #sourceLocation()
-		            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
-		        }
 		        func __safeDI_t3() -> T3 {
+		            func __safeDI_t4() -> T4 {
+		                #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
+		                let t4BuilderAlias: Instantiator<T4> = t4Builder
+		                #sourceLocation()
+		                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
+		            }
 		            let t4: T4 = __safeDI_t4()
 		            return T3(t4: t4)
 		        }
@@ -737,11 +737,11 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            let widget: any Widget = __safeDI_widgetSendableBuilder_aBuilder.widget(bBuilder)
 			            return A(bBuilder: bBuilder, widget: widget)
 			        }
+			        let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			            let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 			            return B(aBuilder: aBuilder)
 			        }
-			        let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 			        let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }

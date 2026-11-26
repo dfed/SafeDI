@@ -164,6 +164,9 @@ struct ClosingPlaceRecord: Sendable {
 	/// Unlike a built place's, these and their count are part of the closer's structural key: the closer's call must match
 	/// the function it closes on.
 	var passedArguments = [PassedArgument]()
+	/// Whether the place is a member of a loop of builders wrapped again inside a sibling's function
+	/// (`ScopeGenerator.LoopRebinding`).
+	var rebindsLoopMember = false
 }
 
 /// A place written as text, as the path key writes it: a rename of a value, or another place whose code the engine copies
