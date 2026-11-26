@@ -62,7 +62,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// holes share none: `SafeDIToolFulfillerImportTests` counts it on a production root whose places share generators.
 		// Finding the carrier a sibling requires grows with the children of one scope, which shape E does not grow: the test
 		// below counts it on a seam whose own type builds many children.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires])
+		// The walk that finds the values a seam tier omits enters only a subtree that holds a call omitting a parameter or a
+		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -125,6 +127,104 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			lookups.append(count)
 		}
 		#expect(lookups == [12, 56])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesEachPlaceStoodForOnceInCaptureWalk_whenCallsCasesGrowWithThreePlacesEach() async throws {
+		// `Home` builds n holders of a place of `Api`, a case each, beneath three parents each: the first parent's fill
+		// generates code, and the second's stands for the third's. `Root` names an `Instantiator` and a
+		// `SendableInstantiator`, so the walk for captured wrappers reaches the call, where each fill takes the places
+		// it stands for: n places gathered once and taken once. Each of the three passes over the call also looks a
+		// standing fill up for each of its 3n places and asks the one set of its case for each third place: 14n units
+		// in all. Scanned for by each of the 2n fills, the n places stood for were compared 2n² times.
+		var work = [Int]()
+		for holderCount in [8, 16] {
+			var feature = ["public protocol Api {}"]
+			var homeDeclarations = [String]()
+			for holder in 0..<holderCount {
+				feature.append(seamFixtureType(named: "Holder\(holder)", declarations: ["@Instantiated let api: any Api"]))
+				for parent in ["First", "Second", "Third"] {
+					feature.append(seamFixtureType(named: "\(parent)\(holder)", declarations: ["@Instantiated let holder: Holder\(holder)"]))
+					homeDeclarations.append("@Instantiated let \(parent.lowercased())\(holder): \(parent)\(holder)")
+				}
+			}
+			feature.append(seamFixtureType(named: "Home", isSeam: true, declarations: homeDeclarations))
+			let modules = SafeDIToolSeamBuilderParameterTests.modules(
+				feature: feature,
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []),
+					seamFixtureType(named: "Row", declarations: []),
+					seamFixtureType(named: "Worker", declarations: []).replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
+					seamFixtureType(named: "Root", isRoot: true, declarations: [
+						"@Instantiated let rowBuilder: Instantiator<Row>",
+						"@Instantiated let workerBuilder: SendableInstantiator<Worker>",
+						"@Instantiated let home: Home",
+					]),
+				],
+			)
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: modules,
+					integration: .moduleInfo,
+					compileVerification: holderCount == 8 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var count = 0
+			for await generationWork in stream where generationWork.step == .findingFillThatStandsForPlace {
+				count += generationWork.elementCount
+			}
+			work.append(count)
+		}
+		#expect(work == [112, 224])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_walksEachSeamsTreeOncePerGeneratorAndContext_whenScreensOpenScreensOfTheNextLayer() async throws {
+		// Layers of four screens, each holding instantiators of three screens of the next layer, every screen of the first
+		// layer a seam and every screen receiving `service`: places share generators (see `ConstructionMemo`), so the last
+		// layer is reached from each seam along 3^(layers - 1) paths. The walk that collects the names of a seam's builder
+		// functions visits each generator once, and the walk that finds a seam's receivers each generator once for each
+		// context it is reached in, as far as its subtree reads it: here one. No call omits a parameter and no cycle closes,
+		// so the walk that finds the values a tier omits enters nothing. Each of the last two walks visited every path: at
+		// four and six layers, 160 and 1,456 visits each.
+		var visitsByLayerCount = [[GenerationWork.Step: Int]]()
+		for layerCount in [4, 6] {
+			var fixture = [seamFixtureType(named: "Service", declarations: [])]
+			for layer in 0..<layerCount {
+				for position in 0..<4 {
+					var declarations = ["@Received let service: Service"]
+					if layer + 1 < layerCount {
+						declarations += (0..<3).map { offset in "@Instantiated let screen\(layer + 1)x\((position + offset) % 4)Builder: Instantiator<Screen\(layer + 1)x\((position + offset) % 4)>" }
+					}
+					fixture.append(seamFixtureType(named: "Screen\(layer)x\(position)", isSeam: layer == 0, declarations: declarations))
+				}
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
+					integration: .moduleInfo,
+					compileVerification: layerCount == 4 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			let countedSteps: [GenerationWork.Step] = [.collectingBuilderFunctionNames, .findingSeamReceivers, .findingSeamTierOmissions]
+			var visits = Dictionary(uniqueKeysWithValues: countedSteps.map { ($0, 0) })
+			for await work in stream where countedSteps.contains(work.step) {
+				visits[work.step, default: 0] += work.elementCount
+			}
+			visitsByLayerCount.append(visits)
+		}
+		#expect(visitsByLayerCount == [
+			[.collectingBuilderFunctionNames: 96, .findingSeamReceivers: 100, .findingSeamTierOmissions: 0],
+			[.collectingBuilderFunctionNames: 160, .findingSeamReceivers: 196, .findingSeamTierOmissions: 0],
+		])
 	}
 
 	@Test

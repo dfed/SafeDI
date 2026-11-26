@@ -66,11 +66,6 @@ struct ContextStack: Sendable {
 		innermost?.count ?? 0
 	}
 
-	/// The entries, outermost first.
-	var entries: [Entry] {
-		entriesInnermostFirst.reversed()
-	}
-
 	/// The properties of the entries, innermost first.
 	var propertiesInnermostFirst: [Property] {
 		entriesInnermostFirst.map(\.property)
