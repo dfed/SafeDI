@@ -83,7 +83,7 @@ enum SeamPlaceVariantChecks {
 				}
 				for (variant, value) in zip(variants, variantValues) {
 					let least = valueByRoute.filter { $0.value == value }.map(\.route).min { precedes($0, $1, query) }
-					if variant.answer != value.answer || least.map({ query.declaredPathToOwner(along: $0).map(\.declarationLocation) }) != query.declaredPathToOwner(along: variant.leastRoute).map(\.declarationLocation) {
+					if variant.answer != value.answer || least.map({ sortKeys(of: $0, query) }) != sortKeys(of: variant.leastRoute, query) {
 						mismatches.append("The label variant of \(label) at \(naming) in \(observation.seamType.asSource) reading \(value.answer) names another route than the least of its places’ routes")
 					}
 				}
@@ -106,7 +106,7 @@ enum SeamPlaceVariantChecks {
 				let depths = query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex)
 				let leastByDepth = expected.mapValues { $0.min { precedes($0, $1, query) } }
 				let matches = Set(depths.map(\.depth)) == Set(expected.keys) && depths.count == expected.count && depths.allSatisfy { depth in
-					leastByDepth[depth.depth].flatMap(\.self).map { query.declaredPathToOwner(along: $0).map(\.declarationLocation) } == query.declaredPathToOwner(along: depth.leastRoute).map(\.declarationLocation)
+					leastByDepth[depth.depth].flatMap(\.self).map { sortKeys(of: $0, query) } == sortKeys(of: depth.leastRoute, query)
 				}
 				if !matches {
 					mismatches.append("The depths of \(entry.property.asSource) below \(naming) in \(observation.seamType.asSource) are \(depths.map(\.depth)); its places’ stacks hold it at \(expected.keys.sorted())")
@@ -176,12 +176,27 @@ enum SeamPlaceVariantChecks {
 		}
 	}
 
+	/// Whether `lhs` precedes `rhs` by the properties declared along each, root first: by location, then, where the locations
+	/// are equal, by label; a route whose properties are a prefix of the other's first.
 	static func precedes(_ lhs: SeamSignature.Places.Route, _ rhs: SeamSignature.Places.Route, _ query: SeamSignature.Places.Query) -> Bool {
-		let lhsLocations = query.declaredPathToOwner(along: lhs).map(\.declarationLocation)
-		let rhsLocations = query.declaredPathToOwner(along: rhs).map(\.declarationLocation)
-		for (lhsLocation, rhsLocation) in zip(lhsLocations, rhsLocations) where lhsLocation != rhsLocation {
-			return Dependency.DeclarationLocation.precedesInSourceOrder(lhsLocation, rhsLocation)
+		let lhsKeys = sortKeys(of: lhs, query)
+		let rhsKeys = sortKeys(of: rhs, query)
+		for (lhsKey, rhsKey) in zip(lhsKeys, rhsKeys) where lhsKey.location != rhsKey.location || lhsKey.label != rhsKey.label {
+			guard lhsKey.location == rhsKey.location else {
+				return Dependency.DeclarationLocation.precedesInSourceOrder(lhsKey.location, rhsKey.location)
+			}
+			return lhsKey.label < rhsKey.label
 		}
-		return lhsLocations.count < rhsLocations.count
+		return lhsKeys.count < rhsKeys.count
+	}
+
+	/// What orders `route`: each declared property's location and label, root first.
+	static func sortKeys(of route: SeamSignature.Places.Route, _ query: SeamSignature.Places.Query) -> [SortKey] {
+		query.declaredPathToOwner(along: route).map { SortKey(location: $0.declarationLocation, label: $0.property.label) }
+	}
+
+	struct SortKey: Equatable {
+		let location: Dependency.DeclarationLocation?
+		let label: String
 	}
 }
