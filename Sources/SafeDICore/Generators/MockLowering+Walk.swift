@@ -1268,11 +1268,6 @@ extension MockLowering {
 					fieldName: bindingName,
 					parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
 					nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
-					ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
-						concreteType: instantiable.concreteInstantiable,
-						builtWithHandWrittenMock: usesMockInitializer,
-						configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
-					).name : nil,
 					pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
 				)
 			}
