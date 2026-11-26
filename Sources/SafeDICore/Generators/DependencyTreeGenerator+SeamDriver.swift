@@ -1008,10 +1008,19 @@ extension DependencyTreeGenerator {
 		// optional value passed to its declaring type, and every other read of it is rejected before emission, so it
 		// adds no parameter. The computation ends when a pass changes no signature's content – never the receivers'
 		// order, which a tree carrying the receivers of a seam that carries its own meets differently on every pass –
-		// or at the limit, which no input reaches by the argument above and which reports the component if one does. The
-		// argument needs each pass to read the component's other seams as one pass left them: an enum a seam's builders
+		// or at the limit, which reports the component. The argument needs each pass to read the component's other seams
+		// as one pass left them: an enum a seam's builders
 		// reach is read from the seam that declares it (`ownScopeEnums`), since copies of different ages, each carried
-		// by a different neighbor, would differ on every pass around a cycle of four seams.
+		// by a different neighbor, would differ on every pass around a cycle of four seams. For the same reason a place
+		// a seam passes up is labeled by the seam that declares it, with that seam's own builder label for the place's
+		// hole type and family (`holes(of:…)`), which follows only from that seam's hole types and parameters, both of
+		// which only grow: a label is a function of the places a pass settles, and never an input to another seam's
+		// label. A label a passing seam named apart from its own holes would carry each seam's names into the next
+		// around a ring, and change on every pass. The rest of a passed-up place – its fields, the values its case
+		// carries, its uncarried declarations – is still copied from the seam that presents it first, which inside a ring
+		// can be a neighbor's copy from the pass before: a ring in which a value reaches a place only after the first
+		// pass can alternate between two copies until the limit, or settle on a stale one, as every release has. Reading
+		// the whole place from the seam that declares it, as its label is, is the follow-up that closes this.
 		var errorsOfLastPass = [DependencyTreeGeneratorError]()
 		var failedSeamsOfLastPass = Set<TypeDescription>()
 		var settled = false

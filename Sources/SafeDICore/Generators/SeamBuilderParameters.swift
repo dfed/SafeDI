@@ -134,7 +134,10 @@ extension DependencyTreeGenerator {
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
 		// are named apart by their owner, their declared type simplified, their declared type, and their site path, a
-		// parameter keeping its label. A scope struct is named after the owner and the property, with the site path
+		// parameter keeping its label. A hole a call passes up starts from the label the seam that declares it gives it,
+		// its own root enum's builder for the hole's type and family, never the label a seam that passes it up in turn
+		// gave it, which that seam named apart from its own holes: around a ring of seams whose signatures settle
+		// together, such a label carried each seam's names into the next, and changed on every pass. A scope struct is named after the owner and the property, with the site path
 		// appended for a property built at several sites, and an underscore appended while it equals an earlier one.
 		struct Candidate {
 			let label: String
@@ -152,7 +155,7 @@ extension DependencyTreeGenerator {
 			)
 		} + passedUpHoles.map { passedUp in
 			Candidate(
-				label: passedUp.hole.builderLabel,
+				label: passedUp.declaringSeamLabel,
 				suffixTypes: [
 					passedUp.hole.ownerType,
 					passedUp.hole.property.typeDescription.simplified,
@@ -453,8 +456,8 @@ extension DependencyTreeGenerator {
 		seamModule: ModuleIdentity,
 		ownSitePaths: [[Property]],
 		hiddenByCall: inout [ObjectIdentifier: [String: FillReentryHidings]],
-	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions]) {
-		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)]()
+	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole, declaringSeamLabel: String)], ownSiteAdditions: [[Property]: SiteAdditions]) {
+		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole, declaringSeamLabel: String)]()
 		var takenSites = Set(ownSitePaths.map { SeamSignature.Hole.Site(seamType: seamType, path: $0) })
 		var additionsBySite = [SeamSignature.Hole.Site: SiteAdditions]()
 		var generatorsToVisit = [(generator: generator, typesToCall: [SeamSignature.Hole.PathType](), route: [SeamSignature.Hole.DeclaredProperty](), pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration](), isInSendableFunction: false, fillContexts: [FillContext]())]
@@ -470,7 +473,11 @@ extension DependencyTreeGenerator {
 			if let innerSeamType = visited.builtInstantiable?.concreteInstantiable {
 				for hole in visited.passedUpHoles {
 					if takenSites.insert(hole.site).inserted {
-						passedUpHoles.append((innerSeamType, typesToCall, route, hole))
+						// The seam that declares the place labels it: its own root enum's builder for the place's hole type and family,
+						// which the called seam's signature carries, since a builder of the called seam reaches the place from it. That
+						// label follows only from the declaring seam's hole types and parameters, so no passed-up label feeds another.
+						let declaringSeamLabel = visited.calledBuilders?.enumsByKey[SeamSignature.ScopeEnum.rootKey(of: hole)]?.builderLabel ?? hole.builderLabel
+						passedUpHoles.append((innerSeamType, typesToCall, route, hole, declaringSeamLabel))
 					}
 					// The call captures the builder when it is made in a `@Sendable` builder function, and takes it `@Sendable`
 					// when the presented copy is.
@@ -505,12 +512,12 @@ extension DependencyTreeGenerator {
 			ownSiteAdditions[path] = additionsBySite[SeamSignature.Hole.Site(seamType: seamType, path: path)]
 		}
 		return (
-			passedUpHoles.map { innerSeamType, typesToCall, route, hole in
+			passedUpHoles.map { innerSeamType, typesToCall, route, hole, declaringSeamLabel in
 				let additions = additionsBySite[hole.site, default: SiteAdditions()]
 				var passedUpHole = additions.presenting(hole)
 				passedUpHole.reenteringCallDeclarations = additions.reenteringCallDeclarations
 				passedUpHole.reenteringPlaceFields = additions.reenteringPlaceFields
-				return (innerSeamType, typesToCall, route, passedUpHole)
+				return (innerSeamType, typesToCall, route, passedUpHole, declaringSeamLabel)
 			},
 			ownSiteAdditions,
 		)
@@ -1664,6 +1671,10 @@ extension DependencyTreeGenerator {
 								.uniqued()
 							unfilledHoles.append(DependencyTreeGeneratorError.UnfilledHole(
 								hole: hole,
+								// The seam that declares the place takes it under its own root enum's builder for the place's hole type and
+								// family, which the called seam's signature carries; the label the called seam takes it under can be one it
+								// named apart from its other places, which no other initializer takes.
+								builderLabel: call.calledBuilders?.enumsByKey[SeamSignature.ScopeEnum.rootKey(of: hole)]?.builderLabel ?? hole.builderLabel,
 								rootType: root.instantiable.concreteInstantiable,
 								chain: holeChain,
 								location: callRootDependency?.declarationLocation,
@@ -1725,6 +1736,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 	/// one that does is out of the tree's reach.
 	struct UnfilledHole {
 		let hole: SeamSignature.Hole
+		/// The label the generated initializer of the seam that declares the place takes its builder under.
+		let builderLabel: String
 		let rootType: TypeDescription
 		/// The types from the root to the hole's owner.
 		let chain: [TypeDescription]
@@ -1756,7 +1769,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let unlistedModules = unlistedModuleNames.map { "`\($0)`" }.joinedAsList(conjunction: "or")
 			let listRemedy = (unlistedModuleNames.count > 1 ? "for each, " : "") + DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy
 			let listUnlistedModules = unlistedModuleNames.isEmpty ? "" : " A module that declares a root lists every module beneath it, and \(callerModule) does not list \(unlistedModules): \(listRemedy) Listing \(unlistedModuleNames.count > 1 ? "them" : "it") lets SafeDI follow the chain, but \(typeName) still needs a declaration that fulfills it."
-			let takenBuilder = hole.enumPlace.map { "`\(hole.builderLabel)`, whose member `\($0.caseName)` builds `\(hole.property.label)`" } ?? "`\(hole.builderLabel)`, which builds `\(hole.property.label)`"
+			let takenBuilder = hole.enumPlace.map { "`\(builderLabel)`, whose member `\($0.caseName)` builds `\(hole.property.label)`" } ?? "`\(builderLabel)`, which builds `\(hole.property.label)`"
 			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes \(takenBuilder), and the root `\(rootType.asSource)` must fill it.\(listUnlistedModules)"
 			let message = if let unreachedFulfillingType {
 				"`\(unreachedFulfillingType.asSource)` fulfills \(reference), but SafeDI cannot follow that chain, because \(callerModule) does not list \(unlistedModules). A module that declares a root lists every module beneath it: \(listRemedy)"
