@@ -29,12 +29,7 @@ extension DependencyTreeGenerator {
 	func validateSendableBuildersCaptureNoNonSendableWrapper(
 		inTreesRootedAt roots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
 	) async throws {
-		// Walking the trees costs a pass over every scope, so only a module whose types name both a wrapper
-		// that is not `Sendable` and a `Sendable` builder pays for it.
-		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
-		guard dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable }),
-		      dependencies.contains(where: \.property.propertyType.isSendable)
-		else { return }
+		guard namesNonSendableWrapperAndSendableBuilder else { return }
 		// Two paths can reach one receiver through the same chain of types, so identical captures are reported once.
 		// The trees are walked in parallel: the captures are a set, which the error sorts into source order.
 		let captures = await withTaskGroup(
@@ -57,6 +52,15 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// Whether the module's types name both a wrapper that is not `Sendable` and a `Sendable` builder. Walking the trees
+	/// for a `@Sendable` builder function's captures costs a pass over every scope, so only such a module pays for it,
+	/// and only such a module's trees need be built per path for that walk.
+	var namesNonSendableWrapperAndSendableBuilder: Bool {
+		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
+		return dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable })
+			&& dependencies.contains(where: \.property.propertyType.isSendable)
+	}
+
 	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree
 	/// holds: a value for a parameter the tier the call reaches omits, or no tier takes, which the receivers inside
 	/// the seam would be handed were the tree built inline. Walks each finished generator tree as generation does
@@ -68,7 +72,9 @@ extension DependencyTreeGenerator {
 		guard !seams.isEmpty, let emittingModule else { return }
 		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
 		for root in roots {
-			for omission in await root.scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
+			// A module that holds a seam builds every root's tree per path.
+			guard let scopeGenerator = root.scopeGenerator else { continue }
+			for omission in await scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
 				// A provider in a file this run cannot read – another module's, in a build that hands this run that
 				// module's declarations but not its files – is reported where this module refers to what leads to the
 				// call, naming the provider's module.

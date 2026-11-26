@@ -613,9 +613,11 @@ func executeSafeDIToolMultiModuleTest(
 																try await MockVariantBodyChecks.comparing {
 																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
 																		try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
-																			// Every mock root the type key lays out falls back only on the record errors it expects (`MockTypeKeyLayoutChecks`).
-																			try await MockLowering.$typeKeyLayoutObserver.withValue(MockTypeKeyLayoutChecks.failingUnexpectedRecordErrors(handingOn: MockLowering.typeKeyLayoutObserver)) {
-																				try await tool.generate()
+																			try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																				// Every mock root the type key lays out falls back only on the record errors it expects (`MockTypeKeyLayoutChecks`).
+																				try await MockLowering.$typeKeyLayoutObserver.withValue(MockTypeKeyLayoutChecks.failingUnexpectedRecordErrors(handingOn: MockLowering.typeKeyLayoutObserver)) {
+																					try await tool.generate()
+																				}
 																			}
 																		}
 																	}

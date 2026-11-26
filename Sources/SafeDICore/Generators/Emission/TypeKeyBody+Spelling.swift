@@ -238,10 +238,8 @@ extension TypeKeyLayout {
 		guard let declaredType = type(of: declaration, label: label) else {
 			return parameterType.isOptional ? "nil" : nil
 		}
-		let parameterRead = PlaceRead(argumentLabel: label, label: label, property: Property(label: label, typeDescription: parameterType), source: .binding(label: label))
-		if let read = Self.spelledRead(parameterRead, declaredAs: declaredType) {
-			// The declaration itself, or the instance of its lazy wrapper where the parameter takes the instance.
-			return read
+		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
+			return label
 		} else {
 			// The call is one of the function's call sites, whose declarations' types `computeParameterTypes` combined into
 			// `parameterType` (`parameterType(combining:)`), so a declaration that is not the parameter's type, or its

@@ -26,11 +26,13 @@ extension DependencyTreeGenerator {
 	/// many places hand or build it; the order is the trees'.
 	/// - Throws: The error `generate` reports when the trees are not valid.
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies {
-		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof()).roots
+		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), plansCyclesPerType: false).roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
+		// Every root's tree is built per path here (`plansCyclesPerType`).
 		for root in roots {
-			let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable)
+			guard let scopeGenerator = root.scopeGenerator else { continue }
+			let tree = await scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable)
 			supplies.append(contentsOf: tree.supplies)
 			constructedTypes.append(contentsOf: tree.constructedTypes)
 		}

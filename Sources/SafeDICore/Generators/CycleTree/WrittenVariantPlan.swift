@@ -26,6 +26,63 @@ public enum PlanCodeObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ code: String?) -> Void)?
 }
 
+/// Lets a test see, for each production root that reaches a cycle in a module that generates no seam, whether its code
+/// is laid out from its per-type plan or its tree is built per path, and why; and lets it have every root's tree built
+/// per path. Test only.
+public enum RootTreeChoiceObservation {
+	/// Why a root that reaches a cycle has its tree built per path.
+	public enum PerPathReason: String, Sendable {
+		/// The caller reads the trees per path: to draw the DOT graph, or to list what each receive is handed.
+		case treesReadPerPath
+		/// A test set `forcesPerPath`.
+		case forcedPerPath
+		/// The module's types name both a wrapper that is not `Sendable` and a `Sendable` one, so the `@Sendable` capture
+		/// walk reads its trees.
+		case moduleNamesNonSendableWrapperAndSendableBuilder
+		/// A type of the root's tree holds a `LazilyInstantiated` or a `SendableLazilyInstantiated`.
+		case holdsLazilyInstantiated
+		/// A type of the root's tree receives or instantiates a value only if available, or holds an optional one.
+		case holdsValueOnlyIfAvailable
+		/// A type of the root's tree renames a dependency (`fulfilledByDependencyNamed:`).
+		case renames
+		/// A type of the root's tree holds a `Sendable` wrapper or a type spelled with `Sendable`.
+		case holdsSendableWrapperOrFunction
+		/// A type on a cycle of the root's tree is instantiated erased.
+		case erasesCycleMember
+		/// An initializer of the root's tree declares a parameter `@escaping` by a name.
+		case declaresEscapingName
+		/// The types of the root's tree receive or declare one label in more than one form.
+		case holdsLabelInSeveralForms
+		/// A type of the root's tree receives an instantiator, which can close a loop of builders.
+		case receivesInstantiator
+		/// The root's tree builds a type whose dependency tree its own module generates.
+		case buildsSeam
+		/// A type outside every cycle that instantiates dependencies of its own is instantiated at two properties of the
+		/// root's tree, so a plan would build its tree once for each.
+		case buildsTreeOutsideCyclesTwice
+		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares and that a type beneath
+		/// the root declares, which a function declared in the root's body could not capture.
+		case receivesLabelDeclaredBetweenRootAndCycle
+		/// The root's tree may hold a label no one parameter of a cycle's function can pass
+		/// (`DependencyTreeGenerator.mayHaveUnpassableCycleLabel(inTreeOf:cache:)`).
+		case mayHaveUnpassableCycleLabel
+		/// The root has no per-type plan.
+		case noPlan
+		/// A call of the plan passes a member of a loop of builders made again at the call.
+		case passesLoopMemberMadeAgainAtCall
+		/// A call of the plan passes the instance of a lazily instantiated declaration, read at the call.
+		case passesLazilyInstantiatedInstanceAtCall
+		/// The type key lays out none of the plan.
+		case noLayout
+	}
+
+	/// Called once per such root with the root's type and `nil` where its code is laid out from its plan.
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void)?
+
+	/// Whether every root's tree is built per path, as before a cyclic tree was planned per type.
+	@TaskLocal public static var forcesPerPath = false
+}
+
 /// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks
 /// `@Sendable` (`VariantBodies.isSendable(_:)`) with which the type key lays out as `@Sendable` (`WrittenVariantPlan`'s
 /// family), each body at its position in the plan, the root's own first. Test only, until one of the two is removed.
@@ -64,12 +121,39 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		/// Whether the plan marks each body `@Sendable` (`VariantBodies.isSendable(_:)`).
 		let sendableMarks: [Bool]
 
+		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
+		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
+		/// write; or the instance of a lazily instantiated declaration (`Answer.instance`), which the layout reads at the
+		/// call, where today's function takes the wrapper and creates the instance where its body first reads it.
+		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
+			for callsOfBody in calls {
+				for call in callsOfBody {
+					for argument in call.arguments {
+						switch argument {
+						case .declaredMadeAgainAtCall:
+							return .passesLoopMemberMadeAgainAtCall
+						case .instance:
+							return .passesLazilyInstantiatedInstanceAtCall
+						case .none, .declared:
+							continue
+						}
+					}
+				}
+			}
+			return nil
+		}
+
 		/// The bodies of `plan` in `bodies`, each call of the body it calls by its position here, and each body's labels,
 		/// with their answers and each call's arguments, in the order its function takes them, which every call of it
 		/// gives (`VariantBodies.Call.argumentOrder`): the label it is built as, then the others as its tree first
 		/// receives them.
 		/// - Parameter plan: The positions of the root's body and the bodies it calls (`VariantBodies.plan(ofRoot:shadow:cache:)`).
-		init(of bodies: DependencyTreeGenerator.VariantBodies, plan: (rootBody: Int, calledBodies: [Int])) {
+		/// - Parameter labelsDeclaredInComponentByScope: Where every label a function's tree receives that no scope of its
+		///   cycle declares is declared by the root alone, the labels each scope's cycle declares
+		///   (`CallPlaceShadow.labelsDeclaredInComponentByScope`): a function then takes only those and the label it is
+		///   built as, and captures the root's declaration of every other, as today's function does. `nil` keeps every
+		///   label a parameter.
+		init(of bodies: DependencyTreeGenerator.VariantBodies, plan: (rootBody: Int, calledBodies: [Int]), labelsDeclaredInComponentByScope: [ObjectIdentifier: Set<String>]? = nil) {
 			let positions = [plan.rootBody] + plan.calledBodies
 			var bodyByPosition = [Int: Int]()
 			for (body, position) in positions.enumerated() {
@@ -82,8 +166,14 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 					// Every body called is among `plan.calledBodies`; a position that were not would be the root's, which
 					// no function builds, and the type key would keep the path key's body.
 					let calledBody = bodyByPosition[call.calledBody, default: 0]
-					argumentOrders[calledBody] = call.argumentOrder
-					return VariantCall(path: call.path, property: call.property, calledBody: calledBody, arguments: call.argumentOrder.map { call.arguments[$0] })
+					var argumentOrder = call.argumentOrder
+					if let labelsDeclaredInComponentByScope {
+						let called = bodies.bodies[call.calledBody]
+						let parameterLabels = labelsDeclaredInComponentByScope[called.key.scope, default: []]
+						argumentOrder = argumentOrder.filter { called.labels[$0] == called.key.property?.label || parameterLabels.contains(called.labels[$0]) }
+					}
+					argumentOrders[calledBody] = argumentOrder
+					return VariantCall(path: call.path, property: call.property, calledBody: calledBody, arguments: argumentOrder.map { call.arguments[$0] })
 				})
 			}
 			generators = positions.map { bodies.generator(of: $0) }

@@ -357,6 +357,11 @@ extension DependencyTreeGenerator {
 					labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
 				}
 			}
+			var labelsDeclaredInComponentByScope = [ObjectIdentifier: Set<String>]()
+			for (index, identifier) in graph.nodes.enumerated() where graph.isOnCycle(index) {
+				labelsDeclaredInComponentByScope[identifier] = labelsDeclaredByComponent[graph.componentByNode[index], default: []]
+			}
+			self.labelsDeclaredInComponentByScope = labelsDeclaredInComponentByScope
 			var copyByIdentifier = [ObjectIdentifier: Scope]()
 			var callPlaceByIdentifier = [ObjectIdentifier: Scope]()
 			var parameterLabelsByCallPlace = [ObjectIdentifier: Set<String>]()
@@ -413,6 +418,12 @@ extension DependencyTreeGenerator {
 		/// a path's function takes: one declared in the component off every path between the function and a scope closing
 		/// the cycle on it.
 		let parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>]
+
+		/// The labels the scopes of the strongly connected component of each scope on a cycle declare, the scope's own
+		/// included, by scope: a function of the plan takes no other label as a parameter where the root alone declares
+		/// every other label its tree receives, which the function, declared in the root's body, then captures, as today's
+		/// does.
+		let labelsDeclaredInComponentByScope: [ObjectIdentifier: Set<String>]
 
 		/// Whether a copy builds `scope` as a call place: the scope is on a cycle.
 		func isOnCycle(_ scope: Scope) -> Bool {

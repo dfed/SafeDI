@@ -208,35 +208,6 @@ struct TypeKeyBodyCycleVariantTests {
 	}
 
 	@Test
-	func statements_passesTheInstance_whenACallAnswersALazilyInstantiatedDeclaration() throws {
-		let statements = try #require(TypeKeyBody.statements(
-			ofRootBody: [
-				Self.alias("x", "LazilyInstantiated<X>", typeDescription: .simple(name: "LazilyInstantiated", generics: [.simple(name: "X")])),
-				Self.call("aBuilder", building: "A", variant: 0, reading: ["x"], answers: [.instance(of: Property(label: "x", typeDescription: .simple(name: "LazilyInstantiated", generics: [.simple(name: "X")])))]),
-			],
-			variants: [
-				Self.variant("aBuilder", building: "A", reading: ["x"], children: [
-					Self.inline("k", "K", reading: "x", "X"),
-					Self.call("aBuilder", building: "A", variant: 0, reading: ["x"]),
-				]),
-			],
-		))
-		#expect(GeneratedCode.lines(statements).spelled() == """
-		        let x = LazilyInstantiated<X>()
-		        func __safeDI_aBuilder(x: X) -> A {
-		            let k = K(x: x)
-		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(x: x)
-		            }
-		            return A(k: k, aBuilder: aBuilder)
-		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(x: x.instance)
-		        }
-		""")
-	}
-
-	@Test
 	func statements_typesTheParameterAsItsAnswer_whenOnlyARenameOnlyIfAvailableReadsIt() throws {
 		let statements = try #require(TypeKeyBody.statements(
 			ofRootBody: [

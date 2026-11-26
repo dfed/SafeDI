@@ -19,6 +19,51 @@
 // SOFTWARE.
 
 extension DependencyTreeGenerator {
+	/// Whether a test compares a root's per-type plan with today's tree, which is then built for every root.
+	static var observesPerTypePlan: Bool {
+		CallPlaceOrderObservation.observer != nil
+			|| VariantBodyObservation.observer != nil
+			|| PlanBodiesObservation.observer != nil
+			|| PlanCallsObservation.observer != nil
+			|| TwinIdentityObservation.observer != nil
+			|| PlanCodeObservation.observer != nil
+			|| PlanSendableObservation.observer != nil
+			|| UnpassableCycleLabelObservation.observer != nil
+	}
+
+	/// The per-type plan of the cycles of a production root, built with no tree of the root's built per path, for the type
+	/// key to lay the root's code out of; or why the root's tree is built per path: it reaches no cycle
+	/// (`nil`), its tree can hold a label no one parameter of a cycle's function can pass
+	/// (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`, whose error only a tree per path reports), the root has no plan,
+	/// or a call of the plan passes an argument the layout cannot write yet
+	/// (`WrittenVariantPlan.Unplanned.argumentTheLayoutCannotWrite`).
+	static func perTypePlan(
+		ofRoot scope: Scope,
+		frozenScopeMap: FrozenScopeMap,
+		declaredTypeNames: DeclaredTypeNames,
+		cache: inout ReceivedPropertiesCache,
+	) throws -> PerTypePlanChoice? {
+		guard let shapeOutsidePlan = shapeOutsidePerTypePlan(inTreeOf: scope, cache: &cache), let shadow = CallPlaceShadow(root: scope, cache: &cache) else { return nil }
+		if let reason = shapeOutsidePlan.reason {
+			return .perPath(reason)
+		}
+		guard !mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &cache) else { return .perPath(.mayHaveUnpassableCycleLabel) }
+		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames)
+		guard let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) else { return .perPath(.noPlan) }
+		let unplanned = WrittenVariantPlan.Unplanned(of: bodies, plan: plan, labelsDeclaredInComponentByScope: shadow.labelsDeclaredInComponentByScope)
+		if let reason = unplanned.argumentTheLayoutCannotWrite {
+			return .perPath(reason)
+		} else {
+			return .perType(unplanned)
+		}
+	}
+
+	/// What `perTypePlan(ofRoot:frozenScopeMap:declaredTypeNames:cache:)` decides of a root that reaches a cycle.
+	enum PerTypePlanChoice {
+		case perType(WrittenVariantPlan.Unplanned)
+		case perPath(RootTreeChoiceObservation.PerPathReason)
+	}
+
 	/// Compares each place of a root's tree with a body built from its scope's copy beneath the answers its path gives
 	/// the labels the scope's tree receives (`VariantBodyObservation`), and the bodies today's places take with those the
 	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`), the code the type key lays out of that plan (`PlanCodeObservation`), and which of its bodies the plan and the layout mark `@Sendable` (`PlanSendableObservation`). Does nothing where no test observes any.
