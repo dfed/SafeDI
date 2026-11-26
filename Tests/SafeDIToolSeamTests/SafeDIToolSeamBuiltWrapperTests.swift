@@ -303,19 +303,19 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 				extension Root {
 				    public init() {
+				        func __safeDI_gadgetBuilder_Host_part(_ scope_analytics: Analytics) -> any Gadget {
+				            let analytics = scope_analytics
+				            func __safeDI_part() -> DefaultGadget {
+				                DefaultGadget(analytics: analytics)
+				            }
+				            return __safeDI_part()
+				        }
+				        func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
+				            .init(part: { scope_analytics in __safeDI_gadgetBuilder_Host_part(scope_analytics) })
+				        }
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
 				            _ = Host.__safeDI_Host_D5095FC0D69E72CF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_gadgetBuilder_Host_part(_ scope_analytics: Analytics) -> any Gadget {
-				                let analytics = scope_analytics
-				                func __safeDI_part() -> DefaultGadget {
-				                    DefaultGadget(analytics: analytics)
-				                }
-				                return __safeDI_part()
-				            }
-				            func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
-				                .init(part: { scope_analytics in __safeDI_gadgetBuilder_Host_part(scope_analytics) })
-				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
@@ -362,18 +362,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 				extension Root {
 				    public init() {
+				        func __safeDI_panelBuilder_Host_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+				            func __safeDI_part(name: String) -> DefaultPanel {
+				                DefaultPanel(name: name, analytics: analytics)
+				            }
+				            return { forwarded in __safeDI_part(name: forwarded) }
+				        }
+				        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+				            .init(part: { values_analytics in __safeDI_panelBuilder_Host_part(analytics: values_analytics) })
+				        }
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
 				            _ = Host.__safeDI_Host_2262779BCDF32D4C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_panelBuilder_Host_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
-				                func __safeDI_part(name: String) -> DefaultPanel {
-				                    DefaultPanel(name: name, analytics: analytics)
-				                }
-				                return { forwarded in __safeDI_part(name: forwarded) }
-				            }
-				            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-				                .init(part: { values_analytics in __safeDI_panelBuilder_Host_part(analytics: values_analytics) })
-				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
@@ -420,18 +420,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 				extension Root {
 				    public init() {
+				        func __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<String, AnyGadget>.Builder {
+				            func __safeDI_part(name: String) -> NamedGadget {
+				                NamedGadget(name: name, analytics: analytics)
+				            }
+				            return { forwarded in AnyGadget(__safeDI_part(name: forwarded)) }
+				        }
+				        func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
+				            .init(part: { values_analytics in __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: values_analytics) })
+				        }
 				        let analytics = Analytics()
 				        func __safeDI_host() -> Host {
 				            _ = Host.__safeDI_Host_AAFD5C8A3036F849.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<String, AnyGadget>.Builder {
-				                func __safeDI_part(name: String) -> NamedGadget {
-				                    NamedGadget(name: name, analytics: analytics)
-				                }
-				                return { forwarded in AnyGadget(__safeDI_part(name: forwarded)) }
-				            }
-				            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
-				                .init(part: { values_analytics in __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: values_analytics) })
-				            }
 				            return Host(__safeDI_analytics: analytics, __safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 				        }
 				        let host: Host = __safeDI_host()
@@ -540,17 +540,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget>.Builder {
+			            func __safeDI_part(run: nonisolated(nonsending) @escaping () async -> Void) -> ActionGadget {
+			                ActionGadget(run: run, analytics: analytics)
+			            }
+			            return { forwarded in __safeDI_part(run: forwarded) }
+			        }
+			        func __safeDI_actionGadget_GadgetBuilder_Host() -> Host.__safeDI_ActionGadget_GadgetCarrier<any Gadget> {
+			            .init(part: { values_analytics in __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_B4F72827A3ECE5F3.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget>.Builder {
-			                func __safeDI_part(run: nonisolated(nonsending) @escaping () async -> Void) -> ActionGadget {
-			                    ActionGadget(run: run, analytics: analytics)
-			                }
-			                return { forwarded in __safeDI_part(run: forwarded) }
-			            }
-			            func __safeDI_actionGadget_GadgetBuilder_Host() -> Host.__safeDI_ActionGadget_GadgetCarrier<any Gadget> {
-			                .init(part: { values_analytics in __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_actionGadget_GadgetBuilder: __safeDI_actionGadget_GadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -559,6 +559,96 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			}
 			""",
 		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresNestedCallsFillSendableAtTheRoot_whenSendableWrapperBuilderFillKeptInItsCallCallsSeamItFillsItself() async throws {
+		// `Shell` builds `Host` in a `SendableInstantiator` and passes up `Host`'s `part`, held in a plain `Instantiator`, so
+		// the root's fill of it is `@Sendable` while the builder function it returns is plain. The fill reads the root's
+		// `token`, which no level carries, so it stays in its call. `DefaultPanel` calls `GearHost`, whose fill captures nothing and is declared
+		// at the root's top; the `@Sendable` fill calls it, through the plain builder function, so it is `@Sendable` too.
+		let feature = Self.featureFiles(
+			hostDeclarations: ["@Received let analytics: Analytics", "@Instantiated let part: Instantiator<Panel>"],
+			otherFiles: [
+				"public protocol Gear: Sendable {}",
+				seamFixtureType(named: "GearHost", isSeam: true, declarations: ["@Instantiated let gear: any Gear"], conformances: ", Sendable"),
+				seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Received let analytics: Analytics", "@Instantiated let hostBuilder: SendableInstantiator<Host>"], conformances: ", Sendable"),
+			],
+		)
+		let fulfillers = [
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultGear", fulfilling: "Gear", declarations: []),
+			seamFixtureType(named: "Token", declarations: [], conformances: ", Sendable"),
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [Panel.self], conformsElsewhere: true)
+			public final class DefaultPanel: Panel, @unchecked Sendable {
+			    public init(name: String, analytics: Analytics, token: Token, gearHost: GearHost) {
+			        self.name = name
+			        self.analytics = analytics
+			        self.token = token
+			        self.gearHost = gearHost
+			        super.init(title: name)
+			    }
+
+			    @Forwarded let name: String
+			    @Received let analytics: Analytics
+			    @Received let token: Token
+			    @Instantiated let gearHost: GearHost
+			}
+			""",
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let token: Token", "@Instantiated let shell: Shell"])
+		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        @Sendable nonisolated func __safeDI_gearBuilder_GearHost() -> GearHost.__safeDI_GearCarrier<any Gear> {
+			            .init(gear: {
+			                let gear: any Gear = DefaultGear()
+			                return gear
+			            })
+			        }
+			        let analytics = Analytics()
+			        let token = Token()
+			        func __safeDI_shell() -> Shell {
+			            _ = Shell.__safeDI_Shell_FAD8E6B8C1E0198E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_panelBuilder_Host_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+			                func __safeDI_part(name: String) -> DefaultPanel {
+			                    func __safeDI_gearHost() -> GearHost {
+			                        _ = GearHost.__safeDI_GearHost_3306B0475BD7CA86.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                        return GearHost(__safeDI_gearBuilder: __safeDI_gearBuilder_GearHost())
+			                    }
+			                    let gearHost: GearHost = __safeDI_gearHost()
+			                    return DefaultPanel(name: name, analytics: analytics, token: token, gearHost: gearHost)
+			                }
+			                return { forwarded in __safeDI_part(name: forwarded) }
+			            }
+			            @Sendable nonisolated func __safeDI_panelSendableBuilder_Shell() -> Shell.__safeDI_PanelSendableCarrier<Panel> {
+			                .init(hostBuilder: { __safeDI_panelBuilder_Host() })
+			            }
+			            @Sendable nonisolated func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+			                .init(part: { values_analytics in __safeDI_panelBuilder_Host_part(analytics: values_analytics) })
+			            }
+			            return Shell(__safeDI_analytics: analytics, __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Shell())
+			        }
+			        let shell: Shell = __safeDI_shell()
+			        self.init(analytics: analytics, token: token, shell: shell)
+			    }
+			}
+			""",
+		])
+		try await expectValuesEqualVisibleBuild(
+			output,
+			modules: modules,
+			visibleModules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature + fulfillers, app: [root]),
+			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe(#"Root().shell.hostBuilder.instantiate().part.instantiate("name")"#)],
+		)
 	}
 
 	// MARK: Forwarded values
@@ -643,26 +733,26 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
+			            func __safeDI_erased(count: Int, name: String) -> PairGadget {
+			                PairGadget(count: count, name: name, analytics: analytics)
+			            }
+			            return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
+			        }
+			        func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+			            func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
+			                DefaultPairPanel(count: count, name: name, analytics: analytics)
+			            }
+			            return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
+			        }
+			        func __safeDI_pairGadget_GadgetBuilder_Host() -> Host.__safeDI_PairGadget_GadgetCarrier<any Gadget> {
+			            .init(erased: { values_analytics in __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: values_analytics) })
+			        }
+			        func __safeDI_pairPanelBuilder_Host() -> Host.__safeDI_PairPanelCarrier<PairPanel> {
+			            .init(held: { values_analytics, values_erased in __safeDI_pairPanelBuilder_Host_held(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_F096C02FA24133CC.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
-			                func __safeDI_erased(count: Int, name: String) -> PairGadget {
-			                    PairGadget(count: count, name: name, analytics: analytics)
-			                }
-			                return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
-			            }
-			            func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
-			                func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
-			                    DefaultPairPanel(count: count, name: name, analytics: analytics)
-			                }
-			                return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
-			            }
-			            func __safeDI_pairGadget_GadgetBuilder_Host() -> Host.__safeDI_PairGadget_GadgetCarrier<any Gadget> {
-			                .init(erased: { values_analytics in __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: values_analytics) })
-			            }
-			            func __safeDI_pairPanelBuilder_Host() -> Host.__safeDI_PairPanelCarrier<PairPanel> {
-			                .init(held: { values_analytics, values_erased in __safeDI_pairPanelBuilder_Host_held(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_pairGadget_GadgetBuilder: __safeDI_pairGadget_GadgetBuilder_Host(), __safeDI_pairPanelBuilder: __safeDI_pairPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -729,17 +819,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<\(spelling), any Gadget>.Builder {
+			            func __safeDI_part() -> DefaultGadget {
+			                DefaultGadget(analytics: analytics)
+			            }
+			            return { _ in __safeDI_part() }
+			        }
+			        func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
+			            .init(part: { values_analytics in __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_BBBB471B63CC96BB.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<\(spelling), any Gadget>.Builder {
-			                func __safeDI_part() -> DefaultGadget {
-			                    DefaultGadget(analytics: analytics)
-			                }
-			                return { _ in __safeDI_part() }
-			            }
-			            func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.__safeDI_DefaultGadget_GadgetCarrier<any Gadget> {
-			                .init(part: { values_analytics in __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -813,17 +903,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+			            func __safeDI_held() -> DefaultEmptyPanel {
+			                DefaultEmptyPanel(analytics: analytics)
+			            }
+			            return { _ in __safeDI_held() }
+			        }
+			        func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
+			            .init(held: { values_analytics in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_F661F6F058163B02.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
-			                func __safeDI_held() -> DefaultEmptyPanel {
-			                    DefaultEmptyPanel(analytics: analytics)
-			                }
-			                return { _ in __safeDI_held() }
-			            }
-			            func __safeDI_emptyPanelBuilder_Host() -> Host.__safeDI_EmptyPanelCarrier<EmptyPanel> {
-			                .init(held: { values_analytics in __safeDI_emptyPanelBuilder_Host_held(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -855,17 +945,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_panelBuilder_Host_forwarded(analytics: Analytics) -> Instantiator<Panel>.Builder {
+			            func __safeDI_forwarded(name: String) -> DefaultPanel {
+			                DefaultPanel(name: name, analytics: analytics)
+			            }
+			            return { forwarded in __safeDI_forwarded(name: forwarded) }
+			        }
+			        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+			            .init(forwarded: { values_analytics in __safeDI_panelBuilder_Host_forwarded(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_F26543937F780D4F.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_panelBuilder_Host_forwarded(analytics: Analytics) -> Instantiator<Panel>.Builder {
-			                func __safeDI_forwarded(name: String) -> DefaultPanel {
-			                    DefaultPanel(name: name, analytics: analytics)
-			                }
-			                return { forwarded in __safeDI_forwarded(name: forwarded) }
-			            }
-			            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-			                .init(forwarded: { values_analytics in __safeDI_panelBuilder_Host_forwarded(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -901,20 +991,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() -> SendableErasedInstantiator<String, any Gadget>.Builder {
+		            @Sendable nonisolated func __safeDI_again(name: String) -> LoopingGadget {
+		                let again = SendableErasedInstantiator<String, any Gadget> {
+		                    __safeDI_again(name: $0)
+		                }
+		                return LoopingGadget(name: name, again: again)
+		            }
+		            return { forwarded in __safeDI_again(name: forwarded) }
+		        }
+		        @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host() -> Host.__safeDI_LoopingGadget_GadgetSendableCarrier<any Gadget> {
+		            .init(again: { __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_21623A769023CF80.self\(seamCallComment(seam: "Host"))
-		            @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() -> SendableErasedInstantiator<String, any Gadget>.Builder {
-		                @Sendable nonisolated func __safeDI_again(name: String) -> LoopingGadget {
-		                    let again = SendableErasedInstantiator<String, any Gadget> {
-		                        __safeDI_again(name: $0)
-		                    }
-		                    return LoopingGadget(name: name, again: again)
-		                }
-		                return { forwarded in __safeDI_again(name: forwarded) }
-		            }
-		            @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host() -> Host.__safeDI_LoopingGadget_GadgetSendableCarrier<any Gadget> {
-		                .init(again: { __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() })
-		            }
 		            return Host(__safeDI_loopingGadget_GadgetSendableBuilder: __safeDI_loopingGadget_GadgetSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -928,20 +1018,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_loopingGadget_GadgetBuilder_Host_again() -> ErasedInstantiator<String, any Gadget>.Builder {
+		            func __safeDI_again(name: String) -> LoopingGadget {
+		                let again = ErasedInstantiator<String, any Gadget> {
+		                    __safeDI_again(name: $0)
+		                }
+		                return LoopingGadget(name: name, again: again)
+		            }
+		            return { forwarded in __safeDI_again(name: forwarded) }
+		        }
+		        func __safeDI_loopingGadget_GadgetBuilder_Host() -> Host.__safeDI_LoopingGadget_GadgetCarrier<any Gadget> {
+		            .init(again: { __safeDI_loopingGadget_GadgetBuilder_Host_again() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_EA5802D3C5040509.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_loopingGadget_GadgetBuilder_Host_again() -> ErasedInstantiator<String, any Gadget>.Builder {
-		                func __safeDI_again(name: String) -> LoopingGadget {
-		                    let again = ErasedInstantiator<String, any Gadget> {
-		                        __safeDI_again(name: $0)
-		                    }
-		                    return LoopingGadget(name: name, again: again)
-		                }
-		                return { forwarded in __safeDI_again(name: forwarded) }
-		            }
-		            func __safeDI_loopingGadget_GadgetBuilder_Host() -> Host.__safeDI_LoopingGadget_GadgetCarrier<any Gadget> {
-		                .init(again: { __safeDI_loopingGadget_GadgetBuilder_Host_again() })
-		            }
 		            return Host(__safeDI_loopingGadget_GadgetBuilder: __safeDI_loopingGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1273,20 +1363,20 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_panelBuilder_Inner_part() -> Instantiator<Panel>.Builder {
+			            func __safeDI_part(name: String) -> DefaultPanel {
+			                DefaultPanel(name: name)
+			            }
+			            return { forwarded in __safeDI_part(name: forwarded) }
+			        }
+			        func __safeDI_panelBuilder_Outer() -> Outer.__safeDI_PanelCarrier<Panel> {
+			            .init(inner: __safeDI_panelBuilder_Inner())
+			        }
+			        func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
+			            .init(part: { __safeDI_panelBuilder_Inner_part() })
+			        }
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_39BC2731DA822B84.self\(seamCallComment(seam: "Outer"))
-			            func __safeDI_panelBuilder_Inner_part() -> Instantiator<Panel>.Builder {
-			                func __safeDI_part(name: String) -> DefaultPanel {
-			                    DefaultPanel(name: name)
-			                }
-			                return { forwarded in __safeDI_part(name: forwarded) }
-			            }
-			            func __safeDI_panelBuilder_Outer() -> Outer.__safeDI_PanelCarrier<Panel> {
-			                .init(inner: __safeDI_panelBuilder_Inner())
-			            }
-			            func __safeDI_panelBuilder_Inner() -> Inner.__safeDI_PanelCarrier<Panel> {
-			                .init(part: { __safeDI_panelBuilder_Inner_part() })
-			            }
 			            return Outer(__safeDI_panelBuilder: __safeDI_panelBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()
@@ -1536,17 +1626,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
+		            func __safeDI_part(label: Label) -> LabeledGadget {
+		                LabeledGadget(label: label, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_part(label: forwarded) }
+		        }
+		        func __safeDI_labeledGadget_GadgetBuilder_Host() -> Host.__safeDI_LabeledGadget_GadgetCarrier<any Gadget> {
+		            .init(part: { values_analytics in __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_518400D9315C3321.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
-		                func __safeDI_part(label: Label) -> LabeledGadget {
-		                    LabeledGadget(label: label, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_part(label: forwarded) }
-		            }
-		            func __safeDI_labeledGadget_GadgetBuilder_Host() -> Host.__safeDI_LabeledGadget_GadgetCarrier<any Gadget> {
-		                .init(part: { values_analytics in __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_labeledGadget_GadgetBuilder: __safeDI_labeledGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1560,17 +1650,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
+		            func __safeDI_part(label: Label) -> LabeledGadget {
+		                LabeledGadget(label: label, analytics: analytics)
+		            }
+		            return { forwarded in __safeDI_part(label: forwarded) }
+		        }
+		        func __safeDI_labeledGadget_GadgetBuilder_Host() -> Host.__safeDI_LabeledGadget_GadgetCarrier<any Gadget> {
+		            .init(part: { values_analytics in __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_85EF4B83F34F4F13.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
-		                func __safeDI_part(label: Label) -> LabeledGadget {
-		                    LabeledGadget(label: label, analytics: analytics)
-		                }
-		                return { forwarded in __safeDI_part(label: forwarded) }
-		            }
-		            func __safeDI_labeledGadget_GadgetBuilder_Host() -> Host.__safeDI_LabeledGadget_GadgetCarrier<any Gadget> {
-		                .init(part: { values_analytics in __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: values_analytics) })
-		            }
 		            return Host(__safeDI_labeledGadget_GadgetBuilder: __safeDI_labeledGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -1997,17 +2087,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
+			            func __safeDI_part(forwardedAction: @escaping () -> Void) -> DefaultActionPanel {
+			                DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
+			            }
+			            return { forwarded in __safeDI_part(forwardedAction: forwarded) }
+			        }
+			        func __safeDI_actionPanelBuilder_Host() -> Host.__safeDI_ActionPanelCarrier<ActionPanel> {
+			            .init(part: { values_analytics in __safeDI_actionPanelBuilder_Host_part(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_73A2F70A927B2DCD.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
-			                func __safeDI_part(forwardedAction: @escaping () -> Void) -> DefaultActionPanel {
-			                    DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
-			                }
-			                return { forwarded in __safeDI_part(forwardedAction: forwarded) }
-			            }
-			            func __safeDI_actionPanelBuilder_Host() -> Host.__safeDI_ActionPanelCarrier<ActionPanel> {
-			                .init(part: { values_analytics in __safeDI_actionPanelBuilder_Host_part(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2148,17 +2238,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
+			            func __safeDI_part(forwardedAction: @escaping OnTap) -> DefaultActionPanel {
+			                DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
+			            }
+			            return { forwarded in __safeDI_part(forwardedAction: forwarded) }
+			        }
+			        func __safeDI_actionPanelBuilder_Host() -> Host.__safeDI_ActionPanelCarrier<ActionPanel> {
+			            .init(part: { values_analytics in __safeDI_actionPanelBuilder_Host_part(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_73A2F70A927B2DCD.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
-			                func __safeDI_part(forwardedAction: @escaping OnTap) -> DefaultActionPanel {
-			                    DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
-			                }
-			                return { forwarded in __safeDI_part(forwardedAction: forwarded) }
-			            }
-			            func __safeDI_actionPanelBuilder_Host() -> Host.__safeDI_ActionPanelCarrier<ActionPanel> {
-			                .init(part: { values_analytics in __safeDI_actionPanelBuilder_Host_part(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2299,17 +2389,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<OnTap, AnyGadget>.Builder {
+			            func __safeDI_part(onTap: @escaping OnTap) -> TapGadget {
+			                TapGadget(onTap: onTap, analytics: analytics)
+			            }
+			            return { forwarded in AnyGadget(__safeDI_part(onTap: forwarded)) }
+			        }
+			        func __safeDI_tapGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_TapGadget_AnyGadgetCarrier<AnyGadget> {
+			            .init(part: { values_analytics in __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: values_analytics) })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_45E43E6CA8DDC64D.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<OnTap, AnyGadget>.Builder {
-			                func __safeDI_part(onTap: @escaping OnTap) -> TapGadget {
-			                    TapGadget(onTap: onTap, analytics: analytics)
-			                }
-			                return { forwarded in AnyGadget(__safeDI_part(onTap: forwarded)) }
-			            }
-			            func __safeDI_tapGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_TapGadget_AnyGadgetCarrier<AnyGadget> {
-			                .init(part: { values_analytics in __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: values_analytics) })
-			            }
 			            return Host(__safeDI_tapGadget_AnyGadgetBuilder: __safeDI_tapGadget_AnyGadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2632,18 +2722,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_gadgetBuilder_Host_part() -> any Gadget {
+			            func __safeDI_part() -> DefaultGadget {
+			                let kid = Kid(part: nil)
+			                return DefaultGadget(kid: kid)
+			            }
+			            return __safeDI_part()
+			        }
+			        func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
+			            .init(part: { __safeDI_gadgetBuilder_Host_part() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_84E665108514B7F7.self\(seamCallComment(seam: "Host"))
-			            func __safeDI_gadgetBuilder_Host_part() -> any Gadget {
-			                func __safeDI_part() -> DefaultGadget {
-			                    let kid = Kid(part: nil)
-			                    return DefaultGadget(kid: kid)
-			                }
-			                return __safeDI_part()
-			            }
-			            func __safeDI_gadgetBuilder_Host() -> Host.__safeDI_GadgetCarrier<any Gadget> {
-			                .init(part: { __safeDI_gadgetBuilder_Host_part() })
-			            }
 			            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -2725,17 +2815,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Label, AnyGadget>.Builder {
+		            func __safeDI_part(label: Feature.Label) -> NamedGadget {
+		                NamedGadget(label: label)
+		            }
+		            return { forwarded in AnyGadget(__safeDI_part(label: forwarded)) }
+		        }
+		        func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
+		            .init(part: { __safeDI_namedGadget_AnyGadgetBuilder_Host_part() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_71934DC459E48C08.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Label, AnyGadget>.Builder {
-		                func __safeDI_part(label: Feature.Label) -> NamedGadget {
-		                    NamedGadget(label: label)
-		                }
-		                return { forwarded in AnyGadget(__safeDI_part(label: forwarded)) }
-		            }
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
-		                .init(part: { __safeDI_namedGadget_AnyGadgetBuilder_Host_part() })
-		            }
 		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2749,17 +2839,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Feature.Label, AnyGadget>.Builder {
+		            func __safeDI_part(label: Label) -> NamedGadget {
+		                NamedGadget(label: label)
+		            }
+		            return { forwarded in AnyGadget(__safeDI_part(label: forwarded)) }
+		        }
+		        func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
+		            .init(part: { __safeDI_namedGadget_AnyGadgetBuilder_Host_part() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_3D06EC7721D023B0.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Feature.Label, AnyGadget>.Builder {
-		                func __safeDI_part(label: Label) -> NamedGadget {
-		                    NamedGadget(label: label)
-		                }
-		                return { forwarded in AnyGadget(__safeDI_part(label: forwarded)) }
-		            }
-		            func __safeDI_namedGadget_AnyGadgetBuilder_Host() -> Host.__safeDI_NamedGadget_AnyGadgetCarrier<AnyGadget> {
-		                .init(part: { __safeDI_namedGadget_AnyGadgetBuilder_Host_part() })
-		            }
 		            return Host(__safeDI_namedGadget_AnyGadgetBuilder: __safeDI_namedGadget_AnyGadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()

@@ -871,22 +871,22 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder_Home_Detail_Scope_api() -> any Api {
+		            func __safeDI_api() -> LiveApi {
+		                let client = Client()
+		                return LiveApi(client: client)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(detailBuilder: { values_navigator in __safeDI_apiBuilder_Home_Detail_Scope() })
+		        }
+		        func __safeDI_apiBuilder_Home_Detail_Scope() -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: { __safeDI_apiBuilder_Home_Detail_Scope_api() })
+		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_C4B9D7A756031A26.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home_Detail_Scope_api() -> any Api {
-		                func __safeDI_api() -> LiveApi {
-		                    let client = Client()
-		                    return LiveApi(client: client)
-		                }
-		                let api: any Api = __safeDI_api()
-		                return api
-		            }
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(detailBuilder: { values_navigator in __safeDI_apiBuilder_Home_Detail_Scope() })
-		            }
-		            func __safeDI_apiBuilder_Home_Detail_Scope() -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: { __safeDI_apiBuilder_Home_Detail_Scope_api() })
-		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()
@@ -2031,29 +2031,29 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_panel() -> Panel {
+		            func __safeDI_panel() -> DefaultPanel {
+		                let tag = Tag()
+		                return DefaultPanel(tag: tag)
+		            }
+		            let panel: Panel = __safeDI_panel()
+		            return panel
+		        }
+		        @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_heldBuilder() -> SendableInstantiator<Panel>.Builder {
+		            @Sendable nonisolated func __safeDI_heldBuilder() -> DefaultPanel {
+		                let tag = Tag()
+		                return DefaultPanel(tag: tag)
+		            }
+		            return { _ in __safeDI_heldBuilder() }
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(panel: { __safeDI_panelBuilder_Host_panel() })
+		        }
+		        @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.__safeDI_PanelSendableCarrier<Panel> {
+		            .init(heldBuilder: { __safeDI_panelSendableBuilder_Host_heldBuilder() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_286D15B0DCA35A43.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_panel() -> Panel {
-		                func __safeDI_panel() -> DefaultPanel {
-		                    let tag = Tag()
-		                    return DefaultPanel(tag: tag)
-		                }
-		                let panel: Panel = __safeDI_panel()
-		                return panel
-		            }
-		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_heldBuilder() -> SendableInstantiator<Panel>.Builder {
-		                @Sendable nonisolated func __safeDI_heldBuilder() -> DefaultPanel {
-		                    let tag = Tag()
-		                    return DefaultPanel(tag: tag)
-		                }
-		                return { _ in __safeDI_heldBuilder() }
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(panel: { __safeDI_panelBuilder_Host_panel() })
-		            }
-		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.__safeDI_PanelSendableCarrier<Panel> {
-		                .init(heldBuilder: { __safeDI_panelSendableBuilder_Host_heldBuilder() })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host(), __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2142,32 +2142,32 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_held() -> Instantiator<Panel>.Builder {
+		            func __safeDI_held() -> DefaultPanel {
+		                let tag = Tag()
+		                return DefaultPanel(tag: tag)
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Worker_Scope_panel() -> Panel {
+		            func __safeDI_panel() -> DefaultPanel {
+		                let tag = Tag()
+		                return DefaultPanel(tag: tag)
+		            }
+		            let panel: Panel = __safeDI_panel()
+		            return panel
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(held: { __safeDI_panelBuilder_Host_held() })
+		        }
+		        @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.__safeDI_PanelSendableCarrier<Panel> {
+		            .init(workerBuilder: { __safeDI_panelBuilder_Host_Worker_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_panelBuilder_Host_Worker_Scope() -> Host.__safeDI_PanelCarrier_Worker<Panel> {
+		            .init(panel: { __safeDI_panelSendableBuilder_Host_Worker_Scope_panel() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_3FB0969910BCAA7E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_held() -> Instantiator<Panel>.Builder {
-		                func __safeDI_held() -> DefaultPanel {
-		                    let tag = Tag()
-		                    return DefaultPanel(tag: tag)
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Worker_Scope_panel() -> Panel {
-		                func __safeDI_panel() -> DefaultPanel {
-		                    let tag = Tag()
-		                    return DefaultPanel(tag: tag)
-		                }
-		                let panel: Panel = __safeDI_panel()
-		                return panel
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(held: { __safeDI_panelBuilder_Host_held() })
-		            }
-		            @Sendable nonisolated func __safeDI_panelSendableBuilder_Host() -> Host.__safeDI_PanelSendableCarrier<Panel> {
-		                .init(workerBuilder: { __safeDI_panelBuilder_Host_Worker_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_panelBuilder_Host_Worker_Scope() -> Host.__safeDI_PanelCarrier_Worker<Panel> {
-		                .init(panel: { __safeDI_panelSendableBuilder_Host_Worker_Scope_panel() })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host(), __safeDI_panelSendableBuilder: __safeDI_panelSendableBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
@@ -2225,26 +2225,26 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_panelBuilder_Host_panel() -> Panel {
+		            func __safeDI_panel() -> DefaultPanel {
+		                let tag = Tag()
+		                return DefaultPanel(tag: tag)
+		            }
+		            let panel: Panel = __safeDI_panel()
+		            return panel
+		        }
+		        func __safeDI_panelBuilder_Host_held() -> Instantiator<Panel>.Builder {
+		            func __safeDI_held() -> DefaultPanel {
+		                let tag = Tag()
+		                return DefaultPanel(tag: tag)
+		            }
+		            return { _ in __safeDI_held() }
+		        }
+		        func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
+		            .init(panel: { __safeDI_panelBuilder_Host_panel() }, held: { values_panel in __safeDI_panelBuilder_Host_held() })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_39F98A0986A20D2E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_panelBuilder_Host_panel() -> Panel {
-		                func __safeDI_panel() -> DefaultPanel {
-		                    let tag = Tag()
-		                    return DefaultPanel(tag: tag)
-		                }
-		                let panel: Panel = __safeDI_panel()
-		                return panel
-		            }
-		            func __safeDI_panelBuilder_Host_held() -> Instantiator<Panel>.Builder {
-		                func __safeDI_held() -> DefaultPanel {
-		                    let tag = Tag()
-		                    return DefaultPanel(tag: tag)
-		                }
-		                return { _ in __safeDI_held() }
-		            }
-		            func __safeDI_panelBuilder_Host() -> Host.__safeDI_PanelCarrier<Panel> {
-		                .init(panel: { __safeDI_panelBuilder_Host_panel() }, held: { values_panel in __safeDI_panelBuilder_Host_held() })
-		            }
 		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()

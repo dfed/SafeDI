@@ -1252,19 +1252,19 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
+			            func __safeDI_userService() -> DefaultUserService {
+			                _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
+			                return DefaultUserService()
+			            }
+			            let userService: any UserService = __safeDI_userService()
+			            return userService
+			        }
+			        func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			            .init(userService: { __safeDI_userServiceBuilder_Service_userService() })
+			        }
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_3AB0D4BFE5B82066.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-			            func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
-			                func __safeDI_userService() -> DefaultUserService {
-			                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
-			                    return DefaultUserService()
-			                }
-			                let userService: any UserService = __safeDI_userService()
-			                return userService
-			            }
-			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-			                .init(userService: { __safeDI_userServiceBuilder_Service_userService() })
-			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
@@ -1330,19 +1330,19 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
+			            func __safeDI_userService() -> DefaultUserService {
+			                _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
+			                return DefaultUserService()
+			            }
+			            let userService: any UserService = __safeDI_userService()
+			            return userService
+			        }
+			        func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+			            .init(userService: { __safeDI_userServiceBuilder_Service_userService() })
+			        }
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_3AB0D4BFE5B82066.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-			            func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
-			                func __safeDI_userService() -> DefaultUserService {
-			                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
-			                    return DefaultUserService()
-			                }
-			                let userService: any UserService = __safeDI_userService()
-			                return userService
-			            }
-			            func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-			                .init(userService: { __safeDI_userServiceBuilder_Service_userService() })
-			            }
 			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
