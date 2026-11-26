@@ -67,7 +67,16 @@ extension TypeKeyLayout {
 		return dependents
 	}
 
-	/// The views other than the root's, each after every view its body builds: post-order of the view DAG.
+	/// Whether no variant of the per-type plan reads a declaration from above that it does not take as a cycle parameter: a
+	/// variant has no place of its own, so every read it makes from above is one each call passes, or one no declaration
+	/// answers, which its body is built with `nil` for.
+	func variantsReadOnlyTheirCycleParameters() -> Bool {
+		variantBodies.allSatisfy { escapingReads[$0].values.allSatisfy { $0 == PathValue.none } }
+	}
+
+	/// The views other than the root's, each after every view its body builds or, for a variant of the per-type plan, first
+	/// calls: post-order of the view DAG. A closing statement of the path key's plan calls a body on its own path, which the
+	/// walk has visited already.
 	func postOrderOfViews() -> [Int] {
 		var order = [Int]()
 		var isVisited = [Bool](repeating: false, count: bodies.count)
@@ -83,9 +92,16 @@ extension TypeKeyLayout {
 				continue
 			}
 			frames[frames.count - 1].next += 1
-			if case let .built(child) = statements[frame.next], !isVisited[child] {
-				isVisited[child] = true
-				frames.append((body: child, next: 0))
+			switch statements[frame.next] {
+			case let .built(child),
+			     let .closer(_, child):
+				if !isVisited[child] {
+					isVisited[child] = true
+					frames.append((body: child, next: 0))
+				}
+			case .inline,
+			     .alias:
+				break
 			}
 		}
 		return order
@@ -155,7 +171,7 @@ extension TypeKeyLayout {
 				record.callSiteReads.forEach(note)
 				required.formUnion(requiredReads[target])
 			case let .alias(record):
-				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional {
+				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional, !record.readsOnlyIfAvailable {
 					required.insert(fulfillingProperty.label)
 				}
 				record.listedReads.forEach(note)
