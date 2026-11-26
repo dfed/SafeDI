@@ -21,7 +21,10 @@
 // The interface every track builds against, frozen 2026-11-26 at 9 PM PT. Each ID is a dense 32-bit position in the
 // order the world's walk first reaches it, so nothing sorts by name. A column owed by the table-side columns lane
 // (lanes/per-type-facts/step0-columns-brief.md) or the mock track (lanes/per-type-facts/track-d-columns.md) is declared
-// here with its final type and answers empty until that lane fills it; its doc comment says which.
+// here with its final type and answers empty until that lane fills it; its doc comment says which. One part is not
+// frozen: `Read` in a mock world, which gains the override read about a concrete type (a `TypeClassID`), not a label
+// (track D, "Settled by the design thread"). Its answer is an optional argument handed down like any answer, and `key`
+// projects every answer of it to one key, as rule 1 does: one body per declaration, never one per set of cycle types.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
@@ -42,6 +45,23 @@ typealias ModuleID = Int32
 typealias ComponentID = Int32
 /// A cycle's identity (A4): the property as cycle validation sees it with the concrete type built.
 typealias CycleID = Int32
+
+/// What one read of a variant comes to in its body (the outcomes fold, `TypeFactsOutcomes`: the outcomes lane fills it;
+/// track D reads it). Track D's `passesNil` is `none` here and its `boundBeforeSendableFunction` is
+/// `readBeforeSendableFunction`; `keysVariant` is a read track D has no outcome for, whose answer keys the variant.
+enum TypeFactsOutcome: UInt8, Sendable {
+	/// Nothing answers the read: the body is passed `nil`, or the read has no value.
+	case none
+	/// The body reads the value its enclosing body binds, by capture.
+	case captured
+	/// The value is bound before the `@Sendable` function that would capture it, outside that function
+	/// (`boundBefore(of:)` names the edge that opens it).
+	case readBeforeSendableFunction
+	/// The body takes the value as a parameter of its function.
+	case parameter
+	/// The answer keys the variant and is no value the body is handed (family, carrier, what a mock root pins).
+	case keysVariant
+}
 
 /// What a declaration's property is: its form, beside how its type is built (`TypeFactsConstruction`).
 enum TypeFactsKind: UInt8, Sendable {
@@ -115,6 +135,17 @@ struct TypeFactsReceived: Equatable, Sendable {
 	let isRequiredThroughAlias: Bool
 }
 
+/// One receive a node's own type makes: the read it makes, the properties that fulfill it as a run of
+/// `acceptedProperties(of:)`, whether it is required, and the alias it is read through.
+struct TypeFactsReceive: Equatable, Sendable {
+	let read: ReadID
+	let acceptedStart: Int32
+	let acceptedCount: Int32
+	let isRequired: Bool
+	/// The `PropertyID.raw` of the alias the receive is read through, -1 for a direct receive.
+	let alias: Int32
+}
+
 /// An answer to a read, by value: compared by its form and what it provides, never by the declaration that gives it.
 struct TypeFactsAnswer: Equatable, Sendable {
 	enum Form: UInt8, Sendable {
@@ -126,6 +157,10 @@ struct TypeFactsAnswer: Equatable, Sendable {
 		case beingBuilt
 		/// A key only: a read only if available, whose `nil` or value is an optional parameter (rule 1).
 		case optionalParameter
+		/// As `optionalParameter`, answered by a `LazilyInstantiated`, which the parameter is.
+		case optionalLazilyInstantiatedParameter
+		/// As `optionalParameter`, answered by a `SendableLazilyInstantiated`, which the parameter is.
+		case optionalSendableLazilyInstantiatedParameter
 	}
 
 	let form: Form
@@ -158,13 +193,24 @@ protocol TypeFactsWorld {
 	func hole(_ declaration: DeclarationID) -> TypeFactsHole?
 	/// The union fact of what the subtree receives from above. Owed by the table-side columns.
 	func received(by declaration: DeclarationID) -> ArraySlice<TypeFactsReceived>
+	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
+	/// table-side columns.
+	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive>
+	/// The properties that fulfill a receive. Owed by the table-side columns.
+	func acceptedProperties(of receive: TypeFactsReceive) -> ArraySlice<PropertyID>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
-	func reads(of declaration: DeclarationID) -> [ReadID]
+	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
 	func read(_ read: ReadID) -> Read
 	/// The labels the node's subtree reads from above it, each once, in read order.
-	func labels(of declaration: DeclarationID) -> [WorldLabelID]
+	func labels(of declaration: DeclarationID) -> ArraySlice<WorldLabelID>
 
+	/// The roots the world is built from: one tonight. A world of several roots (every production root and seam, or every
+	/// mock root, of one validation call) seeds a variant per root from that root's answers and shares the rest where
+	/// they agree; nothing per root lives on a variant.
+	var rootCount: Int { get }
+	/// The variant a root's body is.
+	func rootVariant(_ root: Int) -> VariantID
 	var variantCount: Int { get }
 	func declaration(of variant: VariantID) -> DeclarationID
 	func family(of variant: VariantID) -> VariantFamily
@@ -172,12 +218,23 @@ protocol TypeFactsWorld {
 	/// answer ID with what a parameter carries left out. A call's own answers are `sources(ofCall:of:)`.
 	func keys(of variant: VariantID) -> ArraySlice<AnswerID>
 	func answer(_ answer: AnswerID) -> TypeFactsAnswer
+	/// The forms an answer's declaration provides, by value, interned apart from the channel that reads them. Owed with
+	/// answers interned by ID (answers are interned by text tonight).
+	func forms(of answer: AnswerID) -> ArraySlice<PropertyID>
+	/// Whether the answer's declaration provides `property`. Owed with `forms(of:)`: `false` until then.
+	func provides(_ answer: AnswerID, _ property: PropertyID) -> Bool
 	/// The variant each edge of the variant's declaration calls, in edge order.
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
+	/// What each read of the variant comes to, parallel to `keys(of:)`. Owed by the outcomes fold.
+	func outcomes(of variant: VariantID) -> ArraySlice<TypeFactsOutcome>
+	/// For each read of the variant, parallel to `keys(of:)`: the offset of the edge that opens the `@Sendable` function a
+	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome. Owed by the
+	/// outcomes fold.
+	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -185,6 +242,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		graph.nodes.count
 	}
 
+	/// Never `alias` or `hole` yet, and `constant` for the root: aliases and holes become nodes with the table-side
+	/// columns (step0-columns-brief.md), so a switch over kinds has those cases with nothing behind them until then.
 	func kind(of declaration: DeclarationID) -> TypeFactsKind {
 		guard let property = graph.nodes[Int(declaration)].property else {
 			return .constant
@@ -259,24 +318,40 @@ extension TypeFactsGraph: TypeFactsWorld {
 		[]
 	}
 
-	func reads(of declaration: DeclarationID) -> [ReadID] {
-		reads.reads(of: Int(declaration))
+	func receives(of _: DeclarationID) -> ArraySlice<TypeFactsReceive> {
+		[]
+	}
+
+	func acceptedProperties(of _: TypeFactsReceive) -> ArraySlice<PropertyID> {
+		[]
+	}
+
+	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {
+		[]
+	}
+
+	func provides(_: AnswerID, _: PropertyID) -> Bool {
+		false
+	}
+
+	var rootCount: Int {
+		1
+	}
+
+	func rootVariant(_: Int) -> VariantID {
+		0
+	}
+
+	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID> {
+		readColumn[Int(readOffsets[Int(declaration)])..<Int(readOffsets[Int(declaration) + 1])]
 	}
 
 	func read(_ read: ReadID) -> Read {
 		readTable[Int(read)]
 	}
 
-	func labels(of declaration: DeclarationID) -> [WorldLabelID] {
-		var labels = [WorldLabelID]()
-		var seen = Set<WorldLabelID>()
-		for read in reads.reads(of: Int(declaration)) {
-			let label = readTable[Int(read)].label
-			if label >= 0, seen.insert(label).inserted {
-				labels.append(label)
-			}
-		}
-		return labels
+	func labels(of declaration: DeclarationID) -> ArraySlice<WorldLabelID> {
+		labelColumn[Int(labelOffsets[Int(declaration)])..<Int(labelOffsets[Int(declaration) + 1])]
 	}
 
 	var variantCount: Int {
@@ -297,7 +372,17 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func answer(_ answer: AnswerID) -> TypeFactsAnswer {
 		guard answer >= 0 else {
-			return TypeFactsAnswer(form: answer == TypeFactsGraph.optionalParameterKey ? .optionalParameter : .none, forms: -1)
+			let form: TypeFactsAnswer.Form = switch answer {
+			case TypeFactsGraph.optionalParameterKey:
+				.optionalParameter
+			case TypeFactsGraph.optionalLazilyInstantiatedParameterKey:
+				.optionalLazilyInstantiatedParameter
+			case TypeFactsGraph.optionalSendableLazilyInstantiatedParameterKey:
+				.optionalSendableLazilyInstantiatedParameter
+			default:
+				.none
+			}
+			return TypeFactsAnswer(form: form, forms: -1)
 		}
 		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerKeys[Int(answer)])
 	}
@@ -312,5 +397,13 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func isCalledOnce(_ variant: VariantID) -> Bool {
 		variants.isCalledOnce[Int(variant)]
+	}
+
+	func outcomes(of _: VariantID) -> ArraySlice<TypeFactsOutcome> {
+		[]
+	}
+
+	func boundBefore(of _: VariantID) -> ArraySlice<Int32> {
+		[]
 	}
 }

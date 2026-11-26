@@ -82,7 +82,9 @@ struct TypeFactsVariants: Sendable {
 	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
 	///     types differ by family key on it.
 	///   - key: The value of an answer to a read that a variant is told apart by. The two parameter rules live here: a
-	///     difference a parameter can carry projects to one key.
+	///     difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
+	///     none, never to a key a call passes through, so it need not be idempotent: a key collapsed at one call reaches
+	///     every callee below unchanged.
 	init(
 		graph: OrderedGraph<some Hashable & Sendable>,
 		reads: ReadsFromAbove,
@@ -139,19 +141,18 @@ struct TypeFactsVariants: Sendable {
 				scratchSources.removeAll(keepingCapacity: true)
 				reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
 					work += 1
-					let answer: Int32
 					if let bound = binding(edge, read) {
-						answer = bound.answer
+						scratchKeys.append(key(read, bound.answer))
 						scratchSources.append(.bound(bound.declaration, answer: bound.answer))
 					} else if let position = reads.rows.rank(of: read, inRow: node) {
-						// The caller's key: an answer its callers share, which is all a body shared by them can hand on.
-						answer = columns.key(ofVariant: caller, at: position)
+						// The caller's key, as it is: an answer its callers share, which is all a body shared by them can
+						// hand on. It is a key already, so `key` is never applied to it again.
+						scratchKeys.append(columns.key(ofVariant: caller, at: position))
 						scratchSources.append(.passedThrough(Int32(position)))
 					} else {
-						answer = -1
+						scratchKeys.append(key(read, -1))
 						scratchSources.append(.none)
 					}
-					scratchKeys.append(key(read, answer))
 				}
 				columns.sourceOffsets.append(Int32(columns.sources.count))
 				columns.sources.append(contentsOf: scratchSources)

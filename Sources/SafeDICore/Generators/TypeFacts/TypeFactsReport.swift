@@ -58,6 +58,14 @@ public struct TypeFactsReport: Sendable {
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
 		projection = graph.projection
+		world = Self.projection(of: graph)
+		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
+		for variant in 0..<graph.variantCount {
+			variantCounts[Int(graph.declaration(of: VariantID(variant)))] += 1
+		}
+		variantCountsByNode = variantCounts
+		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
+		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		nodes = graph.graph.nodes.indices.map { index in
@@ -146,6 +154,44 @@ public struct TypeFactsReport: Sendable {
 	public let nodes: [Node]
 	/// The places in the order the build started them, the root first.
 	public let places: [Place]
+	/// The world as every track reads it (`TypeFactsWorld`), a line per declaration then a line per variant.
+	public let world: String
+	/// How many variants each node has, by node position.
+	public let variantCountsByNode: [Int]
+	/// Each variant's node.
+	public let variantNodes: [Int]
+	/// The variant each edge of a variant's node calls, in edge order.
+	public let variantCalls: [[Int]]
+
+	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
+	private static func projection(of world: some TypeFactsWorld) -> String {
+		var lines = [String]()
+		for index in 0..<world.declarationCount {
+			let declaration = DeclarationID(index)
+			var line = "d\(index) \(world.kind(of: declaration)) \(world.construction(of: declaration)) property \(world.propertyID(of: declaration))"
+			line += " type \(world.builtType(of: declaration).raw) cycle \(world.cycle(of: declaration)) component \(world.component(of: declaration))"
+			line += world.isOnCycle(declaration) ? " on cycle" : ""
+			line += " route \(world.firstRoute(to: declaration)) edges \(Array(world.edges(from: declaration)))"
+			line += " facts \(world.edgeFacts(from: declaration).count) bindings \(world.bindings(of: declaration).count)"
+			line += " parents \(world.parents(of: declaration).count) hole \(world.hole(declaration) != nil) received \(world.received(by: declaration).count)"
+			line += " receives \(world.receives(of: declaration).map { world.acceptedProperties(of: $0).count })"
+			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
+			line += " labels \(Array(world.labels(of: declaration)))"
+			lines.append(line)
+		}
+		lines.append("roots \((0..<world.rootCount).map(world.rootVariant))")
+		for index in 0..<world.variantCount {
+			let variant = VariantID(index)
+			var line = "v\(index) d\(world.declaration(of: variant)) \(world.family(of: variant))"
+			line += " keys [\(world.keys(of: variant).map { "\(world.answer($0).form) \(world.forms(of: $0).count)" }.joined(separator: ", "))]"
+			let calls = world.calls(of: variant)
+			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]"
+			line += world.isCalledOnce(variant) ? " once" : ""
+			line += " outcomes \(world.outcomes(of: variant).count) bound before \(world.boundBefore(of: variant).count)"
+			lines.append(line)
+		}
+		return lines.joined(separator: "\n")
+	}
 }
 
 extension ConstructionLog.Read {
