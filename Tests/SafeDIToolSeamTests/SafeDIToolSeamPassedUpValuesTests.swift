@@ -395,6 +395,84 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachRouteItsNearestValue_whenRootFillsPlaceTwoSeamsUpWhoseSecondRouteAloneReadsRootsValue() async throws {
+		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up to `Root`, whose
+		// `LiveApi` receives `token`. Inline, the `LiveApi` under `first` reads `First`’s token, and the one under `second`,
+		// where nothing between `Root` and the place declares one, reads `Root`’s.
+		let modules = Self.innerAndOuterModules(
+			inner: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let token: Token", "@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			],
+			outer: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received public let token: Token"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let token: Token", "@Instantiated public let shell: Shell"]),
+				"""
+				func eachApiReadsItsNearestToken() -> [Bool] {
+				    let root = Root()
+				    let home = root.shell.home
+				    return [(home.first.panel.api as? LiveApi)?.token === home.first.token, (home.second.panel.api as? LiveApi)?.token === root.token]
+				}
+				""",
+			],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(output: output, modules: modules),
+			probes: [DifferentialValueProbe("eachApiReadsItsNearestToken()")],
+			filesToDelete: &filesToDelete,
+		)
+		if compileVerificationIsEnabled {
+			#expect(description == """
+			probe eachApiReadsItsNearestToken()
+			Array<Bool>
+			  0: Bool true
+			  1: Bool true
+
+			""")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDeclarationBoundAfterPlace_whenRootFillsPlaceTwoSeamsUpWhoseSecondRouteAloneLeavesLabelUncarried() async {
+		// `Home` holds a place of `Api` under `first` and under `second`, one case, and `Shell` passes it up to `Root`. Only
+		// `Second` declares `token`, which receives `panel` and so is built after it: inline, the `LiveApi` under `second`
+		// would read it, and no builder is handed it, so the second route alone makes `Root`’s fill an error.
+		let modules = Self.innerAndOuterModules(
+			inner: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: ["@Received public let panel: Panel"]),
+				seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated public let panel: Panel", "@Instantiated public let token: Token"]),
+				seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let first: First", "@Instantiated public let second: Second"]),
+			],
+			outer: [
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let home: Home"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let token: Token?"]),
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let shell: Shell"]),
+			],
+		)
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `token: Token?`, which `Second` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder_second_panel`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `Api` in module `Inner` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Inner"]!["Second.swift"]):9:5: note: `Second` declares `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
