@@ -1083,6 +1083,39 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				}
 				return caseFields
 			}
+			// Test only, deleted before merge: the same fields read from the call's place graph, for the tests' oracle, which
+			// rides on the levels' observer (`SeamPlaceLevels.caseFieldsMismatches`).
+			if let observer = SeamPlaceLevels.observer, let calledBuilders = scope.calledBuilders, !calledBuilders.places.cases.isEmpty {
+				let query = SeamSignature.Places.Query(of: calledBuilders.places)
+				var mismatches = [String]()
+				func spelled(_ fields: [SeamSignature.Hole.Field]) -> [String] {
+					fields.map { "\($0.property.label): \($0.property.typeDescription.asSource)\($0.isDeferredParameter ? " (deferred)" : "")" }
+				}
+				for (caseKey, places) in placesByCaseKey.sorted(by: { $0.key < $1.key }) {
+					let caseIndices = Set(places.compactMap { calledBuilders.caseIndexBySite[$0.site] })
+					guard let firstPlace = places.first, let perPlace = caseFieldsByCaseKey[caseKey] else { continue }
+					guard caseIndices.count == 1, let caseIndex = caseIndices.first, places.allSatisfy({ calledBuilders.caseIndexBySite[$0.site] != nil }) else {
+						if !caseIndices.isEmpty {
+							mismatches.append("case \(caseKey): its places are of graph cases \(caseIndices.sorted()) and \(places.count(where: { calledBuilders.caseIndexBySite[$0.site] == nil })) passed up")
+						}
+						continue
+					}
+					let byGraph = ScopeGenerator.caseFields(ofCaseAt: caseIndex, hole: firstPlace, in: query)
+					if spelled(perPlace.fields).sorted() != spelled(byGraph.fields).sorted() {
+						mismatches.append("case \(caseKey): fields per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
+					} else if spelled(perPlace.fields) != spelled(byGraph.fields) {
+						mismatches.append("case \(caseKey): field order per place \(spelled(perPlace.fields)), by graph \(spelled(byGraph.fields))")
+					}
+					if perPlace.callerReadLabels != byGraph.callerReadLabels {
+						mismatches.append("case \(caseKey): caller-read labels per place \(perPlace.callerReadLabels.sorted()), by graph \(byGraph.callerReadLabels.sorted())")
+					}
+				}
+				if !mismatches.isEmpty {
+					var observation = SeamPlaceLevels(seamType: .simple(name: "", generics: []), places: [])
+					observation.caseFieldsMismatches = [(["case fields read from the place graph differ from those read per place"] + mismatches).joined(separator: "\n")]
+					observer(observation)
+				}
+			}
 			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
 			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
 			// (`parameterField(of:reading:)`). A route on which no type binds the value hands the fill the caller's, which the root

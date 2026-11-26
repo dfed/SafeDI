@@ -1805,6 +1805,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return caseFields
 	}
 
+	/// What one fill binds for every place of the case at `caseIndex` of `query`'s place graph, the case whose emitting place
+	/// is `hole`, by the rule `caseFields(of:)` states, read over every route to the case instead of over its places: a
+	/// label's fields are the distinct field answers of its routes (`SeamSignature.Places.Query.answers(ofLabel:at:)`), the
+	/// representative route's first, and a label some route answers with no level's field is read from the caller's scope
+	/// there. A route through an inner seam's levels is a route of the graph, so this covers the labels
+	/// `InnerScopeReaders.labelsSomeInnerRouteLacks(of:)` finds. A `nil` case is a place the call passes up, which is no case
+	/// of the graph yet: its fields are its own.
+	static func caseFields(ofCaseAt caseIndex: Int?, hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> CaseFields {
+		guard let caseIndex else { return caseFields(of: [hole]) }
+		var caseFields = CaseFields()
+		let payloadLabels = Set((hole.enumPlace?.values ?? []).map(\.property.label))
+		for label in query.labels(reaching: caseIndex) {
+			let answers = query.answers(ofLabel: label, at: caseIndex)
+			let held = answers.compactMap { answer -> SeamSignature.Hole.Field? in
+				guard case let .field(level, declaration) = answer else { return nil }
+				return query.places.declaration(level: level, declaration: declaration).field
+			}
+			guard let firstField = held.first else { continue }
+			guard !payloadLabels.contains(label) else {
+				caseFields.fields.append(firstField)
+				continue
+			}
+			let heldByLevels = held.filter { !$0.isDeferredParameter }
+			guard let firstHeld = heldByLevels.first else {
+				caseFields.fields.append(firstField)
+				continue
+			}
+			caseFields.fields.append(heldByLevels.first { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == firstHeld.property.asUnwrappedProperty } ?? firstHeld)
+			if heldByLevels.count < answers.count {
+				caseFields.callerReadLabels.insert(label)
+			}
+		}
+		return caseFields
+	}
+
 	/// The fields of `places`, the places of one case nested by type, whose label some of them carry in forms that differ in
 	/// more than optionality, from levels: one fill cannot take them as one parameter. Each label's forms in the order of
 	/// their declarations' locations, so the one a diagnostic is reported at never depends on a type's name.
