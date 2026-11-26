@@ -721,6 +721,91 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysParameterOrder_whenScreenClosesCycleOnItselfBeforeOthers() async throws {
+		// S3 opens itself before S0 and S2, whose functions take `x` and `y`: a function takes them in the order its body
+		// first receives them, never in the order a call of its own function passes them.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    @Instantiated let y: Y
+		    @Instantiated let x: X
+		    public init(s1Builder: Instantiator<S1>, y: Y, x: X) { self.s1Builder = s1Builder; self.y = y; self.x = x }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let x: X
+		    @Instantiated let s2Builder: Instantiator<S2>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(x: X, s2Builder: Instantiator<S2>, s0Builder: Instantiator<S0>) { self.x = x; self.s2Builder = s2Builder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S2: Instantiable {
+		    @Instantiated let s3Builder: Instantiator<S3>
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    @Received let y: Y
+		    public init(s3Builder: Instantiator<S3>, s1Builder: Instantiator<S1>, y: Y) { self.s3Builder = s3Builder; self.s1Builder = s1Builder; self.y = y }
+		}
+
+		@Instantiable public final class S3: Instantiable {
+		    @Instantiated let s3Builder: Instantiator<S3>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    @Instantiated let s2Builder: Instantiator<S2>
+		    public init(s3Builder: Instantiator<S3>, s0Builder: Instantiator<S0>, s2Builder: Instantiator<S2>) { self.s3Builder = s3Builder; self.s0Builder = s0Builder; self.s2Builder = s2Builder }
+		}
+
+		@Instantiable public final class X: Instantiable { public init() {} }
+
+		@Instantiable public final class Y: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysParameterOrder_whenInitializerTakesReceivesInOtherOrderThanDeclared() async throws {
+		// S2 declares `x` before `y` and its initializer takes `y` first: S1's and S2's functions take them in declaration
+		// order, as today's do.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let x: X
+		    @Instantiated let y: Y
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(x: X, y: Y, s1Builder: Instantiator<S1>) { self.x = x; self.y = y; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let s2Builder: Instantiator<S2>
+		    public init(s2Builder: Instantiator<S2>) { self.s2Builder = s2Builder }
+		}
+
+		@Instantiable public final class S2: Instantiable {
+		    @Received let x: X
+		    @Received let y: Y
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(y: Y, x: X, s0Builder: Instantiator<S0>) { self.y = y; self.x = x; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class X: Instantiable { public init() {} }
+
+		@Instantiable public final class Y: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

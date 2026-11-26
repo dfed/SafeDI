@@ -200,6 +200,7 @@ extension TypeKeyLayout {
 	func readsOfBody(_ body: Int) -> [String] {
 		var seen = Set<String>()
 		var list = [String]()
+		var variantCallSiteReads = [String]()
 		func add(_ label: String) {
 			if seen.insert(label).inserted {
 				list.append(label)
@@ -218,8 +219,20 @@ extension TypeKeyLayout {
 			case let .inline(record):
 				record.constructionReads.forEach { add($0.label) }
 			case let .closer(record, target):
-				record.callSiteReads.forEach { add($0.label) }
-				reads[target].forEach(add)
+				if record.targetVariant == nil {
+					record.callSiteReads.forEach { add($0.label) }
+					reads[target].forEach(add)
+				} else {
+					// A call of a variant of the per-type plan stands where today's tree builds the child or closes the cycle;
+					// it reads what the variant's body reads, in the body's order, as a built child does. A call of the body's
+					// own variant reads nothing new, and what the calls pass comes after every read of the body, so that a
+					// function takes its parameters in the order today's walk of its body first meets them
+					// (`inOrderTheBodyFirstReceives`) rather than in the order a call's arguments settled on a pass before.
+					if target != body {
+						reads[target].forEach(add)
+					}
+					variantCallSiteReads += record.callSiteReads.map(\.label)
+				}
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
 					add(fulfillingProperty.label)
@@ -227,6 +240,7 @@ extension TypeKeyLayout {
 				record.listedReads.forEach { add($0.label) }
 			}
 		}
+		variantCallSiteReads.forEach(add)
 		return list.filter { !bodies[body].forwardedLabels.contains($0) && bodies[body].positionsByLabel[$0] == nil }
 	}
 
