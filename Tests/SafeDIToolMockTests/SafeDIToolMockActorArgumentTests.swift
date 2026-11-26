@@ -133,15 +133,17 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_worker__overrides = safeDIOverrides.worker
-			        func __safeDI_worker() -> Worker {
-			            func __safeDI_childBuilder() -> Child {
-			                if let safeDIBuilder = __safeDI_worker__overrides.childBuilder { safeDIBuilder() } else { Child() }
-			            }
-			            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-			            return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable () -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 			        }
-			        let worker: Worker = __safeDI_worker()
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let childBuilder = Instantiator<Child> {
+			                __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_Worker_configuration.childBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        }
+			        let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.worker
+			        let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
 			        return Root(worker: worker)
 			    }
 			}
@@ -179,10 +181,12 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Worker {
-			        func __safeDI_childBuilder() -> Child {
-			            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (() -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 			        }
-			        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			        let childBuilder = Instantiator<Child> {
+			            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
+			        }
 			        return Worker(childBuilder: childBuilder)
 			    }
 			}
@@ -357,19 +361,21 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_store() -> Store {
-			            let __safeDI_worker__overrides = safeDIOverrides.store.worker
-			            func __safeDI_worker() -> Worker {
-			                func __safeDI_childBuilder() -> Child {
-			                    if let safeDIBuilder = __safeDI_worker__overrides.childBuilder { safeDIBuilder() } else { Child() }
-			                }
-			                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-			                return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let childBuilder = Instantiator<Child> {
+			                __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_Worker_configuration.childBuilder)
 			            }
-			            let worker: Worker = __safeDI_worker()
-			            return if let safeDIBuilder = safeDIOverrides.store.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
 			        }
-			        let store: Store = __safeDI_store()
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable () -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
+			        }
+			        func __safeDI_store(__safeDI_Store_configuration: Store.SafeDIMockConfiguration) -> Store {
+			            let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = __safeDI_Store_configuration.worker
+			            let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
+			            return if let safeDIBuilder = __safeDI_Store_configuration.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+			        }
+			        let store: Store = __safeDI_store(__safeDI_Store_configuration: safeDIOverrides.store)
 			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { Other() }
 			        return Root(store: store, other: other)
 			    }
@@ -408,15 +414,17 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Store {
-			        let __safeDI_worker__overrides = safeDIOverrides.worker
-			        func __safeDI_worker() -> Worker {
-			            func __safeDI_childBuilder() -> Child {
-			                if let safeDIBuilder = __safeDI_worker__overrides.childBuilder { safeDIBuilder() } else { Child() }
-			            }
-			            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-			            return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable () -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 			        }
-			        let worker: Worker = __safeDI_worker()
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let childBuilder = Instantiator<Child> {
+			                __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_Worker_configuration.childBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        }
+			        let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.worker
+			        let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
 			        return Store(worker: worker)
 			    }
 			}
@@ -489,10 +497,12 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Worker {
-			        func __safeDI_childBuilder() -> Child {
-			            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (() -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 			        }
-			        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			        let childBuilder = Instantiator<Child> {
+			            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
+			        }
 			        return Worker(childBuilder: childBuilder)
 			    }
 			}
@@ -674,19 +684,21 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_store() -> Store {
-			            let __safeDI_worker__overrides = safeDIOverrides.store.worker
-			            func __safeDI_worker() -> Worker {
-			                func __safeDI_childBuilder() -> Child {
-			                    if let safeDIBuilder = __safeDI_worker__overrides.childBuilder { safeDIBuilder() } else { Child() }
-			                }
-			                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-			                return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let childBuilder = Instantiator<Child> {
+			                __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_Worker_configuration.childBuilder)
 			            }
-			            let worker: Worker = __safeDI_worker()
-			            return if let safeDIBuilder = safeDIOverrides.store.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
 			        }
-			        let store: Store = __safeDI_store()
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable () -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
+			        }
+			        func __safeDI_store(__safeDI_Store_configuration: Store.SafeDIMockConfiguration) -> Store {
+			            let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = __safeDI_Store_configuration.worker
+			            let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
+			            return if let safeDIBuilder = __safeDI_Store_configuration.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+			        }
+			        let store: Store = __safeDI_store(__safeDI_Store_configuration: safeDIOverrides.store)
 			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { Other() }
 			        return Root(store: store, other: other)
 			    }
@@ -725,15 +737,17 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Store {
-			        let __safeDI_worker__overrides = safeDIOverrides.worker
-			        func __safeDI_worker() -> Worker {
-			            func __safeDI_childBuilder() -> Child {
-			                if let safeDIBuilder = __safeDI_worker__overrides.childBuilder { safeDIBuilder() } else { Child() }
-			            }
-			            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-			            return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (@Sendable () -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 			        }
-			        let worker: Worker = __safeDI_worker()
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let childBuilder = Instantiator<Child> {
+			                __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_Worker_configuration.childBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Worker(childBuilder: childBuilder) }
+			        }
+			        let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.worker
+			        let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
 			        return Store(worker: worker)
 			    }
 			}
@@ -806,10 +820,12 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Worker {
-			        func __safeDI_childBuilder() -> Child {
-			            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: (() -> Child)?) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 			        }
-			        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			        let childBuilder = Instantiator<Child> {
+			            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
+			        }
 			        return Worker(childBuilder: childBuilder)
 			    }
 			}
@@ -951,19 +967,21 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_worker__overrides = safeDIOverrides.worker
-			        func __safeDI_worker() -> Worker {
-			            func __safeDI_helper() -> Helper {
-			                func __safeDI_childBuilder() -> Child {
-			                    if let safeDIBuilder = __safeDI_worker__overrides.helper.childBuilder.safeDIBuilder { safeDIBuilder(__safeDI_worker__overrides.helper.childBuilder.name()) } else { Child(name: __safeDI_worker__overrides.helper.childBuilder.name()) }
-			                }
-			                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-			                return if let safeDIBuilder = __safeDI_worker__overrides.helper.safeDIBuilder { safeDIBuilder(childBuilder) } else { Helper(childBuilder: childBuilder) }
+			        func __safeDI_helper(__safeDI_Helper_configuration: Helper.SafeDIMockConfiguration) -> Helper {
+			            let childBuilder = Instantiator<Child> {
+			                __safeDI_childBuilder(__safeDI_Child_configuration: __safeDI_Helper_configuration.childBuilder)
 			            }
-			            let helper: Helper = __safeDI_helper()
-			            return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(helper) } else { Worker(helper: helper) }
+			            return if let safeDIBuilder = __safeDI_Helper_configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Helper(childBuilder: childBuilder) }
 			        }
-			        let worker: Worker = __safeDI_worker()
+			        func __safeDI_childBuilder(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Child_configuration.name()) } else { Child(name: __safeDI_Child_configuration.name()) }
+			        }
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let helper: Helper = __safeDI_helper(__safeDI_Helper_configuration: __safeDI_Worker_configuration.helper)
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(helper) } else { Worker(helper: helper) }
+			        }
+			        let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.worker
+			        let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
 			        return Root(worker: worker)
 			    }
 			}
@@ -1282,20 +1300,22 @@ struct SafeDIToolMockActorArgumentTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Store {
-			        let __safeDI_worker__overrides = safeDIOverrides.worker
-			        func __safeDI_worker() -> Worker {
-			            let token = if let safeDIBuilder = __safeDI_worker__overrides.token { safeDIBuilder() } else { Token() }
-			            func __safeDI_helper() -> Helper {
-			                func __safeDI_child() -> Child {
-			                    if let safeDIBuilder = __safeDI_worker__overrides.helper.child.safeDIBuilder { safeDIBuilder(token, __safeDI_worker__overrides.helper.child.name()) } else { Child(token: token, name: __safeDI_worker__overrides.helper.child.name()) }
-			                }
-			                let child = LazilyInstantiated<Child>(__safeDI_child)
-			                return if let safeDIBuilder = __safeDI_worker__overrides.helper.safeDIBuilder { safeDIBuilder(child) } else { Helper(child: child) }
+			        func __safeDI_helper(token: Token, __safeDI_Helper_configuration: Helper.SafeDIMockConfiguration) -> Helper {
+			            let child = LazilyInstantiated<Child> {
+			                __safeDI_child(token: token, __safeDI_Child_configuration: __safeDI_Helper_configuration.child)
 			            }
-			            let helper: Helper = __safeDI_helper()
-			            return if let safeDIBuilder = __safeDI_worker__overrides.safeDIBuilder { safeDIBuilder(token, helper) } else { Worker(token: token, helper: helper) }
+			            return if let safeDIBuilder = __safeDI_Helper_configuration.safeDIBuilder { safeDIBuilder(child) } else { Helper(child: child) }
 			        }
-			        let worker: Worker = __safeDI_worker()
+			        func __safeDI_child(token: Token, __safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(token, __safeDI_Child_configuration.name()) } else { Child(token: token, name: __safeDI_Child_configuration.name()) }
+			        }
+			        func __safeDI_worker(__safeDI_Worker_configuration: Worker.SafeDIMockConfiguration) -> Worker {
+			            let token = if let safeDIBuilder = __safeDI_Worker_configuration.token { safeDIBuilder() } else { Token() }
+			            let helper: Helper = __safeDI_helper(token: token, __safeDI_Helper_configuration: __safeDI_Worker_configuration.helper)
+			            return if let safeDIBuilder = __safeDI_Worker_configuration.safeDIBuilder { safeDIBuilder(token, helper) } else { Worker(token: token, helper: helper) }
+			        }
+			        let __safeDI_worker____safeDI_Worker_configuration: Worker.SafeDIMockConfiguration = safeDIOverrides.worker
+			        let worker: Worker = __safeDI_worker(__safeDI_Worker_configuration: __safeDI_worker____safeDI_Worker_configuration)
 			        return Store(worker: worker)
 			    }
 			}

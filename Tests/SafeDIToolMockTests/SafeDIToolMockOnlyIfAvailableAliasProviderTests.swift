@@ -103,14 +103,14 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let serviceAlias: Service? = safeDIOverrides.serviceAlias
-			        func __safeDI_child() -> Child {
-			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            let service = if let safeDIBuilder = __safeDI_Child_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let serviceAlias: Service? = service
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(serviceAlias) } else { Sibling(serviceAlias: serviceAlias) }
 			        return Root(child: child, sibling: sibling)
 			    }
@@ -163,14 +163,14 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_child() -> Child {
-			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            let service = if let safeDIBuilder = __safeDI_Child_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let serviceAlias: Service? = service
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        return Root(child: child)
 			    }
 			}
@@ -454,14 +454,14 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
 			        let serviceAlias: Service? = safeDIOverrides.serviceAlias
-			        func __safeDI_child() -> Child {
-			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            let service = if let safeDIBuilder = __safeDI_Child_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let serviceAlias: Service? = service
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(serviceAlias) } else { Sibling(serviceAlias: serviceAlias) }
 			        return Holder(child: child, sibling: sibling)
 			    }
@@ -515,14 +515,14 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
-			        func __safeDI_child() -> Child {
-			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            let service = if let safeDIBuilder = __safeDI_Child_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let serviceAlias: Service? = service
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        return Holder(child: child)
 			    }
 			}
@@ -1179,14 +1179,14 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let serviceAlias = if let safeDIBuilder = safeDIOverrides.serviceAlias { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			        func __safeDI_child() -> Child {
-			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+			            let service = if let safeDIBuilder = __safeDI_Child_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
 			            let serviceAlias: Service? = service
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
+			            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
-			        let child: Child = __safeDI_child()
+			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 			        return Root(serviceAlias: serviceAlias, child: child)
 			    }
 			}
@@ -1310,22 +1310,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    ) -> Holder {
 			        let serviceAlias = if let safeDIBuilder = safeDIOverrides.serviceAlias { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(serviceAlias) } else { Other(serviceAlias: serviceAlias) }
-			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
-			            func __safeDI_midBuilder() -> Mid {
-			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			                #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
-			                let serviceAlias: Service? = service
-			                #sourceLocation()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
-			                }
-			                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(service, serviceAlias, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, aBuilder: aBuilder) }
+			        func __safeDI_aBuilder(serviceAlias: Service?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let midBuilder = Instantiator<Mid> {
+			                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 			            }
-			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			        }
+			        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+			            let service = if let safeDIBuilder = __safeDI_Mid_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			            #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
+			            let serviceAlias: Service? = service
+			            #sourceLocation()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(serviceAlias: serviceAlias, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, aBuilder: aBuilder) }
 			        }
 			        let aBuilder = Instantiator<A> {
-			            __safeDI_aBuilder(serviceAlias: serviceAlias)
+			            __safeDI_aBuilder(serviceAlias: serviceAlias, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 			        }
 			        return Holder(other: other, aBuilder: aBuilder)
 			    }
@@ -1379,22 +1381,24 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        serviceAlias: Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
-			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
-			            func __safeDI_midBuilder() -> Mid {
-			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			                #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
-			                let serviceAlias: Service? = service
-			                #sourceLocation()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
-			                }
-			                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(service, serviceAlias, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, aBuilder: aBuilder) }
+			        func __safeDI_aBuilder(serviceAlias: Service?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let midBuilder = Instantiator<Mid> {
+			                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 			            }
-			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			        }
+			        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+			            let service = if let safeDIBuilder = __safeDI_Mid_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			            #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
+			            let serviceAlias: Service? = service
+			            #sourceLocation()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(serviceAlias: serviceAlias, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(service, serviceAlias, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, aBuilder: aBuilder) }
 			        }
 			        let aBuilder = Instantiator<A> {
-			            __safeDI_aBuilder(serviceAlias: serviceAlias)
+			            __safeDI_aBuilder(serviceAlias: serviceAlias, __safeDI_A_configuration: safeDIOverrides.aBuilder)
 			        }
 			        return Holder(serviceAlias: serviceAlias, aBuilder: aBuilder)
 			    }
@@ -1448,6 +1452,59 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			midArguments.append("sibling")
 		}
 		midArguments.append("aBuilder")
+		let laidOutSiblingConstruction = withSibling
+			? "            let sibling = if let safeDIBuilder = __safeDI_Mid_configuration.sibling { safeDIBuilder(\(label)Alias) } else { Sibling(\(label)Alias: \(label)Alias) }\n"
+			: ""
+		// A constant fulfilling property is laid out by type: `A` and `Mid` are built by functions of the mock's own scope,
+		// handed their configurations. An instantiator that builds itself again keeps its functions nested.
+		let mockBody = switch fulfillingProperty {
+		case .constant:
+			"""
+			        let \(label)Alias: \(type)? = safeDIOverrides.\(label)Alias
+			        func __safeDI_aBuilder(\(label)Alias: \(type)?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let midBuilder = Instantiator<Mid> {
+			                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(\(label)Alias, midBuilder) } else { A(\(label)Alias: \(label)Alias, midBuilder: midBuilder) }
+			        }
+			        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+			            let service = if let safeDIBuilder = __safeDI_Mid_configuration.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: \(withSibling ? 11 : 10))
+			            let \(label)Alias: \(type)? = \(label)
+			            #sourceLocation()
+			\(laidOutSiblingConstruction)            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(\(label)Alias: \(label)Alias, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
+			            }
+			            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(\(midArguments.joined(separator: ", "))) } else { Mid(\(midArguments.map { "\($0): \($0)" }.joined(separator: ", "))) }
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(\(label)Alias: \(label)Alias, __safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
+			        return Holder(aBuilder: aBuilder)
+			"""
+		case .instantiator:
+			"""
+			        let \(label)Alias: \(type)? = safeDIOverrides.\(label)Alias
+			        func __safeDI_aBuilder(\(label)Alias: \(type)?) -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			\(fulfillingPropertyConstruction)
+			                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: \(withSibling ? 11 : 10))
+			                let \(label)Alias: \(type)? = \(label)
+			                #sourceLocation()
+			\(siblingConstruction)                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(\(label)Alias: \(label)Alias)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(\(midArguments.joined(separator: ", "))) } else { Mid(\(midArguments.map { "\($0): \($0)" }.joined(separator: ", "))) }
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(\(label)Alias, midBuilder) } else { A(\(label)Alias: \(label)Alias, midBuilder: midBuilder) }
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(\(label)Alias: \(label)Alias)
+			        }
+			        return Holder(aBuilder: aBuilder)
+			"""
+		}
 		return """
 		#if DEBUG
 		extension Holder {
@@ -1482,25 +1539,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Holder {
-		        let \(label)Alias: \(type)? = safeDIOverrides.\(label)Alias
-		        func __safeDI_aBuilder(\(label)Alias: \(type)?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		\(fulfillingPropertyConstruction)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: \(withSibling ? 11 : 10))
-		                let \(label)Alias: \(type)? = \(label)
-		                #sourceLocation()
-		\(siblingConstruction)                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(\(label)Alias: \(label)Alias)
-		                }
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(\(midArguments.joined(separator: ", "))) } else { Mid(\(midArguments.map { "\($0): \($0)" }.joined(separator: ", "))) }
-		            }
-		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(\(label)Alias, midBuilder) } else { A(\(label)Alias: \(label)Alias, midBuilder: midBuilder) }
-		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(\(label)Alias: \(label)Alias)
-		        }
-		        return Holder(aBuilder: aBuilder)
+		\(mockBody)
 		    }
 		}
 		#endif
