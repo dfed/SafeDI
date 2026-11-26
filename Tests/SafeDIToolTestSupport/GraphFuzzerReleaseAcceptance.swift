@@ -187,6 +187,9 @@ enum GraphFuzzerReleaseAnnotation: String, CaseIterable, Comparable, Sendable {
 	case newSourceDiagnostic = "new-source-diagnostic"
 	/// Both releases' generated code draws a warning: no break, but a defect the older release shares.
 	case sharedGeneratedWarning = "shared-generated-warning"
+	/// A graph whose generated code draws a new warning (class E) and whose probes also build other values, which
+	/// class F would report without the warning.
+	case alsoBuildsOtherValues = "also-builds-other-values"
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -296,12 +299,12 @@ enum GraphFuzzerReleaseAcceptance {
 			}
 			let generatedWarnings = compilation.messages(ofSeverity: .warning, inGeneratedFiles: true)
 			let newGeneratedWarnings = messages(generatedWarnings, notIn: olderCompilation.messages(ofSeverity: .warning, inGeneratedFiles: true))
-			guard newGeneratedWarnings.isEmpty else {
+			// A new warning decides the class, and the values are compared still, so that a graph whose code also builds
+			// other values says so (`alsoBuildsOtherValues`).
+			if !newGeneratedWarnings.isEmpty {
 				verdict.verdictClass = .currentDrawsNewGeneratedWarning
 				verdict.details = quoted(newGeneratedWarnings)
-				return .decided(verdict)
-			}
-			if !generatedWarnings.isEmpty {
+			} else if !generatedWarnings.isEmpty {
 				verdict.annotations.append(.sharedGeneratedWarning)
 			}
 			let currentProbes = probes(generatedFiles)
@@ -333,6 +336,18 @@ enum GraphFuzzerReleaseAcceptance {
 		comparing result: Result<DifferentialValueComparison, DifferentialValueOracleError>,
 	) -> GraphFuzzerReleaseVerdict {
 		var verdict = verdict
+		guard verdict.verdictClass != .currentDrawsNewGeneratedWarning else {
+			switch result {
+			case let .success(comparison):
+				if !comparison.differences.isEmpty {
+					verdict.annotations.append(.alsoBuildsOtherValues)
+					verdict.details = (verdict.details.isEmpty ? "" : verdict.details + "\n") + "Its probes also build other values:\n" + comparison.differences.map(\.description).joined(separator: "\n")
+				}
+			case let .failure(error):
+				verdict.details = (verdict.details.isEmpty ? "" : verdict.details + "\n") + "Its values were not compared: \(error)"
+			}
+			return verdict
+		}
 		switch result {
 		case let .success(comparison):
 			if comparison.differences.isEmpty {
@@ -353,26 +368,53 @@ enum GraphFuzzerReleaseAcceptance {
 	/// (`ReleaseOverrideProbe`): an adopter's test is written against that release's `SafeDIOverrides`, so both releases'
 	/// mocks are called with the same overrides, and an override one release ignores, applies at another place, or calls
 	/// another number of times is a difference.
+	///
+	/// A mock both releases generate with the same required parameters is called too, with a value for each that the
+	/// probes build from the fixture's declarations (`ReleaseProbeArguments`), as a test that calls it passes one, both
+	/// plainly and with an override at every place.
 	static func withOverrideProbes(
 		_ classification: GraphFuzzerReleaseClassification,
 		fixtureFiles: [String],
 		older: GraphFuzzerReleaseRun,
+		current: GraphFuzzerReleaseRun? = nil,
 	) -> GraphFuzzerReleaseClassification {
 		guard case let .comparesValues(verdict, probes) = classification,
 		      case let .compiled(olderGeneratedFiles, _, _) = older.outcome
 		else { return classification }
-		let mockedTypeNames = probes.compactMap { probe -> String? in
+		var mockCalls = probes.compactMap { probe -> (typeName: String, arguments: [String])? in
 			guard probe.knownRightExpression == nil, probe.expression.hasSuffix(".mock()") else { return nil }
 			let typeName = String(probe.expression.dropLast(".mock()".count))
-			return typeName.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." } ? typeName : nil
+			return typeName.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." } ? (typeName, []) : nil
 		}
-		guard !mockedTypeNames.isEmpty else { return classification }
+		var probesWithArguments = [DifferentialValueProbe]()
+		if let current, case let .compiled(currentGeneratedFiles, _, _) = current.outcome {
+			let arguments = ReleaseProbeArguments(fixtureFiles: fixtureFiles)
+			let requiredParametersByType = { (generatedFiles: [String: String]) -> [String: [GraphFuzzerMirrorProperty]] in
+				var requiredParametersByType = [String: [GraphFuzzerMirrorProperty]]()
+				for (_, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) {
+					for (typeName, section) in GraphFuzzerFixture.mockSections(of: contents) {
+						requiredParametersByType[typeName] = GraphFuzzerMockOverrides.requiredParameters(section)
+					}
+				}
+				return requiredParametersByType
+			}
+			let currentRequiredParameters = requiredParametersByType(currentGeneratedFiles)
+			for (typeName, parameters) in requiredParametersByType(olderGeneratedFiles).sorted(by: { $0.key < $1.key }) where !parameters.isEmpty {
+				guard currentRequiredParameters[typeName] == parameters,
+				      let mockArguments = arguments.arguments(for: parameters)
+				else { continue }
+				probesWithArguments.append(DifferentialValueProbe("\(typeName).mock(\(mockArguments.joined(separator: ", ")))"))
+				mockCalls.append((typeName, mockArguments))
+			}
+		}
+		guard !mockCalls.isEmpty else { return classification }
 		let tree = ReleaseMockConfigurationTree(generatedFiles: olderGeneratedFiles)
 		let constructors = ReleaseOverrideConstructors(fixtureFiles: fixtureFiles)
 		var verdictWithOverrides = verdict
-		var overrideProbes = [DifferentialValueProbe]()
-		for typeName in mockedTypeNames {
-			guard let overrideProbe = ReleaseOverrideProbe.probe(mockedTypeName: typeName, tree: tree, constructors: constructors) else { continue }
+		verdictWithOverrides.mockProbeCount += probesWithArguments.count
+		var overrideProbes = probesWithArguments
+		for (typeName, mockArguments) in mockCalls {
+			guard let overrideProbe = ReleaseOverrideProbe.probe(mockedTypeName: typeName, mockArguments: mockArguments, tree: tree, constructors: constructors) else { continue }
 			overrideProbes.append(overrideProbe.probe)
 			verdictWithOverrides.overrideProbeCount += 1
 			verdictWithOverrides.overriddenPlaceCount += overrideProbe.placeCount
@@ -502,6 +544,7 @@ enum GraphFuzzerReleaseAcceptance {
 						classify(older: olderRun, current: currentRun) { fixture.differentialValueProbes(generatedFiles: $0) },
 						fixtureFiles: fixture.swiftFileContent,
 						older: olderRun,
+						current: currentRun,
 					)
 					guard case let .comparesValues(_, probes) = classification,
 					      case let .compiled(olderGeneratedFiles, _, _) = olderRun.outcome,
@@ -562,6 +605,7 @@ enum GraphFuzzerReleaseAcceptance {
 			case let .comparesValues(verdict, _):
 				guard let graph, let result = comparisonByName[graph.name] else {
 					var verdict = verdict
+					guard verdict.verdictClass != .currentDrawsNewGeneratedWarning else { return (seed, verdict) }
 					verdict.verdictClass = .valuesNotCompared
 					verdict.details = "The comparator returned no comparison: compile verification is off (SAFEDI_SKIP_COMPILE_CHECK)."
 					return (seed, verdict)

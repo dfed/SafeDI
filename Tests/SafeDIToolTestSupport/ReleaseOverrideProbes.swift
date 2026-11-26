@@ -21,6 +21,7 @@
 import Foundation
 import SafeDICore
 import SwiftParser
+import SwiftSyntax
 
 // MARK: - Overriding every place of a mock's configuration tree
 
@@ -330,5 +331,192 @@ struct ReleaseOverrideProbe: Equatable {
 
 	private static func stringLiteral(_ text: String) -> String {
 		"\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+	}
+}
+
+// MARK: - Arguments for a mock's required parameters
+
+/// The values the probes pass a generated `mock()`'s required parameters: each built from the fixture's own
+/// declarations, as a test that calls the mock builds it. An optional is `nil`; a standard type a fixed value; a type
+/// the fixture declares at the top level through the first of its initializers, in declaration order, whose parameters
+/// without a default the probes can build too (or its implicit `init()`); and a protocol through the first type that
+/// conforms to it, the fixture's `@Instantiable` types before the rest, in declaration order.
+struct ReleaseProbeArguments {
+	init(fixtureFiles: [String]) {
+		var declarations = [Declaration]()
+		for contents in fixtureFiles {
+			let visitor = DeclarationVisitor(viewMode: .sourceAccurate)
+			visitor.walk(Parser.parse(source: contents))
+			declarations += visitor.declarations
+		}
+		self.declarations = declarations
+	}
+
+	/// The arguments of a call passing each of `parameters` a value, as `label: value`, or `nil` when the probes cannot
+	/// build one of them.
+	func arguments(for parameters: [GraphFuzzerMirrorProperty]) -> [String]? {
+		var arguments = [String]()
+		for parameter in parameters {
+			guard let value = value(ofType: parameter.type, depth: 0) else { return nil }
+			arguments.append(parameter.label == "_" ? value : "\(parameter.label): \(value)")
+		}
+		return arguments
+	}
+
+	/// A value of `type`, or `nil` when the probes cannot build one.
+	func value(ofType type: String, depth: Int) -> String? {
+		var type = type.trimmingCharacters(in: .whitespaces)
+		guard depth < Self.depthLimit else { return nil }
+		if type.hasSuffix("?") || type.hasPrefix("Optional<") || type.hasPrefix("Swift.Optional<") {
+			return "nil"
+		}
+		while type.hasPrefix("("), type.hasSuffix(")") {
+			type = String(type.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
+		}
+		for prefix in ["any ", "some "] where type.hasPrefix(prefix) {
+			type = String(type.dropFirst(prefix.count))
+		}
+		if let standard = Self.standardValues[type.replacingOccurrences(of: "Swift.", with: "")] {
+			return standard
+		}
+		guard type.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { return nil }
+		if let declaration = declarations.first(where: { $0.name == type && !$0.isProtocol }) {
+			return construction(of: declaration, depth: depth)
+		}
+		let conformers = declarations.filter { !$0.isProtocol && $0.inheritedTypeNames.contains(type) }
+		for declaration in conformers.filter(\.isInstantiable) + conformers.filter({ !$0.isInstantiable }) {
+			if let construction = construction(of: declaration, depth: depth) {
+				return construction
+			}
+		}
+		return nil
+	}
+
+	private func construction(of declaration: Declaration, depth: Int) -> String? {
+		guard !declaration.isActor else { return nil }
+		if declaration.initializers.isEmpty {
+			return declaration.hasStoredPropertyWithoutDefault ? nil : "\(declaration.name)()"
+		}
+		for initializer in declaration.initializers {
+			var arguments = [String]()
+			var builds = true
+			for parameter in initializer where !parameter.hasDefault {
+				guard let value = value(ofType: parameter.type, depth: depth + 1) else {
+					builds = false
+					break
+				}
+				arguments.append(parameter.label.map { "\($0): \(value)" } ?? value)
+			}
+			if builds {
+				return "\(declaration.name)(\(arguments.joined(separator: ", ")))"
+			}
+		}
+		return nil
+	}
+
+	private static let depthLimit = 4
+
+	private static let standardValues = [
+		"String": "\"sample\"",
+		"Int": "0",
+		"Double": "0",
+		"Bool": "false",
+	]
+
+	fileprivate struct Parameter {
+		let label: String?
+		let type: String
+		let hasDefault: Bool
+	}
+
+	fileprivate struct Declaration {
+		let name: String
+		let isProtocol: Bool
+		let isActor: Bool
+		let isInstantiable: Bool
+		let inheritedTypeNames: [String]
+		/// Each initializer the probes may call, in declaration order: none that fails, throws, is `async` or private.
+		var initializers: [[Parameter]]
+		var hasStoredPropertyWithoutDefault: Bool
+	}
+
+	private let declarations: [Declaration]
+
+	/// Reads the fixture's top-level type declarations.
+	private final class DeclarationVisitor: SyntaxVisitor {
+		var declarations = [Declaration]()
+
+		override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+			record(node, name: node.name.text, isProtocol: false, isActor: false, attributes: node.attributes, modifiers: node.modifiers, inheritance: node.inheritanceClause, members: node.memberBlock)
+		}
+
+		override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+			record(node, name: node.name.text, isProtocol: false, isActor: false, attributes: node.attributes, modifiers: node.modifiers, inheritance: node.inheritanceClause, members: node.memberBlock)
+		}
+
+		override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+			record(node, name: node.name.text, isProtocol: false, isActor: true, attributes: node.attributes, modifiers: node.modifiers, inheritance: node.inheritanceClause, members: node.memberBlock)
+		}
+
+		override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+			record(node, name: node.name.text, isProtocol: true, isActor: false, attributes: node.attributes, modifiers: node.modifiers, inheritance: node.inheritanceClause, members: node.memberBlock)
+		}
+
+		override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+			.skipChildren
+		}
+
+		override func visit(_: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+			.skipChildren
+		}
+
+		private func record(
+			_ node: some SyntaxProtocol,
+			name: String,
+			isProtocol: Bool,
+			isActor: Bool,
+			attributes: AttributeListSyntax,
+			modifiers: DeclModifierListSyntax,
+			inheritance: InheritanceClauseSyntax?,
+			members: MemberBlockSyntax,
+		) -> SyntaxVisitorContinueKind {
+			// Only a top-level declaration: a nested type would need its enclosing type's name.
+			guard node.parent?.is(CodeBlockItemSyntax.self) == true, !Self.isPrivate(modifiers) else { return .skipChildren }
+			var initializers = [[Parameter]]()
+			var hasStoredPropertyWithoutDefault = false
+			for member in members.members {
+				if let initializer = member.decl.as(InitializerDeclSyntax.self) {
+					guard initializer.optionalMark == nil,
+					      initializer.signature.effectSpecifiers == nil,
+					      initializer.genericParameterClause == nil,
+					      !Self.isPrivate(initializer.modifiers)
+					else { continue }
+					initializers.append(initializer.signature.parameterClause.parameters.map { parameter in
+						let label = parameter.firstName.text
+						return Parameter(label: label == "_" ? nil : label, type: parameter.type.trimmedDescription, hasDefault: parameter.defaultValue != nil)
+					})
+				} else if let variable = member.decl.as(VariableDeclSyntax.self),
+				          !variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" })
+				{
+					for binding in variable.bindings where binding.initializer == nil && binding.accessorBlock == nil {
+						hasStoredPropertyWithoutDefault = true
+					}
+				}
+			}
+			declarations.append(Declaration(
+				name: name,
+				isProtocol: isProtocol,
+				isActor: isActor,
+				isInstantiable: attributes.contains { $0.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "Instantiable" },
+				inheritedTypeNames: inheritance?.inheritedTypes.map { $0.type.trimmedDescription.replacingOccurrences(of: "@unchecked ", with: "") } ?? [],
+				initializers: initializers,
+				hasStoredPropertyWithoutDefault: hasStoredPropertyWithoutDefault,
+			))
+			return .skipChildren
+		}
+
+		private static func isPrivate(_ modifiers: DeclModifierListSyntax) -> Bool {
+			modifiers.contains { $0.name.text == "private" || $0.name.text == "fileprivate" }
+		}
 	}
 }

@@ -259,14 +259,14 @@ struct SafeDIToolReleaseAcceptanceTests {
 	func classify_reportsCurrentDrawsNewGeneratedWarning_whenOnlyCurrentGeneratedCodeDrawsAWarning() {
 		let current = GraphFuzzerReleaseRun.compiledRun(stderr: "/scratch/Generated/S0_Root0+SafeDIMock.swift:12:7: warning: initialization of immutable value 't7Builder' was never used")
 		let classification = GraphFuzzerReleaseAcceptance.classify(older: .cleanRun(), current: current, probes: Self.noProbes)
-		#expect(classification == .decided(GraphFuzzerReleaseVerdict(verdictClass: .currentDrawsNewGeneratedWarning, details: "initialization of immutable value 't7Builder' was never used")))
+		#expect(classification == .comparesValues(GraphFuzzerReleaseVerdict(verdictClass: .currentDrawsNewGeneratedWarning, details: "initialization of immutable value 't7Builder' was never used"), probes: []))
 	}
 
 	@Test
 	func classify_reportsCurrentDrawsNewGeneratedWarning_whenWarningIsAtFixtureLineASourceLocationDirectiveAttributesGeneratedCodeTo() {
 		let current = GraphFuzzerReleaseRun.compiledRun(stderr: "/scratch/SourceLocation/S0_T1.swift:6:3: warning: variable 't3' was never mutated")
 		let classification = GraphFuzzerReleaseAcceptance.classify(older: .cleanRun(), current: current, probes: Self.noProbes)
-		#expect(classification == .decided(GraphFuzzerReleaseVerdict(verdictClass: .currentDrawsNewGeneratedWarning, details: "variable 't3' was never mutated")))
+		#expect(classification == .comparesValues(GraphFuzzerReleaseVerdict(verdictClass: .currentDrawsNewGeneratedWarning, details: "variable 't3' was never mutated"), probes: []))
 	}
 
 	@Test
