@@ -133,6 +133,61 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		#expect(try written.storedPlaces.placesBySeam.joined().contains { $0.isPassedUp })
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesRecordOfModuleBeneath_whenAnotherCallPresentsThePlacesSiteByALongerRoute() async throws {
+		// `Top` builds `Bottom` itself and through `Outer`, which builds it through `Inner` and holds a place of its own,
+		// so that `Top` passes places up from both. `Outer`'s record of `Bottom`'s place has a longer route than `Top`'s
+		// place of it, and is a record of a module beneath, which names no place of `Top`'s module: the place takes from
+		// it the declarations `Outer` binds, where it would otherwise hold each in full.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Base", swiftFileContent: [
+				"public protocol Gauge {}",
+				Self.instantiable("Network", isSeam: false, []),
+				Self.receivingSeam("Bottom", building: "gauge: any Gauge"),
+				Self.receivingSeam("Inner", building: "bottomBuilder: Instantiator<Bottom>"),
+				Self.instantiable("Clock", isSeam: false, []),
+				Self.receivingSeam("Outer", building: "clock: Clock", "gauge: any Gauge", "innerBuilder: Instantiator<Inner>"),
+			]),
+			ModuleFixture(name: "Upper", packageName: "Base", swiftFileContent: [
+				"import Feature\n" + Self.receivingSeam("Top", building: "bottomBuilder: Instantiator<Bottom>", "outerBuilder: Instantiator<Outer>"),
+			], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import Feature
+				import Upper
+
+				@Instantiable(fulfillingAdditionalTypes: [Gauge.self])
+				public final class LiveGauge: Gauge, Instantiable {
+					public init() {}
+				}
+
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+					public init(network: Network, seam: Top) {
+						self.network = network
+						self.seam = seam
+					}
+					@Instantiated let network: Network
+					@Instantiated let seam: Top
+				}
+				""",
+			], dependencies: ["Feature", "Upper"]),
+		]
+		let read = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		#expect(read.modules["App"]?.generatedFiles == computed.modules["App"]?.generatedFiles)
+		let places = try #require(read.modules["Upper"]?.moduleInfoFile?.seamSignatures).storedPlaces
+		let otherRecordCounts = places.placesBySeam.joined().map {
+			if case let .passedUp(place) = $0 {
+				place.others.count
+			} else {
+				-1
+			}
+		}
+		#expect(otherRecordCounts == [1, 0])
+	}
+
 	// MARK: Tests – Size
 
 	@Test
@@ -377,6 +432,21 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		\(properties.map { "\t\tself.\($0.label) = \($0.label)" }.joined(separator: "\n"))
 			}
 		\(properties.map { "\t@Instantiated let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		}
+		"""
+	}
+
+	/// A public seam that receives `network: Network` and instantiates each of `properties`, written `label: Type`.
+	private static func receivingSeam(_ name: String, building properties: String...) -> String {
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class \(name): Instantiable {
+			public init(network: Network, \(properties.joined(separator: ", "))) {
+				self.network = network
+		\(properties.map { "\t\tself.\($0.prefix { $0 != ":" }) = \($0.prefix { $0 != ":" })" }.joined(separator: "\n"))
+			}
+			@Received let network: Network
+		\(properties.map { "\t@Instantiated let \($0)" }.joined(separator: "\n"))
 		}
 		"""
 	}
