@@ -50,6 +50,8 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// The per-type plan of each mock root's cycles, by mocked type, where a test observes the code it lays out.
+		var cyclePlans = [TypeDescription: MockCyclePlan]()
 		// The public mocks the module's own files declare, whose plans its module info carries.
 		var ownPublicMockTypes = Set<TypeDescription>()
 		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
@@ -85,6 +87,7 @@ extension DependencyTreeGenerator {
 
 			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
 			do {
+				var cyclePlan: MockCyclePlan?
 				let mockRoot = try await createMockRoot(
 					for: instantiable,
 					scope: scope,
@@ -100,6 +103,7 @@ extension DependencyTreeGenerator {
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 					constructionMemo: &constructionMemo,
+					cyclePlan: &cyclePlan,
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
@@ -120,6 +124,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
+				cyclePlans[instantiable.concreteInstantiable] = cyclePlan
 			} catch let error as DependencyTreeGeneratorError {
 				mockRootErrors.append(error)
 			}
@@ -222,10 +227,11 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
+		let cyclePlansByMockedType = cyclePlans
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext)
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, cyclePlan: cyclePlansByMockedType[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
@@ -669,6 +675,7 @@ extension DependencyTreeGenerator {
 	///   - checksConstructions: See `createMockRootScopeGenerator`.
 	///   - promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
 	///   - scopesWithValidatedDeclarations: See `createMockRootScopeGenerator`.
+	///   - cyclePlan: See `createMockRootScopeGenerator`.
 	func createMockRoot(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -682,6 +689,7 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
+		cyclePlan: inout MockCyclePlan?,
 	) async throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -717,6 +725,7 @@ extension DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 			constructionMemo: &constructionMemo,
+			cyclePlan: &cyclePlan,
 		)
 	}
 

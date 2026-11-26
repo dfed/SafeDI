@@ -35,6 +35,8 @@ extension DependencyTreeGenerator {
 	///   a scope's tree is the same whichever mock root builds it, so a tree validated once is not walked again.
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), which a public
 	///   mock's root reads, or `nil` when the module declares no public mock.
+	/// - Parameter cyclePlan: Set to the per-type plan of the root's cycles where a test observes the code the plan lays
+	///   out (`compareMockBodies`), and to `nil` otherwise.
 	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
 	///   is checked, or `nil` to check none. It also decides which dependencies the mock promotes: one the calls in its
 	///   tree build when passed `nil` is promoted only where the module can construct it.
@@ -56,6 +58,7 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
+		cyclePlan: inout MockCyclePlan?,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -529,7 +532,7 @@ extension DependencyTreeGenerator {
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
 		// Each place of the tree against the body the plan of a tree by declaration builds for it, built only where a test
 		// compares the two.
-		try Self.compareMockBodies(
+		cyclePlan = try Self.compareMockBodies(
 			ofMockOf: instantiable,
 			mockRootScope: mockRootScope,
 			todaysTree: generator,

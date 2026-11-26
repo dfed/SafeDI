@@ -119,26 +119,29 @@ extension TypeKeyBody {
 	}
 
 	/// The closing record of `call`, made at a call place whose own record is `record`: the call's property, built by
-	/// calling its body's function, which takes the called body's labels.
+	/// calling its body's function, which takes the called body's labels, and handed what the place's own record hands.
 	private static func closingRecord(of call: VariantCall, at record: PlaceRecord, plan: some TypeKeyVariantPlan) -> ClosingPlaceRecord? {
 		let isErased: Bool
 		let isExtension: Bool
 		let forwardedProperties: [Property]
+		let passedArguments: [PassedArgument]
 		switch record {
 		case let .built(built):
 			isErased = built.isErased
 			isExtension = built.isExtension
 			forwardedProperties = built.forwardedProperties.sorted()
+			passedArguments = built.passedArguments
 		case let .closer(closer):
 			isErased = closer.isErased
 			isExtension = closer.isExtension
 			forwardedProperties = closer.forwardedProperties
+			passedArguments = closer.passedArguments
 		case .alias:
 			return nil
 		}
 		let labels = plan.labels(of: call.calledBody)
 		guard labels.count == call.arguments.count else { return nil }
-		return ClosingPlaceRecord(
+		var closer = ClosingPlaceRecord(
 			callingVariant: call.calledBody - 1,
 			property: call.property,
 			isErased: isErased,
@@ -147,6 +150,10 @@ extension TypeKeyBody {
 			labels: labels,
 			arguments: call.arguments,
 		)
+		// A place that hands the function it calls passed arguments (`BuiltPlaceRecord.passedArguments`) hands its own,
+		// which the variant's function takes as the record of its body does.
+		closer.passedArguments = passedArguments
+		return closer
 	}
 
 	/// `statement`, a place under its indentations, with its record `record`.

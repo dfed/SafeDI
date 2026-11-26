@@ -24,7 +24,7 @@
 /// overflows a thread's stack nor releases a chain of nested nodes.
 extension ScopeGenerator {
 	/// The mock of `instantiable`, the mocked type of this root, whose tree is its generator's children.
-	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext) async throws -> MockLowering.Result {
+	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext, cyclePlan: MockCyclePlan? = nil) async throws -> MockLowering.Result {
 		// The mocked type's hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every
 		// dependency is a node of its tree, a parameter of `mock()`, an override's binding or passed `nil`.
 		// The parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
@@ -172,9 +172,19 @@ extension ScopeGenerator {
 		if laysOutWithTypeKey {
 			walk.recordBuiltPlaces()
 		}
+		// Where a test observes or writes it, the code the per-type plan of the root's cycles lays out from the walk's
+		// records, which takes the place of the type key's lines where the test writes it.
+		var planLines: [String]?
+		if laysOutWithTypeKey, let cyclePlan {
+			let planCode = walk.cyclePlanCode(of: cyclePlan, declaredAtRoot: signature.typeKeyRootDeclarations)
+			MockPlanCodeObservation.observer?(instantiable.concreteInstantiable.asSource, planCode.code, planCode.outcome)
+			if MockPlanCodeObservation.writesPlanCode, let code = planCode.code {
+				planLines = code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			}
+		}
 		if laysOutWithTypeKey {
 			let layout = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations)
-			if let typeKeyLines = layout.lines {
+			if let typeKeyLines = planLines ?? layout.lines {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
 			}
 			MockLowering.typeKeyLayoutObserver?(instantiable.concreteInstantiable.asSource, layout.fallback)

@@ -441,6 +441,8 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var constructionMemo = ConstructionMemo()
+		// No mock is lowered here, so no plan of its cycles is laid out.
+		var cyclePlan: MockCyclePlan?
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -456,6 +458,7 @@ extension DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 			constructionMemo: &constructionMemo,
+			cyclePlan: &cyclePlan,
 		)
 		return await Self.ownPublicMockPlan(of: instantiable, mockRoot: mockRoot, mockDefaults: mockScopes.flatParameterMockDefaults, publicMockContext: publicMockContext)
 	}

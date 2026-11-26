@@ -42,6 +42,9 @@ extension DependencyTreeGenerator {
 	/// a mock's tree is (`VariantBodies(…forMockGeneration: true)`), and the answers keep what the bindings pass `nil`
 	/// (`NearestDeclarations.keeping(labels:)`). Holds every body for as long as the comparison runs.
 	///
+	/// - Returns: Where a test observes or writes the code of the plan (`MockPlanCodeObservation`), the plan the mock's
+	///   lowering lays out (`MockCyclePlan`); otherwise `nil`.
+	///
 	/// What override a place reads is no input of its body: the places of one type read different entries of
 	/// `SafeDIOverrides`, the kind of read (a configuration, a closure, a hand-written mock's) is the declaration's, and a
 	/// body is to be handed its configuration by each call.
@@ -55,15 +58,18 @@ extension DependencyTreeGenerator {
 		frozenScopeMap: FrozenScopeMap,
 		declaredTypeNames: DeclaredTypeNames,
 		cache: inout ReceivedPropertiesCache,
-	) throws {
+	) throws -> MockCyclePlan? {
 		let observer = MockVariantBodyObservation.observer
 		let planObserver = MockVariantBodyObservation.planObserver
+		let laysOutPlan = MockPlanCodeObservation.laysOutPlans
 		// A tree that calls another module's public mock is not compared: the call reads the caller's declarations for its
 		// fills' trees, as a production root's seam call does, and a body has no edge for a fill.
-		guard observer != nil || planObserver != nil,
-		      !reachesCallOfPublicMock(from: mockRootScope),
+		guard observer != nil || planObserver != nil || laysOutPlan,
 		      let shadow = CallPlaceShadow(root: mockRootScope, cache: &cache)
-		else { return }
+		else { return nil }
+		guard !reachesCallOfPublicMock(from: mockRootScope) else {
+			return laysOutPlan ? MockCyclePlan(keptPerPathBecause: "callsPublicMock") : nil
+		}
 		let mockRoot = instantiable.concreteInstantiable.asSource
 		let rootNearestDeclarations = NearestDeclarations.binding(boundProperties, passingNilTo: receivesPassedNil)
 		var bodies = VariantBodies(frozenScopeMap: frozenScopeMap, declaredTypeNames: declaredTypeNames, forMockGeneration: true)
@@ -72,6 +78,8 @@ extension DependencyTreeGenerator {
 		var callsCompared = [ObjectIdentifier: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, labelsPassedNil: Set<String>)]]()
 		// The bodies today's places of scopes on a cycle take, in the order the walk first meets each.
 		var todaysBodies = [Int]()
+		// The paths of today's places that take each body, in the order the walk meets them.
+		var todaysPathsByBody = [Int: [[Int]]]()
 		var walk = PlaceContextWalk(
 			ofTodaysTree: todaysTree,
 			builtFrom: mockRootScope,
@@ -127,6 +135,9 @@ extension DependencyTreeGenerator {
 				if shadow.isOnCycle(context.scope), !todaysBodies.contains(body) {
 					todaysBodies.append(body)
 				}
+				if laysOutPlan {
+					todaysPathsByBody[body, default: []].append(context.path)
+				}
 				observer?(
 					mockRoot,
 					context.place,
@@ -137,20 +148,27 @@ extension DependencyTreeGenerator {
 		}
 		// The bodies the plan builds with no tree of today's: the root's, beneath every binding the mock gives its tree,
 		// then the body of each call place a body holds, beneath the answers that body's path gives it.
-		if let planObserver, let (_, bodiesOfPlan) = try bodies.plan(
+		guard planObserver != nil || laysOutPlan, let plan = try bodies.plan(
 			ofMockRoot: mockRootScope,
 			keyedBy: Set(boundProperties.map(\.label)).sorted(),
 			beneath: rootNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			shadow: shadow,
 			cache: &cache,
-		) {
-			planObserver(
-				mockRoot,
-				bodiesOfPlan.map { bodies.description(of: $0) },
-				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.description(of: $0) },
-			)
+		) else { return nil }
+		planObserver?(
+			mockRoot,
+			plan.calledBodies.map { bodies.description(of: $0) },
+			todaysBodies.filter { !plan.calledBodies.contains($0) }.map { bodies.description(of: $0) },
+		)
+		guard laysOutPlan else { return nil }
+		// A plan answers each label with one declaration, while the mock's root can bind a label in two forms, one of them
+		// named apart (`value_Draft` beside `value`): a body that takes such a label keeps the root per path.
+		let labelsBoundInTwoForms = Set(Dictionary(grouping: boundProperties, by: \.label).filter { $0.value.count > 1 }.keys)
+		guard !([plan.rootBody] + plan.calledBodies).contains(where: { bodies.bodies[$0].labels.contains(where: labelsBoundInTwoForms.contains) }) else {
+			return MockCyclePlan(keptPerPathBecause: "labelBoundInTwoForms")
 		}
+		return MockCyclePlan(of: bodies, plan: plan, todaysPathsByBody: todaysPathsByBody)
 	}
 
 	/// Whether `scope`'s tree instantiates a call of another module's public mock.

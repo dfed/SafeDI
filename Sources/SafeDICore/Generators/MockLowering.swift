@@ -209,7 +209,9 @@ public enum MockLowering {
 extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
 	/// emitter throw.
-	func lowerMockRoot(context: MockContext) async throws -> MockLowering.Result {
+	/// - Parameter cyclePlan: The per-type plan of the root's cycles, where a test observes the code it lays out
+	///   (`MockPlanCodeObservation`).
+	func lowerMockRoot(context: MockContext, cyclePlan: MockCyclePlan? = nil) async throws -> MockLowering.Result {
 		// A mock root's scope is always a root's.
 		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
@@ -221,7 +223,7 @@ extension ScopeGenerator {
 		{
 			return MockLowering.Result(code: Self.mockWithoutTree(of: instantiable, context: context))
 		} else {
-			return try await lowerMockRootWithTree(of: instantiable, context: context)
+			return try await lowerMockRootWithTree(of: instantiable, context: context, cyclePlan: cyclePlan)
 		}
 	}
 
