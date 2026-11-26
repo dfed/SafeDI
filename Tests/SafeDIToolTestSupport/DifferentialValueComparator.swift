@@ -2510,6 +2510,7 @@ extension GraphFuzzerFixture {
 		if let probe = publicMockOuterFulfillerProbe(generatedFiles: generatedFiles) {
 			probes.append(probe)
 		}
+		probes += publicMockUnavailableEntryProbes(generatedFiles: generatedFiles)
 		let mockFileSuffix = "+SafeDIMock.swift"
 		let typesTakingOwnOptionalName = publicMockTypesTakingOwnOptionalName
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
@@ -2675,6 +2676,35 @@ extension GraphFuzzerFixture {
 		let screenName = typeNamePrefix + "OuterScreen"
 		guard generatedFiles.keys.contains(where: { $0 == "\(screenName)+SafeDIMock.swift" || $0.hasSuffix("/\(screenName)+SafeDIMock.swift") }) else { return nil }
 		return DifferentialValueProbe("\(screenName).mock(outerLabel: \"probe\")")
+	}
+
+	/// Probes passing `true` to the entry that binds `unavailableApi` to `nil` in the mocks of `UnavailableNode` and
+	/// `UnavailableScreen`, which the public mock corpus's draw of a dependency instantiated only if available that a
+	/// declaration fulfills declares (`GraphFuzzerPublicMockDrawFeature.unavailableEntryPublicMock`): the public mock's own
+	/// `SafeDIOverrides` or `UnavailableLeaf`'s module-level configuration on the drawn path, and the internal mocks'
+	/// configurations on the known-right path, which take the same entry by the same path, so that each probe compares
+	/// `nil` beside what the reader is handed. A public mock without the entry fails to compile the probe, and one that
+	/// ignores it builds `UnavailableImpl`. Empty when the graph has no such mocks, or the tool generated neither.
+	private func publicMockUnavailableEntryProbes(generatedFiles: [String: String]) -> [DifferentialValueProbe] {
+		let nodeName = typeNamePrefix + "UnavailableNode"
+		let screenName = typeNamePrefix + "UnavailableScreen"
+		func generatesMock(of typeName: String) -> Bool {
+			generatedFiles.keys.contains { $0 == "\(typeName)+SafeDIMock.swift" || $0.hasSuffix("/\(typeName)+SafeDIMock.swift") }
+		}
+		guard generatesMock(of: nodeName), generatesMock(of: screenName) else { return [] }
+		let leafLabel: String? = if swiftFileContent.contains(where: { $0.contains("let unavailableLeafBuilder: SendableInstantiator<") }) {
+			"unavailableLeafBuilder"
+		} else if swiftFileContent.contains(where: { $0.contains("let unavailableLeaf: \(typeNamePrefix)UnavailableLeaf\n") }) {
+			"unavailableLeaf"
+		} else {
+			nil
+		}
+		let entry = "unavailableApiIsUnavailable: true"
+		let nodeOverrides = if let leafLabel { "\(leafLabel): .init(\(entry))" } else { entry }
+		return [
+			DifferentialValueProbe("\(nodeName).mock(safeDIOverrides: .init(\(nodeOverrides)))"),
+			DifferentialValueProbe("\(screenName).mock(safeDIOverrides: .init(unavailableNode: .init(\(nodeOverrides))))"),
+		]
 	}
 
 	/// A value of `type`, a plain type a host forwards, the same in every run: a standard type's fixed value, or the

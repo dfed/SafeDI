@@ -236,6 +236,17 @@ extension MockLowering {
 				isUnlabeled: false,
 				documentation: nil,
 			)
+		case .unavailableEntry:
+			return PublicStructMember(
+				name: member.name,
+				typeSource: "Bool",
+				parameterTypeSource: "Bool",
+				access: .public,
+				defaultExpression: "false",
+				omittedValue: "false",
+				isUnlabeled: false,
+				documentation: nil,
+			)
 		case let .built(isConfigured, builderClosureType, childRequiresSendable, accessTypes):
 			if isConfigured, let configurationTypeName = context.configurationTypeNameByType[member.concreteType] {
 				return PublicStructMember(
@@ -284,7 +295,7 @@ extension MockLowering.PublicConstructionRecord {
 			sendsArguments: node.instantiable.declarationType == .actorType && !node.usesMockInitializer,
 			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },
 			builderParameterTypes: construction.builderParameterTypes,
-			childMembers: children.compactMap(ChildMember.init(of:)),
+			childMembers: children.flatMap(ChildMember.members(of:)),
 			defaultFields: node.defaultFields,
 		)
 	}
@@ -352,6 +363,14 @@ extension MockLowering.PublicConstructionRecord {
 }
 
 extension MockLowering.PublicConstructionRecord.ChildMember {
+	/// The members that configure `child`: the one `init(of:)` makes, then, for a node its parent's type instantiates
+	/// only if available, the entry that builds it as `nil`, as an internal mock's configuration holds them.
+	static func members(of child: MockLowering.TreeNode) -> [Self] {
+		guard let member = Self(of: child) else { return [] }
+		guard case let .built(node) = child, let unavailableEntryName = node.unavailableEntryName else { return [member] }
+		return [member, Self(name: unavailableEntryName, concreteType: member.concreteType, source: .unavailableEntry)]
+	}
+
 	/// The member that configures `child`, or `nil` for an alias, which the overrides hold no member of.
 	init?(of child: MockLowering.TreeNode) {
 		switch child {

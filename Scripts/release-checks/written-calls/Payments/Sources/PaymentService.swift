@@ -42,3 +42,21 @@ public final class Poller: Instantiable {
 
 	private let interval: Int
 }
+
+/// “Dependency kinds in the generated mock”: a public mock of a type that instantiates, only if available, a dependency
+/// a declaration fulfills takes the entry that binds it to `nil` too.
+public protocol ReceiptPrinter {}
+
+@Instantiable(fulfillingAdditionalTypes: [ReceiptPrinter.self])
+public final class DefaultReceiptPrinter: ReceiptPrinter, Instantiable {
+	public init() {}
+}
+
+@Instantiable(generateMock: .public)
+public final class PaymentReceipt: Instantiable {
+	public init(printer: (any ReceiptPrinter)?) {
+		self.printer = printer
+	}
+
+	@Instantiated(onlyIfAvailable: true) private let printer: (any ReceiptPrinter)?
+}

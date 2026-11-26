@@ -605,17 +605,17 @@ extension MockLowering {
 		}
 
 		/// The name of the entry that builds each of `generators`, one level's nodes bound as `bindingNames`, as `nil`, `nil`
-		/// for a node that has none: an internal mock's node of a property its parent's type instantiates only if available
-		/// that a declaration fulfills (`@Instantiated(onlyIfAvailable: true)`), which production builds, takes an entry
+		/// for a node that has none: a mock's node of a property its parent's type instantiates only if available that a
+		/// declaration fulfills (`@Instantiated(onlyIfAvailable: true)`), which production builds, takes an entry
 		/// `<binding name>IsUnavailable: Bool = false` beside its own, set to build it as `nil`, as production binds it where
-		/// nothing fulfills it. Each name is claimed after every field the level's configuration declares, the nodes'
-		/// own, its defaults' and its builder's (`parentConfigurationReservedNames`), `_` appended while one has it, so no
-		/// existing field moves. A public mock takes none, a deliberate gap: its overrides and module-level configurations
-		/// are spelled apart (`MockLowering+PublicConfigurations.swift`). A node that closes a cycle takes none, and one that
-		/// reads no field of its own (beneath a pruned cycle edge) reads none, deliberate gaps too: neither reads its own
-		/// override, which the entry stands beside.
+		/// nothing fulfills it, in an internal mock's configurations and in a public mock's, which declare it beside the
+		/// node's member (`PublicConstructionRecord.ChildMember.members(of:)`). Each name is claimed after every field the
+		/// level's configuration declares, the nodes' own, its defaults' and its builder's
+		/// (`parentConfigurationReservedNames`), `_` appended while one has it, so no existing field moves. A node that
+		/// closes a cycle takes none, and one that reads no field of its own (beneath a pruned cycle edge) reads none,
+		/// deliberate gaps: neither reads its own override, which the entry stands beside.
 		private func unavailableEntryNames(of generators: [ScopeGenerator], boundAs bindingNames: [String?]) -> [String?] {
-			guard !buildsPublicMock, !parentInstantiatedOnlyIfAvailableProperties.isEmpty else { return Array(repeating: nil, count: generators.count) }
+			guard !parentInstantiatedOnlyIfAvailableProperties.isEmpty else { return Array(repeating: nil, count: generators.count) }
 			var takenNames = parentConfigurationReservedNames
 			takenNames.formUnion(bindingNames.compactMap(\.self))
 			return zip(generators, bindingNames).map { generator, bindingName in

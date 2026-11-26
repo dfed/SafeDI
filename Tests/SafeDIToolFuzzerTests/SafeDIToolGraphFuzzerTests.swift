@@ -9120,7 +9120,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xBBFB2E79AE7331A2
+	static let publicMockCorpusFixtureHash: UInt64 = 0x2E088DB9646DBA2E
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9456,6 +9456,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalPlacePublicMockReceived: 94,
 		.optionalPlacePublicMockPassedUp: 70,
 		.optionalPlacePublicMockPublicConsumer: 48,
+		.unavailableEntryPublicMock: 165,
+		.unavailableEntryPublicMockOnLeaf: 86,
+		.unavailableEntryPublicMockSendably: 32,
+		.unavailableEntryPublicMockReceived: 82,
+		.unavailableEntryPublicMockPublicConsumer: 61,
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,

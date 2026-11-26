@@ -38,6 +38,13 @@ func callPaymentServiceMocks() {
 	_ = PaymentService.mock(retries: nil, analytics: nil, safeDIOverrides: .init())
 }
 
+// “Dependency kinds in the generated mock”: a public mock’s entry that binds a dependency instantiated only if
+// available, which a declaration fulfills, to `nil`.
+func callPaymentReceiptMocks() {
+	_ = PaymentReceipt.mock()
+	_ = PaymentReceipt.mock(safeDIOverrides: .init(printerIsUnavailable: true))
+}
+
 func callPollerMocks() {
 	_ = Poller.mock()
 	// An `@autoclosure` default-valued parameter becomes `(() -> Int)? = nil`.

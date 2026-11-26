@@ -150,7 +150,7 @@ extension ScopeGenerator {
 			// siblings (`inlineOrdered(_:property:)`).
 			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
 			lines.append(MockLowering.publicOverridesStruct(
-				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
+				members: inlineOrderedNodes.flatMap(MockLowering.PublicConstructionRecord.ChildMember.members(of:)),
 				mockedTypeModuleName: instantiable.moduleName,
 				context: publicMockContext,
 				indent: indent,

@@ -190,6 +190,9 @@ public enum MockLowering {
 				/// optional closure of `builderClosureType`, `@Sendable` where `requiresSendable` or the configuration
 				/// holding it is, as visible as `accessTypes`.
 				case built(isConfigured: Bool, builderClosureType: String, requiresSendable: Bool, accessTypes: [TypeDescription])
+				/// The entry that builds a child its parent's type instantiates only if available as `nil`
+				/// (`Walk.unavailableEntryNames(of:boundAs:)`): a `Bool`, `false` by default.
+				case unavailableEntry
 			}
 		}
 	}

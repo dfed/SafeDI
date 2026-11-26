@@ -464,6 +464,23 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case optionalPlacePublicMockPassedUp
 	/// `OptionalScreen`'s mock is `.public`.
 	case optionalPlacePublicMockPublicConsumer
+	/// On a stream of its own (`publicMockUnavailableEntryRandomSeedMask`), a dependency a public mock's tree instantiates
+	/// only if available that a declaration of its module fulfills, so that the public mock's overrides, or a module-level
+	/// configuration, hold the entry that binds it to `nil` (`drawUnavailableEntryPublicMock`): `UnavailableNode`, a `.public`
+	/// type of the declaring module, holds `unavailableApi: (any UnavailableApi)?`, which `UnavailableImpl` fulfills, or
+	/// `UnavailableLeaf`, which it builds, does, and `UnavailableScreen`, a mocked consumer, builds `UnavailableNode`, whose
+	/// public mock it calls, passing the entry through. The value differential passes the entry `true` to both mocks.
+	case unavailableEntryPublicMock
+	/// `UnavailableLeaf`, beneath `UnavailableNode`, holds the dependency, so that `UnavailableLeaf`'s module-level
+	/// configuration holds the entry.
+	case unavailableEntryPublicMockOnLeaf
+	/// `UnavailableNode` builds `UnavailableLeaf` through a `SendableInstantiator`, so that the entry is read inside a
+	/// `@Sendable` function.
+	case unavailableEntryPublicMockSendably
+	/// A type beneath the holder receives the dependency only if available, so that it is handed the `nil` the entry binds.
+	case unavailableEntryPublicMockReceived
+	/// `UnavailableScreen`'s mock is `.public`.
+	case unavailableEntryPublicMockPublicConsumer
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -472,7 +489,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
 	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `carrierBeforeSibling…`,
-	/// `wrapperReadByValuePublicMock…`, `valueFormsBesidePublicMockCall…`, `optionalPlacePublicMock…`,
+	/// `wrapperReadByValuePublicMock…`, `valueFormsBesidePublicMockCall…`, `optionalPlacePublicMock…`, `unavailableEntryPublicMock…`,
 	/// `outerFulfillerPublicMockCall`, and `T6`'s mock isolated to the main
 	/// actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the
 	/// public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
@@ -488,6 +505,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("wrapperReadByValuePublicMock")
 			|| rawValue.hasPrefix("valueFormsBesidePublicMockCall")
 			|| rawValue.hasPrefix("optionalPlacePublicMock")
+			|| rawValue.hasPrefix("unavailableEntryPublicMock")
 			|| rawValue.hasPrefix("outerFulfillerPublicMockCall")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 			|| self == .ownOptionalDefaultOnNonisolatedTypeThatBuilds
@@ -687,9 +705,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// - Parameters:
 	///   - omitsSecondHolePlace: Whether the draw leaves out `secondHolePlace`, drawing the rest as with it.
 	///   - builderSurfaceEdit: The edit the hole draw makes to `T6`'s hole after every roll, for the builder surface's checks.
-	///   - omitsDrawsOlderReleasesReject: Whether the draw leaves out `drawOptionalPlacePublicMock`, whose
-	///     `@Instantiated(onlyIfAvailable: true)` 2.3.0 rejects, for release acceptance; it draws from a stream of its own,
-	///     so the rest is drawn as with it.
+	///   - omitsDrawsOlderReleasesReject: Whether the draw leaves out `drawOptionalPlacePublicMock` and
+	///     `drawUnavailableEntryPublicMock`, whose `@Instantiated(onlyIfAvailable: true)` 2.3.0 rejects, for release
+	///     acceptance; each draws from a stream of its own, so the rest is drawn as with them.
 	init(seed: UInt64, omitsSecondHolePlace: Bool = false, builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit? = nil, omitsDrawsOlderReleasesReject: Bool = false) {
 		self.omitsSecondHolePlace = omitsSecondHolePlace
 		self.builderSurfaceEdit = builderSurfaceEdit
@@ -778,6 +796,10 @@ struct GraphFuzzerPublicMockDraw {
 		}
 		var outerFulfillerRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOuterFulfillerRandomSeedMask)
 		drawFulfillerOnlyCallingModuleCanBuild(random: &outerFulfillerRandom)
+		if !omitsDrawsOlderReleasesReject {
+			var unavailableEntryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockUnavailableEntryRandomSeedMask)
+			drawUnavailableEntryPublicMock(random: &unavailableEntryRandom)
+		}
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -956,6 +978,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only a place a public mock's tree instantiates only if available (`drawOptionalPlacePublicMock`): rolls added
 	/// after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockOptionalPlaceRandomSeedMask: UInt64 = 0x7075626D6B6F7074
+	/// Draws only a dependency a public mock's tree instantiates only if available that a declaration of its module
+	/// fulfills (`drawUnavailableEntryPublicMock`): rolls added after the rest of the draw was pinned, so that its other
+	/// shapes are drawn as before.
+	static let publicMockUnavailableEntryRandomSeedMask: UInt64 = 0x7075626D6B756E61
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -2866,6 +2892,67 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: consumerModule, declarations: consumerDeclarations))
 	}
 
+	/// A dependency a public mock's tree instantiates only if available that a declaration of its module fulfills, in one
+	/// graph in five: `UnavailableNode`, a `.public` type of the declaring module with an `internal` initializer, holds
+	/// `@Instantiated(onlyIfAvailable: true) let unavailableApi: (any UnavailableApi)?`, or `UnavailableLeaf`, which it builds
+	/// by value or, in a `Sendable` graph, through a `SendableInstantiator`, does; `UnavailableImpl`, beside it, fulfills
+	/// `UnavailableApi`, so the mock builds it, and its `SafeDIOverrides`, or `UnavailableLeaf`'s module-level configuration,
+	/// holds `unavailableApiIsUnavailable: Bool = false`, whose `true` binds the property `nil`, as production binds it where
+	/// nothing fulfills it. Half the time `UnavailableReader`, beneath the holder, receives the value only if available.
+	/// `UnavailableScreen`, a mocked consumer, `true` or `.public`, in one consumer module, builds `UnavailableNode` and calls
+	/// its public mock, handing it the entry through its own overrides. The value differential passes the entry `true` to
+	/// `UnavailableNode`'s and `UnavailableScreen`'s mocks on both paths (`GraphFuzzerFixture.publicMockUnavailableEntryProbes`),
+	/// against the known-right path's internal mocks, which take the same entry. Every roll is made before any is read.
+	private mutating func drawUnavailableEntryPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(20)
+		let onLeaf = random.percentChance(50)
+		let receives = random.percentChance(50)
+		let consumerIsPublic = random.percentChance(33)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let apiName = name("UnavailableApi")
+		let nodeName = name("UnavailableNode")
+		let leafName = name("UnavailableLeaf")
+		let readerName = name("UnavailableReader")
+		var holderProperties = [Property(attribute: "@Instantiated(onlyIfAvailable: true)", label: "unavailableApi", type: "(any \(apiName))?")]
+		var reader: InstantiableClass?
+		if receives {
+			var unavailableReader = InstantiableClass(name: readerName, conformances: conformances)
+			unavailableReader.properties = [Property(attribute: "@Received(onlyIfAvailable: true)", label: "unavailableApi", type: "(any \(apiName))?")]
+			holderProperties.append(Property(attribute: "@Instantiated", label: "unavailableReader", type: readerName))
+			reader = unavailableReader
+		}
+		var impl = InstantiableClass(name: name("UnavailableImpl"), conformances: [apiName] + conformances)
+		impl.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+		var node = InstantiableClass(name: nodeName, conformances: conformances)
+		node.mockGeneration = ".public"
+		// An `internal` initializer, which no consumer module can call, so that the consumer's mock calls the public mock.
+		node.initializerAccess = .internal
+		var declaringModuleDeclarations = [protocolDeclaration(apiName), Self.renderer(of: impl)]
+		if onLeaf {
+			var leaf = InstantiableClass(name: leafName, conformances: conformances)
+			leaf.properties = holderProperties
+			node.properties = isSendableGraph
+				? [Property(attribute: "@Instantiated", label: "unavailableLeafBuilder", type: "SendableInstantiator<\(leafName)>")]
+				: [Property(attribute: "@Instantiated", label: "unavailableLeaf", type: leafName)]
+			declaringModuleDeclarations += [Self.renderer(of: node), Self.renderer(of: leaf)]
+		} else {
+			node.properties = holderProperties
+			declaringModuleDeclarations.append(Self.renderer(of: node))
+		}
+		if let reader {
+			declaringModuleDeclarations.append(Self.renderer(of: reader))
+		}
+		var screen = InstantiableClass(name: name("UnavailableScreen"), conformances: conformances)
+		screen.mockGeneration = consumerIsPublic ? ".public" : "true"
+		screen.properties = [Property(attribute: "@Instantiated", label: "unavailableNode", type: nodeName)]
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: [Self.renderer(of: screen)]))
+	}
+
 	/// A value a consumer's mock cannot build, passed to the public mock it calls, in one graph in five: `UnbuildableScreen`,
 	/// a mocked consumer in one consumer module, instantiates `unbuildableFilter`, of a type no `@Instantiable` declares, so
 	/// that its `mock()` takes it, and `UnbuildableService`, a `.public` type of the declaring module with an `internal`
@@ -4614,6 +4701,21 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if screen.arguments.contains("generateMock: .public") {
 				features.insert(.optionalPlacePublicMockPublicConsumer)
+			}
+		}
+		if let node = types.declarations["\(prefix)UnavailableNode"], let screen = types.declarations["\(prefix)UnavailableScreen"] {
+			features.insert(.unavailableEntryPublicMock)
+			if let leaf = types.declarations["\(prefix)UnavailableLeaf"], leaf.properties.contains(where: { $0.label == "unavailableApi" }) {
+				features.insert(.unavailableEntryPublicMockOnLeaf)
+			}
+			if node.properties.contains(where: { $0.type == "SendableInstantiator<\(prefix)UnavailableLeaf>" }) {
+				features.insert(.unavailableEntryPublicMockSendably)
+			}
+			if types.declarations["\(prefix)UnavailableReader"] != nil {
+				features.insert(.unavailableEntryPublicMockReceived)
+			}
+			if screen.arguments.contains("generateMock: .public") {
+				features.insert(.unavailableEntryPublicMockPublicConsumer)
 			}
 		}
 		if types.declarations["\(prefix)OuterStep"] != nil, types.declarations["\(prefix)OuterScreen"] != nil {
