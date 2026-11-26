@@ -232,6 +232,8 @@ extension DependencyTreeGenerator {
 					holes: plan.holes.map { $0.atTier(tier) },
 					builders: plan.builders.map { $0.atTier(tier) },
 					scopeEnums: plan.scopeEnums,
+					places: plan.places,
+					caseIndexByHole: plan.caseIndexByHole,
 				),
 			)
 		}

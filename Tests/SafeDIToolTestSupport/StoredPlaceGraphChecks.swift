@@ -67,6 +67,23 @@ enum StoredPlaceGraphChecks {
 		}
 	}
 
+	/// Records an issue for each public mock whose place graph `file`, the module info file the run of the module named
+	/// `moduleName` wrote, holds as another graph than the one of `computedPlans`, the plans that run computed
+	/// (`Generate.Output.publicMockPlansWrittenToModuleInfo`), for a plan the file holds that the run did not compute, and
+	/// for a file whose plans do not decode. A plan the run computed and the file leaves out is none: a file holds no plan
+	/// that nests more deeply than a reader reads (`ModulePublicMockPlans`).
+	static func expectGraphsReadBackAsComputed(ofPublicMockPlans computedPlans: [StoredPublicMockPlan], in file: ModuleInfoFile, writtenByRunOfModuleNamed moduleName: String, sourceLocation: SourceLocation) {
+		do {
+			let computedByMockedType = Dictionary(computedPlans.map { ($0.mockedType, $0.places) }, uniquingKeysWith: { first, _ in first })
+			let pairs = try file.publicMockPlansReadBack.map { read in
+				Pair(subject: "the public mock of `\(read.mockedType.asSource)`", computed: computedByMockedType[read.mockedType], read: read.places)
+			}
+			expectGraphsReadBackAsComputed(pairs, byRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		} catch {
+			Issue.record("The public mock plans the run of module `\(moduleName)` wrote do not decode: \(error)", sourceLocation: sourceLocation)
+		}
+	}
+
 	/// Where `read` first differs from `computed`, and how, or `nil` where they hold the same values: every stored
 	/// property of each, at every depth, in the order they are stored, the members of a set or a dictionary in the order
 	/// of their descriptions. A source position counts as absent, as a module info file holds none: `read` came from a

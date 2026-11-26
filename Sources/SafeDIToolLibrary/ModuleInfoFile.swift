@@ -613,6 +613,14 @@ extension ModuleInfoFile {
 		}
 	}
 
+	/// The plans this file holds of its module's public mocks, decoded as a run of a module whose mocks call one decodes
+	/// them. The tests ask this of every file a run writes, as they ask `seamSignaturesReadBack`; the tool never does.
+	public var publicMockPlansReadBack: [StoredPublicMockPlan] {
+		get throws {
+			try publicMockPlans.decoded
+		}
+	}
+
 	/// Each stored block of this file's own module, decoded and encoded again: the two encodings of a block are the same
 	/// bytes for a file SafeDITool wrote, since one layout writes and reads a block. The tests ask this of every file a
 	/// run writes, with real signatures and plans; the tool never does.

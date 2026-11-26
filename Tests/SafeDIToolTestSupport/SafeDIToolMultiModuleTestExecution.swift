@@ -642,6 +642,10 @@ func executeSafeDIToolMultiModuleTest(
 				// what the oracles check of a computed graph holds of the graph a module above decodes.
 				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: computedSignatures, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
 			}
+			if let computedPlans = generateOutput?.publicMockPlansWrittenToModuleInfo {
+				// And each public mock's, which a module whose mocks call it decodes.
+				StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: computedPlans, in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+			}
 		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.

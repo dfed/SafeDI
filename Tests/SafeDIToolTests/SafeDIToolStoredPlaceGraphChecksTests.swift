@@ -114,4 +114,56 @@ struct SafeDIToolStoredPlaceGraphChecksTests {
 			issue.description.contains("the places of seam `Host` is read as") && issue.description.contains("and was computed as absent")
 		}
 	}
+
+	@Test
+	func expectGraphsReadBackAsComputed_recordsIssue_whenFileHoldsAnotherGraphOfPublicMockOrMockTheRunDidNotCompute() throws {
+		func plan(of mockedType: String, cases: [SeamSignature.Places.Case]) -> StoredPublicMockPlan {
+			StoredPublicMockPlan(
+				mockedType: .simple(name: mockedType),
+				parameters: [],
+				noTierParameters: [],
+				tiers: [.public],
+				guardTypeName: "\(mockedType)Guard",
+				holes: [],
+				builders: [],
+				scopeEnums: [],
+				places: SeamSignature.Places(levels: [], cases: cases),
+				caseIndexByHole: [0, -1],
+				receivers: [],
+				typesDeclaredEscaping: [],
+			)
+		}
+		let plainCase = SeamSignature.Places.Case(ownerLevel: 0, isBuiltInSendableFunction: false, siteOpensSendableFunction: false, passedUp: nil, namingRoute: [0])
+		let sendableCase = SeamSignature.Places.Case(ownerLevel: 0, isBuiltInSendableFunction: true, siteOpensSendableFunction: false, passedUp: nil, namingRoute: [0])
+		let written = [plan(of: "Host", cases: [plainCase]), plan(of: "Panel", cases: [plainCase, sendableCase])]
+		let file = try ModuleInfoFile(moduleInfoData: ModuleInfoFile(
+			moduleName: "Feature",
+			packageName: nil,
+			dependencyModuleNames: [],
+			imports: [],
+			mockImports: [],
+			instantiables: [],
+			configurations: [],
+			filesWithUnexpectedNodes: nil,
+			conditionalCompilationDecisions: [],
+			instantiableTypeNamesInAnyClause: [],
+			plainTypeDeclarations: [],
+			seamSignatures: ModuleSeamSignatures([]),
+			publicMockPlans: ModulePublicMockPlans(written, compilesGeneratedMocks: false),
+			view: .empty,
+		).moduleInfoDataWritingSeamSignaturesWithoutPositions)
+		// The plans the file was written from record nothing, and neither does a plan the run computed that the file
+		// leaves out.
+		StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: written + [plan(of: "Sheet", cases: [plainCase])], in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		withKnownIssue {
+			StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: [written[0], plan(of: "Panel", cases: [plainCase, plainCase])], in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		} matching: { issue in
+			issue.description.contains("A place graph the run of module `Feature` wrote reads back as another graph than the one it computed: the places of the public mock of `Panel`.cases.1.isBuiltInSendableFunction is read as `true`, and was computed as `false`")
+		}
+		withKnownIssue {
+			StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: [written[1]], in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
+		} matching: { issue in
+			issue.description.contains("the places of the public mock of `Host` is read as") && issue.description.contains("and was computed as absent")
+		}
+	}
 }

@@ -2461,8 +2461,8 @@ struct CalledBuilders: Sendable {
 	/// Each hole by its site, the first of `holes` at a site: found once for the call, never once for each builder whose
 	/// routes are asked for, which grew a call's construction with the square of its hole types.
 	let holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
-	/// The called seam's place graph (`SeamSignature.places`), which answers what the routes to a case hand its places.
-	/// Empty for a public mock's call, whose plan holds no graph yet.
+	/// The place graph of the called seam (`SeamSignature.places`) or public mock (`StoredPublicMockPlan.places`), which
+	/// answers what the routes to a case hand its places.
 	let places: SeamSignature.Places
 	/// The case in `places` of the place at each site (`SeamSignature.caseIndexByHole`). A place a call passes up, which
 	/// is no case of the graph yet, and every place of a call whose graph was not built, has no entry.
