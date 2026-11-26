@@ -98,6 +98,19 @@ public struct GenerationWork: Sendable {
 		/// fill then takes. Scanned for, the fills of a case were compared for every place of it, and the places stood
 		/// for for every fill.
 		case findingFillThatStandsForPlace
+		/// Collecting the names of the builder functions of a seam's tree (`DependencyTreeGenerator.builderFunctionNamesOfProperties(in:includingHoleSites:)`):
+		/// each generator the walk visits. A walk visits a generator once, so the generators count, not the places that
+		/// share them.
+		case collectingBuilderFunctionNames
+		/// Finding a seam's receivers and the reads of its parameters (`DependencyTreeGenerator.receivers(in:of:instantiables:)`):
+		/// each place of the seam's tree the walk reaches, a place it then skips included. A place whose generator the walk
+		/// already visited with the same context, as far as the generator's subtree reads it, is skipped and its children
+		/// are not reached, so the generators and the contexts their parents are visited in count, not the paths to them.
+		case findingSeamReceivers
+		/// Finding the values a seam tier a tree calls omits (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`):
+		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
+		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
+		case findingSeamTierOmissions
 	}
 
 	/// The step that did the work.
