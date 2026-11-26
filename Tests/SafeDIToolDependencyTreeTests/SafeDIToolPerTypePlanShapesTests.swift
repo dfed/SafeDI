@@ -1,0 +1,439 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// Which production roots that reach a cycle have their code laid out from their per-type plan, and which shape keeps
+/// each other one on today's tree (`DependencyTreeGenerator.shapeOutsidePerTypePlan(inTreeOf:cache:)`). Each test also
+/// generates its graph with every root kept on today's tree, and expects the same files.
+struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenScreensOnCycleReceiveValueTheirCycleDeclares() async throws {
+		// Screens open each other through instantiators, one forwarded a value and instantiating a leaf, the other receiving the leaf.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Forwarded let count: Int
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(leaf: Leaf, count: Int, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.count = count; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleReceivesValueRootDeclares() async throws {
+		// A screen receives a value the root declares, which today's function captures.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .receivesLabelDeclaredOutsideItsCycle])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsLazilyInstantiated() async throws {
+		// A screen holds a `LazilyInstantiated`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let leaf: LazilyInstantiated<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: LazilyInstantiated<Leaf>, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .holdsLazilyInstantiated])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeReceivesValueOnlyIfAvailable() async throws {
+		// A screen receives a value only if available.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received(onlyIfAvailable: true) let leaf: Leaf?
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf?, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .holdsValueOnlyIfAvailable])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeForwardsOptionalValue() async throws {
+		// A screen is forwarded an optional value.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Forwarded let count: Int?
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(count: Int?, s0Builder: Instantiator<S0>) { self.count = count; self.s0Builder = s0Builder }
+		}
+		""")
+
+		#expect(choices == ["Root": .holdsValueOnlyIfAvailable])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeRenamesDependency() async throws {
+		// A screen renames a value the root declares.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self) let other: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(other: Leaf, s0Builder: Instantiator<S0>) { self.other = other; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .renames])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsSendableWrapper() async throws {
+		// A screen holds a `SendableInstantiator`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: SendableInstantiator<S0>
+		    public init(s0Builder: SendableInstantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: SendableInstantiator<S1>
+		    public init(s1Builder: SendableInstantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let s0Builder: SendableInstantiator<S0>
+		    public init(s0Builder: SendableInstantiator<S0>) { self.s0Builder = s0Builder }
+		}
+		""")
+
+		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsValueSpelledWithSendable() async throws {
+		// A screen is forwarded a `@Sendable` function.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Forwarded let onTap: @Sendable () -> Void
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(onTap: @escaping @Sendable () -> Void, s0Builder: Instantiator<S0>) { self.onTap = onTap; self.s0Builder = s0Builder }
+		}
+		""")
+
+		#expect(choices == ["Root": .holdsSendableWrapperOrFunction])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenCycleMemberIsInstantiatedErased() async throws {
+		// A screen instantiates the screen that opened it as an `ErasedInstantiator`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Instantiator<S0>
+		    public init(home: Instantiator<S0>) { self.home = home }
+		}
+
+		@Instantiable public final class S0: Instantiable, Screen {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated(fulfilledByType: "S0", erasedToConcreteExistential: false) let s0Builder: ErasedInstantiator<(), any Screen>
+		    public init(s0Builder: ErasedInstantiator<(), any Screen>) { self.s0Builder = s0Builder }
+		}
+
+		public protocol Screen {}
+		""")
+
+		#expect(choices == ["Root": .erasesCycleMember])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenInitializerDeclaresNameEscaping() async throws {
+		// A screen's initializer declares a forwarded typealias of a function `@escaping`.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Forwarded let onTap: OnTap
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(onTap: @escaping OnTap, s0Builder: Instantiator<S0>) { self.onTap = onTap; self.s0Builder = s0Builder }
+		}
+
+		public typealias OnTap = () -> Void
+		""")
+
+		#expect(choices == ["Root": .declaresEscapingName])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTreeDeclaresLabelInTwoForms() async throws {
+		// The root and a screen declare one label with two types.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Leaf, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let leaf: Instantiator<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: Instantiator<Leaf>, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .holdsLabelInSeveralForms])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeReceivesInstantiator() async throws {
+		// A screen receives an instantiator the root declares.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leafBuilder: Instantiator<Leaf>, s0Builder: Instantiator<S0>) { self.leafBuilder = leafBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Received let leafBuilder: Instantiator<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leafBuilder: Instantiator<Leaf>, s0Builder: Instantiator<S0>) { self.leafBuilder = leafBuilder; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .receivesInstantiator])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOutsideCyclesWithChildrenIsInstantiatedTwice() async throws {
+		// The root and a screen each instantiate a type outside every cycle that instantiates a value of its own.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let box: Box
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(box: Box, s0Builder: Instantiator<S0>) { self.box = box; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let otherBox: Box
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(otherBox: Box, s0Builder: Instantiator<S0>) { self.otherBox = otherBox; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+
+		@Instantiable public final class Box: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    public init(leaf: Leaf) { self.leaf = leaf }
+		}
+		""")
+
+		#expect(choices == ["Root": .buildsTreeOutsideCyclesTwice])
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	private static func withoutSourceLocations(_ file: String) -> String {
+		file.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains("#sourceLocation(file:") }.joined(separator: "\n")
+	}
+
+	/// Why each root of `swiftFileContent` that reaches a cycle is kept on today's tree, `nil` for one laid out from its
+	/// plan. Records an issue where the files generated differ from those generated with every root kept on today's tree.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func choicesGeneratingTodaysCode(of swiftFileContent: String) async throws -> [String: RootTreeChoiceObservation.PerPathReason?] {
+		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
+		let output = try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			continuation.yield((root, perPathReason))
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var choices = [String: RootTreeChoiceObservation.PerPathReason?]()
+		for await (root, perPathReason) in stream {
+			choices[root] = perPathReason
+		}
+		let todaysOutput = try await RootTreeChoiceObservation.$forcesPerPath.withValue(true) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// A rename's `#sourceLocation` names its fixture's file, which each run writes in a folder of its own.
+		#expect(output.dependencyTreeFiles.mapValues(Self.withoutSourceLocations) == todaysOutput.dependencyTreeFiles.mapValues(Self.withoutSourceLocations))
+		return choices
+	}
+}

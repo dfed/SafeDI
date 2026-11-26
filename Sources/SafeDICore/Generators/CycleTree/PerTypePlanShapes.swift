@@ -30,7 +30,8 @@ extension DependencyTreeGenerator {
 	/// from the declarations alone, before any plan or tree is built; `nil` where `root` reaches no cycle.
 	///
 	/// The plan lays out a root only if its whole tree holds none of the shapes this names: what remains is types that
-	/// instantiate one another, by value or through instantiators, with required receives and forwarded values. Every
+	/// instantiate one another, by value or through instantiators, with forwarded values and required receives of values
+	/// their own cycle declares. Every
 	/// other root is built per path, as today, so its code and its errors are today's. The first shape found names the
 	/// reason, in the order the walk reaches the types (each type's dependencies in declaration order), which no test or
 	/// output but a test's count reads.
@@ -62,44 +63,32 @@ extension DependencyTreeGenerator {
 					reason = .holdsLabelInSeveralForms
 				}
 			}
-			for (edge, propertyToGenerate) in scope.propertiesToGenerate.filter({ $0.builtScope != nil }).enumerated() where reason == nil {
+			var edge = 0
+			// The graph's edges are these properties, in this order.
+			for case let .instantiated(property, _, erasedToConcreteExistential) in scope.propertiesToGenerate where reason == nil {
 				let target = graph.edges(from: index)[edge]
+				edge += 1
 				timesInstantiated[target] += 1
-				switch propertyToGenerate {
-				case let .instantiated(property, _, erasedToConcreteExistential):
-					if graph.isOnCycle(target) {
-						if erasedToConcreteExistential || property.propertyType == .erasedInstantiator {
-							reason = .erasesCycleMember
-						}
-					} else if timesInstantiated[target] > 1, !scopes[target].propertiesToGenerate.isEmpty {
-						reason = .buildsTreeOutsideCyclesTwice
+				if graph.isOnCycle(target) {
+					if erasedToConcreteExistential || property.propertyType == .erasedInstantiator {
+						reason = .erasesCycleMember
 					}
-				case .hole:
-					reason = .buildsSeam
-				case .aliased:
-					reason = .renames
+				} else if timesInstantiated[target] > 1, !scopes[target].propertiesToGenerate.isEmpty {
+					reason = .buildsTreeOutsideCyclesTwice
 				}
 			}
 		}
 		if reason == nil {
-			// A function of the plan is declared in the root's body, and captures each label its tree receives that no scope
-			// of its cycle declares, so the root's declaration must be the only one such a label has.
+			// Today's function captures each label its tree receives that no scope of its cycle declares. A function of the
+			// plan captures nothing yet: it would take the label as a parameter, which is other code than today's.
 			var labelsDeclaredByComponent = [Int: Set<String>]()
-			var labelsDeclaredBeneathRoot = Set<String>()
-			for (index, scope) in scopes.enumerated() {
-				if index > 0 {
-					labelsDeclaredBeneathRoot.formUnion(scope.declaredLabels)
-				}
-				if graph.isOnCycle(index) {
-					labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
-				}
+			for (index, scope) in scopes.enumerated() where graph.isOnCycle(index) {
+				labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
 			}
 			for (index, scope) in scopes.enumerated() where reason == nil && graph.isOnCycle(index) {
 				let labelsDeclaredInComponent = labelsDeclaredByComponent[graph.componentByNode[index], default: []]
-				for receivedProperty in collectReceivedProperties(from: scope, cache: &cache).received
-					where !labelsDeclaredInComponent.contains(receivedProperty.label) && labelsDeclaredBeneathRoot.contains(receivedProperty.label)
-				{
-					reason = .receivesLabelDeclaredBetweenRootAndCycle
+				if collectReceivedProperties(from: scope, cache: &cache).received.contains(where: { !labelsDeclaredInComponent.contains($0.label) }) {
+					reason = .receivesLabelDeclaredOutsideItsCycle
 				}
 			}
 		}

@@ -60,9 +60,9 @@ public enum RootTreeChoiceObservation {
 		/// A type outside every cycle that instantiates dependencies of its own is instantiated at two properties of the
 		/// root's tree, so a plan would build its tree once for each.
 		case buildsTreeOutsideCyclesTwice
-		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares and that a type beneath
-		/// the root declares, which a function declared in the root's body could not capture.
-		case receivesLabelDeclaredBetweenRootAndCycle
+		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares. Today's function
+		/// captures that declaration, and a function of the plan captures nothing yet.
+		case receivesLabelDeclaredOutsideItsCycle
 		/// The root's tree may hold a label no one parameter of a cycle's function can pass
 		/// (`DependencyTreeGenerator.mayHaveUnpassableCycleLabel(inTreeOf:cache:)`).
 		case mayHaveUnpassableCycleLabel
@@ -148,12 +148,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		/// gives (`VariantBodies.Call.argumentOrder`): the label it is built as, then the others as its tree first
 		/// receives them.
 		/// - Parameter plan: The positions of the root's body and the bodies it calls (`VariantBodies.plan(ofRoot:shadow:cache:)`).
-		/// - Parameter labelsDeclaredInComponentByScope: Where every label a function's tree receives that no scope of its
-		///   cycle declares is declared by the root alone, the labels each scope's cycle declares
-		///   (`CallPlaceShadow.labelsDeclaredInComponentByScope`): a function then takes only those and the label it is
-		///   built as, and captures the root's declaration of every other, as today's function does. `nil` keeps every
-		///   label a parameter.
-		init(of bodies: DependencyTreeGenerator.VariantBodies, plan: (rootBody: Int, calledBodies: [Int]), labelsDeclaredInComponentByScope: [ObjectIdentifier: Set<String>]? = nil) {
+		init(of bodies: DependencyTreeGenerator.VariantBodies, plan: (rootBody: Int, calledBodies: [Int])) {
 			let positions = [plan.rootBody] + plan.calledBodies
 			var bodyByPosition = [Int: Int]()
 			for (body, position) in positions.enumerated() {
@@ -166,14 +161,8 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 					// Every body called is among `plan.calledBodies`; a position that were not would be the root's, which
 					// no function builds, and the type key would keep the path key's body.
 					let calledBody = bodyByPosition[call.calledBody, default: 0]
-					var argumentOrder = call.argumentOrder
-					if let labelsDeclaredInComponentByScope {
-						let called = bodies.bodies[call.calledBody]
-						let parameterLabels = labelsDeclaredInComponentByScope[called.key.scope, default: []]
-						argumentOrder = argumentOrder.filter { called.labels[$0] == called.key.property?.label || parameterLabels.contains(called.labels[$0]) }
-					}
-					argumentOrders[calledBody] = argumentOrder
-					return VariantCall(path: call.path, property: call.property, calledBody: calledBody, arguments: argumentOrder.map { call.arguments[$0] })
+					argumentOrders[calledBody] = call.argumentOrder
+					return VariantCall(path: call.path, property: call.property, calledBody: calledBody, arguments: call.argumentOrder.map { call.arguments[$0] })
 				})
 			}
 			generators = positions.map { bodies.generator(of: $0) }
