@@ -179,6 +179,19 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "inlinePlaceBuilder"
 			return
 		}
+		// A node a public mock promotes at its root's level reads its caller's value before its override and its construction
+		// (`ConstantNode.passingPromotedValue(orBuilding:)`), a read no alternative records.
+		guard node.promotedParameterName == nil else {
+			unrecordedReasons[childIndexPath] = "promotedParameter"
+			return
+		}
+		// A public mock builds a configured node by calling its type's construction function, which is handed the override
+		// (`ConstantNode.publicBuilderFunctionEndLines(children:overrideRead:indent:)`): a target and an argument no record
+		// names.
+		guard !buildsPublicMock || !node.hasConfiguration else {
+			unrecordedReasons[childIndexPath] = "publicConstructionFunction"
+			return
+		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		var alternatives = [ConstructionAlternative]()
 		if let overrideRead {

@@ -405,8 +405,12 @@ extension MockLowering.Walk {
 	/// `filledCallBuilders.holeBuildersByInlinePlace`, which the type key does not lay out), or a property node of the root's
 	/// level bound under a name apart from its label (the walk's `pathsNamedApart`, which arises only at the root's level,
 	/// where `mock()`'s parameters and promoted siblings can share a label). A root that holds either lays out as before.
+	///
+	/// A public mock's root shares nothing: its places' records read their overrides by the path from the root, since
+	/// `relateConfiguration(ofBuiltPlaceAt:of:)` relates only an internal mock's to the place's own configuration, so a later
+	/// meeting would take the first meeting's path, another place's override.
 	func sharesSubtrees(of orderedChildren: [ScopeGenerator.OrderedChild]) -> Bool {
-		guard filledCallBuilders.holeBuildersByInlinePlace.isEmpty else { return false }
+		guard !buildsPublicMock, filledCallBuilders.holeBuildersByInlinePlace.isEmpty else { return false }
 		let bindingNames = rootLevelBindingNames(of: orderedChildren.map(\.generator))
 		return !zip(orderedChildren, bindingNames).contains { child, bindingName in
 			guard let bindingName, case let .property(_, property, _, _, _, _) = child.generator.scopeData else { return false }

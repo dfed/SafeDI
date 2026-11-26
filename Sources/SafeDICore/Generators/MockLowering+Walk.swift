@@ -182,8 +182,9 @@ extension ScopeGenerator {
 			})
 		}
 		let rootReceiverBindingIndex = bindingLines.endIndex
-		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
-		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
+		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch, and a public
+		// mock's only behind another (`MockLowering.laysOutPublicMocksWithTypeKey`).
+		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && (instantiable.generateMock != .public || MockLowering.laysOutPublicMocksWithTypeKey)
 		walk.recordsPlaces = laysOutWithTypeKey
 		// The walk that records places writes no text: the layout writes the body from the records. A root whose layout
 		// falls back is walked again from here for its text, recording nothing, so that walk's body is what a root the type

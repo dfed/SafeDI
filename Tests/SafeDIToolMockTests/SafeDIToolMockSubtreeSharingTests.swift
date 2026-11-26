@@ -143,6 +143,22 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(meetings == ["Root": 0])
 	}
 
+	/// A public mock's root shares nothing, also where the type key lays public mocks out
+	/// (`MockLowering.laysOutPublicMocksWithTypeKey`): its places' records read their overrides by the path from the root, so
+	/// the second `Screen` would read the first's override (`MockLowering.Walk.sharesSubtrees(of:)`).
+	@Test
+	mutating func mock_sharesNothing_whenRootIsPublicMock() async throws {
+		let fixture = Self.screenBeneathTwoParents(screenProperty: "@Instantiated let screen: Screen")
+			.map { $0.replacingOccurrences(of: "@Instantiable(generateMock: true)\n", with: "@Instantiable(generateMock: .public)\n") }
+		var filesToDelete = filesToDelete
+		let outcomes = try await MockLowering.$laysOutPublicMocksWithTypeKey.withValue(true) {
+			try await Self.outcomes(of: fixture, filesToDelete: &filesToDelete)
+		}
+		self.filesToDelete = filesToDelete
+		#expect(outcomes.map(\.mockedType) == ["Root"])
+		#expect(outcomes.map(\.sharedMeetings) == [0])
+	}
+
 	/// A root whose tree calls another module's public mock inline shares nothing: the call's fills read the caller's scope
 	/// by path (`MockLowering.Walk.sharesSubtrees(of:)`).
 	@Test
@@ -388,6 +404,13 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 	}
 
 	private mutating func outcomes(of swiftFileContent: [String]) async throws -> [MockLowering.SubtreeSharingOutcome] {
+		var filesToDelete = filesToDelete
+		let outcomes = try await Self.outcomes(of: swiftFileContent, filesToDelete: &filesToDelete)
+		self.filesToDelete = filesToDelete
+		return outcomes
+	}
+
+	private static func outcomes(of swiftFileContent: [String], filesToDelete: inout [URL]) async throws -> [MockLowering.SubtreeSharingOutcome] {
 		let (stream, continuation) = AsyncStream.makeStream(of: MockLowering.SubtreeSharingOutcome.self)
 		try await MockLowering.$subtreeSharingObserver.withValue({ outcome in
 			continuation.yield(outcome)
