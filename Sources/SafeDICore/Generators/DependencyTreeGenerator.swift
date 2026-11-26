@@ -956,21 +956,19 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			// Each place of the root's tree against the bodies of its plan, built only where a test compares the two.
-			if let todaysTree = comparedTree {
-				if let unplannedPlan = try Self.compareBodies(
-					ofRoot: scope,
-					todaysTree: todaysTree,
-					frozenScopeMap: frozenScopeMap,
-					declaredTypeNames: declaredTypeNames,
-					cache: &receivedPropertiesCache,
-				), let planCodeObserver = PlanCodeObservation.observer {
-					// The root's body laid out from the plan's bodies: one function per body, which the root declares.
-					let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplannedPlan))
-					try planCodeObserver(
-						scope.instantiable.concreteInstantiable.asSource,
-						statements.map { try ScopeGenerator.rootCode(of: scope.instantiable, writing: $0).spelled() },
-					)
-				}
+			if let todaysTree = comparedTree, let unplannedPlan = try Self.compareBodies(
+				ofRoot: scope,
+				todaysTree: todaysTree,
+				frozenScopeMap: frozenScopeMap,
+				declaredTypeNames: declaredTypeNames,
+				cache: &receivedPropertiesCache,
+			), let planCodeObserver = PlanCodeObservation.observer {
+				// The root's body laid out from the plan's bodies: one function per body, which the root declares.
+				let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplannedPlan))
+				try planCodeObserver(
+					scope.instantiable.concreteInstantiable.asSource,
+					statements.map { try ScopeGenerator.rootCode(of: scope.instantiable, writing: $0).spelled() },
+				)
 			}
 			// Whether the plan's detector of labels no one parameter can pass keeps the root on today's tree, checked
 			// against what today's tree reports only where a test observes it.
