@@ -2376,9 +2376,239 @@ extension DependencyTreeGenerator {
 		let hidden: FillReentryHidings
 	}
 
+	/// EXPERIMENT: the places of each case of one call judged by the call's place graph: the tree of the case's emitting fill
+	/// (`ScopeGenerator.fillJudgementTree`, else the fill) once per label it reads and per joint value the case's routes read
+	/// of that label (`SeamSignature.Places.Query.labelVariants(ofLabel:at:)`), each against the emitting place with that
+	/// label's facts and naming route the variant's. A cycle a fill closes on the seam's path is judged per place still. A
+	/// case some of whose places have no graph case, and every case of a call with no graph, is judged per label by place.
+	private static func caseJudgement(of entries: [CaseJudgementEntry], call: ScopeGenerator, callerModule: ModuleIdentity, compilesGeneratedMocks: Bool, seamTreeReceives: inout SeamTreeReceives) -> [DependencyTreeGeneratorError.FillFinding] {
+		guard let calledBuilders = call.calledBuilders, !calledBuilders.places.cases.isEmpty else {
+			return placeCaseJudgement(of: entries, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+		}
+		let query = SeamSignature.Places.Query(of: calledBuilders.places)
+		var groupKeys = [String]()
+		var groups = [String: [CaseJudgementEntry]]()
+		for (index, entry) in entries.enumerated() {
+			let key = entry.hole.enumPlace != nil ? ScopeGenerator.fillCaseKey(of: entry.hole) : "#\(index)"
+			if groups[key] == nil {
+				groupKeys.append(key)
+			}
+			groups[key, default: []].append(entry)
+		}
+		var findings = [DependencyTreeGeneratorError.FillFinding]()
+		for key in groupKeys {
+			guard let group = groups[key] else { continue }
+			var caseIndices = [Int]()
+			for entry in group {
+				if let caseIndex = calledBuilders.caseIndexBySite[entry.hole.site], !caseIndices.contains(caseIndex) {
+					caseIndices.append(caseIndex)
+				}
+			}
+			guard !caseIndices.isEmpty, group.allSatisfy({ calledBuilders.caseIndexBySite[$0.hole.site] != nil }) else {
+				findings += placeCaseJudgement(of: group, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+				continue
+			}
+			guard let emitting = group.first(where: { $0.fill.fillEmitsCode }) ?? group.first, let child = (emitting.fill.fillJudgementTree ?? emitting.fill).children.first else { continue }
+			let reads = FillTreeReads(walking: child, recordsOpenScopes: true)
+			// The case's own place names its builder, of its own family.
+			func casePlace(at caseIndex: Int) -> SeamSignature.Hole {
+				group.first { calledBuilders.caseIndexBySite[$0.hole.site] == caseIndex }?.hole ?? emitting.hole
+			}
+			// The entries of the seam's path a scope of the fill closes a cycle on where a route's path holds one: its property
+			// as cycle validation sees it, built for its type, in each form a path stacks it in.
+			func closedOnEntries(of property: Property, builtAs builtType: TypeDescription) -> [SeamSignature.Places.StackEntry] {
+				let validated = property.asValidatedForDependencyCycles
+				let instanceType = validated.typeDescription.unwrapped
+				let forms = [validated] + [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].map { wrapper in
+					let wrapperType = TypeDescription.simple(name: wrapper, generics: [instanceType])
+					return Property(label: validated.label, typeDescription: validated.typeDescription.isOptional ? .optional(wrapperType) : wrapperType)
+				}
+				return forms.map { SeamSignature.Places.StackEntry(property: $0, concreteType: builtType) }
+			}
+			// The open scopes some route of the case closes a cycle at, whose subtrees those routes never build.
+			var closingAtSomeRoute = Set<SeamSignature.Places.StackEntry>()
+			for read in reads.reads {
+				guard case let .openScope(scope) = read else { continue }
+				for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where caseIndices.contains(where: { !query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: $0).isEmpty }) {
+					closingAtSomeRoute.insert(entry)
+				}
+			}
+			// One query per set of closing scopes a read is made beneath: it ranges over the routes that build it.
+			var queriesByExclusion = [Set<SeamSignature.Places.StackEntry>: SeamSignature.Places.Query]()
+			func closingEntriesAbove(_ ancestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor]) -> Set<SeamSignature.Places.StackEntry> {
+				Set(ancestors.flatMap { closedOnEntries(of: $0.property, builtAs: $0.builtType) }).intersection(closingAtSomeRoute)
+			}
+			func excludingQuery(_ excluded: Set<SeamSignature.Places.StackEntry>) -> SeamSignature.Places.Query {
+				guard !excluded.isEmpty else { return query }
+				if let memoized = queriesByExclusion[excluded] {
+					return memoized
+				}
+				let made = SeamSignature.Places.Query(of: calledBuilders.places, excludingRoutesWhoseStackHolds: excluded)
+				queriesByExclusion[excluded] = made
+				return made
+			}
+			for read in reads.reads {
+				guard case let .openScope(scope) = read else { continue }
+				let scopeQuery = excludingQuery(closingEntriesAbove(scope.fillAncestors))
+				for caseIndex in caseIndices {
+					for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where closingAtSomeRoute.contains(entry) {
+						for (depth, route) in scopeQuery.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: caseIndex) {
+							let hole = routedHole(casePlace(at: caseIndex), along: route, in: scopeQuery)
+							findings.append(.init(hole: hole, kind: .closesCycleInSeamTree(
+								closingProperty: scope.property,
+								closingType: scope.closingType,
+								declarationLocation: scope.declarationLocation,
+								fillAncestors: scope.fillAncestors,
+								closedOnDeclaration: hole.declaredSitePath.dropLast(depth + 1).last,
+								closesOnOwnerOfHole: depth == 0,
+								seamModule: hole.scopeSeamModule,
+							), closer: .init(
+								caseKey: ScopeGenerator.fillCaseKey(of: hole),
+								closingProperty: scope.property,
+								closingType: scope.closingType,
+								declarationLocation: scope.declarationLocation,
+								closedOnDeclaration: ScopeGenerator.BuiltDeclaration(property: entry.property, concreteType: entry.concreteType),
+								declarationsBeneath: depth,
+							)))
+						}
+					}
+				}
+			}
+			var labels = [String]()
+			for read in reads.reads {
+				if case let .receive(receive) = read, !labels.contains(receive.property.label) {
+					labels.append(receive.property.label)
+				}
+			}
+			// What the calls inside the call's fills hide from any place of the case: one fill fills them all.
+			var hidden = FillReentryHidings()
+			for entry in group {
+				for (label, declarations) in entry.hidden.pathDeclarations {
+					let known = Set((hidden.pathDeclarations[label] ?? []).map { String(describing: $0) })
+					hidden.pathDeclarations[label, default: []] += declarations.filter { !known.contains(String(describing: $0)) }
+				}
+				for (label, declarations) in entry.hidden.calledCopyDeclarations where hidden.calledCopyDeclarations[label] == nil {
+					hidden.calledCopyDeclarations[label] = declarations
+				}
+				for (label, fields) in entry.hidden.fieldsOfReenteringPlaces {
+					hidden.fieldsOfReenteringPlaces[label, default: []] += fields.filter { !(hidden.fieldsOfReenteringPlaces[label] ?? []).contains($0) }
+				}
+			}
+			for label in labels {
+				let placeDeclarations = group.flatMap { $0.hole.uncarriedDeclarations.filter { $0.property.label == label } }
+				// The label's reads, by the closing scopes they are made beneath, in the order each set is first met.
+				var exclusions = [Set<SeamSignature.Places.StackEntry>]()
+				for read in reads.reads {
+					guard case let .receive(receive) = read, receive.property.label == label else { continue }
+					let excluded = closingEntriesAbove(receive.fillAncestors)
+					if !exclusions.contains(excluded) {
+						exclusions.append(excluded)
+					}
+				}
+				for excluded in exclusions {
+					let labelReads = reads.keeping {
+						guard case let .receive(receive) = $0, receive.property.label == label else { return false }
+						return closingEntriesAbove(receive.fillAncestors) == excluded
+					}
+					let labelQuery = excludingQuery(excluded)
+					for caseIndex in caseIndices {
+						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) {
+							let hole = judgedHole(casePlace(at: caseIndex), ofLabel: label, as: variant, at: caseIndex, in: labelQuery, placeDeclarations: placeDeclarations)
+							findings += findingsOfFill(of: hole, fill: emitting.fill, reads: labelReads, call: call, hidden: hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
+						}
+					}
+				}
+			}
+		}
+		return findings
+	}
+
+	/// EXPERIMENT: `hole`, a case's emitting place, as the place on `variant`'s least route reads `label`: that label's field,
+	/// uncarried declaration, cycle re-entry and declaration hidden by a field are the variant's, and the place is named by
+	/// the route.
+	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, at caseIndex: Int, in query: SeamSignature.Places.Query, placeDeclarations: [SeamSignature.Hole.UncarriedDeclaration]) -> SeamSignature.Hole {
+		var fields = hole.fields.filter { $0.property.label != label }
+		if case let .field(level, declaration) = variant.answer {
+			fields.append(query.places.declaration(level: level, declaration: declaration).field)
+		}
+		// The place's own declaration of the label is the one the graph answers; the declarations a call on the way presents
+		// besides (`boundByPassingUpSeam`, copies a called place carries) stay. A declaration some place of the case carries
+		// keeps that place's buildability, which the graph's leaves out.
+		func sameDeclaration(_ lhs: SeamSignature.Hole.UncarriedDeclaration, _ rhs: SeamSignature.Hole.UncarriedDeclaration) -> Bool {
+			lhs.property == rhs.property && lhs.declaringType == rhs.declaringType && lhs.reason == rhs.reason
+		}
+		let graphDeclarations = query.answers(ofLabel: label, at: caseIndex).compactMap { query.uncarriedDeclaration(of: $0, at: caseIndex) }
+		let variantDeclaration = query.uncarriedDeclaration(of: variant.answer, at: caseIndex).map { graphDeclaration in
+			placeDeclarations.first { sameDeclaration($0, graphDeclaration) } ?? graphDeclaration
+		}
+		var uncarriedDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
+		var placedVariant = false
+		for declaration in hole.uncarriedDeclarations {
+			guard declaration.property.label == label, graphDeclarations.contains(where: { sameDeclaration($0, declaration) }) else {
+				uncarriedDeclarations.append(declaration)
+				continue
+			}
+			if !placedVariant, let variantDeclaration {
+				uncarriedDeclarations.append(variantDeclaration)
+			}
+			placedVariant = true
+		}
+		if !placedVariant, let variantDeclaration {
+			uncarriedDeclarations.append(variantDeclaration)
+		}
+		let cycleReentryDeclarations = hole.cycleReentryDeclarations.filter { $0.property.label != label } + [variant.cycleReentry].compactMap(\.self)
+		let declarationsHiddenByFields = hole.declarationsHiddenByFields.filter { $0.property.label != label } + [variant.hiddenByField].compactMap(\.self)
+		return routedHole(hole, along: variant.leastRoute, in: query, fields: fields, uncarriedDeclarations: uncarriedDeclarations, cycleReentryDeclarations: cycleReentryDeclarations, declarationsHiddenByFields: declarationsHiddenByFields)
+	}
+
+	/// EXPERIMENT: `hole`, a case's emitting place, named by `route`, with the facts given in place of its own.
+	private static func routedHole(
+		_ hole: SeamSignature.Hole,
+		along route: SeamSignature.Places.Route,
+		in query: SeamSignature.Places.Query,
+		fields: [SeamSignature.Hole.Field]? = nil,
+		uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration]? = nil,
+		cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration]? = nil,
+		declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]? = nil,
+	) -> SeamSignature.Hole {
+		let declaredSitePath = query.declaredPathToOwner(along: route) + hole.declaredSitePath.suffix(1)
+		return SeamSignature.Hole(
+			storing: hole.ownerType,
+			declaringModuleNames: hole.declaringModuleNames,
+			property: hole.property,
+			instantiatedType: hole.instantiatedType,
+			declarationLocation: hole.declarationLocation,
+			erasedToConcreteExistential: hole.erasedToConcreteExistential,
+			sitePath: query.sitePath(along: route),
+			declaredSitePath: declaredSitePath,
+			fillPropertyStack: hole.fillPropertyStack,
+			fillConcreteTypeStack: hole.fillConcreteTypeStack,
+			builderLabel: hole.builderLabel,
+			narrowerTierBuilderLabels: hole.narrowerTierBuilderLabels,
+			internalName: hole.internalName,
+			scopeSeamType: hole.scopeSeamType,
+			scopeSeamModule: hole.scopeSeamModule,
+			typesToOwner: query.typesToOwner(along: route),
+			scopeTypeName: hole.scopeTypeName,
+			enumPlace: hole.enumPlace,
+			wrapperFunctionName: hole.wrapperFunctionName,
+			fields: fields ?? hole.fields,
+			tierAccess: hole.tierAccess,
+			accessCause: hole.accessCause,
+			uncarriedDeclarations: uncarriedDeclarations ?? hole.uncarriedDeclarations,
+			cycleReentryDeclarations: cycleReentryDeclarations ?? hole.cycleReentryDeclarations,
+			reenteringCallDeclarations: hole.reenteringCallDeclarations,
+			reenteringPlaceFields: hole.reenteringPlaceFields,
+			declarationsHiddenByFields: declarationsHiddenByFields ?? hole.declarationsHiddenByFields,
+			innerSeamType: hole.innerSeamType,
+			passedUpRoute: hole.passedUpRoute,
+			isSendable: hole.isSendable,
+		)
+	}
+
 	/// EXPERIMENT: the places of each case of one call judged once per distinct answer, each answer by the place whose
 	/// path sorts first in source order, against the tree of the case's emitted fill.
-	private static func caseJudgement(of entries: [CaseJudgementEntry], call: ScopeGenerator, callerModule: ModuleIdentity, compilesGeneratedMocks: Bool, seamTreeReceives: inout SeamTreeReceives) -> [DependencyTreeGeneratorError.FillFinding] {
+	private static func placeCaseJudgement(of entries: [CaseJudgementEntry], call: ScopeGenerator, callerModule: ModuleIdentity, compilesGeneratedMocks: Bool, seamTreeReceives: inout SeamTreeReceives) -> [DependencyTreeGeneratorError.FillFinding] {
 		var groupKeys = [String]()
 		var groups = [String: [CaseJudgementEntry]]()
 		for (index, entry) in entries.enumerated() {
@@ -2538,6 +2768,19 @@ extension DependencyTreeGenerator {
 			let onlyIfAvailable: Bool
 			/// The seam call the receive is made by, where a call in the fill passes it on to the seam's tree.
 			let passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall?
+			/// EXPERIMENT: the scopes of the fill the receive is made beneath, its reader's own last: a route whose path builds
+			/// one of them closes a cycle there and never reads it.
+			let fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor]
+		}
+
+		/// EXPERIMENT: a scope of a tree built with none of its scopes closing a cycle on the seam's path
+		/// (`ScopeGenerator.fillJudgementTree`), which closes one on a route whose path builds its property for its type.
+		struct OpenScope {
+			let property: Property
+			let builtType: TypeDescription
+			let closingType: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
+			let fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor]
 		}
 
 		/// A scope of the tree that closes a cycle on a declaration of the filled seam's path. A closer beneath a fill nested in
@@ -2553,6 +2796,7 @@ extension DependencyTreeGenerator {
 		enum Read {
 			case receive(Receive)
 			case closer(Closer)
+			case openScope(OpenScope)
 		}
 
 		/// The reads, in walk order: each type before the types beneath it, siblings in declaration order.
@@ -2570,7 +2814,7 @@ extension DependencyTreeGenerator {
 			self.root = root
 		}
 
-		init(walking root: ScopeGenerator) {
+		init(walking root: ScopeGenerator, recordsOpenScopes: Bool = false) {
 			self.root = root
 			var reads = [Read]()
 			typealias Frame = (generator: ScopeGenerator, parent: Instantiable, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool)
@@ -2590,19 +2834,19 @@ extension DependencyTreeGenerator {
 					} else {
 						nil
 					}
+					let childFillAncestors = fillAncestors + (generator.property.map { [DependencyTreeGeneratorError.FillFinding.FillAncestor(property: $0, builtType: instantiable.concreteInstantiable)] } ?? [])
 					for dependency in instantiable.dependencies {
 						switch dependency.source {
 						case let .received(onlyIfAvailable):
 							guard !isProvided(dependency.property, by: providedProperties) else { continue }
-							reads.append(.receive(.init(property: dependency.property, readerType: instantiable.concreteInstantiable, declarationLocation: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: passingCall)))
+							reads.append(.receive(.init(property: dependency.property, readerType: instantiable.concreteInstantiable, declarationLocation: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: passingCall, fillAncestors: childFillAncestors)))
 						case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 							guard !isProvided(fulfillingProperty, by: childProvidedProperties) else { continue }
-							reads.append(.receive(.init(property: fulfillingProperty, readerType: instantiable.concreteInstantiable, declarationLocation: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: nil)))
+							reads.append(.receive(.init(property: fulfillingProperty, readerType: instantiable.concreteInstantiable, declarationLocation: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: nil, fillAncestors: childFillAncestors)))
 						case .instantiated, .forwarded:
 							continue
 						}
 					}
-					let childFillAncestors = fillAncestors + (generator.property.map { [DependencyTreeGeneratorError.FillFinding.FillAncestor(property: $0, builtType: instantiable.concreteInstantiable)] } ?? [])
 					framesToVisit.append(contentsOf: generator.children.reversed().map { ($0, instantiable, childProvidedProperties, childFillAncestors, judgesClosers) })
 				} else if let parent {
 					framesToVisit.append(contentsOf: generator.children.reversed().map { ($0, parent, childProvidedProperties, fillAncestors, judgesClosers && generator.fillHole == nil) })
@@ -2623,6 +2867,15 @@ extension DependencyTreeGenerator {
 						)))
 					}
 				} else {
+					if recordsOpenScopes, judgesClosers, let property = generator.property, let instantiable = generator.builtInstantiable {
+						reads.append(.openScope(.init(
+							property: property,
+							builtType: instantiable.concreteInstantiable,
+							closingType: parent.concreteInstantiable,
+							declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation,
+							fillAncestors: fillAncestors,
+						)))
+					}
 					visit(generator, parent: parent, providedProperties: providedProperties, fillAncestors: fillAncestors, judgesClosers: judgesClosers)
 				}
 			}
@@ -2978,6 +3231,8 @@ extension DependencyTreeGenerator {
 						declarationsBeneath: declarationsBeneath,
 					)))
 				}
+			case .openScope:
+				break
 			}
 		}
 		return findings
