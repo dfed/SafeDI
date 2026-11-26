@@ -1331,17 +1331,22 @@ extension ScopeGenerator {
 		return receivers
 	}
 
-	/// A declaration of a dependency in a mock's tree, as `treeReceivers(in:mockedType:)` keeps it once.
+	/// A declaration of a dependency in a mock's tree, as `treeReceivers(in:mockedType:)` keeps it once. A declaration read
+	/// from another module's info carries no location, so the source is part of it too: two declarations of one type and
+	/// property that differ only in how the value reaches them stay two receivers, and which one is kept never follows
+	/// the order of the walk.
 	private struct TreeReceiverDeclaration: Hashable {
 		init(declaringType: TypeDescription, dependency: Dependency) {
 			self.declaringType = declaringType
 			declarationLocation = dependency.declarationLocation
 			property = dependency.property
+			source = dependency.source
 		}
 
 		let declaringType: TypeDescription
 		let declarationLocation: Dependency.DeclarationLocation?
 		let property: Property
+		let source: Dependency.Source
 	}
 }
 
