@@ -156,9 +156,69 @@ struct TypeFactsOutcomesTests {
 	}
 
 	@Test
+	func outcomes_readsStatementBeforeSendableFunction_whenReadValueIsNotSendable() {
+		// The root passes its configuration (declaration 2) to the plain function 1 and the `@Sendable` function 2, which
+		// passes it on to the plain function 3: only the `@Sendable` function reads it before it, and a value of its own
+		// (declaration 8) that 2 passes 3 for a second read is a parameter.
+		let outcomes = World(
+			variants: [
+				.init(reads: [], calls: [.init(callee: 1, sources: [.bound(2)]), .init(callee: 2, sources: [.bound(2)])]),
+				.init(reads: [.valueOutsideSendableFunctions]),
+				.init(reads: [.valueOutsideSendableFunctions], family: .sendable, calls: [.init(callee: 3, sources: [.passedThrough(0), .bound(8)])]),
+				.init(reads: [.valueOutsideSendableFunctions, .valueOutsideSendableFunctions]),
+			],
+		).outcomes
+
+		#expect((1...3).map { Array(outcomes.outcomes(of: $0)) } == [
+			[.captured(2)],
+			[.init(form: .readBeforeSendableFunction, declaration: 2)],
+			[.captured(2), .parameter],
+		])
+	}
+
+	@Test
+	func cellRule_followsChannelAndWhetherAnswerIsBeingBuilt_whenMadeFromRead() {
+		let rules = [ReadChannel.value, .optional, .alias, .madeAgain, .override, .fill, .family, .carrier, .mock].map {
+			TypeFactsOutcomes.Input.CellRule(channel: $0, isBeingBuilt: false)
+		}
+
+		#expect(rules == [.value, .value, .value, .value, .valueOutsideSendableFunctions, .value, .keysVariant, .keysVariant, .keysVariant])
+		#expect(TypeFactsOutcomes.Input.CellRule(channel: .value, isBeingBuilt: true) == .valueBeingBuilt)
+	}
+
+	@Test
+	func outcomes_makesLabelParameterOfSharedVariant_whenTwoParentsOfWorldsGraphEachBindIt() {
+		// The root builds 1 and 2 in line, which each build 3, which reads 0. Each binds 0 with the same answer (an `id`
+		// of one form) from its own declaration, so 3 has one variant, whose function takes `id`.
+		let graph = OrderedGraph(root: 0) { node in
+			[0: [1, 2], 1: [3], 2: [3]][node, default: []]
+		}
+		// A row of the reads is a node's position in the graph, which is in first-reach order.
+		let own = BitRows(rowCount: 4, columnCount: 1) { row, insert in
+			[[], [], [], [0]][graph.nodes[row]].forEach(insert)
+		}
+		let hidden = BitRows(rowCount: 4, columnCount: 1) { row, insert in
+			[[], [0], [0], []][graph.nodes[row]].forEach(insert)
+		}
+		let firstEdgeOfEachParent = [1, 2].map { graph.edgeOffset(of: graph.index(of: $0) ?? 0) }
+		let variants = TypeFactsVariants(
+			graph: graph,
+			reads: ReadsFromAbove(graph: graph, own: own, hidden: hidden),
+			rootAnswer: { _ in nil },
+			binding: { edge, _ in firstEdgeOfEachParent.firstIndex(of: edge).map { VariantBinding(answer: 7, declaration: Int32(1 + $0)) } },
+			family: { _, family in family },
+			key: { _, answer in answer },
+		)
+		let outcomes = TypeFactsOutcomes(.init(variants: variants) { _, _, _ in .value })
+
+		#expect(variants.count == 4)
+		#expect(Array(outcomes.outcomes(of: variants.callees(of: 1).first ?? -1)) == [.parameter])
+	}
+
+	@Test
 	func outcomes_doNotDependOnOrderOfCallEdges_whenEdgesAreReversed() {
 		// Six callers pass three statements and `nil` to one function, in every order the reversal gives.
-		let sources: [[TypeFactsOutcomes.Input.Source]] = [[.bound(1), .none], [.bound(1), .bound(1)], [.bound(2), .bound(1)], [.passedThrough(0), .bound(1)], [.bound(1), .bound(1)], [.bound(3), .bound(1)]]
+		let sources: [[AnswerSource]] = [[.bound(1), .none], [.bound(1), .bound(1)], [.bound(2), .bound(1)], [.passedThrough(0), .bound(1)], [.bound(1), .bound(1)], [.bound(3), .bound(1)]]
 		let worlds = [sources, sources.reversed()].map { order in
 			World(
 				variants: [.init(reads: [.value], calls: order.map { .init(callee: 1, sources: $0) }, rootSource: 1), .init(reads: [.value, .value])],
@@ -204,19 +264,21 @@ struct TypeFactsOutcomesTests {
 private struct World {
 	struct Call {
 		let callee: Int32
-		let sources: [TypeFactsOutcomes.Input.Source]
+		let sources: [AnswerSource]
 	}
 
 	struct Variant {
-		init(reads: [TypeFactsOutcomes.Input.CellRule], isInline: Bool = false, calls: [Call] = [], rootSource: Int32? = nil, rootSources: [Int32?]? = nil) {
+		init(reads: [TypeFactsOutcomes.Input.CellRule], isInline: Bool = false, family: VariantFamily = .plain, calls: [Call] = [], rootSource: Int32? = nil, rootSources: [Int32?]? = nil) {
 			self.reads = reads
 			self.isInline = isInline
+			self.family = family
 			self.calls = calls
 			self.rootSources = rootSources ?? reads.map { _ in rootSource }
 		}
 
 		let reads: [TypeFactsOutcomes.Input.CellRule]
 		let isInline: Bool
+		let family: VariantFamily
 		let calls: [Call]
 		/// What the world binds for each read, read only of the root.
 		let rootSources: [Int32?]
@@ -225,11 +287,12 @@ private struct World {
 	let variants: [Variant]
 
 	var input: TypeFactsOutcomes.Input {
-		var input = TypeFactsOutcomes.Input(readOffsets: [0], cellRules: [], isInline: [], callOffsets: [0], callees: [], sourceOffsets: [0], sources: [], rootSources: variants[0].rootSources)
+		var input = TypeFactsOutcomes.Input(readOffsets: [0], cellRules: [], isInline: [], families: [], callOffsets: [0], callees: [], sourceOffsets: [0], sources: [], rootSources: variants[0].rootSources.map { $0.map(AnswerSource.bound) ?? .none })
 		for variant in variants {
 			input.cellRules += variant.reads
 			input.readOffsets.append(Int32(input.cellRules.count))
 			input.isInline.append(variant.isInline)
+			input.families.append(variant.family)
 			for call in variant.calls {
 				input.callees.append(call.callee)
 				input.sources += call.sources
