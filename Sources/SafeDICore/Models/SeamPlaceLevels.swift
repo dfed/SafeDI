@@ -44,6 +44,22 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 		/// The declarations on the path the scope struct carries no field of, which hide the farther declarations of their
 		/// labels, in the order they are bound.
 		public let uncarriedProperties: [Property]
+		/// For the tests' checks only: the fields the hole carries today, a `@Sendable` function on the path included.
+		public var carriedFields: [Property] = []
+		/// For the tests' checks only: the declarations the hole carries no field of today, a `@Sendable` function on the path included.
+		public var carriedUncarriedProperties: [Property] = []
+		/// For the tests' checks only: whether the place is held in a `Sendable` wrapper, built in a `@Sendable` function of its own.
+		public var siteOpensSendableFunction = false
+		/// For the tests' checks only: the declarations a cycle that re-enters a scope on the path passes it, which the hole carries today
+		/// (`SeamSignature.Hole.cycleReentryDeclarations`).
+		public var carriedCycleReentryProperties: [Property] = []
+		/// For the tests' checks only: the declarations a fill's field of a seam parameter hides, which the hole carries today
+		/// (`SeamSignature.Hole.declarationsHiddenByFields`).
+		public var carriedHiddenByFieldProperties: [Property] = []
+		/// For the tests' checks only: the stack the hole's owner was built with, innermost first (`SeamSignature.Hole.fillPropertyStack`).
+		public var carriedStack: [Property] = []
+		/// For the tests' checks only: the concrete type of each entry of `carriedStack`.
+		public var carriedStackConcreteTypes: [TypeDescription] = []
 	}
 
 	/// What one scope on a place's path declares, in the order it binds the declarations, each marked by whether it is
@@ -61,6 +77,16 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 		/// any other type, its forwarded properties, then its children; for a fill, the declarations the filled seam's
 		/// struct does not carry, then the fields it binds.
 		public let declarations: [Declaration]
+		/// For the tests' checks only: whether the scope's builder function, or the fill, is `@Sendable`, enclosing what the level binds.
+		public var opensSendableFunction = false
+		/// For the tests' checks only: where a cycle-closing scope in its tree calls the scope's builder function, the declarations a scope
+		/// between the two binds, first per label (`declarationsBetween(closedOnScope:closedOnDeclaration:)`), which a place
+		/// beneath reads again where its nearest declaration of the label is outside the function.
+		public var reentryDeclarations: [Property] = []
+		/// For the tests' checks only: for a fill, the stack of the filled seam's path its tree is built beneath, innermost first.
+		public var fillBaseStack: [Property] = []
+		/// For the tests' checks only: the concrete type of each entry of `fillBaseStack`.
+		public var fillBaseConcreteTypes: [TypeDescription] = []
 
 		/// The values the level holds: the declarations bound before the next property.
 		public var fields: [Property] {
@@ -87,6 +113,10 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 			/// Whether the scope's builder function wraps it again as a member of a loop of builders
 			/// (`ScopeGenerator.reboundProperties`).
 			public var isReboundByBuilderFunction = false
+			/// For the tests' checks only: whether it is a parameter of the seam, which a fill reads from its caller's scope.
+			public var isSeamParameter = false
+			/// For the tests' checks only: for a fill's field, whether it is bound from a parameter of the filled seam.
+			public var isFieldOfSeamParameter = false
 		}
 	}
 

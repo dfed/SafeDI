@@ -141,6 +141,10 @@ public enum MockLowering {
 		let constructionAttributes: String?
 		/// What the construction returns: the concrete type, or what a hand-written mock returns.
 		let constructionReturnType: TypeDescription
+		/// Whether the construction is an actor's initializer, which takes each argument into the actor's isolation: the
+		/// construction function takes each `sending`, and so does the builder that overrides it
+		/// (`MockLowering.BuilderParameters`).
+		let sendsArguments: Bool
 		// A node beneath a repeated configured ancestor records only the construction it builds
 		// with, which declares a construction function (`ScopeGenerator.collectPublicConstructionNodes`).
 		/// Whether the record describes the type's module-level configuration too, as the node that records the

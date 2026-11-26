@@ -170,4 +170,12 @@ func callMockWithOverridesValue() {
 func makePresenterMock() -> MyPresenter {
 	MyPresenter.mock()
 }
+
+// “Dependencies instantiated only if available”: a mock whose module sees a type that fulfills a dependency a public mock
+// it calls takes a builder for builds that type, and takes an optional builder that replaces it.
+func callOptionalBuilderFillingMocks() {
+	let _: AppTrackerScreen = AppTrackerScreen.mock()
+	let _: AppTrackerScreen = AppTrackerScreen.mock(feedAnalyticsOptionalBuilder: { AppFeedAnalytics() })
+	let _: AppTrackerScreen = AppTrackerScreen.mock(feedAnalyticsOptionalBuilder: { nil })
+}
 #endif

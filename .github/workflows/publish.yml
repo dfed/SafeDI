@@ -59,8 +59,11 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Stamp version
         run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDIToolLibrary/SafeDITool.swift
+      # Built for speed, with the -O that `-c release` passes, never -Osize: every build that uses SafeDI pays the
+      # tool's run time. The frontend and linker flags only leave out code nothing calls. The Linux jobs below and
+      # ci.yml's "Build Release SafeDITool on Linux" build with the same optimization; change them together.
       - name: Build SafeDITool
-        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link -Xlinker -dead_strip
+        run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Xfrontend -Xswiftc -internalize-at-link -Xlinker -dead_strip
       - name: Strip binary
         run: strip -rSTx .build/*/release/SafeDITool
       - name: Give SafeDITool executable permissions
@@ -136,7 +139,7 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDIToolLibrary/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+        run: swift build -c release --product SafeDITool --static-swift-stdlib
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
       - name: Smoke test
@@ -182,7 +185,7 @@ jobs:
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDIToolLibrary/SafeDITool.swift
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+        run: swift build -c release --product SafeDITool --static-swift-stdlib
       - name: Strip binary
         run: strip -s .build/release/SafeDITool
       - name: Smoke test

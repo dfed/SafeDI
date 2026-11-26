@@ -351,6 +351,76 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		#expect(keyedTypes == ["DefaultService"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_asksOnlyMemoCandidatesItsContextAnswersAlike_whenScreensOpenEachOtherInCycles() async throws {
+		// Screen `i` opens screens `i + 1` and `i + 3` (modulo the count) through an `Instantiator`, so every screen is built
+		// inside many sets of other screens, and the memo keeps a candidate of its key for each set whose builders close
+		// other cycles. A lookup follows what its own context answers each of those reads, so it asks at most the one
+		// candidate built inside the same screens, at eight screens and at ten: asking each candidate of the key in turn
+		// asked dozens per lookup, and more with every screen.
+		var mostCandidatesAsked = [Int]()
+		var lookupCounts = [Int]()
+		for screenCount in [8, 10] {
+			var fixture = [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let screen0Builder: Instantiator<Screen0>"]),
+			]
+			for screen in 0..<screenCount {
+				fixture.append(seamFixtureType(named: "Screen\(screen)", isFinalClass: true, declarations: [1, 3].map {
+					"@Instantiated let screen\((screen + $0) % screenCount)Builder: Instantiator<Screen\((screen + $0) % screenCount)>"
+				}))
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			continuation.finish()
+			var candidatesAsked = [Int]()
+			for await work in stream where work.step == .askingMemoCandidates {
+				candidatesAsked.append(work.elementCount)
+			}
+			mostCandidatesAsked.append(candidatesAsked.max() ?? 0)
+			lookupCounts.append(candidatesAsked.count)
+		}
+		#expect(mostCandidatesAsked == [1, 1])
+		#expect(lookupCounts == [128, 224])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_filesNoMemoEntryUnderItsCycleReads_whenMockedRootBuildsChainOfFeatures() async throws {
+		// A root with a generated mock builds feature 0 through an `Instantiator`, which builds feature 1, and so on: no
+		// place is built twice, so each key of the memo holds one entry, which a lookup asks through its log. Filing each
+		// entry under its cycle reads listed the reads of every feature beneath it, which grew with the square of the
+		// chain's length: three times the time and five times the memory at 1,500 features.
+		var cycleReadsFiled = [Int]()
+		for featureCount in [20, 40] {
+			var fixture = [
+				seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Root", isFinalClass: true, declarations: [
+					"@Instantiated let service: Service",
+					"@Instantiated let feature0Builder: Instantiator<Feature0>",
+				]).replacingOccurrences(of: "@Instantiable", with: "@Instantiable(generateMock: true)"),
+			]
+			for feature in 0..<featureCount {
+				fixture.append(seamFixtureType(named: "Feature\(feature)", isFinalClass: true, declarations: ["@Received let service: Service"] + (
+					feature + 1 < featureCount ? ["@Instantiated let feature\(feature + 1)Builder: Instantiator<Feature\(feature + 1)>"] : []
+				)))
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			continuation.finish()
+			var filed = 0
+			for await work in stream where work.step == .filingMemoEntryReads {
+				filed += work.elementCount
+			}
+			cycleReadsFiled.append(filed)
+		}
+		#expect(cycleReadsFiled == [0, 0])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

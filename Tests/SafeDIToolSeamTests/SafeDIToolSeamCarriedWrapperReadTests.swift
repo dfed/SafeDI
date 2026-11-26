@@ -1045,20 +1045,20 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7C664E6434832B43.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1087,20 +1087,20 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: LazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner(token: LazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_9D577CDC1CB8596F.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: LazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner(token: LazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1129,20 +1129,20 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_553002D3D704FD49.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1171,20 +1171,20 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7C664E6434832B43.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1285,20 +1285,20 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Hub {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7C664E6434832B43.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1356,20 +1356,20 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		        }
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7C664E6434832B43.self // If this line does not compile, add the SafeDI plugin to the target that declares Outer.
-		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
-		            }
 		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
 		        }
 		        let outer: Outer = __safeDI_outer()
@@ -1402,26 +1402,26 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
+		        }
+		        func __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(token: values.token) })
+		        }
+		        func __safeDI_gadgetBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: token) })
+		        }
+		        func __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(gadget: { _ in __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: token) })
+		        }
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_DE8053B2BCF75EFD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
-		            }
-		            func __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(token: values.token) })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: token) })
-		            }
-		            func __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(gadget: { _ in __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: token) })
-		            }
 		            return Top(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Top())
 		        }
 		        let top: Top = __safeDI_top()
@@ -1454,26 +1454,26 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		            .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
+		        }
+		        func __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo> {
+		            .init(gizmo: { _ in
+		                let gizmo: any Gizmo = GizmoImpl(token: token.instance)
+		                return gizmo
+		            })
+		        }
+		        func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
+		        }
+		        func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>>> {
+		            .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: values_token) })
+		        }
+		        func __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		            .init(gadget: { _ in __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: token) })
+		        }
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_DE8053B2BCF75EFD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
-		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
-		            }
-		            func __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo> {
-		                .init(gizmo: { _ in
-		                    let gizmo: any Gizmo = GizmoImpl(token: token.instance)
-		                    return gizmo
-		                })
-		            }
-		            func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
-		            }
-		            func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>>> {
-		                .init(service: { values_token, values_leafBuilder in __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: values_token) })
-		            }
-		            func __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
-		                .init(gadget: { _ in __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: token) })
-		            }
 		            return Top(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Top())
 		        }
 		        let top: Top = __safeDI_top()

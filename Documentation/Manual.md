@@ -16,6 +16,8 @@ There are a total of five macros in the SafeDI library:
 | [`@Received`](#received) | Property declaration | Receives an instance or value from an `@Instantiated` or `@Forwarded` property further up the dependency tree. |
 | [`#SafeDIConfiguration`](#safediconfiguration) | Freestanding declaration | Provides build-time configuration for SafeDI’s code generation plugin. |
 
+SafeDI reads its attached macros, its wrappers and `MockGeneration` spelled with its module name (`@SafeDI.Instantiable`, `@SafeDI.Instantiated`, `SafeDI.Instantiator<T>`) as it reads their bare spellings.
+
 Let’s walk through each of these macros in detail.
 
 ### @Instantiable
@@ -318,6 +320,8 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
+The `@Instantiable` macro checks a type’s own initializer, or the hand-written mock its `mock()` calls: when it spells `@MainActor`, and nothing on the type or in the argument the generated declaration reads could make that declaration `@MainActor` too, the macro reports an error with a fix-it that adds `@MainActor`. It matches no actor by its name, so any attribute without arguments there keeps it quiet, as does an `#if` among the type’s attributes; `nonisolated` does not, since the generated declaration could not call the initializer either. It cannot see the initializers of the types a tree builds, nor an actor a type takes from its superclass or a protocol, so add those attributes yourself.
+
 A [public mock](#public-mocks) builds each type of its tree through a function SafeDI generates in that type’s extension, which repeats the attributes the type’s initializer, `instantiate(…)` or hand-written mock spells, exactly as written, so that function has the same isolation. It leaves out `@_spi`, `@backDeployed` and `@objc`, which that function cannot take. An attached macro there expands on that function too; if the macro cannot, give the type a hand-written `mock()` without it, which the public mock then builds the type with.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
@@ -343,7 +347,9 @@ Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
-An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
+An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it. A dependency that a parent may not have created is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies), and one whose type only some of your applications declare is instantiated with [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies).
+
+The type an `@Instantiated` SafeDI wrapper builds cannot itself be a SafeDI wrapper, as in `LazilyInstantiated<Instantiator<Screen>>`: SafeDI builds a wrapper’s value from an `@Instantiable` type, so declare the inner wrapper, `Instantiator<Screen>`, instead.
 
 In a SwiftUI `View`, `@Instantiated` objects are re-initialized each time SwiftUI recreates the view; see this [deep dive on SwiftUI view lifecycles](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
@@ -521,7 +527,7 @@ A type can also receive an instantiator declared above it, of any of the four ki
 
 A received property that is not an instantiator cannot close a cycle, a `LazilyInstantiated` one included. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. So does a router built as a value that receives `screenBuilder`, when the `Screen` it builds receives that router. Receive an instantiator of the property instead, or declare `@Received(onlyIfAvailable: true) let parent: Parent?`, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
 
-In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry, and neither does anything built through it. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
+In a generated mock, one dependency in each cycle of `@Instantiated` properties has no `SafeDIOverrides` entry of its own. A type the cycle builds again is built with the entry of the nearest place above it that builds the same type the same way (both with the type’s hand-written mock method, or both with its initializer), and so is everything built through it, so a mock’s overrides hold however many times a test goes around the loop. A type built through that dependency that nothing above it builds that way has no entry. Instantiators that receive one another each keep theirs, and each type they build is built with its entry.
 
 ### ErasedInstantiator
 
@@ -691,6 +697,39 @@ public struct Parent: Instantiable {
 An instantiator received only if available is `nil` only where no instantiator of that name is declared above the receiver, or where a property that is not an instantiator is waiting in the same circle. A type the instantiator builds, and an instantiator beside it that it receives and that receives it back, get the instantiator, as [Dependency cycles](#dependency-cycles) describes.
 
 A renamed dependency follows the same rules; see [Renaming and retyping dependencies](#renaming-and-retyping-dependencies).
+
+## Conditionally instantiating dependencies
+
+Use `@Instantiated(onlyIfAvailable: true)` to instantiate an optional dependency only when the code you build declares a type that fulfills it. This is useful for code shared between applications where only some of them implement a protocol — for example, a `CheckoutView` in a module that two applications use, only one of which detects fraud:
+
+```swift
+public protocol FraudDetector {}
+
+@Instantiable
+public struct CheckoutView: Instantiable {
+    public init(fraudDetector: (any FraudDetector)?) {
+        self.fraudDetector = fraudDetector
+    }
+
+    // Instantiated in an application that declares a type fulfilling `FraudDetector`; `nil` in one that declares none.
+    @Instantiated(onlyIfAvailable: true) private let fraudDetector: (any FraudDetector)?
+}
+```
+
+The first application declares the type, and the second declares nothing:
+
+```swift
+@Instantiable(fulfillingAdditionalTypes: [FraudDetector.self])
+public struct DefaultFraudDetector: FraudDetector, Instantiable {
+    public init() {}
+}
+```
+
+SafeDI instantiates the property wherever an `@Instantiable` declaration it reads fulfills the property’s type, or the type its `fulfilledByType:` names. Where none does, the property is `nil`, with no warning: the second application needs no do-nothing implementation. A declaration that is [`mockOnly`](#the-mockonly-parameter) fulfills the type only for mocks, so it does not make the property available.
+
+The property’s type must be optional, spelled with one `?`, and the macro checks it, with a fix-it. Whether or not SafeDI instantiates the property, it is the [nearest declaration](#received) of its label for the types beneath it, which receive it as the optional it is declared as: with `@Received`, or with `@Received(onlyIfAvailable: true)`. A type beneath it never receives the dependency as a non-optional type, since the same code must build in an application that does not declare the type.
+
+The module of a [seam](#generating-a-dependency-tree-per-module) cannot see what the applications that call it declare. When no declaration the seam’s module reads fulfills such a property in the seam’s tree, the seam’s generated initializer takes a builder that returns the optional type, as it does for [a protocol only the application implements](#generating-a-dependency-tree-per-module): an application that declares a fulfilling type builds it there, and one that declares none passes `nil`, with no error.
 
 ## Renaming and retyping dependencies
 
@@ -929,17 +968,17 @@ A tree that calls the seam fills the builder when its module can see an implemen
 
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
+func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
+    .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
+}
+func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
+    .init(userService: {
+        let userService: any UserService = DefaultUserService(analytics: analytics)
+        return userService
+    })
+}
 func __safeDI_service() -> Service {
     _ = Service.__safeDI_Service_88819F20AD4FA546.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder_Service() -> Service.__safeDI_UserServiceCarrier<any UserService> {
-        .init(profile: { values_analytics in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values_analytics) })
-    }
-    func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.__safeDI_UserServiceCarrier_Profile<any UserService> {
-        .init(userService: {
-            let userService: any UserService = DefaultUserService(analytics: analytics)
-            return userService
-        })
-    }
     return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 }
 ```
@@ -1066,7 +1105,7 @@ A labeled default-valued `@autoclosure` parameter, such as `retries: @autoclosur
 
 Declare a default-valued parameter whose type is a typealias of a function type `@escaping`, as in `onFinish: @escaping Handler = {}`. Where a type beneath the mocked type declares one, its `SafeDIMockConfiguration` stores the value, and SafeDI cannot see that the typealias names a function type, so without `@escaping` the mock does not compile.
 
-Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call.
+Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call. The same holds for a type the mock builds for an argument of an actor’s initializer, down to the first `Instantiator` or `LazilyInstantiated` on the way, in an internal or a public mock: Swift needs that argument to share no state with the mock’s overrides, so the type’s override closures and default-valued parameters are `@Sendable` too, and an override of the actor takes each argument `sending`, which an override written as `{ worker in Store(worker: worker) }` already does.
 
 #### Dependency kinds in the generated mock
 
@@ -1118,6 +1157,8 @@ To give every type its own instance, as the app does, declare a [`mockOnly`](#th
 **Lazily instantiated dependencies.** A [lazily instantiated](#lazilyinstantiated) dependency is overridden like any other `@Instantiated` dependency: its entry is a closure that returns the instance, which the mock calls the first time the instance is read. A type’s generated mock therefore has the same parameters whether the dependencies it receives are lazily instantiated or not.
 
 **Dependencies received only if available.** A `@Received(onlyIfAvailable: true)` dependency gets an optional entry only when every type in the tree that receives it, renames included, receives it only if available. It has no entry of its own when the mock builds it anyway: when the mocked type instantiates it, or another type in the tree requires it. When nothing fulfills it and another type requires it, it is a required flat parameter. Where production passes a receiver `nil`, such as one built inside the instance it receives, the mock passes `nil` too, and offers no entry that only that receiver would read. Production passes `nil`, and so does the mock, to a receiver of `token: Token?` above or below a type that requires `token: Instantiator<Token>` from the same declaration, or on that type through a rename, since that declaration can only be the instantiator. The entry defaults to `nil` also where production passes an instantiator declared above the mocked type, since the mock does not build what is above that type. Where the mock builds the instantiator, a type that receives it gets it, as in production.
+
+**Dependencies instantiated only if available.** An [`@Instantiated(onlyIfAvailable: true)`](#conditionally-instantiating-dependencies) dependency whose type nothing fulfills, not even a [`mockOnly`](#the-mockonly-parameter) declaration, gets an optional entry too, which defaults to `nil`, the value production gives it: one entry for its label and type, wherever in the tree it is declared. Pass a value to test the code that runs when an application declares the type. Only the types that declare the dependency, and the types beneath them that receive it, get the value. The dependency has no entry, and stays `nil`, where the mock already takes another value of its label and type, and in a type built by a `SendableInstantiator`, a `SendableErasedInstantiator` or a `SendableLazilyInstantiated`. A [public mock](#public-mocks) takes a builder for such a dependency instead of an entry, as it does for any type its module cannot build: `mock(analyticsOptionalBuilder:)` for an `analytics: (any Analytics)?`, a function that returns the optional value and defaults to one that returns `nil`. A mock in another module whose tree calls that public mock builds, at each place, a type its own module sees that fulfills the dependency, as production does there, and takes an optional builder, `analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil`, which replaces that type where a test passes it. Where its module sees no such type either, it takes the builder, defaulting to one that returns `nil`, and passes it to the public mock.
 
 **Renames.** A mock resolves each `@Received` dependency from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` builds `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`, and otherwise takes it as a required parameter. An entry for a composition such as `(EventTracker & CrashReporter).self` does not cover its members. So a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each; pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
@@ -1350,6 +1391,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 **Holes.**
 
 - A [hole](#generating-a-dependency-tree-per-module) – here, a type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – takes a required builder under the seam’s label, which takes what the hole’s places forward and nothing else: where no place forwards a value, it takes nothing, as `feedServiceBuilder` [below](#calling-a-public-mock-from-another-module) does. Places built in a `Sendable` function take a `@Sendable` builder of their own, labeled `…SendableBuilder`. A `mockOnly` stub that fulfills the hole’s type, in the module or one it depends on, removes the builder: the mock builds the stub, and production still fills the hole. As for a seam, one builder fills every place of its type, so those places must forward the same values, or SafeDI reports an error.
+- A type the tree instantiates [only if available](#dependency-kinds-in-the-generated-mock) that nothing the module sees fulfills is a hole too. Its builder returns the optional value, is labeled after the type with `Optional` before `Builder`, as `analyticsOptionalBuilder` is for an `(any Analytics)?`, and defaults to one that returns `nil`, the value production gives the property.
 
 Beside each tier’s `mock()`, a public mock has a `__safeDI_mock(…)`, which that `mock()` calls, and which takes each builder as a struct. Only generated code calls it: a mock another module generates calls it, never `mock()`. Its shape can change in any release, as the seam’s initializer for generated code can. Each generated call of a public mock names an empty enum that encodes the mock’s signature, so a call generated against an older signature fails to compile at the call.
 
@@ -1388,7 +1430,7 @@ Also:
   - a place whose implementation calls a public mock that passes a place up for one of these reasons.
 
   SafeDI decides this once for your module, for each public mock and type of place: every mock in the module that calls that public mock takes the builder, a `.public` mock included, even where the same module fills places of that type that other public mocks hold.
-- An internal mock takes one builder for each hole type its calls pass up, as a required parameter of its own for the test to supply, labeled as a seam labels a builder: `serviceBuilder`, with a trailing `_`, as in `serviceBuilder_`, when another parameter has its name. The places it passes up to one builder must forward the same values, or SafeDI reports an error. A public mock takes a builder of its own for the place, which its callers supply, as a seam passes an inner seam’s places up.
+- An internal mock takes one builder for each hole type its calls pass up, as a required parameter of its own for the test to supply (one for a type instantiated only if available defaults to one that returns `nil`), labeled as a seam labels a builder: `serviceBuilder`, with a trailing `_`, as in `serviceBuilder_`, when another parameter has its name. The places it passes up to one builder must forward the same values, or SafeDI reports an error. A public mock takes a builder of its own for the place, which its callers supply, as a seam passes an inner seam’s places up.
 - The calling mock takes an optional builder for each hole type whose places its calls fill, such as `apiBuilder: (() -> any Api)? = nil`, under the label it would take a required builder of that type under. Passed, it replaces every fill of that type in every call the mock makes, and an override of a called type is handed it in place of the fill; left `nil`, the fills build the places. A place built inside a `@Sendable` function, as a `SendableInstantiator` builds one, takes the `@Sendable` builder of its type, such as `apiSendableBuilder`, so pass both to replace every place of the type. Where the mock also passes up a place of the type, it takes the one required builder, which then builds the places its calls fill too. An override or a builder replaces everything beneath what it builds. Where your module builds another module’s public type inline instead of calling its mock, as it does when it can call the type’s initializer and build its whole tree, the builder also replaces each place of that tree that the type’s own module cannot fill, including one held in an instantiator or `LazilyInstantiated` and one inside a fill, unless your overrides replace that place. A public mock takes these builders as well; generated code that calls it never passes them, so its own fills build those places.
 - A place a public mock fills itself never reaches a builder that generated code calling it passes. Generated code that calls that mock fills such a place too where it can, and otherwise passes it up with the rest, so an internal mock can take a builder that is never called.
 - A mock tree that reaches a type whose declaring module SafeDI does not know builds it inline where it can, and otherwise fails as [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) describes.
@@ -1407,7 +1449,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
 ]
 ```
 
@@ -1508,13 +1550,13 @@ targets: [
 
 You can see this integration in practice in the [Example Package Integration](../Examples/Example%20Package%20Integration) package.
 
-Unlike the Xcode project plugin, the Swift package plugin finds the source files of dependent modules itself. It reads the modules of your package and of the packages it depends on by path, but not those of a package it fetches from a URL. To build an `@Instantiable` type a fetched package declares, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration`; SafeDI then knows no module for those types, with the limits [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) lists. If SafeDI’s generated code is missing required imports, list the modules in [`additionalImportedModules`](#safediconfiguration).
+Unlike the Xcode project plugin, the Swift package plugin finds the source files of dependent modules itself. It reads the modules of your package and of the packages it depends on by path, but not those of a package it fetches from a URL or a package registry, as SwiftPM reports each package’s origin, wherever the package is kept. To build an `@Instantiable` type a fetched package declares, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration`; SafeDI then knows no module for those types, with the limits [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) lists. Where the checkout directory is depends on the build folder: `swift build` keeps it at `.build/checkouts/<package>` in your package, or under the folder `--scratch-path` names, and Xcode keeps it in the project’s DerivedData folder, under `SourcePackages/checkouts/<package>`. SafeDI resolves a relative entry against your package’s directory under `swift build`, so `.build/checkouts/<package>` finds the package only in a build that uses the default build folder; a build that keeps its checkouts elsewhere reads nothing from that entry, and SafeDI warns at the configuration that nothing exists at its path. If SafeDI’s generated code is missing required imports, list the modules in [`additionalImportedModules`](#safediconfiguration).
 
 > **Note:** On Swift 6.4 or later, `swift build` can fail for a target with a couple thousand or more input files with `sandbox-exec: data object length … exceeds maximum (65535)`. Xcode is not affected. Build with `swift build --build-system native`, or with `swift build --disable-sandbox`, which turns off sandboxing for every plugin and package manifest in the build.
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.3.4")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.4.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1579,7 +1621,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.4"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.0"),
 ]
 ```
 
@@ -1954,7 +1996,7 @@ Each of these errors says what to change.
 - **A hole’s implementation that reads a value of a seam’s tree, at a place an inner seam passes up.** Say a seam `Shared` instantiates `db` and calls the seam `ScreenA`, whose `api: any Api` only the app implements, and the app’s `LiveApi` receives `db`. Inline, `LiveApi` reads `Shared`’s `db`, but `Shared` passes `ScreenA`’s builder on from its own caller, which cannot hand it `Shared`’s values. Declare `@Received let db: Db` on `ScreenA`, so its builder is handed `db`, or implement `Api` in `Shared`’s module or a module it lists among its SafeDI dependencies. A mock that calls `Shared`’s public mock reports the same error for a fake that receives `db`, as [Calling a public mock from another module](#calling-a-public-mock-from-another-module) describes.
 - **A hole’s implementation that reads a value bound on the way to a seam built again.** When a seam’s tree builds the seam again, directly or through another seam of its module, the builders it took are handed on to that call. So the caller that fills a builder cannot hand its implementation a value the tree declares on that path.
 - **A hole’s implementation that builds the seam again and reads a value only the place it fills carries.** Say a seam’s `CartScreen` forwards `cart` and holds a place of a hole, and the implementation in another module receives `cart`, even only if available, and instantiates the seam again. Inline, the seam built again sits beneath that screen, so a place of it outside every screen reads the screen’s `cart`. A builder hands that place no `cart`, so it would read `nil` or another value. Receive the value on the seam, as `@Received(onlyIfAvailable: true) let cart: Cart?`, so the call passes it on, or implement the hole in the seam’s module. Where a `@Sendable` function builds the place, as a `SendableInstantiator` does, no value the seam receives reaches it, so implement the hole in the seam’s module. A type of the seam’s tree that receives the value is reported at the call.
-- **A hole’s implementation that reads a value declared on a cycle in the seam’s tree, between where a type is instantiated and where the cycle instantiates it again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the value declared at its own level of the cycle, but a builder hands its implementation the same values at every level. A value declared above the cycle, or by the type built again, is the same in both, and is no error, so receive the value on the type built again.
+- **A hole’s implementation that reads a value declared on a cycle in the seam’s tree, between where a type is instantiated and where the cycle instantiates it again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the value declared at its own level of the cycle, but a builder hands its implementation the same values at every level. The same holds for a value that a second cycle through one of the types between declares, which inline reaches the type built again through that cycle. It holds, too, where the cycle is in the tree of another type that generates its dependency tree, around the property that instantiates the type whose hole it is: there, receive the value on the type whose hole it is. A value declared above the cycle, or by the type built again, is the same in both, and is no error, so receive the value on the type built again.
 - **A hole’s implementation that receives an instantiator the seam’s tree instantiates.** Say a seam declares `@Instantiated let detailBuilder: ErasedInstantiator<(), any Detail>`, and the type that implements `Detail` in another module receives `detailBuilder` to open itself again. Inline, it gets an instantiator of its own, as [Dependency cycles](#dependency-cycles) describes, but that instantiator builds through a function inside the seam’s initializer, which the caller cannot refer to. The same holds for an instantiator that builds a type on the way to the hole, and for one the seam builds after the hole, such as the instantiator of a second hole whose implementation receives the first one back. Declare the instantiator on a type above the seam instead, and receive it in the seam’s tree, where everything its tree receives, its holes’ implementations included, comes from outside the seam too. Otherwise, where the instantiator is built after a property that leads to the hole, and no other module implements a hole of the instantiator’s tree, declare both on one type of the implementation’s module, and have the seam instantiate a protocol that type fulfills in their place.
 
 #### Trees a seam builds differently
@@ -1995,10 +2037,13 @@ internal import Foundation
 To pick a level, SafeDI must know which module declares each type a generated declaration names. For a type whose declaration it does not read, it assumes:
 
 - every module your files import at the level of the declaration that names the type, or wider;
-- Foundation, for Foundation’s common types;
-- for other types, every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
+- every module that a dependency’s file imports at `package` or wider, when that file’s `@Instantiable` declaration names the type in a dependency or an initializer parameter. An import there that spells no level tells SafeDI nothing: spell it at the level of the declaration that names the type.
 
-This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name. To silence the warning, import that module below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
+The same holds for the standard library’s and Foundation’s types, such as `String` or `URL`: SafeDI never decides which module declares a type from its name, since any module may declare its own `Calendar` or `Result`.
+
+So when a module spells import levels, every module whose types its seams and public mocks name must spell them too. If a dependency’s file writes `import Foundation` and its `public init(url: URL)` reaches a seam’s initializer, the generated file imports Foundation too narrowly, and the compiler reports that the initializer “cannot be declared public because its parameter uses an internal type”. Write `public import Foundation` in that dependency’s file.
+
+This assumption can be too broad. A file whose `public` declaration names a type SafeDI reads no declaration of imports, `public`, every module SafeDI assumes for that type, and the compiler warns at one whose types the file does not name (“public import of 'Combine' was not used in public declarations or inlinable code”). To silence the warning, spell the type with its module’s name where your declaration names it (`public init(url: Foundation.URL)`), which tells SafeDI the one module that declares it. For a module only your own files import `public`, you can instead import it below `public` (`internal import Analytics`) in your files that declare SafeDI content, unless one of their `public` declarations needs it.
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
@@ -2106,7 +2151,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.3.4"`
+2. Update your SafeDI dependency to `from: "2.4.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 

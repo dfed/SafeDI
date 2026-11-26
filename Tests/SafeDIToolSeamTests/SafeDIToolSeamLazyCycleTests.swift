@@ -73,11 +73,11 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_t1Builder t1Builder: Instantiator<T1>) {
+			        func __safeDI_t1Builder_() -> T1 {
+			            T1()
+			        }
 			        func __safeDI_t0Builder() -> T0 {
-			            func __safeDI_t1Builder() -> T1 {
-			                T1()
-			            }
-			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder_)
 			            func __safeDI_t3Builder() -> T3 {
 			                _ = T3.__safeDI_T3_637A336A650792AD.self
 			                return T3(__safeDI_t1Builder: t1Builder)
@@ -584,11 +584,11 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_t1Builder t1Builder: Instantiator<T1>) {
+			        func __safeDI_t1Builder_() -> T1 {
+			            T1()
+			        }
 			        func __safeDI_t0Builder() -> T0 {
-			            func __safeDI_t1Builder() -> T1 {
-			                T1()
-			            }
-			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder_)
 			            func __safeDI_t3() -> T3 {
 			                _ = T3.__safeDI_T3_637A336A650792AD.self
 			                return T3(__safeDI_t1Builder: t1Builder)
@@ -671,25 +671,25 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: A = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
+			        }
 			        let a: A = __safeDI_a()
 			        func __safeDI_d() -> D {
-			            func __safeDI_eBuilder() -> E {
-			                let d = LazilyInstantiated<D>(__safeDI_d)
-			                return E(d: d)
-			            }
 			            let eBuilder = Instantiator<E>(__safeDI_eBuilder)
 			            return D(eBuilder: eBuilder)
+			        }
+			        func __safeDI_eBuilder() -> E {
+			            let d = LazilyInstantiated<D>(__safeDI_d)
+			            return E(d: d)
 			        }
 			        let d: D = __safeDI_d()
 			        self.init(a: a, d: d)
@@ -809,28 +809,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        func __safeDI_aBuilder(theme: (any Hub.Space.Theme)?) -> A {
+		        func __safeDI_aBuilder() -> A {
 		            func __safeDI_service() -> Service {
 		                _ = Service.__safeDI_Service_DC70414D97AA0952.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                return Service()
 		            }
 		            let service: Service = __safeDI_service()
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_theme() -> AppTheme {
-		                    let aBuilder = Instantiator<A> {
-		                        __safeDI_aBuilder(theme: nil)
-		                    }
-		                    return AppTheme(aBuilder: aBuilder)
-		                }
-		                let theme: any Hub.Space.Theme = __safeDI_theme()
-		                return Mid(theme: theme)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(service: service, midBuilder: midBuilder)
 		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(theme: nil)
+		        func __safeDI_midBuilder() -> Mid {
+		            let theme: any Hub.Space.Theme = __safeDI_theme()
+		            return Mid(theme: theme)
 		        }
+		        func __safeDI_theme() -> AppTheme {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return AppTheme(aBuilder: aBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        self.init(aBuilder: aBuilder)
 		    }
 		}

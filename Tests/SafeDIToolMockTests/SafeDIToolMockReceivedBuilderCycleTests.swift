@@ -2783,7 +2783,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            func __safeDI_innerABuilder() -> A {
 			                func __safeDI_innerBBuilder() -> B {
 			                    let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
-			                    return B(innerABuilder: innerABuilder)
+			                    return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(innerABuilder) } else { B(innerABuilder: innerABuilder) }
 			                }
 			                let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
 			                return A(innerBBuilder: innerBBuilder, qBuilder: qBuilder)
@@ -2801,7 +2801,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            func __safeDI_innerBBuilder() -> B {
 			                func __safeDI_innerABuilder() -> A {
 			                    let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
-			                    return A(innerBBuilder: innerBBuilder, qBuilder: qBuilder)
+			                    return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(innerBBuilder, qBuilder) } else { A(innerBBuilder: innerBBuilder, qBuilder: qBuilder) }
 			                }
 			                let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
 			                return if let safeDIBuilder = safeDIOverrides.aBuilder.innerBBuilder.safeDIBuilder { safeDIBuilder(innerABuilder) } else { B(innerABuilder: innerABuilder) }

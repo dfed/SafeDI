@@ -915,6 +915,14 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	}
 
 	@Test
+	func drawFeatures_readOuterFulfillerShape_whenSeedsDrawIt() {
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		#expect((0..<60).filter { features(ofSeed: $0).contains(.outerFulfillerPublicMockCall) } == [2, 5, 11, 23, 25, 47, 57])
+	}
+
+	@Test
 	func drawFeatures_readHoleLabelShapes_whenSeedsDrawThem() {
 		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
 			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))

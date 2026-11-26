@@ -159,7 +159,7 @@ extension MockLowering {
 extension ScopeGenerator {
 	/// The property this generator's node builds, where it is a node that builds one rather than an alias.
 	nonisolated var mockLoweringBuiltProperty: Property? {
-		if case let .property(_, property, _, _, _, _) = scopeData {
+		if case let .property(_, property, _, _, _, _) = scopeData, !isUnavailableDependency {
 			property
 		} else {
 			nil

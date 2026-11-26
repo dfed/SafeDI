@@ -254,7 +254,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.a = { _ in __safeDI_builder }
+		                self.init(a: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -357,7 +357,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.a = { _ in __safeDI_builder }
+		                self.init(a: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -379,7 +379,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                    self.o = { _ in __safeDI_builder }
+		                    self.init(o: { _ in __safeDI_builder })
 		                }
 		            }
 		        }
@@ -393,7 +393,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.child = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(child: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -510,7 +510,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.a2 = { _ in __safeDI_builder }
+		                self.init(a2: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -604,7 +604,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.a = { _ in __safeDI_builder }
+		                self.init(a: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -626,7 +626,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                    self.a2 = { _ in __safeDI_builder }
+		                    self.init(a2: { _ in __safeDI_builder })
 		                }
 		            }
 		        }
@@ -640,7 +640,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(inner: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -775,15 +775,15 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_apiBuilder__Host() -> Host.__safeDI_ApiCarrier<any Api> {
+		            .init(api: { scope_apiBuilder in
+		                let api: any Api = Live()
+		                return api
+		            })
+		        }
 		        func __safeDI_holderBuilder(apiBuilder: Int) -> Holder {
 		            func __safeDI_host() -> Host {
 		                _ = Host.__safeDI_Host_BF70F492F1E5D486.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                func __safeDI_apiBuilder__Host() -> Host.__safeDI_ApiCarrier<any Api> {
-		                    .init(api: { scope_apiBuilder in
-		                        let api: any Api = Live()
-		                        return api
-		                    })
-		                }
 		                return Host(__safeDI_apiBuilder: apiBuilder, __safeDI_apiBuilder_: __safeDI_apiBuilder__Host())
 		            }
 		            let host: Host = __safeDI_host()
@@ -1004,20 +1004,20 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_impl_Api_ImplBuilder_Host() -> Host.__safeDI_Impl_Api_ImplCarrier<any Api> {
+		            .init(api: {
+		                let api: any Api = Impl()
+		                return api
+		            })
+		        }
+		        func __safeDI_impl_Api_Impl_ApiBuilder_Host() -> Host.__safeDI_Impl_Api_Impl_ApiCarrier<any Impl_Api> {
+		            .init(implApi: { scope_api in
+		                let implApi: any Impl_Api = LiveImplApi()
+		                return implApi
+		            })
+		        }
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_062D71729FD4D920.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_impl_Api_ImplBuilder_Host() -> Host.__safeDI_Impl_Api_ImplCarrier<any Api> {
-		                .init(api: {
-		                    let api: any Api = Impl()
-		                    return api
-		                })
-		            }
-		            func __safeDI_impl_Api_Impl_ApiBuilder_Host() -> Host.__safeDI_Impl_Api_Impl_ApiCarrier<any Impl_Api> {
-		                .init(implApi: { scope_api in
-		                    let implApi: any Impl_Api = LiveImplApi()
-		                    return implApi
-		                })
-		            }
 		            return Host(__safeDI_impl_Api_ImplBuilder: __safeDI_impl_Api_ImplBuilder_Host(), __safeDI_impl_Api_Impl_ApiBuilder: __safeDI_impl_Api_Impl_ApiBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()

@@ -2559,7 +2559,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(fixture.swiftFileContent.last == """
 		@Instantiable(generateMock: true)
 		extension S35_Ext: Instantiable {
-			public static func instantiate(t4: S35_T6, title: String = "default", retryCount: Int = 3, _ note: String = "") -> S35_Ext {
+			public static func instantiate(t4: S35_T6, title: String = "default", retryCount: Int = 3, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3, _ note: String = "") -> S35_Ext {
 				S35_Ext(t4: t4, title: title, retryCount: retryCount, note: note)
 			}
 		}
@@ -2584,7 +2584,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(GraphFuzzerGenerator.fixture(forSeed: 35).swiftFileContent.last == """
 		@Instantiable(generateMock: true)
 		extension S35_Ext: Instantiable {
-			public static func instantiate(t4: S35_T6, title: String = "default", retryCount: Int = 3, _ note: String = "") -> S35_Ext {
+			public static func instantiate(t4: S35_T6, title: String = "default", retryCount: Int = 3, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3, _ note: String = "") -> S35_Ext {
 				S35_Ext()
 			}
 		}
@@ -2645,7 +2645,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(fixture.swiftFileContent.last == """
 		@Instantiable
 		extension S296_Ext: Instantiable {
-			public static func instantiate(t3Builder: Instantiator<S296_T3>, retryCount: Int = 3, _ note: String = "") -> S296_Ext {
+			public static func instantiate(t3Builder: Instantiator<S296_T3>, retryCount: Int = 3, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3, _ note: String = "") -> S296_Ext {
 				S296_Ext(t3Builder: t3Builder, retryCount: retryCount, note: note)
 			}
 		}
@@ -2668,7 +2668,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(GraphFuzzerGenerator.fixture(forSeed: 296).swiftFileContent.last == """
 		@Instantiable
 		extension S296_Ext: Instantiable {
-			public static func instantiate(t3Builder: Instantiator<S296_T3>, retryCount: Int = 3, _ note: String = "") -> S296_Ext {
+			public static func instantiate(t3Builder: Instantiator<S296_T3>, retryCount: Int = 3, pollInterval: @autoclosure @escaping @Sendable () -> Int = 3, _ note: String = "") -> S296_Ext {
 				S296_Ext()
 			}
 		}

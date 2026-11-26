@@ -48,7 +48,15 @@ CORPUS_SEED_COUNTS = {"base": 5000, "seam": 2000, "public-mock": 1000}
 # probes spent the batch's traversals and are now compared on their own (629,
 # seamCorpusAcceptedSeedCount's graphs that 2.3.0 accepts), and 897 public mock
 # graphs, publicMockCorpusAcceptedSeedCount.
-COMPARED_GRAPH_FLOORS = {"base": 2400, "seam": 560, "public-mock": 800}
+# Public mock, lowered to 650: one public mock graph in five takes a `@Sendable`
+# autoclosure with a default (`drawsSendableAutoclosureDefault`), whose public
+# mock 2.3.0 takes as `(() -> T)?` and captures in a `@Sendable` function, so
+# its code does not compile ("implicit capture of 'pollInterval' requires that
+# '() -> Int' conforms to 'Sendable'") and the graph is class A. Of the 205
+# graphs that draw it, 161 that both releases compare with the roll off are
+# class A with it on, and no other graph changes class; run 45517807548
+# compared 685.
+COMPARED_GRAPH_FLOORS = {"base": 2400, "seam": 560, "public-mock": 650}
 
 reports_directory = sys.argv[1]
 expected_shard_counts = {}

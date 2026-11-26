@@ -103,6 +103,7 @@ let package = Package(
 				"SafeDICore/Models/SeamPlaceLevels.swift",
 				"SafeDICore/Models/SeamSignature.swift",
 				"SafeDICore/Models/SourceDiagnostic.swift",
+				"SafeDICore/Models/StoredPublicMockPlan.swift",
 				"SafeDICore/Models/TypeAccessProof.swift",
 				"SafeDICore/Models/TypeRequirements.swift",
 				"SafeDICore/Models/WithoutPositions.swift",
@@ -167,8 +168,8 @@ let package = Package(
 		),
 		.binaryTarget(
 			name: "SafeDIToolBinary",
-			url: "https://github.com/dfed/SafeDI/releases/download/2.3.4/SafeDITool.artifactbundle.zip",
-			checksum: "25b24f51ccf4c88bb388e787553f2d155378e49313944c604dc3a01620e6007e",
+			url: "https://github.com/dfed/SafeDI/releases/download/2.4.0/SafeDITool.artifactbundle.zip",
+			checksum: "b70746ec576b226e5c246182403a6877bbd51eb63673f88cb6d0cb31426a232b",
 		),
 		// The tool's commands live in a library, and the executable only runs them, so that
 		// what tests the commands depends on a library, which every build system builds

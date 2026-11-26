@@ -34,6 +34,9 @@ extension MockLowering {
 		let isAutoclosure: Bool
 		let isClosureType: Bool
 		let isDeclaredEscaping: Bool
+		/// Whether the parameter is a `@Sendable` `@autoclosure`, whose closure a configuration stores `@Sendable`, since
+		/// the autoclosure the construction is passed captures it.
+		let isSendableAutoclosure: Bool
 
 		init(of parameter: ScopeGenerator.DefaultParameter, handWrittenMockDefaultParameters: [ScopeGenerator.DefaultParameter]) {
 			label = parameter.label
@@ -44,6 +47,7 @@ extension MockLowering {
 			isAutoclosure = parameter.isAutoclosure
 			isClosureType = parameter.isClosureType
 			isDeclaredEscaping = parameter.isDeclaredEscaping
+			isSendableAutoclosure = MockLowering.isSendableAutoclosure(parameter.typeDescription)
 		}
 
 		/// The field's parameter of the configuration's initializer, at `indent`, and the field its storage holds, in a
@@ -52,8 +56,8 @@ extension MockLowering {
 			if isAutoclosure {
 				// Evaluated where the type is built: the configuration stores a closure, which the construction calls.
 				(
-					parameter: "\(indent)\(label): @autoclosure @escaping () -> \(valueTypeSource) = \(ScopeGenerator.autoclosureDefault(defaultExpression))",
-					field: Self.field(named: label, typeSource: "() -> \(valueTypeSource)", parameterTypeSource: "@escaping () -> \(valueTypeSource)"),
+					parameter: "\(indent)\(label): @autoclosure @escaping \(closureTypeSource) = \(ScopeGenerator.autoclosureDefault(defaultExpression))",
+					field: Self.field(named: label, typeSource: closureTypeSource, parameterTypeSource: "@escaping \(closureTypeSource)"),
 				)
 			} else if isClosureType {
 				(
@@ -68,6 +72,11 @@ extension MockLowering {
 			}
 		}
 
+		/// The closure an `@autoclosure` parameter's field stores, spelled: `@Sendable` where the parameter's autoclosure is.
+		private var closureTypeSource: String {
+			"\(isSendableAutoclosure ? "@Sendable " : "")() -> \(valueTypeSource)"
+		}
+
 		/// The type of the value the parameter takes, spelled.
 		var valueTypeSource: String {
 			valueTypeDescription.asSource
@@ -76,7 +85,7 @@ extension MockLowering {
 		/// The type of the value a public mock's configuration and construction function take for the field: an
 		/// `@autoclosure` parameter's as a closure that returns its value.
 		var publicValueType: TypeDescription {
-			isAutoclosure ? .closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueTypeDescription) : valueTypeDescription
+			isAutoclosure ? MockLowering.closureTaken(forAutoclosureReturning: valueTypeDescription, isSendable: isSendableAutoclosure) : valueTypeDescription
 		}
 
 		/// The default a public mock resolves the field with: an `@autoclosure` parameter's wrapped in a closure.
@@ -103,6 +112,21 @@ extension MockLowering {
 	}
 }
 
+extension MockLowering {
+	/// Whether `typeDescription`, without `@escaping`, is a `@Sendable` `@autoclosure`.
+	static func isSendableAutoclosure(_ typeDescription: TypeDescription) -> Bool {
+		guard case let .attributed(_, _, attributes) = typeDescription.strippingEscaping else { return false }
+		return attributes.contains("autoclosure") && attributes.contains("Sendable")
+	}
+
+	/// The closure a public mock takes in place of an `@autoclosure` parameter returning `valueType`: `@Sendable` where
+	/// the autoclosure is, which captures it.
+	static func closureTaken(forAutoclosureReturning valueType: TypeDescription, isSendable: Bool) -> TypeDescription {
+		let closure = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType)
+		return isSendable ? closure.asSendableFunction : closure
+	}
+}
+
 extension MockLowering.Walk {
 	/// The fields of the configuration of a node of `instantiable` for its construction's default-valued parameters, with
 	/// the defaults the type's hand-written mock declares. A node built with its type's hand-written mock
@@ -118,6 +142,15 @@ extension MockLowering.Walk {
 	/// generates (`UnfulfilledMockParameter`) and which the emitter reads as it reads a default (`resolveBuilderArguments`).
 	mutating func constructionReadsConfiguration(of instantiable: Instantiable, usesMockInitializer: Bool) -> Bool {
 		Self.readsConfiguration(mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer), given: instantiable)
+	}
+
+	/// Whether the construction of a node of `instantiable` passes a default it reads from its configuration to a
+	/// `@Sendable` `@autoclosure`, which would capture the overrides the read names: its builder function then reads the
+	/// configuration into locals before it, as a `@Sendable` builder function does.
+	mutating func constructionPassesConfigurationReadToSendableAutoclosure(of instantiable: Instantiable, usesMockInitializer: Bool) -> Bool {
+		mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer).callSiteArguments.contains { argument in
+			MockLowering.dependency(passedTo: argument, among: instantiable.dependencies) == nil && MockLowering.isSendableAutoclosure(argument.typeDescription)
+		}
 	}
 
 	private static func readsConfiguration(_ construction: ScopeGenerator.MockConstruction, given instantiable: Instantiable) -> Bool {

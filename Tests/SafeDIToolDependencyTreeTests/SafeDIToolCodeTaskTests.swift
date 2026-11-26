@@ -46,10 +46,8 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_holdsNoFinishedCodeTask_whenSeveralRootsBuildTreesOfSeveralLevels() async throws {
-		// Two roots, each building four levels of three types, the two deepest through instantiators: 121 scopes each, so
-		// each root and the three subtrees beneath it start their code early. Each starts it for the context its parent asks
-		// in, so no task is still running once the code is done: with the release reverted, the trees hold one task for
-		// each scope, 121 each.
+		// Two roots, each building four levels of three types, the two deepest through instantiators: 121 scopes each.
+		// With the release reverted, the trees hold one task for each scope, 121 each.
 		let fixture = Self.ternaryTree(depth: 4, beneath: ["FirstRoot", "SecondRoot"], rootDeclarations: [], instantiatesLayer: 3)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
 		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
@@ -68,144 +66,6 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		}
 		// One count for each root's tree.
 		#expect(heldTaskCounts == [0, 0])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_startsTasksForFewScopes_whenTreeHasManySmallSubtrees() async throws {
-		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: []))
-		// The root and the scopes of the next two levels, whose subtrees have 364 and 121 scopes, each on a task of its own,
-		// and the subtrees of 40 scopes beneath them, in two groups, of 80 and 40. The construction memo shares one generator
-		// between every place of a level that builds the same type in the same context, so each level holds three, which
-		// start once: 1 + 3 + 3 + 2. Without the memo, 31; one task for each subtree of 40 as well, 40. Every scope of the
-		// tree, one per path, started early: 1,093.
-		#expect(starts == 9)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_startsOneTaskForEachGroupOfSmallSubtrees_whenRootHasManySmallSubtrees() async throws {
-		// The root is a seam, since a root of the dependency tree starts no code early. It instantiates 30 children of three
-		// scopes each, 91 scopes in all, so its subtree is large and each child's is small. The children start in groups of
-		// at least 64 scopes: the first 22 (66 scopes) on one task and the last 8 on another, beside the root's own. One task
-		// for each child, as before, ran 30 children's code together: 31.
-		let children = (0..<30).map { "Child\($0)" }
-		let fixture = [
-			seamFixtureType(named: "Root", isSeam: true, isFinalClass: true, declarations: children.map { "@Instantiated let \($0.lowercased()): \($0)" }),
-			seamFixtureType(named: "LeafA", isFinalClass: true, declarations: []),
-			seamFixtureType(named: "LeafB", isFinalClass: true, declarations: []),
-		] + children.map { child in
-			seamFixtureType(named: child, isFinalClass: true, declarations: ["@Instantiated let leafA: LeafA", "@Instantiated let leafB: LeafB"])
-		}
-		let starts = try await countCodeTaskStarts(of: fixture)
-		#expect(starts == 3)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle() async throws {
-		// The step builds a session of its own, which the screen it builds again receives: the tree is created a second time
-		// with the parameter the screen's builder function takes. The seam's first signature pass settles it, so emission
-		// makes that pass's tree again rather than creating it twice, and starts its code once: 10 tasks, the ternary tree's
-		// 9 and one for the root's two other small subtrees, which group together. A tree emission created twice started 10
-		// on each pass (32 each without the construction memo, and 42 with a task for each small subtree); every scope of
-		// both passes started early, 2,196.
-		let cycle = [
-			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
-			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
-			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
-		]
-		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(
-			depth: Self.depth,
-			beneath: ["Root"],
-			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
-		) + cycle)
-		#expect(starts == 10)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_startsTasksForFewScopes_whenSeamThatTakesAParameterIsCreatedAgainForItsLazyCycle() async throws {
-		// The tree of `generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle`, whose screen also receives a
-		// token nothing in the tree provides. The seam takes the token, so its first signature pass does not settle it, and
-		// emission creates its tree anew: twice, for the lazy cycle. The second creation reuses each place the first built
-		// settled, and starts again the groups the first started beneath it: 10 tasks on each creation, 20.
-		let cycle = [
-			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Received let token: Token", "@Instantiated let stepBuilder: Instantiator<Step>"]),
-			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
-			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
-			seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
-		]
-		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(
-			depth: Self.depth,
-			beneath: ["Root"],
-			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
-		) + cycle)
-		#expect(starts == 20)
-	}
-
-	@Test
-	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
-	mutating func generate_writesSameCode_whenEarlyStartsFinishInAnyOrder() async throws {
-		// The tree its lazy cycle has created twice starts 10 tasks early once emission makes it again, as
-		// `generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle` counts. Each run forces the order in which
-		// they finish, and the code must be what a run whose starts race writes.
-		let fixture = Self.ternaryTree(
-			depth: Self.depth,
-			beneath: ["Root"],
-			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
-		) + [
-			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
-			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
-			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
-		]
-		let racing = try await executeSafeDIToolTest(
-			swiftFileContent: fixture,
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			// The tree's code is what every other test of its shapes compares; this one compares it across orders.
-			skipCompileVerification: true,
-		)
-		var orders: [@Sendable (Int) -> [Int]] = [{ Array(0..<$0) }, { Array((0..<$0).reversed()) }]
-		for seed in UInt64(1)...4 {
-			orders.append { count in
-				var state = seed
-				return (0..<count).map { position in
-					// SplitMix64.
-					state &+= 0x9E3779B97F4A7C15
-					var mixed = state
-					mixed = (mixed ^ (mixed >> 30)) &* 0xBF58476D1CE4E5B9
-					mixed = (mixed ^ (mixed >> 27)) &* 0x94D049BB133111EB
-					return (key: mixed ^ (mixed >> 31), position: position)
-				}
-				.sorted { $0.key < $1.key }
-				.map(\.position)
-			}
-		}
-		for order in orders {
-			let ordering = ForcedCodeTaskStartOrder(order: order)
-			let ordered = try await CodeTaskStart.$ordering.withValue(ordering) {
-				try await executeSafeDIToolTest(
-					swiftFileContent: fixture,
-					buildSwiftOutputDirectory: true,
-					filesToDelete: &filesToDelete,
-					skipCompileVerification: true,
-				)
-			}
-			// Every start took its turn in the order forced.
-			#expect(await ordering.turnsTaken() == order(10))
-			#expect(ordered.dependencyTreeFiles == racing.dependencyTreeFiles)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_startsNoTask_whenTypeKeyLaysOutTheRoot() async throws {
-		// The tree of `generate_startsTasksForFewScopes_whenTreeHasManySmallSubtrees`, whose seam starts 10, beneath a root of
-		// the dependency tree. The type key lays the root's body out from the plan of every place at the context the root asks
-		// for, so the root starts none.
-		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: [], asSeams: false))
-		#expect(starts == 0)
 	}
 
 	@Test
@@ -284,9 +144,8 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_plansOnlyTheRootsChildrenAtOnce_whenATypeKeyRootStartsNoCodeEarly() async throws {
-		// The root starts no code early, so its tree is planned once it exists, the root's six children at once, at most four
-		// in flight. Each child plans its leaves one after another, so only the root's body reports.
+	mutating func generate_plansOnlyTheRootsChildrenAtOnce_whenTypeKeyLaysOutTheRoot() async throws {
+		// The root's six children are planned at once, at most four in flight. Each child plans its leaves one after another, so only the root's body reports.
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
 		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
@@ -303,6 +162,51 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			childCounts.append(childCount)
 		}
 		#expect(childCounts == [6])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_plansSeamRootsChildrenAtOnce_whenModuleGeneratesSeam() async throws {
+		// The seam is a root of its own module's generation, so its body plans its three children at once, as a root of the
+		// dependency tree does; each child plans its leaf alone. With the seam's body planning one child after another, no
+		// body reports.
+		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.seamWithThreeChildren,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "App"],
+			)
+		}
+		continuation.finish()
+		var childCounts = [Int]()
+		for await childCount in stream {
+			childCounts.append(childCount)
+		}
+		#expect(childCounts == [3])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_plansSeamRootsChildrenOneAfterAnother_whenModuleGeneratesMoreTreesThanBodyPlansAtOnce() async throws {
+		// Five seams, one more than a body plans children at once, each planned on a task of its own: each seam's body
+		// plans its two children one after another, so no body reports.
+		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.fiveSeamsOfTwoChildren,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "App"],
+			)
+		}
+		continuation.finish()
+		var childCounts = [Int]()
+		for await childCount in stream {
+			childCounts.append(childCount)
+		}
+		#expect(childCounts == [])
 	}
 
 	@Test
@@ -418,6 +322,134 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 
 	/// A root of the dependency tree whose six children, `Child0` to `Child5`, receive one to six leaves, declared in the
 	/// order 5, 2, 4, 0, 3, 1.
+	private static let fiveSeamsOfTwoChildren = [
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen0: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen1: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen2: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen3: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen4: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable
+		public final class First: Instantiable {
+		    public init() {}
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Second: Instantiable {
+		    public init() {}
+		}
+		""",
+	]
+
+	private static let seamWithThreeChildren = [
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen: Instantiable {
+		    public init(first: First, second: Second, third: Third) {
+		        self.first = first
+		        self.second = second
+		        self.third = third
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		    @Instantiated let third: Third
+		}
+		""",
+		"""
+		@Instantiable
+		public final class First: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Second: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Third: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init() {}
+		}
+		""",
+	]
+
 	private static let sixChildrenDeclaredLargestFirst = [
 		"""
 		@Instantiable(isRoot: true)
@@ -567,15 +599,11 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		""",
 	]
 
-	/// The layers of types beneath the root of the trees whose early starts are counted: 1 + 3 + 9 + … + 3⁶ = 1,093
-	/// scopes, one per path.
-	private static let depth = 6
-
-	/// `roots`, seams unless `asSeams` is `false`, since a root of the dependency tree starts no code early, and `depth`
+	/// `roots`, each a seam, and `depth`
 	/// layers of three types each, `L<layer>A` to `L<layer>C`, each instantiating the three types of
 	/// the layer beneath it, so that each root's tree has a scope for each of `3^layer` paths to each layer. The types of
 	/// layer `instantiatesLayer` and below are instantiated through an `Instantiator`.
-	private static func ternaryTree(depth: Int, beneath roots: [String], rootDeclarations: [String], instantiatesLayer: Int? = nil, asSeams: Bool = true) -> [String] {
+	private static func ternaryTree(depth: Int, beneath roots: [String], rootDeclarations: [String], instantiatesLayer: Int? = nil) -> [String] {
 		let letters = ["A", "B", "C"]
 		func declarations(instantiatingLayer layer: Int) -> [String] {
 			guard layer <= depth else { return [] }
@@ -588,7 +616,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			}
 		}
 		var files = roots.map { root in
-			seamFixtureType(named: root, isSeam: asSeams, isRoot: !asSeams, isFinalClass: true, declarations: rootDeclarations + declarations(instantiatingLayer: 1))
+			seamFixtureType(named: root, isSeam: true, isFinalClass: true, declarations: rootDeclarations + declarations(instantiatingLayer: 1))
 		}
 		for layer in 1...depth {
 			for letter in letters {
@@ -596,26 +624,5 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			}
 		}
 		return files
-	}
-
-	/// How many scopes started generating their code on a task of their own while `fixture` generated.
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func countCodeTaskStarts(of fixture: [String]) async throws -> Int {
-		let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
-		_ = try await CodeTaskStart.$observer.withValue({ continuation.yield(()) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: fixture,
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-				// The tree's code is what every other test of its shapes compares; this one counts how it is generated.
-				skipCompileVerification: true,
-			)
-		}
-		continuation.finish()
-		var starts = 0
-		for await _ in stream {
-			starts += 1
-		}
-		return starts
 	}
 }

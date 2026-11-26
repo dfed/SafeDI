@@ -29,7 +29,7 @@ extension TypeKeyLayout {
 		case let .statement(body, index):
 			property(of: bodies[body].statements[index])?.typeDescription
 		case let .forwarded(body, label):
-			bodies[body].record?.forwardedProperties.first(where: { $0.label == label })?.typeDescription
+			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
 			bodies[body].record?.cycleParameters.first(where: { $0.label == label })?.typeDescription
 		}
@@ -106,8 +106,21 @@ extension TypeKeyLayout {
 		for argument in record.arguments {
 			key.append("argument|\(argument.argumentLabel)|\(argument.label)|\(argument.property.asSource)")
 		}
-		for statement in bodies[body].statements {
+		key.append(contentsOf: record.constructionShape)
+		// A place's own passed arguments are its function's parameters: only their names and types tell places apart, since
+		// each call hands its own values, which the caller's key holds.
+		for argument in record.passedArguments {
+			key.append("parameter|\(argument.parameterName)|\(argument.type.asSource)")
+		}
+		for (index, statement) in bodies[body].statements.enumerated() {
 			key.append(statementShape(statement))
+			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
+			key.append("passedArguments|\(passedArguments.count)")
+			if case .closer = statement {
+				key.append(contentsOf: passedArguments.map { $0.closerShape ?? $0.shape })
+			} else {
+				key.append(contentsOf: passedArguments.map(\.shape))
+			}
 		}
 		return key
 	}
@@ -121,9 +134,10 @@ extension TypeKeyLayout {
 			return "call|\(record.property.asSource)|\(record.isErased)|\(record.isExtension)"
 		case let .inline(record):
 			let arguments = record.arguments.map { "\($0.argumentLabel):\($0.label):\($0.property.asSource)" }.joined(separator: ",")
-			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)"
+			return "inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape.joined(separator: ";"))"
 		case let .alias(record):
-			return "alias|\(record.text)"
+			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
+			return "alias|\(record.text)|\(reads)"
 		}
 	}
 

@@ -845,9 +845,9 @@ jobs:
             # The outputs each group used, which are what its cache would have
             # kept, and the list of those its processes printed, which is all
             # the upload below shares. Two groups that used one output hold
-            # the same file, named by the program's key.
-            mkdir -p .compile-check-cache/value-outputs
-            find group-compile-checks -path '*/value-outputs/*' -type f -exec cp -t .compile-check-cache/value-outputs/ {} +
+            # the same file, named by the program's key, which the script
+            # keeps once.
+            .github/scripts/join-value-outputs.sh group-compile-checks .compile-check-cache
             find group-compile-checks -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
             echo "Value comparison outputs of $groups groups: $(find .compile-check-cache/value-outputs -type f | wc -l) used, $(wc -l < ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt") of them printed in this run."
           else

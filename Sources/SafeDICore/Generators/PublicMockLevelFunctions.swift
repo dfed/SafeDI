@@ -91,8 +91,8 @@ struct PublicMockLevelFunctions: Sendable {
 	private(set) var functions = [Function]()
 	/// The index of the function each root dispatcher's key is handed to with no value bound.
 	private(set) var rootFunctionIndexByKey = [String: Int]()
-	/// What the call passes each of its roots, by label: the call of the root level function.
-	private(set) var rootCallsByLabel = [String: String]()
+	/// The root level function each of the call's roots is handed, with the root, by the root's label.
+	private var rootFunctionByLabel = [String: (index: Int, root: Root)]()
 
 	/// The level functions of a call whose dispatchers are `dispatchers` and whose fills take `fillParametersByKey` beside
 	/// their case's payload, for `roots`. A root level function takes each value of `callerReads` its routes read, as a
@@ -250,7 +250,7 @@ struct PublicMockLevelFunctions: Sendable {
 			}
 		}
 		for root in roots {
-			rootCallsByLabel[root.label] = rootFunctionIndexByKey[root.dispatcherKey].map { rootCall(of: functions[$0], for: root) }
+			rootFunctionByLabel[root.label] = rootFunctionIndexByKey[root.dispatcherKey].map { (index: $0, root: root) }
 		}
 	}
 
@@ -293,9 +293,15 @@ struct PublicMockLevelFunctions: Sendable {
 		rootFunctionIndexByKey[key].map { functions[$0].members }
 	}
 
+	/// What the call passes each of its roots, by label: the call of the root level function, handed `nil` for each label
+	/// of `labelsBuiltAfterCall`, which the caller builds after the call, as the fills read it.
+	func rootCallsByLabel(passingNilFor labelsBuiltAfterCall: Set<String>) -> [String: String] {
+		rootFunctionByLabel.mapValues { rootCall(of: functions[$0.index], for: $0.root, passingNilFor: labelsBuiltAfterCall) }
+	}
+
 	/// The call of `function`, a root level function, handed the struct `root.carriedStructs` names for each struct of the
-	/// caller's levels it is handed, by the name a fill takes it under.
-	private func rootCall(of function: Function, for root: Root) -> String {
+	/// caller's levels it is handed, by the name a fill takes it under, and `nil` for each label of `labelsBuiltAfterCall`.
+	private func rootCall(of function: Function, for root: Root, passingNilFor labelsBuiltAfterCall: Set<String>) -> String {
 		var arguments = [String]()
 		for carried in function.carriedInnerScopes {
 			// The `""` is never emitted: the call records a struct in `root.carriedStructs` for each struct its dispatcher
@@ -306,7 +312,8 @@ struct PublicMockLevelFunctions: Sendable {
 		// Every value a root level function takes is one the call's fills read of the caller's scope.
 		for parameter in function.parameters {
 			let label = parameter.property.label
-			arguments.append("\(label.spelledAsArgumentLabel): \(callerArgumentByLabel[label] ?? "nil")")
+			let argument = labelsBuiltAfterCall.contains(label) ? nil : callerArgumentByLabel[label]
+			arguments.append("\(label.spelledAsArgumentLabel): \(argument ?? "nil")")
 		}
 		return "\(function.name)(\(arguments.joined(separator: ", ")))"
 	}

@@ -980,7 +980,7 @@ def release_build(runner, worktree, linux):
     # SwiftPM's native build system, as CI's Swift 6.3 uses by default: Swift Build, the default from Swift 6.4,
     # refuses `--target SafeDIMacros` ("Found multiple targets named 'SafeDIMacros'"), since it plans a macro target
     # once for the host and once for the destination.
-    build = runner + ["swift", "build", "--build-system", "native", "-c", "release", "--scratch-path", ".build/pre-push-release", "-Xswiftc", "-Osize"] + (["--static-swift-stdlib"] if linux else [])
+    build = runner + ["swift", "build", "--build-system", "native", "-c", "release", "--scratch-path", ".build/pre-push-release"] + (["--static-swift-stdlib"] if linux else [])
     status_code, seconds, lines = timed(build + ["--product", "SafeDITool"], worktree)
     if status_code != 0:
         return status_code, seconds, lines

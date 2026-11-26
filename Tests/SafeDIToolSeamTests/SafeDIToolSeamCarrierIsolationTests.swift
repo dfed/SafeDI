@@ -144,29 +144,33 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
+		        func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let model = Model(id: id)
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id, model)
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(id, model, api)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Screen(id: id, model: model, api: api, detailBuilder: detailBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(id: $0)
 		        }
+		        @Sendable nonisolated func __safeDI_detailBuilder_(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
 		        @Sendable nonisolated func __safeDI_workBuilder(id: Int) -> Work {
 		            let __safeDI_apiSendableBuilder_workBuilder = __safeDI_apiSendableBuilder.workBuilder()
 		            let model = Model(id: id)
 		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_workBuilder.detailBuilder(id, model)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder_(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_apiSendableBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Work(id: id, model: model, detailBuilder: detailBuilder)
 		        }
 		        let workBuilder = SendableInstantiator<Work> {
@@ -190,34 +194,34 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 
 		extension Root {
 		    public \(root == .structRoot ? "" : "convenience ")init() {
-		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_4F2020B42ED8EAF2.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-		                .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
-		            }
-		            func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
-		                .init(
-		                    api: { scope_id, scope_model in
-		                        let id = scope_id
-		                        let model = scope_model
-		                        let api: any Api = Impl(id: id, model: model)
-		                        return api
-		                    },
-		                    detailBuilder: { values_id, values_model, values_api in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) }
-		                )
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(id: Int, model: Model) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
-		                .init(api: {
+		        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+		            .init(screenBuilder: __safeDI_apiBuilder_Home_Screen_Scope())
+		        }
+		        func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
+		            .init(
+		                api: { scope_id, scope_model in
+		                    let id = scope_id
+		                    let model = scope_model
 		                    let api: any Api = Impl(id: id, model: model)
 		                    return api
-		                })
-		            }
-		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
-		                .init(workBuilder: { __safeDI_apiBuilder_Home_Work_Scope() })
-		            }
-		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Work_Scope() -> Home.__safeDI_ApiCarrier_Work<any Api> {
-		                .init(detailBuilder: { values_id, values_model in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) })
-		            }
+		                },
+		                detailBuilder: { values_id, values_model, values_api in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) }
+		            )
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(id: Int, model: Model) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
+		            .init(api: {
+		                let api: any Api = Impl(id: id, model: model)
+		                return api
+		            })
+		        }
+		        @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.__safeDI_ApiSendableCarrier<any Api> {
+		            .init(workBuilder: { __safeDI_apiBuilder_Home_Work_Scope() })
+		        }
+		        @Sendable nonisolated func __safeDI_apiBuilder_Home_Work_Scope() -> Home.__safeDI_ApiCarrier_Work<any Api> {
+		            .init(detailBuilder: { values_id, values_model in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) })
+		        }
+		        func __safeDI_home() -> Home {
+		            _ = Home.__safeDI_Home_4F2020B42ED8EAF2.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }
 		        let home: Home = __safeDI_home()

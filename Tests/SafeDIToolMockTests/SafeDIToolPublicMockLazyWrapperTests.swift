@@ -2789,11 +2789,11 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 		                _ = Cache.__safeDI_Cache_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                func __safeDI_cache() -> Cache {
 		                    let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
-		                    return Cache.__safeDI_mock(session: session.instance)
+		                    return Cache.__safeDI_mock(session: session.instance, safeDIOverrides: safeDIOverrides.holder.cache)
 		                }
 		                let cache: Cache = __safeDI_cache()
 		                let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
-		                return Holder(cache: cache, holderBuilder: holderBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }
 		            }
 		            let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(cache, holderBuilder) } else { Holder(cache: cache, holderBuilder: holderBuilder) }

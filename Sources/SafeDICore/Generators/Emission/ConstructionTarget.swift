@@ -26,9 +26,11 @@ enum ConstructionTarget: Hashable, Sendable {
 	case instantiate(TypeDescription)
 	/// A mock method of `Concrete`, by name: `mock`, a `customMockName`, or the function of a public mock's tier.
 	case mock(TypeDescription, name: String)
+	/// Nothing: an `@Instantiated(onlyIfAvailable: true)` property no production declaration fulfills, which is `nil`.
+	case unavailable
 
 	/// The function the construction calls, spelled through `TypeDescription`: the concrete type itself for an
-	/// initializer, and the method as a member of the concrete type otherwise.
+	/// initializer, and the method as a member of the concrete type otherwise. `nil` for a target that constructs nothing.
 	var callee: String {
 		switch self {
 		case let .initializer(concreteType):
@@ -37,6 +39,19 @@ enum ConstructionTarget: Hashable, Sendable {
 			TypeDescription.nested(name: InstantiableVisitor.instantiateMethodName, parentType: concreteType, generics: []).asSource
 		case let .mock(concreteType, name):
 			TypeDescription.nested(name: name, parentType: concreteType, generics: []).asSource
+		case .unavailable:
+			"nil"
+		}
+	}
+
+	/// The construction, with `arguments` spelled as the call's argument list: `callee` called with them, or `nil` for a
+	/// target that constructs nothing.
+	func spelled(passing arguments: String) -> String {
+		switch self {
+		case .initializer, .instantiate, .mock:
+			"\(callee)(\(arguments))"
+		case .unavailable:
+			callee
 		}
 	}
 }

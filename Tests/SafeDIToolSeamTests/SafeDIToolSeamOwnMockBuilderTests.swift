@@ -1059,10 +1059,10 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder __safeDI_userServiceBuilder_: __safeDI_UserServiceCarrier<any UserService>) {
 		        let __safeDI_userServiceBuilder_badge = __safeDI_userServiceBuilder_.badge
+		        func __safeDI_userServiceBuilder() -> Analytics {
+		            Analytics()
+		        }
 		        func __safeDI_badge() -> Badge {
-		            func __safeDI_userServiceBuilder() -> Analytics {
-		                Analytics()
-		            }
 		            let userServiceBuilder = Instantiator<Analytics>(__safeDI_userServiceBuilder)
 		            let userService: any UserService = __safeDI_userServiceBuilder_badge.userService(userServiceBuilder)
 		            return Badge(userService: userService, userServiceBuilder: userServiceBuilder)
@@ -1726,7 +1726,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.userService = { _ in __safeDI_builder() }
+		                self.init(userService: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }

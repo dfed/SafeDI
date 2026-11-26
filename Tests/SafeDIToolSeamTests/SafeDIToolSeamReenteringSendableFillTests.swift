@@ -171,7 +171,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
+			                self.init(service: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -258,7 +258,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.logger = { _ in __safeDI_builder() }
+			                self.init(logger: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -275,7 +275,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
+			                self.init(service: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -375,7 +375,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.store = { _ in __safeDI_builder() }
+			                self.init(store: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -414,7 +414,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
+			                self.init(service: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -498,7 +498,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -600,7 +600,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -617,7 +617,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -723,7 +723,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -742,7 +742,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.store = { _ in __safeDI_builder() }
+			                self.init(store: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -819,8 +819,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.analytics = { _ in __safeDI_builder() }
-			                    self.book_serviceSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(analytics: { _ in __safeDI_builder() }, book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -838,7 +837,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.page_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -906,7 +905,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.analytics = { _ in __safeDI_builder() }
+			                    self.init(analytics: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -927,8 +926,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.book_loggerSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                    self.book_serviceSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(book_loggerSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -950,8 +948,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.page_loggerBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.page_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(page_loggerBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1038,8 +1035,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.book_serviceSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                    self.book_storeBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, book_storeBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1056,7 +1052,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.analytics = { _ in __safeDI_builder() }
+			                    self.init(analytics: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1074,7 +1070,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.page_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1153,7 +1149,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.chapter_storeBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(chapter_storeBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1176,8 +1172,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.analytics = { _ in __safeDI_builder() }
-			                    self.book_serviceSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(analytics: { _ in __safeDI_builder() }, book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1195,7 +1190,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.page_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1285,8 +1280,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.analytics = { _ in __safeDI_builder() }
-			                    self.chapter_storeBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(analytics: { _ in __safeDI_builder() }, chapter_storeBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1303,7 +1297,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.book_serviceSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1321,7 +1315,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.page_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1407,7 +1401,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.analytics = { _ in __safeDI_builder() }
+			                    self.init(analytics: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1434,8 +1428,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.pageBuilder_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                    self.pageBuilder_serviceBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(pageBuilder_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, pageBuilder_serviceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -1451,8 +1444,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.page_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.page_serviceBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, page_serviceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }

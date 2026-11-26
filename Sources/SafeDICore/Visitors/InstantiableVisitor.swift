@@ -758,7 +758,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// See `Instantiable.conformanceListNamesSendable`.
 	private var conformanceListNamesSendable = false
 	/// See `Instantiable.conformanceListNamesOtherTypes`.
-	private var conformanceListNamesOtherTypes = false
+	public private(set) var conformanceListNamesOtherTypes = false
 
 	/// Whether the walk reports `diagnostics`, which only the macro reads: SafeDITool, which evaluates `#if` blocks, trusts
 	/// what the macro rejects, so its walk skips the checks whose only result is a diagnostic.

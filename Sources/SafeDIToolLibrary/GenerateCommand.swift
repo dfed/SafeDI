@@ -161,6 +161,10 @@ public struct Generate: AsyncParsableCommand {
 		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
 		/// being released when the process ends with the run.
 		let builtValues: [any Sendable]
+		/// What the run that read stored seam signatures and public mock plans threw, when the run that computed
+		/// everything after it did not: the stored blocks then made a run fail that computing them does not, which no
+		/// generated file and no error shows. The tests read it, never the tool.
+		public var errorOfDiscardedRunThatReadStoredBlocks: (any Error)?
 	}
 
 	/// An output `run()` keeps until the process ends.
@@ -187,7 +191,9 @@ public struct Generate: AsyncParsableCommand {
 		do {
 			return try await generate(buildLog: buildLog, readsStoredSeamSignatures: true, readStoredSeamSignatures: &readStoredSeamSignatures)
 		} catch where readStoredSeamSignatures {
-			return try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures)
+			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures)
+			output.errorOfDiscardedRunThatReadStoredBlocks = error
+			return output
 		}
 	}
 
@@ -532,6 +538,7 @@ public struct Generate: AsyncParsableCommand {
 		var dotGraph: String?
 		// The signatures of the seams the module generates, from that same call, which its module info carries.
 		var storedSeamSignatures = [StoredSeamSignature]()
+		var storedPublicMockPlans = [StoredPublicMockPlan]()
 		if manifest != nil || combinedOutput != nil {
 			if !filesWithUnexpectedNodes.isEmpty {
 				// Write `#error(…)` instead of generated Swift so the
@@ -715,6 +722,8 @@ public struct Generate: AsyncParsableCommand {
 							mockConditionalCompilation: mockConditionalCompilation,
 							currentModuleSourceFilePaths: manifest.map { Set($0.mockGeneration.map(\.inputFilePath)) } ?? Set(currentModuleMockSourceFiles),
 							additionalMocksToGenerate: Set(lists.additionalMocksToGenerate),
+							// A module info carries the plan of each public mock the module declares.
+							storesPublicMockPlans: moduleInfoDestination != nil,
 						)
 						: nil
 					listsPassTheirChecks = true
@@ -731,6 +740,7 @@ public struct Generate: AsyncParsableCommand {
 				let (additionalMocksToGenerate, dependencyTreeDestinationsBySource) = try listChecks.get()
 				dotGraph = results.dotTree
 				storedSeamSignatures = results.storedSeamSignatures
+				storedPublicMockPlans = results.mocks?.storedPublicMockPlans ?? []
 
 				// Build a map from source file path → the roots whose extension code it holds.
 				var sourceFileToExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
@@ -965,7 +975,7 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
+			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures, publicMockPlans: storedPublicMockPlans, compilesGeneratedMocks: evaluator.compilesGeneratedMocks, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
 				.moduleInfoDataWritingSeamSignaturesWithoutPositions
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
@@ -1241,10 +1251,17 @@ public struct Generate: AsyncParsableCommand {
 		var generatedSeams = Set<TypeDescription>()
 		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
 		var foreignPublicMocks = [TypeDescription: SeamResolution.ForeignPublicMock]()
-		/// The signature the module info of the module named `moduleName` carries of `seam`, as that module's run named it.
-		func storedSignature(of seam: TypeDescription, inModuleNamed moduleName: String) -> StoredSeamSignature? {
-			guard readsStoredSeamSignatures else { return nil }
-			return moduleInfoView.storedSeamSignaturesByModuleName[moduleName]?[seam]
+		// Each module's seams, gathered once rather than searched per seam.
+		let storedSeamTypesByModuleName = moduleInfoView.storedSeamSignaturesByModuleName.mapValues { Set($0.seamTypes) }
+		let storedPublicMockTypesByModuleName = moduleInfoView.storedPublicMockPlansByModuleName.mapValues { Set($0.mockedTypes) }
+		/// The signatures the module info of the module named `moduleName` carries of its seams, when they include `seam`,
+		/// as that module's run named it.
+		func storedSignatures(of seam: TypeDescription, inModuleNamed moduleName: String) -> StoredSeamSignatures? {
+			guard readsStoredSeamSignatures,
+			      storedSeamTypesByModuleName[moduleName]?.contains(seam) == true,
+			      let signatures = moduleInfoView.storedSeamSignaturesByModuleName[moduleName]
+			else { return nil }
+			return signatures.stored
 		}
 		/// The seam `seam` of the module named `moduleName`, whose visible declarations are resolved only when the
 		/// generator computes its signature: a module whose seams no tree reaches, or whose module info carries their
@@ -1257,17 +1274,26 @@ public struct Generate: AsyncParsableCommand {
 				callComment: readFromModuleInfo ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 				// A module info holds the module's declarations as the module read them.
 				declaringModuleMockCondition: readFromModuleInfo ? nil : resolver.mockCondition(ofModuleNamed: moduleName),
-				storedSignature: readFromModuleInfo ? storedSignature(of: seam.concreteInstantiable, inModuleNamed: moduleName) : nil,
+				storedSignatures: readFromModuleInfo ? storedSignatures(of: seam.concreteInstantiable, inModuleNamed: moduleName) : nil,
 			)
 		}
 		/// The public mock of `publicMock`, of the module named `moduleName`, whose visible declarations are resolved only
 		/// when the generator computes its plan.
 		func foreignPublicMock(_ publicMock: Instantiable, ofModuleNamed moduleName: String) -> SeamResolution.ForeignPublicMock {
-			SeamResolution.ForeignPublicMock(
+			// The plans the module's own run computed, when its module info carries one of this mock.
+			var storedPlans: StoredPublicMockPlans?
+			if readsStoredSeamSignatures,
+			   resolver.readsModuleInfo(ofModuleNamed: moduleName),
+			   storedPublicMockTypesByModuleName[moduleName]?.contains(publicMock.concreteInstantiable) == true
+			{
+				storedPlans = moduleInfoView.storedPublicMockPlansByModuleName[moduleName]?.stored
+			}
+			return SeamResolution.ForeignPublicMock(
 				declaringModule: ModuleIdentity(moduleName: moduleName, packageName: publicMock.packageName),
 				visibleDeclarations: { try resolver.visibleDeclarations(ofModuleNamed: moduleName) },
 				callComment: resolver.readsModuleInfo(ofModuleNamed: moduleName) ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 				declaringModuleMockCondition: resolver.mockCondition(ofModuleNamed: moduleName),
+				storedPlans: storedPlans,
 			)
 		}
 		for seam in seamInstantiables {

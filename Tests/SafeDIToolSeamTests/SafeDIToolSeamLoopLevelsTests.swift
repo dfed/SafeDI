@@ -185,29 +185,29 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+			            .init(screenABuilder: __safeDI_apiBuilder_Home_ScreenA_Scope(), screenBBuilder: __safeDI_apiBuilder_Home_ScreenB_Scope(), screenCBuilder: __safeDI_apiBuilder_Home_ScreenC_Scope())
+			        }
+			        func __safeDI_apiBuilder_Home_ScreenA_Scope() -> Home.__safeDI_ApiCarrier_ScreenA<any Api> {
+			            .init(api: { scope_id, scope_screenBBuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
+			        func __safeDI_apiBuilder_Home_ScreenB_Scope() -> Home.__safeDI_ApiCarrier_ScreenB<any Api> {
+			            .init(api: { scope_id, scope_screenCBuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
+			        func __safeDI_apiBuilder_Home_ScreenC_Scope() -> Home.__safeDI_ApiCarrier_ScreenC<any Api> {
+			            .init(api: { scope_id, scope_screenABuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
 			        func __safeDI_home() -> Home {
 			            _ = Home.__safeDI_Home_6D4E0593FD00DAB3.self\(Self.callComment(module: "Feature"))
-			            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-			                .init(screenABuilder: __safeDI_apiBuilder_Home_ScreenA_Scope(), screenBBuilder: __safeDI_apiBuilder_Home_ScreenB_Scope(), screenCBuilder: __safeDI_apiBuilder_Home_ScreenC_Scope())
-			            }
-			            func __safeDI_apiBuilder_Home_ScreenA_Scope() -> Home.__safeDI_ApiCarrier_ScreenA<any Api> {
-			                .init(api: { scope_id, scope_screenBBuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
-			            func __safeDI_apiBuilder_Home_ScreenB_Scope() -> Home.__safeDI_ApiCarrier_ScreenB<any Api> {
-			                .init(api: { scope_id, scope_screenCBuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
-			            func __safeDI_apiBuilder_Home_ScreenC_Scope() -> Home.__safeDI_ApiCarrier_ScreenC<any Api> {
-			                .init(api: { scope_id, scope_screenABuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
 			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 			        }
 			        let home: Home = __safeDI_home()
@@ -449,39 +449,39 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+			            .init(screenABuilder: __safeDI_apiBuilder_Home_ScreenA_Scope(), screenBBuilder: __safeDI_apiBuilder_Home_ScreenB_Scope())
+			        }
+			        func __safeDI_apiBuilder_Home_ScreenA_Scope() -> Home.__safeDI_ApiCarrier_ScreenA<any Api> {
+			            .init(
+			                api: { scope_screenBBuilder in
+			                    let api: any Api = DefaultApi()
+			                    return api
+			                },
+			                tabXBuilder: { values_screenBBuilder, values_api in __safeDI_apiBuilder_Home_TabX_Scope() },
+			                tabYBuilder: { values_screenBBuilder, values_api in __safeDI_apiBuilder_Home_TabY_Scope() }
+			            )
+			        }
+			        func __safeDI_apiBuilder_Home_TabX_Scope() -> Home.__safeDI_ApiCarrier_TabX<any Api> {
+			            .init(api: { scope_tabYBuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
+			        func __safeDI_apiBuilder_Home_TabY_Scope() -> Home.__safeDI_ApiCarrier_TabY<any Api> {
+			            .init(api: { scope_tabXBuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
+			        func __safeDI_apiBuilder_Home_ScreenB_Scope() -> Home.__safeDI_ApiCarrier_ScreenB<any Api> {
+			            .init(api: { scope_screenABuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
 			        func __safeDI_home() -> Home {
 			            _ = Home.__safeDI_Home_31621E585D1B9CBB.self\(Self.callComment(module: "Feature"))
-			            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-			                .init(screenABuilder: __safeDI_apiBuilder_Home_ScreenA_Scope(), screenBBuilder: __safeDI_apiBuilder_Home_ScreenB_Scope())
-			            }
-			            func __safeDI_apiBuilder_Home_ScreenA_Scope() -> Home.__safeDI_ApiCarrier_ScreenA<any Api> {
-			                .init(
-			                    api: { scope_screenBBuilder in
-			                        let api: any Api = DefaultApi()
-			                        return api
-			                    },
-			                    tabXBuilder: { values_screenBBuilder, values_api in __safeDI_apiBuilder_Home_TabX_Scope() },
-			                    tabYBuilder: { values_screenBBuilder, values_api in __safeDI_apiBuilder_Home_TabY_Scope() }
-			                )
-			            }
-			            func __safeDI_apiBuilder_Home_TabX_Scope() -> Home.__safeDI_ApiCarrier_TabX<any Api> {
-			                .init(api: { scope_tabYBuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
-			            func __safeDI_apiBuilder_Home_TabY_Scope() -> Home.__safeDI_ApiCarrier_TabY<any Api> {
-			                .init(api: { scope_tabXBuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
-			            func __safeDI_apiBuilder_Home_ScreenB_Scope() -> Home.__safeDI_ApiCarrier_ScreenB<any Api> {
-			                .init(api: { scope_screenABuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
 			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 			        }
 			        let home: Home = __safeDI_home()
@@ -640,26 +640,26 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
+			            .init(flowBuilder: __safeDI_apiBuilder_Home_Flow_Scope())
+			        }
+			        func __safeDI_apiBuilder_Home_Flow_Scope() -> Home.__safeDI_ApiCarrier_Flow<any Api> {
+			            .init(aBuilder: __safeDI_apiBuilder_Home_A_Scope(), bBuilder: __safeDI_apiBuilder_Home_B_Scope())
+			        }
+			        func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
+			            .init(api: { scope_bBuilder, scope_flowBuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
+			        func __safeDI_apiBuilder_Home_B_Scope() -> Home.__safeDI_ApiCarrier_B<any Api> {
+			            .init(api: { scope_aBuilder in
+			                let api: any Api = DefaultApi()
+			                return api
+			            })
+			        }
 			        func __safeDI_home() -> Home {
 			            _ = Home.__safeDI_Home_363879E6EA1BD3C0.self\(Self.callComment(module: "Feature"))
-			            func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
-			                .init(flowBuilder: __safeDI_apiBuilder_Home_Flow_Scope())
-			            }
-			            func __safeDI_apiBuilder_Home_Flow_Scope() -> Home.__safeDI_ApiCarrier_Flow<any Api> {
-			                .init(aBuilder: __safeDI_apiBuilder_Home_A_Scope(), bBuilder: __safeDI_apiBuilder_Home_B_Scope())
-			            }
-			            func __safeDI_apiBuilder_Home_A_Scope() -> Home.__safeDI_ApiCarrier_A<any Api> {
-			                .init(api: { scope_bBuilder, scope_flowBuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
-			            func __safeDI_apiBuilder_Home_B_Scope() -> Home.__safeDI_ApiCarrier_B<any Api> {
-			                .init(api: { scope_aBuilder in
-			                    let api: any Api = DefaultApi()
-			                    return api
-			                })
-			            }
 			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home())
 			        }
 			        let home: Home = __safeDI_home()
@@ -1012,7 +1012,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
+			                self.init(service: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -1067,8 +1067,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -1087,7 +1086,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1106,7 +1105,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1120,7 +1119,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1210,8 +1209,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -1230,7 +1228,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1249,7 +1247,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1263,7 +1261,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1345,29 +1343,29 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			            .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
+			        }
+			        func __safeDI_gadgetBuilder_Outer_DefaultService_Scope() -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
+			            .init(aBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopA_Scope() }, bBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopB_Scope() })
+			        }
+			        func __safeDI_gadgetBuilder_Outer_LoopA_Scope() -> Outer.SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<any Gadget> {
+			            .init(gadget: { _ in
+			                let gadget: any Gadget = LiveGadget()
+			                return gadget
+			            })
+			        }
+			        func __safeDI_gadgetBuilder_Outer_LoopB_Scope() -> Outer.SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<any Gadget> {
+			            .init(gadget: { _ in
+			                let gadget: any Gadget = LiveGadget()
+			                return gadget
+			            })
+			        }
+			        func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			            .init(service: { __safeDI_gadgetBuilder_Outer_DefaultService_Scope() })
+			        }
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_757BD5316E5FE50B.self // If this line does not compile, add the SafeDI plugin to the target that declares Outer.
-			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
-			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
-			            }
-			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope() -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
-			                .init(aBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopA_Scope() }, bBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopB_Scope() })
-			            }
-			            func __safeDI_gadgetBuilder_Outer_LoopA_Scope() -> Outer.SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<any Gadget> {
-			                .init(gadget: { _ in
-			                    let gadget: any Gadget = LiveGadget()
-			                    return gadget
-			                })
-			            }
-			            func __safeDI_gadgetBuilder_Outer_LoopB_Scope() -> Outer.SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<any Gadget> {
-			                .init(gadget: { _ in
-			                    let gadget: any Gadget = LiveGadget()
-			                    return gadget
-			                })
-			            }
-			            func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.__safeDI_ServiceCarrier<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
-			                .init(service: { __safeDI_gadgetBuilder_Outer_DefaultService_Scope() })
-			            }
 			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()

@@ -94,17 +94,34 @@ extension TypeKeyLayout {
 	/// How many places the views stand for, saturating at `Int.max`: each view stands for one place at each place of each
 	/// body holding it.
 	func placeCount() -> Int {
+		Self.saturatingSum(placesByBody().dropFirst())
+	}
+
+	/// How many places each view stands for, saturating at `Int.max`; the root's body stands for one.
+	func placesByBody() -> [Int] {
 		var placesByBody = [Int](repeating: 0, count: bodies.count)
 		placesByBody[0] = 1
-		var total = 0
 		for body in postOrder.reversed() {
-			var places = 0
-			for edge in bodies[body].edges {
-				let (sum, overflow) = places.addingReportingOverflow(placesByBody[edge.parent])
-				places = overflow ? Int.max : sum
-			}
-			placesByBody[body] = places
-			let (sum, overflow) = total.addingReportingOverflow(places)
+			placesByBody[body] = Self.saturatingSum(bodies[body].edges.map { placesByBody[$0.parent] })
+		}
+		return placesByBody
+	}
+
+	/// Whether the root lays out the loops of builders it holds: it holds none, or a class holding a member's view that wraps
+	/// another member again stands for several places, which the path key would write once per path. A class's places do not
+	/// depend on which places the walk keyed into one view, only on the path key's tree.
+	func laysOutLoops() -> Bool {
+		guard !loopRebindingBodies.isEmpty else { return true }
+		let places = placesByBody()
+		return loopRebindingBodies.contains { body in
+			Self.saturatingSum(membersByClass[classByBody[body]].map { places[$0] }) > 1
+		}
+	}
+
+	static func saturatingSum(_ counts: some Sequence<Int>) -> Int {
+		var total = 0
+		for count in counts {
+			let (sum, overflow) = total.addingReportingOverflow(count)
 			total = overflow ? Int.max : sum
 		}
 		return total
@@ -143,21 +160,22 @@ extension TypeKeyLayout {
 				required.insert(read.label)
 			}
 		}
-		bodies[body].record?.arguments.forEach(note)
+		bodies[body].record?.constructionReads.forEach(note)
 		for statement in bodies[body].statements {
 			switch statement {
 			case let .built(child):
 				required.formUnion(requiredReads[child])
-				bodies[child].record?.callCycleArguments.forEach(note)
+				bodies[child].record?.callSiteReads.forEach(note)
 			case let .inline(record):
-				record.arguments.forEach(note)
+				record.constructionReads.forEach(note)
 			case let .closer(record, target):
-				record.cycleArguments.forEach(note)
+				record.callSiteReads.forEach(note)
 				required.formUnion(requiredReads[target])
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional {
 					required.insert(fulfillingProperty.label)
 				}
+				record.listedReads.forEach(note)
 			}
 		}
 		return required.intersection(reads[body])
@@ -171,25 +189,26 @@ extension TypeKeyLayout {
 				list.append(label)
 			}
 		}
-		for argument in bodies[body].record?.arguments ?? [] {
+		for argument in bodies[body].record?.constructionReads ?? [] {
 			add(argument.label)
 		}
 		for statement in bodies[body].statements {
 			switch statement {
 			case let .built(child):
 				reads[child].forEach(add)
-				for argument in bodies[child].record?.callCycleArguments ?? [] {
+				for argument in bodies[child].record?.callSiteReads ?? [] {
 					add(argument.label)
 				}
 			case let .inline(record):
-				record.arguments.forEach { add($0.label) }
+				record.constructionReads.forEach { add($0.label) }
 			case let .closer(record, target):
-				record.cycleArguments.forEach { add($0.label) }
+				record.callSiteReads.forEach { add($0.label) }
 				reads[target].forEach(add)
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
 					add(fulfillingProperty.label)
 				}
+				record.listedReads.forEach { add($0.label) }
 			}
 		}
 		return list.filter { !bodies[body].forwardedLabels.contains($0) && bodies[body].positionsByLabel[$0] == nil }
@@ -212,7 +231,7 @@ extension TypeKeyLayout {
 			}
 		}
 		let statements = bodies[body].statements
-		for argument in bodies[body].record?.arguments ?? [] {
+		for argument in bodies[body].record?.constructionReads ?? [] {
 			note(argument.label, pathValue(of: argument, inBody: body, before: statements.count))
 		}
 		for (index, statement) in statements.enumerated() {
@@ -221,20 +240,23 @@ extension TypeKeyLayout {
 				for (label, value) in escapingReads[child].sorted(by: { $0.key < $1.key }) {
 					note(label, value)
 				}
-				for argument in bodies[child].record?.callCycleArguments ?? [] {
+				for argument in bodies[child].record?.callSiteReads ?? [] {
 					note(argument.label, pathValue(of: argument, inBody: body, before: index))
 				}
 			case let .inline(record):
-				for argument in record.arguments {
+				for argument in record.constructionReads {
 					note(argument.label, pathValue(of: argument, inBody: body, before: index))
 				}
 			case let .closer(record, _):
-				for argument in record.cycleArguments {
+				for argument in record.callSiteReads {
 					note(argument.label, pathValue(of: argument, inBody: body, before: index))
 				}
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
 					note(fulfillingProperty.label, lookUp(fulfillingProperty.label, inBody: body, before: index))
+				}
+				for read in record.listedReads {
+					note(read.label, pathValue(of: read, inBody: body, before: index))
 				}
 			}
 		}

@@ -211,6 +211,164 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToRootLevelFunction_whenSiblingBuiltAfterCallProvidesValueFillReceivesOnlyIfAvailable() async throws {
+		// `Feed`, whose public mock `Screen` calls, builds `Model` at its root and inside `Page`, which declares `token`, so the
+		// fill of `Model`’s `api` takes `token` from the root level function on the route through `Feed`’s root. `Token` and
+		// `Feed` each receive the other only if available, so `Screen`’s mock builds `feed` first and the fill reads `nil`,
+		// as production passes `nil` to a receive of a sibling built later: the root level function is handed `nil` too,
+		// not the `token` declared after the call.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: ["Core.swift": """
+			import SafeDI
+
+			public protocol Api: AnyObject {}
+
+			@Instantiable(generateMock: .public)
+			public final class Feed: Instantiable {
+			    init(page: Page, model: Model) {
+			        self.page = page
+			        self.model = model
+			    }
+
+			    @Instantiated let page: Page
+			    @Instantiated let model: Model
+			}
+
+			@Instantiable
+			public final class Page: Instantiable {
+			    init(token: Token, model: Model) {
+			        self.token = token
+			        self.model = model
+			    }
+
+			    @Instantiated let token: Token
+			    @Instantiated let model: Model
+			}
+
+			@Instantiable
+			public final class Model: Instantiable {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated let api: any Api
+			}
+
+			@Instantiable
+			public final class Token: Instantiable {
+			    public init(feed: Feed?) {
+			        self.feed = feed
+			    }
+
+			    @Received(onlyIfAvailable: true) let feed: Feed?
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Instantiable, Api {
+			    public init(token: Token?) {
+			        self.token = token
+			    }
+
+			    @Received(onlyIfAvailable: true) let token: Token?
+			}
+
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(token: Token, feed: Feed) {
+			        self.token = token
+			        self.feed = feed
+			    }
+
+			    @Instantiated let token: Token
+			    @Instantiated let feed: Feed
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            feed: Feed.SafeDIOverrides = .init(),
+		            token: ((Feed?) -> Token)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                feed: feed,
+		                token: token
+		            )
+		        }
+
+		        var feed: Feed.SafeDIOverrides { __safeDI_storage.feed }
+		        var token: ((Feed?) -> Token)? { __safeDI_storage.token }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                feed: Feed.SafeDIOverrides,
+		                token: ((Feed?) -> Token)?
+		            ) {
+		                self.feed = feed
+		                self.token = token
+		            }
+
+		            let feed: Feed.SafeDIOverrides
+		            let token: ((Feed?) -> Token)?
+		        }
+		    }
+
+		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_feed() -> Feed {
+		            func __safeDI_apiBuilder_Feed_Model_Scope_api(_ scope: Feed.SafeDIMockScope_Api.Model_Scope.api_Values, token: Token?) -> any Api {
+		                let api: any Api = LiveApi(token: token)
+		                return api
+		            }
+		            func __safeDI_apiBuilder_Feed(token: Token?) -> Feed.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(page: { _ in __safeDI_apiBuilder_Feed_Page_Scope() }, model: { _ in __safeDI_apiBuilder_Feed_Model_Scope_(token: token) })
+		            }
+		            func __safeDI_apiBuilder_Feed_Page_Scope() -> Feed.SafeDIMockScope_Api.Page_Scope.__safeDI_Builder<any Api> {
+		                .init(model: { values in __safeDI_apiBuilder_Feed_Model_Scope(token: values.token) })
+		            }
+		            func __safeDI_apiBuilder_Feed_Model_Scope(token: Token) -> Feed.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { scope in __safeDI_apiBuilder_Feed_Model_Scope_api(scope, token: token) })
+		            }
+		            func __safeDI_apiBuilder_Feed_Model_Scope_(token: Token?) -> Feed.SafeDIMockScope_Api.Model_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { scope in __safeDI_apiBuilder_Feed_Model_Scope_api(scope, token: token) })
+		            }
+		            _ = Feed.__safeDI_Feed_mock_774316E7D473A6D8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Feed.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Feed(token: nil), feed: nil, safeDIOverrides: safeDIOverrides.feed)
+		        }
+		        let feed: Feed = __safeDI_feed()
+		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder(feed) } else { Token(feed: feed) }
+		        return Screen(token: token, feed: feed)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe("Screen.mock()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_bindsCallUnderOverridesLabelInsideBuilderFunction_whenTypeBuiltInInstantiatorCallsPublicMockOfLabelMockReceivesOnlyIfAvailable() async throws {
 		// `Screen` receives `cache` only if available, so its mock binds the override `cache`, and `Home`, built in
 		// `homeBuilder`’s function, calls `Cache`’s public mock for its own `cache`, bound under the label inside that

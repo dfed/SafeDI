@@ -140,7 +140,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.gadget = { _ in __safeDI_builder() }
+		                    self.init(gadget: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -154,7 +154,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.deeper_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.init(deeper_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -253,7 +253,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.thing = { _ in __safeDI_builder() }
+		                    self.init(thing: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -267,7 +267,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.inner_gadgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.init(inner_gadgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }

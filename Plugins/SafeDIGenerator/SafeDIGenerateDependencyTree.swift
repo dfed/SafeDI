@@ -42,7 +42,11 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		let tool = try context.tool(named: "SafeDITool").url
 		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
 		let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
-		let dependencyTargets = sourceTarget.sourceModuleRecursiveDependencies(inPackageAt: context.package.directoryURL)
+		let packagesByTargetID = context.package.packagesByTargetID
+		let dependencyTargets = sourceTarget.sourceModuleRecursiveDependencies(
+			readingTargetsOf: context.package,
+			packagesByTargetID: packagesByTargetID,
+		)
 		let dependenciesSourceFiles = dependencyTargets
 			.flatMap {
 				$0
@@ -63,7 +67,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		try writeTargetGraph(
 			of: sourceTarget,
 			dependencyTargets: dependencyTargets,
-			in: context.package,
+			packagesByTargetID: packagesByTargetID,
 			relativeTo: packageRoot,
 			besideInputSourcesFile: inputSourcesFile,
 		)
@@ -245,36 +249,23 @@ func inputSwiftFilePaths(of swiftFiles: [URL], relativeTo base: URL) -> [String]
 
 /// Writes the target graph of `target`, whose input CSV lists its own files and those of `dependencyTargets`, each
 /// spelled relative to `base` as `inputSwiftFilePaths(of:relativeTo:)` spells it, beside `inputSourcesFile`, for
-/// `generate` to read the module and package that declare each file.
-///
-/// The plugin API reports which package declares a target only by listing the package's targets, so each target's
-/// package is found among `package` and the packages it depends on, directly or through another. The API does not
-/// report which plugins a target applies, so the graph does not say whether a dependency target applies this one.
+/// `generate` to read the module and package that declare each file. `packagesByTargetID` names the package that
+/// declares each target. The API does not report which plugins a target applies, so the graph does not say whether a
+/// dependency target applies this one.
 func writeTargetGraph(
 	of target: SwiftSourceModuleTarget,
 	dependencyTargets: [SwiftSourceModuleTarget],
-	in package: Package,
+	packagesByTargetID: [Target.ID: Package],
 	relativeTo base: URL,
 	besideInputSourcesFile inputSourcesFile: URL,
 ) throws {
-	var packageIDsByTargetID = [String: Package.ID]()
-	var visitedPackageIDs = Set<Package.ID>()
-	var packagesToVisit = [package]
-	while let packageToVisit = packagesToVisit.popLast() {
-		if visitedPackageIDs.insert(packageToVisit.id).inserted {
-			for packageTarget in packageToVisit.targets {
-				packageIDsByTargetID[packageTarget.id] = packageToVisit.id
-			}
-			packagesToVisit += packageToVisit.dependencies.map(\.package)
-		}
-	}
 	func moduleName(of target: any Target) -> String {
 		(target as? any SourceModuleTarget)?.moduleName ?? target.name
 	}
 	func graphTarget(_ target: SwiftSourceModuleTarget) -> PluginTargetGraph.Target {
 		PluginTargetGraph.Target(
 			moduleName: target.moduleName,
-			packageID: packageIDsByTargetID[target.id],
+			packageID: packagesByTargetID[target.id]?.id,
 			// The files the CSV lists for the target, spelled by the same code.
 			sourceFilePaths: inputSwiftFilePaths(of: target.sourceFiles(withSuffix: ".swift").map(\.url), relativeTo: base).sorted(),
 			dependencyModuleNames: Set(target.dependencies.flatMap { dependency in
@@ -300,30 +291,59 @@ func writeTargetGraph(
 	try writeIfChanged(encoder.encode(targetGraph), to: targetGraphFile(besideInputSourcesFile: inputSourcesFile))
 }
 
+extension Package {
+	/// The package that declares each target of this package and of the packages it depends on, directly or through
+	/// another. The plugin API reports which package declares a target only by listing the package's targets.
+	var packagesByTargetID: [Target.ID: Package] {
+		var packagesByTargetID = [Target.ID: Package]()
+		var visitedPackageIDs = Set<Package.ID>()
+		var packagesToVisit = [self]
+		while let packageToVisit = packagesToVisit.popLast() {
+			if visitedPackageIDs.insert(packageToVisit.id).inserted {
+				for packageTarget in packageToVisit.targets {
+					packagesByTargetID[packageTarget.id] = packageToVisit
+				}
+				packagesToVisit += packageToVisit.dependencies.map(\.package)
+			}
+		}
+		return packagesByTargetID
+	}
+}
+
+extension PackageOrigin {
+	/// Whether the build reads the package from a directory the user keeps: the root package, or a package depended on
+	/// by path. A package fetched from a source control repository or from a registry is third-party code. An origin a
+	/// later SwiftPM adds counts as fetched: a module SafeDI does not read can still be read through
+	/// `additionalDirectoriesToInclude`, while a module it reads by mistake cannot be left out.
+	var isKeptByUser: Bool {
+		switch self {
+		case .root, .local:
+			true
+		case .repository, .registry:
+			false
+		@unknown default:
+			false
+		}
+	}
+}
+
 extension Target {
 	/// The Swift modules this target depends on, directly or through another, that are first-party code: every one of
-	/// the package at `packageDirectory`, which declares this target, and every other one that is not under
-	/// `checkouts`. A package SwiftPM fetched lies under `checkouts`, and so does each of its targets when the package
-	/// being built is itself fetched, as a library package consumed from a URL is: its own targets are still the
-	/// package's first-party code, and a type one of them declares `package` is one its siblings name.
-	func sourceModuleRecursiveDependencies(inPackageAt packageDirectory: URL) -> [SwiftSourceModuleTarget] {
-		let packageDirectoryComponents = packageDirectory.pathComponents
-		return recursiveTargetDependencies.compactMap { target in
+	/// `package`, which declares this target, and every one of a package the user keeps (`PackageOrigin.isKeptByUser`),
+	/// as SwiftPM reports each package's origin. `package` can itself be fetched, as a library package consumed from a
+	/// URL that applies SafeDI to its own targets is: its own targets are still the package's first-party code, and a
+	/// type one of them declares `package` is one its siblings name. `packagesByTargetID` names the package that
+	/// declares each target, and lists every target this one depends on.
+	func sourceModuleRecursiveDependencies(
+		readingTargetsOf package: Package,
+		packagesByTargetID: [Target.ID: Package],
+	) -> [SwiftSourceModuleTarget] {
+		recursiveTargetDependencies.compactMap { target in
 			// Since we only understand Swift files, we only care about SwiftSourceModuleTargets.
-			guard let swiftModule = target as? SwiftSourceModuleTarget else {
-				return nil
-			}
-
-			// We only care about first-party code. Ignore third-party dependencies.
-			let pathComponents = swiftModule.directoryURL.pathComponents
-			guard pathComponents.starts(with: packageDirectoryComponents) || pathComponents
-				// Removing the module name.
-					.dropLast()
-					// Removing 'Sources'.
-					.dropLast(ifEquals: "Sources")
-					// Removing the package name.
-					.dropLast()
-					.last != "checkouts"
+			guard let swiftModule = target as? SwiftSourceModuleTarget,
+			      // We only care about first-party code. Ignore third-party dependencies.
+			      let declaringPackage = packagesByTargetID[target.id],
+			      declaringPackage.id == package.id || declaringPackage.origin.isKeptByUser
 			else {
 				return nil
 			}
@@ -503,13 +523,3 @@ extension Target {
 		}
 	}
 #endif
-
-extension Array where Element: Equatable {
-	public func dropLast(ifEquals value: Element) -> [Element] {
-		if last == value {
-			dropLast()
-		} else {
-			self
-		}
-	}
-}

@@ -30,18 +30,22 @@ indirect enum Expression: Hashable, Sendable {
 	/// What a place of a public mock built inline inside a fill is bound to: the value of the builder `mock()` takes for its
 	/// hole type and family, where it is passed or required, and `otherwise` where an optional one is `nil`.
 	case holeBuilderRead(ScopeGenerator.FillPlaceBindings.HoleBuilder, otherwise: Expression)
+	/// A construction the type key spells whole: a construction value, or a call after the closures it tries first.
+	case spelledConstruction(String)
 
 	/// How generated code spells the expression.
 	var spelled: String {
 		switch self {
 		case let .construction(target, arguments):
-			"\(target.callee)(\(arguments))"
+			target.spelled(passing: arguments)
 		case let .call(function, arguments):
 			"\(function)(\(arguments))"
 		case let .erasure(expression, erasedType):
 			"\(erasedType.asSource)(\(expression.spelled))"
 		case let .holeBuilderRead(holeBuilder, otherwise):
 			holeBuilder.inlinePlaceValue(construction: otherwise.spelled, overrideExpression: nil)
+		case let .spelledConstruction(spelled):
+			spelled
 		}
 	}
 
