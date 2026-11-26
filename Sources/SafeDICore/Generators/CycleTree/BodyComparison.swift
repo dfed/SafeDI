@@ -21,7 +21,7 @@
 extension DependencyTreeGenerator {
 	/// Compares each place of a root's tree with a body built from its scope's copy beneath the answers its path gives
 	/// the labels the scope's tree receives (`VariantBodyObservation`), and the bodies today's places take with those the
-	/// root's plan builds with no tree of today's (`PlanBodiesObservation`). Does nothing where no test observes either.
+	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`). Does nothing where no test observes any.
 	///
 	/// A tree with a label no one parameter can pass is rejected (`validateCycleLabelsArePassable`), and is not compared:
 	/// a body beneath a call's own answers passes a value there that today's parameter cannot carry.
@@ -40,7 +40,9 @@ extension DependencyTreeGenerator {
 	) throws {
 		let variantBodyObserver = VariantBodyObservation.observer
 		let planBodiesObserver = PlanBodiesObservation.observer
-		guard variantBodyObserver != nil || planBodiesObserver != nil,
+		let planCallsObserver = PlanCallsObservation.observer
+		let twinIdentityObserver = TwinIdentityObservation.observer
+		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil || twinIdentityObserver != nil,
 		      todaysTree.unpassableCycleLabelsInTree.isEmpty,
 		      let shadow = CallPlaceShadow(root: scope, cache: &cache)
 		else { return }
@@ -50,18 +52,25 @@ extension DependencyTreeGenerator {
 		var callsCompared = [ObjectIdentifier: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, labelsPassedNil: Set<String>)]]()
 		// The bodies today's places of scopes on a cycle take, in the order the walk first meets each.
 		var todaysBodies = [Int]()
+		// The calls of today's tree that run another function than the plan's call names.
+		var callsOfOtherFunction = [String]()
 		var walk = PlaceContextWalk(ofTodaysTree: todaysTree, builtFrom: scope, twinValues: shadow.twinValues)
 		while let (context, isCalledByCycleClosingScope) = walk.next() {
+			if isCalledByCycleClosingScope {
+				callsOfOtherFunction += VariantAnswers.placesCallingOtherFunctionThanPlan(at: context, twinValues: shadow.twinValues)
+			}
 			if let copy = shadow.copy(of: context.scope) {
 				var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &cache).received.map(\.label))
 				labelSet.insert(context.property.label)
 				let labels = labelSet.sorted()
-				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
+				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily)
+				// A label whose declaration the scopes above build after the place is `nil` in its tree.
+				let answeredLabels = VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter)
 				let body = try bodies.body(
 					of: copy,
 					as: key,
 					keyedBy: labels,
-					answering: labels,
+					answering: answeredLabels,
 					beneath: context.nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 					builtBy: (context.builder, context.erasedToConcreteExistential),
@@ -69,13 +78,13 @@ extension DependencyTreeGenerator {
 				// Today's place reads a parameter of a function it is built in where the call's path declares the
 				// label, and the parameter is `nil` where the call passes `nil`: every receive of that label is then
 				// `nil`, as in a body no declaration answers the label for.
-				var todaysUnavailableOptionalProperties = context.generator.unavailableOptionalProperties
+				var todaysUnavailableOptionalProperties = context.orderedUnavailableProperties
 				if !context.labelsPassedNil.isDisjoint(with: labelSet) {
 					let bodyWithoutAnswers = try bodies.body(
 						of: copy,
 						as: key,
 						keyedBy: labels,
-						answering: labels.filter { !context.labelsPassedNil.contains($0) },
+						answering: answeredLabels.filter { !context.labelsPassedNil.contains($0) },
 						beneath: context.nearestDeclarations,
 						lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 						builtBy: (context.builder, context.erasedToConcreteExistential),
@@ -106,62 +115,26 @@ extension DependencyTreeGenerator {
 		}
 		// The bodies the plan builds with no tree of today's: the root's, then the body of each call place a
 		// body holds, beneath the answers that body's path gives it.
-		if let planBodiesObserver, let rootCopy = shadow.copy(of: scope) {
-			var bodiesOfPlan = [Int]()
-			var bodiesToWalk = try [bodies.body(
-				of: rootCopy,
-				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
-				keyedBy: [],
-				answering: [],
-				beneath: NearestDeclarations(),
-				lazilyInstantiatedInstanceProperties: [],
-			)]
-			while let bodyToWalk = bodiesToWalk.popLast() {
-				let body = bodies.bodies[bodyToWalk]
-				var bodyWalk = PlaceContextWalk(
-					ofTodaysTree: body.generator,
-					builtFrom: body.copy,
-					beneath: body.nearestDeclarations,
-					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
-					twinValues: shadow.twinValues,
-					twinsBeingBuilt: body.key.twinsBeingBuilt,
-				)
-				while let (context, _) = bodyWalk.next() {
-					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
-						var labelSet = Set(Self.collectReceivedProperties(from: calledScope, cache: &cache).received.map(\.label))
-						labelSet.insert(context.property.label)
-						let labels = labelSet.sorted()
-						// A call is of the function's property: where the path is building the value the call place
-						// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
-						// cycle on that property's function, beneath the calling scope's declarations.
-						let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
-						let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
-						var calledNearestDeclarations = context.nearestDeclarations
-						if functionProperty != context.property {
-							calledNearestDeclarations = context.enclosingNearestDeclarations
-							calledNearestDeclarations.build(functionProperty)
-						}
-						let calledBody = try bodies.body(
-							of: calledCopy,
-							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
-							keyedBy: labels,
-							answering: labels,
-							beneath: calledNearestDeclarations,
-							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
-							builtBy: (context.builder, context.erasedToConcreteExistential),
-						)
-						if !bodiesOfPlan.contains(calledBody) {
-							bodiesOfPlan.append(calledBody)
-							bodiesToWalk.append(calledBody)
-						}
-					}
-				}
-			}
-			planBodiesObserver(
+		if planBodiesObserver != nil || planCallsObserver != nil, let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) {
+			let bodiesOfPlan = plan.calledBodies
+			planCallsObserver?(
+				scope.instantiable.concreteInstantiable.asSource,
+				([plan.rootBody] + bodiesOfPlan).flatMap { bodies.callDescriptions(of: $0) },
+			)
+			planBodiesObserver?(
 				scope.instantiable.concreteInstantiable.asSource,
 				bodiesOfPlan.map { bodies.bodies[$0].description },
 				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
 				shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
+			)
+		}
+		if let twinIdentityObserver, !shadow.twinValues.isEmpty {
+			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+			twinIdentityObserver(
+				scope.instantiable.concreteInstantiable.asSource,
+				VariantAnswers.shadowsTwinValues(of: shadow),
+				PerTypePlan(root: ConstructionScope(table: table, record: record)).map(VariantAnswers.plansTwinValues(of:)) ?? [],
+				callsOfOtherFunction,
 			)
 		}
 	}

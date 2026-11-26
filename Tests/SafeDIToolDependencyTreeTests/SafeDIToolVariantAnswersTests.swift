@@ -1,0 +1,233 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// The judgements a body's key needs beyond the nearest declaration of each label (`VariantAnswers`): the order the
+/// scope that makes a call builds its children in, the `@Sendable` family a call is made in, and which function a call
+/// of a twin value runs.
+struct SafeDIToolVariantAnswersTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsBodyAnsweringSiblingBuiltAfterCallNil_whenScopesBuildSiblingsInOtherOrders() async throws {
+		// `P1` and `P2` each build `cBuilder` and `x`, which receive each other only if available, so each builds first
+		// the one it declares first. `P1` builds `x` before `cBuilder`, so `C` reads `P1`'s `x`; `P2` builds it after, so
+		// `C` reads `nil` there whatever declares `x`: two bodies of `C`, one of them answering `x` with `nil`.
+		let plans = try await plans(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let p1: P1
+			    @Instantiated let p2: P2
+			    public init(p1: P1, p2: P2) { self.p1 = p1; self.p2 = p2 }
+			}
+
+			@Instantiable public final class P1: Instantiable {
+			    @Instantiated let cBuilder: Instantiator<C>
+			    @Instantiated let x: X
+			    public init(cBuilder: Instantiator<C>, x: X) { self.cBuilder = cBuilder; self.x = x }
+			}
+
+			@Instantiable public final class P2: Instantiable {
+			    @Instantiated let x: X
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(x: X, cBuilder: Instantiator<C>) { self.x = x; self.cBuilder = cBuilder }
+			}
+
+			@Instantiable public final class X: Instantiable {
+			    @Received(onlyIfAvailable: true) let cBuilder: Instantiator<C>?
+			    public init(cBuilder: Instantiator<C>?) { self.cBuilder = cBuilder }
+			}
+
+			@Instantiable public final class C: Instantiable {
+			    @Received(onlyIfAvailable: true) let x: X?
+			    @Instantiated let dBuilder: Instantiator<D>
+			    public init(x: X?, dBuilder: Instantiator<D>) { self.x = x; self.dBuilder = dBuilder }
+			}
+
+			@Instantiable public final class D: Instantiable {
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+			}
+			""")
+
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"C as cBuilder: Instantiator<C> [cBuilder = cBuilder: Instantiator<C>, being built] [x = nil]",
+					"C as cBuilder: Instantiator<C> [cBuilder = cBuilder: Instantiator<C>, being built] [x = x: X]",
+					"D as dBuilder: Instantiator<D> [dBuilder = dBuilder: Instantiator<D>, being built] [x = x: X]",
+					"D as dBuilder: Instantiator<D> [dBuilder = dBuilder: Instantiator<D>, being built] [x = nil]",
+				],
+				todaysBodiesPlanLacks: [],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsBodyPerFamily_whenTypeOnCycleIsBuiltInsideAndOutsideSendableFunction() async throws {
+		// `A` is built in the `@Sendable` function of a `SendableInstantiator` and `B` in a plain one; each builds
+		// `cBuilder`, on a cycle through `D`. A plain function takes the isolation of the root's initializer and a
+		// `@Sendable` one is nonisolated, so the bodies of `C` and `D` built in each are bodies of their own.
+		let plans = try await plans(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let aBuilder: SendableInstantiator<A>
+			    @Instantiated let bBuilder: Instantiator<B>
+			    public init(aBuilder: SendableInstantiator<A>, bBuilder: Instantiator<B>) { self.aBuilder = aBuilder; self.bBuilder = bBuilder }
+			}
+
+			@Instantiable public final class A: Instantiable {
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+			}
+
+			@Instantiable public final class B: Instantiable {
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+			}
+
+			@Instantiable public final class C: Instantiable {
+			    @Instantiated let dBuilder: Instantiator<D>
+			    public init(dBuilder: Instantiator<D>) { self.dBuilder = dBuilder }
+			}
+
+			@Instantiable public final class D: Instantiable {
+			    @Instantiated let cBuilder: Instantiator<C>
+			    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+			}
+			""")
+
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"C as cBuilder: Instantiator<C> [cBuilder = cBuilder: Instantiator<C>, being built]",
+					"C as cBuilder: Instantiator<C> [cBuilder = cBuilder: Instantiator<C>, being built] [@Sendable]",
+					"D as dBuilder: Instantiator<D> [dBuilder = dBuilder: Instantiator<D>, being built] [@Sendable]",
+					"D as dBuilder: Instantiator<D> [dBuilder = dBuilder: Instantiator<D>, being built]",
+				],
+				todaysBodiesPlanLacks: [],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsFunctionOfTwinPlanNamesAndPlanNamesNoTwins_whenConstantTwinIsOffCycleOfLazyTwin() async throws {
+		// `Root` builds `home: Home` and `Panel` builds `home: LazilyInstantiated<Home>`: one identity, so the order shadow
+		// names them twins. The plan's twins are declarations of one component, and `Root`'s constant is off the cycle
+		// `Panel`'s wrapper is on, so the plan names none. `Panel`'s call of the value runs the function of `Root`'s
+		// constant, the twin its path is building, as the plan's call does.
+		var observations = [TwinObservation]()
+		let (stream, continuation) = AsyncStream.makeStream(of: TwinObservation.self)
+		try await TwinIdentityObservation.$observer.withValue({ root, shadowsTwinValues, plansTwinValues, callsOfOtherFunction in
+			continuation.yield(TwinObservation(root: root, shadowsTwinValues: shadowsTwinValues, plansTwinValues: plansTwinValues, callsOfOtherFunction: callsOfOtherFunction))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let home: Home
+					    public init(home: Home) { self.home = home }
+					}
+
+					@Instantiable public final class Home: Instantiable {
+					    @Instantiated let panelBuilder: Instantiator<Panel>
+					    public init(panelBuilder: Instantiator<Panel>) { self.panelBuilder = panelBuilder }
+					}
+
+					@Instantiable public final class Panel: Instantiable {
+					    @Instantiated let home: LazilyInstantiated<Home>
+					    public init(home: LazilyInstantiated<Home>) { self.home = home }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		for await observation in stream {
+			observations.append(observation)
+		}
+
+		#expect(observations == [
+			TwinObservation(root: "Root", shadowsTwinValues: ["Home as home: Home"], plansTwinValues: [], callsOfOtherFunction: []),
+		])
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	private struct Plan: Equatable {
+		let root: String
+		let bodiesOfPlan: [String]
+		let todaysBodiesPlanLacks: [String]
+	}
+
+	private struct TwinObservation: Equatable {
+		let root: String
+		let shadowsTwinValues: [String]
+		let plansTwinValues: [String]
+		let callsOfOtherFunction: [String]
+	}
+
+	/// The bodies the plan builds for each root of `swiftFileContent`, and those today's places take that it lacks.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func plans(of swiftFileContent: String) async throws -> [Plan] {
+		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
+		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, _ in
+			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var plans = [Plan]()
+		for await plan in stream where !plans.contains(plan) {
+			plans.append(plan)
+		}
+		return plans
+	}
+}

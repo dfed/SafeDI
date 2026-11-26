@@ -710,9 +710,12 @@ public actor DependencyTreeGenerator {
 						),
 					))
 					// Each scope the root reaches with its children on a cycle as call places, built only where a test compares
-					// the order it gives the scope's children with today's.
+					// the order it gives the scope's children with today's. A tree with a label no one parameter can pass,
+					// which is rejected, is not compared: today's scope that closes the cycle takes no parameter for the
+					// label and so waits for no sibling that declares it, while a call place receives it.
 					if let observer = CallPlaceOrderObservation.observer,
 					   let todaysTree = roots.last?.scopeGenerator,
+					   todaysTree.unpassableCycleLabelsInTree.isEmpty,
 					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
 					{
 						var callPlaceOrderByScope = [ObjectIdentifier: [Int]]()

@@ -83,12 +83,14 @@ extension DependencyTreeGenerator {
 		while let (context, isCalledByCycleClosingScope) = walk.next() {
 			if let copy = shadow.copy(of: context.scope) {
 				let labels = labels(readBy: context.scope, builtAs: context.property, cache: &cache)
-				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
+				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily)
+				// A label whose declaration the scopes above build after the place is `nil` in its tree.
+				let answeredLabels = VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter)
 				let body = try bodies.body(
 					of: copy,
 					as: key,
 					keyedBy: labels,
-					answering: labels,
+					answering: answeredLabels,
 					beneath: context.nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 					builtBy: (context.builder, context.erasedToConcreteExistential),
@@ -96,14 +98,14 @@ extension DependencyTreeGenerator {
 				// Today's place reads a parameter of a function it is built in where the call's path declares the label,
 				// and the parameter is `nil` where the call passes `nil`: every receive of that label is then `nil`, as in
 				// a body no declaration answers the label for.
-				var todaysUnavailableOptionalProperties = context.generator.unavailableOptionalProperties
+				var todaysUnavailableOptionalProperties = context.orderedUnavailableProperties
 				let labelsPassedNil = context.labelsPassedNil.intersection(labels)
 				if !labelsPassedNil.isEmpty {
 					let bodyWithoutAnswers = try bodies.body(
 						of: copy,
 						as: key,
 						keyedBy: labels,
-						answering: labels.filter { !labelsPassedNil.contains($0) },
+						answering: answeredLabels.filter { !labelsPassedNil.contains($0) },
 						beneath: context.nearestDeclarations,
 						lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 						builtBy: (context.builder, context.erasedToConcreteExistential),
@@ -140,7 +142,7 @@ extension DependencyTreeGenerator {
 			var bodiesOfPlan = [Int]()
 			var bodiesToWalk = try [bodies.body(
 				of: rootCopy,
-				as: VariantBodyKey(scope: ObjectIdentifier(mockRootScope), property: nil, twinsBeingBuilt: [:]),
+				as: VariantBodyKey(scope: ObjectIdentifier(mockRootScope), property: nil, twinsBeingBuilt: [:], isInSendableFamily: false),
 				keyedBy: rootLabels,
 				answering: rootLabels,
 				beneath: rootNearestDeclarations,
@@ -155,6 +157,8 @@ extension DependencyTreeGenerator {
 					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
 					twinValues: shadow.twinValues,
 					twinsBeingBuilt: body.key.twinsBeingBuilt,
+					isInSendableFamily: body.key.isInSendableFamily,
+					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
 					isMockRoot: body.key.property == nil,
 				)
 				while let (context, _) = bodyWalk.next() {
@@ -172,9 +176,9 @@ extension DependencyTreeGenerator {
 						}
 						let calledBody = try bodies.body(
 							of: calledCopy,
-							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
+							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily),
 							keyedBy: labels,
-							answering: labels,
+							answering: VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter),
 							beneath: calledNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 							builtBy: (context.builder, context.erasedToConcreteExistential),

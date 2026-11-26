@@ -611,7 +611,9 @@ func executeSafeDIToolMultiModuleTest(
 														try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
 															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
 																try await MockVariantBodyChecks.comparing {
-																	try await tool.generate()
+																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																		try await tool.generate()
+																	}
 																}
 															}
 														}

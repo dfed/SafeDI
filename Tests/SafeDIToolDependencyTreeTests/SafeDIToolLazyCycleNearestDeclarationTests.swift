@@ -4852,6 +4852,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnpassableLabelErrorAlone_whenScopeClosingCycleDeclaresLabelAfterItsBuilder() async {
+		// As the test below, but `S` declares `x` after the builder that closes the cycle. No parameter carries `x`, so
+		// today's tree builds `aBuilder` first, while a call place, which receives what `A`'s tree receives, would wait
+		// for `x`: the comparison of the two orders skips a tree that is rejected (seam corpus seeds 480 and 505).
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>?` and `x: X`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>?` and `x: X` under different labels to fix.
+			\(fixtures["S.swift"]):9:5: note: `x: LazilyInstantiated<X>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: false, scopeClosingCycleDeclaresLabelLast: true), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsUnpassableLabelError_whenTreeBuiltAgainRequiresInstanceBesideOptionalWrapperOnlyIfAvailable() async {
 		// `B` requires `x: X` and `C` receives `x: LazilyInstantiated<X>?` only if available. `Root` and `S` each declare
 		// `x: LazilyInstantiated<X>`, which provides both, but a parameter `x: X` cannot carry the wrapper `C` would get.
@@ -4932,14 +4948,16 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// `Root`, which instantiates `x: LazilyInstantiated<X>` and `aBuilder`, and generates a mock when
 	/// `rootGeneratesMock`; `A` builds `B`, which requires `x: X`, `C`, which receives `x: LazilyInstantiated<X>?` only if
 	/// available, and `sBuilder`; `S` instantiates `x: LazilyInstantiated<X>` and closes the cycle on `A`.
-	private static func requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: Bool) -> [String] {
+	private static func requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: Bool, scopeClosingCycleDeclaresLabelLast: Bool = false) -> [String] {
 		[
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"])
 				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: rootGeneratesMock ? "@Instantiable(isRoot: true, generateMock: true)" : "@Instantiable(isRoot: true)"),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let sBuilder: Instantiator<S>"]),
 			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let x: X"]),
 			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: LazilyInstantiated<X>?"]),
-			seamFixtureType(named: "S", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "S", isFinalClass: true, declarations: scopeClosingCycleDeclaresLabelLast
+				? ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let x: LazilyInstantiated<X>"]
+				: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
 		]
 	}
