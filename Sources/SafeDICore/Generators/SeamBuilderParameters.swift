@@ -337,13 +337,7 @@ extension DependencyTreeGenerator {
 			// The call's own level, which declares nothing: the called seam's root stands beneath it.
 			var opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
 			if presentation.opensSendableFunction {
-				let function: SeamSignature.Hole.UncarriedDeclaration.SendableFunction = if ScopeGenerator.isBuilder(presentation.callProperty) {
-					.instantiator(builtType: presentation.innerSeamType)
-				} else if case .sendableLazilyInstantiated = presentation.callProperty.propertyType {
-					.sendableLazyWrapper(builtType: presentation.innerSeamType)
-				} else {
-					.other
-				}
+				let function = sendableFunction(openedBy: presentation.callProperty, building: presentation.innerSeamType)
 				opensSendableFunction = SeamSignature.Places.SendableFunctionOpened(property: presentation.callProperty, function: function)
 			}
 			levels.append(SeamPlacesBuilder.LevelDraft(
@@ -620,6 +614,18 @@ extension DependencyTreeGenerator {
 			}
 		}
 		return sites
+	}
+
+	/// The `@Sendable` function a scope built as `property`, of the type `builtType`, opens: a level of a seam's own tree,
+	/// or a call that presents the places of the seam it builds.
+	private static func sendableFunction(openedBy property: Property, building builtType: TypeDescription) -> SeamSignature.Hole.UncarriedDeclaration.SendableFunction {
+		if ScopeGenerator.isBuilder(property) {
+			.instantiator(builtType: builtType)
+		} else if case .sendableLazilyInstantiated = property.propertyType {
+			.sendableLazyWrapper(builtType: builtType)
+		} else {
+			.other
+		}
 	}
 
 	/// The holes of the seams the tree `generator` roots calls whose builders it passes up, one per site whatever route
@@ -1546,13 +1552,7 @@ extension DependencyTreeGenerator {
 			if level > 0, let property = frame.generator.property, frame.generator.buildsInSendableFunction {
 				sendableDepth += 1
 				levelOpensSendableFunction = true
-				let function: SeamSignature.Hole.UncarriedDeclaration.SendableFunction = if ScopeGenerator.isBuilder(property) {
-					.instantiator(builtType: instantiable.concreteInstantiable)
-				} else if case .sendableLazilyInstantiated = property.propertyType {
-					.sendableLazyWrapper(builtType: instantiable.concreteInstantiable)
-				} else {
-					.other
-				}
+				let function = sendableFunction(openedBy: property, building: instantiable.concreteInstantiable)
 				levelOpensFunction = SeamSignature.Places.SendableFunctionOpened(property: property, function: function)
 				sendableFunctions.append((property, function))
 			}

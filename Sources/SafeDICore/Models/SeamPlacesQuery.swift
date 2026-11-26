@@ -48,7 +48,7 @@ extension SeamSignature.Places {
 		public init(
 			of places: SeamSignature.Places,
 			excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = [],
-			calledPlaces: @escaping (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil },
+			calledPlaces: ((SeamSignature.Places.CalledCase) -> SeamSignature.Places?)? = nil,
 		) {
 			self.places = places
 			self.calledPlaces = calledPlaces
@@ -892,7 +892,7 @@ extension SeamSignature.Places {
 			if let known = calledQueries[key] {
 				query = known
 			} else {
-				guard let called = calledPlaces(reference) else { return nil }
+				guard let called = calledPlaces?(reference) else { return nil }
 				query = Query(of: called, calledPlaces: calledPlaces)
 				calledQueries[key] = query
 			}
@@ -913,24 +913,6 @@ extension SeamSignature.Places {
 				chain.append(called)
 			}
 			return chain
-		}
-
-		/// The types from the seam, itself excluded, to the owner of the places of the case at `caseIndex`, along the route
-		/// each seam on the way names its case by: for a case of the seam's own, `typesToOwner(along:)` of its route; for a
-		/// place a call presents, the types to the call and then the called seam's (`Hole.typesToOwner` of a passed-up place).
-		public func typesToOwner(ofCase caseIndex: Int) -> [SeamSignature.Hole.PathType] {
-			casesPresented(from: caseIndex).flatMap { presented in
-				presented.query.representativeRoute(of: presented.caseIndex).map { presented.query.typesToOwner(along: $0) } ?? []
-			}
-		}
-
-		/// The properties the code declares from the seam's root to the call that presents the places of the case at
-		/// `caseIndex`, and on through each seam that presents them in turn (`Hole.passedUpRoute`); empty for a case of the
-		/// seam's own.
-		public func passedUpRoute(ofCase caseIndex: Int) -> [SeamSignature.Hole.DeclaredProperty] {
-			casesPresented(from: caseIndex).dropLast().flatMap { presented in
-				presented.query.representativeRoute(of: presented.caseIndex).map { presented.query.declaredPathToOwner(along: $0) } ?? []
-			}
 		}
 
 		/// What the levels on the routes to the case at `caseIndex` declare, in the order a walk up from its owner meets them,
@@ -963,7 +945,7 @@ extension SeamSignature.Places {
 			let caseIndex: Int
 		}
 
-		private let calledPlaces: (SeamSignature.Places.CalledCase) -> SeamSignature.Places?
+		private let calledPlaces: ((SeamSignature.Places.CalledCase) -> SeamSignature.Places?)?
 		/// The query of each called seam a case was asked through, kept as long as this query.
 		private var calledQueries = [CalledSeam: Query]()
 

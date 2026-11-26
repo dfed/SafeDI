@@ -35,12 +35,11 @@ struct PublicMockPlans: Sendable {
 
 	/// The place graph of the plan of `type`'s public mock, or `nil` when the run holds no plan of it.
 	func places(of type: TypeDescription) -> SeamSignature.Places? {
-		switch plansByType[type] {
-		case let .success(plan):
-			plan?.places
-		case .failure, .none:
-			nil
+		var places: SeamSignature.Places?
+		if case let .success(plan)? = plansByType[type] {
+			places = plan?.places
 		}
+		return places
 	}
 
 	mutating func add(plan: StoredPublicMockPlan?, of type: TypeDescription) {

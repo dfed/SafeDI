@@ -2309,7 +2309,7 @@ public struct SeamCall: Sendable {
 		callerPackageName: String? = nil,
 		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
 		caseIndexByHole: [Int] = [],
-		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil },
+		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places?,
 	) {
 		self.parameters = parameters
 		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums, places: places, caseIndexByHole: caseIndexByHole, placesOfSeamsBeneath: placesOfSeamsBeneath)
@@ -2379,7 +2379,7 @@ struct CalledBuilders: Sendable {
 		scopeEnums: [SeamSignature.ScopeEnum],
 		places: SeamSignature.Places = SeamSignature.Places(levels: [], cases: []),
 		caseIndexByHole: [Int] = [],
-		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places? = { _ in nil },
+		placesOfSeamsBeneath: @escaping @Sendable (SeamSignature.Places.CalledCase) -> SeamSignature.Places?,
 	) {
 		self.holes = holes
 		self.builders = builders
