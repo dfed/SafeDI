@@ -3558,15 +3558,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var walk = SeamTierOmissionWalk(reads: reads, isOwnFile: isOwnFile)
 		// No builder function encloses the root, so every read of a function's parameter is judged where the function's
-		// visit returns, and the root's findings are omissions alone.
-		let omissions = await seamTierOmissions(
+		// visit returns, and every omission is the walk's once the root's visit returns.
+		_ = await seamTierOmissions(
 			of: instantiable,
 			propertiesGeneratedLater: [],
 			declarationsByLabel: declarationsByLabel,
 			enclosingCycleFunctions: [:],
 			referenceLocation: instantiable.declarationLocation,
 			walk: &walk,
-		).omissions
+		)
+		let omissions = walk.omissions
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
 		// tree that make it one say why the seam takes it.
@@ -3587,8 +3588,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A visit reads its frame only through what its generator's subtree reads from above it (`SeamTierOmissionReads`), so
 	/// it is made once for each frame projected to those reads (`SeamTierOmissionVisit`): with the functions enclosing it
 	/// numbered by their order, it is made over the projected frame, its findings kept in those numbers, and each visit
-	/// with an equal projection is handed them in its own frame's numbers. Its omissions it leaves out, which the first
-	/// visit found.
+	/// with an equal projection is handed them in its own frame's numbers. The walk collects each visit's omissions once,
+	/// as the visit returns, so the findings it keeps hold none.
 	/// - Parameters:
 	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
 	///     parameters (see `CycleParameter`), by the declaration each builds.
@@ -3618,11 +3619,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			referenceLocation: isInOwnFile && !reads.childLacksDeclarationLocation ? nil : referenceLocation,
 		)
 		if let findings = walk.visits[visit] {
-			return findings.inFrame(numbering: frame.functions, withOmissions: false)
+			return findings.inFrame(numbering: frame.functions)
 		}
-		let findings = await seamTierOmissions(of: instantiable, isInOwnFile: isInOwnFile, visit: visit, walk: &walk)
+		var findings = await seamTierOmissions(of: instantiable, isInOwnFile: isInOwnFile, visit: visit, walk: &walk)
+		// The omissions are the walk's, found once: a visit with an equal projection, which would find them again, is
+		// handed the findings without them, so a visit keeps none of its subtree's.
+		walk.omissions.append(contentsOf: findings.takeOmissions())
 		walk.visits[visit] = findings
-		return findings.inFrame(numbering: frame.functions, withOmissions: true)
+		return findings.inFrame(numbering: frame.functions)
 	}
 
 	/// The findings of `visit`, a visit of this scope, made over its projected frame.
@@ -4210,7 +4214,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// Whether a receive of `unwrappedProperty`, or of its optional form, resolves to this declaration.
 		func provides(_ unwrappedProperty: Property) -> Bool {
-			property.asUnwrappedProperty == unwrappedProperty || instanceProperty?.asUnwrappedProperty == unwrappedProperty
+			providedProperties.provides(unwrappedProperty)
+		}
+
+		/// What `provides(_:)` reads of this declaration.
+		var providedProperties: ProvidedProperties {
+			ProvidedProperties(unwrappedProperty: property.asUnwrappedProperty, unwrappedInstanceProperty: instanceProperty?.asUnwrappedProperty)
 		}
 
 		/// This declaration, with the function whose parameter it is renumbered as `numberByFunction` says.
@@ -4218,6 +4227,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var declaration = self
 			declaration.cycleFunction = cycleFunction.map { numberByFunction[$0, default: $0] }
 			return declaration
+		}
+	}
+
+	/// What a declaration provides a receive of: the properties `VisibleDeclaration.provides(_:)` reads, unwrapped.
+	private struct ProvidedProperties: Hashable, Sendable {
+		let unwrappedProperty: Property
+		let unwrappedInstanceProperty: Property?
+
+		/// Whether a receive of `unwrappedProperty`, or of its optional form, resolves to a declaration of these.
+		func provides(_ unwrappedProperty: Property) -> Bool {
+			self.unwrappedProperty == unwrappedProperty || unwrappedInstanceProperty == unwrappedProperty
 		}
 	}
 
@@ -4392,6 +4412,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		let reads: SeamTierOmissionReads
 		var visits = [SeamTierOmissionVisit: SeamTierOmissionFindings]()
+		/// The omissions the walk found, each visit's once, when it returned.
+		var omissions = [SeamTierOmission]()
 
 		/// A number no function the walk entered has.
 		mutating func nextFunction() -> Int {
@@ -4483,15 +4505,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		/// A call of a builder function a lazy cycle closes on that passes its parameter of `label` a value: the
-		/// declarations of the label where the call is made, reached through the parameters of functions `guards` lists,
-		/// each of which must provide a read the call is to judge.
+		/// declarations of the label where the call is made, reached through the parameters of functions, each of which
+		/// must provide a read the call is to judge. Of those parameters it keeps only what each provides (`guards`), which
+		/// is all a judgement reads of them: keyed by the parameters themselves, the calls of functions nested along a chain
+		/// of lazy cycles were told apart by every path through the chain, and grew with the paths.
 		struct Call: Hashable, Sendable {
 			var function: Int
 			let label: String
-			var guards: [VisibleDeclaration]
+			var guards: Set<ProvidedProperties>
 			var declarations: [VisibleDeclaration]
 		}
 
+		/// The omissions this visit found itself, until the walk takes them (`takeOmissions()`).
 		private(set) var omissions = [SeamTierOmission]()
 		private(set) var reads = [Read]()
 		private(set) var calls = [Call]()
@@ -4517,7 +4542,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `declaringCalls`, judging each read of the function's parameters at the function's calls, and each call of an
 		/// enclosing function that passes one of them by the function's calls.
 		mutating func append(_ child: Self, closing function: Int, declaredBy declaringCalls: [Call]) {
-			omissions.append(contentsOf: child.omissions)
+			GenerationWork.record(child.reads.count + child.calls.count, by: .judgingCallsOfCycleFunctions)
 			let callsOfFunction = declaringCalls + child.calls.filter { $0.function == function }
 			for read in child.reads {
 				guard read.function == function else {
@@ -4543,25 +4568,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					insert(Call(
 						function: call.function,
 						label: call.label,
-						guards: call.guards + [parameter] + callOfFunction.guards,
+						guards: call.guards.union(callOfFunction.guards).union([parameter.providedProperties]),
 						declarations: callOfFunction.declarations,
 					))
 				}
 			}
 		}
 
+		/// The omissions this visit found, which these findings then no longer hold: a visit's omissions are the walk's
+		/// (`SeamTierOmissionWalk.omissions`), never its caller's.
+		mutating func takeOmissions() -> [SeamTierOmission] {
+			defer { omissions = [] }
+			return omissions
+		}
+
 		/// These findings, of a visit made over a frame whose enclosing functions `functions` numbers (see
-		/// `SeamTierOmissionVisit.Frame`), in the numbers of the frame the functions are; with their omissions where
-		/// `withOmissions`.
-		func inFrame(numbering functions: [Int], withOmissions: Bool) -> Self {
+		/// `SeamTierOmissionVisit.Frame`), in the numbers of the frame the functions are. They hold no omission, which the
+		/// walk took when the visit returned.
+		func inFrame(numbering functions: [Int]) -> Self {
 			var numberByFunction = [Int: Int]()
 			for (index, function) in functions.enumerated() {
 				numberByFunction[index - functions.count] = function
 			}
 			var findings = Self()
-			if withOmissions {
-				findings.omissions = omissions
-			}
 			for read in reads {
 				findings.insert(Read(function: numberByFunction[read.function, default: read.function], label: read.label, origin: read.origin))
 			}
@@ -4569,7 +4598,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				findings.insert(Call(
 					function: numberByFunction[call.function, default: call.function],
 					label: call.label,
-					guards: call.guards.map { $0.renumbering(numberByFunction) },
+					guards: call.guards,
 					declarations: call.declarations.map { $0.renumbering(numberByFunction) },
 				))
 			}

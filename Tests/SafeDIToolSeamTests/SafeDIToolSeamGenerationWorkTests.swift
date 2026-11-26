@@ -63,8 +63,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// Finding the carrier a sibling requires grows with the children of one scope, which shape E does not grow: the test
 		// below counts it on a seam whose own type builds many children.
 		// The walk that finds the values a seam tier omits enters only a subtree that holds a call omitting a parameter or a
-		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires, .findingSeamTierOmissions])
+		// scope closing a lazy cycle, which shape E has neither of: the test of layers of screens below counts it, and the
+		// test of a chain of flows below counts how it judges the calls of the functions lazy cycles close on.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .judgingCallsOfCycleFunctions])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -302,6 +303,61 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_judgesCallsOfCycleFunctionsOncePerWhatTheyRead_whenEachFlowReopensEveryEarlierFlow() async throws {
+		// A chain of flows, each calling `Library`'s `Panel` and opening the next flow and every earlier one, the last also
+		// opening a `Mid` that forwards a `note` and opens the last flow again. `Panel`'s `public` tier omits the `token` its
+		// `Badge` receives only if available, and `Badge` also receives `note` only if available, so every reopening closes
+		// a lazy cycle on a flow's builder function that takes `note`, nested inside the functions of the flows before it,
+		// and each call of a function is judged at the calls of the function enclosing it. The walk visits each flow once,
+		// and judges reads and calls that grow with the builders the flows hold, each flow one of every flow before it. A
+		// call keeps of the parameters it passes through only what each provides: kept as the parameters, a call was
+		// another for every path through the chain, and at four, six and eight flows 39, 585 and 26,719 were judged.
+		var work = [[GenerationWork.Step: Int]]()
+		for flowCount in [4, 6, 8] {
+			var flows = [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow0Builder: Instantiator<Flow0>"])]
+			for position in 0..<flowCount {
+				var declarations = ["@Instantiated let panel: Panel"]
+				if position + 1 < flowCount {
+					declarations.append("@Instantiated let flow\(position + 1)Builder: Instantiator<Flow\(position + 1)>")
+				}
+				declarations += (0..<position).map { "@Instantiated let flow\($0)Builder: Instantiator<Flow\($0)>" }
+				if position + 1 == flowCount {
+					declarations.append("@Instantiated let midBuilder: Instantiator<Mid>")
+				}
+				flows.append(seamFixtureType(named: "Flow\(position)", declarations: declarations))
+			}
+			flows.append(seamFixtureType(named: "Mid", declarations: ["@Forwarded let note: Int", "@Instantiated let flow\(flowCount - 1)Builder: Instantiator<Flow\(flowCount - 1)>"]))
+			let app = ModuleFixture(
+				name: "App",
+				packageName: "App",
+				swiftFileContent: ["import Library\n\n" + flows.joined(separator: "\n\n")],
+				dependencies: ["Library"],
+			)
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: [Self.panelModuleWhoseBadgeReceivesNote, app],
+					integration: .moduleInfo,
+					compileVerification: flowCount == 4 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var counts: [GenerationWork.Step: Int] = [.findingSeamTierOmissions: 0, .judgingCallsOfCycleFunctions: 0]
+			for await counted in stream where counts[counted.step] != nil {
+				counts[counted.step, default: 0] += counted.elementCount
+			}
+			work.append(counts)
+		}
+		#expect(work == [
+			[.findingSeamTierOmissions: 6, .judgingCallsOfCycleFunctions: 20],
+			[.findingSeamTierOmissions: 8, .judgingCallsOfCycleFunctions: 47],
+			[.findingSeamTierOmissions: 10, .judgingCallsOfCycleFunctions: 86],
+		])
+	}
+
 	// MARK: Private
 
 	/// `Library`, whose seam `Panel` has a `Badge` that receives the internal `Token` only if available, so its `public`
@@ -320,6 +376,36 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				    }
 
 				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"""
+				@Instantiable
+				struct Token: Instantiable {
+				    init() {}
+				}
+				""",
+			],
+			dependencies: [],
+		)
+	}
+
+	/// `panelModule`, whose `Badge` also receives a `note` only if available.
+	private static var panelModuleWhoseBadgeReceivesNote: ModuleFixture {
+		ModuleFixture(
+			name: "Library",
+			packageName: "App",
+			swiftFileContent: [
+				seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				"""
+				@Instantiable
+				public struct Badge: Instantiable {
+				    init(token: Token?, note: Int?) {
+				        self.token = token
+				        self.note = note
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				    @Received(onlyIfAvailable: true) let note: Int?
 				}
 				""",
 				"""

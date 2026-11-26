@@ -139,6 +139,13 @@ alternating runs after one untimed run of each graph. A run still going after 30
   QO-seam-calls-tier-omitting-parameter-at-every-path
                                the same, every last-layer screen also calling the seam `Panel` of module `Library`,
                                whose `public` tier omits a value its tree receives only if available.
+  QS-seam-tier-omission-in-chain-of-reopened-flows
+                               module `App`: a chain of flows, the row's number its length, each calling the seam
+                               `Panel` of module `Library`, whose `public` tier omits a value its tree receives only
+                               if available, and holding `Instantiator`s of the next flow and of every flow before
+                               it; the last also opens `Mid`, which forwards a value `Panel`'s tree receives only if
+                               available and opens the last flow again, so the flows' functions are nested lazy
+                               cycles.
   B-cycles-through-instantiators
                                module `Feature`: layers of three screens, each holding `Instantiator`s of the three
                                screens of the next layer and of the screen at its own position in the layer before,
@@ -513,6 +520,30 @@ def shape_qo(layers, width=4):
     return [("Library", [], library), ("Feature", ["Library"], feature), ("App", ["Feature", "Library"], "import Feature\nimport Library\nimport SafeDI\n\n" + app)]
 
 
+def shape_qs(length):
+    """A chain of `length` flows of module `App`, each calling the seam `Panel` of module `Library` and holding an
+    `Instantiator` of the next flow and one of every flow before it, so any flow can open an earlier one again; the last
+    also opens `Mid`, which forwards `note` and opens the last flow again. `Panel`'s `public` tier omits the `token` its
+    `Badge` receives only if available, and `Badge` also receives `note` only if available, so each reopening is a lazy
+    cycle whose function takes `note`, nested inside the functions of the flows before it, and the calls of each
+    function are judged at the calls of the function enclosing it."""
+    library = "import SafeDI\n\n"
+    library += declaration("@Instantiable(generateDependencyTree: true)", "Panel", [("@Instantiated", "badge", "Badge")])
+    library += declaration("@Instantiable", "Badge", [("@Received(onlyIfAvailable: true)", "token", "[3 of Int]?"), ("@Received(onlyIfAvailable: true)", "note", "Int?")], initializer_access="")
+    app = "import Library\nimport SafeDI\n\n"
+    app += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "flow0Builder", "Instantiator<Flow0>")])
+    for position in range(length):
+        properties = [("@Instantiated", "panel", "Panel")]
+        if position + 1 < length:
+            properties.append(("@Instantiated", f"flow{position + 1}Builder", f"Instantiator<Flow{position + 1}>"))
+        properties += [("@Instantiated", f"flow{earlier}Builder", f"Instantiator<Flow{earlier}>") for earlier in range(position)]
+        if position + 1 == length:
+            properties.append(("@Instantiated", "midBuilder", "Instantiator<Mid>"))
+        app += declaration("@Instantiable", f"Flow{position}", properties)
+    app += declaration("@Instantiable", "Mid", [("@Forwarded", "note", "Int"), ("@Instantiated", f"flow{length - 1}Builder", f"Instantiator<Flow{length - 1}>")])
+    return [("Library", [], library), ("App", ["Library"], app)]
+
+
 def shape_b(layers, mocks, width=3):
     """Module `Feature`: `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the next
     layer and, past the first layer, of the screen at its own position in the layer before; a screen of the last
@@ -692,6 +723,10 @@ GROWTH_ROWS = {
     "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {}),
     # The check of a seam call's fills still follows every path to each call of `Panel`: 0.36 s and 1.16 s (3.20).
     "QO-seam-calls-tier-omitting-parameter-at-every-path": (lambda layers: shape_qo(layers), 9, {"time": 4.5}),
+    # The walk that finds the values a seam tier omits once kept, on each call of a function a lazy cycle closes on, the
+    # parameters it passed through, so the calls were told apart by every path through a chain of nested cycles: at seven
+    # and nine flows 0.07 s and 3.56 s (51), 53 MB and 1,485 MB (28).
+    "QS-seam-tier-omission-in-chain-of-reopened-flows": (lambda length: shape_qs(length), 7, {}),
     # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),

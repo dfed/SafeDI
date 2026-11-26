@@ -114,6 +114,12 @@ public struct GenerationWork: Sendable {
 		/// the generator's subtree reads it, is skipped and its children are not reached, so the generators and the frames
 		/// their parents are visited in count, not the paths to them.
 		case findingSeamTierOmissions
+		/// Judging, where the visit of a builder function a lazy cycle closes on returns, the reads and calls its body found
+		/// at the function's calls (`SeamTierOmissionFindings.append(_:closing:declaredBy:)`): each read and call the visit
+		/// hands back. A call keeps of the function parameters it passes through only what each provides, so along a chain
+		/// of lazy cycles each nested inside the last the calls a body hands back do not grow with the paths through the
+		/// chain; kept as the parameters themselves, they grew with the factorial of its length.
+		case judgingCallsOfCycleFunctions
 	}
 
 	/// The step that did the work.
