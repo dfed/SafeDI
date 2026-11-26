@@ -888,8 +888,18 @@ public actor DependencyTreeGenerator {
 					// the order it gives the scope's children with today's. A tree with a label no one parameter can pass,
 					// which is rejected, is not compared: today's scope that closes the cycle takes no parameter for the
 					// label and so waits for no sibling that declares it, while a call place receives it.
+					// Under the checks every test runs, neither comparison runs for a root whose shape the plan does not admit
+					// (`RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits`).
+					let comparedTree: ScopeGenerator? = if let todaysTree,
+					                                      !RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits
+					                                      || Self.shapeOutsidePerTypePlan(inTreeOf: scope, cache: &receivedPropertiesCache)?.reason == nil
+					{
+						todaysTree
+					} else {
+						nil
+					}
 					if let observer = CallPlaceOrderObservation.observer,
-					   let todaysTree,
+					   let todaysTree = comparedTree,
 					   todaysTree.unpassableCycleLabelsInTree.isEmpty,
 					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
 					{
@@ -912,7 +922,7 @@ public actor DependencyTreeGenerator {
 						}
 					}
 					// Each place of the root's tree against the bodies of its plan, built only where a test compares the two.
-					if let todaysTree {
+					if let todaysTree = comparedTree {
 						if let unplannedPlan = try Self.compareBodies(
 							ofRoot: scope,
 							todaysTree: todaysTree,

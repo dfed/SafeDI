@@ -59,9 +59,13 @@ extension DependencyTreeGenerator {
 		let observer = MockVariantBodyObservation.observer
 		let planObserver = MockVariantBodyObservation.planObserver
 		// A tree that calls another module's public mock is not compared: the call reads the caller's declarations for its
-		// fills' trees, as a production root's seam call does, and a body has no edge for a fill.
+		// fills' trees, as a production root's seam call does, and a body has no edge for a fill. Nor, under the checks
+		// every test runs, is a tree whose shape the plan does not admit
+		// (`RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits`).
 		guard observer != nil || planObserver != nil,
 		      !reachesCallOfPublicMock(from: mockRootScope),
+		      !RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits
+		      || shapeOutsidePerTypePlan(inTreeOf: mockRootScope, cache: &cache)?.reason == nil,
 		      let shadow = CallPlaceShadow(root: mockRootScope, cache: &cache)
 		else { return }
 		let mockRoot = instantiable.concreteInstantiable.asSource

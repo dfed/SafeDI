@@ -82,6 +82,12 @@ public enum RootTreeChoiceObservation {
 	/// `DependencyTreeGenerator.scopeGeneratorLimitOfTodaysTree`: a test lowers it to plan a small root, or raises it to
 	/// keep a root's tree per path. Nothing else sets it.
 	@TaskLocal public static var scopeGeneratorLimitOverride: Int?
+
+	/// Whether the comparisons of a root's plan with today's tree run only for a root whose shape the plan admits. The
+	/// checks every test runs under set it, where no test observes a comparison itself: a root of another shape keeps
+	/// today's tree whatever its size, so the plan's bodies of it are no code any build emits. A test that observes a
+	/// comparison compares every root that reaches a cycle.
+	@TaskLocal public static var comparesOnlyRootsThePlanAdmits = false
 }
 
 /// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks

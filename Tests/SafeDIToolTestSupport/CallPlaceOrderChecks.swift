@@ -31,6 +31,25 @@ enum CallPlaceOrderChecks {
 		handingOn enclosingObserver: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
+		// A test that observes no comparison of a plan with today's tree compares only the roots whose shape the plan admits.
+		let observesNoComparison = enclosingObserver == nil
+			&& VariantBodyObservation.observer == nil
+			&& PlanBodiesObservation.observer == nil
+			&& PlanCallsObservation.observer == nil
+			&& TwinIdentityObservation.observer == nil
+			&& PlanCodeObservation.observer == nil
+			&& PlanSendableObservation.observer == nil
+			&& MockVariantBodyObservation.observer == nil
+			&& MockVariantBodyObservation.planObserver == nil
+		return try await RootTreeChoiceObservation.$comparesOnlyRootsThePlanAdmits.withValue(observesNoComparison || RootTreeChoiceObservation.comparesOnlyRootsThePlanAdmits) {
+			try await Self.comparingEveryScope(handingOn: enclosingObserver, operation)
+		}
+	}
+
+	private static func comparingEveryScope<Result>(
+		handingOn enclosingObserver: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?,
+		_ operation: () async throws -> Result,
+	) async throws -> Result {
 		try await CallPlaceOrderObservation.$observer.withValue({ scope, todaysOrder, callPlaceOrder in
 			if todaysOrder != callPlaceOrder {
 				Issue.record(Comment(rawValue: """
