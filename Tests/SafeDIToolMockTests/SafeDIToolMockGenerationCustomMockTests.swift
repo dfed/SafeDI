@@ -517,11 +517,11 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
-		        func __safeDI_child() -> Child {
-		            let grandchild = if let safeDIBuilder = safeDIOverrides.child.grandchild { safeDIBuilder(service) } else { Grandchild.customMock(service: service) }
-		            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
+		        func __safeDI_child(__safeDI_Child_configuration: Child.SafeDIMockConfiguration) -> Child {
+		            let grandchild = if let safeDIBuilder = __safeDI_Child_configuration.grandchild { safeDIBuilder(service) } else { Grandchild.customMock(service: service) }
+		            return if let safeDIBuilder = __safeDI_Child_configuration.safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
 		        }
-		        let child: Child = __safeDI_child()
+		        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
 		        return Parent(child: child)
 		    }
 		}

@@ -196,6 +196,8 @@ func executeSafeDIToolTest(
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
 	// A module info file names the module it describes, so the run writes one only when the test names its module.
+	// The module the run generates, which an issue of its stored blocks names.
+	let moduleName = moduleMembershipArguments.firstIndex(of: "--module-name").flatMap { moduleMembershipArguments.indices.contains($0 + 1) ? moduleMembershipArguments[$0 + 1] : nil }
 	let moduleInfoOutput: URL? = moduleMembershipArguments.contains("--module-name") ? URL.temporaryFile.appendingPathExtension("safedi") : nil
 	let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
@@ -347,14 +349,17 @@ func executeSafeDIToolTest(
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
 									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
-											try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
-												try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
-													try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
-														try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
-															try await MockVariantBodyChecks.comparing {
-																try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
-																	try await tool.generate()
+										// Every mock root the type key lays out falls back only on the record errors it expects (`MockTypeKeyLayoutChecks`).
+										try await MockLowering.$typeKeyLayoutObserver.withValue(MockTypeKeyLayoutChecks.failingUnexpectedRecordErrors(handingOn: MockLowering.typeKeyLayoutObserver)) {
+											try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+												try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+													try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+														try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																try await MockVariantBodyChecks.comparing {
+																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																		try await tool.generate()
+																	}
 																}
 															}
 														}
@@ -372,6 +377,8 @@ func executeSafeDIToolTest(
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
 		}
+		// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+		StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
 
 		filesToDelete.append(swiftFileCSV)
 		filesToDelete.append(swiftFixtureDirectory)
@@ -428,6 +435,9 @@ func executeSafeDIToolTest(
 		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: moduleInfoFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if let recordDirectory {
 			// Recorded before compiling, so a compile that fails still leaves the outputs it was given.
 			var outputs = (generatedFiles ?? [:]).sorted { $0.key < $1.key }.map {

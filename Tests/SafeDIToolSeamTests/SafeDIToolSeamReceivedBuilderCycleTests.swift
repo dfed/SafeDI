@@ -2578,22 +2578,33 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		lines += screens.map { "            let screen\($0)Builder: Screen\($0).SafeDIMockConfiguration" }
 		lines += ["        }", "    }", "", "    static func mock(", "        safeDIOverrides: SafeDIOverrides = .init()", "    ) -> Root {"]
 		lines.append("        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }")
-		// A loop's members declare every function first, then every wrapper.
+		// A loop's members declare every function first, then every wrapper, and read their overrides through the mock's
+		// overrides. A screen outside the loop is laid out by type: its function is handed its configuration.
 		for unit in units {
+			let isLoop = unit.count > 1
 			for screen in unit {
 				let opened = edges[screen].map { "screen\($0)Builder" }
-				lines.append("        func __safeDI_screen\(screen)Builder(id: Int) -> Screen {")
+				let configuration = isLoop ? "safeDIOverrides.screen\(screen)Builder" : "__safeDI_Screen\(screen)_configuration"
+				lines.append("        func __safeDI_screen\(screen)Builder(id: Int\(isLoop ? "" : ", __safeDI_Screen\(screen)_configuration: Screen\(screen).SafeDIMockConfiguration")) -> Screen {")
 				for openedScreen in screensRebound(by: screen) {
 					lines += wrapper(of: openedScreen, indentation: "            ")
 				}
-				lines.append("            let model\(screen) = if let safeDIBuilder = safeDIOverrides.screen\(screen)Builder.model\(screen) { safeDIBuilder(id, service) } else { Model\(screen)(id: id, service: service) }")
+				lines.append("            let model\(screen) = if let safeDIBuilder = \(configuration).model\(screen) { safeDIBuilder(id, service) } else { Model\(screen)(id: id, service: service) }")
 				let builderArguments = (["id", "service", "model\(screen)"] + opened).joined(separator: ", ")
 				let initializerArguments = (["id: id", "service: service", "model\(screen): model\(screen)"] + opened.map { "\($0): \($0)" }).joined(separator: ", ")
-				lines.append("            return if let safeDIBuilder = safeDIOverrides.screen\(screen)Builder.safeDIBuilder { safeDIBuilder(\(builderArguments)) } else { Screen\(screen)(\(initializerArguments)) }")
+				lines.append("            return if let safeDIBuilder = \(configuration).safeDIBuilder { safeDIBuilder(\(builderArguments)) } else { Screen\(screen)(\(initializerArguments)) }")
 				lines.append("        }")
 			}
 			for screen in unit {
-				lines += wrapper(of: screen, indentation: "        ")
+				if isLoop {
+					lines += wrapper(of: screen, indentation: "        ")
+				} else {
+					lines += [
+						"        let screen\(screen)Builder = ErasedInstantiator<Int, Screen> {",
+						"            __safeDI_screen\(screen)Builder(id: $0, __safeDI_Screen\(screen)_configuration: safeDIOverrides.screen\(screen)Builder)",
+						"        }",
+					]
+				}
 			}
 		}
 		lines += ["        return Root(\(rootArguments))", "    }", "}", "#endif", "", "#if DEBUG"]

@@ -5,8 +5,7 @@ paths:
   - "Sources/SafeDICore/Visitors/InstantiableVisitor.swift"
   - "Sources/SafeDIMacros/**/*"
   - "Sources/SafeDI/Decorators/MockGeneration.swift"
-  - "Tests/**/*PublicMock*.swift"
-  - "Tests/**/*Attributes*.swift"
+  - "Tests/**/*{PublicMock,Attributes}*.swift"
 ---
 
 # Public mocks

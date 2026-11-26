@@ -165,8 +165,15 @@ struct TypeKeyLayout {
 		/// The labels the body looks up outside it: its plan node's `Domain`, and the domains of the functions its closers
 		/// call.
 		let domainLabels: Set<String>
+		/// What each label of `domainLabels` resolves to where the walk first reached the view: the nearest declaration
+		/// outside the body (`lookUp(_:inBody:before:)` from `parent` before `position`), which the view's key holds, so
+		/// that a look-up climbing out of the body stops here rather than walking every body above it.
+		let outerView: [String: PathValue]
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
+		/// The positions of the statements that declare each function, by its name (`AliasPlaceRecord.declaredFunctionNames`),
+		/// apart from the labels the statements bind, so no read of a label resolves to a function.
+		var positionsByDeclaredFunction = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		/// The parameters of the body's function a cycle closes on, or of a variant's function: what its calls pass it.
 		let cycleParameters: [Property]
@@ -229,6 +236,8 @@ struct TypeKeyLayout {
 	var classByBody = [Int]()
 	/// Each class's members, in walk order.
 	var membersByClass = [[Int]]()
+	/// The labels each class's function is handed (`BuiltPlaceRecord.parameterProperties`), empty for the root's.
+	var parameterLabelsByClass = [Set<String>]()
 	/// The classes each class's body calls, and the call sites of each class.
 	var calleesByClass = [Set<Int>]()
 	var callSitesByClass = [Set<CallSite>]()
@@ -257,6 +266,9 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
+	/// The local each call binds a passed argument to before it calls (`PassedArgument.bindsBeforeCall`), by the call's
+	/// site and the parameter's name.
+	var boundArgumentNames = [CallSite: [String: String]]()
 }
 
 extension AliasPlaceRecord {

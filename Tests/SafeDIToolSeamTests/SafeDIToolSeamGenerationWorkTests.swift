@@ -58,7 +58,11 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// roots, which take one pass, as it does the type key's checks of reads at every member.
 		// A lookup in the construction memo asks the candidates its context answers alike, whatever the shape:
 		// `SafeDIToolConstructionMemoTests` counts them on a tree with cycles, and the reads it files entries under on a chain.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads])
+		// The walk that collects the types a tree builds visits each generator once, and places of a seam's tree with
+		// holes share none: `SafeDIToolFulfillerImportTests` counts it on a production root whose places share generators.
+		// Finding the carrier a sibling requires grows with the children of one scope, which shape E does not grow: the test
+		// below counts it on a seam whose own type builds many children.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .findingCarrierASiblingRequires])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -85,6 +89,95 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			}
 		}
 		#expect(seamSteps.subtracting(countedSteps).isEmpty, "No shape counts work for \(seamSteps.subtracting(countedSteps).map(\.rawValue).sorted())")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_looksUpEachPropertyASiblingRequiresOnce_whenSeamsOwnTypeBuildsManyChildrenThatEachHoldAPlace() async throws {
+		// A seam whose own type builds n children, each holding a place and receiving one value. Each child after the one
+		// that leads to a site is asked, in each of the two passes over the sites, for the first carrier among its
+		// siblings that it requires: scanned for, the n carriers were compared for each of them at each site, 48
+		// comparisons at four children and 448 at eight; looked up, the one property each requires is, 12 lookups and 56.
+		var lookups = [Int]()
+		for childCount in [4, 8] {
+			var fixture = [
+				"public protocol Gizmo {}",
+				seamFixtureType(named: "Service", declarations: []),
+				seamFixtureType(named: "Entry", isSeam: true, declarations: (0..<childCount).map { "@Instantiated let child\($0): Child\($0)" }),
+			]
+			for child in 0..<childCount {
+				fixture.append(seamFixtureType(named: "Child\(child)", declarations: ["@Received let service: Service", "@Instantiated let gizmo: any Gizmo"]))
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
+					integration: .moduleInfo,
+					compileVerification: childCount == 4 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var count = 0
+			for await work in stream where work.step == .findingCarrierASiblingRequires {
+				count += work.elementCount
+			}
+			lookups.append(count)
+		}
+		#expect(lookups == [12, 56])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesEachPlaceStoodForOnceInCaptureWalk_whenCallsCasesGrowWithThreePlacesEach() async throws {
+		// `Home` builds n holders of a place of `Api`, a case each, beneath three parents each: the first parent's fill
+		// generates code, and the second's stands for the third's. `Root` names an `Instantiator` and a
+		// `SendableInstantiator`, so the walk for captured wrappers reaches the call, where each fill takes the places
+		// it stands for: n places gathered once and taken once. Each of the three passes over the call also looks a
+		// standing fill up for each of its 3n places and asks the one set of its case for each third place: 14n units
+		// in all. Scanned for by each of the 2n fills, the n places stood for were compared 2n² times.
+		var work = [Int]()
+		for holderCount in [8, 16] {
+			var feature = ["public protocol Api {}"]
+			var homeDeclarations = [String]()
+			for holder in 0..<holderCount {
+				feature.append(seamFixtureType(named: "Holder\(holder)", declarations: ["@Instantiated let api: any Api"]))
+				for parent in ["First", "Second", "Third"] {
+					feature.append(seamFixtureType(named: "\(parent)\(holder)", declarations: ["@Instantiated let holder: Holder\(holder)"]))
+					homeDeclarations.append("@Instantiated let \(parent.lowercased())\(holder): \(parent)\(holder)")
+				}
+			}
+			feature.append(seamFixtureType(named: "Home", isSeam: true, declarations: homeDeclarations))
+			let modules = SafeDIToolSeamBuilderParameterTests.modules(
+				feature: feature,
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: []),
+					seamFixtureType(named: "Row", declarations: []),
+					seamFixtureType(named: "Worker", declarations: []).replacingOccurrences(of: ": Instantiable", with: ": Instantiable, Sendable"),
+					seamFixtureType(named: "Root", isRoot: true, declarations: [
+						"@Instantiated let rowBuilder: Instantiator<Row>",
+						"@Instantiated let workerBuilder: SendableInstantiator<Worker>",
+						"@Instantiated let home: Home",
+					]),
+				],
+			)
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: modules,
+					integration: .moduleInfo,
+					compileVerification: holderCount == 8 ? .recordingIssues : .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+			continuation.finish()
+			var count = 0
+			for await generationWork in stream where generationWork.step == .findingFillThatStandsForPlace {
+				count += generationWork.elementCount
+			}
+			work.append(count)
+		}
+		#expect(work == [112, 224])
 	}
 
 	// MARK: Private

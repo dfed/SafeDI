@@ -142,11 +142,11 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(count: Int?, title: String) -> Screen {
-		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(count, title) } else { Child(count: count, title: title) }
+		        func __safeDI_childBuilder(count: Int?, title: String, __safeDI_Child_configuration: ((Int?, String) -> Screen)?) -> Screen {
+		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(count, title) } else { Child(count: count, title: title) }
 		        }
 		        let childBuilder = ErasedInstantiator<(count: Int?, title: String), Screen> {
-		            __safeDI_childBuilder(count: $0.count, title: $0.title)
+		            __safeDI_childBuilder(count: $0.count, title: $0.title, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -536,10 +536,12 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder() -> Screen {
-		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
+		        func __safeDI_childBuilder(__safeDI_Child_configuration: (() -> Screen)?) -> Screen {
+		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 		        }
-		        let childBuilder = ErasedInstantiator<Nothing, Screen>(__safeDI_childBuilder)
+		        let childBuilder = ErasedInstantiator<Nothing, Screen> {
+		            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		        }
 		        return Root(childBuilder: childBuilder)
 		    }
 		}
@@ -697,11 +699,11 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(run: @escaping () throws(Failure) -> Void, title: String) -> Screen {
-		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(run, title) } else { Child(run: run, title: title) }
+		        func __safeDI_childBuilder(run: @escaping () throws(Failure) -> Void, title: String, __safeDI_Child_configuration: ((@escaping () throws(Failure) -> Void, String) -> Screen)?) -> Screen {
+		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(run, title) } else { Child(run: run, title: title) }
 		        }
 		        let childBuilder = ErasedInstantiator<(run: () throws(Failure) -> Void, title: String), Screen> {
-		            __safeDI_childBuilder(run: $0.run, title: $0.title)
+		            __safeDI_childBuilder(run: $0.run, title: $0.title, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -851,11 +853,11 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_childBuilder(run: nonisolated(nonsending) @escaping () async -> Void, title: String) -> Screen {
-		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder(run, title) } else { Child(run: run, title: title) }
+		        func __safeDI_childBuilder(run: nonisolated(nonsending) @escaping () async -> Void, title: String, __safeDI_Child_configuration: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)?) -> Screen {
+		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(run, title) } else { Child(run: run, title: title) }
 		        }
 		        let childBuilder: ErasedInstantiator<(run: nonisolated(nonsending) () async -> Void, title: String), Screen> = ErasedInstantiator {
-		            __safeDI_childBuilder(run: $0.run, title: $0.title)
+		            __safeDI_childBuilder(run: $0.run, title: $0.title, __safeDI_Child_configuration: safeDIOverrides.childBuilder)
 		        }
 		        return Root(childBuilder: childBuilder)
 		    }
@@ -1812,16 +1814,16 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		        x_ErasedInstantiator__Child_ForwardedProperties__Screen: ErasedInstantiator<Child.ForwardedProperties, Screen>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Top {
-		        func __safeDI_receiverA() -> ReceiverA {
+		        func __safeDI_receiverA(__safeDI_ReceiverA_configuration: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)?) -> ReceiverA {
 		            let x: ErasedInstantiator<Child.ForwardedProperties, Screen> = x_ErasedInstantiator__Child_ForwardedProperties__Screen
-		            return if let safeDIBuilder = safeDIOverrides.receiverA { safeDIBuilder(x) } else { ReceiverA(x: x) }
+		            return if let safeDIBuilder = __safeDI_ReceiverA_configuration { safeDIBuilder(x) } else { ReceiverA(x: x) }
 		        }
-		        let receiverA: ReceiverA = __safeDI_receiverA()
-		        func __safeDI_x(a: Int, b: String) -> Child {
-		            if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder(a, b) } else { Child(a: a, b: b) }
+		        let receiverA: ReceiverA = __safeDI_receiverA(__safeDI_ReceiverA_configuration: safeDIOverrides.receiverA)
+		        func __safeDI_x(a: Int, b: String, __safeDI_Child_configuration: ((Int, String) -> Child)?) -> Child {
+		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(a, b) } else { Child(a: a, b: b) }
 		        }
 		        let x = Instantiator<Child> {
-		            __safeDI_x(a: $0.a, b: $0.b)
+		            __safeDI_x(a: $0.a, b: $0.b, __safeDI_Child_configuration: safeDIOverrides.x)
 		        }
 		        let receiverB = if let safeDIBuilder = safeDIOverrides.receiverB { safeDIBuilder(x) } else { ReceiverB(x: x) }
 		        return Top(receiverA: receiverA, receiverB: receiverB)
@@ -1943,11 +1945,11 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		        let editor_ErasedInstantiator__Child_ForwardedProperties__Screen: ErasedInstantiator<Child.ForwardedProperties, Screen>? = safeDIOverrides.editor_ErasedInstantiator__Child_ForwardedProperties__Screen
 		        let editor = if let safeDIBuilder = safeDIOverrides.editor { safeDIBuilder() } else { EditorNode() }
 		        let holder = if let safeDIBuilder = safeDIOverrides.holder { safeDIBuilder(editor) } else { Holder(editor: editor) }
-		        func __safeDI_sub() -> Sub {
+		        func __safeDI_sub(__safeDI_Sub_configuration: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)?) -> Sub {
 		            let editor: ErasedInstantiator<Child.ForwardedProperties, Screen>? = editor_ErasedInstantiator__Child_ForwardedProperties__Screen
-		            return if let safeDIBuilder = safeDIOverrides.sub { safeDIBuilder(editor) } else { Sub(editor: editor) }
+		            return if let safeDIBuilder = __safeDI_Sub_configuration { safeDIBuilder(editor) } else { Sub(editor: editor) }
 		        }
-		        let sub: Sub = __safeDI_sub()
+		        let sub: Sub = __safeDI_sub(__safeDI_Sub_configuration: safeDIOverrides.sub)
 		        return Top(holder: holder, sub: sub)
 		    }
 		}

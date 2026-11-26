@@ -605,14 +605,17 @@ func executeSafeDIToolMultiModuleTest(
 								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 									try await ConstructionInternerOrder.applying(.fromEnvironment) {
 										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
-												try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
-													try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
-														try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
-															try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
-																try await MockVariantBodyChecks.comparing {
-																	try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
-																		try await tool.generate()
+											// Every mock root the type key lays out falls back only on the record errors it expects (`MockTypeKeyLayoutChecks`).
+											try await MockLowering.$typeKeyLayoutObserver.withValue(MockTypeKeyLayoutChecks.failingUnexpectedRecordErrors(handingOn: MockLowering.typeKeyLayoutObserver)) {
+												try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+													try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+														try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+															try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																	try await MockVariantBodyChecks.comparing {
+																		try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																			try await tool.generate()
+																		}
 																	}
 																}
 															}
@@ -644,7 +647,14 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		if let generateOutput {
+			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let writtenFile = moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
 			moduleInfoFile = writtenFile.withoutSeamSignatures

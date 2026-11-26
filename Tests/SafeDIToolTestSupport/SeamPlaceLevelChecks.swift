@@ -75,6 +75,14 @@ extension SeamPlaceLevels {
 		return disagreements
 	}
 
+	/// Shadow only: a description of each answer the per-type route query (`SeamRouteQueryShadow`) gives otherwise than
+	/// today's per-site walk, so that the graph fuzzer's corpora fail a graph on which the two differ.
+	var routeQueryShadowMismatches: [String] {
+		let report = SeamRouteQueryShadow.report(of: self)
+		guard report.mismatches > 0 else { return [] }
+		return ["The route query answers \(report.mismatches) questions of `\(seamType.asSource)` otherwise than the per-site walk: " + report.mismatchSamples.joined(separator: "; ")]
+	}
+
 	/// An observer that records an issue for each place whose levels do not hold its fields (`pathStructMismatches`), then
 	/// hands the levels to `enclosingObserver`, the observer the caller set, if any.
 	static func checkingPathStructs(handingOn enclosingObserver: (@Sendable (SeamPlaceLevels) -> Void)?) -> @Sendable (SeamPlaceLevels) -> Void {
@@ -101,7 +109,7 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-		continuation.yield(placeLevels.levelDisagreements())
+		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches)
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()
@@ -119,7 +127,7 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 /// What `operation` returns, with each key a root reaches root functions of with two texts
 /// (`RootFunctionHoisting.observer`), in the order the tool first reaches them: each root's functions of one key must have
 /// one text, which the generator never compares.
-func collectingRootFunctionKeyDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
+func collectingRootFunctionKeyDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String], comparedKeyCount: Int) {
 	let (stream, continuation) = AsyncStream.makeStream(of: [RootFunctionHoisting.Occurrence].self)
 	let enclosingObserver = RootFunctionHoisting.observer
 	let result = try await RootFunctionHoisting.$observer.withValue({ occurrences in
@@ -130,18 +138,22 @@ func collectingRootFunctionKeyDisagreements<Result>(during operation: () async t
 	}
 	continuation.finish()
 	var disagreements = [String]()
+	var comparedKeyCount = 0
 	for await occurrences in stream {
 		var textByKey = [RootFunctionKey: RootFunctionHoisting.Occurrence]()
+		var comparedKeys = Set<RootFunctionKey>()
 		for occurrence in occurrences {
 			guard let first = textByKey[occurrence.key] else {
 				textByKey[occurrence.key] = occurrence
 				continue
 			}
+			comparedKeys.insert(occurrence.key)
 			let disagreement = "Root functions \(first.name) and \(occurrence.name) share a key with different text:\n\(first.text)\n---\n\(occurrence.text)"
 			if first.text != occurrence.text, !disagreements.contains(disagreement) {
 				disagreements.append(disagreement)
 			}
 		}
+		comparedKeyCount += comparedKeys.count
 	}
-	return (result, disagreements)
+	return (result, disagreements, comparedKeyCount)
 }
