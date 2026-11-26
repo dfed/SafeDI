@@ -163,7 +163,10 @@ struct GraphFuzzerV3EngineDraw: Equatable, Sendable {
 			files.append(Self.type("\(p)ZV3ShareLeaf", prefix: p, properties: []))
 		}
 		if let gadget = unbuildableValueAtTwoPlaces {
+			// A file without an `@Instantiable` type names itself (`GraphFuzzerFixture.fileNameMarker`).
 			files.append("""
+			\(GraphFuzzerFixture.fileNameMarker)\(p)ZV3Gadget.swift
+
 			public final class \(p)ZV3Gadget {
 			\tlet differentialValueCreationStamp = \(p)CreationStamp.next()
 
@@ -232,7 +235,7 @@ struct GraphFuzzerV3EngineDraw: Equatable, Sendable {
 	/// the tool reads nothing of it.
 	private func loopKnownRightSource(prefix p: String) -> String {
 		"""
-		// file: \(p)ZV3LoopKnownRight.swift
+		\(GraphFuzzerFixture.fileNameMarker)\(p)ZV3LoopKnownRight.swift
 
 		enum \(p)ZV3LoopKnownRight {
 		\tfinal class Target {

@@ -175,9 +175,9 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 		.twoClosersOfOneCycleTarget: 1_514,
 	]
 
-	/// Seeds that together draw every shape and every right place, configured places and second closer, plus step 2's
-	/// regression seeds, which must stay class B.
-	private static let drawSmokeSeeds: [UInt64] = [0, 1, 2, 4, 5, 8, 13, 15, 16, 17, 24, 33, 36, 99, 383, 584, 764, 786, 1_496, 1_758]
+	/// Seeds whose own graph the tool accepts and that together draw every shape and every right place, configured places
+	/// and second closer, plus step 2's regression seeds, which must stay class B.
+	private static let drawSmokeSeeds: [UInt64] = [0, 2, 13, 14, 15, 33, 35, 36, 38, 51, 59, 64, 68, 99, 383, 584, 764, 786, 1_496, 1_758]
 
 	/// O3's seeds: the agreement oracle's smoke seeds and the draws' smoke seeds.
 	private static let paritySeeds: [UInt64] = GraphFuzzerAPIVersionAgreement.smokeSeeds + drawSmokeSeeds
