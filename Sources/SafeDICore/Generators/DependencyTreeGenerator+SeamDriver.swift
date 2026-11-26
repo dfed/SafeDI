@@ -507,13 +507,13 @@ extension DependencyTreeGenerator {
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				scopeGenerator: record.createScopeGenerator(
+				tree: .perPath(record.createScopeGenerator(
 					in: table,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &constructionMemo,
-				),
+				)),
 			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
@@ -550,7 +550,7 @@ extension DependencyTreeGenerator {
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				scopeGenerator: scopeGenerator,
+				tree: .perPath(scopeGenerator),
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules

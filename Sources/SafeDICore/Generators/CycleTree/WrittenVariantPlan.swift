@@ -26,6 +26,38 @@ public enum PlanCodeObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ code: String?) -> Void)?
 }
 
+/// Lets a test see, for each production root that reaches a cycle in a module that generates no seam, whether its code
+/// is laid out from its per-type plan or its tree is built per path, and why; and lets it have every root's tree built
+/// per path. Test only.
+public enum RootTreeChoiceObservation {
+	/// Why a root that reaches a cycle has its tree built per path.
+	public enum PerPathReason: String, Sendable {
+		/// The caller reads the trees per path: to draw the DOT graph, or to list what each receive is handed.
+		case treesReadPerPath
+		/// A test set `forcesPerPath`.
+		case forcedPerPath
+		/// The module's types name both a wrapper that is not `Sendable` and a `Sendable` one, so the `@Sendable` capture
+		/// walk reads its trees.
+		case moduleNamesNonSendableWrapperAndSendableBuilder
+		/// The root's tree can hold a label no one parameter of a cycle's function can pass.
+		case canHoldUnpassableCycleLabel
+		/// The root has no per-type plan.
+		case noPlan
+		/// A call of the plan passes a member of a loop of builders made again at the call.
+		case passesLoopMemberMadeAgainAtCall
+		/// A call of the plan passes the instance of a lazily instantiated declaration, read at the call.
+		case passesLazilyInstantiatedInstanceAtCall
+		/// The type key lays out none of the plan.
+		case noLayout
+	}
+
+	/// Called once per such root with the root's type and `nil` where its code is laid out from its plan.
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void)?
+
+	/// Whether every root's tree is built per path, as before a cyclic tree was planned per type.
+	@TaskLocal public static var forcesPerPath = false
+}
+
 /// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks
 /// `@Sendable` (`VariantBodies.isSendable(_:)`) with which the type key lays out as `@Sendable` (`WrittenVariantPlan`'s
 /// family), each body at its position in the plan, the root's own first. Test only, until one of the two is removed.
@@ -63,6 +95,28 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		let answers: [[Answer]]
 		/// Whether the plan marks each body `@Sendable` (`VariantBodies.isSendable(_:)`).
 		let sendableMarks: [Bool]
+
+		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
+		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
+		/// write; or the instance of a lazily instantiated declaration (`Answer.instance`), which the layout reads at the
+		/// call, where today's function takes the wrapper and creates the instance where its body first reads it.
+		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
+			for callsOfBody in calls {
+				for call in callsOfBody {
+					for argument in call.arguments {
+						switch argument {
+						case .declaredMadeAgainAtCall:
+							return .passesLoopMemberMadeAgainAtCall
+						case .instance:
+							return .passesLazilyInstantiatedInstanceAtCall
+						case .none, .declared:
+							continue
+						}
+					}
+				}
+			}
+			return nil
+		}
 
 		/// The bodies of `plan` in `bodies`, each call of the body it calls by its position here, and each body's labels,
 		/// with their answers and each call's arguments, in the order its function takes them, which every call of it
