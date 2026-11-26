@@ -149,6 +149,12 @@ public enum RootFunctionHoisting {
 	/// them, so the graph fuzzer can check that equal keys give equal text, which nothing in the generator compares.
 	@TaskLocal public static var observer: (@Sendable ([Occurrence]) -> Void)?
 
+	/// Handed, for each root that declares root functions at its top, those declarations as the root writes them and the
+	/// names of every root function the root declares there, so the graph fuzzer can check that each reads nothing of the
+	/// root but those functions. A function the root declares at its top must capture nothing of the code around the call
+	/// that wrote it, which nothing in the generator checks of its text.
+	@TaskLocal public static var hoistedDeclarationsObserver: (@Sendable (_ declarations: [String], _ declaredNames: Set<String>) -> Void)?
+
 	/// The root functions a root's body reaches, read once, and the body with those the root declares at its top.
 	struct Hoisting {
 		/// Every root function the body reaches, by name.
@@ -215,12 +221,14 @@ public enum RootFunctionHoisting {
 		}
 		let declaredNames = Set(declared.map(\.name))
 		// A fill the root declares holds the root functions its tree declares, which the root declares beside it.
+		let declarations: [GeneratedCode] = declared.map { record in
+			.omittingRootFunctions(record.hoisted(atIndentation: indentation, isSendable: sendable.contains(record.name)), named: declaredNames)
+		}
+		hoistedDeclarationsObserver?(declarations.map { $0.spelled() }, declaredNames)
 		return Hoisting(
 			rootFunctionNames: rootFunctionNames,
 			declaredNames: declaredNames,
-			declarations: declared.map { record in
-				.omittingRootFunctions(record.hoisted(atIndentation: indentation, isSendable: sendable.contains(record.name)), named: declaredNames)
-			},
+			declarations: declarations,
 			body: [.omittingRootFunctions(.lines(statements), named: declaredNames)],
 		)
 	}
