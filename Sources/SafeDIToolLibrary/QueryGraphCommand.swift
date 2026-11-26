@@ -141,18 +141,6 @@ public struct QueryGraph: AsyncParsableCommand {
 		)
 	}
 
-	/// Each production dependency of `instantiables` as declared, by the type that declares it and its label.
-	fileprivate static func dependencyByDeclaration(of instantiables: some Sequence<Instantiable>) -> [UnfulfilledDependency: Dependency] {
-		var dependencyByDeclaration = [UnfulfilledDependency: Dependency]()
-		// A type's declaration is listed under each type it fulfills, each time with the same dependencies.
-		for instantiable in instantiables where !instantiable.mockOnly {
-			for dependency in instantiable.dependencies {
-				dependencyByDeclaration[UnfulfilledDependency(declaringType: instantiable.concreteInstantiable, label: dependency.property.label)] = dependency
-			}
-		}
-		return dependencyByDeclaration
-	}
-
 	/// A generator that builds the trees of `productionMap`'s roots and generates no code.
 	/// - Parameter unfulfilledReceiveLocations: Where each received dependency and alias is declared that the trees are
 	///   built around although nothing provides it.
@@ -225,7 +213,7 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 				absentDependencies.insert(UnfulfilledDependency(declaringType: instantiable.concreteInstantiable, label: dependency.property.label))
 			}
 		}
-		let dependencyByDeclaration = QueryGraph.dependencyByDeclaration(of: productionInstantiables)
+		let dependencyByDeclaration = Self.dependencyByDeclaration(of: productionInstantiables)
 		var provenanceByReceive = [GraphDependency.Receive: Set<GraphDependency.Provenance>]()
 		for supply in supplies?.supplies ?? [] {
 			let receivingTypeName = supply.receivingType.asSource
@@ -310,6 +298,18 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 			}
 			// The declaration breaks a tie between two keys of one plain type, so no dictionary order reaches the output.
 			.sorted { ($0.plainType, $0.fulfilledBy) < ($1.plainType, $1.fulfilledBy) }
+	}
+
+	/// Each production dependency of `instantiables` as declared, by the type that declares it and its label.
+	private static func dependencyByDeclaration(of instantiables: some Sequence<Instantiable>) -> [UnfulfilledDependency: Dependency] {
+		var dependencyByDeclaration = [UnfulfilledDependency: Dependency]()
+		// A type's declaration is listed under each type it fulfills, each time with the same dependencies.
+		for instantiable in instantiables where !instantiable.mockOnly {
+			for dependency in instantiable.dependencies {
+				dependencyByDeclaration[UnfulfilledDependency(declaringType: instantiable.concreteInstantiable, label: dependency.property.label)] = dependency
+			}
+		}
+		return dependencyByDeclaration
 	}
 
 	/// The version of the JSON format. `0` while the command is in alpha: the shape may change in any release.
