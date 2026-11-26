@@ -165,6 +165,21 @@ struct TypeFactsGraph: Sendable {
 		answerTexts = answers.texts
 		answerKeys = answers.keys
 		variants = answers.variants
+		let isBeingBuilt = answers.isBeingBuilt
+		let variantsOfAnswers = answers.variants
+		let readsByID = readInterner.reads
+		outcomes = TypeFactsOutcomes(.init(
+			variants: answers.variants,
+			cellRule: { variant, position in
+				let node = Int(variantsOfAnswers.node(of: variant))
+				return .init(channel: readsByID[Int(readColumn[Int(readOffsets[node]) + position])].channel)
+			},
+			isBeingBuilt: { isBeingBuilt[Int($0)] },
+			// No call builds its callee in its caller's body until the edge facts say which edges open no function and the
+			// layout gives the callee none: false costs only a parameter, where true could capture a function's local.
+			buildsInCallersBody: { _, _ in false },
+			edgeOffset: { graph.edgeOffset(of: $0) },
+		))
 		var cycleIDByKey = [String: Int32]()
 		cycleIDs = graph.nodes.map { node in
 			let key = Self.cycleKey(of: node)
@@ -193,6 +208,9 @@ struct TypeFactsGraph: Sendable {
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
+
+	/// What each read of each variant comes to in its body.
+	let outcomes: TypeFactsOutcomes
 
 	/// Whether each answer ID's declaration is still being built where it answers.
 	let answerIsBeingBuilt: [Bool]
@@ -300,7 +318,7 @@ struct TypeFactsGraph: Sendable {
 			family: { _, family in family },
 			key: { readID, answer in
 				switch readTable[Int(readID)].channel {
-				case .optional:
+				case .optional, .optionalValue:
 					// Rule 1.
 					optionalParameterKey(of: answer < 0 ? nil : kinds[Int(answer)])
 				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
@@ -422,22 +440,25 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		// A call that passes fills hands each the caller's declaration of what the fill's tree receives, in the form the
-		// fill takes, which it reads as a receive only if available reads it (`Scope.callerArgument`).
+		// fill takes (`Scope.callerArgument`), which it reads as a receive only if available reads it.
 		if !record.holeArguments.isEmpty {
 			for property in Set(record.fillReceivedProperties.values.joined()).sorted() {
-				reads.append(Read(.optional, label: labels.id(of: property.label)))
+				let label = labels.id(of: property.label)
+				reads.append(Read(.optionalValue, label: label))
+				reads.append(Read(.optional, label: label))
 			}
 		}
 		return reads
 	}
 
-	/// A required receive reads the nearest declaration of its label; one only if available reads only whether it is
-	/// handed a value or `nil` (rule 1: its whole answer, form included, is an optional parameter the caller passes).
+	/// A required receive reads the nearest declaration of its label; one only if available reads it as `optionalValue`,
+	/// and whether it is handed a value or `nil`, both of which key by rule 1.
 	private static func appendReceiveReads(of label: Int32, onlyIfAvailable: Bool, forMockGeneration: Bool, to reads: inout [Read]) {
 		guard onlyIfAvailable else {
 			reads.append(Read(.value, label: label))
 			return
 		}
+		reads.append(Read(.optionalValue, label: label))
 		reads.append(Read(.optional, label: label))
 		if forMockGeneration {
 			reads.append(Read(.mock, label: label))

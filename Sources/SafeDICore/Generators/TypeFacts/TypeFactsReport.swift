@@ -187,7 +187,7 @@ public struct TypeFactsReport: Sendable {
 			let calls = world.calls(of: variant)
 			line += " calls \(Array(calls)) sources [\(calls.indices.map { "\(world.sources(ofCall: $0 - calls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]"
 			line += world.isCalledOnce(variant) ? " once" : ""
-			line += " outcomes \(world.outcomes(of: variant).count) bound before \(world.boundBefore(of: variant).count)"
+			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
 			lines.append(line)
 		}
 		return lines.joined(separator: "\n")

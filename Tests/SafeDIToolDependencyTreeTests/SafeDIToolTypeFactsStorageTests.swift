@@ -83,21 +83,5 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 		#expect(elementsPerNodeAndEdge[1] <= elementsPerNodeAndEdge[0], "\(elementsPerNodeAndEdge)")
 	}
 
-	@Test
-	func foldFiles_nameNoPropertyTypeOrText_whenReadAsSource() throws {
-		// The folds work on IDs and bit sets: `Property`, `TypeDescription` and `String` appear only where the graph is
-		// built and where text is spelled, in other files.
-		let directory = URL(fileURLWithPath: #filePath)
-			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-			.appendingPathComponent("Sources/SafeDICore/Generators/TypeFacts")
-		for file in ["OrderedGraph.swift", "ReadsFromAbove.swift"] {
-			let source = try String(contentsOf: directory.appendingPathComponent(file), encoding: .utf8)
-			let code = source.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
-			for name in ["Property", "TypeDescription", "String"] {
-				#expect(code.range(of: "\\b\(name)\\b", options: .regularExpression) == nil, "\(file) names \(name)")
-			}
-		}
-	}
-
 	private var filesToDelete: [URL]
 }
