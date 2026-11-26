@@ -21,6 +21,8 @@
 extension SeamSignature.Places {
 	/// Test only, deleted before merge: a seam's places as today's per-site walk gives them, beside the place graph built for
 	/// the same seam, which the differential oracle of the tests compares (`SeamPlacesOracle`). Nothing generated reads it.
+	/// It rides on the levels a test observes (`SeamPlaceLevels.placesObservation`), so a test sets no task-local value of its
+	/// own for it.
 	public struct Observation: Sendable {
 		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route]) {
 			self.seamType = seamType
@@ -43,7 +45,4 @@ extension SeamSignature.Places {
 		/// place a call passes up.
 		public let routeBySite: [Route]
 	}
-
-	/// Test only, deleted before merge: called with each seam's places when its holes are computed, while a test observes.
-	@TaskLocal public static var observer: (@Sendable (Observation) -> Void)?
 }

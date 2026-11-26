@@ -75,7 +75,9 @@ extension DependencyTreeGenerator {
 			let placeLevels: [SeamPlacesBuilder.LevelDraft]
 			let isBuiltInSendableFunction: Bool
 		}
-		let draftsPlaceLevels = SeamSignature.Places.observer != nil
+		// The place graph rides on the levels' observer, which hands it on at the end, so the tests set no task-local value of
+		// their own around `generate()` (`serialization.md`: one more made the tests' release build abort on Linux).
+		let draftsPlaceLevels = SeamPlaceLevels.observer != nil
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
@@ -116,8 +118,9 @@ extension DependencyTreeGenerator {
 			)
 		}
 		// The levels of each place, beside its fields, for the tests and the graph fuzzer: generated code reads none yet.
-		if SeamPlaceLevels.observer != nil {
-			let placeLevels = SeamPlaceLevels(
+		var observedPlaceLevels: SeamPlaceLevels?
+		if draftsPlaceLevels {
+			observedPlaceLevels = SeamPlaceLevels(
 				seamType: seam.concreteInstantiable,
 				places: siteContents.map { content in
 					var place = SeamPlaceLevels.Place(
@@ -136,7 +139,6 @@ extension DependencyTreeGenerator {
 					return place
 				},
 			)
-			SeamPlaceLevels.observer?(placeLevels)
 		}
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
@@ -347,13 +349,16 @@ extension DependencyTreeGenerator {
 		}
 		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
 		let sortedHoles = order.map { holes[$0] }
-		SeamSignature.Places.observer?(SeamSignature.Places.Observation(
-			seamType: seam.concreteInstantiable,
-			places: placesBuilder.places(),
-			siteHoles: sortedHoles,
-			caseIndexBySite: order.map { caseIndexByHole[$0] },
-			routeBySite: order.map { routeByHole[$0] },
-		))
+		if var observedPlaceLevels {
+			observedPlaceLevels.placesObservation = SeamSignature.Places.Observation(
+				seamType: seam.concreteInstantiable,
+				places: placesBuilder.places(),
+				siteHoles: sortedHoles,
+				caseIndexBySite: order.map { caseIndexByHole[$0] },
+				routeBySite: order.map { routeByHole[$0] },
+			)
+			SeamPlaceLevels.observer?(observedPlaceLevels)
+		}
 		return sortedHoles
 	}
 
@@ -1062,7 +1067,7 @@ extension DependencyTreeGenerator {
 				levelPathDeclarations.append(declaration)
 			}
 		}
-		// Beside the levels, while a test observes the place graph (`SeamSignature.Places.observer`), each level's
+		// Beside the levels, while a test observes the place graph (`SeamPlaceLevels.observer`), each level's
 		// declarations as the path declares them and the facts of the level and of the edge into it, outermost first.
 		struct PlaceLevelInProgress {
 			let key: SeamSignature.Places.LevelKey
