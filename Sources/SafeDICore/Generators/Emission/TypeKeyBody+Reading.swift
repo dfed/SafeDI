@@ -73,9 +73,13 @@ extension TypeKeyLayout {
 					// a loop of builders whose closers call only its siblings (`KeyedDeclaration`).
 					let keysByKind = closed.keysByKind
 					var outerView = [String: KeyedDeclaration]()
+					var outerDeclarations = [String: PathValue]()
 					for label in labels {
-						outerView[label] = keyed(lookUp(label, inBody: body, before: position), byKind: keysByKind)
+						let declaration = lookUp(label, inBody: body, before: position)
+						outerDeclarations[label] = declaration
+						outerView[label] = keyed(declaration, byKind: keysByKind)
 					}
+					outerDeclarationsByEdge[[body, position]] = outerDeclarations
 					let key = ViewKey(
 						node: built.node,
 						isInSendableFamily: isInSendableFamily,
@@ -110,6 +114,9 @@ extension TypeKeyLayout {
 					statement = .inline(built)
 				}
 			case let .closer(closer):
+				if closer.rebindsLoopMember {
+					loopRebindingBodies.insert(body)
+				}
 				// The function a closing scope calls is the nearest of its name, as Swift resolves it: an enclosing place's, or,
 				// for a member of a loop of builders, one a statement of an enclosing body declares.
 				switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {
@@ -507,7 +514,8 @@ extension TypeKeyLayout {
 		} else if escapingReads[body][label] == PathValue.none {
 			.none
 		} else {
-			lookUp(label, inBody: edge.parent, before: edge.position)
+			// The walk looked up each label the view reads outside it at each of its places (`outerDeclarationsByEdge`).
+			outerDeclarationsByEdge[[edge.parent, edge.position]]?[label] ?? lookUp(label, inBody: edge.parent, before: edge.position)
 		}
 	}
 

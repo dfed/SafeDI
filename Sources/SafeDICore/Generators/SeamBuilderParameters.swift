@@ -1671,6 +1671,10 @@ extension DependencyTreeGenerator {
 								.uniqued()
 							unfilledHoles.append(DependencyTreeGeneratorError.UnfilledHole(
 								hole: hole,
+								// The seam that declares the place takes it under its own root enum's builder for the place's hole type and
+								// family, which the called seam's signature carries; the label the called seam takes it under can be one it
+								// named apart from its other places, which no other initializer takes.
+								builderLabel: call.calledBuilders?.enumsByKey[SeamSignature.ScopeEnum.rootKey(of: hole)]?.builderLabel ?? hole.builderLabel,
 								rootType: root.instantiable.concreteInstantiable,
 								chain: holeChain,
 								location: callRootDependency?.declarationLocation,
@@ -1732,6 +1736,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 	/// one that does is out of the tree's reach.
 	struct UnfilledHole {
 		let hole: SeamSignature.Hole
+		/// The label the generated initializer of the seam that declares the place takes its builder under.
+		let builderLabel: String
 		let rootType: TypeDescription
 		/// The types from the root to the hole's owner.
 		let chain: [TypeDescription]
@@ -1763,7 +1769,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let unlistedModules = unlistedModuleNames.map { "`\($0)`" }.joinedAsList(conjunction: "or")
 			let listRemedy = (unlistedModuleNames.count > 1 ? "for each, " : "") + DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy
 			let listUnlistedModules = unlistedModuleNames.isEmpty ? "" : " A module that declares a root lists every module beneath it, and \(callerModule) does not list \(unlistedModules): \(listRemedy) Listing \(unlistedModuleNames.count > 1 ? "them" : "it") lets SafeDI follow the chain, but \(typeName) still needs a declaration that fulfills it."
-			let takenBuilder = hole.enumPlace.map { "`\(hole.builderLabel)`, whose member `\($0.caseName)` builds `\(hole.property.label)`" } ?? "`\(hole.builderLabel)`, which builds `\(hole.property.label)`"
+			let takenBuilder = hole.enumPlace.map { "`\(builderLabel)`, whose member `\($0.caseName)` builds `\(hole.property.label)`" } ?? "`\(builderLabel)`, which builds `\(hole.property.label)`"
 			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes \(takenBuilder), and the root `\(rootType.asSource)` must fill it.\(listUnlistedModules)"
 			let message = if let unreachedFulfillingType {
 				"`\(unreachedFulfillingType.asSource)` fulfills \(reference), but SafeDI cannot follow that chain, because \(callerModule) does not list \(unlistedModules). A module that declares a root lists every module beneath it: \(listRemedy)"
