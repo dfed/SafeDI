@@ -77,9 +77,10 @@ extension MockLowering {
 	/// What of a mock root's result the observer compares: its code, and of its configuration records what the module's
 	/// configurations and its one-way check read (`configurationCode`, `configurationsBuiltTwoWays`,
 	/// `recordsReadingConfiguration`): for each concrete type and construction, the first record in walk order not beneath a
-	/// cycle edge, with its struct, its construction's requirements, the modules its fulfillers name, and the types beneath
-	/// a repeated ancestor it nests. A shared subtree records no configuration again, and the walk order of the records
-	/// after it moves, which neither reads. Its `publicConstruction` is never set: a public mock shares nothing.
+	/// cycle edge, with its struct, its construction's requirements and the modules its fulfillers name. No record is
+	/// beneath a repeated ancestor: a root that shares holds no closer and builds no type two ways
+	/// (`SubtreeSharing.init(sharingBeneath:)`). A shared subtree records no configuration again, and the walk order of the
+	/// records after it moves, which neither reads. Its `publicConstruction` is never set: a public mock shares nothing.
 	static func sharingComparison(of result: Result, sendableConfigurationTypeNames: Set<String>) -> String {
 		var text = result.code
 		var seen = Set<String>()
@@ -93,9 +94,6 @@ extension MockLowering {
 			text += "\n// \(key)\n\(record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames))"
 			text += "\n// \(oneWay.property) \(oneWay.parentConcreteType ?? "") \(oneWay.customMockName ?? "") \(oneWay.isExtensionBased) \(oneWay.requirements)"
 			text += "\n// fulfillers: \(record.fulfillers.map { String(describing: $0) }.sorted())"
-			if let beneathRepeatedAncestor = record.beneathRepeatedAncestor {
-				text += "\n// beneath repeated ancestor: \(beneathRepeatedAncestor.nestedChildren.map(\.concreteType.asSource).sorted())"
-			}
 		}
 		return text
 	}
@@ -324,6 +322,10 @@ extension MockLowering {
 					receivedLabels.insert(labelIndex(of: dependency.property.label))
 				}
 			case .root, .hole, .fill:
+				// No test reaches this arm. The root is never beneath a generator on several paths; a hole is only in a public
+				// mock's tree, which shares nothing (`Walk.sharesSubtrees(of:)`); and the construction memo builds a call that
+				// fills a builder, with its fills, afresh on each path, so no fill is beneath a generator on several paths.
+				// The last is the memo's choice, not a refusal of sharing: a memo that shared such a call would reach it.
 				isClosed = false
 			}
 			for child in children {
