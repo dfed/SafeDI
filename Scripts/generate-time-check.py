@@ -143,6 +143,11 @@ alternating runs after one untimed run of each graph. A run still going after 30
                                `Instantiator`s; module `App`: the root, which builds the tree.
   BM-mocks-of-cycles-through-instantiators
                                the same graph with `generateMock: true` on every screen and on the root.
+  O-only-if-available-at-every-screen, R-received-instantiator-at-every-screen, N-rename-at-every-screen
+                               one module (`shape_census`): layers of three screens, each holding `Instantiator`s of
+                               every screen of the next layer and receiving `service`, with, at every screen, an
+                               `@Instantiated(onlyIfAvailable: true)` that nothing fulfills (O), a receive of the
+                               `Instantiator` declared two layers up (R), or a rename of `service` (N).
 A row whose growth is known and not yet removed carries limits of its own (`GROWTH_ROWS`), each what it measured with
 room for noise, which the change that removes the growth deletes. Add a row with each change that removes growth of
 this kind, for the shape it fixed.
@@ -448,6 +453,40 @@ def shape_b(layers, mocks, width=3):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + root)]
 
 
+def shape_census(layers, variant, width=3):
+    """The growth census's graph: `layers` layers of `width` screens, each holding `Instantiator`s of every screen of
+    the next layer and receiving `service`, which the root instantiates, so width^(layers - 1) paths reach the last
+    layer. `variant` adds one thing to every screen: "only-if-available", `@Instantiated(onlyIfAvailable: true) let
+    tracker: (any Tracker)?`, which nothing fulfills; "received-instantiator", below the second layer, the
+    `Instantiator` of the screen at its position two layers up, which that screen's parent declared; "rename",
+    `@Received(fulfilledByDependencyNamed: "service", ofType: Service.self) let vendor: ServiceVendor`; "cycle", below
+    the first layer, an `Instantiator` of the screen at its position one layer up; "seam", nothing, but the screens are
+    in module `Feature` behind the seam `Entry`, which receives `service` and opens the first layer, and App's root
+    opens `Entry`."""
+    source = "public protocol ServiceVendor {}\npublic protocol Tracker {}\n\n" + declaration("@Instantiable", "Service", [], conformances="ServiceVendor, Instantiable")
+    for layer in range(layers):
+        for position in range(width):
+            properties = [("@Received", "service", "Service")]
+            if variant == "only-if-available":
+                properties.append(("@Instantiated(onlyIfAvailable: true)", "tracker", "(any Tracker)?"))
+            if variant == "received-instantiator" and layer > 1:
+                properties.append(("@Received", f"screen{layer - 1}x{position}Builder", f"Instantiator<Screen{layer - 1}x{position}>"))
+            if variant == "rename":
+                properties.append(('@Received(fulfilledByDependencyNamed: "service", ofType: Service.self)', "vendor", "ServiceVendor"))
+            if variant == "cycle" and layer > 0:
+                properties.append(("@Instantiated", f"back{layer}", f"Instantiator<Screen{layer - 1}x{position}>"))
+            if layer + 1 < layers:
+                properties += [("@Instantiated", f"screen{layer + 1}x{child}Builder", f"Instantiator<Screen{layer + 1}x{child}>") for child in range(width)]
+            source += declaration("@Instantiable", f"Screen{layer}x{position}", properties)
+    first = [("@Instantiated", f"screen0x{child}Builder", f"Instantiator<Screen0x{child}>") for child in range(width)]
+    if variant == "seam":
+        source += declaration("@Instantiable(generateDependencyTree: true)", "Entry", [("@Received", "service", "Service")] + first)
+        app = declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "entryBuilder", "Instantiator<Entry>")])
+        return [("Feature", [], "import SafeDI\n\n" + source), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+    source += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service")] + first)
+    return [("App", [], "import SafeDI\n\n" + source)]
+
+
 SHAPES = {
     "E16-seam": lambda: shape_e(16, seam=True),
     "E24-seam": lambda: shape_e(24, seam=True),
@@ -483,7 +522,8 @@ ONE_ARENA = {"MALLOC_ARENA_MAX": "1"}
 # M 0.122 s and 0.388 s (3.17), 428,063 and 3,552,741 bytes of code (8.30); MH 0.304 s and 2.562 s (8.43), 51.2 MB and
 # 188.3 MB (3.68), 267,591 and 3,068,049 bytes of `.safedi` (11.47), 751,871 and 6,212,036 bytes of code (8.26);
 # Q 0.349 s and 2.483 s (7.11); B 0.086 s and 1.576 s (18.37), 38.2 MB and 90.6 MB (2.37); BM 0.079 s and 2.543 s
-# (32.30), 93.0 MB and 173.9 MB (1.87), 108,891 and 28,647,642 bytes of code (263.09).
+# (32.30), 93.0 MB and 173.9 MB (1.87), 108,891 and 28,647,642 bytes of code (263.09); O 420,983 and 4,182,623 bytes of
+# code (9.94); R 0.052 s and 0.216 s (4.16), 473,396 and 4,666,604 bytes of code (9.86); N 0.207 s and 1.365 s (6.60).
 GROWTH_ROWS = {
     "P-seam-hole-at-every-screen": (lambda layers: shape_p(layers), 6, {"time": 13.0, "memory": 5.5, "size": 12.5}),
     "L-label-declared-again": (lambda layers: shape_l(layers), 9, {"time": 11.0}),
@@ -495,6 +535,9 @@ GROWTH_ROWS = {
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
     "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 3.0, "code": 275.0}),
+    "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {"code": 10.5}),
+    "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
+    "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
 }
 GROWTH_STEP = 2
 GROWTH_RUNS = 3
