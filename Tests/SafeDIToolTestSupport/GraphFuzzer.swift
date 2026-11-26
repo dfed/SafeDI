@@ -2631,6 +2631,10 @@ enum GraphFuzzerGenerator {
 		var isStruct = false
 		/// Whether the type is an `actor` rather than a `final class`.
 		var isActor = false
+		/// Whether the type is isolated to the main actor, spelled `@MainActor` before its declaration on the same line.
+		var isMainActor = false
+		/// Whether the type's initializer is spelled `nonisolated`, which only a type isolated to a global actor spells.
+		var initializerIsNonisolated = false
 		/// Declarations written before the type's own, in its file.
 		var precedingDeclarations = [String]()
 		/// Modules the type's file imports beyond those of its module's header.
@@ -2924,6 +2928,7 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			sharedMockBuilderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sharedMockBuilderRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3009,6 +3014,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingMockedTypeTwoMocksBuild(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3486,6 +3493,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingMockedTypeTwoMocksBuild`'s choices: whether a graph gains `ShareScreen`'s mocks, and every shape
+		/// of them.
+		private var sharedMockBuilderRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8363,6 +8373,100 @@ enum GraphFuzzerGenerator {
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
+		// MARK: A mocked type two mocks build
+
+		/// How `addingMockedTypeTwoMocksBuild` isolates `ShareScreen` and its mock.
+		enum SharedMockBuilderIsolation: CaseIterable {
+			/// Neither the type nor its mock spells an isolation.
+			case none
+			/// Its mock spells `mockAttributes: "@MainActor"`; the type spells none.
+			case mockAttributes
+			/// The type is `@MainActor` and its initializer `nonisolated`, so a mock of any isolation builds it.
+			case nonisolatedInitializer
+		}
+
+		/// The base corpus's draw, in one graph of five, of a type with a generated mock that two other mocks build, the
+		/// shape a mock builder shared per type is for. `ShareScreen`, mocked, receives `shareService` and instantiates
+		/// `ShareModel`, which receives it too. `ShareFirst`, mocked, instantiates `shareService` and `ShareScreen`, half the
+		/// time through `ShareMiddle`, a type without a mock that receives `shareService`; `ShareSecond`, mocked,
+		/// instantiates `shareService` and `ShareScreen` by value or through an instantiator, which is `Sendable` in a
+		/// `Sendable` graph. A third of the time `ShareScreen`'s mock spells `mockAttributes: "@MainActor"`, as `ShareFirst`'s
+		/// does then, and a quarter of the time `ShareScreen` is `@MainActor` with a `nonisolated` initializer, whose stored
+		/// values are then `Sendable`; half the time `ShareSecond`'s mock spells the other attributes from `ShareScreen`'s,
+		/// `@MainActor` where `ShareScreen`'s spells none. No root reaches the tree. `GraphFuzzerToolRuns.sharedMockBuilderFailure` judges which mocks build
+		/// `ShareScreen` with its shared builder. `sharedMockBuilderRandom` draws only for this pass, after every other, and
+		/// only in the base corpus.
+		private mutating func addingMockedTypeTwoMocksBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, sharedMockBuilderRandom.percentChance(20) else { return declarations }
+			var declarations = declarations
+			let isolationRoll = sharedMockBuilderRandom.integer(in: 0...99)
+			let isolation: SharedMockBuilderIsolation = if isolationRoll < 25 {
+				.nonisolatedInitializer
+			} else if isolationRoll < 58 {
+				.mockAttributes
+			} else {
+				.none
+			}
+			let secondSpellsOtherAttributes = sharedMockBuilderRandom.percentChance(50)
+			let firstReachesThroughMiddle = sharedMockBuilderRandom.percentChance(50)
+			let secondBuildsThroughInstantiator = sharedMockBuilderRandom.percentChance(50)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let screenAttributes = isolation == .mockAttributes ? "@MainActor" : nil
+			let firstAttributes = screenAttributes
+			let secondAttributes = secondSpellsOtherAttributes ? (screenAttributes == nil ? "@MainActor" : nil) : screenAttributes
+			func arguments(mockAttributes: String?) -> [String] {
+				(mockAttributes.map { ["mockAttributes: \"\($0)\""] } ?? []) + ["generateMock: true"]
+			}
+			func append(_ name: String, arguments: [String] = [], conformances: [String] = conformances, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: arguments,
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let serviceName = "\(prefix)ShareService"
+			let modelName = "\(prefix)ShareModel"
+			let screenName = "\(prefix)ShareScreen"
+			let middleName = "\(prefix)ShareMiddle"
+			let receivedService = PropertyDeclaration(attribute: "@Received", label: "shareService", type: serviceName)
+			let instantiatedService = PropertyDeclaration(attribute: "@Instantiated", label: "shareService", type: serviceName)
+			let screen = PropertyDeclaration(attribute: "@Instantiated", label: "shareScreen", type: screenName)
+			// A `nonisolated` initializer of a type isolated to the main actor stores only `Sendable` values, which a type
+			// of a graph whose wrappers are not `Sendable` declares no conformance to.
+			let storedConformances = isolation == .nonisolatedInitializer && sendability == .nonSendable ? ["Sendable"] : conformances
+			append(serviceName, conformances: storedConformances, [])
+			append(modelName, conformances: storedConformances, [receivedService])
+			var screenDeclaration = TypeDeclaration(
+				name: screenName,
+				instantiableArguments: arguments(mockAttributes: screenAttributes),
+				properties: [receivedService, PropertyDeclaration(attribute: "@Instantiated", label: "shareModel", type: modelName)],
+				declaresHelperTypes: false,
+				// A type isolated to the main actor is `Sendable` already.
+				additionalConformances: isolation == .nonisolatedInitializer ? [] : conformances,
+			)
+			screenDeclaration.isMainActor = isolation == .nonisolatedInitializer
+			screenDeclaration.initializerIsNonisolated = isolation == .nonisolatedInitializer
+			declarations.append(screenDeclaration)
+			if firstReachesThroughMiddle {
+				append(middleName, [receivedService, screen])
+				append("\(prefix)ShareFirst", arguments: arguments(mockAttributes: firstAttributes), [instantiatedService, PropertyDeclaration(attribute: "@Instantiated", label: "shareMiddle", type: middleName)])
+			} else {
+				append("\(prefix)ShareFirst", arguments: arguments(mockAttributes: firstAttributes), [instantiatedService, screen])
+			}
+			append("\(prefix)ShareSecond", arguments: arguments(mockAttributes: secondAttributes), [
+				instantiatedService,
+				secondBuildsThroughInstantiator
+					? PropertyDeclaration(attribute: "@Instantiated", label: "shareScreenBuilder", type: "\(instantiator)<\(screenName)>")
+					: screen,
+			])
+			return declarations
+		}
+
+		private static let sharedMockBuilderRandomSeedMask: UInt64 = 0x73686172654D6B42
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -10647,7 +10751,8 @@ enum GraphFuzzerGenerator {
 				"Instantiable"
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
-			var lines = [instantiableAttribute, "\(declaration.access.modifier)\(declaration.isStruct ? "struct" : declaration.isActor ? "actor" : "final class") \(declaration.name): \(conformances) {"]
+			var lines = [instantiableAttribute, "\(declaration.isMainActor ? "@MainActor " : "")\(declaration.access.modifier)\(declaration.isStruct ? "struct" : declaration.isActor ? "actor" : "final class") \(declaration.name): \(conformances) {"]
+			let initializerIsolation = declaration.initializerIsNonisolated ? "nonisolated " : ""
 			// A function-typed parameter is stored, so it escapes.
 			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
 			// The initializer is no wider, once its type caps it, than the narrowest type it names, so that the fixture
@@ -10659,9 +10764,9 @@ enum GraphFuzzerGenerator {
 			if let guardedMockParameter = declaration.guardedMockParameter {
 				lines += guardedMockParameter.bodyLines(ofTypeNamed: declaration.name)
 			} else if declaration.properties.isEmpty, storedParameters.isEmpty {
-				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {}")
+				lines.append("\t\(initializerIsolation)\(initializerAccess.modifier)init(\(parameters)) {}")
 			} else {
-				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {")
+				lines.append("\t\(initializerIsolation)\(initializerAccess.modifier)init(\(parameters)) {")
 				lines += declaration.properties.map { "\t\tself.\($0.label) = \($0.label)" }
 				lines += storedParameters.map { "\t\tself.\($0.name) = \($0.name)" }
 				lines.append("\t}")
@@ -10942,6 +11047,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case instantiableStruct
 	/// A type a `#SafeDIConfiguration` lists in `additionalMocksToGenerate`.
 	case additionalMockToGenerate
+	/// A type with a generated mock that the mocks of two other types build (`addingMockedTypeTwoMocksBuild`).
+	case mockedTypeTwoMocksBuild
+	/// The same, where one of the mocks builds it beneath a type without a mock.
+	case mockedTypeTwoMocksBuildBeneathUnmockedType
+	/// The same, where the type's mock spells `mockAttributes` and a mock that builds it spells other attributes.
+	case mockedTypeBuiltByMockSpellingOtherAttributes
+	/// The same, where the type is `@MainActor` and its initializer `nonisolated`.
+	case mockedTypeWithNonisolatedInitializer
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
@@ -11559,7 +11672,23 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}) {
 			features.insert(.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner)
 		}
-		return features.union(mockVocabularyFeatures(of: fixture))
+		return features.union(mockVocabularyFeatures(of: fixture)).union(sharedMockBuilderFeatures(of: fixture))
+	}
+
+	/// The features of the mocked type two mocks build that `addingMockedTypeTwoMocksBuild` draws, read from the source.
+	private static func sharedMockBuilderFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
+		guard let draw = GraphFuzzerSharedMockBuilderDraw(fixture: fixture) else { return [] }
+		var features: Set<GraphFuzzerFeature> = [.mockedTypeTwoMocksBuild]
+		if draw.firstReachesThroughUnmockedType {
+			features.insert(.mockedTypeTwoMocksBuildBeneathUnmockedType)
+		}
+		if draw.screenMockAttributes != nil, draw.callerMockAttributes.values.contains(where: { $0 != draw.screenMockAttributes }) {
+			features.insert(.mockedTypeBuiltByMockSpellingOtherAttributes)
+		}
+		if draw.screenInitializerIsNonisolated {
+			features.insert(.mockedTypeWithNonisolatedInitializer)
+		}
+		return features
 	}
 
 	/// The features of the mock vocabulary `addingMockVocabulary` draws, read from the source.
@@ -13623,6 +13752,65 @@ enum GraphFuzzerSourceLine: Equatable {
 	}
 }
 
+// MARK: - A mocked type two mocks build
+
+/// What `addingMockedTypeTwoMocksBuild` drew, read from a graph's source: `ShareScreen`, the attributes its mock spells,
+/// whether its initializer is `nonisolated`, and the attributes each mock that builds it spells.
+struct GraphFuzzerSharedMockBuilderDraw: Equatable {
+	/// The start of the name of a builder a mocked type's extension declares, which every mock that builds the type calls.
+	static let builderNamePrefix = "__safeDI_build_"
+
+	let screenName: String
+	/// The `mockAttributes` `ShareScreen` spells, or `nil` for none.
+	let screenMockAttributes: String?
+	let screenInitializerIsNonisolated: Bool
+	/// The `mockAttributes` `ShareFirst` and `ShareSecond` spell, `nil` for none, by name.
+	let callerMockAttributes: [String: String?]
+	/// Whether `ShareFirst` builds `ShareScreen` beneath `ShareMiddle`, which has no mock.
+	let firstReachesThroughUnmockedType: Bool
+
+	/// The draw in `fixture`, or `nil` where it draws none.
+	init?(fixture: GraphFuzzerFixture) {
+		var mockAttributesByName = [String: String?]()
+		var nonisolatedInitializerNames = Set<String>()
+		for content in fixture.swiftFileContent {
+			var attributeLine: Substring?
+			var currentName: String?
+			for line in content.split(separator: "\n").map({ $0.trimmingCharacters(in: .whitespaces)[...] }) {
+				if line.hasPrefix("@Instantiable") {
+					attributeLine = line
+					continue
+				}
+				if let attribute = attributeLine, let classRange = line.range(of: "final class ") {
+					let name = String(line[classRange.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" })
+					currentName = name
+					if let start = attribute.range(of: "mockAttributes: \"") {
+						mockAttributesByName[name] = .some(String(attribute[start.upperBound...].prefix { $0 != "\"" }))
+					} else {
+						mockAttributesByName[name] = .some(nil)
+					}
+				} else if let currentName, line.hasPrefix("nonisolated "), line.contains("init(") {
+					nonisolatedInitializerNames.insert(currentName)
+				}
+				attributeLine = nil
+			}
+		}
+		guard let screenName = mockAttributesByName.keys.first(where: { $0.hasSuffix("_ShareScreen") }) else { return nil }
+		let prefix = screenName.dropLast("ShareScreen".count)
+		self.screenName = screenName
+		screenMockAttributes = mockAttributesByName[screenName] ?? nil
+		screenInitializerIsNonisolated = nonisolatedInitializerNames.contains(screenName)
+		var callerMockAttributes = [String: String?]()
+		for callerName in ["\(prefix)ShareFirst", "\(prefix)ShareSecond"] {
+			if let attributes = mockAttributesByName[callerName] {
+				callerMockAttributes[callerName] = attributes
+			}
+		}
+		self.callerMockAttributes = callerMockAttributes
+		firstReachesThroughUnmockedType = mockAttributesByName["\(prefix)ShareMiddle"] != nil
+	}
+}
+
 // MARK: - Oracle
 
 /// One way two outcomes of the tool differ.
@@ -14146,6 +14334,7 @@ struct GraphFuzzerFailure: Equatable {
 		/// A base corpus graph's generated mock builds a type that has a hand-written mock with the type's initializer,
 		/// where it calls the hand-written mock.
 		case generatedMockBypassesHandWrittenMock = "a generated mock builds a type with its initializer rather than its hand-written mock"
+		case mockedTypeNotBuiltWithSharedBuilder = "a mock builds a mocked type other mocks build without the one builder shared per type"
 		case integrationsDiffer = "the graph split across modules gives other results under the two multi-module integrations"
 		case seamRejectsGraphInlineAccepts = "the tool rejects the graph with an error that is not a seam's own, and accepts it with no seam"
 		/// The tool accepts a graph in one module with its seam and rejects it with no seam. In one module the seam world is
@@ -15858,6 +16047,53 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
+	/// The failure of a base corpus graph that draws a mocked type two mocks build (`addingMockedTypeTwoMocksBuild`) whose
+	/// generated mocks do not build `ShareScreen` with one builder shared per type, or `nil`. `ShareScreen`'s mock file
+	/// declares one `static func __safeDI_build_<hash>` in its extension, which each mock that builds `ShareScreen` calls in
+	/// place of its initializer where its own `mock()` spells the attributes `ShareScreen`'s spells, or `ShareScreen`'s
+	/// spells none; a mock that spells other attributes builds `ShareScreen` inline, calling no builder. Where `ShareScreen`'s
+	/// initializer is `nonisolated`, every mock builds it inline and its file declares no builder. Only the draw's own types
+	/// are judged, whose subtrees hold no cycle, hole or call of another module's public mock, so each is shared; only a
+	/// graph in one module, since a mock of another module builds the type inline.
+	var sharedMockBuilderFailure: GraphFuzzerFailure? {
+		guard GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty,
+		      fixture.modules == nil,
+		      let draw = GraphFuzzerSharedMockBuilderDraw(fixture: fixture),
+		      case .accepted = firstOutcome
+		else { return nil }
+		let builderPrefix = "\(draw.screenName).\(GraphFuzzerSharedMockBuilderDraw.builderNamePrefix)"
+		var problems = [String]()
+		let screenFileName = "\(draw.screenName)+SafeDIMock.swift"
+		let builderDeclarations = generatedFiles[screenFileName, default: ""].split(separator: "\n").filter {
+			$0.contains("static func \(GraphFuzzerSharedMockBuilderDraw.builderNamePrefix)")
+		}
+		if draw.screenInitializerIsNonisolated {
+			if !builderDeclarations.isEmpty {
+				problems.append("`\(screenFileName)` declares a builder of a type whose initializer is `nonisolated`, which every mock builds inline.")
+			}
+		} else if builderDeclarations.count != 1 {
+			problems.append("`\(screenFileName)` declares \(builderDeclarations.count) builders of `\(draw.screenName)`, not one.")
+		}
+		for (callerName, callerAttributes) in draw.callerMockAttributes.sorted(by: { $0.key < $1.key }) {
+			let fileName = "\(callerName)+SafeDIMock.swift"
+			let lines = generatedFiles[fileName, default: ""].split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.hasPrefix("//") }
+			let callsBuilder = lines.contains { $0.contains(builderPrefix) }
+			let callsInitializer = lines.contains { Self.callsInitializer(of: draw.screenName, in: $0) }
+			let callsSharedBuilder = !draw.screenInitializerIsNonisolated && (draw.screenMockAttributes == nil || draw.screenMockAttributes == callerAttributes)
+			if callsSharedBuilder, !callsBuilder || callsInitializer {
+				problems.append("`\(fileName)` builds `\(draw.screenName)` \(callsBuilder ? "with its initializer beside" : "without") its shared builder.")
+			} else if !callsSharedBuilder, callsBuilder {
+				problems.append("`\(fileName)` calls `\(draw.screenName)`'s shared builder, which it builds inline \(draw.screenInitializerIsNonisolated ? "since its initializer is `nonisolated`" : "since its mock spells other attributes").")
+			}
+		}
+		guard !problems.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .mockedTypeNotBuiltWithSharedBuilder,
+			details: "\(problems.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
 	/// The names of the types `fixture` declares a hand-written mock of, sorted: the type each static method named `mock`,
 	/// or named by a `customMockName` the fixture spells, returns, written on one line as
 	/// `static func <name>(<parameters>) -> <Type> {`.
@@ -16044,7 +16280,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.sharedMockBuilderFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
