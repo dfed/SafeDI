@@ -385,6 +385,147 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(visits == [3: [20, 26], 6: [38, 50], 12: [74, 98]])
 	}
 
+	/// The mock root's cycle walk walks a scope reached again only where the context above it reads differently, so a
+	/// tree whose screens build the next layer beneath two parents costs a walk per scope, not per path: in the plain
+	/// chain, and in one whose parents each declare the `session` every layer receives and build the next layer through an
+	/// instantiator. Without the skip, twelve layers walk 20,477 and 28,667 scopes.
+	@Test
+	mutating func mock_walksCycleCheckInScopesNotPaths_whenScreensBuildNextLayerBeneathTwoParents() async throws {
+		var walkedScopes = [Int: [Int]]()
+		for layers in [3, 6, 12] {
+			var counts = [Int]()
+			for files in [Self.layeredChain(layers: layers), Self.layeredSessionChain(layers: layers)] {
+				let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+				_ = try await DependencyTreeGenerator.$mockRootCycleWalkObserver.withValue({ walked in
+					continuation.yield(walked)
+				}) {
+					try await executeSafeDIToolTest(
+						swiftFileContent: files,
+						buildSwiftOutputDirectory: true,
+						filesToDelete: &filesToDelete,
+					)
+				}
+				continuation.finish()
+				var total = 0
+				for await walked in stream {
+					total += walked
+				}
+				counts.append(total)
+			}
+			walkedScopes[layers] = counts
+		}
+		#expect(walkedScopes == [3: [11, 12], 6: [20, 21], 12: [38, 39]])
+	}
+
+	/// `Shared` receives `service`, which `Mocked` receives and its mock promotes. The walk meets `Shared` first as `Mocked`'s
+	/// own child, where nothing builds `service` around it, and then inside the promoted `Service`, which is still being
+	/// built there: the second meeting reads another context and is walked, so the cycle is reported.
+	@Test
+	mutating func mock_throwsCycle_whenScopeWalkedCleanOnEarlierPathReceivesPropertyBeingBuiltOnLaterPath() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Shared.swift"]):7:5: error: Dependency cycle: `Service` -> `Shared` -> `Service`. `Shared` receives `service: Service`, which is still being built when `Shared` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Service.swift"]):1:1: note: `Service` is part of the cycle
+				\(fixtures["Shared.swift"]):1:1: note: `Shared` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.type("Mocked", kind: "final class", generateMock: true, properties: ["@Instantiated let shared: Shared", "@Received let service: Service"]),
+					Self.type("Service", kind: "final class", properties: ["@Instantiated let shared: Shared"]),
+					Self.type("Shared", kind: "final class", properties: ["@Received let service: Service"]),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	/// `Shared` instantiates `service` beneath the promoted `Service` twice: first through the instantiator `holderBuilder`,
+	/// which defers the cycle, and then through the constant `other`, which does not. The second context holds `other`,
+	/// which `Shared`'s subtree builds again through `service`, so it is walked and the cycle with no deferred hop is
+	/// reported.
+	@Test
+	mutating func mock_throwsCycle_whenScopeWalkedCleanBeneathInstantiatorClosesCycleBeneathConstant() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Shared.swift"]):7:5: error: Dependency cycle: `Service` -> `Other` -> `Shared` -> `Service`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `service: Service`, `other: Other`, `shared: Shared` to an instantiator.
+				\(fixtures["Service.swift"]):1:1: note: `Service` is part of the cycle
+				\(fixtures["Other.swift"]):1:1: note: `Other` is part of the cycle
+				\(fixtures["Shared.swift"]):1:1: note: `Shared` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.type("Mocked", kind: "final class", generateMock: true, properties: ["@Received let service: Service"]),
+					Self.type("Service", kind: "final class", properties: ["@Instantiated let holderBuilder: Instantiator<Holder>", "@Instantiated let other: Other"]),
+					Self.type("Holder", kind: "final class", properties: ["@Instantiated let shared: Shared"]),
+					Self.type("Other", kind: "final class", properties: ["@Instantiated let shared: Shared"]),
+					Self.type("Shared", kind: "final class", properties: ["@Instantiated let service: Service"]),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	/// `Shared` receives `service` beneath the promoted `RealService` twice: first beneath `Holder`, which declares a
+	/// `service` of its own that `FakeService` fulfills, and then directly. The two contexts differ only in that
+	/// declaration, so the second is walked and the receive of the service still being built is reported.
+	@Test
+	mutating func mock_throwsCycle_whenScopeWalkedCleanBeneathNearerDeclarationReceivesPropertyBeingBuiltWithoutIt() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Shared.swift"]):7:5: error: Dependency cycle: `ServiceProtocol` -> `Shared` -> `ServiceProtocol`. `Shared` receives `service: ServiceProtocol`, which is still being built when `Shared` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["RealService.swift"]):1:1: note: `ServiceProtocol` is part of the cycle
+				\(fixtures["Shared.swift"]):1:1: note: `Shared` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					Self.type("Mocked", kind: "final class", generateMock: true, properties: ["@Received let service: ServiceProtocol"]),
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public final class RealService: Instantiable, ServiceProtocol {
+					    public init(holder: Holder, shared: Shared) {
+					        self.holder = holder
+					        self.shared = shared
+					    }
+
+					    @Instantiated let holder: Holder
+					    @Instantiated let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Holder: Instantiable {
+					    public init(service: ServiceProtocol, shared: Shared) {
+					        self.service = service
+					        self.shared = shared
+					    }
+
+					    @Instantiated(fulfilledByType: "FakeService") let service: ServiceProtocol
+					    @Instantiated let shared: Shared
+					}
+					""",
+					Self.type("FakeService", kind: "final class", conformances: ", ServiceProtocol", properties: []),
+					Self.type("Shared", kind: "final class", properties: ["@Received let service: ServiceProtocol"]),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	/// `Screen` instantiates `config`, which the mock cannot build, beneath `First` and beneath `Second`, whose builder function
 	/// declares a `config` of its own. The tree-names walk visits `Screen` once, from `First`, so it names `mock()`'s
 	/// parameter apart from what a builder function around `Screen` declares on every path that meets it, not only the first.
@@ -613,6 +754,27 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 			files.append(Self.type("Layer\(layer + 1)", kind: "final class", properties: layerProperties))
 		}
 		files.append(Self.type("Leaf", kind: "final class", properties: []))
+		return files
+	}
+
+	/// `Root` builds `First0` and `Second0` through instantiators; each `First<n>` and `Second<n>` declares a `session`
+	/// and builds `Layer<n+1>` through an instantiator, and each layer receives the session and builds the next layer's
+	/// `First` and `Second` through instantiators, the last a `Leaf`.
+	private static func layeredSessionChain(layers: Int) -> [String] {
+		var files = [
+			Self.type("Root", kind: "final class", generateMock: true, properties: ["@Instantiated let first0: Instantiator<First0>", "@Instantiated let second0: Instantiator<Second0>"]),
+			Self.type("Session", kind: "final class", properties: []),
+			Self.type("Leaf", kind: "final class", properties: []),
+		]
+		for layer in 0..<layers {
+			for parent in ["First", "Second"] {
+				files.append(Self.type("\(parent)\(layer)", kind: "final class", properties: ["@Instantiated let session: Session", "@Instantiated let layer\(layer + 1): Instantiator<Layer\(layer + 1)>"]))
+			}
+			let next = layer + 1 < layers
+				? ["@Instantiated let first\(layer + 1): Instantiator<First\(layer + 1)>", "@Instantiated let second\(layer + 1): Instantiator<Second\(layer + 1)>"]
+				: ["@Instantiated let leaf: Leaf"]
+			files.append(Self.type("Layer\(layer + 1)", kind: "final class", properties: ["@Received let session: Session"] + next))
+		}
 		return files
 	}
 

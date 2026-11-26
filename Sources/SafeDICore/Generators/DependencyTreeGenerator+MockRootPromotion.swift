@@ -1260,6 +1260,157 @@ extension DependencyTreeGenerator {
 		return properties.union(otherProperties).contains { fulfills($0, properties) && fulfills($0, otherProperties) }
 	}
 
+	/// Told how many scopes each mock root's cycle walk walked, counting none it skipped. Only a test sets it.
+	@TaskLocal public static var mockRootCycleWalkObserver: (@Sendable (_ walkedScopes: Int) -> Void)?
+
+	/// An item of `validateMockRootScopeForCycles`' stack: a scope to walk, or a scope whose subtree has been walked, which
+	/// the walk meets once every scope beneath it is walked.
+	private enum CycleWalkItem {
+		case walk(ScopeToWalkForCycles)
+		case finished(ScopeToWalkForCycles)
+	}
+
+	/// The contexts in which `validateMockRootScopeForCycles` has walked a scope's subtree clean, so a scope reached again
+	/// in a context its subtree reads alike is not walked again. A walk throws its first error and ends, so a subtree it
+	/// finished walking found nothing, and a walk of it in a context every judgement beneath reads alike finds nothing
+	/// either: no error is lost, and none is reported in another order.
+	///
+	/// A walk beneath a scope reads the context above it only through the entries of the property stack a dependency or
+	/// child beneath it can match (`CycleWalkReads.properties`), whether a property that is no constant lies between two of
+	/// them (`throwIfInvalidCycle`'s judgement of an instantiation), and the declarations, by the scopes above, of the
+	/// labels beneath it that a receive can close a cycle on (`nearestDeclaration(of:mockRootScope:)`), each compared
+	/// with the entries by depth alone. `CycleWalkContextKey` keeps exactly those, in stack order, so two contexts with
+	/// equal keys take every judgement beneath alike. The mock root's own declarations are the same for every context.
+	/// No test turns red without the mark for hops that are no constant: an instantiation beneath that closes a cycle
+	/// builds the scope of the entry it closes on, whose subtree holds every hop down to the scope, so those hops are
+	/// among the reads. The mark keeps the key sound where one type is built by two scopes, such as one whose
+	/// hand-written mock is not passed every dependency (`Scope.dependenciesLeftOut`).
+	///
+	/// Holds the first clean context of each scope, then the keys of its clean contexts and what each scope's subtree
+	/// reads, computed only for a scope reached again; all of it dies with the walk, as "Share work by construction" in
+	/// `generator-design.md` allows a pass over a whole tree that looks for cycles.
+	private struct CleanCycleWalks {
+		/// The first context each scope's subtree was walked clean in, until a second context asks for its key.
+		private var firstCleanContexts = [ObjectIdentifier: ScopeToWalkForCycles]()
+		/// The keys of the contexts each scope's subtree was walked clean in, once a second context asked.
+		private var cleanKeys = [ObjectIdentifier: Set<CycleWalkContextKey>]()
+		/// What each scope's subtree reads, for the scopes reached again and those beneath them.
+		private var readsByScope = [ObjectIdentifier: CycleWalkReads]()
+
+		/// Whether `scopeToWalk`'s subtree was walked clean in a context it reads alike.
+		mutating func wasWalkedClean(_ scopeToWalk: ScopeToWalkForCycles) -> Bool {
+			let scopeID = ObjectIdentifier(scopeToWalk.scope)
+			keyFirstCleanContext(ofScopeWith: scopeID)
+			guard let keys = cleanKeys[scopeID] else { return false }
+			return keys.contains(key(of: scopeToWalk))
+		}
+
+		/// Records that `scopeToWalk`'s subtree was walked clean.
+		mutating func recordWalkedClean(_ scopeToWalk: ScopeToWalkForCycles) {
+			let scopeID = ObjectIdentifier(scopeToWalk.scope)
+			keyFirstCleanContext(ofScopeWith: scopeID)
+			if cleanKeys[scopeID] != nil {
+				cleanKeys[scopeID, default: []].insert(key(of: scopeToWalk))
+			} else if firstCleanContexts[scopeID] == nil {
+				firstCleanContexts[scopeID] = scopeToWalk
+			}
+		}
+
+		/// Keys the first clean context of a scope another context asks about, which costs no more than walking its
+		/// subtree once, and the walk then need not.
+		private mutating func keyFirstCleanContext(ofScopeWith scopeID: ObjectIdentifier) {
+			guard let firstCleanContext = firstCleanContexts.removeValue(forKey: scopeID) else { return }
+			cleanKeys[scopeID, default: []].insert(key(of: firstCleanContext))
+		}
+
+		/// The context above `scopeToWalk`'s scope, as its subtree reads it.
+		private mutating func key(of scopeToWalk: ScopeToWalkForCycles) -> CycleWalkContextKey {
+			let reads = reads(of: scopeToWalk.scope)
+			var tokensAbove = [CycleWalkContextKey.Token]()
+			let propertyStack = scopeToWalk.propertyStack
+			for index in propertyStack.indices.dropFirst() {
+				// The scope at `index` declares the entry at `index - 1` and its siblings, so its declarations come before
+				// its own entry, as a declaration's depth compares with an entry's.
+				let scopeAtIndex = scopeToWalk.scopeStack[index]
+				for dependency in scopeAtIndex.instantiable.dependencies where reads.receivedLabels.contains(dependency.property.label) && scopeAtIndex.createdProperties.contains(dependency.property) {
+					tokensAbove.append(.declaration(dependency.property.asValidatedForDependencyCycles))
+				}
+				for propertyToGenerate in scopeAtIndex.propertiesToGenerate where reads.receivedLabels.contains(propertyToGenerate.property.label) && !scopeAtIndex.createdProperties.contains(propertyToGenerate.property) {
+					tokensAbove.append(.declaration(propertyToGenerate.property.asValidatedForDependencyCycles))
+				}
+				let entry = propertyStack[index]
+				if reads.properties.contains(entry) {
+					tokensAbove.append(.entry(entry, builtType: scopeAtIndex.instantiable.concreteInstantiable))
+				} else if !entry.propertyType.isConstant, tokensAbove.last != .deferringHop {
+					tokensAbove.append(.deferringHop)
+				}
+			}
+			return CycleWalkContextKey(scope: ObjectIdentifier(scopeToWalk.scope), property: propertyStack.first, tokensAbove: tokensAbove)
+		}
+
+		/// What `scope`'s subtree reads of the context above it: what a walk beneath it can reach through instantiated
+		/// children, over-approximating the scopes a walk skips as repeats.
+		private mutating func reads(of scope: Scope) -> CycleWalkReads {
+			let scopeID = ObjectIdentifier(scope)
+			if let reads = readsByScope[scopeID] { return reads }
+			var properties = Set<Property>()
+			var receivedLabels = Set<String>()
+			var visitedScopes: Set<ObjectIdentifier> = [scopeID]
+			var scopesToVisit = [scope]
+			while let visitedScope = scopesToVisit.popLast() {
+				for dependency in visitedScope.instantiable.dependencies where !dependency.isForwarded && dependency.canCloseDependencyCycle {
+					let property = (dependency.source.fulfillingProperty ?? dependency.property).asValidatedForDependencyCycles
+					properties.insert(property)
+					if !dependency.isInstantiated {
+						properties.insert(Property(label: property.label, typeDescription: .optional(property.typeDescription)))
+						receivedLabels.insert(property.label)
+					}
+				}
+				for case let .instantiated(childProperty, childScope, _) in visitedScope.propertiesToGenerate {
+					properties.insert(childProperty.asValidatedForDependencyCycles)
+					let childScopeID = ObjectIdentifier(childScope)
+					guard visitedScopes.insert(childScopeID).inserted else { continue }
+					if let childReads = readsByScope[childScopeID] {
+						properties.formUnion(childReads.properties)
+						receivedLabels.formUnion(childReads.receivedLabels)
+					} else {
+						scopesToVisit.append(childScope)
+					}
+				}
+			}
+			let reads = CycleWalkReads(properties: properties, receivedLabels: receivedLabels)
+			readsByScope[scopeID] = reads
+			return reads
+		}
+	}
+
+	/// What a walk of a scope's subtree for cycles reads of the context above it (see `CleanCycleWalks`).
+	private struct CycleWalkReads {
+		/// The properties, as cycle validation sees them, a stack entry can match beneath: each dependency that can close
+		/// a cycle, the optional form of each received one, and each instantiated child.
+		let properties: Set<Property>
+		/// The labels of the dependencies beneath that receive, whose nearest declarations a receive's cycle reads.
+		let receivedLabels: Set<String>
+	}
+
+	/// The context above a scope, as a walk of its subtree for cycles reads it (see `CleanCycleWalks`).
+	private struct CycleWalkContextKey: Hashable {
+		/// What the context holds above the scope, innermost first.
+		enum Token: Hashable {
+			/// An entry of the property stack a property beneath can match, with the type built for it.
+			case entry(Property, builtType: TypeDescription)
+			/// A declaration of a label a receive beneath reads, by a scope above.
+			case declaration(Property)
+			/// One or more entries no property beneath can match, at least one of which is no constant.
+			case deferringHop
+		}
+
+		let scope: ObjectIdentifier
+		/// The scope's own property, as cycle validation sees it, or `nil` for the mock root.
+		let property: Property?
+		let tokensAbove: [Token]
+	}
+
 	/// A scope that `validateMockRootScopeForCycles` has yet to walk.
 	private struct ScopeToWalkForCycles {
 		let scope: Scope
@@ -1400,10 +1551,25 @@ extension DependencyTreeGenerator {
 	/// The mock root scope has @Received dependencies promoted as children,
 	/// which can create cycles not visible in the pre-promotion scope.
 	/// The walk goes depth first, in the order each scope declares its children, and keeps its own stack of
-	/// the scopes left to walk, since a tree can be as deep as the module has types.
+	/// the scopes left to walk, since a tree can be as deep as the module has types. A scope reached again in a context
+	/// its walk reads alike from one its subtree was walked clean in is not walked again (`CleanCycleWalks`): a tree whose
+	/// screens each build the next layer's screens beneath two parents reaches its last layer on 2^n paths.
 	private func validateMockRootScopeForCycles(_ mockRootScope: Scope) throws {
-		var scopesToWalk = [ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], scopeStack: [], lazilyInstantiatedDeclarations: [:])]
-		while let scopeToWalk = scopesToWalk.popLast() {
+		var cleanWalks = CleanCycleWalks()
+		var walkedScopes = 0
+		defer { Self.mockRootCycleWalkObserver?(walkedScopes) }
+		var scopesToWalk = [CycleWalkItem.walk(ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], scopeStack: [], lazilyInstantiatedDeclarations: [:]))]
+		while let item = scopesToWalk.popLast() {
+			let scopeToWalk: ScopeToWalkForCycles
+			switch item {
+			case let .walk(walkedScope):
+				scopeToWalk = walkedScope
+			case let .finished(walkedScope):
+				cleanWalks.recordWalkedClean(walkedScope)
+				continue
+			}
+			guard !cleanWalks.wasWalkedClean(scopeToWalk) else { continue }
+			walkedScopes += 1
 			let scope = scopeToWalk.scope
 			let propertyStack = scopeToWalk.propertyStack
 			// Check dependencies for cycles (catches @Received references back to ancestors).
@@ -1455,7 +1621,8 @@ extension DependencyTreeGenerator {
 				)
 			}
 
-			// Walk the children next.
+			// Walk the children next, then record that the scope's subtree was walked clean: a walk that throws ends here.
+			scopesToWalk.append(.finished(scopeToWalk))
 			let firstChildIndex = scopesToWalk.endIndex
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
@@ -1464,12 +1631,12 @@ extension DependencyTreeGenerator {
 					guard !propertyStack.indices.contains(where: {
 						propertyStack[$0] == childProperty && scopeToWalk.scopeStack[$0].instantiable.concreteInstantiable == childScope.instantiable.concreteInstantiable
 					}) else { continue }
-					scopesToWalk.append(ScopeToWalkForCycles(
+					scopesToWalk.append(.walk(ScopeToWalkForCycles(
 						scope: childScope,
 						propertyStack: [childProperty] + propertyStack,
 						scopeStack: [childScope] + scopeToWalk.scopeStack,
 						lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-					))
+					)))
 				case .aliased, .hole:
 					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
 					break
