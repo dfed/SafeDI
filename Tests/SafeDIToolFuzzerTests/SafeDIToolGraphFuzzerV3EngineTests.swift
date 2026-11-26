@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 import Foundation
-@testable import SafeDICore
 import Testing
+@testable import SafeDICore
 @testable import SafeDIToolTestSupport
 
 /// The v3 engine draws (`GraphFuzzerV3EngineDraw`) with their configured probes (`GraphFuzzerV3DrawnProbes`), and O3
@@ -166,18 +166,18 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The agreement corpus: the base corpus's seeds.
-	private static let agreementCorpusSeedCount: UInt64 = 5000
+	private static let agreementCorpusSeedCount: UInt64 = 5_000
 
 	/// Graphs of the agreement corpus that draw each shape, by `GraphFuzzerV3EngineDraw.drawnCounts(forSeeds:)`.
 	private static let drawnCountPins: [GraphFuzzerV3EngineDraw.Shape: Int] = [
-		.configuredTypeUnderTwoParents: 1504,
-		.unbuildableValueAtTwoPlaces: 1534,
-		.twoClosersOfOneCycleTarget: 1514,
+		.configuredTypeUnderTwoParents: 1_504,
+		.unbuildableValueAtTwoPlaces: 1_534,
+		.twoClosersOfOneCycleTarget: 1_514,
 	]
 
 	/// Seeds that together draw every shape and every right place, configured places and second closer, plus step 2's
 	/// regression seeds, which must stay class B.
-	private static let drawSmokeSeeds: [UInt64] = [0, 1, 2, 4, 5, 8, 13, 15, 16, 17, 24, 33, 36, 99, 383, 584, 764, 786, 1496, 1758]
+	private static let drawSmokeSeeds: [UInt64] = [0, 1, 2, 4, 5, 8, 13, 15, 16, 17, 24, 33, 36, 99, 383, 584, 764, 786, 1_496, 1_758]
 
 	/// O3's seeds: the agreement oracle's smoke seeds and the draws' smoke seeds.
 	private static let paritySeeds: [UInt64] = GraphFuzzerAPIVersionAgreement.smokeSeeds + drawSmokeSeeds

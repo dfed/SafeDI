@@ -115,7 +115,7 @@ struct GraphFuzzerV3EngineDraw: Equatable, Sendable {
 	}
 
 	/// The stream of these draws, apart from every other stream of the fuzzer.
-	static let randomSeedMask: UInt64 = 0x5633_454E_4749_4E45
+	static let randomSeedMask: UInt64 = 0x5633454E47494E45
 
 	let configuredTypeUnderTwoParents: ConfiguredTypeUnderTwoParents?
 	let unbuildableValueAtTwoPlaces: UnbuildableValueAtTwoPlaces?
