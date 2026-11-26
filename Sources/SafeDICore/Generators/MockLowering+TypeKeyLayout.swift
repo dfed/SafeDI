@@ -440,17 +440,15 @@ extension MockLowering.Walk {
 		var readPlaces = 0
 
 		/// The labels the places of `body` read, other than of `nil`, that neither `declaredAbove` nor a place before the
-		/// read in `body` binds, each once, in the order the walk meets them; and the labels `body` binds. A place that
-		/// records nothing reads the label `""`, which nothing binds, as the first unresolved read where it is.
+		/// read in `body` binds, each once, in the order the walk meets them; and the labels `body` binds. Every place of a
+		/// body read here holds a record: a root with a place that records nothing keeps the walk's body before its reads
+		/// are checked (`firstUnrecordedPath`, in `typeKeyRootLines(declaredAtRoot:)`), and a place's code is text only
+		/// where it records nothing (`placeCode(at:)`).
 		mutating func unresolvedLabels(of body: [GeneratedCode], declaredAbove: Set<String>) -> (labels: [String], bound: Set<String>) {
 			var labels = OrderedLabels()
 			var visible = declaredAbove
-			for code in body {
+			for record in body.compactMap(TypeKeyLayout.record(of:)) {
 				readPlaces += 1
-				guard let record = TypeKeyLayout.record(of: code) else {
-					labels.append("")
-					break
-				}
 				switch record {
 				case let .built(built):
 					labels.append(contentsOf: built.callSiteReads, unless: visible)
