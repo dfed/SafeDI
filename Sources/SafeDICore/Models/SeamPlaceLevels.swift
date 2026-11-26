@@ -37,6 +37,9 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 	/// Test only, deleted before merge: each route the seam's enums nested by type compute, beside the same route rebuilt
 	/// from its steps by edge (`SeamRouteStepObservation`). Left out of `==`.
 	public var routeSteps = [SeamRouteStepObservation]()
+	/// Test only, deleted before merge: a `validateFills` call's findings judged per place and by case, which rides alone on
+	/// a value with no seam and no places (`FillCaseJudgementComparison`). Left out of `==`.
+	public var fillJudgement: FillCaseJudgementComparison?
 
 	public static func == (lhs: SeamPlaceLevels, rhs: SeamPlaceLevels) -> Bool {
 		lhs.seamType == rhs.seamType && lhs.places == rhs.places
