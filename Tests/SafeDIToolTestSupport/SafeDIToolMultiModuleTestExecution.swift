@@ -630,7 +630,14 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		if let generateOutput {
+			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let writtenFile = moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
 			moduleInfoFile = writtenFile.withoutSeamSignatures

@@ -27,8 +27,10 @@
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 ///
 /// If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI.
+///
+/// - Parameter onlyIfAvailable: Whether to instantiate the dependency only when a type that fulfills it is available to the module that generates the dependency tree. The decorated property’s type must be optional: it is `nil` where no such type is available. This is useful in code that several applications share, when only some of them implement a protocol.
 @attached(peer)
-public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
+public macro Instantiated(onlyIfAvailable: Bool = false) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")
 
 /// Marks a SafeDI dependency that is instantiated when its enclosing type is instantiated.
 ///
@@ -45,10 +47,12 @@ public macro Instantiated() = #externalMacro(module: "SafeDIMacros", type: "Inje
 /// - Parameters:
 ///   - concreteTypeName: The name of the concrete type that will be instantiated and assigned to this property. This parameter is only required when the decorated property’s type does not match an `@Instantiable` type or its `additionalTypes`. This parameter is particularly useful when working with a type-erased property.
 ///   - erasedToConcreteExistential: Whether the concrete type is being erased to a concrete existential type – a type that encapsulates a value conforming to a protocol without revealing the underlying type. Concrete type erasing types like `AnyView` fit this description. Set this parameter to `true` to encapsulate the created instance of `concreteTypeName` in a no-label initializer of the property’s type (e.g. `AnyView(ConcreteView())`).
+///   - onlyIfAvailable: Whether to instantiate the dependency only when the type named by `concreteTypeName` is available to the module that generates the dependency tree. The decorated property’s type must be optional: it is `nil` where that type is not available.
 ///
 ///  - SeeAlso: [The Swift Programming Lanaguage’s explanation of existential types](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/#Boxed-Protocol-Types)
 @attached(peer)
 public macro Instantiated(
 	fulfilledByType concreteTypeName: StaticString,
 	erasedToConcreteExistential: Bool = false,
+	onlyIfAvailable: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

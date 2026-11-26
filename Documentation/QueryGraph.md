@@ -68,12 +68,13 @@ Keys are sorted, every array is present, and an optional key is left out rather 
         {
           "filePath" : "Sources/App/Root.swift",
           "fulfilledBy" : "App.DefaultService",
+          "fulfilledByType" : "DefaultService",
           "isErased" : false,
           "isOnlyIfAvailable" : false,
           "label" : "service",
           "lifetime" : "eager",
           "line" : 11,
-          "plainType" : "DefaultService",
+          "plainType" : "Service",
           "source" : "instantiated",
           "type" : "any Service"
         },
@@ -128,7 +129,7 @@ Keys are sorted, every array is present, and an optional key is left out rather 
   - `received`, handed down by a declaration above the owner: a `@Received` property, or an alias, a `@Received(fulfilledByDependencyNamed:ofType:)`, which has `aliasOf` naming the property it renames, with its `label`, `type` and `plainType`;
   - `forwarded`, passed in by whoever builds the owner.
 
-  `wrapper` names the SafeDI wrapper the property is held in. An instantiated dependency’s `plainType` is the type SafeDI builds: its `fulfilledByType:`, or its type without the wrapper. **`fulfilledBy`** points down the graph: in a resolved graph, the id of the declaration that fulfills an instantiated dependency’s `plainType`, absent when no production declaration does. `isErased` and `isOnlyIfAvailable` say whether the dependency is `erasedToConcreteExistential` or received only if available.
+  `wrapper` names the SafeDI wrapper the property is held in. An instantiated dependency declared with `fulfilledByType:` has **`fulfilledByType`**, the type SafeDI builds, as a `plainType` is spelled; its `plainType` stays the property’s. **`fulfilledBy`** points down the graph: in a resolved graph, the id of the declaration that fulfills the type an instantiated dependency builds, its `fulfilledByType` or else its `plainType`, absent when no production declaration does. `isErased` and `isOnlyIfAvailable` say whether the dependency is `erasedToConcreteExistential` and whether it is received or instantiated only if available. A dependency instantiated only if available that has no `fulfilledBy` is `nil`, and so is every dependency whose `provenance` names it.
 - **`provenance`**: where a received dependency’s value comes from. Each received dependency and alias of a declaration some root’s tree builds has it, once the trees are built: every value the trees hand it, in every place they build its type. A value is one of:
   - `{ "source" : "declaration", "declaredBy", "label" }`: the value of the dependency `label` of declaration `declaredBy`, which instantiates, forwards or aliases it. An alias’s values are those of what it renames. A value that is itself an alias is that alias, so follow the alias’s own `provenance` to what it renames;
   - `{ "source" : "nil", "reason" : { "kind", "message" } }`: generated code hands it `nil`, as it hands a dependency received only if available. `kind` is `noProvidingDeclaration`, where no declaration in scope provides the form it reads, or `providerNotYetBuilt`, where the nearest declaration that provides it is built after it, or is still being built around it. `message` says the same in a sentence.
@@ -143,11 +144,12 @@ The export does not say the order a type builds its dependencies in, which can d
 
 These use [`jq`](https://jqlang.org).
 
-Where `Cache` is used – built, received or renamed – with each site’s file and line:
+Where `Cache` is used – held, received or renamed as `Cache`, or built as `App.Cache`, also through a type it fulfills – with each site’s file and line:
 
 ```bash
-jq --arg T Cache '[.declarations[] as $owner | $owner.dependencies[]
-  | select(.plainType == $T or .aliasOf.plainType == $T)
+jq --arg T Cache --arg ID App.Cache '[.declarations[] as $owner | $owner.dependencies[]
+  | select(.plainType == $T or .aliasOf.plainType == $T
+    or .fulfilledByType == $T or .fulfilledBy == $ID)
   | {owner: $owner.id, source, lifetime, label, filePath, line}]' graph.json
 ```
 

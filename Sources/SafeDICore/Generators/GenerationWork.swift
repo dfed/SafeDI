@@ -66,11 +66,32 @@ public struct GenerationWork: Sendable {
 		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
 		/// and its levels do not grow with the paths through the tree.
 		case findingRootFunctions
+		/// Looking a place up in the construction memo (`ConstructionMemo.reuse(of:in:besideCallGenerators:drawing:)`): each
+		/// candidate of the place's key whose log the lookup asks. The candidates are found by what their reads of the
+		/// declaration a cycle closes on were answered, so a lookup asks the ones its context answers alike, not every
+		/// candidate a tree with cycles stored for the key.
+		case askingMemoCandidates
+		/// Filing an entry of the construction memo under its cycle reads (`ConstructionMemo`'s `Candidates`): each cycle read
+		/// of the entry's subtree. A key files its entries once it holds two, so a chain of places with one entry each
+		/// files none; filing every entry listed the reads of a chain of n places n² times.
+		case filingMemoEntryReads
 		/// Asking whether a read of a type key class's statement is `nil` in every member of the class
 		/// (`TypeKeyLayout.checkEveryRead`): each member's statement read. The answer is the class's, so each read is asked
 		/// once per class and reads each member once; asked for every member, it read the members of a class of n members
 		/// n² times.
 		case checkingReadsAtEveryMember
+		/// Collecting the types a tree builds, for the imports of its file (`ScopeGenerator.fulfillersOfTree(buildingMock:)`)
+		/// and for the public mocks a mock tree reaches (`concreteTypesOfTree()`): each generator the walk visits. A walk
+		/// visits a generator once, so the generators count, not the places that share them; entered at every place, a
+		/// tree of n layers of screens that each build every screen of the next layer was visited once per path.
+		case collectingTypesOfATree
+		/// Finding, for a child a scope on a site's path builds after the property that leads to the site, the first carrier
+		/// among its siblings that it requires (`DependencyTreeGenerator.fields(of:)`): the properties the child
+		/// requires, where they are fewer than the scope's carriers and each is looked up, or else the carriers compared
+		/// until one is found. Scanned for in every case, every carrier of the scope was compared for every later
+		/// child of every site, so a seam whose own type builds n children that each hold a place compared n carriers n²
+		/// times.
+		case findingCarrierASiblingRequires
 	}
 
 	/// The step that did the work.
