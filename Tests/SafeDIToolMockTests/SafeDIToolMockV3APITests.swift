@@ -396,20 +396,21 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> List {
-		        func __safeDI_detailBuilder(_ detailBuilderConfiguration: Detail.SafeDIOverrides, _ __safeDI_nearest_List: List.SafeDIOverrides?) -> Detail {
-		            let leaf = if let safeDIBuilder = detailBuilderConfiguration.leaf { safeDIBuilder() } else { Leaf() }
-		            let listBuilderConfiguration = detailBuilderConfiguration.listBuilder ?? __safeDI_nearest_List ?? .init()
-		            func __safeDI_listBuilder() -> List {
-		                let detailBuilder = Instantiator<Detail> {
-		                    __safeDI_detailBuilder(listBuilderConfiguration.detailBuilder ?? detailBuilderConfiguration, listBuilderConfiguration)
-		                }
-		                return if let safeDIBuilder = listBuilderConfiguration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
+		        func __safeDI_detailBuilder(__safeDI_Detail_configuration: Detail.SafeDIOverrides, __safeDI_List_configuration_nearest: List.SafeDIOverrides?) -> Detail {
+		            let leaf = if let safeDIBuilder = __safeDI_Detail_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            let listBuilder = Instantiator<List> {
+		                __safeDI_listBuilder(__safeDI_List_configuration: __safeDI_Detail_configuration.listBuilder ?? __safeDI_List_configuration_nearest ?? .init(), __safeDI_Detail_configuration_nearest: __safeDI_Detail_configuration)
 		            }
-		            let listBuilder = Instantiator<List>(__safeDI_listBuilder)
-		            return if let safeDIBuilder = detailBuilderConfiguration.safeDIBuilder { safeDIBuilder(leaf, listBuilder) } else { Detail(leaf: leaf, listBuilder: listBuilder) }
+		            return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(leaf, listBuilder) } else { Detail(leaf: leaf, listBuilder: listBuilder) }
+		        }
+		        func __safeDI_listBuilder(__safeDI_List_configuration: List.SafeDIOverrides, __safeDI_Detail_configuration_nearest: Detail.SafeDIOverrides?) -> List {
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_List_configuration.detailBuilder ?? __safeDI_Detail_configuration_nearest ?? .init(), __safeDI_List_configuration_nearest: __safeDI_List_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_List_configuration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		        }
 		        let detailBuilder = Instantiator<Detail> {
-		            __safeDI_detailBuilder(safeDIOverrides.detailBuilder ?? .init(), safeDIOverrides)
+		            __safeDI_detailBuilder(__safeDI_Detail_configuration: safeDIOverrides.detailBuilder ?? .init(), __safeDI_List_configuration_nearest: safeDIOverrides)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		    }

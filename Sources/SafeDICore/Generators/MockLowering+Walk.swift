@@ -488,6 +488,8 @@ extension MockLowering {
 		var v3ScopePushes = [(types: [TypeDescription], pushedTarget: Bool)]()
 		// The configured loop members `mock()` promotes, each bound from its `SafeDIReceived` before its loop.
 		var v3PromotedLoopMemberInstanceNames = [Property: String]()
+		// What binds each of those members from its `SafeDIReceived`, which its loop's text place holds at its top.
+		var v3PromotedLoopMemberPreludes = [Property: MockLowering.PromotedLoopMemberPrelude]()
 		/// In `.v3Unstable`, what the module names each type's configuration.
 		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
 		/// In `.v3Unstable`, the name of the mocked type's configuration parameter in the type key's form, whose nearest
@@ -694,11 +696,20 @@ extension MockLowering {
 					let parameterName = promotedParameterNames[property] ?? bindingName
 					let instanceName = ReservedName.receivedInstanceName(of: bindingName)
 					let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
-					lines.append("\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(v3ConfigurationNames.typeName(of: instantiable.concreteInstantiable))) = switch \(parameterName) {")
-					lines.append("\(indent)case let .instance(instance): (instance, .init())")
-					lines.append("\(indent)case let .built(configuration): (nil, configuration)")
-					lines.append("\(indent)}")
+					let configurationTypeName = v3ConfigurationNames.typeName(of: instantiable.concreteInstantiable)
+					let preludeLines = [
+						"\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(configurationTypeName)) = switch \(parameterName) {",
+						"\(indent)case let .instance(instance): (instance, .init())",
+						"\(indent)case let .built(configuration): (nil, configuration)",
+						"\(indent)}",
+					]
+					lines.append(contentsOf: preludeLines)
 					v3PromotedLoopMemberInstanceNames[property] = instanceName
+					v3PromotedLoopMemberPreludes[property] = MockLowering.PromotedLoopMemberPrelude(
+						lines: preludeLines,
+						parameter: Property(label: parameterName, typeDescription: .simple(name: "SafeDIReceived", generics: [MockLowering.v3ReceivedValueType(of: property), .simple(name: configurationTypeName, generics: [])])),
+						boundNames: [instanceName, configurationName],
+					)
 				}
 			}
 			for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
