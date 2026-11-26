@@ -818,7 +818,7 @@ private struct Rendering {
 	/// configuration built afresh, `T.SafeDIMockConfiguration()`. Any other expression is `nil`.
 	private func expressionTextReadingNoDroppedField(of expression: ExprSyntax, handedAs parameterLabel: String, toBuilderOf builtName: String, at position: Syntax, in scope: Scope) -> String? {
 		guard parameterLabel.hasPrefix(Self.builderFunctionPrefix),
-		      parameterLabel.hasSuffix(Self.hoistedConfigurationParameterSuffix)
+		      let suffix = Self.hoistedConfigurationParameterSuffixes.first(where: { parameterLabel.hasSuffix($0) })
 		else { return nil }
 		let nearest: ExprSyntax?
 		let read: ExprSyntax
@@ -842,7 +842,7 @@ private struct Rendering {
 		      let field = fields[owner]?[label],
 		      droppedFields.contains(field),
 		      field.type.hasSuffix(".\(mockConfigurationStructName)"),
-		      parameterLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)"
+		      parameterLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(suffix)"
 		else { return nil }
 		return "\(nearest.map { "\($0.trimmedDescription) ?? " } ?? "")\(field.type)()"
 	}
@@ -959,7 +959,9 @@ private struct Rendering {
 	}
 
 	private static let builderFunctionPrefix = "__safeDI_"
-	private static let hoistedConfigurationParameterSuffix = "_configuration"
+	/// The suffixes of the parameter a hoisted builder function takes its configuration by: `_mockConfiguration` where the
+	/// function builds its type with the type's hand-written mock, `_configuration` otherwise.
+	private static let hoistedConfigurationParameterSuffixes = ["_mockConfiguration", "_configuration"]
 	private static let lazilyInstantiatedWrapperSuffix = "_lazilyInstantiated"
 	private static let sendableLazilyInstantiatedWrapperSuffix = "_sendableLazilyInstantiated"
 	private static let overrideBuilderName = "safeDIBuilder"
