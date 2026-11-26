@@ -611,8 +611,14 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
+		// The tests record the answers of the final tree only (`SeamHolesPathAnswer`), so where it is the first one it is built
+		// again under the observer.
+		let recordedTreeName = "public mock \(instantiable.concreteInstantiable.asSource)"
+		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else {
+			guard SeamHolesPathAnswer.observer != nil else { return builtGenerator }
+			return try SeamHolesPathAnswer.building(treeOf: recordedTreeName) { try mockRootGeneratorWithHoles(builders: builders) }
+		}
+		return try SeamHolesPathAnswer.building(treeOf: recordedTreeName) { try mockRootGeneratorWithHoles(builders: buildersNamedApart) }
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the

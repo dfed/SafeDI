@@ -39,11 +39,16 @@ public struct SeamHolesPathAnswer: Sendable, Hashable {
 	public let path: String
 	/// Whether a `Sendable` wrapper is on the path above the edge: the family a binding of the edge can depend on.
 	public let isInsideSendableWrapper: Bool
+	/// The innermost fill enclosing the edge, as the declaration of the call whose builder it fills and the case it fills
+	/// (`ScopeGenerator.fillCaseKey(of:)`), or `-` outside every fill.
+	public let fill: String
+	/// The fills enclosing `fill`, innermost first, which the widened key leaves out.
+	public let outerFills: String
 
 	/// Called with each answer of a seam's tree built for emission, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (SeamHolesPathAnswer) -> Void)?
 	/// The seam whose emitted tree is being built, set only while `observer` is.
-	@TaskLocal static var seamBeingBuilt: TypeDescription?
+	@TaskLocal static var seamBeingBuilt: String?
 
 	/// Whether answers are being recorded.
 	static var isRecording: Bool {
@@ -51,7 +56,7 @@ public struct SeamHolesPathAnswer: Sendable, Hashable {
 	}
 
 	/// Builds `operation` recording the answers of the tree of `seamType`, when an observer is set.
-	static func building<Result>(treeOf seamType: TypeDescription, _ operation: () throws -> Result) rethrows -> Result {
+	static func building<Result>(treeOf seamType: String, _ operation: () throws -> Result) rethrows -> Result {
 		guard observer != nil else { return try operation() }
 		return try $seamBeingBuilt.withValue(seamType) { try operation() }
 	}
@@ -66,16 +71,18 @@ public struct SeamHolesPathAnswer: Sendable, Hashable {
 		"\(property.asSource)" + (concreteType.map { " built as \($0.asSource)" } ?? "")
 	}
 
-	static func record(node: String, edge: String, column: String, answer: String, path: [Property], isInsideSendableWrapper: Bool) {
+	static func record(node: String, edge: String, column: String, answer: String, path: [Property], isInsideSendableWrapper: Bool, fills: [String] = []) {
 		guard let observer, let seamBeingBuilt else { return }
 		observer(SeamHolesPathAnswer(
-			seamType: seamBeingBuilt.asSource,
+			seamType: seamBeingBuilt,
 			node: node,
 			edge: edge,
 			column: column,
 			answer: answer,
 			path: path.map(\.asSource).joined(separator: " / "),
 			isInsideSendableWrapper: isInsideSendableWrapper,
+			fill: fills.last ?? "-",
+			outerFills: fills.dropLast().reversed().joined(separator: " <- "),
 		))
 	}
 
@@ -111,7 +118,9 @@ public struct SeamHolesPathAnswer: Sendable, Hashable {
 
 	/// What the site's own code and its place record read of the hole (`ScopeGenerator.buildSiteCode`, `HoleSiteReads`,
 	/// `fieldsCarried(by:)`): the route only from its last step, and the fields the steps after the innermost fill carry.
-	static func projection(ofSiteAsRead hole: SeamSignature.Hole?) -> String {
+	/// - Parameter fieldLabelsReadByEnclosingFill: The labels of the struct fields of the emitted fill enclosing the site,
+	///   which reads of what the site carries only those (`fieldsCarriedBySites`); empty outside every emitted fill.
+	static func projection(ofSiteAsRead hole: SeamSignature.Hole?, fieldLabelsReadByEnclosingFill: Set<Property>) -> String {
 		guard let hole else { return "none" }
 		var text = "\(hole.internalName) builder \(hole.builderLabel) wrapper \(hole.wrapperFunctionName ?? "none") sendable \(hole.isSendable) built \(hole.builtType.asSource)"
 		if let enumPlace = hole.enumPlace {
@@ -126,9 +135,15 @@ public struct SeamHolesPathAnswer: Sendable, Hashable {
 			} else {
 				hole.fields
 			}
-			text += " carried \(carried.map(\.property.asSource))"
+			let carriedAndRead = carried.filter { fieldLabelsReadByEnclosingFill.contains($0.property) }
+			if !carriedAndRead.isEmpty {
+				text += " carried and read \(carriedAndRead.map(\.property.asSource))"
+			}
 		} else {
-			text += " fields \(hole.fields.map(\.property.asSource))"
+			let carriedAndRead = hole.fields.filter { fieldLabelsReadByEnclosingFill.contains($0.property) }
+			if !carriedAndRead.isEmpty {
+				text += " fields carried and read \(carriedAndRead.map(\.property.asSource))"
+			}
 		}
 		return text
 	}

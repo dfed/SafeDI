@@ -524,7 +524,7 @@ extension DependencyTreeGenerator {
 			let finalSeamRoot = seamRoot
 			let declaredTypeNames = declaredTypeNames
 			func builtTree() throws -> ScopeGenerator {
-				try SeamHolesPathAnswer.building(treeOf: seam.concreteInstantiable) {
+				try SeamHolesPathAnswer.building(treeOf: seam.concreteInstantiable.asSource) {
 					try Self.seamRootGenerator(
 						rootScope: seamRootScope,
 						in: .seamWorld(seamWorld),
@@ -537,7 +537,7 @@ extension DependencyTreeGenerator {
 			// built here would (`seam-signature-passes.md`); the pass's tree is released once it is.
 			let scopeGenerator: ScopeGenerator
 			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
-				scopeGenerator = SeamHolesPathAnswer.building(treeOf: seam.concreteInstantiable) {
+				scopeGenerator = SeamHolesPathAnswer.building(treeOf: seam.concreteInstantiable.asSource) {
 					ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
 				}
 				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
