@@ -6876,10 +6876,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// is a loop's non-alias child with cycle parameters, and the members are the loop's non-alias children and the renames
 	/// the body declares of them. Empty for nearly every body.
 	///
-	/// - Parameter takingNoCycleParameters: Whether to give the members of every non-alias child on a loop, also one whose
+	/// - Parameter includingChildrenWithoutCycleParameters: Whether to give the members of every non-alias child on a loop, also one whose
 	///   function takes no such parameter: a call place of a plan by declaration (`VariantAnswers`) stands for a function
 	///   that takes them, and has none of its own.
-	nonisolated func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild], takingNoCycleParameters: Bool = false) -> [Int: Set<Property>] {
+	nonisolated func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild], includingChildrenWithoutCycleParameters: Bool = false) -> [Int: Set<Property>] {
 		let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
 		guard !loopByChildIndex.isEmpty else { return [:] }
 		var membersByLoop = [Int: Set<Property>]()
@@ -6896,7 +6896,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		var membersByChildIndex = [Int: Set<Property>]()
-		for child in orderedChildren where !child.generator.isAlias && (takingNoCycleParameters || !child.generator.cycleParameters.isEmpty) {
+		for child in orderedChildren where !child.generator.isAlias && (includingChildrenWithoutCycleParameters || !child.generator.cycleParameters.isEmpty) {
 			guard let loop = loopByChildIndex[child.index] else { continue }
 			membersByChildIndex[child.index] = membersByLoop[loop, default: []]
 		}

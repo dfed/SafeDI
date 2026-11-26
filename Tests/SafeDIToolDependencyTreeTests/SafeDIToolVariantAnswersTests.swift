@@ -280,6 +280,83 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesLoopMemberMadeAgainAtCall_whenScopeBuildsItAfterCallOfLoopMate() async throws {
+		// `Flow` builds `screenBuilder` before `peerBuilder`, its loop mate, which `Screen`’s body takes as a parameter:
+		// `Flow`’s call cannot read a declaration it has not made, so it passes the wrapper made again.
+		let calls = try await calls(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Screen: Instantiable {
+			    @Received(onlyIfAvailable: true) let peerBuilder: Instantiator<Peer>?
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(peerBuilder: Instantiator<Peer>?, flowBuilder: Instantiator<Flow>) { self.peerBuilder = peerBuilder; self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Flow: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    @Instantiated let peerBuilder: Instantiator<Peer>
+			    public init(screenBuilder: Instantiator<Screen>, peerBuilder: Instantiator<Peer>) { self.screenBuilder = screenBuilder; self.peerBuilder = peerBuilder }
+			}
+
+			@Instantiable public final class Peer: Instantiable {
+			    @Received let screenBuilder: Instantiator<Screen>
+			    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+			}
+			""")
+
+		#expect(calls == [[
+			"Root",
+			"Root [3] at [0] calls [0] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
+			"\"flowBuilder: Instantiator<Flow>\" [0] at [0] calls [1] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
+			"\"screenBuilder: Instantiator<Screen>\" [1] at [0] calls [0] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
+		]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesLoopMemberMadeAgainAtEachCall_whenCycleClosesOnFunctionOfLoopMate() async throws {
+		// `Root` and `Flow` each build `screenBuilder` before `peerBuilder`: the root’s call and the call that closes the
+		// cycle each pass the wrapper made again.
+		let calls = try await calls(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    @Instantiated let peerBuilder: Instantiator<Peer>
+			    public init(screenBuilder: Instantiator<Screen>, peerBuilder: Instantiator<Peer>) { self.screenBuilder = screenBuilder; self.peerBuilder = peerBuilder }
+			}
+
+			@Instantiable public final class Screen: Instantiable {
+			    @Received(onlyIfAvailable: true) let peerBuilder: Instantiator<Peer>?
+			    @Instantiated let flowBuilder: Instantiator<Flow>
+			    public init(peerBuilder: Instantiator<Peer>?, flowBuilder: Instantiator<Flow>) { self.peerBuilder = peerBuilder; self.flowBuilder = flowBuilder }
+			}
+
+			@Instantiable public final class Flow: Instantiable {
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			    @Instantiated let peerBuilder: Instantiator<Peer>
+			    public init(screenBuilder: Instantiator<Screen>, peerBuilder: Instantiator<Peer>) { self.screenBuilder = screenBuilder; self.peerBuilder = peerBuilder }
+			}
+
+			@Instantiable public final class Peer: Instantiable {
+			    @Received let screenBuilder: Instantiator<Screen>
+			    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+			}
+			""")
+
+		#expect(calls == [[
+			"Root",
+			"Root [3] at [0] calls [0] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
+			"\"screenBuilder: Instantiator<Screen>\" [0] at [0] calls [2] as flowBuilder: Instantiator<Flow> (flowBuilder: flowBuilder: Instantiator<Flow>, being built)",
+			"\"flowBuilder: Instantiator<Flow>\" [2] at [0] calls [0] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; peerBuilder: peerBuilder: Instantiator<Peer>, made again at the call)",
+		]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -316,5 +393,26 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 			plans.append(plan)
 		}
 		return plans
+	}
+
+	/// The calls each body of the plan of each root of `swiftFileContent` makes: the root, then a line per call.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func calls(of swiftFileContent: String) async throws -> [[String]] {
+		let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
+		try await PlanCallsObservation.$observer.withValue({ root, calls in
+			continuation.yield([root] + calls)
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var calls = [[String]]()
+		for await call in stream where !calls.contains(call) {
+			calls.append(call)
+		}
+		return calls
 	}
 }

@@ -300,7 +300,8 @@ extension Answer {
 		case .none,
 		     .declared(_, isBeingBuilt: true):
 			nil
-		case let .declared(declaration, isBeingBuilt: false):
+		case let .declared(declaration, isBeingBuilt: false),
+		     let .declaredMadeAgainAtCall(declaration):
 			Property(label: label, typeDescription: declaration.typeDescription)
 		case let .instance(of: wrapper):
 			wrapper.typeDescription.unwrapped.lazilyInstantiatedInstanceType.map { instanceType in
@@ -311,12 +312,17 @@ extension Answer {
 
 	/// What a call passes for `label` under this answer, which takes a parameter: the nearest declaration of the label
 	/// where the call is made, or that wrapper's instance. The one place a call's argument form is decided.
+	///
+	/// A deliberate gap while nothing emits from the plan: a member of a loop of builders made again at the call
+	/// (`declaredMadeAgainAtCall`) is spelled as its binding here, which the call would read before its declaration.
+	/// The layout of a loop member's call owes that wrapper before the plan's code is generated for such a loop.
 	func argumentSource(labeled label: String) -> ArgumentSource {
 		switch self {
 		case let .instance(of: wrapper):
 			.lazyInstance(label: label, throughOptional: wrapper.typeDescription.isOptional)
 		case .none,
-		     .declared:
+		     .declared,
+		     .declaredMadeAgainAtCall:
 			.binding(label: label)
 		}
 	}

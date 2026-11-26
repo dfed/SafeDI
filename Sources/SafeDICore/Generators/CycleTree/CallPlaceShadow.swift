@@ -63,8 +63,10 @@ extension DependencyTreeGenerator {
 		/// above it, included.
 		let orderedUnavailableProperties: Set<Property>
 		/// The labels of the declarations the place's tree reads only if available that are built after it
-		/// (`VariantAnswers.labelsBuiltAfter(_:besides:reboundBy:besidesParameters:)`): `nil` at the place, whatever declares them.
+		/// (`VariantAnswers.labelsBuiltAfter(_:besides:reboundBy:besidesParameters:passedByReceivedFunction:)`): `nil` at the place, whatever declares them.
 		let labelsBuiltAfter: Set<String>
+		/// The labels the call that builds the place passes made again (`VariantAnswers.labelsMadeAgainAtCall`).
+		let labelsMadeAgainAtCall: Set<String>
 		/// Whether the place is built in the `@Sendable` family (`VariantAnswers.isInSendableFamily(calledInSendableFunction:property:)`).
 		let isInSendableFamily: Bool
 	}
@@ -81,6 +83,7 @@ extension DependencyTreeGenerator {
 		/// is declared, which every call of it reads as the declaring place does (`PlaceContext`).
 		let orderedUnavailableProperties: Set<Property>
 		let labelsBuiltAfter: Set<String>
+		let labelsMadeAgainAtCall: Set<String>
 		/// The `propertiesGeneratedLater` of the scopes the function's body builds, given the order around its declaration.
 		let bodyPropertiesGeneratedLater: Set<Property>
 	}
@@ -214,8 +217,11 @@ extension DependencyTreeGenerator {
 				childNearestDeclarations.recordRequiredReceives(of: scope.instantiable, publicMockCall: scope.publicMockCall)
 			}
 			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: place.propertiesGeneratedLater)
-			// The members of each child's loop of builders, which a `_received` function passes the child's function.
-			let loopMembersByChildIndex = generator.loopMembersPassedByReceivedFunctions(of: orderedChildren, takingNoCycleParameters: true)
+			// The members of each child's loop of builders, which a `_received` function passes the child's function. Where
+			// the walk is of a body with call places, the loops are that body's own generator's: no check compares them
+			// with the loops today's tree finds at the place, only the bodies and answers that follow from them
+			// (`PlanBodiesChecks`).
+			let loopMembersByChildIndex = generator.loopMembersPassedByReceivedFunctions(of: orderedChildren, includingChildrenWithoutCycleParameters: true)
 			for child in orderedChildren where scope.propertiesToGenerate.indices.contains(child.index) {
 				let loopMembers = loopMembersByChildIndex[child.index, default: []]
 				if case let .instantiated(property, childScope, erasedToConcreteExistential) = scope.propertiesToGenerate[child.index] {
@@ -248,6 +254,7 @@ extension DependencyTreeGenerator {
 							twinsBeingBuilt: twinsBeingBuilt,
 							orderedUnavailableProperties: function.orderedUnavailableProperties,
 							labelsBuiltAfter: function.labelsBuiltAfter,
+							labelsMadeAgainAtCall: function.labelsMadeAgainAtCall,
 							isInSendableFamily: isInSendableFamily,
 						)
 					}
@@ -260,6 +267,7 @@ extension DependencyTreeGenerator {
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							orderedUnavailableProperties: child.generator.mockLoweringBodyUnavailableProperties(child.unavailableProperties),
 							labelsBuiltAfter: VariantAnswers.labelsBuiltAfter(child.propertiesGeneratedLater, besides: childLabelsBuiltAfter, reboundBy: child.generator, besidesParameters: parameterLabelsByCallPlace[ObjectIdentifier(childScope), default: []], passedByReceivedFunction: loopMembers),
+							labelsMadeAgainAtCall: VariantAnswers.labelsMadeAgainAtCall(child.propertiesGeneratedLater, by: child.generator, besidesParameters: parameterLabelsByCallPlace[ObjectIdentifier(childScope), default: []], passedByReceivedFunction: loopMembers),
 							bodyPropertiesGeneratedLater: child.generator.mockLoweringBodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 						)
 						let isInSendableFamily = VariantAnswers.isInSendableFamily(calledInSendableFunction: place.isInSendableFunction, property: property)

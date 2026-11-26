@@ -124,7 +124,8 @@ extension DependencyTreeGenerator {
 			let property: Property
 			/// The position of the body called.
 			let calledBody: Int
-			/// What the called body's answers are, one per label of its `labels` (`Body.planAnswers`).
+			/// What the called body's answers are, one per label of its `labels` (`Body.planAnswers`), but for a member of a
+			/// loop of builders this call passes made again (`Answer.declaredMadeAgainAtCall`).
 			let arguments: [Answer]
 			/// The positions of `arguments` in the order a function takes them: the label the called body is built as, then
 			/// each other label in the order a walk of the called scope's tree first receives it (each scope's dependencies
@@ -177,6 +178,8 @@ extension DependencyTreeGenerator {
 						"\(label): nil"
 					case let .declared(property, isBeingBuilt):
 						"\(label): \(property.asSource)\(isBeingBuilt ? ", being built" : "")"
+					case let .declaredMadeAgainAtCall(property):
+						"\(label): \(property.asSource), made again at the call"
 					case let .instance(of: property):
 						"\(label): instance of \(property.asSource)"
 					}
@@ -277,13 +280,14 @@ extension DependencyTreeGenerator {
 							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 							builtBy: (context.builder, context.erasedToConcreteExistential),
 						)
-						let labelsInOrderReceived = [context.property.label] + Self.labelsInOrderFirstReceived(inTreeOf: calledScope)
+						// The tree can receive the label the body is built as too, as a loop mate does: it keeps its first place.
+						let labelsInOrderReceived = [context.property.label] + Self.labelsInOrderFirstReceived(inTreeOf: calledScope).filter { $0 != context.property.label }
 						let argumentOrder = labelsInOrderReceived.compactMap { bodies[calledBody].labels.firstIndex(of: $0) }
 						calls.append(Call(
 							path: context.path,
 							property: context.property,
 							calledBody: calledBody,
-							arguments: bodies[calledBody].planAnswers,
+							arguments: VariantAnswers.arguments(bodies[calledBody].planAnswers, of: labels, makingAgain: context.labelsMadeAgainAtCall),
 							// A label no receive of the walk names keeps its sorted place after the others.
 							argumentOrder: argumentOrder + bodies[calledBody].labels.indices.filter { !argumentOrder.contains($0) },
 							isInSendableFamily: context.isInSendableFamily,
