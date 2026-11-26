@@ -10221,6 +10221,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let nestedFillHoleRandomSeedMask: UInt64 = 0x6E65737446696C6C
+
 		// MARK: A ring of seams that pass up each other's places
 
 		/// Adds three seams that reach one another, each passing up the places of the others: `RingSeamA` to `RingSeamC`,
@@ -10247,8 +10248,7 @@ enum GraphFuzzerGenerator {
 		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
 		private mutating func addingSeamRingShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			// `build()` calls this pass only for a graph split across modules.
-			guard features.contains(.generateDependencyTree), seamRingRandom.percentChance(25) else { return declarations }
-			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
+			guard features.contains(.generateDependencyTree), seamRingRandom.percentChance(25), !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
 			func instantiable(_ suffix: String, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
