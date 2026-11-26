@@ -126,15 +126,6 @@ extension MockLowering {
 		}
 	}
 
-	/// Whether a node the mock builds writes a builder function: where it builds children or a wrapper, as production's
-	/// place does, and also where its function binds a receive named apart again (`receiverBindings`), reads a default from
-	/// its configuration (`readsDefaults`), or binds the value of a `@Sendable` autoclosure parameter of `mock()`
-	/// (`hasSendableAutoclosureBindings`), which production's place never does: the input the mock walk hands production's
-	/// built record function for whether the place has a function.
-	static func writesBuilderFunction(hasChildren: Bool, isWrapped: Bool, hasReceiverBindings: Bool, readsDefaults: Bool, hasSendableAutoclosureBindings: Bool) -> Bool {
-		hasChildren || isWrapped || hasReceiverBindings || readsDefaults || hasSendableAutoclosureBindings
-	}
-
 	/// The statements that begin a node's builder function, before its children's, as places the type key reads: each
 	/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the node
 	/// instantiates, as `ConstantNode.receiverBindingLines(indent:)` writes them, unindented. Each is a place written as
