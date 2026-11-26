@@ -67,10 +67,11 @@ extension TypeKeyLayout {
 					let isInSendableFamily = built.isSendable || bodies[body].isInSendableFamily
 					// A closer passes the function it calls what that function reads, which the closer's body looks up outside
 					// itself: the labels of the target's domain are this view's too.
-					guard let closed = closedOnFunctions(named: domain.closedOnFunctionNames, from: body) else { return false }
+					guard let closed = closedOnFunctions(named: domain.closedOnFunctionNames, from: body, closesBeneathItsBody: domain.closesBeneathItsBody) else { return false }
 					let labels = domain.labels.union(closed.labels)
-					// A view whose closers call a function declared outside it keeps the declarations themselves (`KeyedDeclaration`).
-					let keysByKind = domain.closedOnFunctionNames.isEmpty
+					// A view whose closers call a function declared outside it keeps the declarations themselves, but for a member of
+					// a loop of builders whose closers call only its siblings (`KeyedDeclaration`).
+					let keysByKind = closed.keysByKind
 					var outerView = [String: KeyedDeclaration]()
 					for label in labels {
 						outerView[label] = keyed(lookUp(label, inBody: body, before: position), byKind: keysByKind)
@@ -81,6 +82,7 @@ extension TypeKeyLayout {
 						outerView: outerView,
 						cycleArguments: built.callCycleArguments.map { keyed(pathValue(of: $0, inBody: body, before: position), byKind: keysByKind) },
 						closedOnStatements: closed.statementKeys,
+						closedOnResolutions: closed.resolutions,
 					)
 					passedArgumentsByCall[[body, position]] = built.passedArguments
 					if let view = viewsByKey[key] {
@@ -199,40 +201,56 @@ extension TypeKeyLayout {
 
 	/// The labels the functions named `names` read outside them, which a place whose closers call them, made in `body`,
 	/// passes them; and the keys of the statements declaring those that a statement of an enclosing body declares, and of
-	/// each such function they call in turn, so two places share a view only where the loops they rebind are alike. `nil`
+	/// each such function they call in turn, so two places share a view only where the loops they rebind are alike: each
+	/// statement once, in the order the walk first reaches it, and the statement each name the walk resolves is, by that
+	/// order. The keys hold each declaration by kind (`keysByKind`) where every name resolves to a statement of the body it
+	/// is resolved from, called only by that statement's siblings' own statements, whose functions take no cycle
+	/// parameters: a member of a loop of builders whose places' calls `checkCall` checks against each place's own body. `nil`
 	/// where a place beneath one of them records nothing.
-	mutating func closedOnFunctions(named names: Set<String>, from body: Int) -> (labels: Set<String>, statementKeys: [ClosedOnStatementKey])? {
+	mutating func closedOnFunctions(named names: Set<String>, from body: Int, closesBeneathItsBody: Bool) -> (labels: Set<String>, statementKeys: [ClosedOnStatementKey], resolutions: [Int], keysByKind: Bool)? {
 		var labels = Set<String>()
 		var statements = [(body: Int, index: Int, record: BuiltPlaceRecord)]()
-		var seen = Set<[Int]>()
+		var positionByStatement = [[Int]: Int]()
+		var resolutions = [Int]()
+		var keysByKind = !closesBeneathItsBody
 		var pending = names.sorted().map { (name: $0, body: body) }
 		while let next = pending.popLast() {
 			switch resolvedFunction(named: next.name, from: next.body) {
 			case let .enclosing(target):
 				labels.formUnion(bodies[target].domainLabels)
+				resolutions.append(-1)
+				keysByKind = false
 			case let .statement(declaringBody, index, record):
-				guard seen.insert([declaringBody, index]).inserted else { continue }
+				if let position = positionByStatement[[declaringBody, index]] {
+					resolutions.append(position)
+					continue
+				}
 				guard let domain = domain(of: record) else { return nil }
+				positionByStatement[[declaringBody, index]] = statements.count
+				resolutions.append(statements.count)
+				if declaringBody != next.body || domain.closesBeneathItsBody || !record.cycleParameters.isEmpty {
+					keysByKind = false
+				}
 				labels.formUnion(domain.labels)
 				statements.append((declaringBody, index, record))
 				pending.append(contentsOf: domain.closedOnFunctionNames.sorted().map { (name: $0, body: declaringBody) })
 			case nil:
-				break
+				resolutions.append(-2)
 			}
 		}
-		let keys = statements.sorted { ($0.body, $0.index) < ($1.body, $1.index) }.map { statement in
-			var outerView = [String: PathValue]()
+		let keys = statements.map { statement in
+			var outerView = [String: KeyedDeclaration]()
 			for label in labels {
-				outerView[label] = lookUp(label, inBody: statement.body, before: statement.index)
+				outerView[label] = keyed(lookUp(label, inBody: statement.body, before: statement.index), byKind: keysByKind)
 			}
 			return ClosedOnStatementKey(
 				node: statement.record.node,
 				isInSendableFamily: statement.record.isSendable || bodies[statement.body].isInSendableFamily,
 				outerView: outerView,
-				cycleArguments: statement.record.callCycleArguments.map { pathValue(of: $0, inBody: statement.body, before: statement.index) },
+				cycleArguments: statement.record.callCycleArguments.map { keyed(pathValue(of: $0, inBody: statement.body, before: statement.index), byKind: keysByKind) },
 			)
 		}
-		return (labels, keys)
+		return (labels, keys, resolutions, keysByKind)
 	}
 
 	/// What `built`'s body looks up outside itself, or `nil` where a place beneath it records nothing. The plan nodes
@@ -275,9 +293,10 @@ extension TypeKeyLayout {
 			for case let .built(childBuilt) in children where childBuilt.hasFunction {
 				declaredNames.insert(childBuilt.functionName)
 			}
-			func close(_ name: String) {
+			func close(_ name: String, beneathTheBody: Bool) {
 				if name != current.functionName, !declaredNames.contains(name) {
 					domain.closedOnFunctionNames.insert(name)
+					domain.closesBeneathItsBody = domain.closesBeneathItsBody || beneathTheBody
 				}
 			}
 			for child in children {
@@ -288,14 +307,16 @@ extension TypeKeyLayout {
 						for label in childDomain.labels where !bound.contains(label) && !boundBefore.contains(label) {
 							domain.labels.insert(label)
 						}
-						childDomain.closedOnFunctionNames.forEach(close)
+						for name in childDomain.closedOnFunctionNames {
+							close(name, beneathTheBody: true)
+						}
 					} else {
 						childBuilt.constructionReads.forEach(lookUp)
 					}
 					boundBefore.insert(childBuilt.property.label)
 				case let .closer(closer):
 					closer.callSiteReads.forEach(lookUp)
-					close(closer.closedOnFunctionName)
+					close(closer.closedOnFunctionName, beneathTheBody: false)
 					boundBefore.insert(closer.property.label)
 				case let .alias(alias):
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {

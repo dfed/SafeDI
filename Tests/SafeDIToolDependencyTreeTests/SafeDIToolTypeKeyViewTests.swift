@@ -148,6 +148,21 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutOneViewPerScreen_whenEachScreenReceivesTheBuilderItsGrandparentDeclares() async throws {
+		// Layers of three screens, each opening the three screens of the next layer through an `Instantiator`, and each below
+		// the second layer receiving the `Instantiator` its grandparent declares, which builds its parent's type: a loop of
+		// builders, whose members' functions wrap one another again. Each rebinding is a place closing a cycle on a sibling's
+		// function, keyed by kind, so each screen is one view, three per layer, where a view per path made three times as
+		// many views at each layer.
+		var counts = [[Int]]()
+		for layerCount in [4, 6] {
+			try await counts.append(viewCounts(of: Self.screensReceivingTheirGrandparentsBuilder(layerCount: layerCount)))
+		}
+		#expect(counts == [[12], [18]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesEachParentsRouter_whenParentsOfTwoTypesOpenOneScreen() async throws {
 		// Two parents of different types each declare a `router` and open one `Detail` that receives it: `Detail`'s places
 		// share one view and one function, which takes the router as a parameter, and each call passes its own parent's.
@@ -271,6 +286,28 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 				var declarations = ["@Instantiated let router\(layer): Router"]
 				if layer > 0 {
 					declarations.append("@Received let router\(layer - 1): Router")
+				}
+				if layer < layerCount - 1 {
+					declarations += (0..<3).map { "@Instantiated let screen\(layer + 1)x\($0)Builder: Instantiator<Screen\(layer + 1)x\($0)>" }
+				}
+				files.append(seamFixtureType(named: "Screen\(layer)x\(position)", isFinalClass: true, declarations: declarations))
+			}
+		}
+		return files
+	}
+
+	/// Layers of three screens beneath a root that opens the first layer's, each screen opening the three screens of the next
+	/// layer through an `Instantiator`, and each screen of a layer after the first receiving the `Instantiator` of the screen
+	/// of its parent's layer at its own position, which its grandparent declares.
+	private static func screensReceivingTheirGrandparentsBuilder(layerCount: Int) -> [String] {
+		var files = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (0..<3).map { "@Instantiated let screen0x\($0)Builder: Instantiator<Screen0x\($0)>" }),
+		]
+		for layer in 0..<layerCount {
+			for position in 0..<3 {
+				var declarations = [String]()
+				if layer > 1 {
+					declarations.append("@Received let screen\(layer - 1)x\(position)Builder: Instantiator<Screen\(layer - 1)x\(position)>")
 				}
 				if layer < layerCount - 1 {
 					declarations += (0..<3).map { "@Instantiated let screen\(layer + 1)x\($0)Builder: Instantiator<Screen\(layer + 1)x\($0)>" }
