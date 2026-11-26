@@ -68,7 +68,7 @@ struct BitRows: Sendable {
 	/// Hands each column set in a row to `body`, in increasing order, with its rank: how many columns of the row precede it.
 	func forEachColumn(inRow row: Int, _ body: (_ column: Int32, _ rank: Int) -> Void) {
 		var rank = 0
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
 			var word = wordBits[index]
 			while word != 0 {
 				body(wordIndices[index] * 64 + Int32(word.trailingZeroBitCount), rank)
@@ -82,7 +82,7 @@ struct BitRows: Sendable {
 	func rank(of column: Int32, inRow row: Int) -> Int? {
 		let (word, bit) = Int(column).quotientAndRemainder(dividingBy: 64)
 		var rank = 0
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
 			let bits = wordBits[index]
 			if wordIndices[index] == Int32(word) {
 				guard bits & 1 << UInt64(bit) != 0 else {
@@ -99,7 +99,7 @@ struct BitRows: Sendable {
 	/// The columns a row holds.
 	func columnCount(inRow row: Int) -> Int {
 		var count = 0
-		for index in Int(rowStarts[row]) ..< Int(rowEnds[row]) {
+		for index in Int(rowStarts[row])..<Int(rowEnds[row]) {
 			count += wordBits[index].nonzeroBitCount
 		}
 		return count

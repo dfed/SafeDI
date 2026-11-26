@@ -32,7 +32,7 @@ struct TypeFactsVariantsTests {
 		let variants = makeVariants(graph: graph, own: [[], [], [0]], bindings: [:])
 
 		#expect(variants.count == 3)
-		#expect((0 ..< variants.count).map { Array(variants.callees(of: $0)) } == [[1], [2], [1]])
+		#expect((0..<variants.count).map { Array(variants.callees(of: $0)) } == [[1], [2], [1]])
 		#expect(variants.isInline == [false, false, false])
 	}
 
@@ -66,8 +66,8 @@ struct TypeFactsVariantsTests {
 		])
 
 		#expect(variants.count == 5)
-		#expect((0 ..< variants.count).map { variants.node(of: $0) } == [0, 1, 3, 2, 2])
-		#expect((0 ..< variants.count).map { Array(variants.answers(of: $0)) } == [[], [], [], [7], [8]])
+		#expect((0..<variants.count).map { variants.node(of: $0) } == [0, 1, 3, 2, 2])
+		#expect((0..<variants.count).map { Array(variants.answers(of: $0)) } == [[], [], [], [7], [8]])
 	}
 
 	@Test
@@ -112,7 +112,7 @@ struct TypeFactsVariantsTests {
 		})
 
 		#expect(variants.count == 5)
-		#expect((0 ..< variants.count).map { variants.family(of: $0) } == [.plain, .plain, .plain, .plain, .sendable])
+		#expect((0..<variants.count).map { variants.family(of: $0) } == [.plain, .plain, .plain, .plain, .sendable])
 	}
 
 	@Test

@@ -182,18 +182,18 @@ struct TypeFactsVariants: Sendable {
 
 	/// The answers the variant was made with, one per read of its node's reads from above, in read order.
 	func answers(of variant: Int) -> ArraySlice<Int32> {
-		columns.answers[Int(columns.answerOffsets[variant]) ..< Int(columns.answerOffsets[variant + 1])]
+		columns.answers[Int(columns.answerOffsets[variant])..<Int(columns.answerOffsets[variant + 1])]
 	}
 
 	/// The variant each of the variant's node's edges calls, in edge order.
 	func callees(of variant: Int) -> ArraySlice<Int32> {
-		columns.callees[Int(columns.callOffsets[variant]) ..< Int(columns.callOffsets[variant + 1])]
+		columns.callees[Int(columns.callOffsets[variant])..<Int(columns.callOffsets[variant + 1])]
 	}
 
 	/// Where each answer a call hands its callee comes from, in the callee's read order: `call` is the call's position
 	/// among every variant's calls, `callOffset(of:)` plus the edge's index.
 	func sources(ofCall call: Int) -> ArraySlice<AnswerSource> {
-		columns.sources[Int(columns.sourceOffsets[call]) ..< Int(columns.sourceOffsets[call + 1])]
+		columns.sources[Int(columns.sourceOffsets[call])..<Int(columns.sourceOffsets[call + 1])]
 	}
 
 	func callOffset(of variant: Int) -> Int {
@@ -243,7 +243,7 @@ struct TypeFactsVariants: Sendable {
 			guard end - start == candidateKeys.count else {
 				return false
 			}
-			for offset in 0 ..< candidateKeys.count where keys[start + offset] != candidateKeys[offset] {
+			for offset in 0..<candidateKeys.count where keys[start + offset] != candidateKeys[offset] {
 				return false
 			}
 			return true
