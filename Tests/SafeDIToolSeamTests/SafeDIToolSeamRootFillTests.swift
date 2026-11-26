@@ -393,97 +393,98 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 	/// only `App` fills too and whose tree opens `Inner`; and `App`, whose `LiveApi` fills both, instantiating `Detail`, and
 	/// whose root instantiates `Outer` and, where `callsInnerThroughOuterSeam`, `InnerHost`, a seam of `OuterSeam` that
 	/// instantiates `Inner`, else `Inner` itself.
-	private static func siblingCallModules(callsInnerThroughOuterSeam: Bool) -> [ModuleFixture] { [
-		ModuleFixture(name: "InnerSeam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
-		import SafeDI
+	private static func siblingCallModules(callsInnerThroughOuterSeam: Bool) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "InnerSeam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+			import SafeDI
 
-		nonisolated public protocol Api: AnyObject {}
+			nonisolated public protocol Api: AnyObject {}
 
-		@Instantiable
-		public final class Service: Instantiable {
-		    public init() {}
-		}
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init() {}
+			}
 
-		@Instantiable(generateDependencyTree: true)
-		public final class Inner: Instantiable {
-		    public init(service: Service, api: any Api) {
-		        self.service = service
-		        self.api = api
-		    }
+			@Instantiable(generateDependencyTree: true)
+			public final class Inner: Instantiable {
+			    public init(service: Service, api: any Api) {
+			        self.service = service
+			        self.api = api
+			    }
 
-		    @Received let service: Service
-		    @Instantiated let api: any Api
-		}
-		"""]),
-		ModuleFixture(name: "OuterSeam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
-		import InnerSeam
-		import SafeDI
+			    @Received let service: Service
+			    @Instantiated let api: any Api
+			}
+			"""]),
+			ModuleFixture(name: "OuterSeam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+			import InnerSeam
+			import SafeDI
 
-		@Instantiable(generateDependencyTree: true)
-		public final class Outer: Instantiable {
-		    public init(service: Service, api: any Api, innerBuilder: Instantiator<Inner>) {
-		        self.service = service
-		        self.api = api
-		        self.innerBuilder = innerBuilder
-		    }
+			@Instantiable(generateDependencyTree: true)
+			public final class Outer: Instantiable {
+			    public init(service: Service, api: any Api, innerBuilder: Instantiator<Inner>) {
+			        self.service = service
+			        self.api = api
+			        self.innerBuilder = innerBuilder
+			    }
 
-		    @Received let service: Service
-		    @Instantiated let api: any Api
-		    @Instantiated let innerBuilder: Instantiator<Inner>
-		}
-		""" + (callsInnerThroughOuterSeam ? """
+			    @Received let service: Service
+			    @Instantiated let api: any Api
+			    @Instantiated let innerBuilder: Instantiator<Inner>
+			}
+			""" + (callsInnerThroughOuterSeam ? """
 
 
-		@Instantiable(generateDependencyTree: true)
-		public final class InnerHost: Instantiable {
-		    public init(service: Service, inner: Inner) {
-		        self.service = service
-		        self.inner = inner
-		    }
+			@Instantiable(generateDependencyTree: true)
+			public final class InnerHost: Instantiable {
+			    public init(service: Service, inner: Inner) {
+			        self.service = service
+			        self.inner = inner
+			    }
 
-		    @Received let service: Service
-		    @Instantiated let inner: Inner
-		}
-		""" : "")], dependencies: ["InnerSeam"]),
-		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
-		import InnerSeam
-		import OuterSeam
-		import SafeDI
+			    @Received let service: Service
+			    @Instantiated let inner: Inner
+			}
+			""" : "")], dependencies: ["InnerSeam"]),
+			ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+			import InnerSeam
+			import OuterSeam
+			import SafeDI
 
-		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
-		public final class LiveApi: Api, Instantiable {
-		    public init(service: Service, detail: Detail) {
-		        self.service = service
-		        self.detail = detail
-		    }
+			@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+			public final class LiveApi: Api, Instantiable {
+			    public init(service: Service, detail: Detail) {
+			        self.service = service
+			        self.detail = detail
+			    }
 
-		    @Received let service: Service
-		    @Instantiated let detail: Detail
-		}
+			    @Received let service: Service
+			    @Instantiated let detail: Detail
+			}
 
-		@Instantiable
-		public final class Detail: Instantiable {
-		    public init(service: Service) {
-		        self.service = service
-		    }
+			@Instantiable
+			public final class Detail: Instantiable {
+			    public init(service: Service) {
+			        self.service = service
+			    }
 
-		    @Received let service: Service
-		}
+			    @Received let service: Service
+			}
 
-		@Instantiable(isRoot: true)
-		public final class Root: Instantiable {
-		    public init(service: Service, \(callsInnerThroughOuterSeam ? "innerHost: InnerHost" : "inner: Inner"), outer: Outer) {
-		        self.service = service
-		        \(callsInnerThroughOuterSeam ? "self.innerHost = innerHost" : "self.inner = inner")
-		        self.outer = outer
-		    }
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: Service, \(callsInnerThroughOuterSeam ? "innerHost: InnerHost" : "inner: Inner"), outer: Outer) {
+			        self.service = service
+			        \(callsInnerThroughOuterSeam ? "self.innerHost = innerHost" : "self.inner = inner")
+			        self.outer = outer
+			    }
 
-		    @Instantiated let service: Service
-		    @Instantiated let \(callsInnerThroughOuterSeam ? "innerHost: InnerHost" : "inner: Inner")
-		    @Instantiated let outer: Outer
-		}
-		"""], dependencies: ["InnerSeam", "OuterSeam"]),
-	]
+			    @Instantiated let service: Service
+			    @Instantiated let \(callsInnerThroughOuterSeam ? "innerHost: InnerHost" : "inner: Inner")
+			    @Instantiated let outer: Outer
+			}
+			"""], dependencies: ["InnerSeam", "OuterSeam"]),
+		]
 	}
 
 	/// `Last`, a seam whose `screenBuilder` only `App` can fill, and `App`, whose `AppScreen` fills it and opens `Last`
