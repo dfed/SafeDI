@@ -583,7 +583,7 @@ extension MockLowering {
 		var pathsStartingExtraction = Set<[Int]>()
 		/// The statements each place's builder function begins with before its children's, as places the type key reads: each
 		/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the
-		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:sendableAutoclosureBindings:)`).
+		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:readTypes:sendableAutoclosureBindings:)`).
 		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
 		/// Why each place has no record, which names its root's fallback (`MockLowering.typeKeyLayoutObserver`).
 		var unrecordedReasons = [[Int]: String]()
@@ -1450,6 +1450,10 @@ extension MockLowering {
 			let argumentLazilyInstantiatedNames = generator.cycleParameters.isEmpty ? lazilyInstantiatedNames : functionLazilyInstantiatedNames
 			MockLowering.routeReceives(of: uncoveredInstantiatedProperties, toParametersNamed: uncoveredParameterNames, in: &functionRenames)
 			var receiverBindings = [(property: Property, name: String)]()
+			// The type of the declaration each binding reads, by the name it reads: where the receive is optional and the name
+			// binds its unwrapped form, the unwrapped type, which a `.v3Unstable` record lists, so the type key passes a function
+			// that reads it a value of that type. `.v2` lists the receive's type, and its output stays as it was.
+			var receiverBindingReadTypes = [String: TypeDescription]()
 			var publicWrapperParametersReadByName = [String: String]()
 			let functionPublicMockWrapperParameterNames = buildsPublicMock ? MockLowering.removingRenames(hiddenBy: declarationsHidingRenames, from: publicMockWrapperParameterNames) : [:]
 			// In `.v3Unstable`, a receive the builder function's own cycle parameter provides reads that parameter, which a
@@ -1483,8 +1487,13 @@ extension MockLowering {
 					} else {
 						receiverBindings.append(wrapper)
 					}
-				} else if let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription] {
+				} else if let name = names[dependency.property.typeDescription] {
 					receiverBindings.append((dependency.property, name))
+				} else if let name = names[dependency.property.asUnwrappedProperty.typeDescription] {
+					receiverBindings.append((dependency.property, name))
+					if isV3 {
+						receiverBindingReadTypes[name] = dependency.property.asUnwrappedProperty.typeDescription
+					}
 				}
 			}
 			// A receive named apart whose label a receive beneath reads by name is handed the name instead of bound again
@@ -1631,6 +1640,7 @@ extension MockLowering {
 			if recordsPlaces, !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty {
 				leadingBodyPlaces[childIndexPath] = MockLowering.receiverBindingPlaces(
 					receiverBindings: receiverBindings,
+					readTypes: receiverBindingReadTypes,
 					sendableAutoclosureBindings: uncoveredInstantiatedProperties.compactMap { property in sendableAutoclosureBindings[property].map { (property, $0) } },
 				)
 			}
