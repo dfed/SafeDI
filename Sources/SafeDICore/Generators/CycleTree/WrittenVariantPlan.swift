@@ -32,10 +32,6 @@ public enum PlanCodeObservation {
 public enum RootTreeChoiceObservation {
 	/// Why a root that reaches a cycle has its tree built per path.
 	public enum PerPathReason: String, Sendable {
-		/// The caller reads the trees per path: to draw the DOT graph, or to list what each receive is handed.
-		case treesReadPerPath
-		/// A test set `forcesPerPath`.
-		case forcedPerPath
 		/// The module's types name both a wrapper that is not `Sendable` and a `Sendable` one, so the `@Sendable` capture
 		/// walk reads its trees.
 		case moduleNamesNonSendableWrapperAndSendableBuilder
@@ -45,7 +41,7 @@ public enum RootTreeChoiceObservation {
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree renames a dependency (`fulfilledByDependencyNamed:`).
 		case renames
-		/// A type of the root's tree holds a `Sendable` wrapper or a type spelled with `Sendable`.
+		/// A type of the root's tree holds a `Sendable` wrapper or a `@Sendable` function.
 		case holdsSendableWrapperOrFunction
 		/// A type on a cycle of the root's tree is instantiated erased.
 		case erasesCycleMember
@@ -75,13 +71,17 @@ public enum RootTreeChoiceObservation {
 		case passesLazilyInstantiatedInstanceAtCall
 		/// The type key lays out none of the plan.
 		case noLayout
+		/// Planning the root threw an error, which is discarded: today's tree reports what a build with no plan reports.
+		case planningThrew
 	}
 
 	/// Called once per such root with the root's type and `nil` where its code is laid out from its plan.
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void)?
 
-	/// Whether every root's tree is built per path, as before a cyclic tree was planned per type.
-	@TaskLocal public static var forcesPerPath = false
+	/// The number of places a root's tree per path may hold before it is abandoned for the root's plan by type, in place of
+	/// `DependencyTreeGenerator.scopeGeneratorLimitOfTodaysTree`: a test lowers it to plan a small root, or raises it to
+	/// keep a root's tree per path. Nothing else sets it.
+	@TaskLocal public static var scopeGeneratorLimitOverride: Int?
 }
 
 /// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks

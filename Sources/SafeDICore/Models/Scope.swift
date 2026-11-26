@@ -404,6 +404,9 @@ extension ScopeRecord {
 	///   - constructionMemo: The memo of the trees created before this one, whose generators the tree's first pass may
 	///     reuse when it is shared across trees, and which then keeps that pass's generators once the tree is created
 	///     (see `ConstructionMemo.Sharing`).
+	///   - scopeGeneratorLimit: The number of places the tree's passes may build or reuse between them, past which its
+	///     caller is asked once whether to abandon the tree (`ScopeGeneratorLimitExceeded`, and the memo keeps nothing of
+	///     it) or to build on with no limit, or `nil` for a tree built whatever its size.
 	///
 	/// The tree is created again while a scope that a lazy cycle closes on finds other parameters for its builder
 	/// function than it was created with (see `CycleParameter`): its cycle-closing scopes, created before it, pass
@@ -429,6 +432,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool = true,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		scopeGeneratorLimit: ScopeGeneratorLimit? = nil,
 	) throws -> ScopeGenerator {
 		let scopeGenerator = try createdTree(
 			in: table,
@@ -441,6 +445,7 @@ extension ScopeRecord {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
+			scopeGeneratorLimit: scopeGeneratorLimit,
 		)
 		if let observer = ConstructionMemoOracle.observer {
 			// The build with the memo shares it across every tree created with this memo, whatever the memo's own sharing,
@@ -458,6 +463,7 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
+					scopeGeneratorLimit: nil,
 				)
 			} }
 			constructionMemo.oracleMemo = oracleMemo
@@ -476,6 +482,7 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
+					scopeGeneratorLimit: nil,
 				)
 			} }
 			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
@@ -484,6 +491,9 @@ extension ScopeRecord {
 	}
 
 	/// The tree `createScopeGenerator` creates, in as many passes as it takes.
+	/// - Parameter scopeGeneratorLimit: The number of places the passes may build or reuse between them before the caller
+	///   is asked whether to abandon the tree (`ScopeGeneratorLimitExceeded`), or `nil` for a tree built whatever its
+	///   size. A tree within the limit, and one its caller keeps, is built exactly as without one.
 	private func createdTree(
 		in table: ScopeTable,
 		nearestDeclarations: NearestDeclarations,
@@ -495,7 +505,12 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
+		scopeGeneratorLimit: ScopeGeneratorLimit?,
 	) throws -> ScopeGenerator {
+		// The places every pass so far has built or reused, which `scopeGeneratorLimit` bounds until its caller keeps the
+		// tree, and then no longer.
+		var scopeGeneratorCount = 0
+		var scopeGeneratorLimit = scopeGeneratorLimit
 		var previousPassGenerator: ScopeGenerator?
 		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
 		// pass's findings (see `CycleParameterPlan`), or `nil` where the tree is not planned.
@@ -542,6 +557,8 @@ extension ScopeRecord {
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
+				var discardedCount = 0
+				var discardedLimit: ScopeGeneratorLimit?
 				_ = try createScopeGenerator(
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -559,6 +576,8 @@ extension ScopeRecord {
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 					placeReadLabels: placeReadLabels,
+					scopeGeneratorLimit: &discardedLimit,
+					scopeGeneratorCount: &discardedCount,
 				)
 			}
 			scopeGenerator = try createScopeGenerator(
@@ -578,6 +597,8 @@ extension ScopeRecord {
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 				placeReadLabels: placeReadLabels,
+				scopeGeneratorLimit: &scopeGeneratorLimit,
+				scopeGeneratorCount: &scopeGeneratorCount,
 			)
 			if previousPassGenerator == nil {
 				cycleParameterSeed = Self.cycleParameterSeed(
@@ -666,6 +687,8 @@ extension ScopeRecord {
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
 		placeReadLabels: PlaceReadLabels?,
+		scopeGeneratorLimit: inout ScopeGeneratorLimit?,
+		scopeGeneratorCount: inout Int,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
@@ -707,6 +730,13 @@ extension ScopeRecord {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential, propertyID):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
+					// Every place counts, built or reused: a tree that grows with its paths reuses most of them.
+					scopeGeneratorCount += 1
+					if let limit = scopeGeneratorLimit, scopeGeneratorCount > limit.places {
+						guard !limit.abandonsTree() else { throw ScopeGeneratorLimitExceeded() }
+						// The caller keeps this tree: it is built on as if no limit had been given.
+						scopeGeneratorLimit = nil
+					}
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, id: propertyID, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
@@ -2744,6 +2774,20 @@ extension Instantiable {
 
 /// An `@Instantiated` `ErasedInstantiator` or `SendableErasedInstantiator` whose first generic argument is not the
 /// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
+/// Thrown where a tree's passes have built or reused more places than the limit its caller gave it and the caller
+/// abandons the tree. Never reported: the caller that gave the limit catches it and builds the root another way.
+struct ScopeGeneratorLimitExceeded: Error {}
+
+/// How many places a tree's passes may build or reuse between them before its caller is asked, once, whether to
+/// abandon it. A place is a property a scope of the tree instantiates, counted where its generator is built or
+/// reused from the construction memo: the count reads the declarations alone, never a name.
+struct ScopeGeneratorLimit {
+	let places: Int
+	/// Whether the tree is abandoned (`ScopeGeneratorLimitExceeded`). `false` keeps it: it is built on with no limit,
+	/// and nothing built so far is thrown away.
+	let abandonsTree: () -> Bool
+}
+
 struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
 	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.

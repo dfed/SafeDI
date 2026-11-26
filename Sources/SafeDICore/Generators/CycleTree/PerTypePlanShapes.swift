@@ -138,8 +138,8 @@ extension DependencyTreeGenerator {
 		}
 		if property.typeDescription.isOptional {
 			return .holdsValueOnlyIfAvailable
-		} else if property.typeDescription.asSource.contains("Sendable") {
-			// Stricter than the shape: a type whose name holds the word stays on today's tree too, whose code is the same.
+		} else if property.typeDescription.isSendableFunction {
+			// Read from the type's structure, never from its spelling: a type whose name holds the word is no such value.
 			return .holdsSendableWrapperOrFunction
 		} else {
 			return nil
