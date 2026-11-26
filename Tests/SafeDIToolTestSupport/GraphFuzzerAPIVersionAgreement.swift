@@ -295,7 +295,11 @@ enum GraphFuzzerAPIVersionAgreement {
 		let v3Fixture = (judgesUnbuildableBuilders ? v2Fixture.declaringUnbuildableBuilderCalls : v2Fixture).selectingAPIVersion(.v3Unstable)
 		let v2Run = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: v2Fixture, filesToDelete: &filesToDelete)
 		let v3Run = try await GraphFuzzerReleaseAcceptance.run(.currentTree, over: v3Fixture, filesToDelete: &filesToDelete)
-		let v3GeneratedFiles: [String: String] = if case let .compiled(generatedFiles, _, _) = v3Run.outcome { generatedFiles } else { [:] }
+		let v3GeneratedFiles: [String: String] = if case let .compiled(generatedFiles, _, _) = v3Run.outcome {
+			generatedFiles
+		} else {
+			[:]
+		}
 		let classification = GraphFuzzerReleaseAcceptance.classify(older: v2Run, current: v3Run) { v2Fixture.differentialValueProbes(generatedFiles: $0.filter { !$0.key.hasSuffix("+SafeDIMock.swift") || $0.value.contains("static func mock(") }).map { Self.callingV3Mock($0, v3GeneratedFiles: v3GeneratedFiles) } }
 		// `SAFEDI_API_VERSION_AGREEMENT_DUMP` names a directory to write each seed's `.v3Unstable` fixture, both sides'
 		// generated files and their compiles' output into, to read a disagreement by hand.
