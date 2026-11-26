@@ -153,7 +153,7 @@ extension FileScan: BinarySchemaMember {
 				BinaryLayoutField("reservedTypeNameDeclarations", \.reservedTypeNameDeclarations),
 			],
 			// A cached scan is one whose module kept its plain type declarations
-			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)`),
+			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`),
 			// which leaves no block undecided.
 			unwrittenProperties: ["plainTypeDeclarationDecisions"],
 		)

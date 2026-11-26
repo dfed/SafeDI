@@ -63,7 +63,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.profile = profile
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -77,7 +76,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.userService = userService
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(userService: { __safeDI_builder() })
 			        }
@@ -740,7 +738,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profileBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -754,7 +751,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _, _ in __safeDI_builder() })
 		        }
@@ -791,7 +787,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _ in __safeDI_builder() })
 		        }
@@ -805,7 +800,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.screenBuilder_Sendable = screenBuilder_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(screenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -819,7 +813,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(profileBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -864,7 +857,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _, _, _ in __safeDI_builder() })
 		        }
@@ -878,7 +870,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(profileBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1022,7 +1013,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.erasedUserServiceBuilder = erasedUserServiceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(erasedUserServiceBuilder: { _, _, _ in __safeDI_builder })
 		        }
@@ -1036,7 +1026,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.sendableErasedUserServiceBuilder = sendableErasedUserServiceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 		            self.init(sendableErasedUserServiceBuilder: { __safeDI_builder })
 		        }
@@ -1050,7 +1039,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.lazyUserService = lazyUserService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(lazyUserService: { _ in __safeDI_builder() })
 		        }
@@ -1064,7 +1052,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.sendableLazyUserService = sendableLazyUserService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(sendableLazyUserService: { __safeDI_builder() })
 		        }
@@ -1190,7 +1177,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(home: { _ in .init(__safeDI_noScope: __safeDI_builder) }, settings: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1204,7 +1190,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.avatar = avatar
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(avatar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1218,7 +1203,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.avatar = avatar
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(avatar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1232,7 +1216,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -1340,7 +1323,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1354,7 +1336,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _ in __safeDI_builder() })
 		        }
@@ -1438,7 +1419,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.profile = profile
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1452,7 +1432,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.userService = userService
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(userService: { __safeDI_builder() })
 			        }
@@ -1805,7 +1784,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -1819,7 +1797,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.router = router
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(router: { __safeDI_builder() })
 		        }
@@ -2259,7 +2236,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -2442,7 +2418,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                    self.logger = logger
 			                }
 
-			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.init(logger: { _ in __safeDI_builder() })
 			                }
@@ -2457,7 +2432,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                self.service_userServiceBuilder = service_userServiceBuilder
 			            }
 
-			            @_alwaysEmitIntoClient
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.init(service_userServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
@@ -2562,7 +2536,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.xBuilder = xBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -2576,7 +2549,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(service: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -2789,7 +2761,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(serviceBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3018,7 +2989,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.card = card
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(home: { _ in .init(__safeDI_noScope: __safeDI_builder) }, card: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3032,7 +3002,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.avatar = avatar
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(avatar: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3046,7 +3015,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -3060,7 +3028,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -3144,7 +3111,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		                    self.logger = logger
 		                }
 
-		                @_alwaysEmitIntoClient
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.init(logger: { _ in __safeDI_builder() })
 		                }
@@ -3159,7 +3125,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		                self.service_userServiceBuilder = service_userServiceBuilder
 		            }
 
-		            @_alwaysEmitIntoClient
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.init(service_userServiceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
@@ -3410,7 +3375,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3424,7 +3388,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(serviceBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3438,7 +3401,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -3915,7 +3877,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(serviceBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3948,7 +3909,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(xBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3962,7 +3922,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.otherBuilder = otherBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(otherBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -3976,7 +3935,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -4093,7 +4051,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profileBuilder = profileBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profileBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4107,7 +4064,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -4121,7 +4077,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.shellBuilder_Sendable = shellBuilder_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(shellBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4160,7 +4115,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.innerBuilder_Sendable = innerBuilder_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(innerBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, innerBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4239,7 +4193,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4253,7 +4206,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -4267,7 +4219,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(serviceBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4283,7 +4234,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.xBuilder_Sendable = xBuilder_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(xBuilder: { .init(__safeDI_noScope: __safeDI_builder) }, xBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4297,7 +4247,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.serviceBuilder_Sendable = serviceBuilder_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(serviceBuilder_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4397,7 +4346,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4428,7 +4376,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4459,7 +4406,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _ in __safeDI_builder() })
 		        }
@@ -4489,7 +4435,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.bBuilder = bBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4578,7 +4523,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4609,7 +4553,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.innerBuilder = innerBuilder
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(innerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -4640,7 +4583,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4654,7 +4596,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -4686,7 +4627,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(a: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -4700,7 +4640,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.b_Sendable = b_Sendable
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		            self.init(b_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5194,7 +5133,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -5208,7 +5146,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.`case` = `case`
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(case: { _ in __safeDI_builder() })
 		        }
@@ -5222,7 +5159,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -5236,7 +5172,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _, _ in __safeDI_builder() })
 		        }
@@ -5272,7 +5207,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5286,7 +5220,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { _ in __safeDI_builder() })
 		        }
@@ -5328,7 +5261,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(a_b: .init(__safeDI_noScope: __safeDI_builder), a: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -5342,7 +5274,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.c = c
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(c: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5356,7 +5287,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.b_c = b_c
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(b_c: .init(__safeDI_noScope: __safeDI_builder))
 		        }
@@ -5370,7 +5300,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -5626,7 +5555,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -5640,7 +5568,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -5757,7 +5684,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -5771,7 +5697,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -6276,7 +6201,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                    self.serviceBuilder = serviceBuilder
 			                }
 
-			                @_alwaysEmitIntoClient
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.init(serviceBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
@@ -6291,7 +6215,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                self.inner_trackerBuilder = inner_trackerBuilder
 			            }
 
-			            @_alwaysEmitIntoClient
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.init(inner_trackerBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
@@ -6443,7 +6366,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -6457,7 +6379,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(userService: { __safeDI_builder() })
 		        }
@@ -7379,7 +7300,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	            self.profile = profile
 	        }
 
-	        @_alwaysEmitIntoClient
 	        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 	            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 	        }
@@ -7393,7 +7313,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	            self.userService = userService
 	        }
 
-	        @_alwaysEmitIntoClient
 	        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 	            self.init(userService: { __safeDI_builder() })
 	        }

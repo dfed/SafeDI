@@ -140,8 +140,6 @@ extension ScopeGenerator {
 				typesDeclaredEscaping: signature.typesDeclaredEscaping,
 				unreadTypeComment: publicMockContext.unreadTypeComment,
 				namesForwardedTypes: true,
-				// A public mock's type may be narrower than its `public` tier, which does not say how visible the type is.
-				emitsFallbackIntoClient: false,
 			) {
 				lines.append(declaration)
 				lines.append("")

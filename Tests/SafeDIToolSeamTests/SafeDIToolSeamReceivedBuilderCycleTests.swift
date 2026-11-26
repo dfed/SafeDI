@@ -608,7 +608,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -622,7 +621,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -712,7 +710,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _ in __safeDI_builder() })
 			        }
@@ -726,7 +723,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -820,7 +816,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.xBuilder = xBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(xBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -834,7 +829,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.p = p
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(p: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -848,7 +842,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -862,7 +855,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -976,7 +968,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -990,7 +981,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -1004,7 +994,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -1127,7 +1116,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.bBuilder = bBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(bBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1141,7 +1129,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
@@ -1213,7 +1200,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.leaf = leaf
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: .init(__safeDI_noScope: __safeDI_builder), leaf: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1229,7 +1215,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(leaf: { _, _ in .init(__safeDI_noScope: __safeDI_builder) }, widget: { _, _, _ in __safeDI_builder() })
 			        }
@@ -1243,7 +1228,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.leaf = leaf
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(leaf: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1257,7 +1241,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { __safeDI_builder() })
 			        }
@@ -1376,7 +1359,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(flow: { _ in .init(__safeDI_noScope: __safeDI_builder) }, a: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
@@ -1390,7 +1372,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
@@ -1404,7 +1385,6 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            self.widget = widget
 			        }
 
-			        @_alwaysEmitIntoClient
 			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
