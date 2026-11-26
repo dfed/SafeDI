@@ -70,9 +70,10 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_holdsCaptureWalkBackForRootReachingOneKindOfWrapper_whenAnotherRootReachesBoth() async throws {
+	mutating func generate_holdsCaptureWalkBackForEachRoot_whenModuleNamesBothKindsOfWrapper() async throws {
 		// The module names both kinds of wrapper, so its gate lets the walk run. `SendableRoot`'s scopes name only
-		// `SendableInstantiator`s and `MixedRoot`'s both kinds: only `MixedRoot`'s tree can hold a capture.
+		// `SendableInstantiator`s, and `MixedRoot`'s `Instantiator` is of a label no scope built in a `@Sendable` function
+		// reads: neither root's tree can hold a capture.
 		let (gates, error) = await gates(of:
 			"""
 			@Instantiable(isRoot: true) public final class SendableRoot: Instantiable {
@@ -98,9 +99,69 @@ struct SafeDIToolSendableCaptureGateTests: ~Copyable {
 
 		#expect(error == nil)
 		#expect(gates == [
-			Gate(root: "MixedRoot", letsWalkRun: true, todaysWalkFindsCapture: false),
+			Gate(root: "MixedRoot", letsWalkRun: false, todaysWalkFindsCapture: false),
 			Gate(root: "SendableRoot", letsWalkRun: false, todaysWalkFindsCapture: false),
 		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_letsCaptureWalkRun_whenSendableFunctionRenamesNonSendableWrapper() async throws {
+		// `Settings`, built in the `@Sendable` function of `settingsBuilder`, renames `childBuilder`, an `Instantiator`
+		// `Root` declares outside it: the alias reads the wrapper there, so the gate must let the walk run.
+		let (gates, error) = await gates(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let childBuilder: Instantiator<Child>
+			    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+			    public init(childBuilder: Instantiator<Child>, settingsBuilder: SendableInstantiator<Settings>) { self.childBuilder = childBuilder; self.settingsBuilder = settingsBuilder }
+			}
+
+			@Instantiable public final class Settings: Instantiable {
+			    @Received(fulfilledByDependencyNamed: "childBuilder", ofType: Instantiator<Child>.self) let renamedChildBuilder: Instantiator<Child>
+			    public init(renamedChildBuilder: Instantiator<Child>) { self.renamedChildBuilder = renamedChildBuilder }
+			}
+
+			@Instantiable public final class Child: Instantiable {
+			    public init() {}
+			}
+			""")
+
+		#expect(error != nil)
+		#expect(gates == [Gate(root: "Root", letsWalkRun: true, todaysWalkFindsCapture: true)])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsCaptureWalkBack_whenSendableFunctionReadsNoLabelOfNonSendableWrapper() async throws {
+		// `Root` declares an `Instantiator` and builds `Settings` in a `@Sendable` function, but `Settings` forwards
+		// `name` and receives only `theme`, a constant: no read inside the function names the wrapper's label.
+		let (gates, error) = await gates(of:
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let childBuilder: Instantiator<Child>
+			    @Instantiated let theme: Theme
+			    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+			    public init(childBuilder: Instantiator<Child>, theme: Theme, settingsBuilder: SendableInstantiator<Settings>) { self.childBuilder = childBuilder; self.theme = theme; self.settingsBuilder = settingsBuilder }
+			}
+
+			@Instantiable public final class Settings: Instantiable {
+			    @Forwarded let name: String
+			    @Received let theme: Theme
+			    public init(name: String, theme: Theme) { self.name = name; self.theme = theme }
+			}
+
+			@Instantiable public final class Theme: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable public final class Child: Instantiable {
+			    public init() {}
+			}
+			""")
+
+		#expect(error == nil)
+		#expect(gates == [Gate(root: "Root", letsWalkRun: false, todaysWalkFindsCapture: false)])
 	}
 
 	// MARK: Private

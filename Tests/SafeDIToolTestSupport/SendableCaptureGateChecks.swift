@@ -33,7 +33,7 @@ enum SendableCaptureGateChecks {
 	) async throws -> Result {
 		try await SendableCaptureGateObservation.$observer.withValue({ root, gateLetsWalkRun, todaysWalkFindsCapture in
 			if todaysWalkFindsCapture, !gateLetsWalkRun {
-				Issue.record(Comment(rawValue: "\(root)’s tree holds a capture of a non-`Sendable` wrapper, but the scopes it reaches do not name both kinds of wrapper"))
+				Issue.record(Comment(rawValue: "\(root)’s tree holds a capture of a non-`Sendable` wrapper, but the gate read from the scopes it reaches holds the capture walk back"))
 			}
 			enclosingObserver?(root, gateLetsWalkRun, todaysWalkFindsCapture)
 		}) {
