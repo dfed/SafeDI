@@ -2219,7 +2219,11 @@ extension DependencyTreeGenerator {
 		if let observer = SeamPlaceLevels.observer {
 			let byCase = fillFindings(inTreesRootedAt: generators, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, byCase: true)
 			var observation = SeamPlaceLevels(seamType: .simple(name: "", generics: []), places: [])
-			observation.fillJudgement = .init(perPlace: findings.flatMap(\.sourceDiagnostics).map(\.formatted), byCase: byCase.flatMap(\.sourceDiagnostics).map(\.formatted))
+			// In the order the error prints them (`DependencyTreeGeneratorError.fillFindings`), which no judge's order decides.
+			func printed(_ findings: [DependencyTreeGeneratorError.FillFinding]) -> [String] {
+				findings.sorted { $0.precedesInSourceOrder($1) }.flatMap(\.sourceDiagnostics).map(\.formatted)
+			}
+			observation.fillJudgement = .init(perPlace: printed(findings), byCase: printed(byCase))
 			observer(observation)
 		}
 		if !findings.isEmpty {
@@ -2494,6 +2498,15 @@ extension DependencyTreeGenerator {
 					hidden.fieldsOfReenteringPlaces[label, default: []] += fields.filter { !(hidden.fieldsOfReenteringPlaces[label] ?? []).contains($0) }
 				}
 			}
+			// Whether the caller binds each form a called public mock binds from its argument: a fill's hole drops the declaration
+			// where it does, and every fill of the call has the one scope above it.
+			var callerBindsArgument = [Property: Bool]()
+			for entry in group {
+				guard let presented = calledBuilders.holes.first(where: { $0.site == entry.hole.site }) else { continue }
+				for declaration in presented.uncarriedDeclarations where declaration.isBoundFromCallersArgument {
+					callerBindsArgument[declaration.property] = !entry.hole.uncarriedDeclarations.contains(declaration)
+				}
+			}
 			for label in labels {
 				let placeDeclarations = group.flatMap { $0.hole.uncarriedDeclarations.filter { $0.property.label == label } }
 				// The label's reads, by the closing scopes they are made beneath, in the order each set is first met.
@@ -2513,7 +2526,7 @@ extension DependencyTreeGenerator {
 					let labelQuery = excludingQuery(excluded)
 					for caseIndex in caseIndices {
 						for variant in labelQuery.labelVariants(ofLabel: label, at: caseIndex) {
-							let hole = judgedHole(casePlace(at: caseIndex), ofLabel: label, as: variant, at: caseIndex, in: labelQuery, placeDeclarations: placeDeclarations)
+							let hole = judgedHole(casePlace(at: caseIndex), ofLabel: label, as: variant, at: caseIndex, in: labelQuery, placeDeclarations: placeDeclarations, callerBindsArgument: callerBindsArgument)
 							findings += findingsOfFill(of: hole, fill: emitting.fill, reads: labelReads, call: call, hidden: hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 						}
 					}
@@ -2526,7 +2539,7 @@ extension DependencyTreeGenerator {
 	/// EXPERIMENT: `hole`, a case's emitting place, as the place on `variant`'s least route reads `label`: that label's field,
 	/// uncarried declaration, cycle re-entry and declaration hidden by a field are the variant's, and the place is named by
 	/// the route.
-	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, at caseIndex: Int, in query: SeamSignature.Places.Query, placeDeclarations: [SeamSignature.Hole.UncarriedDeclaration]) -> SeamSignature.Hole {
+	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, at caseIndex: Int, in query: SeamSignature.Places.Query, placeDeclarations: [SeamSignature.Hole.UncarriedDeclaration], callerBindsArgument: [Property: Bool]) -> SeamSignature.Hole {
 		var fields = hole.fields.filter { $0.property.label != label }
 		if case let .field(level, declaration) = variant.answer {
 			fields.append(query.places.declaration(level: level, declaration: declaration).field)
@@ -2537,9 +2550,17 @@ extension DependencyTreeGenerator {
 		func sameDeclaration(_ lhs: SeamSignature.Hole.UncarriedDeclaration, _ rhs: SeamSignature.Hole.UncarriedDeclaration) -> Bool {
 			lhs.property == rhs.property && lhs.declaringType == rhs.declaringType && lhs.reason == rhs.reason
 		}
-		let graphDeclarations = query.answers(ofLabel: label, at: caseIndex).compactMap { query.uncarriedDeclaration(of: $0, at: caseIndex) }
+		// A declaration a public mock's root binds from its caller's argument that a path to a call binds otherwise is
+		// presented as that call's (`Places.Case.uncarriedReplacedOnPathsToCalls`).
+		let replacements = query.places.cases[caseIndex].uncarriedReplacedOnPathsToCalls.filter { $0.property.label == label }
+		let graphDeclarations = query.answers(ofLabel: label, at: caseIndex).compactMap { query.uncarriedDeclaration(of: $0, at: caseIndex) } + replacements
 		let variantDeclaration = query.uncarriedDeclaration(of: variant.answer, at: caseIndex).map { graphDeclaration in
-			placeDeclarations.first { sameDeclaration($0, graphDeclaration) } ?? graphDeclaration
+			let presented = graphDeclaration.isBoundFromCallersArgument ? replacements.first ?? graphDeclaration : graphDeclaration
+			return placeDeclarations.first { sameDeclaration($0, presented) } ?? presented
+		}.flatMap { declaration -> SeamSignature.Hole.UncarriedDeclaration? in
+			// The fill reads the caller's own where the caller binds the form the called mock binds from its argument
+			// (`Scope.fillUnderConstruction`).
+			declaration.isBoundFromCallersArgument && callerBindsArgument[declaration.property] == true ? nil : declaration
 		}
 		var uncarriedDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
 		var placedVariant = false
