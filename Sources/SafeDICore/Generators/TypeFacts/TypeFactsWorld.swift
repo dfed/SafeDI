@@ -28,6 +28,12 @@
 // path can close on, none for a body outside every cycle. A step to a property already on the path returns to that place
 // and forgets the places beneath it, as 2.4.0 does. The slot is keyed as `cycle(of:)` keys a cycle, and the form
 // `nearest ?? parent.field` is withdrawn.
+//
+// Twins (ruling of 2026-11-26, 3:47 PM PT; designs/per-type-facts.md section 17): `cycle(of:)` is the identity in both
+// worlds, so a value and a `LazilyInstantiated` of one label share it, and plain and `@Sendable` builders do not. Which
+// twin a path builds is an argument, never a key: when the `madeAgain` producer lands, its key projects that choice to
+// one key, as rule 1 does. Owed with the cycles producer: per identity, its declarations in first-reach order; per node,
+// the twinned identities its subtree can close on, a union fact like the reads.
 
 /// A node of a world's graph: a declaration, its position in `OrderedGraph`.
 typealias DeclarationID = Int32
