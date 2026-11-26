@@ -72,7 +72,7 @@ public enum SeamPlacesOracle {
 
 		// The sites of each case, in site order.
 		var sitesByCase = [[Int]](repeating: [], count: places.cases.count)
-		var caseIndexBySitePath = [[Property]: Int]()
+		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		for (site, caseIndex) in observation.caseIndexBySite.enumerated() {
 			let hole = holes[site]
 			guard caseIndex >= 0 else {
@@ -87,7 +87,7 @@ public enum SeamPlacesOracle {
 				continue
 			}
 			sitesByCase[caseIndex].append(site)
-			caseIndexBySitePath[hole.sitePath] = caseIndex
+			caseIndexBySite[hole.site] = caseIndex
 		}
 		for (caseIndex, sites) in sitesByCase.enumerated() where sites.isEmpty {
 			report.record("case \(caseIndex) holds no site")
@@ -151,10 +151,10 @@ public enum SeamPlacesOracle {
 				guard let located = answer.located else { continue }
 				let key = "\(located.level).\(located.declaration)"
 				for placeInTree in uncarried.placesInTree {
-					if let caseIndex = caseIndexBySitePath[placeInTree.path] {
+					if let caseIndex = caseIndexBySite[placeInTree] {
 						casesInTreeByDeclaration[key, default: []].insert(caseIndex)
 					} else {
-						// A place a call passes up has no case yet.
+						// A place a call passes up, its site in the inner seam's tree, has no case yet.
 						report.passedUpPlacesInTree += 1
 					}
 				}
