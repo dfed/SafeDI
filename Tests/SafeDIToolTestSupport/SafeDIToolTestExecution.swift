@@ -342,6 +342,8 @@ func executeSafeDIToolTest(
 			// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
 			generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
 				try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
+					// Test only, deleted before merge: every seam's place graph must answer as its per-site walk (`SeamPlacesOracle`).
+					try await SeamSignature.Places.$observer.withValue(SeamPlacesOracle.recordingMismatches(handingOn: SeamSignature.Places.observer)) {
 					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
 						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
 							// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
@@ -354,6 +356,7 @@ func executeSafeDIToolTest(
 								}
 							}
 						}
+					}
 					}
 				}
 			}
