@@ -104,17 +104,17 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			        name: String,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> CachedItem {
-			        func __safeDI_player() -> Player {
-			            func __safeDI_cachedItemBuilder(name: String) -> CachedItem {
-			                let player: Player = __safeDI_player()
-			                return CachedItem(player: player, name: name)
-			            }
+			        func __safeDI_player(__safeDI_Player_configuration: Player.SafeDIMockConfiguration) -> Player {
 			            let cachedItemBuilder = Instantiator<CachedItem> {
-			                __safeDI_cachedItemBuilder(name: $0)
+			                __safeDI_cachedItemBuilder(name: $0, __safeDI_CachedItem_configuration: CachedItem.SafeDIMockConfiguration(), __safeDI_Player_configuration_nearest: __safeDI_Player_configuration)
 			            }
-			            return if let safeDIBuilder = safeDIOverrides.player.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
+			            return if let safeDIBuilder = __safeDI_Player_configuration.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
 			        }
-			        let player: Player = __safeDI_player()
+			        func __safeDI_cachedItemBuilder(name: String, __safeDI_CachedItem_configuration: CachedItem.SafeDIMockConfiguration, __safeDI_Player_configuration_nearest: Player.SafeDIMockConfiguration?) -> CachedItem {
+			            let player: Player = __safeDI_player(__safeDI_Player_configuration: __safeDI_Player_configuration_nearest ?? Player.SafeDIMockConfiguration())
+			            return if let safeDIBuilder = __safeDI_CachedItem_configuration.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
+			        }
+			        let player: Player = __safeDI_player(__safeDI_Player_configuration: safeDIOverrides.player)
 			        return CachedItem(player: player, name: name)
 			    }
 			}
@@ -187,18 +187,18 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Player {
-			        func __safeDI_cachedItemBuilder(name: String) -> CachedItem {
-			            func __safeDI_player() -> Player {
-			                let cachedItemBuilder = Instantiator<CachedItem> {
-			                    __safeDI_cachedItemBuilder(name: $0)
-			                }
-			                return if let safeDIBuilder = safeDIOverrides.cachedItemBuilder.player.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
+			        func __safeDI_cachedItemBuilder(name: String, __safeDI_CachedItem_configuration: CachedItem.SafeDIMockConfiguration) -> CachedItem {
+			            let player: Player = __safeDI_player(__safeDI_Player_configuration: __safeDI_CachedItem_configuration.player, __safeDI_CachedItem_configuration_nearest: __safeDI_CachedItem_configuration)
+			            return if let safeDIBuilder = __safeDI_CachedItem_configuration.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
+			        }
+			        func __safeDI_player(__safeDI_Player_configuration: Player.SafeDIMockConfiguration, __safeDI_CachedItem_configuration_nearest: CachedItem.SafeDIMockConfiguration?) -> Player {
+			            let cachedItemBuilder = Instantiator<CachedItem> {
+			                __safeDI_cachedItemBuilder(name: $0, __safeDI_CachedItem_configuration: __safeDI_CachedItem_configuration_nearest ?? CachedItem.SafeDIMockConfiguration())
 			            }
-			            let player: Player = __safeDI_player()
-			            return if let safeDIBuilder = safeDIOverrides.cachedItemBuilder.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
+			            return if let safeDIBuilder = __safeDI_Player_configuration.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
 			        }
 			        let cachedItemBuilder = Instantiator<CachedItem> {
-			            __safeDI_cachedItemBuilder(name: $0)
+			            __safeDI_cachedItemBuilder(name: $0, __safeDI_CachedItem_configuration: safeDIOverrides.cachedItemBuilder)
 			        }
 			        return Player(cachedItemBuilder: cachedItemBuilder)
 			    }
