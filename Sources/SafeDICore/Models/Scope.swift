@@ -1276,9 +1276,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
 		self.log = log
 		// A scope of a seam's tree reads its `SeamHoles` only at its own path, which its key's class names
-		// (`SeamHoles.positionClass(at:)`); a mock's tree with holes reads context the log does not cover, and so does a call
-		// that passes fills outside a mock's tree, until production trees are measured with it.
-		subtreeIsShareable = (seamHoles.isEmpty || !forMockGeneration) && seamRoot == nil && mockBuilders == nil && (holeArguments.isEmpty || forMockGeneration)
+		// (`SeamHoles.positionClass(at:)`), unless the tests' differential builds it per path (`sharesHoleSubtrees`); a
+		// mock's tree with holes reads context the log does not cover, and so does a call that passes fills outside a mock's
+		// tree, until production trees are measured with it.
+		subtreeIsShareable = (seamHoles.isEmpty || !forMockGeneration && seamHoles.sharesHoleSubtrees) && seamRoot == nil && mockBuilders == nil && (holeArguments.isEmpty || forMockGeneration)
 		// A fill and a scope inside one are built only as part of the call that passes the fill, whose place is stored whole.
 		isMemoizable = subtreeIsShareable && fill == nil && enclosingFills.isEmpty
 		if !holeArguments.isEmpty {
@@ -1869,8 +1870,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// A hole's generator holds nothing of its path: its site's view (`HoleSiteView`), carrier site and lazy set are what
 		// the key's class and lazy set name, and the walks of a finished tree derive a site's path facts from the path
 		// (`SeamBuilderParameters`), so two paths of a seam's tree share it. A mock's tree, whose `SeamHoles` names no
-		// class, never shares a scope that holds a place.
-		if forMockGeneration {
+		// class, never shares a scope that holds a place, nor does a tree the tests' differential builds per path.
+		if forMockGeneration || !seamHoles.sharesHoleSubtrees {
 			isMemoizable = false
 			subtreeIsShareable = false
 		}
@@ -1954,7 +1955,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// or in a mock's tree with holes (see `ConstructionMemo`). In a seam's tree the key holds the class of the child's path
 	/// (`SeamHoles.positionClass(at:)`).
 	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, id propertyID: PropertyID, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
-		guard enclosingFills.isEmpty, seamHoles.isEmpty || !forMockGeneration, fill == nil else { return nil }
+		guard enclosingFills.isEmpty, seamHoles.isEmpty || !forMockGeneration && seamHoles.sharesHoleSubtrees, fill == nil else { return nil }
 		return ConstructionMemo.Key(
 			scope: ObjectIdentifier(scope.identity),
 			property: propertyID,
@@ -2823,6 +2824,7 @@ struct SeamHoles: Sendable {
 		namesBoundForBuilders = []
 		namesBoundForDeferredParameters = []
 		holdsLoopPayloadsInBoxes = false
+		sharesHoleSubtrees = ConstructionMemo.sharesHoleSubtrees
 		namesBoundBySeam = GenerationWork.Shared([])
 		carrierValues = SeamCarrierValues()
 		carrierSitesByPath = [:]
@@ -2858,6 +2860,7 @@ struct SeamHoles: Sendable {
 
 	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false, computesPositionClasses: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
+		sharesHoleSubtrees = ConstructionMemo.sharesHoleSubtrees
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let builderByEnum = Dictionary(builders.map { ($0.enumKey, $0) }, uniquingKeysWith: { first, _ in first })
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
@@ -3023,7 +3026,7 @@ struct SeamHoles: Sendable {
 			valuesBindingsByPath[path] = (formationsByPath[path] ?? []) + orderedBindings.filter { !$0.isCalledInsideFunction }
 		}
 		self.memberCallsInsideFunctionByPath = memberCallsInsideFunctionByPath
-		if computesPositionClasses {
+		if computesPositionClasses, sharesHoleSubtrees {
 			// What each path's scopes read of these maps, which the construction memo's key holds as the path's class
 			// (`positionClass(at:)`). Calls, which read the maps of calls, and fills store no generator in a memo.
 			var contentByPath = [[Property]: PositionClassContent]()
@@ -3245,6 +3248,9 @@ struct SeamHoles: Sendable {
 	/// binds each payload in a `let` of its own, a deliberate gap: its payloads were never builder structs, and nothing in
 	/// its extension would declare the class.
 	let holdsLoopPayloadsInBoxes: Bool
+	/// Whether the tree shares its places whose subtrees hold a hole (`ConstructionMemo.sharesHoleSubtrees`), read once per
+	/// tree.
+	let sharesHoleSubtrees: Bool
 	/// `namesBoundForBuilders` and `namesBoundForDeferredParameters`, joined once for every scope of the tree to share: the
 	/// payloads' names grow with the tree, so a join for each scope grew with the square of the tree.
 	let namesBoundBySeam: GenerationWork.Shared<Set<String>>

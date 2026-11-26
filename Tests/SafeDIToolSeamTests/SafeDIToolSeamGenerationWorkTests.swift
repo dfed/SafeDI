@@ -190,14 +190,14 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// classes are numbered once per tree, whatever its passes.
 		var measures = [[GenerationWork.Step: Int]]()
 		var tableCounts = [Int]()
-		for layerCount in Self.sharedTreeLayerCounts {
+		for layerCount in Self.sharedTreeOfWidthThreeLayerCounts {
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
 			let modules = Self.screensOpeningTheNextLayer(layerCount: layerCount, width: 3, labelsNameTheLayer: true, reachesItselfAgain: reachesItselfAgain)
 			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [modules] in
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: modules,
 					integration: .moduleInfo,
-					compileVerification: layerCount == Self.sharedTreeLayerCounts.first ? .recordingIssues : .skipped,
+					compileVerification: layerCount == Self.sharedTreeOfWidthThreeLayerCounts.first ? .recordingIssues : .skipped,
 					filesToDelete: &filesToDelete,
 				)
 			}
@@ -221,10 +221,10 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			// with each layer.
 			let work = measures.map { $0[step, default: 0] }
 			let workAddedByEachLayer = zip(work, work.dropFirst()).map { $1 - $0 }
-			#expect(Set(workAddedByEachLayer).count == 1, "\(step.rawValue) does \(work) units of work at \(Self.sharedTreeLayerCounts) layers")
+			#expect(Set(workAddedByEachLayer).count == 1, "\(step.rawValue) does \(work) units of work at \(Self.sharedTreeOfWidthThreeLayerCounts) layers")
 		}
 		// One table per tree with a seam root: numbered once per pass instead, the trees that take more passes add tables.
-		#expect(tableCounts == Array(repeating: reachesItselfAgain ? 8 : 7, count: Self.sharedTreeLayerCounts.count))
+		#expect(tableCounts == Array(repeating: reachesItselfAgain ? 8 : 7, count: Self.sharedTreeOfWidthThreeLayerCounts.count))
 	}
 
 	@Test
@@ -302,6 +302,10 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 	private static let screenCounts = [12, 16, 20]
 	/// The layers of screens the counts of shared trees are taken at.
 	private static let sharedTreeLayerCounts = [3, 4, 5, 6]
+	/// The layers of screens three wide the counts of shared trees are taken at, one fewer than for screens two wide: at six
+	/// layers 243 paths reach the last, and the tests' differential, which builds each pass again without sharing places
+	/// that hold holes and compares the two signatures, took 2.5 GB and 75 s there, against 0.7 GB and 15 s at five.
+	private static let sharedTreeOfWidthThreeLayerCounts = [3, 4, 5]
 	/// The steps a seam's tree shares the work of between the places of one position class.
 	private static let sharedTreeSteps: [GenerationWork.Step] = [.interningPositionClasses, .findingBuildsThatOrderChildrenOtherwise, .buildingGeneratorsOfSeamTree, .reseatingGenerators]
 

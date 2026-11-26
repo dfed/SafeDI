@@ -56,22 +56,9 @@ struct PositionClassContent: Hashable {
 		append(property.typeDescription)
 	}
 
-	/// An access level, by its position among the levels.
+	/// An access level, by its spelling.
 	mutating func append(_ access: AccessLevel) {
-		switch access {
-		case .open:
-			append(0)
-		case .public:
-			append(1)
-		case .package:
-			append(2)
-		case .internal:
-			append(3)
-		case .fileprivate:
-			append(4)
-		case .private:
-			append(5)
-		}
+		append(access.spelling)
 	}
 
 	/// What a site's or a member call's code reads of a field: its property, and how it is bound and handed.

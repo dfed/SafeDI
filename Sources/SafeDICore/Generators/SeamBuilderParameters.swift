@@ -53,9 +53,10 @@ extension DependencyTreeGenerator {
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		// A tree built with the construction memo shares a hole's generator between the paths of one position class, which
 		// can be paths whose owners' stacks differ, so the stack a path derives is checked against the one its generator
-		// was built with only where nothing is shared: a tree built without the memo, which the tests build of every seam
-		// beside the shared one, and a public mock's tree, whose holes are never stored.
-		let sites = buildSites(in: generator, observesOwnerStacks: !ConstructionMemo.isEnabled || bindsReceivesAgain)
+		// was built with only where no hole is shared: a tree built without the memo or without sharing places that hold
+		// holes, which the tests build of every seam beside the shared one, and a public mock's tree, whose holes are never
+		// stored.
+		let sites = buildSites(in: generator, observesOwnerStacks: !ConstructionMemo.isEnabled || !ConstructionMemo.sharesHoleSubtrees || bindsReceivesAgain)
 		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
 		// What the calls inside the fills of each seam call on a place's path hide from those fills, by the call's identity.
 		var hiddenByCall = [ObjectIdentifier: [String: FillReentryHidings]]()

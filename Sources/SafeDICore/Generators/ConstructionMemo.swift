@@ -419,6 +419,12 @@ struct ConstructionMemo {
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
 	/// oracle, which compares the trees built with and without it.
 	@TaskLocal static var isEnabled = true
+
+	/// Whether a seam's tree shares a place whose subtree holds a hole between the paths of its position class
+	/// (`SeamHoles.positionClass(at:)`), and a tree built to find a signature shares a hole's generator. Turned off only by
+	/// the tests' differential of a seam's signature (`SeamSignatureObservation.comparesUnsharedTrees`), which builds each
+	/// such place per path, as the memo did before places with holes were shared, while every other place keeps sharing.
+	@TaskLocal static var sharesHoleSubtrees = true
 }
 
 /// The context a place of a tree inherits from the scopes above it, which its subtree reads (see `ConstructionMemo`).
