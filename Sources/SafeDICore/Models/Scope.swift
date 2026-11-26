@@ -2538,9 +2538,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// Both read the caller's declarations, which they log.
 		let builderCallArguments = builderCallArguments(fillNames: fillNames)
 		let enclosingLevelCalls = scope.publicMockCall == nil ? [:] : enclosingLevelCalls()
-		if builtFillCount > 0, let observer = SeamFillSharing.observer {
-			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count, fillJudgementTreeCount: fillJudgementTreeCount))
-		}
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -2621,6 +2618,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			previousPassBuildsFillOfEveryPlace: previousPassGenerator?.buildsFillOfEveryPlace ?? false,
 			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
+		if builtFillCount > 0, let observer = SeamFillSharing.observer {
+			let bindings = builtGenerator.children.compactMap { fill in
+				fill.fillHole.flatMap { hole in builtGenerator.fillBinding(of: fill).map { (sitePath: hole.sitePath, binding: $0) } }
+			}
+			observer(SeamFillSharing.FillsOfCall(calledType: scope.instantiable.concreteInstantiable.asSource, builtFillCount: builtFillCount, placeStoodForCount: fillsStoodFor.count, fillJudgementTreeCount: fillJudgementTreeCount, bindings: bindings))
+		}
 		return if let fill {
 			ScopeGenerator(
 				fill: fill.hole,
