@@ -1668,14 +1668,21 @@ extension DependencyTreeGenerator {
 		/// Elsewhere the walk reads the stack only by its length, to find the child of the declaring scope it is built
 		/// inside, whose comparison `CleanSubtreeAlias.fulfillingSiblingBeingBuilt` holds. A required receive of an
 		/// `onlyIfAvailable` alias bound from a property the tree builds hands the stack to
-		/// `validateNoCycleInReceivedProperties`, which reads its first entry, finds the entries that
+		/// `validateNoCycleInReceivedProperties`, which reads its first entry, finds by its first index each entry that
 		/// `propertiesReceivedTransitively(from:)` holds, and reads the entries up to the one it finds: the stack up to the
-		/// farthest of those decides that walk.
+		/// farthest of those first indices decides that walk. A walk that finds an entry raises `memoBlockingEventCount` or
+		/// throws, so a key is kept only from a walk that found none.
 		func declaringStackEntriesReadByFulfillingPropertyWalk(of alias: ReceivableAlias, lastFulfillingProperty: Property) -> [Property] {
 			if alias.onlyIfAvailable, case .built? = alias.binding {
 				let reachableProperties = propertiesReceivedTransitively(from: lastFulfillingProperty)
 				let stack = alias.lastAliasDeclaringInstantiationStack
-				return Array(stack.prefix((stack.lastIndex(where: reachableProperties.contains) ?? 0) + 1))
+				// The walk finds an entry by its first index.
+				var entriesFound = Set<Property>()
+				var farthestIndexFound = 0
+				for (index, entry) in stack.enumerated() where reachableProperties.contains(entry) && entriesFound.insert(entry).inserted {
+					farthestIndexFound = index
+				}
+				return Array(stack.prefix(farthestIndexFound + 1))
 			} else {
 				return []
 			}

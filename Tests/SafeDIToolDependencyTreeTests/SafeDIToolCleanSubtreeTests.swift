@@ -323,6 +323,36 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleError_whenOnlyIfAvailableAliasIsDeclaredInsideInstantiatorItsServiceReceives() async throws {
+		// `D` renames the root's `service` only if available, and `Leaf`, beneath `Shared`, requires the rename, so the
+		// rename's cycle check walks what `Service` receives from `D`: `xBuilder`, which `D` is built inside beneath `X` and
+		// not beneath `B`, so `Shared`'s key holds `D`'s path up to `xBuilder` beneath `X` only. `Service` requires
+		// `xBuilder`, whose tree requires `service`.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: [
+				"@Instantiated let bBuilder: Instantiator<B>",
+				"@Instantiated let xBuilder: Instantiator<X>",
+				"@Instantiated let service: Service",
+			]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Instantiated let d: D"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: [
+				"@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?",
+				"@Instantiated let shared: Shared",
+			]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let renamedService: Service?"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: ["@Received let xBuilder: Instantiator<X>"]),
+		]
+		let skipping = try await run(fixture, skippingCleanSubtrees: true)
+		let walking = try await run(fixture, skippingCleanSubtrees: false)
+		#expect(skipping.outcome == walking.outcome)
+		#expect(skipping.skippedSubtreeCount == 0)
+		#expect(skipping.outcome == .error(Self.renamedServiceReceivedThroughInstantiatorCycleError))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_skipsSharedSubtree_whenItsInstantiatorClosesCycleOnIt() async throws {
 		// `Shared` builds itself again through `Inner`, whose `sharedBuilder` closes the cycle on a `Shared` that is given
 		// what a `Shared` built there would be: nothing above reads that it closed. `A`'s walk of `Shared` is kept once it
@@ -1684,6 +1714,10 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	"""
 	private static let requiredAliasCycleError = """
 	Leaf.swift:7:5: error: Dependency cycle: @Instantiated `service: Service` -> @Received `renamedService: Service?` -> @Received `service: Service`. `service: Service` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+	"""
+
+	private static let renamedServiceReceivedThroughInstantiatorCycleError = """
+	Leaf.swift:7:5: error: Dependency cycle: @Instantiated `service: Service` -> @Received `xBuilder: Instantiator<X>` -> @Received `service: Service`. `service: Service` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
 	"""
 
 	private static let receivedCycleError = """
