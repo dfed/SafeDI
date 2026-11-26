@@ -77,4 +77,61 @@ enum GeneratedCodeText {
 		}
 		return String(decoding: result, as: UTF8.self)
 	}
+
+	/// `text` without what an integration or a checkout spells its own way, for the text a name is hashed from: on each
+	/// line, the comment that ends it (from the first `" // "`: a seam call's guard names how each integration compiles the
+	/// seam's module, and `// Declared at` names a file by the path the integration hands `generate`), and the directory
+	/// of the file a `#sourceLocation(file:line:)` directive before it names. The same bytes as splitting `text` on
+	/// `"\n"`, cutting each line at Foundation’s `range(of:)` of each part, and joining the lines with `"\n"`, unless a
+	/// part forms one `Character` with a scalar beside it, which Foundation’s search, matching whole `Character`s, does
+	/// not find: this pass finds every part's bytes. A line feed after a carriage return ends no line, as `"\r\n"` is one
+	/// `Character`, which is no `"\n"`. A seam's fill bodies are named by this text, and Foundation's search over each
+	/// body's whole text was a third of `generate`'s time where fills share bodies.
+	static func withoutIntegrationSpellings(_ text: String) -> String {
+		let bytes = Array(text.utf8)
+		guard firstIndex(of: trailingComment, in: bytes, from: 0, upTo: bytes.count) != nil
+			|| firstIndex(of: sourceLocationFile, in: bytes, from: 0, upTo: bytes.count) != nil
+		else { return text }
+		let lineFeed = UInt8(ascii: "\n")
+		let carriageReturn = UInt8(ascii: "\r")
+		let slash = UInt8(ascii: "/")
+		var result = [UInt8]()
+		result.reserveCapacity(bytes.count)
+		var lineStart = 0
+		var searchStart = 0
+		while true {
+			var lineEnd = bytes[searchStart...].firstIndex(of: lineFeed) ?? bytes.count
+			while lineEnd < bytes.count, lineEnd > lineStart, bytes[lineEnd - 1] == carriageReturn {
+				lineEnd = bytes[(lineEnd + 1)...].firstIndex(of: lineFeed) ?? bytes.count
+			}
+			let codeEnd = firstIndex(of: trailingComment, in: bytes, from: lineStart, upTo: lineEnd) ?? lineEnd
+			if let directive = firstIndex(of: sourceLocationFile, in: bytes, from: lineStart, upTo: codeEnd),
+			   case let pathStart = directive + sourceLocationFile.count,
+			   let closing = firstIndex(of: sourceLocationLine, in: bytes, from: pathStart, upTo: codeEnd)
+			{
+				result.append(contentsOf: bytes[lineStart..<pathStart])
+				result.append(contentsOf: bytes[(bytes[pathStart..<closing].lastIndex(of: slash).map { $0 + 1 } ?? pathStart)..<codeEnd])
+			} else {
+				result.append(contentsOf: bytes[lineStart..<codeEnd])
+			}
+			guard lineEnd < bytes.count else { break }
+			result.append(lineFeed)
+			lineStart = lineEnd + 1
+			searchStart = lineStart
+		}
+		return String(decoding: result, as: UTF8.self)
+	}
+
+	private static let trailingComment = Array(" // ".utf8)
+	private static let sourceLocationFile = Array("#sourceLocation(file: \"".utf8)
+	private static let sourceLocationLine = Array("\", line: ".utf8)
+
+	/// The first index at or after `start` where `part` lies wholly before `end` in `bytes`.
+	private static func firstIndex(of part: [UInt8], in bytes: [UInt8], from start: Int, upTo end: Int) -> Int? {
+		guard end - start >= part.count else { return nil }
+		for index in start...(end - part.count) where bytes[index] == part[0] && bytes[index..<(index + part.count)].elementsEqual(part) {
+			return index
+		}
+		return nil
+	}
 }

@@ -93,6 +93,51 @@ struct GeneratedCodeTextTests {
 		#expect(mismatches == [])
 	}
 
+	@Test
+	func withoutIntegrationSpellings_dropsTrailingCommentsAndSourceLocationDirectories_whenLinesHoldBoth() {
+		let text = "let a = A() // Declared at /checkout/Sources/A.swift:3\n#sourceLocation(file: \"/checkout/Sources/B.swift\", line: 9)\nb()"
+		#expect(GeneratedCodeText.withoutIntegrationSpellings(text) == "let a = A()\n#sourceLocation(file: \"B.swift\", line: 9)\nb()")
+	}
+
+	@Test
+	func withoutIntegrationSpellings_returnsWhatFoundationSearchReturns_forEveryStringOfUpToFiveTokens() {
+		// Every string of up to five of these tokens: the parts the pass looks for, a path's separator, a line feed, a
+		// carriage return that forms `"\r\n"` with a line feed, and a combining mark that extends the scalar before it.
+		let tokens = [" // ", "#sourceLocation(file: \"", "\", line: ", "/", "\n", "\r", "x", "\u{301}"]
+		let texts = Self.strings(of: tokens, upToLength: 5)
+		// Foundation’s search matches whole `Character`s, so it misses a part, or a path’s last separator, whose last scalar
+		// a combining mark extends; the pass finds its bytes, which only names a body otherwise (the case below).
+		let partsBeforeCombiningMark = tokens.prefix(4).map { $0 + "\u{301}" }
+		let mismatches = texts.filter { text in
+			Array(GeneratedCodeText.withoutIntegrationSpellings(text).utf8) != Array(Self.withoutIntegrationSpellingsThroughFoundation(text).utf8)
+		}
+		#expect(texts.count == 37_449)
+		#expect(mismatches.filter { text in !partsBeforeCombiningMark.contains { Array(text.utf8).firstRange(of: Array($0.utf8)) != nil } } == [])
+	}
+
+	@Test
+	func withoutIntegrationSpellings_dropsComment_whenCombiningMarkExtendsItsLastSpace() {
+		// Foundation’s search does not find `" // "` here, since its space and the mark are one `Character`.
+		let text = "a() // \u{301}b"
+		#expect(Self.withoutIntegrationSpellingsThroughFoundation(text) == text)
+		#expect(GeneratedCodeText.withoutIntegrationSpellings(text) == "a()")
+	}
+
+	/// The expression `GeneratedCodeText.withoutIntegrationSpellings(_:)` replaces.
+	private static func withoutIntegrationSpellingsThroughFoundation(_ text: String) -> String {
+		let trailingComment = " // "
+		let sourceLocationFile = "#sourceLocation(file: \""
+		guard text.contains(trailingComment) || text.contains(sourceLocationFile) else { return text }
+		return text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+			let code = line[..<(line.range(of: trailingComment)?.lowerBound ?? line.endIndex)]
+			guard let directive = code.range(of: sourceLocationFile),
+			      let closing = code.range(of: "\", line: ", range: directive.upperBound..<code.endIndex)
+			else { return String(code) }
+			let path = code[directive.upperBound..<closing.lowerBound]
+			return String(code[..<directive.upperBound] + path[(path.lastIndex(of: "/").map { path.index(after: $0) } ?? path.startIndex)...] + code[closing.lowerBound...])
+		}.joined(separator: "\n")
+	}
+
 	/// Every concatenation of up to `length` of `tokens`, the empty string first.
 	private static func strings(of tokens: [String], upToLength length: Int) -> [String] {
 		var strings = [""]

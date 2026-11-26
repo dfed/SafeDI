@@ -9732,7 +9732,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The name reads nothing an integration or a checkout spells its own way: a seam call's guard comment, a file's
 		// path. The key keeps the whole text, so two bodies that differ only there are two keys of one name, each kept
 		// where its call declares it.
-		hash.combine(Self.textWithoutIntegrationSpellings(statementsText))
+		hash.combine(GeneratedCodeText.withoutIntegrationSpellings(statementsText))
 		let bodyName = ReservedName.fillBodyFunctionName(hash: hash.hexadecimal)
 		let bodyRecord = RootFunctionRecord(
 			key: RootFunctionKey(
@@ -10075,24 +10075,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(code) // Declared at \(filePath):\(line)"
 		}
 	}
-
-	/// `text` without what an integration or a checkout spells its own way: the comment that ends a line (a seam call's
-	/// guard names how each integration compiles the seam's module, and `// Declared at` names a file by the path the
-	/// integration hands `generate`), and the directory of the file a `#sourceLocation(file:line:)` directive names.
-	static func textWithoutIntegrationSpellings(_ text: String) -> String {
-		guard text.contains(trailingCommentPrefix) || text.contains(sourceLocationFilePrefix) else { return text }
-		return text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-			let code = line[..<(line.range(of: trailingCommentPrefix)?.lowerBound ?? line.endIndex)]
-			guard let directive = code.range(of: sourceLocationFilePrefix),
-			      let closing = code.range(of: "\", line: ", range: directive.upperBound..<code.endIndex)
-			else { return String(code) }
-			let path = code[directive.upperBound..<closing.lowerBound]
-			return String(code[..<directive.upperBound] + path[(path.lastIndex(of: "/").map { path.index(after: $0) } ?? path.startIndex)...] + code[closing.lowerBound...])
-		}.joined(separator: "\n")
-	}
-
-	private static let trailingCommentPrefix = " // "
-	private static let sourceLocationFilePrefix = "#sourceLocation(file: \""
 
 	// MARK: Mock Root Parameters
 
