@@ -56,13 +56,7 @@ CORPUS_SEED_COUNTS = {"base": 5000, "seam": 2000, "public-mock": 1000}
 # graphs that draw it, 161 that both releases compare with the roll off are
 # class A with it on, and no other graph changes class; run 45517807548
 # compared 685.
-# Lowered to exactly what run 45688217992 compared (1857, 450 and 554): the
-# 2.4.0 stack draws `@Instantiated(onlyIfAvailable: true)` and actors whose
-# arguments the mock tree builds, features 2.3.0 rejects, so those graphs are
-# class A (1390 base, 660 seam and 178 public mock graphs draw one). The
-# follow-up that draws the comparison's graphs without features 2.3.0 does not
-# know restores 2400, 560 and 650.
-COMPARED_GRAPH_FLOORS = {"base": 1857, "seam": 450, "public-mock": 554}
+COMPARED_GRAPH_FLOORS = {"base": 2400, "seam": 560, "public-mock": 650}
 
 reports_directory = sys.argv[1]
 expected_shard_counts = {}

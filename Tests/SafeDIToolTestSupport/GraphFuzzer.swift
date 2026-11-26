@@ -2484,6 +2484,20 @@ enum GraphFuzzerGenerator {
 		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
+	/// The graph release acceptance compares for `seed` and `features`: drawn storing every parameter, and without the
+	/// draws of features 2.3.0 rejects (`Builder.omitsDrawsOlderReleasesReject`), each of which
+	/// draws from a stream of its own, so that the rest of the graph is the corpus's. Release acceptance compares a graph
+	/// only where the older release accepts it, so a graph that draws such a feature would compare nothing. Only release
+	/// acceptance draws it, so no corpus pin moves.
+	static func releaseAcceptanceFixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> GraphFuzzerFixture {
+		guard !features.contains(.generateMockPublic) else {
+			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed, omitsDrawsOlderReleasesReject: true).swiftFileContent(storingEveryParameter: true, isKnownRight: false))
+		}
+		var builder = Builder(seed: seed, features: features, storesEveryParameter: true)
+		builder.omitsDrawsOlderReleasesReject = true
+		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
+	}
+
 	/// The graph for `seed` and `features` without its second place of a hole – the property a hole draw adds that gives a
 	/// hole a second place, or an inner seam a second route, which the generator records as it draws – drawn otherwise
 	/// exactly as the graph is, or `nil` when the graph has none. The name-stability oracle compares the builder labels
@@ -3002,7 +3016,9 @@ enum GraphFuzzerGenerator {
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
 				finalDeclarations = addingCarrierShapes(to: finalDeclarations)
 				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
-				finalDeclarations = addingOptionalPlaceShapes(to: finalDeclarations)
+				if !omitsDrawsOlderReleasesReject {
+					finalDeclarations = addingOptionalPlaceShapes(to: finalDeclarations)
+				}
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3336,6 +3352,10 @@ enum GraphFuzzerGenerator {
 		private(set) var drawnHolePlaces = [GraphFuzzerDrawnHolePlace]()
 		/// Whether `build()` leaves out `secondHolePlace`, after every draw, so that the graph is drawn as with it.
 		var omitsSecondHolePlace = false
+		/// Whether `build()` leaves out the draws of features 2.3.0 rejects – `@Instantiated(onlyIfAvailable: true)`
+		/// (`addingDependencyInstantiatedOnlyIfAvailable`, `addingOptionalPlaceShapes`) and actors
+		/// (`addingActorArgumentShapes`) – for release acceptance (`GraphFuzzerGenerator.releaseAcceptanceFixture`).
+		var omitsDrawsOlderReleasesReject = false
 		/// The property `addingHoleShapes` adds that is a second path to a type that already holds a place on another path,
 		/// on a type that holds a place without it – by its type's name and its label – which the second-path oracle removes
 		/// (`GraphFuzzerGenerator.fixtureWithoutSecondPath`).
@@ -8131,7 +8151,7 @@ enum GraphFuzzerGenerator {
 		/// mock's overrides, which a lazy builder reading them joined, so the compile is the oracle. No root reaches the tree.
 		/// `actorArgumentRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingActorArgumentShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
-			guard features.isEmpty, actorArgumentRandom.percentChance(16), sendability != .sendable else { return declarations }
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, actorArgumentRandom.percentChance(16), sendability != .sendable else { return declarations }
 			var declarations = declarations
 			let wrapper = actorArgumentRandom.percentChance(50) ? "Instantiator" : "LazilyInstantiated"
 			let throughHelper = actorArgumentRandom.percentChance(50)
@@ -8207,7 +8227,7 @@ enum GraphFuzzerGenerator {
 		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
 		/// every other, and only in the base corpus.
 		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
-			guard features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
 			var declarations = declarations
 			let tokenComesFirst = instantiatedOnlyIfAvailableRandom.percentChance(50)
 			let leafRequiresToken = instantiatedOnlyIfAvailableRandom.percentChance(40)
