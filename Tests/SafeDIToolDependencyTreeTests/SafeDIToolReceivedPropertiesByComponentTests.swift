@@ -75,6 +75,9 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let alongPaths = try await run(fixture, completingByComponent: false)
 		#expect(inPasses.outcome == alongPaths.outcome)
 		#expect(inPasses.outcome.isGenerated)
+		// One pass of the one scope: a second would collect it again.
+		let counts = [inPasses.collectedScopeCount, alongPaths.collectedScopeCount]
+		#expect(counts == [2, 2])
 	}
 
 	// MARK: Tests – Cycles with an `onlyIfAvailable` alias
@@ -134,6 +137,28 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: AliasRequiredThroughCycle.allCases, SafeDIToolCleanSubtreeTests.DeclarationOrder.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWhatWalkAlongPathsReports_whenServiceReceivesBuilderOfCycleWhoseTreeRequiresItThroughOnlyIfAvailableAlias(graph: AliasRequiredThroughCycle, order: SafeDIToolCleanSubtreeTests.DeclarationOrder) async throws {
+		// `Root` builds `service` and `s0Builder`, and `Service` receives `s0Builder`. A `Reader` beneath the cycle that
+		// `S0` opens requires an only-if-available alias of `service`, so `s0Builder`'s tree requires `service` built
+		// first: the two children of `Root` require each other. Where `Root` declares `service` first only that
+		// requirement, which the passes carry out of the cycle, rejects the graph; where it declares `s0Builder` first
+		// the walk rejects `service`'s receive.
+		let fixture = graph.fixture(order: order)
+		let inPasses = try await run(fixture, completingByComponent: true)
+		let alongPaths = try await run(fixture, completingByComponent: false)
+		#expect(inPasses.outcome == alongPaths.outcome)
+		switch (inPasses.outcome, graph.expectedError(order: order)) {
+		case let (.error(description), expectedError?):
+			#expect(description == expectedError)
+		case (.generated, nil):
+			break
+		case (.error, nil), (.generated, _?):
+			Issue.record("\(graph), \(order): \(inPasses.outcome)")
+		}
+	}
+
 	// MARK: Tests – Cycles left to the walk
 
 	@Test
@@ -150,8 +175,10 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let alongPaths = try await run(fixture, completingByComponent: false)
 		#expect(inPasses.outcome == alongPaths.outcome)
 		#expect(inPasses.outcome.isGenerated)
-		// Every scope the walk along the paths collects, and the passes' collections before it.
-		#expect(inPasses.collectedScopeCount >= alongPaths.collectedScopeCount)
+		// Every scope the walk along the paths collects, and the passes' collections before it: with the passes'
+		// results kept the first count is smaller than the second.
+		let counts = [inPasses.collectedScopeCount, alongPaths.collectedScopeCount]
+		#expect(counts == [43, 33])
 	}
 
 	@Test
@@ -196,7 +223,8 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let alongPaths = try await run(fixture, completingByComponent: false)
 		#expect(inPasses.outcome == alongPaths.outcome)
 		#expect(inPasses.outcome.isGenerated)
-		#expect(inPasses.collectedScopeCount >= alongPaths.collectedScopeCount)
+		let counts = [inPasses.collectedScopeCount, alongPaths.collectedScopeCount]
+		#expect(counts == [44, 34])
 	}
 
 	@Test
@@ -210,7 +238,10 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let alongPaths = try await run(modules, completingByComponent: false)
 		#expect(inPasses.outcome == alongPaths.outcome)
 		#expect(inPasses.outcome.isGenerated)
-		#expect(inPasses.collectedScopeCount >= alongPaths.collectedScopeCount)
+		// The two passes over `A` and `B`, then the walk of them along their paths with the fill and the call: with the
+		// passes' results kept, or the fill and the call not left to the walk, fewer scopes are collected.
+		let counts = [inPasses.collectedScopeCount, alongPaths.collectedScopeCount]
+		#expect(counts == [70, 34])
 	}
 
 	@Test
@@ -350,7 +381,85 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		}
 	}
 
-	/// `screenCount` screens that each open every other and receive `service`, which `Root` instantiates beside the first
+	/// Graphs in which `Root` builds a `service` that receives `s0Builder`, beside `s0Builder`, whose tree holds a cycle
+	/// and a `Reader` of an only-if-available alias of `service`.
+	enum AliasRequiredThroughCycle: CaseIterable {
+		/// `S0` and `S1` open each other, and `S1` builds `Panel`, which declares the alias and builds its `Reader`: the
+		/// cycle is completed in passes, which carry the requirement out of it.
+		case panelBeneathCycleDeclaresAlias
+		/// The same graph with a `Reader` that receives nothing, so nothing requires the alias.
+		case panelBeneathCycleDeclaresAliasNothingReads
+		/// `S1` declares the alias itself and builds the `Reader`: the cycle is left to the walk.
+		case typeOfCycleDeclaresAlias
+		/// `S0` opens only itself and builds `Panel`.
+		case panelBeneathTypeThatOpensItselfDeclaresAlias
+		/// `S0` opens only itself, declares the alias and builds the `Reader`.
+		case typeThatOpensItselfDeclaresAlias
+
+		private static let renamedService = "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?"
+
+		private var types: [(name: String, declarations: [String])] {
+			let panel = ("Panel", [Self.renamedService, "@Instantiated let reader: Reader"])
+			let reader = ("Reader", self == .panelBeneathCycleDeclaresAliasNothingReads ? [] : ["@Received let renamedService: Service?"])
+			let screens: [(String, [String])] = switch self {
+			case .panelBeneathCycleDeclaresAlias, .panelBeneathCycleDeclaresAliasNothingReads:
+				[
+					("S0", ["@Instantiated let s1Builder: Instantiator<S1>"]),
+					("S1", ["@Instantiated let s0Builder: Instantiator<S0>", "@Instantiated let panel: Panel"]),
+					panel,
+				]
+			case .typeOfCycleDeclaresAlias:
+				[
+					("S0", ["@Instantiated let s1Builder: Instantiator<S1>"]),
+					("S1", ["@Instantiated let s0Builder: Instantiator<S0>", Self.renamedService, "@Instantiated let reader: Reader"]),
+				]
+			case .panelBeneathTypeThatOpensItselfDeclaresAlias:
+				[
+					("S0", ["@Instantiated let s0Builder: Instantiator<S0>", "@Instantiated let panel: Panel"]),
+					panel,
+				]
+			case .typeThatOpensItselfDeclaresAlias:
+				[
+					("S0", ["@Instantiated let s0Builder: Instantiator<S0>", Self.renamedService, "@Instantiated let reader: Reader"]),
+				]
+			}
+			return [
+				("Root", ["@Instantiated let service: Service", "@Instantiated let s0Builder: Instantiator<S0>"]),
+				("Service", ["@Received let s0Builder: Instantiator<S0>"]),
+			] + screens + [reader]
+		}
+
+		/// What main reports for the graph in `order`: `nil` where it generates.
+		func expectedError(order: SafeDIToolCleanSubtreeTests.DeclarationOrder) -> String? {
+			switch (self, order) {
+			case (.panelBeneathCycleDeclaresAliasNothingReads, _):
+				nil
+			case (.typeThatOpensItselfDeclaresAlias, _):
+				"""
+				Service.swift:7:5: error: Dependency cycle: @Instantiated `s0Builder: Instantiator<S0>` -> @Received `renamedService: Service?` -> @Received `service: Service` -> @Received `s0Builder: Instantiator<S0>`. `s0Builder: Instantiator<S0>` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+				"""
+			case (.panelBeneathCycleDeclaresAlias, .written), (.typeOfCycleDeclaresAlias, .written), (.panelBeneathTypeThatOpensItselfDeclaresAlias, .written):
+				// `service` is declared first: the check of children that require each other reports it.
+				"""
+				Reader.swift:7:5: error: Dependency cycle: @Instantiated `service: Service` -> @Received `s0Builder: Instantiator<S0>` -> @Received `service: Service`. `service: Service` is received while it is still being instantiated. `renamedService: Service?` renames `service: Service` only if available, so a type that receives `renamedService` without `onlyIfAvailable` must be built after `service: Service`. Receive `renamedService` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `service: Service` cannot be built first.
+				"""
+			case (.panelBeneathCycleDeclaresAlias, .reversed), (.panelBeneathCycleDeclaresAlias, .rootRotated), (.panelBeneathCycleDeclaresAlias, .rootRotatedAndOthersReversed),
+			     (.typeOfCycleDeclaresAlias, .reversed), (.typeOfCycleDeclaresAlias, .rootRotated), (.typeOfCycleDeclaresAlias, .rootRotatedAndOthersReversed),
+			     (.panelBeneathTypeThatOpensItselfDeclaresAlias, .reversed), (.panelBeneathTypeThatOpensItselfDeclaresAlias, .rootRotated), (.panelBeneathTypeThatOpensItselfDeclaresAlias, .rootRotatedAndOthersReversed):
+				// `s0Builder` is declared first: the walk reports `service`'s receive of it.
+				"""
+				Service.swift:7:5: error: Dependency cycle: @Instantiated `s0Builder: Instantiator<S0>` -> @Received `service: Service` -> @Received `s0Builder: Instantiator<S0>`. `s0Builder: Instantiator<S0>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				"""
+			}
+		}
+
+		func fixture(order: SafeDIToolCleanSubtreeTests.DeclarationOrder) -> [String] {
+			types.map { name, declarations in
+				seamFixtureType(named: name, isRoot: name == "Root", isFinalClass: true, declarations: order.ordered(declarations, ofRoot: name == "Root"))
+			}
+		}
+	}
+
 	/// screen's builder and `rootDeclarations`; the last screen also declares `lastScreenDeclarations`.
 	private static func screensOpeningEveryOther(screenCount: Int, lastScreenDeclarations: [String], rootDeclarations: [String] = []) -> [String] {
 		var fixture = [String]()
