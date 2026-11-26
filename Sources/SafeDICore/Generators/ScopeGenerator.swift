@@ -3530,24 +3530,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var providerReceivers = [SeamSignature.Receiver]()
 	}
 
-	/// Every value the tree rooted at this scope holds for a parameter a seam tier it calls omits, in the order the tree's
-	/// code is generated, followed by those read through a parameter of a builder function a lazy cycle closes on: at
-	/// each call of a seam's tier, each parameter the tier omits, or no tier takes, that the call's leaf – which declares
-	/// the whole signature, the omitted parameters as receives only if available – would be handed a binding for rather
-	/// than `nil`, as generation decides it (`unavailableProperties`), located at the closest declaration of its label. A
-	/// seam's own parameters are declarations of the seam's own. Where that declaration is a parameter of a builder
-	/// function a lazy cycle closes on, the value is the one each call of the function passes (see `OmissionFindings`).
+	/// Every value the tree rooted at this scope holds for a parameter a seam tier it calls omits: at each call of a seam's
+	/// tier, each parameter the tier omits, or no tier takes, that the call's leaf – which declares the whole signature, the
+	/// omitted parameters as receives only if available – would be handed a binding for rather than `nil`, as generation
+	/// decides it (`unavailableProperties`), located at the closest declaration of its label. A seam's own parameters are
+	/// declarations of the seam's own. Where that declaration is a parameter of a builder function a lazy cycle closes on,
+	/// the value is the one each call of the function passes (see `SeamTierOmissionFindings`). Each omission is found at
+	/// least once, in no order the error reads: it reports each once, in source order.
 	/// - Parameters:
 	///   - instantiable: The type this root scope builds.
 	///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
 	func seamTierOmissions(ofTreeRootedAt instantiable: Instantiable, isOwnFile: @escaping @Sendable (String) -> Bool) async -> [SeamTierOmission] {
-		// Only a call of a seam tier that omits a parameter reports, and only a scope that closes a lazy cycle records a
-		// call that judges a read elsewhere, so the walk enters no subtree that holds neither, and no tree that holds no
-		// such call: its visits record nothing.
-		// Several places of the tree can share one generator (see `ConstructionMemo`), so entered at every place a tree of
-		// screens that each open three screens of the next layer was walked once per path.
-		let generatorsLeadingToOmissions = Self.generatorsLeadingToSeamTierOmissions(inTreeRootedAt: self)
-		guard generatorsLeadingToOmissions.contains(ObjectIdentifier(self)) else { return [] }
+		// Only a call of a seam tier that omits a parameter reports, so a tree that holds none is not walked.
+		guard let reads = SeamTierOmissionReads(treeRootedAt: self) else { return [] }
 		var declarationsByLabel = [String: [VisibleDeclaration]]()
 		if case let .root(_, seamRoot?) = scopeData {
 			for parameter in seamRoot.signature.parameters {
@@ -3561,16 +3556,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				))
 			}
 		}
+		var walk = SeamTierOmissionWalk(reads: reads, isOwnFile: isOwnFile)
+		// No builder function encloses the root, so every read of a function's parameter is judged where the function's
+		// visit returns, and the root's findings are omissions alone.
 		let omissions = await seamTierOmissions(
 			of: instantiable,
 			propertiesGeneratedLater: [],
 			declarationsByLabel: declarationsByLabel,
 			enclosingCycleFunctions: [:],
-			visitNumber: 0,
-			referenceLocation: { instantiable.declarationLocation },
-			isOwnFile: isOwnFile,
-			generatorsLeadingToOmissions: generatorsLeadingToOmissions,
-		).judged()
+			referenceLocation: instantiable.declarationLocation,
+			walk: &walk,
+		).omissions
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
 		// tree that make it one say why the seam takes it.
@@ -3583,35 +3579,69 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The findings of a visit of this scope, reached with the frame the parameters give, in the numbers that frame gives
+	/// the builder functions enclosing it.
+	///
+	/// Several places of the tree can share one generator (see `ConstructionMemo`), so a tree of screens that each open three
+	/// screens of the next layer reaches a call in the last layer along a number of paths that grows with the layers' power.
+	/// A visit reads its frame only through what its generator's subtree reads from above it (`SeamTierOmissionReads`), so
+	/// it is made once for each frame projected to those reads (`SeamTierOmissionVisit`): with the functions enclosing it
+	/// numbered by their order, it is made over the projected frame, its findings kept in those numbers, and each visit
+	/// with an equal projection is handed them in its own frame's numbers. Its omissions it leaves out, which the first
+	/// visit found.
 	/// - Parameters:
 	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
 	///     parameters (see `CycleParameter`), by the declaration each builds.
-	///   - generatorsLeadingToOmissions: The generators of the tree whose subtree holds a seam call that omits a
-	///     parameter or a scope that closes a lazy cycle (`generatorsLeadingToSeamTierOmissions(inTreeRootedAt:)`).
+	///   - referenceLocation: Where the module refers to what leads to this scope (`SeamTierOmission.referenceLocation`).
 	private func seamTierOmissions(
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
 		enclosingCycleFunctions: [BuiltDeclaration: Int],
-		visitNumber: Int,
-		referenceLocation: @escaping @Sendable () -> Dependency.DeclarationLocation?,
-		isOwnFile: @escaping @Sendable (String) -> Bool,
-		generatorsLeadingToOmissions: Set<ObjectIdentifier>,
-	) async -> OmissionFindings<SeamTierOmission> {
+		referenceLocation: Dependency.DeclarationLocation?,
+		walk: inout SeamTierOmissionWalk,
+	) async -> SeamTierOmissionFindings {
 		GenerationWork.record(1, by: .findingSeamTierOmissions)
+		let reads = walk.reads.reads(of: self)
+		let isInOwnFile = walk.isInOwnFile(instantiable)
+		let frame = SeamTierOmissionVisit.Frame(
+			reads: reads,
+			declarationsByLabel: declarationsByLabel,
+			enclosingCycleFunctions: enclosingCycleFunctions,
+		)
+		let visit = SeamTierOmissionVisit(
+			generator: ObjectIdentifier(self),
+			propertiesGeneratedLater: propertiesGeneratedLater,
+			declarationsByLabel: frame.declarationsByLabel,
+			enclosingCycleFunctions: frame.enclosingCycleFunctions,
+			// A scope in one of the module's own files refers to each child at the dependency that builds it.
+			referenceLocation: isInOwnFile && !reads.childLacksDeclarationLocation ? nil : referenceLocation,
+		)
+		if let findings = walk.visits[visit] {
+			return findings.inFrame(numbering: frame.functions, withOmissions: false)
+		}
+		let findings = await seamTierOmissions(of: instantiable, isInOwnFile: isInOwnFile, visit: visit, walk: &walk)
+		walk.visits[visit] = findings
+		return findings.inFrame(numbering: frame.functions, withOmissions: true)
+	}
+
+	/// The findings of `visit`, a visit of this scope, made over its projected frame.
+	private func seamTierOmissions(
+		of instantiable: Instantiable,
+		isInOwnFile: Bool,
+		visit: SeamTierOmissionVisit,
+		walk: inout SeamTierOmissionWalk,
+	) async -> SeamTierOmissionFindings {
 		let declaringType = instantiable.concreteInstantiable
 		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
 		for dependency in instantiable.dependencies where !dependency.source.isReceived {
 			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
 		}
 		// A child's construction is referred to by this type's dependency that builds it when this type is declared in
-		// one of the module's own files, and otherwise where this type's construction is. Found only for an omission:
-		// spelling the file of every type the walk passes cost a root that calls many seams more than the walk did.
-		func childReferenceLocation(of property: Property?) -> @Sendable () -> Dependency.DeclarationLocation? {
-			{ [declarationLocationByProperty] in
-				guard let property, instantiable.sourceFilePath.map(isOwnFile) ?? false else { return referenceLocation() }
-				return declarationLocationByProperty[property].flatMap(\.self) ?? referenceLocation()
-			}
+		// one of the module's own files, and otherwise where this type's construction is.
+		func childReferenceLocation(of property: Property?) -> Dependency.DeclarationLocation? {
+			guard let property, isInOwnFile else { return visit.referenceLocation }
+			return declarationLocationByProperty[property].flatMap(\.self) ?? visit.referenceLocation
 		}
 		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
 			VisibleDeclaration(
@@ -3631,7 +3661,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
 			))
 		}
-		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
+		let orderedChildren = orderedChildren(propertiesGeneratedLater: visit.propertiesGeneratedLater)
 		for child in orderedChildren {
 			if let property = child.generator.property {
 				scopeDeclarationsByLabel[property.label, default: []].append(visibleDeclaration(
@@ -3640,15 +3670,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				))
 			}
 		}
-		var childDeclarationsByLabel = declarationsByLabel
+		var childDeclarationsByLabel = visit.declarationsByLabel
 		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
+		/// The calls `child` makes of `function`, which it declares or closes a cycle on, with the declarations of each
+		/// parameter's label where the call is made, but for those it passes `nil`.
+		func calls(by child: OrderedChild, of function: Int) -> [SeamTierOmissionFindings.Call] {
+			child.generator.cycleParameters
+				.filter { !child.unavailableProperties.contains($0.property) }
+				.map { SeamTierOmissionFindings.Call(function: function, label: $0.property.label, guards: [], declarations: childDeclarationsByLabel[$0.property.label, default: []]) }
+		}
 
-		var findings = OmissionFindings<SeamTierOmission>(nextVisitNumber: visitNumber + 1)
+		var findings = SeamTierOmissionFindings()
 		for child in orderedChildren {
 			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
 				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
-				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
+				if let function = child.generator.closedOnDeclaration.flatMap({ visit.enclosingCycleFunctions[$0] }) {
+					findings.insert(calls(by: child, of: function))
+				}
 			} else if let seamCall {
 				let omittedParameters = seamCall.omittedParameters.map { ($0, false) } + seamCall.noTierParameters.map { ($0, true) }
 				for (parameter, isNoTierParameter) in omittedParameters {
@@ -3662,8 +3701,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A function a lazy cycle closes on and every type between it and a scope closing the cycle on it lie in one
 					// module, since each builds the next and the last builds the first: the module refers to the call where it
 					// refers to the function, whichever call of the function passes the value.
-					let referenceLocation = childReferenceLocation(of: child.generator.property)()
-					findings.append(reading: unwrappedProperty, from: provider) { provider in
+					let referenceLocation = childReferenceLocation(of: child.generator.property)
+					findings.append(SeamTierOmissionFindings.Origin(
+						unwrappedProperty: unwrappedProperty,
+						call: ObjectIdentifier(child.generator),
+						parameter: parameter.property,
+						isNoTierParameter: isNoTierParameter,
+						referenceLocation: referenceLocation,
+					) { provider in
 						SeamTierOmission(
 							seam: childInstantiable,
 							seamCall: seamCall,
@@ -3674,64 +3719,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							providerDeclarationLocation: provider.declarationLocation,
 							referenceLocation: referenceLocation,
 						)
-					}
+					}, readFrom: provider)
 				}
-			} else if generatorsLeadingToOmissions.contains(ObjectIdentifier(child.generator)) {
+			} else if walk.reads.leadsToOmissions(child.generator) {
 				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
 				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
 				// declaration of their labels where it is called, as generation's do.
-				// The function is told apart by the walk's visit of the child, never by its generator, which several places of the
+				// The function is told apart by a number of the walk's, never by its generator, which several places of the
 				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own. A child the walk
 				// does not enter takes no number: its function's parameters are read only in its body, which holds no call
 				// that omits one.
-				let function = findings.nextVisitNumber
-				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
-				await findings.append(contentsOf: child.generator.seamTierOmissions(
+				let function = walk.nextFunction()
+				let declaringCalls = calls(by: child, of: function)
+				let childFindings = await child.generator.seamTierOmissions(
 					of: childInstantiable,
 					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
-					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
-					visitNumber: function,
+					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: visit.enclosingCycleFunctions),
 					referenceLocation: childReferenceLocation(of: child.generator.property),
-					isOwnFile: isOwnFile,
-					generatorsLeadingToOmissions: generatorsLeadingToOmissions,
-				))
+					walk: &walk,
+				)
+				findings.append(childFindings, closing: function, declaredBy: declaringCalls)
 			}
 		}
 		return findings
-	}
-
-	/// The generators of the tree `root` roots whose subtree holds a call of a seam tier that omits a parameter, or one no
-	/// tier takes, or a scope that closes a lazy cycle: the scopes `seamTierOmissions` enters. Empty where the tree holds no
-	/// such call, since a scope that closes a lazy cycle only records calls, which judge the reads of an omitting call
-	/// alone: a tree without one reports nothing, and a lazy cycle in it would have the walk enter every path to it again.
-	/// Each generator is visited once, from the leaves up; the set dies with the walk.
-	private static func generatorsLeadingToSeamTierOmissions(inTreeRootedAt root: ScopeGenerator) -> Set<ObjectIdentifier> {
-		var leadingToOmissions = Set<ObjectIdentifier>()
-		var holdsCallOmittingParameter = false
-		var visitedGenerators = Set<ObjectIdentifier>()
-		var generatorsToVisit = [(generator: root, childrenAreVisited: false)]
-		while let (visited, childrenAreVisited) = generatorsToVisit.popLast() {
-			guard childrenAreVisited else {
-				guard visitedGenerators.insert(ObjectIdentifier(visited)).inserted else { continue }
-				generatorsToVisit.append((visited, true))
-				for child in visited.children where !visitedGenerators.contains(ObjectIdentifier(child)) {
-					generatorsToVisit.append((child, false))
-				}
-				continue
-			}
-			let (closesCycle, callOmitsParameter) = if case let .property(_, _, _, _, isPropertyCycle, seamCall) = visited.scopeData {
-				(isPropertyCycle, seamCall.map { !($0.omittedParameters.isEmpty && $0.noTierParameters.isEmpty) } ?? false)
-			} else {
-				(false, false)
-			}
-			holdsCallOmittingParameter = holdsCallOmittingParameter || callOmitsParameter
-			if closesCycle || callOmitsParameter || visited.children.contains(where: { leadingToOmissions.contains(ObjectIdentifier($0)) }) {
-				leadingToOmissions.insert(ObjectIdentifier(visited))
-			}
-		}
-		guard holdsCallOmittingParameter else { return [] }
-		return leadingToOmissions
 	}
 
 	/// The value each receive in the tree rooted at this scope, a root of the dependency tree, is handed in each place the
@@ -4178,7 +4189,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Private
 
 	/// A property that generated code declares, as `nonSendableWrapperCaptures` sees it.
-	private struct VisibleDeclaration {
+	private struct VisibleDeclaration: Hashable {
 		let property: Property
 		/// The by-value property with which receivers read the instance of `property`, when it is lazily instantiated.
 		let instanceProperty: Property?
@@ -4201,10 +4212,386 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		func provides(_ unwrappedProperty: Property) -> Bool {
 			property.asUnwrappedProperty == unwrappedProperty || instanceProperty?.asUnwrappedProperty == unwrappedProperty
 		}
+
+		/// This declaration, with the function whose parameter it is renumbered as `numberByFunction` says.
+		func renumbering(_ numberByFunction: [Int: Int]) -> Self {
+			var declaration = self
+			declaration.cycleFunction = cycleFunction.map { numberByFunction[$0, default: $0] }
+			return declaration
+		}
 	}
 
-	/// What a walk finds of the values a tree passes the calls it makes of seams' tiers (`seamTierOmissions`) or of other
-	/// modules' public mocks (`publicMockTierOmissions`), or of the value each receive is handed (`receivedValueSupplies`).
+	/// What the walk of the values seam tiers omit (`seamTierOmissions(ofTreeRootedAt:isOwnFile:)`) reads of each
+	/// generator's subtree, found once per walk from the leaves up, each generator once.
+	///
+	/// The walk enters only the generators whose subtree holds a call of a seam tier that omits a parameter, or one no tier
+	/// takes, or a scope that closes a lazy cycle, since such a scope records calls, which judge the reads of an omitting
+	/// call alone; and nothing in a tree that holds no such call, which would report nothing. Of each generator it enters,
+	/// what its visit reads from above it: the labels whose declarations it reads where it is called (each omitted parameter
+	/// of a seam call, and each parameter of a function a child declares or a cycle-closing child calls), less those a
+	/// declaration of its own or of a function's body hides, and the declarations whose functions its cycle-closing scopes
+	/// call, less those a function of its subtree builds. Holds a set of labels and one of declarations per generator
+	/// entered, each no larger than what its subtree reads, and dies with the walk.
+	private struct SeamTierOmissionReads: Sendable {
+		/// The reads of a tree's generators, or `nil` where the tree holds no call that omits a parameter.
+		init?(treeRootedAt root: ScopeGenerator) {
+			var holdsCallOmittingParameter = false
+			var visitedGenerators = Set<ObjectIdentifier>()
+			var generatorsToVisit = [(generator: root, childrenAreVisited: false)]
+			while let (visited, childrenAreVisited) = generatorsToVisit.popLast() {
+				guard childrenAreVisited else {
+					guard visitedGenerators.insert(ObjectIdentifier(visited)).inserted else { continue }
+					generatorsToVisit.append((visited, true))
+					for child in visited.children where !visitedGenerators.contains(ObjectIdentifier(child)) {
+						generatorsToVisit.append((child, false))
+					}
+					continue
+				}
+				let (closesCycle, callOmitsParameter) = if case let .property(_, _, _, _, isPropertyCycle, seamCall) = visited.scopeData {
+					(isPropertyCycle, seamCall.map { !($0.omittedParameters.isEmpty && $0.noTierParameters.isEmpty) } ?? false)
+				} else {
+					(false, false)
+				}
+				holdsCallOmittingParameter = holdsCallOmittingParameter || callOmitsParameter
+				guard closesCycle || callOmitsParameter || visited.children.contains(where: { readsByGenerator[ObjectIdentifier($0)] != nil }) else { continue }
+				readsByGenerator[ObjectIdentifier(visited)] = Self.reads(of: visited, among: readsByGenerator)
+			}
+			guard holdsCallOmittingParameter else { return nil }
+		}
+
+		/// What the walk reads of a generator's subtree from above it.
+		struct Reads: Sendable {
+			/// The labels whose declarations above the generator its subtree reads.
+			var labels = Set<String>()
+			/// The declarations built by the functions above the generator whose cycle-closing scopes in its subtree call.
+			var closedOnDeclarations = Set<BuiltDeclaration>()
+			/// Whether a child of the generator is referred to where the generator is, since the generator's type declares no
+			/// location for the dependency that builds it.
+			var childLacksDeclarationLocation = false
+		}
+
+		/// Whether the walk enters `generator`.
+		func leadsToOmissions(_ generator: ScopeGenerator) -> Bool {
+			readsByGenerator[ObjectIdentifier(generator)] != nil
+		}
+
+		/// What the walk reads of the subtree of `generator`, a generator it enters.
+		func reads(of generator: ScopeGenerator) -> Reads {
+			readsByGenerator[ObjectIdentifier(generator), default: Reads()]
+		}
+
+		private var readsByGenerator = [ObjectIdentifier: Reads]()
+
+		/// What a visit of `generator` reads from above it, given those of its children the walk enters.
+		private static func reads(of generator: ScopeGenerator, among readsByGenerator: [ObjectIdentifier: Reads]) -> Reads {
+			var reads = Reads()
+			var declaredLabels = Set<String>()
+			var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
+			for dependency in generator.builtInstantiable?.dependencies ?? [] {
+				switch dependency.source {
+				case .forwarded:
+					declaredLabels.insert(dependency.property.label)
+					declarationLocationByProperty[dependency.property] = dependency.declarationLocation
+				case .instantiated, .aliased:
+					declarationLocationByProperty[dependency.property] = dependency.declarationLocation
+				case .received:
+					continue
+				}
+			}
+			for child in generator.children {
+				guard let property = child.property else {
+					reads.childLacksDeclarationLocation = true
+					continue
+				}
+				declaredLabels.insert(property.label)
+				reads.childLacksDeclarationLocation = reads.childLacksDeclarationLocation || declarationLocationByProperty[property].flatMap(\.self) == nil
+				guard case let .property(_, _, _, _, isPropertyCycle, seamCall) = child.scopeData else { continue }
+				if isPropertyCycle {
+					reads.labels.formUnion(child.cycleParameters.map(\.property.label))
+					if let closedOnDeclaration = child.closedOnDeclaration {
+						reads.closedOnDeclarations.insert(closedOnDeclaration)
+					}
+				} else if let seamCall {
+					reads.labels.formUnion((seamCall.omittedParameters + seamCall.noTierParameters).map(\.property.label))
+				} else if let childReads = readsByGenerator[ObjectIdentifier(child)] {
+					// The child's function is called with its parameters, which its body's declarations of their labels are.
+					let parameterLabels = Set(child.cycleParameters.map(\.property.label))
+					reads.labels.formUnion(parameterLabels)
+					reads.labels.formUnion(child.declaresCycleParameters ? childReads.labels.subtracting(parameterLabels) : childReads.labels)
+					var closedOnDeclarations = childReads.closedOnDeclarations
+					if child.declaresCycleParameters, let declaration = child.declaration {
+						closedOnDeclarations.remove(declaration)
+					}
+					reads.closedOnDeclarations.formUnion(closedOnDeclarations)
+				}
+			}
+			reads.labels.subtract(declaredLabels)
+			return reads
+		}
+	}
+
+	/// A visit the walk of the values seam tiers omit makes: a generator, with its frame projected to what its subtree reads
+	/// from above it (`SeamTierOmissionReads`) and the builder functions enclosing it numbered by their order, from -1 for
+	/// the innermost down, apart from the positive numbers the walk gives the functions it enters. Each part is a part of
+	/// the frame a judgement of the visit, or of a visit beneath it, reads: the properties generated after the scope, which
+	/// decide what a child is passed `nil` for (`orderedChildren(propertiesGeneratedLater:)`); the declarations of each label
+	/// it reads, which provide what an omitting call would read and what a function's calls pass; the functions its
+	/// cycle-closing scopes call; and where the module refers to the scope, where the scope's children are referred to
+	/// there. The walk keeps one with its findings for each visit made, until it returns.
+	private struct SeamTierOmissionVisit: Hashable, Sendable {
+		let generator: ObjectIdentifier
+		let propertiesGeneratedLater: Set<Property>
+		let declarationsByLabel: [String: [VisibleDeclaration]]
+		let enclosingCycleFunctions: [BuiltDeclaration: Int]
+		let referenceLocation: Dependency.DeclarationLocation?
+
+		/// A visit's frame, projected to what the generator's subtree reads, with the functions enclosing it renumbered.
+		struct Frame {
+			init(reads: SeamTierOmissionReads.Reads, declarationsByLabel: [String: [VisibleDeclaration]], enclosingCycleFunctions: [BuiltDeclaration: Int]) {
+				var projectedDeclarationsByLabel = [String: [VisibleDeclaration]]()
+				for label in reads.labels {
+					projectedDeclarationsByLabel[label] = declarationsByLabel[label]
+				}
+				var projectedEnclosingCycleFunctions = [BuiltDeclaration: Int]()
+				for declaration in reads.closedOnDeclarations {
+					projectedEnclosingCycleFunctions[declaration] = enclosingCycleFunctions[declaration]
+				}
+				var functions = Set(projectedEnclosingCycleFunctions.values)
+				for declarations in projectedDeclarationsByLabel.values {
+					functions.formUnion(declarations.compactMap(\.cycleFunction))
+				}
+				self.functions = functions.sorted()
+				var numberByFunction = [Int: Int]()
+				for (index, function) in self.functions.enumerated() {
+					numberByFunction[function] = index - self.functions.count
+				}
+				self.declarationsByLabel = projectedDeclarationsByLabel.mapValues { declarations in
+					declarations.map { $0.renumbering(numberByFunction) }
+				}
+				self.enclosingCycleFunctions = projectedEnclosingCycleFunctions.mapValues { numberByFunction[$0, default: $0] }
+			}
+
+			/// The projected declarations, their functions renumbered.
+			let declarationsByLabel: [String: [VisibleDeclaration]]
+			/// The projected functions, renumbered.
+			let enclosingCycleFunctions: [BuiltDeclaration: Int]
+			/// The functions the frame numbers, in order: the function numbered `index - functions.count` is `functions[index]`.
+			let functions: [Int]
+		}
+	}
+
+	/// The walk of the values seam tiers omit (`seamTierOmissions(ofTreeRootedAt:isOwnFile:)`): what it reads of the tree,
+	/// the visits it made with their findings, the numbers it gave the functions it entered, and whether each file is one of
+	/// the module's own, each asked once. It holds a visit for each frame a generator is reached in, as far as its subtree
+	/// reads it, with the findings of the visit, and dies with the walk.
+	private struct SeamTierOmissionWalk: Sendable {
+		init(reads: SeamTierOmissionReads, isOwnFile: @escaping @Sendable (String) -> Bool) {
+			self.reads = reads
+			self.isOwnFile = isOwnFile
+		}
+
+		let reads: SeamTierOmissionReads
+		var visits = [SeamTierOmissionVisit: SeamTierOmissionFindings]()
+
+		/// A number no function the walk entered has.
+		mutating func nextFunction() -> Int {
+			lastFunction += 1
+			return lastFunction
+		}
+
+		/// Whether `instantiable` is declared in one of the module's own files.
+		mutating func isInOwnFile(_ instantiable: Instantiable) -> Bool {
+			guard let filePath = instantiable.sourceFilePath else { return false }
+			if let isOwnFile = isOwnFileByPath[filePath] {
+				return isOwnFile
+			} else {
+				let isOwnFile = isOwnFile(filePath)
+				isOwnFileByPath[filePath] = isOwnFile
+				return isOwnFile
+			}
+		}
+
+		private let isOwnFile: @Sendable (String) -> Bool
+		private var lastFunction = 0
+		private var isOwnFileByPath = [String: Bool]()
+	}
+
+	/// What a visit of the walk of the values seam tiers omit finds beneath it. A builder function a lazy cycle closes on
+	/// reads its parameters (see `CycleParameter`), which the scope that declares it passes as each scope that closes the
+	/// cycle on it does, so a call in its body that omits one is judged at the calls of the function, by the declarations
+	/// they pass, never by the declarations above the function, as `nonSendableWrapperCaptures` judges a capture of one.
+	///
+	/// Every call of a function is made inside the visit of the scope that declares it, so a visit's findings are judged
+	/// where the visit of each function it enters returns (`append(_:closing:declaredBy:)`): a read of the function's
+	/// parameter is an omission at each declaration a call passes that provides it, or a read of the parameter of an
+	/// enclosing function a call passes, and a call of an enclosing function that passes the function's parameter passes
+	/// what the function's calls pass, while each parameter that leads there provides the read. So a visit's findings name
+	/// only the functions enclosing it.
+	private struct SeamTierOmissionFindings: Sendable {
+		/// A call, in the body of a builder function a lazy cycle closes on, that omits a value of one of the function's
+		/// parameters: an omission at each declaration a call of the function passes that provides what `origin` reads.
+		struct Read: Hashable, Sendable {
+			let function: Int
+			let label: String
+			let origin: Origin
+		}
+
+		/// An omitting call's read of a value: what decides the omission besides the declaration that provides the value.
+		struct Origin: Hashable, Sendable {
+			init(
+				unwrappedProperty: Property,
+				call: ObjectIdentifier,
+				parameter: Property,
+				isNoTierParameter: Bool,
+				referenceLocation: Dependency.DeclarationLocation?,
+				omission: @escaping @Sendable (VisibleDeclaration) -> SeamTierOmission,
+			) {
+				self.unwrappedProperty = unwrappedProperty
+				self.call = call
+				self.parameter = parameter
+				self.isNoTierParameter = isNoTierParameter
+				self.referenceLocation = referenceLocation
+				self.omission = omission
+			}
+
+			/// The property the call's leaf receives, unwrapped.
+			let unwrappedProperty: Property
+			/// The generator of the omitting call, the parameter it omits, whether no tier takes it, and where the module
+			/// refers to the call, which decide `omission`.
+			let call: ObjectIdentifier
+			let parameter: Property
+			let isNoTierParameter: Bool
+			let referenceLocation: Dependency.DeclarationLocation?
+			/// The omission, given the declaration that provides the value.
+			let omission: @Sendable (VisibleDeclaration) -> SeamTierOmission
+
+			static func == (lhs: Self, rhs: Self) -> Bool {
+				lhs.unwrappedProperty == rhs.unwrappedProperty
+					&& lhs.call == rhs.call
+					&& lhs.parameter == rhs.parameter
+					&& lhs.isNoTierParameter == rhs.isNoTierParameter
+					&& lhs.referenceLocation == rhs.referenceLocation
+			}
+
+			func hash(into hasher: inout Hasher) {
+				hasher.combine(unwrappedProperty)
+				hasher.combine(call)
+				hasher.combine(parameter)
+				hasher.combine(isNoTierParameter)
+				hasher.combine(referenceLocation)
+			}
+		}
+
+		/// A call of a builder function a lazy cycle closes on that passes its parameter of `label` a value: the
+		/// declarations of the label where the call is made, reached through the parameters of functions `guards` lists,
+		/// each of which must provide a read the call is to judge.
+		struct Call: Hashable, Sendable {
+			var function: Int
+			let label: String
+			var guards: [VisibleDeclaration]
+			var declarations: [VisibleDeclaration]
+		}
+
+		private(set) var omissions = [SeamTierOmission]()
+		private(set) var reads = [Read]()
+		private(set) var calls = [Call]()
+
+		/// Records the calls of a function that a scope closing a cycle on it makes.
+		mutating func insert(_ calls: [Call]) {
+			for call in calls {
+				insert(call)
+			}
+		}
+
+		/// Records the read `origin` makes of a value `provider`, the declaration the omitting call's leaf would read,
+		/// provides: an omission where a type declares it, else a read of the parameter of the function it is.
+		mutating func append(_ origin: Origin, readFrom provider: VisibleDeclaration) {
+			if let function = provider.cycleFunction {
+				insert(Read(function: function, label: provider.property.label, origin: origin))
+			} else {
+				omissions.append(origin.omission(provider))
+			}
+		}
+
+		/// Adds the findings of the visit of a child whose builder function is `function`, made with the calls of it
+		/// `declaringCalls`, judging each read of the function's parameters at the function's calls, and each call of an
+		/// enclosing function that passes one of them by the function's calls.
+		mutating func append(_ child: Self, closing function: Int, declaredBy declaringCalls: [Call]) {
+			omissions.append(contentsOf: child.omissions)
+			let callsOfFunction = declaringCalls + child.calls.filter { $0.function == function }
+			for read in child.reads {
+				guard read.function == function else {
+					insert(read)
+					continue
+				}
+				let unwrappedProperty = read.origin.unwrappedProperty
+				for call in callsOfFunction where call.label == read.label && call.guards.allSatisfy({ $0.provides(unwrappedProperty) }) {
+					// A call that passes the function's own parameter passes what the function's other calls pass.
+					guard let provider = call.declarations.first(where: { $0.provides(unwrappedProperty) }),
+					      provider.cycleFunction != function
+					else { continue }
+					append(read.origin, readFrom: provider)
+				}
+			}
+			for call in child.calls where call.function != function {
+				// A label's declarations are those of one scope, or the one parameter of the function whose body it is in.
+				guard let parameter = call.declarations.first, parameter.cycleFunction == function else {
+					insert(call)
+					continue
+				}
+				for callOfFunction in callsOfFunction where callOfFunction.label == call.label && callOfFunction.declarations.first?.cycleFunction != function {
+					insert(Call(
+						function: call.function,
+						label: call.label,
+						guards: call.guards + [parameter] + callOfFunction.guards,
+						declarations: callOfFunction.declarations,
+					))
+				}
+			}
+		}
+
+		/// These findings, of a visit made over a frame whose enclosing functions `functions` numbers (see
+		/// `SeamTierOmissionVisit.Frame`), in the numbers of the frame the functions are; with their omissions where
+		/// `withOmissions`.
+		func inFrame(numbering functions: [Int], withOmissions: Bool) -> Self {
+			var numberByFunction = [Int: Int]()
+			for (index, function) in functions.enumerated() {
+				numberByFunction[index - functions.count] = function
+			}
+			var findings = Self()
+			if withOmissions {
+				findings.omissions = omissions
+			}
+			for read in reads {
+				findings.insert(Read(function: numberByFunction[read.function, default: read.function], label: read.label, origin: read.origin))
+			}
+			for call in calls {
+				findings.insert(Call(
+					function: numberByFunction[call.function, default: call.function],
+					label: call.label,
+					guards: call.guards.map { $0.renumbering(numberByFunction) },
+					declarations: call.declarations.map { $0.renumbering(numberByFunction) },
+				))
+			}
+			return findings
+		}
+
+		private var readSet = Set<Read>()
+		private var callSet = Set<Call>()
+
+		private mutating func insert(_ read: Read) {
+			guard readSet.insert(read).inserted else { return }
+			reads.append(read)
+		}
+
+		private mutating func insert(_ call: Call) {
+			guard callSet.insert(call).inserted else { return }
+			calls.append(call)
+		}
+	}
+
+	/// What a walk finds of the values a tree passes the calls it makes of other modules' public mocks
+	/// (`publicMockTierOmissions`), or of the value each receive is handed (`receivedValueSupplies`).
 	/// A builder function a lazy cycle closes on reads its parameters
 	/// (see `CycleParameter`), which the scope that declares it passes as each scope that closes the cycle on it does, so
 	/// a call in its body that omits one is judged at the calls of the function, by the declarations they pass, never by

@@ -228,7 +228,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			screenDeclarations: { layer, position, _ in
 				["@Instantiated let viewModel: Screen\(layer)x\(position)ViewModel", "@Instantiated let view: Screen\(layer)x\(position)View"]
 			},
-			screenTypes: { layer, position in
+			screenTypes: { layer, position, _ in
 				[
 					seamFixtureType(named: "Screen\(layer)x\(position)ViewModel", declarations: []),
 					seamFixtureType(named: "Screen\(layer)x\(position)View", declarations: ["@Received let viewModel: Screen\(layer)x\(position)ViewModel"]),
@@ -250,30 +250,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// no such call: the same visits at four and six layers.
 		let visits = try await visitsInLayersOfScreens(
 			screenDeclarations: { layer, _, _ in layer == 0 ? ["@Instantiated let panel: Panel"] : [] },
-			libraryModule: ModuleFixture(
-				name: "Library",
-				packageName: "App",
-				swiftFileContent: [
-					seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
-					"""
-					@Instantiable
-					public struct Badge: Instantiable {
-					    init(token: Token?) {
-					        self.token = token
-					    }
-
-					    @Received(onlyIfAvailable: true) let token: Token?
-					}
-					""",
-					"""
-					@Instantiable
-					struct Token: Instantiable {
-					    init() {}
-					}
-					""",
-				],
-				dependencies: [],
-			),
+			libraryModule: Self.panelModule,
 		)
 		#expect(visits == [
 			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 212, .findingSeamTierOmissions: 4],
@@ -281,19 +258,92 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_walksEachSeamsTreeOncePerGeneratorAndContextForOmissions_whenLastLayerCallsTierThatOmitsParameter() async throws {
+		// The layers of screens above, each screen of the last layer calling `Library`'s `Panel`, whose `public` tier omits
+		// the `token` its `Badge` receives only if available. The walk that finds the values a tier omits enters every
+		// screen, since each leads to such a call, and visits each generator once for each frame it is reached in, as far
+		// as its subtree reads it: here one. It visited every path: at four and six layers, 160 and 1,456 visits.
+		let visits = try await visitsInLayersOfScreens(
+			screenDeclarations: { layer, _, layerCount in layer + 1 == layerCount ? ["@Instantiated let panel: Panel"] : [] },
+			libraryModule: Self.panelModule,
+		)
+		#expect(visits == [
+			[.collectingBuilderFunctionNames: 216, .findingSeamReceivers: 236, .findingSeamTierOmissions: 100],
+			[.collectingBuilderFunctionNames: 344, .findingSeamReceivers: 428, .findingSeamTierOmissions: 196],
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_walksEachSeamsTreeOncePerGeneratorAndContextForOmissions_whenLastLayerCallsTierThatOmitsParameterInsideFunctionLazyCycleClosesOn() async throws {
+		// The layers of screens above, each screen of the last layer calling `Panel` and holding an instantiator of a
+		// `Mid` that instantiates a `theme` the screen receives only if available and an instantiator of the screen, which
+		// closes a lazy cycle on the screen's builder function: the function takes `theme`, which `Mid`'s cycle-closing
+		// scope passes. The walk enters each `Mid` to record that call, and visits each generator once for each frame it is
+		// reached in, the screen's function numbered by its place among the functions enclosing the visit. It visited every
+		// path: at four and six layers, 376 and 3,400 visits.
+		let visits = try await visitsInLayersOfScreens(
+			screenDeclarations: { layer, position, layerCount in
+				layer + 1 == layerCount
+					? ["@Received(onlyIfAvailable: true) let theme: Theme?", "@Instantiated let panel: Panel", "@Instantiated let midBuilder: Instantiator<Mid\(position)>"]
+					: []
+			},
+			screenTypes: { layer, position, layerCount in
+				(layer == 0 && position == 0 ? [seamFixtureType(named: "Theme", declarations: [])] : [])
+					+ (layer + 1 == layerCount ? [seamFixtureType(named: "Mid\(position)", declarations: ["@Instantiated let theme: Theme", "@Instantiated let screenBuilder: Instantiator<Screen\(layer)x\(position)>"])] : [])
+			},
+			libraryModule: Self.panelModule,
+		)
+		#expect(visits == [
+			[.collectingBuilderFunctionNames: 432, .findingSeamReceivers: 396, .findingSeamTierOmissions: 132],
+			[.collectingBuilderFunctionNames: 560, .findingSeamReceivers: 588, .findingSeamTierOmissions: 228],
+		])
+	}
+
 	// MARK: Private
+
+	/// `Library`, whose seam `Panel` has a `Badge` that receives the internal `Token` only if available, so its `public`
+	/// tier omits `token`.
+	private static var panelModule: ModuleFixture {
+		ModuleFixture(
+			name: "Library",
+			packageName: "App",
+			swiftFileContent: [
+				seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				"""
+				@Instantiable
+				public struct Badge: Instantiable {
+				    init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"""
+				@Instantiable
+				struct Token: Instantiable {
+				    init() {}
+				}
+				""",
+			],
+			dependencies: [],
+		)
+	}
 
 	private var filesToDelete: [URL]
 
 	/// The visits each walk of a seam's tree `GenerationWork` counts makes as module `Feature` is generated, at four and at
 	/// six layers of four screens, each screen holding instantiators of three screens of the next layer, every screen of
 	/// the first layer a seam and every screen receiving `service`. A screen also declares `screenDeclarations` of its
-	/// layer, position and the layer count, beside `screenTypes` of its layer and position, and `Feature` depends on
+	/// layer, position and the layer count, beside `screenTypes` of the same, and `Feature` depends on
 	/// `libraryModule`, where one is given, and imports it.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func visitsInLayersOfScreens(
 		screenDeclarations: (_ layer: Int, _ position: Int, _ layerCount: Int) -> [String] = { _, _, _ in [] },
-		screenTypes: (_ layer: Int, _ position: Int) -> [String] = { _, _ in [] },
+		screenTypes: (_ layer: Int, _ position: Int, _ layerCount: Int) -> [String] = { _, _, _ in [] },
 		libraryModule: ModuleFixture? = nil,
 	) async throws -> [[GenerationWork.Step: Int]] {
 		var visitsByLayerCount = [[GenerationWork.Step: Int]]()
@@ -307,7 +357,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 					}
 					declarations += screenDeclarations(layer, position, layerCount)
 					fixture.append(seamFixtureType(named: "Screen\(layer)x\(position)", isSeam: layer == 0, declarations: declarations))
-					fixture += screenTypes(layer, position)
+					fixture += screenTypes(layer, position, layerCount)
 				}
 			}
 			let feature = ModuleFixture(

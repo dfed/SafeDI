@@ -136,6 +136,9 @@ alternating runs after one untimed run of each graph. A run still going after 30
   Q-seam-own-module-paths      module `Feature`: layers of four screens, each receiving `service` and holding
                                `Instantiator`s of three screens of the next layer, every screen of the first layer a
                                seam, and no hole; module `App`: the root, which instantiates the first seam.
+  QO-seam-calls-tier-omitting-parameter-at-every-path
+                               the same, every last-layer screen also calling the seam `Panel` of module `Library`,
+                               whose `public` tier omits a value its tree receives only if available.
   B-cycles-through-instantiators
                                module `Feature`: layers of three screens, each holding `Instantiator`s of the three
                                screens of the next layer and of the screen at its own position in the layer before,
@@ -487,6 +490,29 @@ def shape_q(layers, width=4, received=True):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
 
 
+def shape_qo(layers, width=4):
+    """`shape_q` with module `Library` beneath `Feature`, declaring the seam `Panel`, which instantiates `Badge`, whose
+    internal initializer takes the `token` it receives only if available, an internal `Token`; so `Panel`'s `public`
+    tier omits `token`. Every screen of the last layer calls `Panel`, so the walk that finds the values a tier omits
+    finds a call omitting a parameter at the end of each of the 3^(layers - 1) paths from each seam."""
+    library = "import SafeDI\n\n"
+    library += declaration("@Instantiable(generateDependencyTree: true)", "Panel", [("@Instantiated", "badge", "Badge")])
+    library += declaration("@Instantiable", "Badge", [("@Received(onlyIfAvailable: true)", "token", "Token?")], initializer_access="")
+    library += declaration("@Instantiable", "Token", [], access="", initializer_access="")
+    feature = "import Library\nimport SafeDI\n\n" + declaration("@Instantiable", "Service", [])
+    for layer in range(layers):
+        for position in range(width):
+            children = [f"Screen{layer + 1}x{(position + offset) % width}" for offset in range(3)] if layer + 1 < layers else []
+            properties = [("@Received", "service", "Service")]
+            properties += [("@Instantiated", f"screen{child[6:]}Builder", f"Instantiator<{child}>") for child in children]
+            if layer + 1 == layers:
+                properties.append(("@Instantiated", "panel", "Panel"))
+            attribute = "@Instantiable(generateDependencyTree: true)" if layer == 0 else "@Instantiable"
+            feature += declaration(attribute, f"Screen{layer}x{position}", properties)
+    app = declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Screen0x0")])
+    return [("Library", [], library), ("Feature", ["Library"], feature), ("App", ["Feature", "Library"], "import Feature\nimport Library\nimport SafeDI\n\n" + app)]
+
+
 def shape_b(layers, mocks, width=3):
     """Module `Feature`: `layers` layers of `width` screens, each holding `Instantiator`s of three screens of the next
     layer and, past the first layer, of the screen at its own position in the layer before; a screen of the last
@@ -664,6 +690,7 @@ GROWTH_ROWS = {
     "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
     "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
     "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {}),
+    "QO-seam-calls-tier-omitting-parameter-at-every-path": (lambda layers: shape_qo(layers), 9, {}),
     # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
