@@ -105,16 +105,11 @@ extension DependencyTreeGenerator {
 }
 
 extension Dependency {
-	/// Whether this is a required receive, or a required alias, of one of `properties`.
+	/// Whether this receives one of `properties`, or is an alias of one. An error of a pass after the first names only a
+	/// required receive or alias: every instantiated dependency no declaration fulfills is reported in the first pass,
+	/// and no error reports a dependency that is only if available, or forwarded.
 	fileprivate func receivesOne(of properties: Set<Property>) -> Bool {
-		switch source {
-		case .received(onlyIfAvailable: false):
-			properties.contains(property)
-		case let .aliased(fulfillingProperty, _, onlyIfAvailable: false):
-			properties.contains(fulfillingProperty)
-		case .received(onlyIfAvailable: true), .aliased(_, _, onlyIfAvailable: true), .instantiated, .forwarded:
-			false
-		}
+		properties.contains(source.fulfillingProperty ?? property)
 	}
 
 	/// This dependency read as only if available, its type made optional. An error reports only a dependency that is
