@@ -54,6 +54,10 @@ struct GeneratedCode: Sendable {
 		case sendableFunction(GeneratedCode)
 		/// `code` without the root functions named `names`, which the root declares at its top.
 		case omittingRootFunctions(GeneratedCode, named: Set<String>)
+		/// A function named `name` that a seam call declares where it is, written as `code`: a fill or dispatcher that reads
+		/// the code around the call, which no root function beneath the call may be named as or call
+		/// (`RootFunctionHoisting`).
+		case inPlaceFunction(named: String, GeneratedCode)
 	}
 
 	/// Text, written as it is.
@@ -102,6 +106,11 @@ struct GeneratedCode: Sendable {
 	/// `code` without the root functions named `names` (`Node.omittingRootFunctions`).
 	static func omittingRootFunctions(_ code: GeneratedCode, named names: Set<String>) -> GeneratedCode {
 		GeneratedCode(storage: .children(Children(.omittingRootFunctions(names), [code])))
+	}
+
+	/// A function a seam call declares where it is (`Node.inPlaceFunction`).
+	static func inPlaceFunction(named name: String, _ code: GeneratedCode) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.inPlaceFunction(name), [code])))
 	}
 
 	/// The empty code.
@@ -168,6 +177,8 @@ struct GeneratedCode: Sendable {
 				.sendableFunction(children.codes[0])
 			case let .omittingRootFunctions(names):
 				.omittingRootFunctions(children.codes[0], named: names)
+			case let .inPlaceFunction(name):
+				.inPlaceFunction(named: name, children.codes[0])
 			}
 		}
 	}
@@ -179,7 +190,7 @@ struct GeneratedCode: Sendable {
 		switch node {
 		case let .text(text):
 			return text
-		case .sequence, .lines, .indented, .place, .rootFunction, .sendableFunction, .omittingRootFunctions:
+		case .sequence, .lines, .indented, .place, .rootFunction, .sendableFunction, .omittingRootFunctions, .inPlaceFunction:
 			break
 		}
 		var writer = GeneratedCodeWriter()
@@ -205,6 +216,7 @@ struct GeneratedCode: Sendable {
 			case rootFunction(RootFunctionRecord)
 			case sendableFunction
 			case omittingRootFunctions(Set<String>)
+			case inPlaceFunction(String)
 		}
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
@@ -212,7 +224,7 @@ struct GeneratedCode: Sendable {
 			holdsRootFunction = switch kind {
 			case .rootFunction:
 				true
-			case .sequence, .lines, .indented, .place, .sendableFunction, .omittingRootFunctions:
+			case .sequence, .lines, .indented, .place, .sendableFunction, .omittingRootFunctions, .inPlaceFunction:
 				codes.contains(where: \.holdsRootFunction)
 			}
 			slot = DeferredReleaseSlot(codes)
@@ -324,7 +336,8 @@ private struct GeneratedCodeWriter {
 					if !omittedRootFunctionNames.contains(where: { $0.contains(record.name) }) {
 						work.append(.code(inPlace))
 					}
-				case let .sendableFunction(code):
+				case let .sendableFunction(code),
+				     let .inPlaceFunction(_, code):
 					work.append(.code(code))
 				case let .omittingRootFunctions(code, names):
 					omittedRootFunctionNames.append(names)

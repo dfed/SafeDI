@@ -7506,6 +7506,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else if let record = fillRootFunction(of: child.generator, code: code, in: body, leadingMemberWhitespace: leadingMemberWhitespace) {
 			body.rootFunctionFillKeys.insert(record.key.level)
 			body.generatedProperties.append(.rootFunction(record))
+		} else if seamCall != nil, case let .fill(_, name) = child.generator.scopeData {
+			body.generatedProperties.append(.inPlaceFunction(named: name, code))
 		} else {
 			body.generatedProperties.append(code)
 		}
@@ -7615,7 +7617,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for (dispatcher, textWithoutAttributes) in zip(body.callDispatchers, textsWithoutAttributes) {
 			let isSendable = sendableFillKeys.contains(dispatcher.key)
 			guard rootFunctionKeys.contains(dispatcher.key) else {
-				generatedProperties.append(.text(leadingMemberWhitespace + Self.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes))
+				generatedProperties.append(.inPlaceFunction(named: dispatcher.functionName, .text(leadingMemberWhitespace + Self.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes)))
 				continue
 			}
 			let targetKeys = dispatcher.cases.compactMap(\.target?.key)

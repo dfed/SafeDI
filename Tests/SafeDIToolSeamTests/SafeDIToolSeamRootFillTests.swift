@@ -674,7 +674,397 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		""")
 	}
 
+	/// `Inner` takes `token`, which its `Leaf` receives, and its `api` place `LiveApi` fills. The root's call of `Inner`
+	/// hands the root's `token`, so its fill and dispatcher read the call's values and stay in it. The fill builds `Outer`,
+	/// which opens `Inner`, whose dispatcher the call inside the fill names as the root's call names its own. The root's
+	/// `outer` calls `Outer` too, so that dispatcher has a record the root could declare at its top, where the fill's call of
+	/// it would reach the root's `Outer` call's functions instead of its own: each stays in its call, so what the root's
+	/// `inner` builds does not depend on whether the root also holds `outer`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootFunctionInItsCall_whenItCallsFunctionAnEnclosingCallDeclaresInPlace() async throws {
+		let modules = Self.inPlaceCalleeModules
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(InnerSeam)
+		import InnerSeam
+		#endif
+		#if canImport(OuterSeam)
+		import OuterSeam
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let token = Token()
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_F86A70B275C4BA6F.self // If this line does not compile, compile the code SafeDI generates for module InnerSeam into InnerSeam: under Bazel, add InnerSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		                func __safeDI_api() -> LiveApi {
+		                    func __safeDI_outerBuilder() -> Outer {
+		                        _ = Outer.__safeDI_Outer_DE0AB35781D8E4A3.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+		                            .init(innerBuilder: __safeDI_apiBuilder_Inner())
+		                        }
+		                        return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+		                    }
+		                    let outerBuilder = Instantiator<Outer>(__safeDI_outerBuilder)
+		                    return LiveApi(token: token, outerBuilder: outerBuilder)
+		                }
+		                let api: any Api = __safeDI_api()
+		                return api
+		            }
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		            }
+		            return Inner(__safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_Inner())
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_DE0AB35781D8E4A3.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		                let token = scope_token
+		                func __safeDI_api() -> LiveApi {
+		                    func __safeDI_outerBuilder() -> Outer {
+		                        _ = Outer.__safeDI_Outer_DE0AB35781D8E4A3.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+		                    }
+		                    let outerBuilder = Instantiator<Outer>(__safeDI_outerBuilder)
+		                    return LiveApi(token: token.instance, outerBuilder: outerBuilder)
+		                }
+		                let api: any Api = __safeDI_api()
+		                return api
+		            }
+		            func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+		                .init(innerBuilder: __safeDI_apiBuilder_Inner())
+		            }
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		            }
+		            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(token: token, inner: inner, outer: outer)
+		    }
+		}
+		""")
+		guard compileVerificationIsEnabled else { return }
+		let withoutOuterModules = modules.map { module in
+			guard module.name == "App" else { return module }
+			return ModuleFixture(name: module.name, packageName: module.packageName, swiftFileContentByFilePath: module.swiftFileContentByFilePath.mapValues {
+				$0.replacingOccurrences(of: "public init(token: Token, inner: Inner, outer: Outer) {", with: "public init(token: Token, inner: Inner) {")
+					.replacingOccurrences(of: "        self.outer = outer\n", with: "")
+					.replacingOccurrences(of: "    @Instantiated public let outer: Outer\n", with: "")
+			}, dependencies: module.dependencies)
+		}
+		let withoutOuterOutput = try await executeSafeDIToolMultiModuleTest(modules: withoutOuterModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		try await expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: withoutOuterOutput, modules: withoutOuterModules),
+			probes: [DifferentialValueProbe(
+				name: "the token the LiveApi of the Outer the root's inner opens reads",
+				expression: """
+				{ () -> [Bool] in
+				    let root = Root()
+				    let outer = (root.inner.api as! LiveApi).outerBuilder.instantiate()
+				    let token = (outer.innerBuilder.instantiate().api as! LiveApi).token
+				    return [token === root.token, token === outer.token]
+				}()
+				""",
+			)],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
+	/// `Inner`'s fill is named `__safeDI_apiBuilder_Inner_api`, and `Mid`, between the root and the call of `Inner` inside
+	/// `Child`, declares a builder function of that name for its `apiBuilder_Inner_api`. `Outer` calls `Inner` too, so the
+	/// two calls' dispatchers differ and stay in their calls, and `Mid`'s statement keeps the path key's code: a fill the root
+	/// declared at its top would be hidden by `Mid`'s function where `Child`'s dispatcher calls it, so it stays in its call.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsFillInItsCall_whenBuilderFunctionBetweenRootAndCallTakesFillsName() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.builderNamedAsFillModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(InnerSeam)
+		import InnerSeam
+		#endif
+		#if canImport(OuterSeam)
+		import OuterSeam
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_apiBuilder_Outer_api(_ scope_token: Token, _ scope_innerBuilder: Instantiator<Inner>) -> any Api {
+		            let token = scope_token
+		            func __safeDI_api() -> LiveApi {
+		                func __safeDI_extra() -> Extra {
+		                    let part = Part()
+		                    return Extra(part: part)
+		                }
+		                let extra: Extra = __safeDI_extra()
+		                return LiveApi(token: token, extra: extra)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        func __safeDI_apiBuilder_Inner_Inner_api(_ scope_token: Token) -> any Api {
+		            let token = scope_token
+		            func __safeDI_api() -> LiveApi {
+		                func __safeDI_extra() -> Extra {
+		                    let part = Part()
+		                    return Extra(part: part)
+		                }
+		                let extra: Extra = __safeDI_extra()
+		                return LiveApi(token: token, extra: extra)
+		            }
+		            let api: any Api = __safeDI_api()
+		            return api
+		        }
+		        let token = Token()
+		        func __safeDI_mid() -> Mid {
+		            func __safeDI_apiBuilder_Inner_api() -> Extra {
+		                let part = Part()
+		                return Extra(part: part)
+		            }
+		            let apiBuilder_Inner_api: Extra = __safeDI_apiBuilder_Inner_api()
+		            func __safeDI_child() -> Child {
+		                func __safeDI_inner() -> Inner {
+		                    _ = Inner.__safeDI_Inner_058A9DC2CD763CF7.self // If this line does not compile, compile the code SafeDI generates for module InnerSeam into InnerSeam: under Bazel, add InnerSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                    func __safeDI_apiBuilder_Inner_api(_ scope_token: Token) -> any Api {
+		                        let token = scope_token
+		                        func __safeDI_api() -> LiveApi {
+		                            func __safeDI_extra() -> Extra {
+		                                let part = Part()
+		                                return Extra(part: part)
+		                            }
+		                            let extra: Extra = __safeDI_extra()
+		                            return LiveApi(token: token, extra: extra)
+		                        }
+		                        let api: any Api = __safeDI_api()
+		                        return api
+		                    }
+		                    func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                        .init(api: { scope_token in __safeDI_apiBuilder_Inner_api(scope_token) })
+		                    }
+		                    return Inner(__safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_Inner())
+		                }
+		                let inner: Inner = __safeDI_inner()
+		                return Child(inner: inner)
+		            }
+		            let child: Child = __safeDI_child()
+		            func __safeDI_outer() -> Outer {
+		                _ = Outer.__safeDI_Outer_5F0A5BAD4C94F93A.self // If this line does not compile, compile the code SafeDI generates for module OuterSeam into OuterSeam: under Bazel, add OuterSeam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Outer() -> Outer.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { scope_token, scope_innerBuilder in __safeDI_apiBuilder_Outer_api(scope_token, scope_innerBuilder) }, innerBuilder: __safeDI_apiBuilder_Inner())
+		                }
+		                func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { scope_token in __safeDI_apiBuilder_Inner_Inner_api(scope_token) })
+		                }
+		                return Outer(__safeDI_token: token, __safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
+		            }
+		            let outer: Outer = __safeDI_outer()
+		            return Mid(apiBuilder_Inner_api: apiBuilder_Inner_api, child: child, outer: outer)
+		        }
+		        let mid: Mid = __safeDI_mid()
+		        self.init(token: token, mid: mid)
+		    }
+		}
+		""")
+	}
+
 	// MARK: Fixtures
+
+	/// The modules of `generate_keepsFillInItsCall_whenBuilderFunctionBetweenRootAndCallTakesFillsName`.
+	private static let builderNamedAsFillModules = [
+		ModuleFixture(name: "InnerSeam", packageName: "pkg", swiftFileContentByFilePath: ["Inner.swift": """
+		import SafeDI
+
+		nonisolated public protocol Api {}
+
+		@Instantiable
+		public final class Token: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable {
+		    public init(token: Token, api: any Api) {
+		        self.token = token
+		        self.api = api
+		    }
+
+		    @Received let token: Token
+		    @Instantiated let api: any Api
+		}
+		"""]),
+		ModuleFixture(name: "OuterSeam", packageName: "pkg", swiftFileContentByFilePath: ["Outer.swift": """
+		import InnerSeam
+		import SafeDI
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Outer: Instantiable {
+		    public init(token: Token, api: any Api, innerBuilder: Instantiator<Inner>) {
+		        self.token = token
+		        self.api = api
+		        self.innerBuilder = innerBuilder
+		    }
+
+		    @Received let token: Token
+		    @Instantiated let api: any Api
+		    @Instantiated let innerBuilder: Instantiator<Inner>
+		}
+		"""], dependencies: ["InnerSeam"]),
+		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+		import InnerSeam
+		import OuterSeam
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+		public final class LiveApi: Api, Instantiable {
+		    public init(token: Token, extra: Extra) {
+		        self.token = token
+		        self.extra = extra
+		    }
+
+		    @Received let token: Token
+		    @Instantiated let extra: Extra
+		}
+
+		@Instantiable
+		public final class Part: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Extra: Instantiable {
+		    public init(part: Part) {
+		        self.part = part
+		    }
+
+		    @Instantiated let part: Part
+		}
+
+		@Instantiable
+		public final class Child: Instantiable {
+		    public init(inner: Inner) {
+		        self.inner = inner
+		    }
+
+		    @Instantiated let inner: Inner
+		}
+
+		@Instantiable
+		public final class Mid: Instantiable {
+		    public init(apiBuilder_Inner_api: Extra, child: Child, outer: Outer) {
+		        self.apiBuilder_Inner_api = apiBuilder_Inner_api
+		        self.child = child
+		        self.outer = outer
+		    }
+
+		    @Instantiated let apiBuilder_Inner_api: Extra
+		    @Instantiated let child: Child
+		    @Instantiated let outer: Outer
+		}
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(token: Token, mid: Mid) {
+		        self.token = token
+		        self.mid = mid
+		    }
+
+		    @Instantiated let token: Token
+		    @Instantiated let mid: Mid
+		}
+		"""], dependencies: ["InnerSeam", "OuterSeam"]),
+	]
+
+
+	/// The modules of `generate_keepsRootFunctionInItsCall_whenItCallsFunctionAnEnclosingCallDeclaresInPlace`.
+	private static let inPlaceCalleeModules = [
+		ModuleFixture(name: "InnerSeam", packageName: "pkg", swiftFileContentByFilePath: ["Inner.swift": """
+		import SafeDI
+
+		nonisolated public protocol Api: AnyObject {}
+
+		@Instantiable
+		public final class Token: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init(token: Token) {
+		        self.token = token
+		    }
+
+		    @Received public let token: Token
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable {
+		    public init(leafBuilder: Instantiator<Leaf>, api: any Api) {
+		        self.leafBuilder = leafBuilder
+		        self.api = api
+		    }
+
+		    @Instantiated public let leafBuilder: Instantiator<Leaf>
+		    @Instantiated public let api: any Api
+		}
+		"""]),
+		ModuleFixture(name: "OuterSeam", packageName: "pkg", swiftFileContentByFilePath: ["Outer.swift": """
+		import InnerSeam
+		import SafeDI
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Outer: Instantiable {
+		    public init(token: Token, innerBuilder: Instantiator<Inner>) {
+		        self.token = token
+		        self.innerBuilder = innerBuilder
+		    }
+
+		    @Instantiated public let token: Token
+		    @Instantiated public let innerBuilder: Instantiator<Inner>
+		}
+		"""], dependencies: ["InnerSeam"]),
+		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+		import InnerSeam
+		import OuterSeam
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+		public final class LiveApi: Api, Instantiable {
+		    public init(token: Token, outerBuilder: Instantiator<Outer>) {
+		        self.token = token
+		        self.outerBuilder = outerBuilder
+		    }
+
+		    @Received public let token: Token
+		    @Instantiated public let outerBuilder: Instantiator<Outer>
+		}
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(token: Token, inner: Inner, outer: Outer) {
+		        self.token = token
+		        self.inner = inner
+		        self.outer = outer
+		    }
+
+		    @Instantiated public let token: Token
+		    @Instantiated public let inner: Inner
+		    @Instantiated public let outer: Outer
+		}
+		"""], dependencies: ["InnerSeam", "OuterSeam"]),
+	]
+
 
 	/// The modules of `generate_laysOutOtherRootStatementsByType_whenOneStatementReachesFilledCallTheTypeKeyCannotShare`.
 	private static let lazyCycleFallbackModules = [

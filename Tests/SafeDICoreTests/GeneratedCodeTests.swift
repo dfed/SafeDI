@@ -107,14 +107,14 @@ struct GeneratedCodeTests {
 			reindentingEveryLevel(plan.code)
 		case let .rootFunction(_, inPlace):
 			reindentingEveryLevel(inPlace)
-		case let .sendableFunction(code), let .omittingRootFunctions(code, _):
+		case let .sendableFunction(code), let .omittingRootFunctions(code, _), let .inPlaceFunction(_, code):
 			reindentingEveryLevel(code)
 		}
 	}
 
 	private static func randomCode(depth: Int, using generator: inout SeededGenerator) -> GeneratedCode {
 		let tokens = ["x", "\n", "\r", "é", "\u{301}", " ", "\n\n", "\r\n"]
-		let kind = depth == 0 ? 0 : Int(generator.next() % 5)
+		let kind = depth == 0 ? 0 : Int(generator.next() % 6)
 		switch kind {
 		case 0:
 			let count = Int(generator.next() % 5)
@@ -125,8 +125,10 @@ struct GeneratedCodeTests {
 		case 3:
 			let indentations = ["", "\t", "    ", "\r"]
 			return .indented(randomCode(depth: depth - 1, using: &generator), by: indentations[Int(generator.next() % UInt64(indentations.count))])
-		default:
+		case 4:
 			return .place(PlacePlan(code: randomCode(depth: depth - 1, using: &generator)))
+		default:
+			return .inPlaceFunction(named: "f", randomCode(depth: depth - 1, using: &generator))
 		}
 	}
 }

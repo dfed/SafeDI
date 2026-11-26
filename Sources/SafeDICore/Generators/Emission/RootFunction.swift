@@ -234,28 +234,52 @@ public enum RootFunctionHoisting {
 		var conflictingNames = Set<String>()
 		var heldNamesByName = [String: Set<String>]()
 		var records = [RootFunctionRecord]()
-		var work = codes.reversed().map { (code: $0, isInsideSendableFunction: false, holdingName: String?.none) }
+		// The functions each body around a root function declares where it is: a place's builder function, or a fill or
+		// dispatcher a call keeps (`GeneratedCode.Node.inPlaceFunction`). A root function named as one, or that calls one,
+		// would name another function at the root's top than where its call wrote it, so it stays there.
+		var scopes = [(parent: -1, names: functionsDeclared(directlyIn: codes))]
+		func isDeclaredAround(_ name: String, inScope scope: Int) -> Bool {
+			var scope = scope
+			while scope >= 0 {
+				if scopes[scope].names.contains(name) {
+					return true
+				}
+				scope = scopes[scope].parent
+			}
+			return false
+		}
+		func bodyScope(of body: GeneratedCode, inside parent: Int) -> Int {
+			let names = functionsDeclared(directlyIn: [body])
+			guard !names.isEmpty else { return parent }
+			scopes.append((parent: parent, names: names))
+			return scopes.count - 1
+		}
+		var work = codes.reversed().map { (code: $0, isInsideSendableFunction: false, holdingName: String?.none, scope: 0) }
 		var levelsRead = 0
-		while let (code, isInsideSendableFunction, holdingName) = work.popLast() {
+		while let (code, isInsideSendableFunction, holdingName, scope) = work.popLast() {
 			levelsRead += 1
 			switch code.node {
 			case .text:
 				break
 			case let .sequence(pieces), let .lines(pieces):
-				work.append(contentsOf: pieces.reversed().map { ($0, isInsideSendableFunction, holdingName) })
+				work.append(contentsOf: pieces.reversed().map { ($0, isInsideSendableFunction, holdingName, scope) })
 			case let .indented(inner, _),
-			     let .omittingRootFunctions(inner, _):
-				work.append((inner, isInsideSendableFunction, holdingName))
+			     let .omittingRootFunctions(inner, _),
+			     let .inPlaceFunction(_, inner):
+				work.append((inner, isInsideSendableFunction, holdingName, scope))
 			case let .place(plan) where plan.code.holdsRootFunction:
-				work.append((plan.code, isInsideSendableFunction, holdingName))
+				work.append((plan.code, isInsideSendableFunction, holdingName, bodyScope(of: plan.code, inside: scope)))
 			case .place:
 				// A place records whether a root function is beneath it, so the walk reads no other place's tree.
 				break
 			case let .sendableFunction(inner):
-				work.append((inner, true, holdingName))
+				work.append((inner, true, holdingName, scope))
 			case let .rootFunction(record, inPlace):
 				if let holdingName {
 					heldNamesByName[holdingName, default: []].insert(record.name)
+				}
+				if isDeclaredAround(record.name, inScope: scope) || record.calls.contains(where: { isDeclaredAround($0, inScope: scope) }) {
+					conflictingNames.insert(record.name)
 				}
 				let key = RootFunctionKey(
 					calledSeam: record.key.calledSeam,
@@ -285,11 +309,44 @@ public enum RootFunctionHoisting {
 				}
 				// A fill's plan holds the root functions its tree declares: each is read where every call wrote it.
 				if case .code = record.declaration, inPlace.holdsRootFunction {
-					work.append((inPlace, isInsideSendableFunction || record.isSendable, record.name))
+					work.append((inPlace, isInsideSendableFunction || record.isSendable, record.name, bodyScope(of: inPlace, inside: scope)))
 				}
 			}
 		}
 		GenerationWork.record(levelsRead, by: .findingRootFunctions)
 		return (records, conflictingNames, heldNamesByName)
+	}
+
+	/// The functions `codes`, a body, declares where they are, beside the root functions it holds: each place's builder
+	/// function and the functions a text place declares, and each fill or dispatcher a call keeps. The places' own trees are
+	/// other bodies.
+	private static func functionsDeclared(directlyIn codes: [GeneratedCode]) -> Set<String> {
+		var names = Set<String>()
+		var work = codes
+		while let code = work.popLast() {
+			switch code.node {
+			case .text,
+			     .rootFunction:
+				break
+			case let .sequence(pieces), let .lines(pieces):
+				work.append(contentsOf: pieces)
+			case let .indented(inner, _),
+			     let .omittingRootFunctions(inner, _),
+			     let .sendableFunction(inner):
+				work.append(inner)
+			case let .inPlaceFunction(name, _):
+				names.insert(name)
+			case let .place(plan):
+				switch plan.record {
+				case let .built(built) where built.hasFunction:
+					names.insert(built.functionName)
+				case let .alias(alias):
+					names.formUnion(alias.declaredFunctionNames)
+				case .built, .closer, .none:
+					break
+				}
+			}
+		}
+		return names
 	}
 }
