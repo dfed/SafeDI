@@ -2518,6 +2518,16 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_judgeUnfulfilledQueryMarks_inGraphsTheToolRejects() async throws {
+		// The unfulfilled-dependency query oracle judges each rejected graph in one module whose trees `query graph` built
+		// with dependencies set aside, so a change that stops it setting them aside fails here rather than quietly judging
+		// nothing.
+		let judgedCount = try await smokeResults.value.count(where: \.isJudgedByUnfulfilledQueryOracle)
+		#expect(judgedCount >= 10, "Judged \(judgedCount) of \(Self.smokeSeeds.count) graphs")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_judgeGeneratedOnlyInitializerDefaults_inGraphsTheToolAccepts() async throws {
 		// The oracle judges each initializer only generated code calls, so a change that stops it finding them fails here
 		// rather than quietly judging nothing.

@@ -74,7 +74,8 @@ struct GraphFuzzerQuerySupplies: Equatable {
 	}
 
 	/// Each type's dependencies' kinds by label, read from `query graph`'s export, `json`: `instantiated`, `lazy` or
-	/// `builder` for an instantiated dependency by its lifetime, `forwarded`, `alias` for a received dependency that
+	/// `builder` for an instantiated dependency by its lifetime, `absent` for one nothing fulfills (instantiated only if
+	/// available, which generated code binds to `nil`), `forwarded`, `alias` for a received dependency that
 	/// renames another, and `received`.
 	static func kindsByLabelByType(exportedJSON json: String) throws -> [String: [String: String]] {
 		guard let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
@@ -86,6 +87,9 @@ struct GraphFuzzerQuerySupplies: Equatable {
 			for dependency in dependencies {
 				guard let label = dependency["label"] as? String, let source = dependency["source"] as? String else { continue }
 				let kind = switch source {
+				case "instantiated" where dependency["fulfilledBy"] == nil:
+					// Instantiated only if available where nothing fulfills it: generated code binds `nil`.
+					"absent"
 				case "instantiated":
 					dependency["lifetime"] as? String == "eager" ? "instantiated" : dependency["lifetime"] as? String ?? "?"
 				case "received":
@@ -307,6 +311,8 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 			let kind = kindsByLabelByType[frame.name]?[name]
 			let isOwnAlias = kind == "alias" && receive?.typeName == frame.name && receive?.label == name
 			switch kind {
+			case "absent":
+				values.insert("nil")
 			case "instantiated", "lazy", "builder", "forwarded":
 				values.insert("\(frame.name).\(name)")
 			case "alias" where !isOwnAlias:
@@ -411,5 +417,86 @@ extension GraphFuzzerToolRuns {
 			kind: .querySuppliersDifferFromGeneratedCode,
 			details: "Receive: export against generated code\n\((differences + generated.unreadable.map { "Unreadable: \($0)" }).joined(separator: "\n"))\nThis graph:\n\(outcome.description)",
 		)
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerToolRuns {
+	/// Whether `queryUnfulfilledFailure` judges the graph: the tool rejects it and `query graph` exported it. Both
+	/// directions are judged: an export with partial trees must mark every error's dependency, and any other must mark
+	/// none.
+	var judgesUnfulfilledDependencies: Bool {
+		guard let rejectedQueryExport else { return false }
+		return (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: rejectedQueryExport)) != nil
+	}
+
+	/// The failure of a graph in one module the tool rejects whose `query graph` export marks dependencies unfulfilled
+	/// otherwise than its errors say, or `nil`. Where the export reports `partialTrees`, every error it reports is at a
+	/// dependency it marks unfulfilled, and it marks one at least; otherwise it marks none.
+	var queryUnfulfilledFailure: GraphFuzzerFailure? {
+		guard let rejectedQueryExport else { return nil }
+		let export: GraphFuzzerUnfulfilledDependencies
+		do {
+			export = try GraphFuzzerUnfulfilledDependencies(exportedJSON: rejectedQueryExport)
+		} catch {
+			return GraphFuzzerFailure(seed: fixture.seed, kind: .queryMarksOtherDependenciesUnfulfilled, details: "The export is not JSON: \(error)\n\(rejectedQueryExport)")
+		}
+		let problems = export.problems
+		guard !problems.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .queryMarksOtherDependenciesUnfulfilled,
+			details: "\(problems.joined(separator: "\n"))\nThe export:\n\(rejectedQueryExport)",
+		)
+	}
+}
+
+/// What a `query graph` export says of the dependencies it set aside to build its trees.
+struct GraphFuzzerUnfulfilledDependencies {
+	init(exportedJSON json: String) throws {
+		let object = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] ?? [:]
+		isPartial = object["completeness"] as? String == "partialTrees"
+		var errorLocations = [String]()
+		for error in object["errors"] as? [[String: Any]] ?? [] {
+			errorLocations.append(Self.location(of: error))
+		}
+		self.errorLocations = errorLocations
+		var markedLocations = [String]()
+		for declaration in object["declarations"] as? [[String: Any]] ?? [] {
+			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["isUnfulfilled"] as? Bool == true {
+				markedLocations.append(Self.location(of: dependency))
+			}
+		}
+		self.markedLocations = markedLocations
+	}
+
+	/// Whether the export's `completeness` is `partialTrees`.
+	let isPartial: Bool
+	/// The file and line of each error the export reports, in its order.
+	let errorLocations: [String]
+	/// The file and line of each dependency the export marks unfulfilled, in its order.
+	let markedLocations: [String]
+
+	/// Each way the marks disagree with the errors and `completeness`, empty where they agree.
+	var problems: [String] {
+		var problems = [String]()
+		if isPartial {
+			if markedLocations.isEmpty {
+				problems.append("The export reports partial trees and marks no dependency unfulfilled.")
+			}
+			let marked = Set(markedLocations)
+			for location in errorLocations where !marked.contains(location) {
+				problems.append("The export reports an error at \(location), where it marks no dependency unfulfilled.")
+			}
+		} else {
+			for location in markedLocations {
+				problems.append("The export reports no partial trees and marks the dependency at \(location) unfulfilled.")
+			}
+		}
+		return problems
+	}
+
+	private static func location(of object: [String: Any]) -> String {
+		"\(object["filePath"] as? String ?? "?"):\(object["line"] as? Int ?? 0)"
 	}
 }
