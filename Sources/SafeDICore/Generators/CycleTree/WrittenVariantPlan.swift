@@ -26,6 +26,13 @@ public enum PlanCodeObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ code: String?) -> Void)?
 }
 
+/// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks
+/// `@Sendable` (`VariantBodies.isSendable(_:)`) with which the type key lays out as `@Sendable` (`WrittenVariantPlan`'s
+/// family), each body at its position in the plan, the root's own first. Test only, until one of the two is removed.
+public enum PlanSendableObservation {
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void)?
+}
+
 /// The per-type plan of one root's cycles as the type key reads it, written from the plan's bodies once their code is
 /// planned: `generator(of:)` plans its code asynchronously, so each body's places are planned before the type key lays
 /// the root out. The root's own body is at position 0, and each body the plan calls follows in the order the plan first
@@ -35,7 +42,7 @@ public enum PlanCodeObservation {
 struct WrittenVariantPlan: TypeKeyVariantPlan {
 	let rootStatements: [GeneratedCode]
 	/// The record of each called body's place, at its position less one.
-	private let records: [BuiltPlaceRecord?]
+	private let records: [PlaceRecord?]
 	/// For each body, the indices of the children of each place, by the place's path.
 	private let childIndicesByPath: [[[Int]: [Int]]]
 	private let callsByBody: [[VariantCall]]
@@ -54,6 +61,8 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 		let calls: [[VariantCall]]
 		let labels: [[String]]
 		let answers: [[Answer]]
+		/// Whether the plan marks each body `@Sendable` (`VariantBodies.isSendable(_:)`).
+		let sendableMarks: [Bool]
 
 		/// The bodies of `plan` in `bodies`, each call of the body it calls by its position here, and each body's labels,
 		/// with their answers and each call's arguments, in the order its function takes them, which every call of it
@@ -78,6 +87,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 				})
 			}
 			generators = positions.map { bodies.generator(of: $0) }
+			sendableMarks = positions.map { bodies.isSendable($0) }
 			self.calls = calls
 			labels = zip(positions, argumentOrders).map { position, order in order.map { bodies.bodies[position].labels[$0] } }
 			answers = zip(positions, argumentOrders).map { position, order in order.map { bodies.bodies[position].planAnswers[$0] } }
@@ -87,13 +97,9 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 	/// Plans the code of each body of `unplanned`, and writes what the type key reads of them.
 	init(planning unplanned: Unplanned) async throws {
 		rootStatements = try await unplanned.generators[0].generateChildPlans()
-		var records = [BuiltPlaceRecord?]()
+		var records = [PlaceRecord?]()
 		for generator in unplanned.generators.dropFirst() {
-			if case let .built(built) = try await TypeKeyLayout.record(of: generator.generatePlan()) {
-				records.append(built)
-			} else {
-				records.append(nil)
-			}
+			try await records.append(TypeKeyLayout.record(of: generator.generatePlan()))
 		}
 		self.records = records
 		callsByBody = unplanned.calls
@@ -104,7 +110,9 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 	}
 
 	func record(ofBody body: Int) -> BuiltPlaceRecord? {
-		records[body - 1]
+		// A body is built as the property its call place builds, so its place is one its generator builds.
+		guard case let .built(built) = records[body - 1] else { return nil }
+		return built
 	}
 
 	func childIndices(ofPlaceAt path: [Int], inBody body: Int) -> [Int] {
@@ -144,7 +152,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 
 	/// Whether each body's function is `@Sendable`: where the body's own generator builds in a `@Sendable` function, or
 	/// some call of it is made inside one, at its call place or on the path to it, or in a body whose function is.
-	private static func sendableFamily(of generators: [ScopeGenerator], callsByBody: [[VariantCall]]) -> [Bool] {
+	static func sendableFamily(of generators: [ScopeGenerator], callsByBody: [[VariantCall]]) -> [Bool] {
 		var sendableFamily = generators.map(\.buildsInSendableFunction)
 		// Each pass only turns bodies `@Sendable`, so the passes end within a pass per body.
 		var changed = true

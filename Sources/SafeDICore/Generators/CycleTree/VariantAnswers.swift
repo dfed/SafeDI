@@ -38,26 +38,78 @@ extension DependencyTreeGenerator {
 		/// those `nil` where the place is, less those `generator`, the place's, makes again at the top of its function as a
 		/// member of a loop of builders (`ScopeGenerator.reboundProperties`), which its tree then reads, but for
 		/// `parameterLabels`, which a call place's function takes as parameters instead (a function rebinds no label it
-		/// takes). Each other is `nil` everywhere in the place's tree, since its every receive of the label is only if
-		/// available (a required receive orders the declaration first), so a body answers it `nil` whatever declares it.
+		/// takes), and less those such a parameter is passed made again (`labelsMadeAgainAtCall`). Each other is `nil`
+		/// everywhere in the place's tree, since its every receive of the label is only if available (a required receive
+		/// orders the declaration first), so a body answers it `nil` whatever declares it.
 		static func labelsBuiltAfter(
 			_ propertiesGeneratedLater: Set<Property>,
 			besides labelsBuiltAfterAbove: Set<String>,
 			reboundBy generator: ScopeGenerator,
 			besidesParameters parameterLabels: Set<String>,
+			passedByReceivedFunction loopMembers: Set<Property>,
 		) -> Set<String> {
-			Set(propertiesGeneratedLater.map(\.label))
-				.union(labelsBuiltAfterAbove)
-				.subtracting(generator.reboundProperties.lazy.map(\.label).filter { !parameterLabels.contains($0) })
+			var labels = labelsBuiltAfterAbove
+			for property in propertiesGeneratedLater
+				where !isPassedByReceivedFunction(property, to: generator, taking: parameterLabels, among: loopMembers)
+			{
+				labels.insert(property.label)
+			}
+			return labels.subtracting(generator.reboundProperties.lazy.map(\.label).filter { !parameterLabels.contains($0) })
+		}
+
+		/// The labels of `propertiesGeneratedLater` that the call of `generator`'s function passes made again
+		/// (`Answer.declaredMadeAgainAtCall`): the members of its loop of builders, `loopMembers`, that the function takes
+		/// as parameters, which the scope that declares the loop builds after the call.
+		static func labelsMadeAgainAtCall(
+			_ propertiesGeneratedLater: Set<Property>,
+			by generator: ScopeGenerator,
+			besidesParameters parameterLabels: Set<String>,
+			passedByReceivedFunction loopMembers: Set<Property>,
+		) -> Set<String> {
+			guard !loopMembers.isEmpty else { return [] }
+			return Set(propertiesGeneratedLater.lazy
+				.filter { isPassedByReceivedFunction($0, to: generator, taking: parameterLabels, among: loopMembers) }
+				.map(\.label))
+		}
+
+		/// Whether `property` is one of `loopMembers`, the members of the loop of builders `generator` is on, that its
+		/// function takes as a parameter a lazy cycle needs (one of its own `cycleParameters`, or of `parameterLabels` for
+		/// a call place): the scope that declares the loop hands the member a function of no such parameters,
+		/// `__safeDI_<label>_received`, which makes each such member's wrapper again and passes it, so the function is
+		/// passed a value whichever member is built first. A member is matched by property, in the form the loop declares
+		/// or its optional form, as today's record of the call matches it (`ScopeGenerator`'s `recordCalls`), never by
+		/// label alone.
+		static func isPassedByReceivedFunction(_ property: Property, to generator: ScopeGenerator, taking parameterLabels: Set<String>, among loopMembers: Set<Property>) -> Bool {
+			guard !loopMembers.isEmpty else { return false }
+			let unwrappedProperty = property.asUnwrappedProperty
+			guard loopMembers.contains(unwrappedProperty) || loopMembers.contains(unwrappedProperty.asOptionalProperty) else { return false }
+			return parameterLabels.contains(property.label) || generator.cycleParameters.contains { $0.property.asUnwrappedProperty == unwrappedProperty }
+		}
+
+		/// `answers`, a called body's, one per label of `labels`, as one call's arguments: a declaration whose label is
+		/// among `labelsMadeAgainAtCall` is passed made again. Such a label never answers a declaration being built: a
+		/// declaration being built is of a scope the call is made inside, and one made again is of a sibling the calling
+		/// scope builds after the call.
+		static func arguments(_ answers: [Answer], of labels: [String], makingAgain labelsMadeAgainAtCall: Set<String>) -> [Answer] {
+			guard !labelsMadeAgainAtCall.isEmpty else { return answers }
+			return zip(labels, answers).map { label, answer in
+				if labelsMadeAgainAtCall.contains(label), case let .declared(property, isBeingBuilt: false) = answer {
+					.declaredMadeAgainAtCall(property)
+				} else {
+					answer
+				}
+			}
 		}
 
 		/// The labels of the parameters of the function a lazy cycle closes on that `child`, the scope that declares the
 		/// function or one that closes the cycle on it, passes `nil`, given the order the scope above it builds its children
 		/// in: those whose declaration is still being built (`labelsOfCycleParametersPassedNil`), and those whose declaration
 		/// is built after the call.
-		static func labelsOfCycleParametersPassedNil(by child: ScopeGenerator.OrderedChild) -> Set<String> {
+		static func labelsOfCycleParametersPassedNil(by child: ScopeGenerator.OrderedChild, passedByReceivedFunction loopMembers: Set<Property>) -> Set<String> {
 			var labels = child.generator.labelsOfCycleParametersPassedNil
-			for parameter in child.generator.cycleParameters where child.unavailableProperties.contains(parameter.property) {
+			for parameter in child.generator.cycleParameters
+				where child.unavailableProperties.contains(parameter.property) && !isPassedByReceivedFunction(parameter.property, to: child.generator, taking: [], among: loopMembers)
+			{
 				labels.insert(parameter.property.label)
 			}
 			return labels
@@ -124,6 +176,7 @@ extension DependencyTreeGenerator.PlaceContext {
 		of function: DependencyTreeGenerator.FunctionPlace,
 		by closingScope: ScopeGenerator.OrderedChild,
 		passingOnNilFor labelsPassedNilAboveCall: Set<String>,
+		passedByReceivedFunction loopMembers: Set<Property>,
 	) -> Self {
 		let parameterLabels = Set(function.generator.cycleParameters.map(\.property.label))
 		guard !parameterLabels.isEmpty else { return self }
@@ -132,10 +185,18 @@ extension DependencyTreeGenerator.PlaceContext {
 		for label in parameterLabels.intersection(labelsPassedNilAboveCall) where !labelsPassedNilWhateverTheOrder.contains(label) {
 			labelsBuiltAfter.insert(label)
 		}
+		// A closing scope on a loop of builders calls through a `_received` function, which passes the loop's members
+		// made again.
+		var labelsMadeAgainAtCall = Set<String>()
 		for parameter in closingScope.generator.cycleParameters
-			where closingScope.unavailableProperties.contains(parameter.property) && !labelsPassedNilWhateverTheOrder.contains(parameter.property.label)
+			where closingScope.unavailableProperties.contains(parameter.property)
+			&& !labelsPassedNilWhateverTheOrder.contains(parameter.property.label)
 		{
-			labelsBuiltAfter.insert(parameter.property.label)
+			if DependencyTreeGenerator.VariantAnswers.isPassedByReceivedFunction(parameter.property, to: closingScope.generator, taking: [], among: loopMembers) {
+				labelsMadeAgainAtCall.insert(parameter.property.label)
+			} else {
+				labelsBuiltAfter.insert(parameter.property.label)
+			}
 		}
 		return Self(
 			place: place,
@@ -152,6 +213,7 @@ extension DependencyTreeGenerator.PlaceContext {
 			twinsBeingBuilt: twinsBeingBuilt,
 			orderedUnavailableProperties: orderedUnavailableProperties,
 			labelsBuiltAfter: labelsBuiltAfter,
+			labelsMadeAgainAtCall: labelsMadeAgainAtCall,
 			isInSendableFamily: isInSendableFamily,
 		)
 	}
