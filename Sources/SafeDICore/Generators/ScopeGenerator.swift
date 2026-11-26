@@ -3541,6 +3541,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - instantiable: The type this root scope builds.
 	///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
 	func seamTierOmissions(ofTreeRootedAt instantiable: Instantiable, isOwnFile: @escaping @Sendable (String) -> Bool) async -> [SeamTierOmission] {
+		// Only a call of a seam tier that omits a parameter reports, and only a scope that closes a lazy cycle records a
+		// call that judges a read elsewhere, so the walk enters no subtree that holds neither, and no tree that holds no
+		// such call: its visits record nothing.
+		// Several places of the tree can share one generator (see `ConstructionMemo`), so entered at every place a tree of
+		// screens that each open three screens of the next layer was walked once per path.
+		let generatorsLeadingToOmissions = Self.generatorsLeadingToSeamTierOmissions(inTreeRootedAt: self)
+		guard generatorsLeadingToOmissions.contains(ObjectIdentifier(self)) else { return [] }
 		var declarationsByLabel = [String: [VisibleDeclaration]]()
 		if case let .root(_, seamRoot?) = scopeData {
 			for parameter in seamRoot.signature.parameters {
@@ -3562,6 +3569,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			visitNumber: 0,
 			referenceLocation: { instantiable.declarationLocation },
 			isOwnFile: isOwnFile,
+			generatorsLeadingToOmissions: generatorsLeadingToOmissions,
 		).judged()
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
 		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
@@ -3575,8 +3583,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
-	///   take parameters (see `CycleParameter`), by the declaration each builds.
+	/// - Parameters:
+	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
+	///     parameters (see `CycleParameter`), by the declaration each builds.
+	///   - generatorsLeadingToOmissions: The generators of the tree whose subtree holds a seam call that omits a
+	///     parameter or a scope that closes a lazy cycle (`generatorsLeadingToSeamTierOmissions(inTreeRootedAt:)`).
 	private func seamTierOmissions(
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
@@ -3585,7 +3596,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		visitNumber: Int,
 		referenceLocation: @escaping @Sendable () -> Dependency.DeclarationLocation?,
 		isOwnFile: @escaping @Sendable (String) -> Bool,
+		generatorsLeadingToOmissions: Set<ObjectIdentifier>,
 	) async -> OmissionFindings<SeamTierOmission> {
+		GenerationWork.record(1, by: .findingSeamTierOmissions)
 		let declaringType = instantiable.concreteInstantiable
 		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
 		for dependency in instantiable.dependencies where !dependency.source.isReceived {
@@ -3663,12 +3676,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						)
 					}
 				}
-			} else {
+			} else if generatorsLeadingToOmissions.contains(ObjectIdentifier(child.generator)) {
 				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
 				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
 				// declaration of their labels where it is called, as generation's do.
 				// The function is told apart by the walk's visit of the child, never by its generator, which several places of the
-				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own.
+				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own. A child the walk
+				// does not enter takes no number: its function's parameters are read only in its body, which holds no call
+				// that omits one.
 				let function = findings.nextVisitNumber
 				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
 				await findings.append(contentsOf: child.generator.seamTierOmissions(
@@ -3679,10 +3694,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					visitNumber: function,
 					referenceLocation: childReferenceLocation(of: child.generator.property),
 					isOwnFile: isOwnFile,
+					generatorsLeadingToOmissions: generatorsLeadingToOmissions,
 				))
 			}
 		}
 		return findings
+	}
+
+	/// The generators of the tree `root` roots whose subtree holds a call of a seam tier that omits a parameter, or one no
+	/// tier takes, or a scope that closes a lazy cycle: the scopes `seamTierOmissions` enters. Empty where the tree holds no
+	/// such call, since a scope that closes a lazy cycle only records calls, which judge the reads of an omitting call
+	/// alone: a tree without one reports nothing, and a lazy cycle in it would have the walk enter every path to it again.
+	/// Each generator is visited once, from the leaves up; the set dies with the walk.
+	private static func generatorsLeadingToSeamTierOmissions(inTreeRootedAt root: ScopeGenerator) -> Set<ObjectIdentifier> {
+		var leadingToOmissions = Set<ObjectIdentifier>()
+		var holdsCallOmittingParameter = false
+		var visitedGenerators = Set<ObjectIdentifier>()
+		var generatorsToVisit = [(generator: root, childrenAreVisited: false)]
+		while let (visited, childrenAreVisited) = generatorsToVisit.popLast() {
+			guard childrenAreVisited else {
+				guard visitedGenerators.insert(ObjectIdentifier(visited)).inserted else { continue }
+				generatorsToVisit.append((visited, true))
+				for child in visited.children where !visitedGenerators.contains(ObjectIdentifier(child)) {
+					generatorsToVisit.append((child, false))
+				}
+				continue
+			}
+			let (closesCycle, callOmitsParameter) = if case let .property(_, _, _, _, isPropertyCycle, seamCall) = visited.scopeData {
+				(isPropertyCycle, seamCall.map { !($0.omittedParameters.isEmpty && $0.noTierParameters.isEmpty) } ?? false)
+			} else {
+				(false, false)
+			}
+			holdsCallOmittingParameter = holdsCallOmittingParameter || callOmitsParameter
+			if closesCycle || callOmitsParameter || visited.children.contains(where: { leadingToOmissions.contains(ObjectIdentifier($0)) }) {
+				leadingToOmissions.insert(ObjectIdentifier(visited))
+			}
+		}
+		guard holdsCallOmittingParameter else { return [] }
+		return leadingToOmissions
 	}
 
 	/// The value each receive in the tree rooted at this scope, a root of the dependency tree, is handed in each place the
