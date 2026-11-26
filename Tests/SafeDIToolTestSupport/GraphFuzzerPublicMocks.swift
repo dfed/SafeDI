@@ -442,6 +442,10 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `FormScreen`'s public mock receives an optional wrapper of the value only if available beside a sibling that
 	/// receives the label as `FormMark`, so that it names the wrapper apart by its type.
 	case valueFormsBesidePublicMockCallPublicOptionalWrapperBesideOtherType
+	/// A module whose configuration declares the main actor its default isolation, compiled with
+	/// `-default-isolation MainActor` (`GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed:in:)`), with every
+	/// module above it declaring it too, so that a consumer calls the declaring module's `@MainActor` public mocks.
+	case mainActorDefaultIsolation
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -463,6 +467,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
 			|| rawValue.hasPrefix("carrierBeforeSibling")
 			|| rawValue.hasPrefix("wrapperReadByValuePublicMock")
+			|| self == .mainActorDefaultIsolation
 			|| rawValue.hasPrefix("valueFormsBesidePublicMockCall")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 			|| self == .ownOptionalDefaultOnNonisolatedTypeThatBuilds
@@ -659,10 +664,14 @@ enum GraphFuzzerPublicMockSpelling: CaseIterable {
 /// `AnyT<index>` of a leaf a consumer reaches through an erasure, held under `anyT<index>`; the helper types keep their
 /// names.
 struct GraphFuzzerPublicMockDraw {
+	/// The seed the graph is drawn for, which also decides its modules' default isolation
+	/// (`GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed:in:)`).
+	private let seed: UInt64
 	/// - Parameters:
 	///   - omitsSecondHolePlace: Whether the draw leaves out `secondHolePlace`, drawing the rest as with it.
 	///   - builderSurfaceEdit: The edit the hole draw makes to `T6`'s hole after every roll, for the builder surface's checks.
 	init(seed: UInt64, omitsSecondHolePlace: Bool = false, builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit? = nil) {
+		self.seed = seed
 		self.omitsSecondHolePlace = omitsSecondHolePlace
 		self.builderSurfaceEdit = builderSurfaceEdit
 		prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -753,14 +762,15 @@ struct GraphFuzzerPublicMockDraw {
 	func swiftFileContent(storingEveryParameter: Bool, isKnownRight: Bool) -> [String] {
 		let rendering = Rendering(prefix: prefix, storesEveryParameter: storingEveryParameter, isKnownRight: isKnownRight)
 		let presentModules = Set(files.map(\.module))
-		let contents = files.map { file in
+		// Declared on both paths alike, so that the known-right path compiles each module as the feature path does.
+		let contents = GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed: seed, leavesSendableConformances: true, in: files.map { file in
 			var lines = [GraphFuzzerModule.marker + file.module.name]
 			if let fileName = file.fileName {
 				lines.append(GraphFuzzerFixture.fileNameMarker + fileName)
 			}
 			lines += file.module.dependencies.filter(presentModules.contains).map { "import \($0.name)" }
 			return lines.joined(separator: "\n") + "\n\n" + file.declarations.map { $0(rendering) }.joined(separator: "\n\n") + "\n"
-		}
+		})
 		guard storingEveryParameter else { return contents }
 		// The creation stamps' counter, in the first file of the module every other module imports.
 		let counterIndex = GraphFuzzerSeamDependencyDraw.creationStampCounterIndex(in: contents)
@@ -3948,6 +3958,9 @@ extension GraphFuzzerPublicMockDraw {
 		let types = DeclaredTypes(of: fixture)
 		var features = Set<GraphFuzzerPublicMockDrawFeature>()
 		let modules = Set(fixture.modules ?? [])
+		if !fixture.modulesDefaultingToMainActor.isEmpty {
+			features.insert(.mainActorDefaultIsolation)
+		}
 		if modules.contains(.samePackageCaller), modules.contains(.otherPackageCaller) {
 			features.insert(.bothConsumerModules)
 		} else if modules.contains(.samePackageCaller) {

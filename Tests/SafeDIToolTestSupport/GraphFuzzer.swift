@@ -220,10 +220,20 @@ struct GraphFuzzerFixture: Equatable {
 	/// `Sendable` conformance cannot hold; and one whose hand-written code passes a closure to a wrapper
 	/// (`Instantiator { … }`), since the wrapper’s closure is nonisolated and cannot call the main-actor initializers it
 	/// builds with (seed 243).
-	static func declaringMainActorDefaultIsolation(seed: UInt64, in contents: [String]) -> [String] {
+	/// - Parameter leavesSendableConformances: Whether a graph that spells `Sendable` only as a conformance is declared
+	///   too, as the public mock corpus's graphs are, nearly all of which conform a type to `Sendable`: a main-actor type
+	///   may conform to it, so only a `@Sendable` builder or a `Sendable` wrapper leaves the graph as drawn, and the
+	///   draw's defaults enum (`<prefix>Defaults`), whose main-actor members a type that conforms only to `Instantiable`,
+	///   and so is nonisolated, cannot read as a default value (seed 135), nor build as one, as the spelling draw's
+	///   `= <prefix>SpellConformer()` does (seed 294). That corpus draws the declaration in one graph
+	///   in three, since it leaves most of its graphs as drawn.
+	static func declaringMainActorDefaultIsolation(seed: UInt64, leavesSendableConformances: Bool = false, in contents: [String]) -> [String] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ mainActorDefaultIsolationRandomSeedMask)
-		guard random.percentChance(12),
-		      !contents.contains(where: { $0.contains("Sendable") || $0.contains("Instantiator {") || $0.contains("Instantiated {") }),
+		let compileRejectsFixture: (String) -> Bool = leavesSendableConformances
+			? { ["@Sendable", "SendableInstantiator", "SendableErasedInstantiator", "SendableLazilyInstantiated", "Defaults {", "Conformer()", "Instantiator {", "Instantiated {"].contains(where: $0.contains) }
+			: { ["Sendable", "Instantiator {", "Instantiated {"].contains(where: $0.contains) }
+		guard random.percentChance(leavesSendableConformances ? 33 : 12),
+		      !contents.contains(where: compileRejectsFixture),
 		      !contents.isEmpty
 		else { return contents }
 		let isSplit = contents.contains { GraphFuzzerModule(declaredIn: $0) != nil }
