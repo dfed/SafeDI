@@ -83,6 +83,7 @@ extension ScopeGenerator {
 		// a receive beneath reads, from the mocked type's own for its whole tree (`routingReceives`).
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
 		walk.sendableAutoclosureBindings = signature.sendableAutoclosureBindings
+		walk.configurationParameterNames = MockLowering.ConfigurationParameterNames(reserving: Set(signature.sendableAutoclosureBindings.values.map(\.localName)))
 		walk.rootOverrideNames = Set(signature.onlyIfAvailableOverrides.map(\.name))
 		walk.unavailableDependencyOverrideNames = signature.unavailableDependencyOverrideNames
 		let mockedTypeUncoveredProperties = instantiable.dependencies.compactMap { dependency -> Property? in
@@ -418,6 +419,8 @@ extension MockLowering {
 		/// last: `mock()`'s `safeDIOverrides` at the root, then each place's own parameter, `nil` for a place that reads no
 		/// configuration struct (`MockLowering.relativeConfiguration(of:…)`).
 		var configurationReads: [ValuePath?] = [MockLowering.mockOverridesRead]
+		/// The name under which the functions of each type the walk configured take its configuration, one for the root.
+		var configurationParameterNames = MockLowering.ConfigurationParameterNames()
 		/// Where each built place the walk started reads its configuration in the type key's form, by its path of child indices.
 		var builtPlaceConfigurationContexts = [[Int]: MockLowering.BuiltPlaceConfigurationContext]()
 		/// The labels `mock()` binds before its tree, which no node may bind again.
@@ -1579,11 +1582,7 @@ extension MockLowering {
 				relativeConfigurationsByType[concreteTypeSource, default: []].append(relativeConfiguration)
 			}
 			pushedRelativeConfigurations.append(relativeConfiguration != nil)
-			configurationReads.append(hasConfiguration ? .passedArgument(MockLowering.ConfigurationParameter(
-				concreteType: instantiable.concreteInstantiable,
-				builtWithHandWrittenMock: usesMockInitializer,
-				configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
-			).name) : nil)
+			configurationReads.append(hasConfiguration ? .passedArgument(configurationParameterNames.name(ofConfigurationOf: instantiable.concreteInstantiable, builtWithHandWrittenMock: usesMockInitializer)) : nil)
 			// The configured types around the node's children.
 			let configurationEntry = enteringConfiguredNode(of: instantiable.concreteInstantiable)
 			return .descending(DescendingBuiltNode(

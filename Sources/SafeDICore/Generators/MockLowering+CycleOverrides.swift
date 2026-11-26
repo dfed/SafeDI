@@ -61,9 +61,55 @@ extension MockLowering {
 		let builtWithHandWrittenMock: Bool
 	}
 
-	/// The passed argument through which a type key function of `concreteType` takes the configuration its place reads.
-	/// Its name is one per type, and a passed argument is a declaration inside the function it is handed to, so a read of
-	/// the name resolves to the nearest place of the type above it: the rule above, as the engine's nearest declaration.
+	/// The names under which the builder functions of one mock root take the configurations their places read: one for each
+	/// concrete type and way of building it, claimed where the walk first reaches a place built so. A name is made from the
+	/// type (`TypeDescription.asIdentifier`), which two types can spell alike (`Outer.Inner` and `Outer_Inner`) and which
+	/// keeps the backticks a type is named with (`` `default` ``), so each is spelled as one identifier and claimed, with
+	/// the name a function takes the type's nearest configuration under (`NearestConfigurations.nearestName(ofParameterNamed:)`),
+	/// apart from every name claimed before it and from the locals `mock()` reads its `@Sendable` autoclosure parameters
+	/// into, which a builder function calls. The layout names its functions and locals apart from every parameter its
+	/// functions take (`TypeKeyLayout.computeDecoratorsAndNames`), so a property labeled as a parameter is named
+	/// (`Aa_configuration` beside the type `Aa`) hides nothing either.
+	///
+	/// It holds one name for each type a root's walk configures, for the length of that root's lowering.
+	struct ConfigurationParameterNames {
+		/// The name of the parameter that takes the configuration of a place of `concreteType`, built with its hand-written
+		/// mock or not. A place built with its type's hand-written mock reads a configuration of another shape than one
+		/// built with its initializer (`validateConfigurationsAreBuiltOneWay` leaves out a place beneath a cycle edge), so
+		/// the two ways take parameters of two names, and a place reads only the nearest place built its own way (issue
+		/// #720's shape).
+		mutating func name(ofConfigurationOf concreteType: TypeDescription, builtWithHandWrittenMock: Bool) -> String {
+			let construction = Construction(concreteType: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock)
+			if let name = namesByConstruction[construction] {
+				return name
+			} else {
+				let name = allocator.claim(
+					"\(ReservedName.builderFunctionNamePrefix)\(concreteType.asIdentifier)\(builtWithHandWrittenMock ? "_mockConfiguration" : "_configuration")".spelledAsJoinedIdentifier,
+					occupying: { [$0, NearestConfigurations.nearestName(ofParameterNamed: $0)] },
+				)
+				namesByConstruction[construction] = name
+				return name
+			}
+		}
+
+		private struct Construction: Hashable {
+			let concreteType: TypeDescription
+			let builtWithHandWrittenMock: Bool
+		}
+
+		/// A table that claims every name apart from `names`, which the mock declares before its tree.
+		init(reserving names: Set<String> = []) {
+			allocator = GeneratedNameAllocator(reserving: names)
+		}
+
+		private var namesByConstruction = [Construction: String]()
+		private var allocator: GeneratedNameAllocator
+	}
+
+	/// The passed argument through which a type key function of a concrete type takes the configuration its place reads.
+	/// Its name is one per type (`ConfigurationParameterNames`), and a passed argument is a declaration inside the function
+	/// it is handed to, so a read of the name resolves to the nearest place of the type above it: the rule above, as the
+	/// engine's nearest declaration.
 	/// A place that reads a configuration struct takes it non-optional, and a call that reaches no same-type place hands a
 	/// fresh `<T>.SafeDIMockConfiguration()`, as the path key's pruned place reads one today, so the place's defaults read
 	/// `configuration.label` alike on every call. A place that reads only an override closure takes it optional, and such a
@@ -76,11 +122,10 @@ extension MockLowering {
 		/// Whether the place reads a configuration struct rather than an override closure.
 		let readsConfigurationStruct: Bool
 
-		/// A place built with its type's hand-written mock reads a configuration of another shape than one built with its
-		/// initializer (`validateConfigurationsAreBuiltOneWay` leaves out a place beneath a cycle edge), so the two ways take
-		/// parameters of two names, and a place reads only the nearest place built its own way (issue #720's shape).
-		init(concreteType: TypeDescription, builtWithHandWrittenMock: Bool, configurationType: TypeDescription) {
-			name = ReservedName.builderFunctionNamePrefix + concreteType.asIdentifier + (builtWithHandWrittenMock ? "_mockConfiguration" : "_configuration")
+		/// The parameter named `name` (`ConfigurationParameterNames`) of a place that reads a configuration of
+		/// `configurationType`: its type's struct, or an override closure.
+		init(name: String, configurationType: TypeDescription) {
+			self.name = name
 			readsConfigurationStruct = !configurationType.isClosure && !configurationType.isOptional
 			type = readsConfigurationStruct || configurationType.isOptional ? configurationType : .optional(configurationType)
 		}
@@ -114,22 +159,19 @@ extension MockLowering {
 		}
 	}
 
-	/// What a built place of `concreteType` that reads a configuration of `configurationType` hands its function: the member
+	/// What a built place whose function takes its configuration through `parameter` hands that function: the member
 	/// `label` of its parent's configuration where the parent's configuration has a field for it (`parentConfiguration`, a
 	/// read of the parent's parameter, or the mock's `safeDIOverrides` at the root), else a read of its own type's parameter,
 	/// which resolves to the nearest place of its type above it (`nearestIsProvided`, as the path key reads it), or to
 	/// nothing. The function declares the same list as its parameters, so a call and the function it calls come from one
 	/// rule.
 	static func passedArguments(
-		ofBuiltPlaceOf concreteType: TypeDescription,
+		ofBuiltPlaceTaking parameter: ConfigurationParameter,
 		label: String,
-		builtWithHandWrittenMock: Bool,
-		configurationType: TypeDescription,
 		parentConfiguration: ValuePath?,
 		nearestIsProvided: Bool,
 		staysOutsideSendableFunctions: Bool,
 	) -> [PassedArgument] {
-		let parameter = ConfigurationParameter(concreteType: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: configurationType)
 		let value: ValuePath = if let parentConfiguration {
 			.member(label, of: parentConfiguration)
 		} else {
@@ -138,20 +180,17 @@ extension MockLowering {
 		return [parameter.argument(handing: value, staysOutsideSendableFunctions: staysOutsideSendableFunctions)]
 	}
 
-	/// What a closer hands the function it closes on: a read of the closed-on type's parameter, which resolves to the
+	/// What a closer hands the function it closes on, which takes its configuration through `parameter`: a read of the
+	/// closed-on type's parameter, which resolves to the
 	/// configuration of the place it closes on, the nearest place of that type above it. Never an absolute path, so alike
 	/// places that share a function hand alike closers. `closedOnIsProvided` says whether the path key's closed-on place
 	/// read a configuration; where it read none, the read is of nothing, `nil`, as that place was handed.
 	static func passedArguments(
-		ofCloser generator: ScopeGenerator,
-		closedOnBuiltWithHandWrittenMock: Bool,
-		configurationType: TypeDescription,
+		ofCloserOnPlaceTaking parameter: ConfigurationParameter,
 		closedOnIsProvided: Bool,
 		staysOutsideSendableFunctions: Bool,
 	) -> [PassedArgument] {
-		guard let closedOn = generator.closedOnDeclaration else { return [] }
-		let parameter = ConfigurationParameter(concreteType: closedOn.concreteType, builtWithHandWrittenMock: closedOnBuiltWithHandWrittenMock, configurationType: configurationType)
-		return [parameter.argument(handing: parameter.read(isProvided: closedOnIsProvided), staysOutsideSendableFunctions: staysOutsideSendableFunctions)]
+		[parameter.argument(handing: parameter.read(isProvided: closedOnIsProvided), staysOutsideSendableFunctions: staysOutsideSendableFunctions)]
 	}
 }
 
@@ -175,30 +214,27 @@ extension MockLowering {
 		.rootDeclaration(ReservedName.mockOverridesParameterName)
 	}
 
-	/// The type key's form of a built place's configuration: what its call hands its function (`passedArguments(ofBuiltPlaceOf:…)`),
+	/// The type key's form of a built place's configuration: what its call hands its function (`passedArguments(ofBuiltPlaceTaking:…)`),
 	/// and the alternatives its construction tries, each override read at an absolute path (`OverrideRead.path`) replaced by
 	/// a read of the place's own parameter (its `safeDIBuilder` member, or the parameter itself where it is the override
 	/// closure). So alike places of one type that read their configurations at different paths record alike, and a place a
 	/// cycle builds again reads the configuration of the nearest place of its type built the same way, as the path key reads it.
 	static func relativeConfiguration(
 		of node: NodeConfiguration,
+		parameter: ConfigurationParameter,
 		context: BuiltPlaceConfigurationContext,
 		alternatives: [ConstructionAlternative],
 		hasFunction: Bool,
 		sendableConfigurationTypeNames: Set<String>,
 	) -> (passedArguments: [PassedArgument], alternatives: [ConstructionAlternative]) {
-		let configurationType = configurationType(of: node)
-		let parameter = ConfigurationParameter(concreteType: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
 		let staysOutsideSendableFunctions = if node.hasConfiguration {
 			!sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
 		} else {
 			!node.requiresSendable
 		}
 		let passedArguments = passedArguments(
-			ofBuiltPlaceOf: node.instantiable.concreteInstantiable,
+			ofBuiltPlaceTaking: parameter,
 			label: context.fieldName,
-			builtWithHandWrittenMock: node.usesMockInitializer,
-			configurationType: configurationType,
 			parentConfiguration: context.parentConfiguration,
 			nearestIsProvided: context.nearestIsProvided,
 			staysOutsideSendableFunctions: staysOutsideSendableFunctions,
@@ -231,6 +267,22 @@ extension MockLowering {
 }
 
 extension MockLowering.Walk {
+	/// The parameter through which the function of a place of `node` takes the configuration the place reads, under the
+	/// one name this root gives the node's type built that way.
+	mutating func configurationParameter(of node: MockLowering.NodeConfiguration) -> MockLowering.ConfigurationParameter {
+		configurationParameter(ofPlaceOf: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: MockLowering.configurationType(of: node))
+	}
+
+	/// The parameter through which the function of a place of `concreteType`, built with its hand-written mock or not,
+	/// takes a configuration of `configurationType`. Every parameter of the walk's records is made here, so that every
+	/// name comes from the root's one table.
+	mutating func configurationParameter(ofPlaceOf concreteType: TypeDescription, builtWithHandWrittenMock: Bool, configurationType: TypeDescription) -> MockLowering.ConfigurationParameter {
+		MockLowering.ConfigurationParameter(
+			name: configurationParameterNames.name(ofConfigurationOf: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock),
+			configurationType: configurationType,
+		)
+	}
+
 	/// Puts the built place recorded at the walk's place in the type key's form of its configuration
 	/// (`MockLowering.relativeConfiguration(of:…)`). A public mock's places take another configuration, which its own records hand.
 	mutating func relateConfiguration(ofBuiltPlaceAt path: [Int], of node: MockLowering.NodeConfiguration) {
@@ -238,7 +290,7 @@ extension MockLowering.Walk {
 		      case var .built(record) = builtRecords[path],
 		      let context = builtPlaceConfigurationContexts[path]
 		else { return }
-		let relative = MockLowering.relativeConfiguration(of: node, context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
+		let relative = MockLowering.relativeConfiguration(of: node, parameter: configurationParameter(of: node), context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
 		record.passedArguments = relative.passedArguments
 		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
 		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the

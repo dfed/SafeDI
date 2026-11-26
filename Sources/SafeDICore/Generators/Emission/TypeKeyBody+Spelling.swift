@@ -48,6 +48,11 @@ extension TypeKeyLayout {
 			}
 		}
 		var allocator = GeneratedNameAllocator(reserving: namesInScope)
+		// A function's parameters are declarations of its body, where a function or a local of a parameter's name would be
+		// hidden by it, or hide it: every name the layout claims is apart from every parameter a call hands.
+		for owner in membersByClass.indices {
+			allocator.reserve(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
+		}
 		functionNames = membersByClass.indices.map { owner in
 			guard let representative = representative(of: owner) else { return "" }
 			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))

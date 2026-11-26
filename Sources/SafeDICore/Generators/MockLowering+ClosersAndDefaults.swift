@@ -52,7 +52,7 @@ extension MockLowering.Walk {
 		guard let closedOnDeclaration = generator.closedOnDeclaration,
 		      let index = closedOnPlacesByLabel[closedOnDeclaration.property.label]?.lastIndex(where: { $0.declaration == closedOnDeclaration })
 		else { return }
-		closedOnPlacesByLabel[closedOnDeclaration.property.label]?[index].closers.append((path: childIndexPath, generator: generator))
+		closedOnPlacesByLabel[closedOnDeclaration.property.label]?[index].closerPaths.append(childIndexPath)
 	}
 
 	/// Enters the place the walk builds `declaration` at, which a closer beneath can close on.
@@ -61,25 +61,25 @@ extension MockLowering.Walk {
 	}
 
 	/// Leaves the place `node` is built at, once its configuration is known, and hands each closer beneath that closes on it
-	/// the place's configuration (`MockLowering.passedArguments(ofCloser:…)`): its configuration struct where it has one, else
+	/// the place's configuration (`MockLowering.passedArguments(ofCloserOnPlaceTaking:…)`): its configuration struct where it has one, else
 	/// its override closure, read where the place reads its override (`readsOverride`). A public mock's places take another
 	/// configuration, which its own records hand.
 	mutating func leaveClosedOnPlace(of node: MockLowering.ConstantNode, readsOverride: Bool) {
-		guard let place = closedOnPlacesByLabel[node.property.label]?.popLast(), !place.closers.isEmpty, !buildsPublicMock else { return }
+		guard let place = closedOnPlacesByLabel[node.property.label]?.popLast(), !place.closerPaths.isEmpty, !buildsPublicMock else { return }
 		let configurationType = MockLowering.configurationType(of: node.configuration)
 		// A place a closer beneath closes on has a child, so it has a configuration struct, which crosses into a `@Sendable`
 		// function only in its `Sendable` form.
 		let staysOutsideSendableFunctions = !sendableConfigurationTypeNames.contains(node.instantiable.concreteInstantiable.asSource)
-		for closer in place.closers {
-			guard case var .closer(record) = closerAndDefaultRecords[closer.path] else { continue }
+		// Each closer recorded here repeats the place's declaration, so each hands the parameter of the place's own type.
+		let parameter = configurationParameter(ofPlaceOf: place.declaration.concreteType, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
+		for closerPath in place.closerPaths {
+			guard case var .closer(record) = closerAndDefaultRecords[closerPath] else { continue }
 			record.passedArguments = MockLowering.passedArguments(
-				ofCloser: closer.generator,
-				closedOnBuiltWithHandWrittenMock: node.usesMockInitializer,
-				configurationType: configurationType,
+				ofCloserOnPlaceTaking: parameter,
 				closedOnIsProvided: readsOverride,
 				staysOutsideSendableFunctions: staysOutsideSendableFunctions,
 			)
-			closerAndDefaultRecords[closer.path] = .closer(record)
+			closerAndDefaultRecords[closerPath] = .closer(record)
 		}
 	}
 
@@ -109,7 +109,7 @@ extension MockLowering.Walk {
 	/// child indices.
 	struct ClosedOnPlace {
 		let declaration: ScopeGenerator.BuiltDeclaration
-		var closers = [(path: [Int], generator: ScopeGenerator)]()
+		var closerPaths = [[Int]]()
 	}
 }
 
@@ -190,8 +190,8 @@ extension MockLowering.Walk {
 		guard usesMockInitializer || constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer) else { return nil }
 		return MockLowering.ConfiguredConstruction(
 			usesMockInitializer: usesMockInitializer,
-			configurationParameter: MockLowering.ConfigurationParameter(
-				concreteType: instantiable.concreteInstantiable,
+			configurationParameter: configurationParameter(
+				ofPlaceOf: instantiable.concreteInstantiable,
 				builtWithHandWrittenMock: usesMockInitializer,
 				configurationType: MockLowering.configurationType(of: node.configuration),
 			),

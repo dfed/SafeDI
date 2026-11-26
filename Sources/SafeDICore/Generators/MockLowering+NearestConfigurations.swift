@@ -34,7 +34,13 @@ extension MockLowering {
 
 		/// The name of the parameter a function takes the nearest configuration of `parameter` under.
 		static func nearestName(of parameter: ConfigurationParameter) -> String {
-			parameter.name + "_nearest"
+			nearestName(ofParameterNamed: parameter.name)
+		}
+
+		/// The name of the parameter a function takes the nearest configuration of the parameter named `name` under, which
+		/// `ConfigurationParameterNames` claims together with `name`.
+		static func nearestName(ofParameterNamed name: String) -> String {
+			"\(name)_nearest".spelledAsJoinedIdentifier
 		}
 
 		/// The type a function takes the nearest configuration of `parameter` as: optional, since a path can reach the
@@ -96,7 +102,7 @@ extension MockLowering.Walk {
 	/// The nearest configurations every function of the walk's places hands on, found as a fixed point over the places:
 	/// a function takes each one a closer among its places closes on, each one a place among them built again by a cycle
 	/// reads, and each one a function it calls takes, but its own.
-	func nearestConfigurations(childPathsByParent: [[Int]: [[Int]]]) -> MockLowering.NearestConfigurations {
+	mutating func nearestConfigurations(childPathsByParent: [[Int]: [[Int]]]) -> MockLowering.NearestConfigurations {
 		var ownParameterByPath = [[Int]: MockLowering.ConfigurationParameter]()
 		var staysOutsideSendableFunctionsByName = [String: Bool]()
 		var firstReachedIndexByName = [String: Int]()
@@ -104,8 +110,7 @@ extension MockLowering.Walk {
 		for (index, path) in placePathsInWalkOrder.enumerated() {
 			if let call = builtPlaceCalls[path], call.inputs.hasFunction {
 				let node = call.nodeConfiguration
-				let configurationType = MockLowering.configurationType(of: node)
-				let parameter = MockLowering.ConfigurationParameter(concreteType: node.instantiable.concreteInstantiable, builtWithHandWrittenMock: node.usesMockInitializer, configurationType: configurationType)
+				let parameter = configurationParameter(of: node)
 				ownParameterByPath[path] = parameter
 				if firstReachedIndexByName[parameter.name] == nil {
 					firstReachedIndexByName[parameter.name] = index

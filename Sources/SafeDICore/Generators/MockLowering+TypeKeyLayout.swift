@@ -334,7 +334,7 @@ extension MockLowering.Walk {
 	}
 
 	/// What a built place hands its configuration parameter where its parent's function takes the nearest configuration of
-	/// its type, `nearestRead`: that, else what it hands now. `value` is what `MockLowering.passedArguments(ofBuiltPlaceOf:…)`
+	/// its type, `nearestRead`: that, else what it hands now. `value` is what `MockLowering.passedArguments(ofBuiltPlaceTaking:…)`
 	/// hands, one of four forms: its parent's field of it, a configuration built afresh, a read of its own type's parameter,
 	/// or `nil`.
 	static func nearestFirst(_ nearestRead: ValuePath, orElse value: ValuePath, own: MockLowering.ConfigurationParameter) -> ValuePath {

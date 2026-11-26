@@ -977,6 +977,7 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		"pushedRelativeConfigurations": relative + "pushed and popped around each node.",
 		"configurationReads": relative + "the node's configuration read is computed for each meeting; its children read theirs relative to it.",
 		"builtPlaceConfigurationContexts": output + "keyed by path, filled for the first meeting's paths.",
+		"configurationParameterNames": rootConstant + "a type's name, once claimed, is the same at every meeting, and the first meeting claims each name its subtree's records hold.",
 		"rootLabels": rootConstant + "the labels `mock()` binds.",
 		"rootOverrideNames": rootConstant + "the root's override names.",
 		"unavailableDependencyOverrideNames": rootConstant + "set from the signature before the walk.",
