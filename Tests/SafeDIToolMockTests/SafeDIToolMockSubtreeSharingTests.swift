@@ -369,6 +369,120 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(visits == [3: [20, 26], 6: [38, 50], 12: [74, 98]])
 	}
 
+	/// `Home`'s public mock promotes `session`, which `Settings` receives, and `Profile` instantiates a `session` of its
+	/// own, so the construction memo gives the root's node and `Profile`'s one generator. The tree-names walk meets it first
+	/// beneath `profile` where `profile` is declared first, and still lists the root's node, which the plan `Feat`'s
+	/// `.safedi` stores reads: `App` calls `Home`'s mock with `session` and the guard `Feat` declares, in either order.
+	@Test(arguments: [true, false])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsPublicMockWithPromotedValue_whenSameGeneratorIsMetFirstBeneathAnotherChild(profileIsDeclaredFirst: Bool) async throws {
+		let homeProperties = ["@Instantiated let profile: Profile", "@Instantiated let settings: Settings"]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": """
+				import SafeDI
+
+				@Instantiable
+				public final class Session: Instantiable {
+				    init() {}
+				}
+
+				@Instantiable
+				public final class Profile: Instantiable {
+				    init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Instantiated let session: Session
+				}
+
+				@Instantiable
+				public final class Settings: Instantiable {
+				    init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received let session: Session
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Home: Instantiable {
+				    init(profile: Profile, settings: Settings) {
+				        self.profile = profile
+				        self.settings = settings
+				    }
+
+				    \((profileIsDeclaredFirst ? homeProperties : homeProperties.reversed()).joined(separator: "\n    "))
+				}
+				"""]),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": """
+				import Feat
+				import SafeDI
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(home: Home) {
+				        self.home = home
+				    }
+
+				    @Instantiated let home: Home
+				}
+				"""], dependencies: ["Feat"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            home: Home.SafeDIOverrides = .init(),
+		            session: Session? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                home: home
+		            )
+		            self.session = session
+		        }
+
+		        var home: Home.SafeDIOverrides { __safeDI_storage.home }
+		        let session: Session?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                home: Home.SafeDIOverrides
+		            ) {
+		                self.home = home
+		            }
+
+		            let home: Home.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session: Session? = safeDIOverrides.session
+		        _ = Home.__safeDI_Home_mock_53B5F60DA3BBE2A1.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let home = Home.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.home)
+		        return Root(home: home)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	/// The mock root's cycle walk walks a scope reached again only where the context above it reads differently, so a
 	/// tree whose screens build the next layer beneath two parents costs a walk per scope, not per path: in the plain
 	/// chain, and in one whose parents each declare the `session` every layer receives and build the next layer through an
