@@ -51,7 +51,11 @@ extension ScopeGenerator {
 			concreteType: instantiable.concreteInstantiable,
 			usesMockInitializer: usesMockInitializer,
 			childFieldSources: MockLowering.ConfigurationRecord.childFieldSources(of: nodes.filter { node in
-				if case let .built(builtNode) = node { builtNode.promotedParameterName == nil } else { true }
+				if case let .built(builtNode) = node {
+					builtNode.promotedParameterName == nil
+				} else {
+					true
+				}
 			}),
 			builderParameters: MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesMockInitializer),
 			defaultFields: walk.configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer),
