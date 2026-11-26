@@ -1117,6 +1117,68 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_listsUnfulfilledProvenanceAfterDeclaration_whenReceiveIsProvidedUnderOneParentOnly() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(provider: Provider, bare: Bare) {
+			        self.provider = provider
+			        self.bare = bare
+			    }
+
+			    @Instantiated let provider: Provider
+			    @Instantiated let bare: Bare
+			}
+			""",
+			"Provider.swift": """
+			@Instantiable
+			public final class Provider: Instantiable {
+			    public init(session: Session, screen: Screen) {
+			        self.session = session
+			        self.screen = screen
+			    }
+
+			    @Instantiated let session: Session
+			    @Instantiated let screen: Screen
+			}
+			""",
+			"Bare.swift": """
+			@Instantiable
+			public final class Bare: Instantiable {
+			    public init(screen: Screen) {
+			        self.screen = screen
+			    }
+
+			    @Instantiated let screen: Screen
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(session: Session) {
+			        self.session = session
+			    }
+
+			    @Received let session: Session
+			}
+			""",
+			"Session.swift": """
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		let screen = try #require(report.declarations.first { $0.typeName == "Screen" })
+		#expect(report.completeness == .partialTrees)
+		#expect(screen.dependencies.map(\.isUnfulfilled) == [true])
+		#expect(Self.supplies(in: report) == ["App.Screen.session": "App.Provider.session, unfulfilled"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_marksAliasUnfulfilled_whenNothingProvidesThePropertyItRenames() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """

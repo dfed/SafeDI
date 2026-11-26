@@ -87,7 +87,7 @@ struct GraphFuzzerQuerySupplies: Equatable {
 			for dependency in dependencies {
 				guard let label = dependency["label"] as? String, let source = dependency["source"] as? String else { continue }
 				let kind = switch source {
-				case "instantiated" where dependency["fulfilledBy"] == nil:
+				case "instantiated" where dependency["isOnlyIfAvailable"] as? Bool == true && dependency["fulfilledBy"] == nil:
 					// Instantiated only if available where nothing fulfills it: generated code binds `nil`.
 					"absent"
 				case "instantiated":

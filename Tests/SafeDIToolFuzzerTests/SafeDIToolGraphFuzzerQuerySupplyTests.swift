@@ -79,6 +79,7 @@ struct SafeDIToolGraphFuzzerQuerySupplyTests {
 		      { "source" : "instantiated", "lifetime" : "eager", "label" : "model" },
 		      { "source" : "instantiated", "lifetime" : "lazy", "label" : "cache" },
 		      { "source" : "instantiated", "lifetime" : "builder", "label" : "stepBuilder" },
+		      { "source" : "instantiated", "lifetime" : "eager", "label" : "analytics", "isOnlyIfAvailable" : true },
 		      { "source" : "forwarded", "label" : "id" },
 		      { "source" : "received", "label" : "session" },
 		      { "source" : "received", "label" : "currentSession", "aliasOf" : { "label" : "session" } }
@@ -91,6 +92,7 @@ struct SafeDIToolGraphFuzzerQuerySupplyTests {
 			"model": "instantiated",
 			"cache": "lazy",
 			"stepBuilder": "builder",
+			"analytics": "absent",
 			"id": "forwarded",
 			"session": "received",
 			"currentSession": "alias",
