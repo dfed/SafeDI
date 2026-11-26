@@ -68,19 +68,27 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsNoInstantiableFound_whenFillOfFillOfRootsSeamCallIsSeamWithHoleNothingFulfills() async {
+	mutating func generate_throwsNoInstantiableFound_whenFillOfFillOfRootsSeamCallIsSeamWithHoleNothingFulfills(integration: MultiModuleIntegration) async {
 		// Three levels: `S1` fills `S0`'s place, `S2` fills `S1`'s, and nothing fulfills `S2`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P2`, which @Instantiated property `p: any P2` instantiates in chain: Root -> S0 -> S1 -> S2. `S2` generates its dependency tree in module `M2`, which cannot see one either, so the initializer SafeDI generated for it takes `p2Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P2`, or an extension of it, with @Instantiable; list `P2` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["M2"]!["S2.swift"]):9:5: note: `S2` instantiates `p: any P2` here.
+			let path = { (module: String, file: String) in
+				switch integration {
+				case .moduleInfo:
+					fixtures[module]![file]
+				case .swiftPackagePlugin:
+					NormalizedFilePath(fixtures[module]!.compilerPath(of: file)).path
+				}
+			}
+			return """
+			\(path("App", "Root.swift")):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P2`, which @Instantiated property `p: any P2` instantiates in chain: Root -> S0 -> S1 -> S2. `S2` generates its dependency tree in module `M2`, which cannot see one either, so the initializer SafeDI generated for it takes `p2Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P2`, or an extension of it, with @Instantiable; list `P2` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(path("M2", "S2.swift")):9:5: note: `S2` instantiates `p: any P2` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(depth: 3, app: [Self.root]),
-				integration: .moduleInfo,
+				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -325,6 +333,272 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesModule_whenRootOfModuleItListsFillsPlaceWithSeamWhosePlaceOnlyThatModuleSeesFulfilled() async throws {
+		// `Other`'s root fills `S0`'s place with `S1`, whose place `Impl`, in a module `Other` lists and `App` does not,
+		// fills. `Other` judged its root; `App`, which reads `Other`'s root but never generates it, does not judge it again.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["public protocol P0: AnyObject {}", "public protocol P1: AnyObject {}"]),
+				ModuleFixture(name: "M0", packageName: "Shop", swiftFileContent: [Self.type("S0", ["generateDependencyTree: true"], declarations: ["@Instantiated let p: any P0"], imports: ["Base"])], dependencies: ["Base"]),
+				ModuleFixture(name: "M1", packageName: "Shop", swiftFileContent: [Self.type("S1", ["generateDependencyTree: true", "fulfillingAdditionalTypes: [P0.self]"], conformances: ["P0"], declarations: ["@Instantiated let p: any P1"], imports: ["Base"])], dependencies: ["Base"]),
+				ModuleFixture(name: "Impls", packageName: "Shop", swiftFileContent: [Self.type("Impl", ["fulfillingAdditionalTypes: [P1.self]"], conformances: ["P1"], imports: ["Base"])], dependencies: ["Base"]),
+				ModuleFixture(name: "Other", packageName: "Other", swiftFileContent: [Self.type("OtherRoot", ["isRoot: true"], declarations: ["@Instantiated let s: S0"], imports: ["Base", "M0", "M1", "Impls"])], dependencies: ["Base", "M0", "M1", "Impls"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+					Self.type("Tile", imports: []),
+					Self.type("Screen", ["generateMock: true"], declarations: ["@Instantiated let tile: Tile"], imports: ["Base", "M0", "M1", "Other"]),
+				], dependencies: ["Base", "M0", "M1", "Other"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(Impls)
+		import Impls
+		#endif
+		#if canImport(M0)
+		import M0
+		#endif
+		#if canImport(M1)
+		import M1
+		#endif
+		#if canImport(Other)
+		import Other
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            tile: (() -> Tile)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                tile: tile
+		            )
+		        }
+
+		        var tile: (() -> Tile)? { __safeDI_storage.tile }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                tile: (() -> Tile)?
+		            ) {
+		                self.tile = tile
+		            }
+
+		            let tile: (() -> Tile)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let tile = if let safeDIBuilder = safeDIOverrides.tile { safeDIBuilder() } else { Tile() }
+		        return Screen(tile: tile)
+		    }
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsEachPlaceOnce_whenFillsOfSeamCallsFillEachOthersPlaces() async throws {
+		// `S1` fills `S0`'s place of `A` and `S0` fills `S1`'s place of `B`: the walk judges each fill's call once and ends.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["open class A: Instantiable {\n    public init() {}\n}", "open class B: Instantiable {\n    public init() {}\n}"]),
+				ModuleFixture(name: "M0", packageName: "Shop", swiftFileContent: ["""
+				import Base
+
+				@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [B.self], conformsElsewhere: true)
+				public final class S0: B {
+				    public init(aBuilder: Instantiator<A>) {
+				        self.aBuilder = aBuilder
+				        super.init()
+				    }
+
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
+				"""], dependencies: ["Base"]),
+				ModuleFixture(name: "M1", packageName: "Shop", swiftFileContent: ["""
+				import Base
+
+				@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [A.self], conformsElsewhere: true)
+				public final class S1: A {
+				    public init(bBuilder: Instantiator<B>) {
+				        self.bBuilder = bBuilder
+				        super.init()
+				    }
+
+				    @Instantiated let bBuilder: Instantiator<B>
+				}
+				"""], dependencies: ["Base"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.type("Root", ["isRoot: true"], declarations: ["@Instantiated let s: S0"], imports: ["Base", "M0", "M1"])], dependencies: ["Base", "M0", "M1"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(M0)
+		import M0
+		#endif
+		#if canImport(M1)
+		import M1
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_s() -> S0 {
+		            _ = S0.__safeDI_S0_FDC3835787986604.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_aBuilder_S0_aBuilder() -> Instantiator<A>.Builder {
+		                func __safeDI_aBuilder() -> S1 {
+		                    _ = S1.__safeDI_S1_97B8FCB68910DF92.self // If this line does not compile, compile the code SafeDI generates for module M1 into M1: under Bazel, add M1’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                    func __safeDI_bBuilder_S1_bBuilder() -> Instantiator<B>.Builder {
+		                        func __safeDI_bBuilder() -> S0 {
+		                            _ = S0.__safeDI_S0_FDC3835787986604.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return S0(__safeDI_aBuilder: __safeDI_aBuilder_S0())
+		                        }
+		                        return { _ in __safeDI_bBuilder() }
+		                    }
+		                    func __safeDI_bBuilder_S1() -> S1.__safeDI_BCarrier<B> {
+		                        .init(bBuilder: { __safeDI_bBuilder_S1_bBuilder() })
+		                    }
+		                    return S1(__safeDI_bBuilder: __safeDI_bBuilder_S1())
+		                }
+		                return { _ in __safeDI_aBuilder() }
+		            }
+		            func __safeDI_aBuilder_S0() -> S0.__safeDI_ACarrier<A> {
+		                .init(aBuilder: { __safeDI_aBuilder_S0_aBuilder() })
+		            }
+		            return S0(__safeDI_aBuilder: __safeDI_aBuilder_S0())
+		        }
+		        let s: S0 = __safeDI_s()
+		        self.init(s: s)
+		    }
+		}
+		"""])
+	}
+
+	@Test(arguments: [(firstLabel: "a", aFirst: true), (firstLabel: "a", aFirst: false), (firstLabel: "z", aFirst: true)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsChainOfFirstFillInBuilderOrder_whenTwoFillsOfOneCallReachSeamWhosePlaceNothingFulfills(firstLabel: String, aFirst: Bool) async {
+		// `S0` takes builders of `A` (or `Z`) and `B`; `S1` fills the first and `S3` the second, and `S1`'s place is filled by
+		// `S3` too, whose place nothing fulfills. The chain is the first the walk meets: the call's builders in label order,
+		// each fill's call judged before the next builder's fill, whatever order `S0` declares its places in.
+		let first = firstLabel.uppercased()
+		let declarations = ["@Instantiated let \(firstLabel): any \(first)", "@Instantiated let b: any B"]
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `D`, which @Instantiated property `d: any D` instantiates in chain: \(firstLabel == "a" ? "Root -> S0 -> S1 -> S3" : "Root -> S0 -> S3"). `S3` generates its dependency tree in module `M3`, which cannot see one either, so the initializer SafeDI generated for it takes `dBuilder`, whose member `d` builds `d`, and the root `Root` must fill it. Decorate `D`, or an extension of it, with @Instantiable; list `D` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["M3"]!["S3.swift"]):9:5: note: `S3` instantiates `d: any D` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["public protocol \(first): AnyObject {}", "public protocol B: AnyObject {}", "public protocol C: AnyObject {}", "public protocol D: AnyObject {}"]),
+					ModuleFixture(name: "M0", packageName: "Shop", swiftFileContent: [Self.type("S0", ["generateDependencyTree: true"], declarations: aFirst ? declarations : declarations.reversed(), imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "M1", packageName: "Shop", swiftFileContent: [Self.type("S1", ["generateDependencyTree: true", "fulfillingAdditionalTypes: [\(first).self]"], conformances: [first], declarations: ["@Instantiated let c: any C"], imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "M3", packageName: "Shop", swiftFileContent: [Self.type("S3", ["generateDependencyTree: true", "fulfillingAdditionalTypes: [B.self, C.self]"], conformances: ["B", "C"], declarations: ["@Instantiated let d: any D"], imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.type("Root", ["isRoot: true"], declarations: ["@Instantiated let s: S0"], imports: ["Base", "M0", "M1", "M3"])], dependencies: ["Base", "M0", "M1", "M3"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesTypesBetweenCallsInChain_whenFillsCallReachesPlaceThroughTypeOfItsTree() async {
+		// `S0`'s place is a property of `Owner`, and `S1`'s, which nothing fulfills, a property of `Panel`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> Owner -> S1 -> Panel. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["M1"]!["Panel.swift"]):9:5: note: `Panel` instantiates `p: any P1` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["public protocol P0: AnyObject {}", "public protocol P1: AnyObject {}"]),
+					ModuleFixture(name: "M0", packageName: "Shop", swiftFileContent: [
+						Self.type("S0", ["generateDependencyTree: true"], declarations: ["@Instantiated let owner: Owner"], imports: ["Base"]),
+						Self.type("Owner", declarations: ["@Instantiated let p: any P0"], imports: ["Base"]),
+					], dependencies: ["Base"]),
+					ModuleFixture(name: "M1", packageName: "Shop", swiftFileContent: [
+						Self.type("S1", ["generateDependencyTree: true", "fulfillingAdditionalTypes: [P0.self]"], conformances: ["P0"], declarations: ["@Instantiated let panel: Panel"], imports: ["Base"]),
+						Self.type("Panel", declarations: ["@Instantiated let p: any P1"], imports: ["Base"]),
+					], dependencies: ["Base"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.type("Root", ["isRoot: true"], declarations: ["@Instantiated let s: S0"], imports: ["Base", "M0", "M1"])], dependencies: ["Base", "M0", "M1"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsPlaceAtRootsPropertyThatCallsItsSeam_whenEarlierPropertysFillIsThatSeam() async {
+		// `s`'s call of `S0` is filled by `S1`, which `t` calls itself: the place nothing fulfills is reported at `t`, where
+		// the root calls `S1`, as before fills' own calls were judged.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):13:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `q: any Q` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["public protocol P0: AnyObject {}", "public protocol Q: AnyObject {}"]),
+					ModuleFixture(name: "M0", packageName: "Shop", swiftFileContent: [Self.type("S0", ["generateDependencyTree: true"], declarations: ["@Instantiated let p: any P0"], imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "M1", packageName: "Shop", swiftFileContent: [Self.type("S1", ["generateDependencyTree: true", "fulfillingAdditionalTypes: [P0.self]"], conformances: ["P0"], declarations: ["@Instantiated let q: any Q"], imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.type("Root", ["isRoot: true"], declarations: ["@Instantiated let s: S0", "@Instantiated let t: S1"], imports: ["Base", "M0", "M1"])], dependencies: ["Base", "M0", "M1"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsPlaceAtFirstPropertyReachingIt_whenFillOfSeamCallInstantiatesSeamWhosePlaceNothingFulfills() async {
+		// `Root` reaches `C`, whose place `F` fills, through `X` before it calls `C` itself; `F` calls `D`, whose place
+		// nothing fulfills: reported at `x`, through `X`, as before fills' own calls were judged.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> X -> C -> F -> D. `D` generates its dependency tree in module `MD`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["MD"]!["D.swift"]):9:5: note: `D` instantiates `q: any Q` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["public protocol P0: AnyObject {}", "public protocol Q: AnyObject {}"]),
+					ModuleFixture(name: "MC", packageName: "Shop", swiftFileContent: [Self.type("C", ["generateDependencyTree: true"], declarations: ["@Instantiated let p: any P0"], imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "MD", packageName: "Shop", swiftFileContent: [Self.type("D", ["generateDependencyTree: true"], declarations: ["@Instantiated let q: any Q"], imports: ["Base"])], dependencies: ["Base"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						Self.type("Root", ["isRoot: true"], declarations: ["@Instantiated let x: X", "@Instantiated let c: C"], imports: ["Base", "MC", "MD"]),
+						Self.type("X", declarations: ["@Instantiated let c: C"], imports: ["Base", "MC", "MD"]),
+						Self.type("F", ["fulfillingAdditionalTypes: [P0.self]"], conformances: ["P0"], declarations: ["@Instantiated let d: D"], imports: ["Base", "MC", "MD"]),
+					], dependencies: ["Base", "MC", "MD"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -342,6 +616,14 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 	/// `App`'s type whose internal mock calls `S0`'s public mock.
 	private static let screen = seamFixtureType(named: "Screen", declarations: ["@Instantiated let s: S0"])
 		.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
+
+	/// The source of a public final class `name` decorated with `@Instantiable(arguments)`, conforming to
+	/// `conformances`, with `declarations`, after an import of each of `imports`.
+	private static func type(_ name: String, _ arguments: [String] = [], conformances: [String] = [], declarations: [String] = [], imports: [String]) -> String {
+		let type = seamFixtureType(named: name, isFinalClass: true, declarations: declarations, conformances: conformances.map { ", \($0)" }.joined())
+			.replacingOccurrences(of: "@Instantiable\n", with: arguments.isEmpty ? "@Instantiable\n" : "@Instantiable(\(arguments.joined(separator: ", ")))\n")
+		return imports.map { "import \($0)\n" }.joined() + (imports.isEmpty ? "" : "\n") + type
+	}
 
 	/// A chain of `depth` seams, each in a module of its own: `S0`, in `M0`, instantiates `p: any P0`; each `S<n>`, in
 	/// `M<n>`, fulfills `P<n-1>` and instantiates `p: any P<n>`, the last as `innerDeclaration` says; nothing fulfills the
