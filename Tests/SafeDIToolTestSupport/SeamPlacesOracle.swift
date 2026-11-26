@@ -243,11 +243,14 @@ public enum SeamPlacesOracle {
 				compare("answers of \(label)", at: path, today: today.sorted(), graph: graph.sorted(), into: &report)
 			}
 
-			// The facts stored per case: the union over its sites in site order, the first of each equal entry.
-			compare("called copy declarations", at: path, today: firstOfEach(sites.flatMap { siteFacts[$0]?.calledCopies ?? [] }), graph: places.cases[caseIndex].calledCopyDeclarations.map { uncarriedJSON($0) }, into: &report)
-			compare("declarations replaced on paths to calls", at: path, today: firstOfEach(sites.flatMap { siteFacts[$0]?.replaced ?? [] }), graph: places.cases[caseIndex].uncarriedReplacedOnPathsToCalls.map { uncarriedJSON($0) }, into: &report)
-			compare("re-entering call declarations", at: path, today: firstOfEach(siteHoles.flatMap { $0.reenteringCallDeclarations.map { json($0) } }), graph: places.cases[caseIndex].reenteringCallDeclarations.map { json($0) }, into: &report)
-			compare("re-entering place fields", at: path, today: firstOfEach(siteHoles.flatMap { $0.reenteringPlaceFields.map { json($0) } }), graph: places.cases[caseIndex].reenteringPlaceFields.map { json($0) }, into: &report)
+			// The facts stored per case: the union over its sites, each equal entry once. Compared as sets: the graph adds a case's
+			// sites in the order the seam's tree builds them, the observation lists them in builder order, and no reader of these
+			// facts reads their order (a finding is ordered by source location). Seam corpus seeds 557 and 583 hold a case whose
+			// sites add the same called copies in another interleaving.
+			compare("called copy declarations", at: path, today: distinctSorted(sites.flatMap { siteFacts[$0]?.calledCopies ?? [] }), graph: places.cases[caseIndex].calledCopyDeclarations.map { uncarriedJSON($0) }.sorted(), into: &report)
+			compare("declarations replaced on paths to calls", at: path, today: distinctSorted(sites.flatMap { siteFacts[$0]?.replaced ?? [] }), graph: places.cases[caseIndex].uncarriedReplacedOnPathsToCalls.map { uncarriedJSON($0) }.sorted(), into: &report)
+			compare("re-entering call declarations", at: path, today: distinctSorted(siteHoles.flatMap { $0.reenteringCallDeclarations.map { json($0) } }), graph: places.cases[caseIndex].reenteringCallDeclarations.map { json($0) }.sorted(), into: &report)
+			compare("re-entering place fields", at: path, today: distinctSorted(siteHoles.flatMap { $0.reenteringPlaceFields.map { json($0) } }), graph: places.cases[caseIndex].reenteringPlaceFields.map { json($0) }.sorted(), into: &report)
 			compare("passed on @Sendable", at: path, today: String(siteHoles.contains(where: \.isSendable)), graph: String(places.cases[caseIndex].isPassedOnSendable), into: &report)
 
 			var reentryLabels = Set(siteHoles.flatMap { $0.cycleReentryDeclarations.map(\.property.label) })
@@ -292,9 +295,8 @@ public enum SeamPlacesOracle {
 		let replaced: [String]
 	}
 
-	private static func firstOfEach(_ entries: [String]) -> [String] {
-		var seen = Set<String>()
-		return entries.filter { seen.insert($0).inserted }
+	private static func distinctSorted(_ entries: [String]) -> [String] {
+		Set(entries).sorted()
 	}
 
 	// MARK: Cases
