@@ -339,7 +339,7 @@ public enum SeamPlacesOracle {
 			var nearest = [String: (position: Int, declaration: Int)]()
 			var labelsInBindingOrder = [String]()
 			for (position, level) in route.levels.enumerated() {
-				for (index, declaration) in places.levels[level].declarations.enumerated() {
+				for (index, declaration) in places.declarationsBeforeAnyNextProperty(ofLevel: level).enumerated() {
 					let label = declaration.field.property.label
 					if nearest.updateValue((position, index), forKey: label) != nil {
 						labelsInBindingOrder.removeAll { $0 == label }
@@ -419,10 +419,10 @@ public enum SeamPlacesOracle {
 		/// The declaration of `label` the route binds last before the declaration at `index` of the level at `position`.
 		private static func declaration(before index: Int, at position: Int, ofLabel label: String, along route: SeamSignature.Places.Route, places: SeamSignature.Places) -> SeamSignature.Places.Declaration? {
 			for (candidatePosition, level) in route.levels.enumerated().prefix(position + 1).reversed() {
-				let declarations = places.levels[level].declarations
+				let declarations = places.declarationsBeforeAnyNextProperty(ofLevel: level)
 				let end = candidatePosition == position ? index : declarations.count
 				if let earlier = declarations[..<end].lastIndex(where: { $0.field.property.label == label }) {
-					return declarations[earlier]
+					return places.declaration(level: level, declaration: earlier)
 				}
 			}
 			return nil

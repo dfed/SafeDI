@@ -132,7 +132,7 @@ enum SeamPlaceVariantChecks {
 		var reentry = [Int]()
 		let levels = Array(route.levels.reversed())
 		for (position, level) in levels.enumerated() {
-			let declarations = places.levels[level].declarations
+			let declarations = places.declarations(ofLevel: level)
 			if let index = declarations.lastIndex(where: { $0.field.property.label == label }) {
 				let declaration = declarations[index]
 				let answer: SeamSignature.Places.Answer = if !declaration.isBoundBeforeNextProperty {
@@ -149,10 +149,10 @@ enum SeamPlaceVariantChecks {
 						(level, earlier)
 					} else {
 						levels[(position + 1)...].lazy.compactMap { above in
-							places.levels[above].declarations.lastIndex { $0.field.property.label == label }.map { (above, $0) }
+							places.declarationsBeforeAnyNextProperty(ofLevel: above).lastIndex { $0.field.property.label == label }.map { (above, $0) }
 						}.first
 					}
-					if let nearest, places.levels[nearest.level].declarations[nearest.index].field.property != declaration.field.property {
+					if let nearest, places.declaration(level: nearest.level, declaration: nearest.index).field.property != declaration.field.property {
 						hidden = [level, index, nearest.level, nearest.index]
 					}
 				}

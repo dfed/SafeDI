@@ -46,13 +46,15 @@ extension SeamSignature.Places {
 		public init(of places: SeamSignature.Places, excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = []) {
 			self.places = places
 			self.excludedEntries = excludedEntries
-			lastDeclarationIndexByLabel = places.levels.map { level in
+			// Labels are the same before every next property, so each list's are found once.
+			let lastIndexByLabelByList = places.declarationLists.map { declarations in
 				var indexByLabel = [String: Int]()
-				for (index, declaration) in level.declarations.enumerated() {
+				for (index, declaration) in declarations.enumerated() {
 					indexByLabel[declaration.field.property.label] = index
 				}
 				return indexByLabel
 			}
+			lastDeclarationIndexByLabel = places.levels.map { lastIndexByLabelByList[$0.declarationList] }
 			firstReentryIndexByLabel = places.levels.map { level in
 				var indexByLabel = [String: Int]()
 				for (index, reentry) in level.cycleReentries.enumerated() where indexByLabel[reentry.property.label] == nil {
@@ -162,7 +164,7 @@ extension SeamSignature.Places {
 			var labels = [String]()
 			if let route = representativeRoute(of: caseIndex) {
 				for level in route.levels {
-					for declaration in places.levels[level].declarations {
+					for declaration in places.declarationsBeforeAnyNextProperty(ofLevel: level) {
 						let label = declaration.field.property.label
 						labels.removeAll { $0 == label }
 						labels.append(label)
@@ -171,7 +173,7 @@ extension SeamSignature.Places {
 			}
 			var seen = Set(labels)
 			for level in levelsReaching(caseIndex) {
-				for declaration in places.levels[level].declarations where seen.insert(declaration.field.property.label).inserted {
+				for declaration in places.declarationsBeforeAnyNextProperty(ofLevel: level) where seen.insert(declaration.field.property.label).inserted {
 					labels.append(declaration.field.property.label)
 				}
 			}
@@ -309,7 +311,7 @@ extension SeamSignature.Places {
 		/// The nearest declaration of the label of the declaration at `index` of `level` before it, on the routes from
 		/// `level` in `state`: an earlier declaration of the label at the level, or the nearest one above.
 		private func reached(before index: Int, at level: Int, state: RouteState) -> [SeamSignature.Places.Reached] {
-			let declarations = places.levels[level].declarations
+			let declarations = places.declarationsBeforeAnyNextProperty(ofLevel: level)
 			let label = declarations[index].field.property.label
 			if let earlier = declarations[..<index].lastIndex(where: { $0.field.property.label == label }) {
 				return [.declaration(level: level, declaration: earlier)]
@@ -565,7 +567,7 @@ extension SeamSignature.Places {
 							guard function == nil, case let .field(level, index) = decided, let hiding = places.declaration(level: level, declaration: index).fillFieldHiding else {
 								return element.hidden == nil ? past : []
 							}
-							let declarations = places.levels[level].declarations
+							let declarations = places.declarationsBeforeAnyNextProperty(ofLevel: level)
 							if let earlier = declarations[..<index].lastIndex(where: { $0.field.property.label == label }) {
 								return hidden(level: level, index: index, hiddenLevel: level, hiddenIndex: earlier, hiding: hiding.calledSeam) == element.hidden ? past : []
 							}

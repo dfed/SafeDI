@@ -923,6 +923,12 @@ extension DependencyTreeGenerator {
 				return nil
 			}
 		}
+
+		/// The first two of `carrierProperties` that are among `requiredProperties`, in their order: the first of them other
+		/// than any one property is the first carrier other than it (`firstCarrier(otherThan:among:)`). For the place graph.
+		func firstTwoCarriers(among requiredProperties: Set<Property>) -> [Property] {
+			requiredProperties.compactMap { firstCarrierByProperty[$0] }.sorted { $0.position < $1.position }.prefix(2).map(\.carrier)
+		}
 	}
 
 	/// A type's dependencies, looked up by property: what a scan of them in declaration order for the first of a property
@@ -1025,6 +1031,8 @@ extension DependencyTreeGenerator {
 		/// For a fill's field bound from a parameter of the filled seam, the seams a declaration it hides is named with
 		/// (`SeamSignature.Places.Declaration.fillFieldHiding`).
 		var fillFieldHiding: SeamSignature.Places.FillFieldHiding?
+		/// For a child of its scope, while the place graph is drafted: what decides its facts before each next property.
+		var childFacts: SeamSignature.Places.ChildFacts?
 		/// Whether it is a fill's field bound from a parameter of the filled seam.
 		var isFieldOfSeamParameter = false
 	}
@@ -1084,7 +1092,9 @@ extension DependencyTreeGenerator {
 		// with the parameters.
 		var levels = [SeamPlaceLevels.Level]()
 		var levelDeclarations = [SeamPlaceLevels.Level.Declaration]()
-		func declare(_ declaration: PathDeclaration) {
+		/// Declares `declaration`, which the place graph's level drafts as `drafted` where that is given: a child of its scope
+		/// before any next property.
+		func declare(_ declaration: PathDeclaration, drafted: PathDeclaration? = nil) {
 			let label = declaration.property.label
 			if nearestDeclarations.updateValue(declaration, forKey: label) != nil {
 				labelsInBindingOrder.removeAll { $0 == label }
@@ -1096,7 +1106,7 @@ extension DependencyTreeGenerator {
 			levelDeclaration.isReboundByBuilderFunction = declaration.isReboundByBuilderFunction
 			levelDeclarations.append(levelDeclaration)
 			if draftsPlaceLevels {
-				levelPathDeclarations.append(declaration)
+				levelPathDeclarations.append(drafted ?? declaration)
 			}
 		}
 		// Beside the levels, while a test observes the place graph (`SeamPlaceLevels.observer`), each level's
@@ -1111,6 +1121,8 @@ extension DependencyTreeGenerator {
 			let pathSegment: [Property]
 			let pathTypes: [SeamSignature.Hole.PathType]
 			let declaredSegment: [SeamSignature.Hole.DeclaredProperty]
+			let nextPosition: Int?
+			let nextLoop: Int?
 		}
 		var placeLevelsInProgress = [PlaceLevelInProgress]()
 		var levelPathDeclarations = [PathDeclaration]()
@@ -1122,7 +1134,7 @@ extension DependencyTreeGenerator {
 		// Each declaration a fill's field hides, by label, with the level of the fill that binds the field.
 		var hiddenByFillFields = [String: (declaration: SeamSignature.Hole.DeclarationHiddenByField, fieldLevel: Int)]()
 		var levelOpensSendableFunction = false
-		func endLevel(builtType: TypeDescription?, nextProperty: Property?, filledType: TypeDescription? = nil, fillBaseStack: [SeamSignature.Places.StackEntry] = [], fillOwnerType: TypeDescription? = nil) {
+		func endLevel(builtType: TypeDescription?, nextProperty: Property?, filledType: TypeDescription? = nil, fillBaseStack: [SeamSignature.Places.StackEntry] = [], fillOwnerType: TypeDescription? = nil, nextPosition: Int? = nil, nextLoop: Int? = nil) {
 			var level = SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations)
 			level.opensSendableFunction = levelOpensSendableFunction
 			if draftsPlaceLevels {
@@ -1135,6 +1147,8 @@ extension DependencyTreeGenerator {
 					pathSegment: levelPathSegment,
 					pathTypes: levelPathTypes,
 					declaredSegment: levelDeclaredSegment,
+					nextPosition: nextPosition,
+					nextLoop: nextLoop,
 				))
 				levelPathDeclarations = []
 				levelOpensFunction = nil
@@ -1480,8 +1494,36 @@ extension DependencyTreeGenerator {
 				carrierProperties: frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil },
 			)
 			childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] = childDeclarations
+			let nextLoop = frame.generator.receivedBuilderLoops.loopByChildIndex[frame.orderedChildren[pathPosition].index]
+			// The positions of the children by their unwrapped properties, which a child's receives only if available are matched by.
+			var positionsByUnwrappedProperty = [Property: [Int]]()
+			if draftsPlaceLevels {
+				for (position, child) in frame.orderedChildren.enumerated() {
+					if let property = child.generator.property {
+						positionsByUnwrappedProperty[property.asUnwrappedProperty, default: []].append(position)
+					}
+				}
+			}
 			for (position, child) in frame.orderedChildren.enumerated() {
 				guard var pathDeclaration = childDeclarations.declarations[position] else { continue }
+				// The place graph drafts the child as it is before any next property, with what decides its facts before each.
+				var drafted: PathDeclaration?
+				if draftsPlaceLevels {
+					let siblingsReceivedOnlyIfAvailable = child.generator.onlyIfAvailableUnwrappedReceivedProperties
+						.flatMap { positionsByUnwrappedProperty[$0] ?? [] }
+						.sorted()
+						.compactMap { frame.orderedChildren[$0].generator.property }
+					drafted = pathDeclaration
+					drafted?.childFacts = SeamSignature.Places.ChildFacts(
+						position: position,
+						isBuilder: ScopeGenerator.isBuilder(pathDeclaration.property),
+						loop: frame.generator.receivedBuilderLoops.loopByChildIndex[child.index],
+						builtType: child.generator.builtInstantiable?.concreteInstantiable,
+						isPlace: child.generator.holeSite != nil,
+						receivesOnlyIfAvailable: siblingsReceivedOnlyIfAvailable,
+						carriers: childDeclarations.firstTwoCarriers(among: child.generator.requiredReceivedProperties),
+					)
+				}
 				let property = pathDeclaration.property
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
 				// being built where the loop's payloads are bound, before the loop's first function.
@@ -1505,11 +1547,11 @@ extension DependencyTreeGenerator {
 					// A place, which builds no type the seam's module sees, is built after the scope on the path too.
 					pathDeclaration.builtAfter = pathProperty
 				}
-				declare(pathDeclaration)
+				declare(pathDeclaration, drafted: drafted)
 			}
 			loopDeclaringInstantiable = instantiable
 			loopDeclaringDependencies = dependencies
-			endLevel(builtType: instantiable.concreteInstantiable, nextProperty: pathProperty)
+			endLevel(builtType: instantiable.concreteInstantiable, nextProperty: pathProperty, nextPosition: pathPosition, nextLoop: nextLoop)
 		}
 		// A `Sendable` wrapper the seam builds around the builder is built in a `@Sendable` function of its own, which binds
 		// nothing.
@@ -1638,8 +1680,7 @@ extension DependencyTreeGenerator {
 						placesInTree = placesByTreePath[treePath] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
 						placesByTreePath[treePath] = placesInTree
 					}
-					return SeamPlacesBuilder.DeclarationDraft(
-						declaration: SeamSignature.Places.Declaration(
+					let placeDeclaration = SeamSignature.Places.Declaration(
 							field: field(of: declaration),
 							isBoundBeforeNextProperty: declaration.isBoundBeforeSite,
 							builtAfter: declaration.builtAfter,
@@ -1653,7 +1694,9 @@ extension DependencyTreeGenerator {
 							isFieldOfSeamParameter: declaration.isFieldOfSeamParameter,
 							fillFieldHiding: declaration.fillFieldHiding,
 							buildability: buildability,
-						),
+						)
+					return SeamPlacesBuilder.DeclarationDraft(
+						declaration: declaration.childFacts.map(placeDeclaration.asChild) ?? placeDeclaration,
 						placesInTree: placesInTree,
 					)
 				},
@@ -1664,6 +1707,8 @@ extension DependencyTreeGenerator {
 				pathSegment: level.pathSegment,
 				pathTypes: level.pathTypes,
 				declaredSegment: level.declaredSegment,
+				nextPosition: level.nextPosition,
+				nextLoop: level.nextLoop,
 			)
 		}
 		return (fields, uncarriedDeclarations, cycleReentryDeclarations, levels.reversed(), pathFields, pathUncarriedProperties, declarationsHiddenByFields, placeLevels, sendableDepth > 0)

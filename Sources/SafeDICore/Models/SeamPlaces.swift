@@ -35,13 +35,18 @@ extension SeamSignature {
 	///
 	/// It lives as long as the signature that holds it.
 	public struct Places: Codable, Sendable {
-		public init(levels: [Level], cases: [Case]) {
+		public init(levels: [Level], cases: [Case], declarationLists: [[Declaration]] = []) {
 			self.levels = levels
 			self.cases = cases
+			self.declarationLists = declarationLists
 		}
 
 		/// The levels, in the order the seam's places first reach them. The seam's root is the one level with no parent.
 		public let levels: [Level]
+		/// The declarations of the levels, one list for every level of one build of a type but for the property next on the
+		/// route: each declaration as it is before any next property (`Declaration.child`), so a type with many properties
+		/// that lead to places holds its declarations once, not once per such property.
+		public let declarationLists: [[Declaration]]
 		/// The cases, in the order the seam's places first reach them.
 		public let cases: [Case]
 
@@ -181,11 +186,92 @@ extension SeamSignature {
 			public let fillFieldHiding: FillFieldHiding?
 			/// Where a type above the seam can build the tree it instantiates.
 			public let buildability: Buildability?
+			/// For a child of the level's scope: what decides, with the level's next property, whether it is bound before that
+			/// property, after what it is built, and why (`Places.declaration(level:declaration:)`). `nil` for any other
+			/// declaration, whose facts are the same before every next property.
+			public private(set) var child: ChildFacts?
 
 			/// Whether it is a parameter of the seam, which a place inside a `@Sendable` function reads from its caller's scope.
 			public var isSeamParameter: Bool {
 				field.isSeamParameter
 			}
+
+			/// The declaration, as a child of its scope, with `child`.
+			public func asChild(_ child: ChildFacts) -> Self {
+				var declaration = self
+				declaration.child = child
+				return declaration
+			}
+
+			/// The declaration as `level`'s scope binds it before its next property, as the per-site walk decides it for a child
+			/// of the scope on a site's path (`SeamBuilderParameters`): a child is bound before the next property where it is
+			/// built before it and is no member of the next property's loop of builders; a builder at the next property, or a
+			/// member of its loop, is building the place; a later child that builds a type or a place is built after the next
+			/// property, and a later child that builds a type is so for the reason its receives give.
+			func beforeNextProperty(of level: Level) -> Self {
+				guard let child, let next = level.nextPosition else { return self }
+				let isLoopMember = child.position < next && child.loop != nil && child.loop == level.nextLoop
+				var builtAfter: Property?
+				var reason = reason
+				if child.position == next && child.isBuilder || isLoopMember {
+					reason = .instantiatorBuildingSite
+				} else if child.position > next, let nextProperty = level.key.nextProperty {
+					if let builtType = child.builtType {
+						builtAfter = nextProperty
+						if child.receivesOnlyIfAvailable.contains(nextProperty) {
+							reason = .receivesPathScopeOnlyIfAvailable(type: builtType)
+						} else if let carrier = child.carriers.first(where: { $0 != nextProperty }) {
+							reason = .requiresOtherCarrier(type: builtType, carrier: carrier)
+						}
+					} else if child.isPlace {
+						builtAfter = nextProperty
+					}
+				}
+				return Self(
+					field: field,
+					isBoundBeforeNextProperty: child.position < next && !isLoopMember,
+					builtAfter: builtAfter,
+					reason: reason,
+					isForwarded: isForwarded,
+					cycleParameterOrigin: cycleParameterOrigin,
+					alias: alias,
+					isBoundFromCallersArgument: isBoundFromCallersArgument,
+					isCycleParameter: isCycleParameter,
+					isReboundByBuilderFunction: isReboundByBuilderFunction,
+					isFieldOfSeamParameter: isFieldOfSeamParameter,
+					fillFieldHiding: fillFieldHiding,
+					buildability: buildability,
+				)
+			}
+		}
+
+		/// What a child of a level's scope brings to the facts that depend on the level's next property.
+		public struct ChildFacts: Codable, Hashable, Sendable {
+			public init(position: Int, isBuilder: Bool, loop: Int?, builtType: TypeDescription?, isPlace: Bool, receivesOnlyIfAvailable: [Property], carriers: [Property]) {
+				self.position = position
+				self.isBuilder = isBuilder
+				self.loop = loop
+				self.builtType = builtType
+				self.isPlace = isPlace
+				self.receivesOnlyIfAvailable = receivesOnlyIfAvailable
+				self.carriers = carriers
+			}
+
+			/// Its position among the scope's children, in the order the scope builds them.
+			public let position: Int
+			/// Whether it is a builder (`ScopeGenerator.isBuilder`).
+			public let isBuilder: Bool
+			/// The loop of received builders it is a member of (`ScopeGenerator.ReceivedBuilderLoops`), if any.
+			public let loop: Int?
+			/// The type it builds, where it builds one.
+			public let builtType: TypeDescription?
+			/// Whether it is a place.
+			public let isPlace: Bool
+			/// The properties of its siblings it receives only if available.
+			public let receivesOnlyIfAvailable: [Property]
+			/// The first two of its siblings that start as carriers and that it requires, in the scope's order: the first one
+			/// other than the next property is the carrier it waits on.
+			public let carriers: [Property]
 		}
 
 		/// What a scope between a closed-on level and one of its cycle-closing scopes declares, which the cycle hands the
@@ -215,7 +301,9 @@ extension SeamSignature {
 		public struct Level: Codable, Sendable {
 			public init(
 				key: LevelKey,
-				declarations: [Declaration],
+				declarationList: Int,
+				nextPosition: Int?,
+				nextLoop: Int?,
 				opensSendableFunction: SendableFunctionOpened?,
 				cycleReentries: [CycleReentry],
 				fillBaseStack: [StackEntry],
@@ -226,7 +314,9 @@ extension SeamSignature {
 				declaredSegmentByParent: [[Hole.DeclaredProperty]],
 			) {
 				self.key = key
-				self.declarations = declarations
+				self.declarationList = declarationList
+				self.nextPosition = nextPosition
+				self.nextLoop = nextLoop
 				self.opensSendableFunction = opensSendableFunction
 				self.cycleReentries = cycleReentries
 				self.fillBaseStack = fillBaseStack
@@ -238,10 +328,15 @@ extension SeamSignature {
 			}
 
 			public let key: LevelKey
-			/// The declarations, in the order the scope binds them: for the seam's root, its parameters, then its children; for
-			/// any other type, its forwarded properties, its loop's rebindings and its cycle parameters, then its children; for a
-			/// fill, the declarations the filled seam's struct does not carry, then the fields it binds.
-			public let declarations: [Declaration]
+			/// The index in `Places.declarationLists` of its declarations, in the order the scope binds them: for the seam's
+			/// root, its parameters, then its children; for any other type, its forwarded properties, its loop's rebindings and
+			/// its cycle parameters, then its children; for a fill, the declarations the filled seam's struct does not carry,
+			/// then the fields it binds. `Places.declaration(level:declaration:)` reads one before the level's next property.
+			public let declarationList: Int
+			/// The position among the scope's children of the next property, where the scope builds it as a child.
+			public let nextPosition: Int?
+			/// The loop of received builders the next property is a member of, if any.
+			public let nextLoop: Int?
 			/// The `@Sendable` function the scope opens, or `nil` where it opens none.
 			public let opensSendableFunction: SendableFunctionOpened?
 			/// Where a cycle-closing scope in the scope's tree calls its builder function, what a scope between binds, first per
@@ -364,9 +459,20 @@ extension SeamSignature {
 			case none
 		}
 
-		/// The declaration at `level`, index `declaration`.
+		/// The declaration at `level`, index `declaration`, as the level's scope binds it before its next property.
 		public func declaration(level: Int, declaration: Int) -> Declaration {
-			levels[level].declarations[declaration]
+			declarationLists[levels[level].declarationList][declaration].beforeNextProperty(of: levels[level])
+		}
+
+		/// The declarations of `level`, as its scope binds them before its next property.
+		public func declarations(ofLevel level: Int) -> [Declaration] {
+			declarationLists[levels[level].declarationList].map { $0.beforeNextProperty(of: levels[level]) }
+		}
+
+		/// The declarations of `level` as they are before any next property: their labels, properties and order, which no
+		/// next property changes.
+		public func declarationsBeforeAnyNextProperty(ofLevel level: Int) -> [Declaration] {
+			declarationLists[levels[level].declarationList]
 		}
 	}
 }
