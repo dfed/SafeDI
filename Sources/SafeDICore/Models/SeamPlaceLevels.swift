@@ -34,6 +34,9 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 	/// Test only, deleted before merge: the seam's place graph beside its per-site holes, for the differential oracle
 	/// (`SeamSignature.Places.Observation`). Left out of `==`, which compares the levels alone.
 	public var placesObservation: SeamSignature.Places.Observation?
+	/// Test only, deleted before merge: each route the seam's enums nested by type compute, beside the same route rebuilt
+	/// from its steps by edge (`SeamRouteStepObservation`). Left out of `==`.
+	public var routeSteps = [SeamRouteStepObservation]()
 
 	public static func == (lhs: SeamPlaceLevels, rhs: SeamPlaceLevels) -> Bool {
 		lhs.seamType == rhs.seamType && lhs.places == rhs.places

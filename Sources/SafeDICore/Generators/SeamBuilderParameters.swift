@@ -48,8 +48,8 @@ extension DependencyTreeGenerator {
 		receiversByParameter: [Property: [SeamSignature.Receiver]] = [:],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
-	) -> [SeamSignature.Hole] {
-		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
+	) -> HolesAndPlaces {
+		guard generator.containsBuildSite || generator.passesUpBuilder else { return HolesAndPlaces() }
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let sites = buildSites(in: generator)
 		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
@@ -75,9 +75,8 @@ extension DependencyTreeGenerator {
 			let placeLevels: [SeamPlacesBuilder.LevelDraft]
 			let isBuiltInSendableFunction: Bool
 		}
-		// The place graph rides on the levels' observer, which hands it on at the end, so the tests set no task-local value of
-		// their own around `generate()` (`serialization.md`: one more made the tests' release build abort on Linux).
-		let draftsPlaceLevels = SeamPlaceLevels.observer != nil
+		// Every place is drafted into the place graph, which the signature holds beside the per-site holes while readers move to it.
+		let draftsPlaceLevels = true
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
@@ -344,22 +343,52 @@ extension DependencyTreeGenerator {
 				routeByHole.append(SeamSignature.Places.Route(levels: []))
 			}
 		}
-		guard draftsPlaceLevels else {
-			return holes.sorted { $0.builderLabel < $1.builderLabel }
-		}
 		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
 		let sortedHoles = order.map { holes[$0] }
-		if var observedPlaceLevels {
-			observedPlaceLevels.placesObservation = SeamSignature.Places.Observation(
-				seamType: seam.concreteInstantiable,
-				places: placesBuilder.places(),
-				siteHoles: sortedHoles,
-				caseIndexBySite: order.map { caseIndexByHole[$0] },
-				routeBySite: order.map { routeByHole[$0] },
-			)
+		// Each case is named by its first place in builder-label order, as each place was named when a seam held a hole per site.
+		var namingRouteByCase = [Int: [Int]]()
+		for index in order where caseIndexByHole[index] >= 0 && namingRouteByCase[caseIndexByHole[index]] == nil {
+			namingRouteByCase[caseIndexByHole[index]] = routeByHole[index].levels
+		}
+		let places = placesBuilder.places(namingRouteByCase: namingRouteByCase)
+		// The place graph rides on the levels' observer, which the caller hands on once the routes are computed, so the tests set
+		// no task-local value of their own around `generate()` (`serialization.md`: one more made the tests' release build abort
+		// on Linux).
+		observedPlaceLevels?.placesObservation = SeamSignature.Places.Observation(
+			seamType: seam.concreteInstantiable,
+			places: places,
+			siteHoles: sortedHoles,
+			caseIndexBySite: order.map { caseIndexByHole[$0] },
+			routeBySite: order.map { routeByHole[$0] },
+		)
+		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
+		for (hole, caseIndex) in zip(holes, caseIndexByHole) where caseIndex >= 0 {
+			caseIndexBySite[hole.site] = caseIndex
+		}
+		return HolesAndPlaces(holes: sortedHoles, places: places, caseIndexBySite: caseIndexBySite, observedPlaceLevels: observedPlaceLevels)
+	}
+
+	/// A seam's or a public mock's places: one hole per site, in builder-label order, and the place graph by case beside them,
+	/// with each own site's case. A place a call passes up has no case yet.
+	struct HolesAndPlaces {
+		var holes = [SeamSignature.Hole]()
+		var places = SeamSignature.Places(levels: [], cases: [])
+		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
+		/// What the tests observe of the places, while they observe them (`SeamPlaceLevels.observer`), which the caller hands
+		/// on with the routes its builders compute (`handOnObservedPlaceLevels(with:)`).
+		var observedPlaceLevels: SeamPlaceLevels?
+
+		/// The case of each of `holes`, or `-1` for a place a call passes up.
+		func caseIndices(of holes: [SeamSignature.Hole]) -> [Int] {
+			holes.map { caseIndexBySite[$0.site] ?? -1 }
+		}
+
+		/// Hands what the tests observe of the places on to them, with each route `builders` computed beside its steps by edge.
+		func handOnObservedPlaceLevels(with builders: ShapedBuilders) {
+			guard var observedPlaceLevels else { return }
+			observedPlaceLevels.routeSteps = builders.routeStepObservations
 			SeamPlaceLevels.observer?(observedPlaceLevels)
 		}
-		return sortedHoles
 	}
 
 	/// The type that fulfills `hole` in `instantiables`, the declarations a module calling the seam sees, or `nil`

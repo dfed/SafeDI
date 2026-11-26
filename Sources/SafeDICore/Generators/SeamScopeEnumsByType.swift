@@ -38,6 +38,22 @@ extension DependencyTreeGenerator {
 		var reentersEnclosingFill = false
 	}
 
+	/// A case on a route, by everything that decides its step (`SeamSignature.Hole.RouteStep`) and nothing of the path it is
+	/// on: the hole type, the case's enum (its type and family) and property, whether the case holds a `@Sendable` enum
+	/// beneath, the builder a call's case fills, whether the step's property is built in a `@Sendable` function, whether
+	/// the route is the `@Sendable` root's, and whether the seam's tree binds the case's payload before the property.
+	struct RouteEdge: Hashable {
+		let holeType: SeamSignature.HoleType
+		let type: TypeDescription
+		let isSendableEnum: Bool
+		let property: Property
+		let isSendableBeneath: Bool
+		let filledBuilder: SeamDeclarationGraph.FilledBuilder?
+		let buildsInSendableFunction: Bool
+		let isSendableRoute: Bool
+		let bindsPayload: Bool
+	}
+
 	/// A property on the path to a place or a call, which a case of the seam's enums stands for.
 	struct ReachedStep {
 		/// The type that declares the property: the seam's, or the type the property of the step before builds, or the type
@@ -74,6 +90,11 @@ extension DependencyTreeGenerator {
 		var memberBindingKeysByFamily = [Bool: [ValuesBindingKey: Set<BindingNode>]]()
 		/// The node of the seam's graph each call's inner scope is bound at, which names it (`innerScopeNames`).
 		var innerScopeNodesByKey = [InnerScopeKey: Set<BindingNode>]()
+		/// The step of each case on a route, by its edge, with no binding path length: what a path decides of a step is only
+		/// where its member and inner scope are bound (`RouteStep.atBindingPathLength(_:)`).
+		var routeStepByEdge = [RouteEdge: SeamSignature.Hole.RouteStep]()
+		/// Each route beside its steps by edge, while the tests observe the seam's places.
+		var routeStepObservations = [SeamRouteStepObservation]()
 
 		/// The root enum of the family `isSendable` says, if the seam declares it.
 		func rootEnum(isSendable: Bool) -> SeamSignature.ScopeEnum? {
@@ -575,6 +596,8 @@ extension DependencyTreeGenerator {
 				member: member,
 			)
 		}
+		// The tests compare each route with its steps by edge (`SeamPlaceLevels.routeSteps`).
+		let observesRouteSteps = SeamPlaceLevels.observer != nil
 		for reached in reached {
 			let count = reached.steps.count
 			guard count > 0 else { continue }
@@ -596,6 +619,19 @@ extension DependencyTreeGenerator {
 				// `<label>_Sendable` case.
 				let innermostSendableIndex = isAllSendable ? count : reached.steps.lastIndex(where: \.buildsInSendableFunction)
 				var steps = [SeamSignature.Hole.RouteStep]()
+				// Every step this route computes, the last included, with its edge and the length of the path its member is bound at.
+				var computedSteps = [SeamSignature.Hole.RouteStep]()
+				var edgesOfSteps = [(edge: RouteEdge, bindingPathLength: Int)]()
+				defer {
+					if observesRouteSteps {
+						result.routeStepObservations.append(SeamRouteStepObservation(
+							seamType: seamType,
+							sitePath: reached.sitePath,
+							computed: computedSteps,
+							rebuilt: edgesOfSteps.compactMap { result.routeStepByEdge[$0.edge]?.atBindingPathLength($0.bindingPathLength) },
+						))
+					}
+				}
 				for (index, reachedStep) in reached.steps.enumerated() {
 					let type = reachedStep.type
 					let property = reachedStep.property
@@ -628,7 +664,25 @@ extension DependencyTreeGenerator {
 					} else {
 						nil
 					}
-					guard let step = routeStep(of: caseOfProperty, pathLength: reachedStep.pathLength, bindingPrefix: bindingPrefix, buildsInSendableFunction: reachedStep.buildsInSendableFunction || isBoundInsideFulfillersFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
+					let buildsInSendableFunction = reachedStep.buildsInSendableFunction || isBoundInsideFulfillersFunction
+					guard let step = routeStep(of: caseOfProperty, pathLength: reachedStep.pathLength, bindingPrefix: bindingPrefix, buildsInSendableFunction: buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
+					// The step is the edge's, whatever path leads to it, but for where its member and inner scope are bound.
+					let edge = RouteEdge(
+						holeType: holeType,
+						type: type,
+						isSendableEnum: caseOfProperty.described.isSendable,
+						property: property,
+						isSendableBeneath: caseOfProperty.isSendableBeneath,
+						filledBuilder: caseOfProperty.filledBuilder,
+						buildsInSendableFunction: buildsInSendableFunction,
+						isSendableRoute: innermostSendableIndex != nil,
+						bindsPayload: bindingPrefix != nil,
+					)
+					if result.routeStepByEdge[edge] == nil {
+						result.routeStepByEdge[edge] = step.atBindingPathLength(0)
+					}
+					computedSteps.append(step)
+					edgesOfSteps.append((edge, bindingPrefix?.count ?? 0))
 					if index < count - 1 {
 						steps.append(step)
 						continue
@@ -1371,4 +1425,18 @@ extension SeamSignature.ScopeEnum {
 			.simple(name: name, generics: [])
 		}
 	}
+}
+
+/// A route a seam's or a public mock's enums nested by type compute, beside the same route rebuilt from its steps by edge
+/// (`DependencyTreeGenerator.ScopeEnumsByType.routeStepByEdge`), for the tests: a step is a function of its edge and the
+/// length of the path its member is bound at, which the tests check on every route until the seam's tree reads the steps
+/// by edge.
+public struct SeamRouteStepObservation: Sendable {
+	public let seamType: TypeDescription
+	/// The properties from the seam's root to the place or the call the route leads to.
+	public let sitePath: [Property]
+	/// Each step the route computed, the place's or the call's own included.
+	public let computed: [SeamSignature.Hole.RouteStep]
+	/// The same steps, each read from its edge's step at its binding path length.
+	public let rebuilt: [SeamSignature.Hole.RouteStep]
 }

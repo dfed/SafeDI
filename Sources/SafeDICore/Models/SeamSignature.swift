@@ -1303,6 +1303,18 @@ public struct SeamSignature: Sendable {
 				}
 			}
 
+			/// This step with its member and its inner scope bound at the property `length` properties from the seam's root
+			/// lead to: the only part of a step the path it is on decides.
+			public func atBindingPathLength(_ length: Int) -> Self {
+				Self(
+					caseName: caseName,
+					values: values,
+					innerScope: innerScope.map { InnerScope(callPathLength: length, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: $0.name) },
+					leadsIntoFill: leadsIntoFill,
+					member: member.map { Member(bindingName: $0.bindingName, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPathLength: length, isCalledInsideFunction: $0.isCalledInsideFunction, isLetChild: $0.isLetChild) },
+				)
+			}
+
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
 			/// type of its struct, as the seam's extension spells it, and its fields, what the case's type binds before its
 			/// property.
@@ -1443,8 +1455,10 @@ public struct SeamSignature: Sendable {
 		}
 	}
 
-	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], callRoutes: [CallRoute] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
+	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], callRoutes: [CallRoute] = [], typesDeclaredEscaping: Set<TypeDescription> = [], places: Places = Places(levels: [], cases: []), caseIndexByHole: [Int] = []) {
 		self.seamType = seamType
+		self.places = places
+		self.caseIndexByHole = caseIndexByHole
 		self.parameters = parameters
 		self.tiers = tiers
 		self.noTierParameters = noTierParameters
@@ -1507,6 +1521,11 @@ public struct SeamSignature: Sendable {
 	/// per site. In the order the builders reach them. Kept apart from `parameters`, so a builder is never receivable in the
 	/// seam's own tree.
 	public let holes: [Hole]
+	/// The seam's places by case: the levels of its tree and one case per property of an owner level and family
+	/// (`SeamPlaces.swift`). Held beside the per-site `holes` while their readers move to cases; nothing generated reads it yet.
+	public let places: Places
+	/// The case in `places` of each of `holes`, in its order, or `-1` for a place a call passes up, which is no case yet.
+	public let caseIndexByHole: [Int]
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
 	/// a plain builder over its enum, then a `@Sendable` builder over its enum.
 	public let builders: [Builder]

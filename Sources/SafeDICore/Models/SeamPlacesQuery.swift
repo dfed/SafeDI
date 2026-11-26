@@ -337,46 +337,12 @@ extension SeamSignature.Places {
 
 		// MARK: Routes
 
-		/// The route the case at `caseIndex` is named by where a diagnostic names one place: the first route a walk up from
-		/// the owner level meets, taking each level's parents in the order the places first reached them, among the routes of
-		/// the case's family. `nil` only for a case no route reaches, which no computation makes.
+		/// The route the case at `caseIndex` is named by where a diagnostic or a name made from a path names one place: its
+		/// first place's in builder-label order (`Case.namingRoute`). `nil` only for a case no place reaches, which no
+		/// computation makes.
 		public func representativeRoute(of caseIndex: Int) -> Route? {
-			let placeCase = places.cases[caseIndex]
-			guard let start = startState(of: placeCase) else { return nil }
-			if let known = representativeRouteByCase[caseIndex] {
-				return known
-			}
-			struct Step: Hashable {
-				let level: Int
-				let state: RouteState
-			}
-			var visited: Set<Step> = [Step(level: placeCase.ownerLevel, state: start)]
-			var path = [(step: Step, nextTransition: Int)]()
-			path.append((Step(level: placeCase.ownerLevel, state: start), 0))
-			var found: [Int]?
-			while let (step, nextTransition) = path.last {
-				if places.levels[step.level].parents.isEmpty {
-					if isValid(step.level, step.state) {
-						found = path.map(\.step.level)
-						break
-					}
-					path.removeLast()
-					continue
-				}
-				let transitions = transitions(from: step.level, state: step.state)
-				guard nextTransition < transitions.count else {
-					path.removeLast()
-					continue
-				}
-				path[path.count - 1].nextTransition += 1
-				let (parent, state) = transitions[nextTransition]
-				let next = Step(level: parent, state: state)
-				guard visited.insert(next).inserted else { continue }
-				path.append((next, 0))
-			}
-			let route = found.map { Route(levels: $0.reversed()) }
-			representativeRouteByCase[caseIndex] = route
-			return route
+			let namingRoute = places.cases[caseIndex].namingRoute
+			return namingRoute.isEmpty ? nil : Route(levels: namingRoute)
 		}
 
 		/// The properties from the seam's root to the hole's property along `route`, as `Hole.sitePath` spells them.
@@ -422,13 +388,14 @@ extension SeamSignature.Places {
 			return entries
 		}
 
-		/// The entries `property`, built for `concreteType`, puts on the stack, innermost first: its instance just outside it
-		/// where it is lazily instantiated, as `Scope.createScopeGenerator` stacks them.
+		/// The entries `property`, built for `concreteType`, puts on the stack, innermost first: where it is lazily
+		/// instantiated, its instance first and then the wrapper, as `Scope.createScopeGenerator` stacks them.
 		static func entries(of property: Property, builtAs concreteType: TypeDescription) -> [SeamSignature.Places.StackEntry] {
-			var entries = [SeamSignature.Places.StackEntry(property: property, concreteType: concreteType)]
+			var entries = [SeamSignature.Places.StackEntry]()
 			if let instance = property.asLazilyInstantiatedInstanceProperty {
 				entries.append(SeamSignature.Places.StackEntry(property: instance, concreteType: concreteType))
 			}
+			entries.append(SeamSignature.Places.StackEntry(property: property, concreteType: concreteType))
 			return entries
 		}
 
@@ -594,7 +561,6 @@ extension SeamSignature.Places {
 		private var hiddenFold = Fold<AnswerKey, HiddenElement>()
 		private var nearestFold = Fold<StateKey, SeamSignature.Places.Reached>()
 		private var reentryFold = Fold<StateKey, ReentryElement>()
-		private var representativeRouteByCase = [Int: Route?]()
 
 		/// What a walk up from a case's owner still requires of the rest of its route to keep it in the case's family.
 		private enum RouteState: Hashable {

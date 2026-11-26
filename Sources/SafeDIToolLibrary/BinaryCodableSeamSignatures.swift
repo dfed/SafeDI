@@ -62,7 +62,8 @@ extension SeamSignature: BinarySchemaMember {
 				BinaryLayoutField("callRoutes", \.callRoutes),
 				BinaryLayoutField("typesDeclaredEscaping", \.typesDeclaredEscaping),
 			],
-			unwrittenProperties: ["callShape", "guardTypeName"],
+			// `places` and `caseIndexByHole` are written once the place graph's coders are wired in (the .safedi lane's change).
+			unwrittenProperties: ["callShape", "guardTypeName", "places", "caseIndexByHole"],
 		)
 	}
 

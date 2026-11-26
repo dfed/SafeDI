@@ -2061,16 +2061,18 @@ extension DependencyTreeGenerator {
 			}
 			return SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, deferral: parameter.deferral, internalName: internalName, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
+		let holesAndPlaces = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,
-			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables),
+			holes: holesAndPlaces.holes,
 			parameters: parameters,
 			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
 			proof: proof,
 			instantiables: instantiables,
 			ownScopeEnums: ownScopeEnums,
 		)
+		holesAndPlaces.handOnObservedPlaceLevels(with: shapedBuilders)
 		let holes = shapedBuilders.holes
 		let tiers = Self.tiers(of: seam, parameters: parameters)
 		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.isOnlyIfAvailable {
@@ -2172,6 +2174,8 @@ extension DependencyTreeGenerator {
 			scopeEnums: shapedBuilders.scopeEnums,
 			callRoutes: shapedBuilders.callRoutes,
 			typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
+			places: holesAndPlaces.places,
+			caseIndexByHole: holesAndPlaces.caseIndices(of: holes),
 		))
 	}
 
