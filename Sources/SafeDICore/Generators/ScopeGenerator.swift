@@ -1683,7 +1683,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			),
 			property: nil,
 			propertiesToGenerate: [child],
-			propertiesToDeclare: Self.fieldForms(of: fields, boundLabels: boundLabels),
+			propertiesToDeclare: Self.fieldForms(of: fields, boundLabels: boundLabels).union(Self.propertiesBeingBuilt(byFillOf: hole)),
 			// A fill builds only `child`, so no dependency of its own is one a mock is passed instead.
 			instantiatedDependenciesNotGenerated: [],
 			unavailableOptionalProperties: callerReads.unavailableProperties,
@@ -1802,6 +1802,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// labeled in `boundLabels` – and, for a lazily instantiated field, the instance a receive reads by value.
 	static func fieldForms(of hole: SeamSignature.Hole, boundLabels: Set<String>) -> Set<Property> {
 		fieldForms(of: hole.fields, boundLabels: boundLabels)
+	}
+
+	/// The property a fill of `hole` builds, with its instance, where it is no instantiator: the type that owns the place
+	/// declares it, so a receive of it in the fill's tree is not received from the scopes enclosing the call. The fill's
+	/// tree finds it still being built and passes a receive only if available `nil`, as the same types built inline do,
+	/// and a required one is the cycle validation reports; a tree that received it from the caller's scope would hand a
+	/// seam a parameter, and a mock an override, that nothing reads. An instantiator is left out: a receive of one is
+	/// `receivesInstantiatorBuildingSite`.
+	static func propertiesBeingBuilt(byFillOf hole: SeamSignature.Hole) -> Set<Property> {
+		guard !isBuilder(hole.property) else { return [] }
+		var properties: Set<Property> = [hole.property]
+		if let instanceProperty = hole.property.asLazilyInstantiatedInstanceProperty {
+			properties.insert(instanceProperty)
+		}
+		return properties
 	}
 
 	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels` (see `fieldForms(of:boundLabels:)`).
@@ -10465,10 +10480,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// once, in the order a walk of the tree in generation order first meets them. One a type built inside a `@Sendable`
 		/// builder function declares is left out: it is bound to `nil` there, since the function could not capture an override.
 		var unavailableDependencyProperties = [Property]()
-		/// Every declaration in the tree of a property instantiated only if available that nothing fulfills, those inside a
-		/// `@Sendable` builder function too, which a public mock is rejected for
-		/// (`PublicMockFinding.holdsUnavailableDependency`).
-		var unavailableDependencyDeclarations = [Dependency]()
 		/// The places inside the fills of the tree's calls of other modules' public mocks (`FillPlace`), in the order the calls
 		/// are generated, each a place of a builder `mock()` takes. The query and a public mock's promotion read a tree that
 		/// holds no internal mock's call, so their names leave these four empty (`treeNames(of:readsFills:)`).
@@ -10713,9 +10724,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// A property instantiated only if available that nothing fulfills takes an override too, which defaults to `nil`, the
 		// value production binds. The type that declares it binds it from the override, so it reads no declaration above it.
+		// A public mock takes a builder for it instead, as a seam does, which a module that calls the mock and sees a
+		// declaration that fulfills the type fills at each place; one spelled as no hole can be stays `nil` there.
 		var unavailableDependencyOverrideProperties = Set<Property>()
 		for property in treeNames.unavailableDependencyProperties
-			where !receivedParameterProperties.contains(property)
+			where instantiable.generateMock != .public
+			&& !receivedParameterProperties.contains(property)
 			&& !receivedParameterProperties.contains(property.asUnwrappedProperty)
 			&& !isFulfilledByForwardedProperty(property)
 		{

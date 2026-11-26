@@ -8805,8 +8805,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// base corpus only. Seed 1329 failed the remedy oracle's seam fill shape that forwards a value into a lazy wrapper's type
 	/// instead, which the fill error's advice to declare that wrapper as an instantiator fixed. The hole draw's value outside a `@Sendable` function lands
 	/// in 338, 1042, 1072 and 1492, which the tool rejects, 338 and 1072 with that draw's error: 338 failed its inherited
-	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer. Seed 1649 fails the compile-time
-	/// assertions' shape in the base corpus only, whose partition no other corpus runs.
+	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer.
 	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [
 		7, 14, 21, 27, 35, 45, 51, 107, 114, 116, 157, 167, 204, 264, 265, 272, 281, 300, 309, 323, 338, 342, 364,
 		371, 381, 383, 431, 434, 455, 461, 476, 508, 525, 527, 545, 548, 567, 577, 593, 595, 617, 624, 628, 632, 634,
@@ -8814,7 +8813,7 @@ struct SafeDIToolGraphFuzzerTests {
 		948, 953, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_081, 1_084, 1_092, 1_139, 1_145, 1_147,
 		1_149, 1_163, 1_300, 1_301, 1_322, 1_329, 1_335, 1_352, 1_362, 1_366, 1_369, 1_372, 1_432, 1_433, 1_434, 1_436,
 		1_447, 1_464, 1_483, 1_492, 1_504, 1_521, 1_524, 1_525, 1_531, 1_559, 1_561, 1_563, 1_567, 1_572, 1_580, 1_602,
-		1_633, 1_646, 1_649, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
+		1_633, 1_646, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
 		1_898, 1_935, 1_959, 1_970,
 	]
 
@@ -8949,6 +8948,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.promotedHolePublicMockPassedUp: 17,
 		.promotedHolePublicMockPublicConsumer: 40,
 		.promotedHolePublicMockSendableLazily: 12,
+		.optionalPlacePublicMock: 165,
+		.optionalPlacePublicMockOnLeaf: 73,
+		.optionalPlacePublicMockSendably: 27,
+		.optionalPlacePublicMockReceived: 84,
+		.optionalPlacePublicMockPassedUp: 67,
+		.optionalPlacePublicMockPublicConsumer: 45,
 		.unbuildableValuePublicMockCall: 174,
 		.unbuildableValuePublicMockCallPublicTier: 174,
 		.carrierBeforeSiblingBeneathInternallyConfiguredChild: 26,
@@ -9002,7 +9007,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x52879FD791F2736D
+	static let publicMockCorpusFixtureHash: UInt64 = 0x61CCC49786C55235
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9064,7 +9069,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x83B3A47D52108C53
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xA16ED3BEF7F33D2E
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9332,6 +9337,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.promotedHolePublicMockSendableLazily: 13,
 		.promotedHolePublicMockPassedUp: 18,
 		.promotedHolePublicMockPublicConsumer: 40,
+		.optionalPlacePublicMock: 178,
+		.optionalPlacePublicMockOnLeaf: 81,
+		.optionalPlacePublicMockSendably: 30,
+		.optionalPlacePublicMockReceived: 94,
+		.optionalPlacePublicMockPassedUp: 70,
+		.optionalPlacePublicMockPublicConsumer: 48,
 		.unbuildableValuePublicMockCall: 198,
 		.unbuildableValuePublicMockCallPublicTier: 191,
 		.unbuildableValuePublicMockCallTierOmits: 7,
@@ -9631,7 +9642,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [1_649, 2_787, 4_622],
+			seeds: [2_787, 4_622, 4_839],
 		),
 	]
 

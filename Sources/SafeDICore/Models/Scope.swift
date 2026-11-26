@@ -2115,7 +2115,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				}
 				guard isPublicMockCall else {
 					if enumKey.holeType.builtType.isOptional {
-						return .init(label: label, value: ".init(\(ReservedName.noScopeArgumentLabel): { nil })")
+						return .init(label: label, value: ".init(\(ReservedName.noScopeArgumentLabel): \(ReservedName.nilBuilderSource))")
 					}
 					return .init(label: label, value: "")
 				}
