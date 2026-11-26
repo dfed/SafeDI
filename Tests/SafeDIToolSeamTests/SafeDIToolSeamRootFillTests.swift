@@ -387,7 +387,201 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		""")
 	}
 
+	/// `Inner`, a seam of `Seam` whose `api` only `App` fills and that builds `Leaf`, which receives `token`, is called by
+	/// `F0` and `F1`, seams of `Callers` that pass its place up. `App`'s `LiveApi` fills it and builds `Reader`, which
+	/// receives `token` as a `SendableLazilyInstantiated`: another form of the label than the field the fill is handed.
+	/// `Mid`, beneath the root, declares that wrapper and calls both seams, so each fill reads `Mid`'s wrapper and stays in
+	/// its call, where the root declares no `token`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsFillInItsCall_whenFillReadsAnotherFormOfHandedLabelDeclaredBeneathRoot() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.wrapperFormModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Callers)
+		import Callers
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Seam)
+		import Seam
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        @Sendable nonisolated func __safeDI_token() -> Token {
+		            Token()
+		        }
+		        func __safeDI_mid() -> Mid {
+		            let token = SendableLazilyInstantiated<Token>(__safeDI_token)
+		            let service = Service()
+		            func __safeDI_f0() -> F0 {
+		                _ = F0.__safeDI_F0_E666CFA02F65FBFB.self // If this line does not compile, compile the code SafeDI generates for module Callers into Callers: under Bazel, add Callers’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		                    func __safeDI_api() -> LiveApi {
+		                        @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
+		                            Reader(token: token)
+		                        }
+		                        let readerBuilder = SendableInstantiator<Reader>(__safeDI_readerBuilder)
+		                        return LiveApi(readerBuilder: readerBuilder)
+		                    }
+		                    let api: any Api = __safeDI_api()
+		                    return api
+		                }
+		                func __safeDI_apiBuilder_F0() -> F0.__safeDI_ApiCarrier<any Api> {
+		                    .init(inner: __safeDI_apiBuilder_Inner())
+		                }
+		                func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		                }
+		                return F0(__safeDI_service: service, __safeDI_token: token.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_F0())
+		            }
+		            let f0: F0 = __safeDI_f0()
+		            func __safeDI_f1() -> F1 {
+		                _ = F1.__safeDI_F1_662E4FC5D4A33B62.self // If this line does not compile, compile the code SafeDI generates for module Callers into Callers: under Bazel, add Callers’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_apiBuilder_Inner_api(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Api {
+		                    func __safeDI_api() -> LiveApi {
+		                        @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
+		                            Reader(token: token)
+		                        }
+		                        let readerBuilder = SendableInstantiator<Reader>(__safeDI_readerBuilder)
+		                        return LiveApi(readerBuilder: readerBuilder)
+		                    }
+		                    let api: any Api = __safeDI_api()
+		                    return api
+		                }
+		                func __safeDI_apiBuilder_F1() -> F1.__safeDI_ApiCarrier<any Api> {
+		                    .init(inner: __safeDI_apiBuilder_Inner())
+		                }
+		                func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: { scope_token, scope_leafBuilder in __safeDI_apiBuilder_Inner_api(scope_token, scope_leafBuilder) })
+		                }
+		                return F1(__safeDI_service: service, __safeDI_token: token.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_F1())
+		            }
+		            let f1: F1 = __safeDI_f1()
+		            return Mid(token: token, service: service, f0: f0, f1: f1)
+		        }
+		        let mid: Mid = __safeDI_mid()
+		        self.init(mid: mid)
+		    }
+		}
+		""")
+	}
+
 	// MARK: Fixtures
+
+	/// The modules of `generate_keepsFillInItsCall_whenFillReadsAnotherFormOfHandedLabelDeclaredBeneathRoot`.
+	private static let wrapperFormModules = [
+		ModuleFixture(name: "Seam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+		import SafeDI
+
+		nonisolated public protocol Api: Sendable {}
+
+		@Instantiable
+		public final class Service: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Token: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init(token: Token) {
+		        self.token = token
+		    }
+
+		    @Received let token: Token
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Inner: Instantiable {
+		    public init(leafBuilder: Instantiator<Leaf>, api: any Api) {
+		        self.leafBuilder = leafBuilder
+		        self.api = api
+		    }
+
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    @Instantiated let api: any Api
+		}
+		"""]),
+		ModuleFixture(name: "Callers", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": """
+		import SafeDI
+		import Seam
+
+		@Instantiable(generateDependencyTree: true)
+		public final class F0: Instantiable {
+		    public init(service: Service, inner: Inner) {
+		        self.service = service
+		        self.inner = inner
+		    }
+
+		    @Received let service: Service
+		    @Instantiated let inner: Inner
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class F1: Instantiable {
+		    public init(service: Service, inner: Inner) {
+		        self.service = service
+		        self.inner = inner
+		    }
+
+		    @Received let service: Service
+		    @Instantiated let inner: Inner
+		}
+		"""], dependencies: ["Seam"]),
+		ModuleFixture(name: "App", packageName: "pkg", swiftFileContentByFilePath: ["Root.swift": """
+		import Callers
+		import SafeDI
+		import Seam
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+		public final class LiveApi: Api, Instantiable {
+		    public init(readerBuilder: SendableInstantiator<Reader>) {
+		        self.readerBuilder = readerBuilder
+		    }
+
+		    @Instantiated let readerBuilder: SendableInstantiator<Reader>
+		}
+
+		@Instantiable
+		public final class Reader: Instantiable, Sendable {
+		    public init(token: SendableLazilyInstantiated<Token>) {
+		        self.token = token
+		    }
+
+		    @Received let token: SendableLazilyInstantiated<Token>
+		}
+
+		@Instantiable
+		public final class Mid: Instantiable {
+		    public init(token: SendableLazilyInstantiated<Token>, service: Service, f0: F0, f1: F1) {
+		        self.token = token
+		        self.service = service
+		        self.f0 = f0
+		        self.f1 = f1
+		    }
+
+		    @Instantiated let token: SendableLazilyInstantiated<Token>
+		    @Instantiated let service: Service
+		    @Instantiated let f0: F0
+		    @Instantiated let f1: F1
+		}
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(mid: Mid) {
+		        self.mid = mid
+		    }
+
+		    @Instantiated let mid: Mid
+		}
+		"""], dependencies: ["Callers", "Seam"]),
+	]
 
 	/// `Inner`, a seam of module `InnerSeam` whose `api` only `App` fills; `Outer`, a seam of module `OuterSeam` whose `api`
 	/// only `App` fills too and whose tree opens `Inner`; and `App`, whose `LiveApi` fills both, instantiating `Detail`, and

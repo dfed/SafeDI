@@ -3118,6 +3118,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// For a fill, whether every value its tree receives is one it is handed, in the form it reads: a field it binds
+	/// (`fillBoundFields`) or a parameter of its dispatcher's in `handedParameters` gives the read's own property, its optional
+	/// form, or, for a lazily instantiated binding, its instance or the instance's optional form; or the memo the fill binds
+	/// serves a wrapper read (`fillBoundMemo(servingWrapperRead:)`). A read received only if available is handed as itself or
+	/// as its optional form. A label alone does not hand a read: a fill that reads another form of a handed label, such as a
+	/// `SendableLazilyInstantiated` beside a deferred parameter's field, reads that form from the caller's scope.
+	nonisolated func readsOnlyHandedForms(handedParameters: [SeamSignature.Hole.Field]) -> Bool {
+		let handedFields = fillBoundFields + handedParameters
+		func isHanded(_ received: Property) -> Bool {
+			handedFields.contains { field in
+				field.property == received
+					|| field.property.asOptionalProperty == received
+					|| field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { $0 == received || $0.asOptionalProperty == received } == true
+			} || fillBoundMemo(servingWrapperRead: received) != nil
+		}
+		return receivedProperties.allSatisfy(isHanded)
+			&& onlyIfAvailableUnwrappedReceivedProperties.allSatisfy { isHanded($0) || isHanded($0.asOptionalProperty) }
+	}
+
 	/// The hole this generator is the fill of, or `nil` for every generator that is no fill.
 	nonisolated var fillHole: SeamSignature.Hole? {
 		if case let .fill(hole, _) = scopeData {
@@ -7479,10 +7498,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		   let inlinedFill = Self.inlinedFill(of: child.generator, code: code.spelled(), leadingMemberWhitespace: leadingMemberWhitespace)
 		{
 			body.inlinedFills[key] = inlinedFill
-			// A fill reads a field bound from a deferred parameter from the caller's scope, not from what it is handed
-			// (`fillBoundFields`), so such a read captures the caller's declaration.
-			let handedLabels = Set((child.generator.fillBoundFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
-			if !child.generator.receivedProperties.allSatisfy({ handedLabels.contains($0.label) }) {
+			// A fill reads a field bound from a deferred parameter, or another form of a label it is handed, from the caller's
+			// scope, not from what it is handed (`readsOnlyHandedForms`), so such a read captures the caller's declaration.
+			if !child.generator.readsOnlyHandedForms(handedParameters: body.parametersByKey[key] ?? []) {
 				body.inlinedFillKeysReadingCallersDeclarations.insert(key)
 			}
 		} else if let record = fillRootFunction(of: child.generator, code: code, in: body, leadingMemberWhitespace: leadingMemberWhitespace) {
@@ -7506,10 +7524,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		      !fill.passesUpBuilder,
 		      !fill.containsBuildSite,
 		      fill.cycleClosedOnDeclarations.isEmpty,
-		      fill.fillCallerReads.innerScopeParameters.isEmpty
-		else { return nil }
-		let handedLabels = Set((fill.fillBoundFields + (body.parametersByKey[key] ?? [])).map(\.property.label))
-		guard fill.receivedProperties.allSatisfy({ handedLabels.contains($0.label) }) else { return nil }
+		      fill.fillCallerReads.innerScopeParameters.isEmpty,
+		      fill.readsOnlyHandedForms(handedParameters: body.parametersByKey[key] ?? []) else { return nil }
 		var fillCode = code
 		if !leadingMemberWhitespace.isEmpty, case let .indented(inner, indentation) = code.node, indentation == leadingMemberWhitespace {
 			fillCode = inner
