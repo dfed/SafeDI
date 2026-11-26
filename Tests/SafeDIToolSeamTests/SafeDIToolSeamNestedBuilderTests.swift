@@ -3591,6 +3591,136 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_settlesSignatures_whenThreeSeamsEachPassUpThePlacesOfTheOthers() async throws {
+		// Each seam builds every panel, and each panel holds a place and calls the next seam, so each seam passes up the
+		// places of the other two, under labels named apart from its own places'. A passed-up place labeled from the label the
+		// called seam's signature of the pass before gave it, which that seam named apart from the places it passes up in turn,
+		// fed each seam's names back into its own next pass, and the labels changed on every pass.
+		let feature = [
+			Self.service,
+			Self.type("Token"),
+			Self.type("S0", seam: true, ["@Received public let token: Token", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>"]),
+			Self.type("S1", seam: true, ["@Received public let token: Token", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>"]),
+			Self.type("S2", seam: true, ["@Received public let token: Token", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>"]),
+			Self.type("P0", ["@Instantiated public let service: any Service", "@Instantiated public let s1Builder: Instantiator<S1>"]),
+			Self.type("P1", ["@Instantiated public let service: any Service", "@Instantiated public let s2Builder: Instantiator<S2>"]),
+			Self.type("P2", ["@Instantiated public let service: any Service", "@Instantiated public let s0Builder: Instantiator<S0>"]),
+		]
+		let fulfiller = Self.fulfilling("DefaultService", "Service")
+		let root = Self.root(["@Instantiated public let token: Token", "@Instantiated public let s0: S0"])
+		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
+			"App": ["App.swift": """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_serviceBuilder_S0() -> S0.__safeDI_ServiceCarrier<any Service> {
+			            .init(p0Builder: { values_token in __safeDI_serviceBuilder_S0_P0_Scope() }, p1Builder: { values_token, values_p0Builder in __safeDI_serviceBuilder_S0_P1_Scope() }, p2Builder: { values_token, values_p0Builder, values_p1Builder in __safeDI_serviceBuilder_S0_P2_Scope() })
+			        }
+			        func __safeDI_serviceBuilder_S0_P0_Scope() -> S0.__safeDI_ServiceCarrier_P0<any Service> {
+			            .init(
+			                service: { scope_s1Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s1Builder: { __safeDI_serviceBuilder_S1() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S1() -> S1.__safeDI_ServiceCarrier<any Service> {
+			            .init(p1Builder: { values_token in __safeDI_serviceBuilder_S1_P1_Scope() }, p2Builder: { values_token, values_p1Builder in __safeDI_serviceBuilder_S1_P2_Scope() }, p0Builder: { values_token, values_p1Builder, values_p2Builder in __safeDI_serviceBuilder_S1_P0_Scope() })
+			        }
+			        func __safeDI_serviceBuilder_S1_P1_Scope() -> S1.__safeDI_ServiceCarrier_P1<any Service> {
+			            .init(
+			                service: { scope_s2Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s2Builder: { __safeDI_serviceBuilder_S2() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S2() -> S2.__safeDI_ServiceCarrier<any Service> {
+			            .init(p2Builder: { values_token in __safeDI_serviceBuilder_S2_P2_Scope() }, p0Builder: { values_token, values_p2Builder in __safeDI_serviceBuilder_S2_P0_Scope() }, p1Builder: { values_token, values_p2Builder, values_p0Builder in __safeDI_serviceBuilder_S2_P1_Scope() })
+			        }
+			        func __safeDI_serviceBuilder_S2_P2_Scope() -> S2.__safeDI_ServiceCarrier_P2<any Service> {
+			            .init(
+			                service: { scope_s0Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s0Builder: { __safeDI_serviceBuilder_S0() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S2_P0_Scope() -> S2.__safeDI_ServiceCarrier_P0<any Service> {
+			            .init(
+			                service: { scope_s1Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s1Builder: { __safeDI_serviceBuilder_S1() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S2_P1_Scope() -> S2.__safeDI_ServiceCarrier_P1<any Service> {
+			            .init(
+			                service: { scope_s2Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s2Builder: { __safeDI_serviceBuilder_S2() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S1_P2_Scope() -> S1.__safeDI_ServiceCarrier_P2<any Service> {
+			            .init(
+			                service: { scope_s0Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s0Builder: { __safeDI_serviceBuilder_S0() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S1_P0_Scope() -> S1.__safeDI_ServiceCarrier_P0<any Service> {
+			            .init(
+			                service: { scope_s1Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s1Builder: { __safeDI_serviceBuilder_S1() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S0_P1_Scope() -> S0.__safeDI_ServiceCarrier_P1<any Service> {
+			            .init(
+			                service: { scope_s2Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s2Builder: { __safeDI_serviceBuilder_S2() }
+			            )
+			        }
+			        func __safeDI_serviceBuilder_S0_P2_Scope() -> S0.__safeDI_ServiceCarrier_P2<any Service> {
+			            .init(
+			                service: { scope_s0Builder in
+			                    let service: any Service = DefaultService()
+			                    return service
+			                },
+			                s0Builder: { __safeDI_serviceBuilder_S0() }
+			            )
+			        }
+			        let token = Token()
+			        func __safeDI_s0() -> S0 {
+			            _ = S0.__safeDI_S0_BA3011C844E7690F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return S0(__safeDI_token: token, __safeDI_serviceBuilder: __safeDI_serviceBuilder_S0())
+			        }
+			        let s0: S0 = __safeDI_s0()
+			        self.init(token: token, s0: s0)
+			    }
+			}
+			"""],
+		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root().s0.p1Builder.instantiate().s2Builder.instantiate().p0Builder.instantiate().s1Builder.instantiate().p2Builder.instantiate().service")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheOuterSeamsGuard_whenAPlaceOfAnInnerSeamItFillsGainsASibling() async throws {
 		// `Host` fills `Deep`'s `Gadget` places and passes its `Service` place up: no builder of `Host` reaches the enum it fills,
 		// so a place added to that enum changes nothing a caller of `Host` passes.
