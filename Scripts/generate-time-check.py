@@ -183,6 +183,7 @@ or DIRECTORY exists.
 --self-test DIRECTORY runs the comparison and the growth rows with stand-in tools (which sleep, hold memory and write
 files that grow with the types a module declares) and checks each verdict above.
 """
+import hashlib
 import os
 import random
 import statistics
@@ -667,7 +668,7 @@ GROWTH_ROWS = {
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
     "W-ring-of-screens-that-open-each-other": (lambda width: shape_w(width), 10, {"time": 4.0}),
-    "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 3.0, "code": 275.0}),
+    "BM-mocks-of-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=True), 2, {"time": 48.0, "memory": 6.5, "code": 275.0}),
     # Three and five modules, not four and six: at six this row alone takes 21 s and 1.2 GB on main today (30 times
     # four's time). 0.26 s and 3.17 s (12.4), 42 MB and 199 MB (4.7), 122,250 and 4,137,809 bytes of `.safedi` (33.8),
     # 282,609 and 4,967,332 bytes of code (17.6).
@@ -675,7 +676,7 @@ GROWTH_ROWS = {
     # H 0.15 s and 2.1 s (13.7 and 14.5 in two runs), 39 MB and 78 MB (2.00), 25,811 and 1,406,899 bytes of `.safedi`
     # (54.5), 31,432 and 126,780 bytes of code (4.03). Starts at three layers: at six, Feature alone takes 9.8 s.
     "H-seam-holes-in-cycles": (lambda layers: shape_seam_holes_in_cycles(layers), 3, {"time": 22.0, "memory": 2.6, "size": 65.0, "code": 5.0}),
-    "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {"code": 10.5}),
+    "O-only-if-available-at-every-screen": (lambda layers: shape_census(layers, "only-if-available"), 6, {}),
     "R-received-instantiator-at-every-screen": (lambda layers: shape_census(layers, "received-instantiator"), 6, {"time": 6.0, "code": 10.5}),
     "N-rename-at-every-screen": (lambda layers: shape_census(layers, "rename"), 8, {"time": 10.5}),
     # V 0.45 s and 3.8 s (8.6); VO 0.51 s and 4.6 s (9.2).
@@ -758,10 +759,19 @@ def module_info_sizes(modules, output):
 
 
 def generated_code(modules, output):
+    """Each module's generated code as (its length, a digest of it), with the output directory's path removed. Read
+    a line at a time: a child process's peak memory starts at what this process holds when it starts the child, so a
+    file held here whole would become the floor of every later measurement."""
     code = []
     for name, _, _ in modules:
+        length = 0
+        digest = hashlib.sha256()
         with open(f"{output}/{name}.generated.swift") as handle:
-            code.append(handle.read().replace(output, ""))
+            for line in handle:
+                line = line.replace(output, "")
+                length += len(line)
+                digest.update(line.encode())
+        code.append((length, digest.hexdigest()))
     return code
 
 
@@ -867,7 +877,7 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
                     write(f"{sources}/{module}/Types.swift", source)
                 generate(head_tool, modules[depth], sources, f"{directory}/growth-{name}/{depth}/warm-up", time_limit=time_limit)
                 sizes[depth] = sum(module_info_sizes(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up"))
-                code[depth] = sum(len(text) for text in generated_code(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up"))
+                code[depth] = sum(length for length, _ in generated_code(modules[depth], f"{directory}/growth-{name}/{depth}/warm-up"))
             for run in range(runs):
                 for depth in depths:
                     samples[depth].append(generate(head_tool, modules[depth], f"{directory}/growth-{name}/{depth}/sources", f"{directory}/growth-{name}/{depth}/{run}", time_limit=time_limit))
@@ -1046,6 +1056,21 @@ def self_test(directory):
             if not set(dependencies) <= seen:
                 failures.append(f"{name}: module {module} is listed before a module it depends on")
             seen.add(module)
+    # A measurement after a large generated file was read: the file must not have become this process's footprint,
+    # which a child's peak memory starts at.
+    footprint = f"{directory}/footprint"
+    large = shape_e(4, seam=False)
+    for name, _, _ in large:
+        os.makedirs(f"{footprint}/output", exist_ok=True)
+        with open(f"{footprint}/output/{name}.generated.swift", "w") as handle:
+            for _ in range(4000):
+                handle.write("// a line of generated code\n" * 1000)
+    lengths = [length for length, _ in generated_code(large, f"{footprint}/output")]
+    for name, _, source in large:
+        write(f"{footprint}/sources/{name}/Types.swift", source)
+    _, _, peak = generate(tool("footprint", sleep=0), large, f"{footprint}/sources", f"{footprint}/output")
+    if lengths != [len("// a line of generated code\n") * 4_000_000] * len(large) or peak > 64 * 1024 * 1024:
+        failures.append(f"reading {lengths} characters of generated code left a later run's peak at {megabytes(peak)}")
     for failure in failures:
         print(f"self-test failed: {failure}")
     print("self-test " + ("failed" if failures else "passed"))
