@@ -456,7 +456,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		            self.owner = owner
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(owner: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -470,7 +469,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(service: { __safeDI_builder() })
 		        }

@@ -15374,7 +15374,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15508,7 +15507,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15656,7 +15654,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
@@ -15790,7 +15787,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            self.service = service
 				        }
 
-				        @_alwaysEmitIntoClient
 				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				            self.init(service: { _ in __safeDI_builder() })
 				        }
