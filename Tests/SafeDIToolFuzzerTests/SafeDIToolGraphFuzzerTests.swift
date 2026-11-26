@@ -8004,6 +8004,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeScreenValueReadWithoutReentry: 116,
 		.reenteredFillCallThroughSeamPassingPlaceUpInSendableFill: 64,
 		.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule: 62,
+		.mainActorDefaultIsolation: 41,
 		.wrapperMix: 378,
 		.wrapperMixValueAndSendableWrapper: 372,
 		.wrapperMixSendableWrapperBesidePlainMemo: 40,

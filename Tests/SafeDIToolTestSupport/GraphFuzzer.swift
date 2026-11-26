@@ -2035,6 +2035,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// That call made, by value, by `ReenteredHub`, a type of the module beneath the seam's that `ReenteredFirstImpl` builds
 	/// in a `SendableInstantiator`: the `@Sendable` function above the call makes the reused level function `@Sendable`.
 	case reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule
+	/// A module whose configuration declares the main actor its default isolation, compiled with
+	/// `-default-isolation MainActor` (`GraphFuzzerFixture.declaringMainActorDefaultIsolation(seed:in:)`), with every
+	/// module above it declaring it too, so that a caller in another module calls its `@MainActor` seam initializers.
+	case mainActorDefaultIsolation
 
 	/// Whether `addingSpelledProperties`' alias-spelling roll draws this shape, whose count in accepted graphs the seam
 	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten.
@@ -11649,6 +11653,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule)
 				}
 			}
+		}
+		if !fixture.modulesDefaultingToMainActor.isEmpty {
+			features.insert(.mainActorDefaultIsolation)
 		}
 		return features
 	}
