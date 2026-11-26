@@ -2509,6 +2509,45 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain() async throws {
+		// Every run of the tool compares each mock lowered with shared work with its walk of every path
+		// (`MockSubtreeSharingChecks`), which judges only a mock whose walk meets a subtree again. The corpus meets one in
+		// almost no graph but those `addingSharedSubtreeShapes` draws, so this runs the first of those. A change that stops
+		// the walk sharing, or the draw landing, fails here rather than quietly judging nothing. Dropping the properties each
+		// child is built before from the key (`childrenPropertiesGeneratedLater: []`) fails seeds 12 and 31 through that
+		// comparison. The draw renames no receive, so dropping the key's renames fails only
+		// `SafeDIToolMockSubtreeSharingTests`' `mock_sharesNothing_whenRepeatedSubtreeReceivesRenamedParameter`.
+		var drawnCount = 0
+		var judgedCount = 0
+		for seed in UInt64(0)..<Self.sharedSubtreeSeedCount {
+			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
+			guard fixture.swiftFileContent.contains(where: { $0.contains("_DiamondHost") }) else { continue }
+			drawnCount += 1
+			let (stream, continuation) = AsyncStream.makeStream(of: MockLowering.SubtreeSharingOutcome.self)
+			_ = try await MockLowering.$subtreeSharingObserver.withValue({ outcome in
+				continuation.yield(outcome)
+			}) {
+				try await GraphFuzzerOracle.toolOutcome(of: fixture)
+			}
+			continuation.finish()
+			var sharesAndLaysOut = false
+			for await outcome in stream where outcome.sharedMeetings > 0 {
+				// A root that shares lays its places out by type key, which reads only the records the shared meetings took.
+				#expect(outcome.layoutOutcome == "laidOut", "Seed \(seed): \(outcome.mockedType) shared and fell back: \(outcome.layoutOutcome)")
+				sharesAndLaysOut = sharesAndLaysOut || outcome.layoutOutcome == "laidOut"
+			}
+			if sharesAndLaysOut {
+				judgedCount += 1
+			}
+		}
+		#expect(judgedCount >= 10, "Judged \(judgedCount) of the \(drawnCount) graphs that draw a shared subtree")
+	}
+
+	/// The corpus seeds `sharedSubtreeSeeds_judgeSubtreeSharing_inGraphsWhoseMocksMeetASubtreeAgain` reads.
+	private static let sharedSubtreeSeedCount: UInt64 = 120
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func smokeSeeds_judgeQuerySuppliers_inGraphsTheToolAccepts() async throws {
 		// The query oracle compares the suppliers `query graph` exports with the generated code of each accepted graph in
 		// one module, so a change that stops it exporting or reading them fails here rather than quietly judging nothing.
@@ -7188,7 +7227,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x4A19E441CED3943D
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x1D34561F5302C430
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7198,7 +7237,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x5765175878DB985A
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x7416014C36C268F7
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -7843,7 +7882,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xFB67C344709C829A
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xC1900EE256484FF7
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
