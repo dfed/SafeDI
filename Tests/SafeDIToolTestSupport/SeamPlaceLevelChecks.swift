@@ -75,6 +75,14 @@ extension SeamPlaceLevels {
 		return disagreements
 	}
 
+	/// Shadow only: a description of each answer the per-type route query (`SeamRouteQueryShadow`) gives otherwise than
+	/// today's per-site walk, so that the graph fuzzer's corpora fail a graph on which the two differ.
+	var routeQueryShadowMismatches: [String] {
+		let report = SeamRouteQueryShadow.report(of: self)
+		guard report.mismatches > 0 else { return [] }
+		return ["The route query answers \(report.mismatches) questions of `\(seamType.asSource)` otherwise than the per-site walk: " + report.mismatchSamples.joined(separator: "; ")]
+	}
+
 	/// An observer that records an issue for each place whose levels do not hold its fields (`pathStructMismatches`), then
 	/// hands the levels to `enclosingObserver`, the observer the caller set, if any.
 	static func checkingPathStructs(handingOn enclosingObserver: (@Sendable (SeamPlaceLevels) -> Void)?) -> @Sendable (SeamPlaceLevels) -> Void {
@@ -101,7 +109,7 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-		continuation.yield(placeLevels.levelDisagreements())
+		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches)
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()
