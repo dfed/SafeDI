@@ -299,6 +299,18 @@ extension DependencyTreeGenerator {
 			}
 			holes.append(hole)
 		}
+		// The access of the builder this seam takes for a place a call presents, `inner`, and what proves it: the builder's
+		// type names the inner seam's scope struct, as visible as that seam's type, and the property's type, which this
+		// seam's declarations prove again, its owner's module among those admitted. A fact of the place, the same for every
+		// call that presents it, so the case of each such call and the seam's hole of the place take one access.
+		func accessOfBuilder(passingUp inner: SeamSignature.Hole) -> SeamSignature.Places.Case.Access {
+			let builderAccess = proof.access(
+				ofParameterTyped: .closure(arguments: [inner.scopeSeamType], isAsync: false, doesThrow: false, returnType: inner.property.typeDescription),
+				mentionedFrom: .declaration(seam),
+				admittedModules: Set([seam.moduleName, instantiables[inner.ownerType]?.moduleName]),
+			)
+			return SeamSignature.Places.Case.Access(level: min(builderAccess.level, seamTypeAccess), cause: builderAccess.cause)
+		}
 		// While a test observes the place graph: a case for each call that presents places and each case of the called seam's
 		// it presents, owned by the level that declares the call, which the same pass drafts that drafts a site's levels.
 		var passedUpCaseBySite = [SeamSignature.Hole.Site: (caseIndex: Int, route: SeamSignature.Places.Route)]()
@@ -366,6 +378,7 @@ extension DependencyTreeGenerator {
 					uncarriedReplacedOnPathsToCalls: [],
 					reenteringCallDeclarations: place.reenteringCallDeclarations,
 					reenteringPlaceFields: place.reenteringPlaceFields,
+					access: accessOfBuilder(passingUp: place.hole),
 				)
 				// The per-site hole of a place several calls present is the first call's.
 				if passedUpCaseBySite[place.hole.site] == nil {
@@ -376,13 +389,7 @@ extension DependencyTreeGenerator {
 		for (offset, passedUp) in passedUpHoles.enumerated() {
 			let builderLabel = builderLabels[siteContents.count + offset]
 			let inner = passedUp.hole
-			// The builder's type names the inner seam's scope struct, as visible as that seam's type, and the property's
-			// type, which this seam's declarations prove again, its owner's module among those admitted.
-			let builderAccess = proof.access(
-				ofParameterTyped: .closure(arguments: [inner.scopeSeamType], isAsync: false, doesThrow: false, returnType: inner.property.typeDescription),
-				mentionedFrom: .declaration(seam),
-				admittedModules: Set([seam.moduleName, instantiables[inner.ownerType]?.moduleName]),
-			)
+			let builderAccess = accessOfBuilder(passingUp: inner)
 			var passedUpHole = SeamSignature.Hole(
 				ownerType: inner.ownerType,
 				// The module that fills the place spells its type, as it does where a seam in another module than the owner holds it.
@@ -402,7 +409,7 @@ extension DependencyTreeGenerator {
 				typesToOwner: passedUp.typesToCall + inner.typesToOwner,
 				scopeTypeName: inner.scopeTypeName,
 				fields: inner.fields,
-				tierAccess: min(builderAccess.level, seamTypeAccess),
+				tierAccess: builderAccess.level,
 				accessCause: builderAccess.cause,
 				uncarriedDeclarations: inner.uncarriedDeclarations,
 				cycleReentryDeclarations: inner.cycleReentryDeclarations,
