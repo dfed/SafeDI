@@ -25,6 +25,27 @@
 extension ScopeGenerator {
 	/// The mock of `instantiable`, the mocked type of this root, whose tree is its generator's children.
 	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext) async throws -> MockLowering.Result {
+		let lowered = try await loweringMockRootWithTree(of: instantiable, context: context)
+		// A test compares each mock root with the same root lowered by a walk that descends every path.
+		if let observer = MockLowering.sharingComparisonObserver, MockLowering.sharesSubtrees {
+			let unshared = try await MockLowering.$sharesSubtrees.withValue(false) {
+				try await MockLowering.$typeKeyLayoutObserver.withValue(nil) {
+					try await MockLowering.$subtreeSharingObserver.withValue(nil) {
+						try await loweringMockRootWithTree(of: instantiable, context: context)
+					}
+				}
+			}
+			observer(
+				"`\(instantiable.concreteInstantiable.asSource).mock()`",
+				MockLowering.sharingComparison(of: lowered.result, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames),
+				MockLowering.sharingComparison(of: unshared.result, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames),
+			)
+		}
+		return lowered.result
+	}
+
+	/// The same, with the outcome of the type key's layout of an internal mock (`typeKeyRootLines(declaredAtRoot:)`).
+	private func loweringMockRootWithTree(of instantiable: Instantiable, context: MockContext) async throws -> (result: MockLowering.Result, layoutOutcome: String?) {
 		// The mocked type's hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every
 		// dependency is a node of its tree, a parameter of `mock()`, an override's binding or passed `nil`.
 		// The parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
@@ -160,6 +181,12 @@ extension ScopeGenerator {
 		// The type key lays an internal mock's body out as production's, where it can, behind a test's switch.
 		let laysOutWithTypeKey = MockLowering.laysOutWithTypeKey && instantiable.generateMock != .public
 		walk.recordsPlaces = laysOutWithTypeKey
+		// The walk shares a built node's subtree between the places that build one generator in one context, where the root
+		// lays out with the type key and no closer or loop of builders reads every path's place
+		// (`MockLowering+SubtreeSharing.swift`).
+		if laysOutWithTypeKey, MockLowering.sharesSubtrees {
+			walk.subtreeSharing = MockLowering.SubtreeSharing(sharingBeneath: self, inlinePlacePaths: walk.filledCallBuilders.holeBuildersByInlinePlace.keys)
+		}
 		let nodes = try await walk.children(
 			of: orderedChildren,
 			loops: mockLoweringLoopMemberships,
@@ -172,12 +199,32 @@ extension ScopeGenerator {
 		if laysOutWithTypeKey {
 			walk.recordBuiltPlaces()
 		}
+		var layoutOutcome: String?
 		if laysOutWithTypeKey {
 			let layout = walk.typeKeyRootLines(declaredAtRoot: signature.typeKeyRootDeclarations)
+			let sharedMeetings = walk.subtreeSharing?.sharedMeetings ?? 0
+			// A shared subtree wrote no text, so a root that keeps the walk's body is lowered again on every path.
+			if layout.lines == nil, sharedMeetings > 0 {
+				// The first walk's tables and records are let go of before the root is lowered again.
+				let heldFacts = walk.subtreeSharing?.heldFacts ?? .init(generators: 0, labelWords: 0)
+				walk.dropRecords()
+				walk.subtreeSharing = nil
+				let unshared = try await MockLowering.$sharesSubtrees.withValue(false) {
+					try await MockLowering.$subtreeSharingObserver.withValue(nil) {
+						try await loweringMockRootWithTree(of: instantiable, context: context)
+					}
+				}
+				MockLowering.subtreeSharingObserver?(MockLowering.SubtreeSharingOutcome(mockedType: instantiable.concreteInstantiable.asSource, sharedMeetings: sharedMeetings, layoutOutcome: layout.fallback, unsharedLayoutOutcome: unshared.layoutOutcome, heldFacts: heldFacts))
+				return unshared
+			}
 			if let typeKeyLines = layout.lines {
 				bindingLines.replaceSubrange(rootReceiverBindingIndex..., with: typeKeyLines)
 			}
 			MockLowering.typeKeyLayoutObserver?(instantiable.concreteInstantiable.asSource, layout.fallback)
+			if MockLowering.sharesSubtrees {
+				MockLowering.subtreeSharingObserver?(MockLowering.SubtreeSharingOutcome(mockedType: instantiable.concreteInstantiable.asSource, sharedMeetings: sharedMeetings, layoutOutcome: layout.fallback, unsharedLayoutOutcome: nil, heldFacts: walk.subtreeSharing?.heldFacts ?? .init(generators: 0, labelWords: 0)))
+			}
+			layoutOutcome = layout.fallback
 		}
 		if laysOutWithTypeKey {
 			walk.dropRecords()
@@ -224,9 +271,10 @@ extension ScopeGenerator {
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		if let publicMockRoot {
 			// A public mock's parameters named apart and its values passed `nil`, as the internal mock's.
-			return publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context)
+			return (publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context), layoutOutcome)
 		} else {
-			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+			let result = MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+			return (result, layoutOutcome)
 		}
 	}
 
@@ -542,6 +590,9 @@ extension MockLowering {
 		/// made, by the closer's path, where its parent reads a configuration: a built place of its type and label hands it
 		/// that field, and the closer hands it the same where no place of its type is above.
 		var closerParentFieldReads = [[Int]: (parentConfiguration: ValuePath, fieldName: String)]()
+		/// The root's sharing of subtrees between the places that build one generator in one context
+		/// (`MockLowering+SubtreeSharing.swift`), or `nil` where the walk descends every path.
+		var subtreeSharing: MockLowering.SubtreeSharing?
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`.
@@ -1009,15 +1060,28 @@ extension MockLowering {
 			case let .descending(started):
 				descending = started
 			}
+			let childrenScope = descending.scope.union(descending.forwarded)
+			// A subtree met before in the same context takes that meeting's nodes and records, and writes no text
+			// (`MockLowering+SubtreeSharing.swift`).
+			let sharedKey = sharedSubtreeKey(of: descending.generator, orderedChildren: descending.orderedChildren, childrenScope: childrenScope, ownLoopMembership: descending.ownLoopMembership)
+			if let sharedKey, let subtreeSharing, let shared = subtreeSharing.subtrees[sharedKey] {
+				subtreeSharing.sharedMeetings += 1
+				subtreeSharing.sourcePathByPath[childIndexPath] = shared.sourcePath
+				subtreeSharing.sourcePaths.insert(shared.sourcePath)
+				return finishBuiltNode(descending, children: shared.children, lines: &lines)
+			}
 			let children = try await children(
 				of: descending.orderedChildren,
 				loops: descending.generator.mockLoweringLoopMemberships,
-				inScope: descending.scope.union(descending.forwarded),
+				inScope: childrenScope,
 				path: descending.nodePath,
 				pathValue: descending.nodePathValue,
 				indent: "\(descending.indent)\(ScopeGenerator.standardIndent)",
 				lines: &lines,
 			)
+			if let sharedKey, let subtreeSharing {
+				subtreeSharing.subtrees[sharedKey] = MockLowering.SharedSubtree(children: children, sourcePath: childIndexPath)
+			}
 			return finishBuiltNode(descending, children: children, lines: &lines)
 		}
 
