@@ -64,6 +64,29 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casePlaces_holdFirstPlaceOfEachCaseInBuilderOrder_whenSeamReachesItsPlacesAlongManyPaths() async throws {
+		// Shape E with twelve screens reaches the `api` of each of its last layer's four models along nine paths: 36 places
+		// in the signature, nine of each case in a row.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: SafeDIToolSeamScopeByTypeTests.shapeEModules(screenCount: 12),
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			filesToDelete: &filesToDelete,
+		)
+		let signature = try #require(output.modules["Feature"]?.generateOutput?.seamSignaturesWrittenToModuleInfo?.first?.signature)
+		#expect(signature.holes.count == 36)
+		#expect(signature.casePlaces.map(\.caseIndex) == [0, 1, 2, 3])
+		#expect(signature.casePlaces.map(\.hole.site) == [0, 9, 18, 27].map { signature.holes[$0].site })
+		#expect(signature.casePlaces.map { $0.hole.sitePath.map(\.label).joined(separator: ".") } == [
+			"screen0Builder.screen5Builder.screen8Builder.model8.api",
+			"screen0Builder.screen5Builder.screen10Builder.model10.api",
+			"screen0Builder.screen5Builder.screen11Builder.model11.api",
+			"screen0Builder.screen6Builder.screen9Builder.model9.api",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFindingOfEveryPlaceOnce_whenAnotherPlacesFillStandsForPlaceWithFinding() async {
 		// `Home` builds `Panel` beneath `First`, `Second` and `Third`, so `Panel`'s `api` is three places of one case, each
 		// handed the same values, as is `Row`'s. `LiveApi` receives `rowBuilder`, which `Panel` builds after `api` and is

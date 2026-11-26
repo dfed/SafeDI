@@ -2955,6 +2955,18 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		]
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casePlaces_keepPlaceACallPassesUpAsACaseOfItsOwn_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.twoLevelPassUpModules(), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let signatures = try #require(output.modules["Feature"]?.generateOutput?.seamSignaturesWrittenToModuleInfo)
+		let casePlacesBySeam = Dictionary(signatures.map { ($0.seamType.asSource, $0.signature?.casePlaces ?? []) }, uniquingKeysWith: { first, _ in first })
+		// `Inner`'s `api` is a case of its place graph. `Middle` and `Outer` pass the place up, which is no case of theirs:
+		// a reader takes it as a case of its own.
+		#expect(casePlacesBySeam.mapValues { $0.map(\.caseIndex) } == ["Inner": [0], "Middle": [nil], "Outer": [nil]])
+		#expect(casePlacesBySeam.mapValues { $0.map { $0.hole.sitePath.map(\.label) } } == ["Inner": [["detailBuilder", "api"]], "Middle": [["detailBuilder", "api"]], "Outer": [["detailBuilder", "api"]]])
+	}
+
 	/// `Inner` builds `Detail`, which receives `logger` and instantiates `api: any Api`; `Outer` instantiates `logger` and calls
 	/// `Inner`, passing the hole up; `App` fills it with `LiveApi`, which receives `logger`.
 	private static func passedUpLoggerModules(rootDeclarations: [String], liveApiInFeature: Bool = false) -> [ModuleFixture] {

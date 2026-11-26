@@ -1526,6 +1526,12 @@ public struct SeamSignature: Sendable {
 	public let places: Places
 	/// The case in `places` of each of `holes`, in its order, or `-1` for a place a call passes up, which is no case yet.
 	public let caseIndexByHole: [Int]
+	/// The seam's places by case, in builder order (`CasePlace.casePlaces(of:caseIndexByHole:)`): what a reader of the
+	/// signature that needs one record per case reads, never `holes` with `caseIndexByHole`. Derived on each read.
+	public var casePlaces: [CasePlace] {
+		CasePlace.casePlaces(of: holes, caseIndexByHole: caseIndexByHole)
+	}
+
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
 	/// a plain builder over its enum, then a `@Sendable` builder over its enum.
 	public let builders: [Builder]
@@ -2238,6 +2244,38 @@ struct SeamSignatureHash {
 	var hexadecimal: String {
 		let digits = String(value, radix: 16, uppercase: true)
 		return String(repeating: "0", count: 16 - digits.count) + digits
+	}
+}
+
+extension SeamSignature {
+	/// One case of a seam's places as a reader of its signature sees it: the places of one property of one owner level in
+	/// one family (`Places.Case`), which generated code is keyed by, however many paths of the seam's tree reach them.
+	public struct CasePlace: Sendable {
+		/// The case's index in `Places.cases`, or `nil` for a place that is a case of its own: one a call passes up, which
+		/// is no case yet, and every place of a signature whose graph was not built.
+		public let caseIndex: Int?
+		/// The case's first place in builder order, the one `Places.Case.namingRoute` leads to: what is equal at every
+		/// place of the case is read from it, and a name made from a path is made from its path.
+		public let hole: Hole
+
+		/// The cases of `holes`, each at the position of its first place, where `caseIndexByHole` holds the case of each
+		/// hole in the order of `holes` (`SeamSignature.caseIndexByHole`). While a signature holds a hole per site this
+		/// keeps the first hole of each case; once it holds a hole per case, it is `holes`, and only this changes.
+		static func casePlaces(of holes: [Hole], caseIndexByHole: [Int]) -> [CasePlace] {
+			var casesFound = Set<Int>()
+			var casePlaces = [CasePlace]()
+			for (index, hole) in holes.enumerated() {
+				// A signature whose graph was not built names no case, as a place a call passes up has none.
+				guard caseIndexByHole.indices.contains(index), caseIndexByHole[index] >= 0 else {
+					casePlaces.append(CasePlace(caseIndex: nil, hole: hole))
+					continue
+				}
+				if casesFound.insert(caseIndexByHole[index]).inserted {
+					casePlaces.append(CasePlace(caseIndex: caseIndexByHole[index], hole: hole))
+				}
+			}
+			return casePlaces
+		}
 	}
 }
 
