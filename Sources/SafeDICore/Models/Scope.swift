@@ -1874,6 +1874,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			holdsPlace: seamHoles.takesBuilders || forMockGeneration || !property.typeDescription.isOptional,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			carrierSite: seamHoles.carrierSite(at: sitePath + [property]),
+			isInsideFill: fillCallDepth != nil,
 		)
 		if let observer = HoleOwnerStackObservation.observer {
 			observer(.built(

@@ -1343,7 +1343,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// beneath it are the fill's, which the module that fills the builder generates. `site` is `nil` in a tree built
 	/// only to compute the seam's signature, which generates nothing. `ownerLazilyInstantiatedInstanceProperties` are the
 	/// properties the site's owner holds only as a `LazilyInstantiated` property's instance, which the site's payload
-	/// reads as the owner's receivers do.
+	/// reads as the owner's receivers do. `isInsideFill` says whether a fill encloses the site, the only place what the
+	/// site carries is read (`fieldsCarriedBySites`).
 	init(
 		holeProperty: Property,
 		erasedToConcreteExistential: Bool,
@@ -1351,6 +1352,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holdsPlace: Bool = true,
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		carrierSite: SeamHoles.CarrierSite? = nil,
+		isInsideFill: Bool = false,
 	) {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		receivedProperties = []
@@ -1408,7 +1410,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = holdsPlace
 		placeHoldingProperties = nil
-		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
+		fieldsCarriedBySites = isInsideFill ? Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property)) : []
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
@@ -1449,7 +1451,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			scopeData = .hole(property: property, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 			fields.valuesBindings = carrierSite?.formations ?? []
 			fields.siteCarrierUse = carrierSite?.use
-			fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
+			// Only a tree that holds no fill is reseated (`confirmingPassFindsNothingNew`), so no fill encloses the site.
+			fieldsCarriedBySites = []
 		case let .root(instantiable, _):
 			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
 			builtInstantiable = instantiable
@@ -5597,7 +5600,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The fields the scope structs of the sites in this generator's subtree carry whose nearest declaration on each
 	/// site's path is above this scope: a fill the seam generates binds each of the filled seam's fields they carry,
-	/// whether or not its own tree reads it.
+	/// whether or not its own tree reads it. Only a fill and the scopes inside one are asked, so a site outside every fill
+	/// carries none here: its fields name its whole path, the earlier siblings of each scope on it included, which would
+	/// make every scope above it differ between paths.
 	let fieldsCarriedBySites: Set<Property>
 	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
 	/// further up the tree. Passing one to this scope’s initializer reads that instance, which instantiates it.
