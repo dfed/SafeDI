@@ -183,15 +183,15 @@ protocol TypeFactsWorld {
 	func firstRoute(to declaration: DeclarationID) -> [DeclarationID]
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
-	/// Owed by the table-side columns.
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
-	/// Owed by the table-side columns.
+	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
+	/// value up to its run ID.
 	func bindings(of declaration: DeclarationID) -> ArraySlice<TypeFactsBinding>
-	/// Owed by the table-side columns.
 	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent>
 	/// Owed by the table-side columns.
 	func hole(_ declaration: DeclarationID) -> TypeFactsHole?
-	/// The union fact of what the subtree receives from above. Owed by the table-side columns.
+	/// The union fact of what the subtree receives from above. Owed: the graph's union rows carry the world's IDs
+	/// (`TypeFactsGraph.receives`) until the snapshot looks a value up to its run ID.
 	func received(by declaration: DeclarationID) -> ArraySlice<TypeFactsReceived>
 	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
 	/// table-side columns.
@@ -242,28 +242,9 @@ extension TypeFactsGraph: TypeFactsWorld {
 		graph.nodes.count
 	}
 
-	/// Never `alias` or `hole` yet, and `constant` for the root: aliases and holes become nodes with the table-side
-	/// columns (step0-columns-brief.md), so a switch over kinds has those cases with nothing behind them until then.
+	/// The form of the property the declaration is built as: a leaf's as its leaf, the root's `constant`.
 	func kind(of declaration: DeclarationID) -> TypeFactsKind {
-		guard let property = graph.nodes[Int(declaration)].property else {
-			return .constant
-		}
-		switch property.propertyType {
-		case .constant:
-			return .constant
-		case .instantiator:
-			return .instantiator
-		case .sendableInstantiator:
-			return .sendableInstantiator
-		case .erasedInstantiator:
-			return .erasedInstantiator
-		case .sendableErasedInstantiator:
-			return .sendableErasedInstantiator
-		case .lazilyInstantiated:
-			return .lazy
-		case .sendableLazilyInstantiated:
-			return .sendableLazy
-		}
+		kinds[Int(declaration)]
 	}
 
 	func construction(of declaration: DeclarationID) -> TypeFactsConstruction {
@@ -298,16 +279,16 @@ extension TypeFactsGraph: TypeFactsWorld {
 		graph.edges(from: Int(declaration))
 	}
 
-	func edgeFacts(from _: DeclarationID) -> ArraySlice<TypeFactsEdge> {
-		[]
+	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge> {
+		edgeFacts(from: Int(declaration))
 	}
 
 	func bindings(of _: DeclarationID) -> ArraySlice<TypeFactsBinding> {
 		[]
 	}
 
-	func parents(of _: DeclarationID) -> ArraySlice<TypeFactsParent> {
-		[]
+	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent> {
+		parents(of: Int(declaration))
 	}
 
 	func hole(_: DeclarationID) -> TypeFactsHole? {
