@@ -7137,11 +7137,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The record of this scope's place where it calls another module's seam and is built by value: its text, with the reads
-	/// of the call's arguments, or `nil` where the type key does not plan it.
+	/// The record of this scope's place where it calls another module's seam: its text, with the reads of the call's
+	/// arguments, or `nil` where the type key does not plan it. A builder's forwarded values are bound inside its text, so a
+	/// read of one of `forwardedProperties`' labels is no read outside it.
 	nonisolated private func seamCallRecord(
 		of property: Property,
 		instantiable: Instantiable,
+		forwardedProperties: [Property] = [],
 		code: GeneratedCode,
 		declaredFunctionName: String?,
 		unavailableProperties: Set<Property>,
@@ -7155,6 +7157,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		      cycleParameters.isEmpty,
 		      var reads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
+		let forwardedLabels = Set(forwardedProperties.map(\.label))
+		reads.removeAll { forwardedLabels.contains($0.label) }
 		// A call that passes places up hands the seam a member of the builder or level the caller's tree holds for each: a read
 		// of that struct, typed as the caller's tree binds it. A call that fills a place, or passes a struct no binding of the
 		// tree types, such as one a fill is handed, is not planned.
@@ -8999,8 +9003,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
 			} else if seamCall != nil {
-				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
-				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
+				try seamCallRecord(of: property, instantiable: instantiable, forwardedProperties: forwardedProperties, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
