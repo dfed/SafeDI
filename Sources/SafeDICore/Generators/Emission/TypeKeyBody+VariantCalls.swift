@@ -25,6 +25,9 @@ struct VariantCall: Sendable {
 	let property: Property
 	let calledBody: Int
 	let arguments: [Answer]
+	/// The values the call hands the called body's function besides its labels' answers, one per passed argument its
+	/// record declares (`BuiltPlaceRecord.passedArguments`), in that order.
+	var passedArguments = [PassedArgument]()
 
 	/// The paths of the places beneath which one of `calls` is made: each proper prefix of a call's path, `[]` included.
 	static func pathsLeadingTo(_ calls: [VariantCall]) -> Set<[Int]> {
@@ -64,17 +67,43 @@ protocol TypeKeyVariantPlan {
 	func isInSendableFamily(_ body: Int) -> Bool
 }
 
+/// Why the type key does not lay out a root's body from a per-type plan, so that the root keeps the path key's body. Each
+/// names the body of the plan, and the path of the place in it, where the layout stopped.
+enum TypeKeyRefusal: Error, Hashable, Sendable {
+	/// A call of `body` is of the root's own body, which no function builds, or of a body the plan does not have.
+	case callOfBodyOutsidePlan(body: Int, calledBody: Int)
+	/// Two calls of `body` are at the place at `path`.
+	case twoCallsAtOnePlace(body: Int, path: [Int])
+	/// `body`'s generator builds no place the type key reads.
+	case bodyBuildsNoPlace(body: Int)
+	/// A statement beneath the place at `path` in `body` is not a place.
+	case statementIsNoPlace(body: Int, path: [Int])
+	/// The place at `path` in `body` holds more places than its generator has children.
+	case placesOutnumberChildren(body: Int, path: [Int])
+	/// The place at `path` in `body` holds fewer places than its generator has children.
+	case childrenOutnumberPlaces(body: Int, path: [Int])
+	/// The call place at `path` in `body` is a rename, which no call can be.
+	case callAtRename(body: Int, path: [Int])
+	/// The call at `path` in `body` answers other labels than the body it calls takes.
+	case answersDifferFromLabels(body: Int, path: [Int])
+	/// The call at `path` in `body` passes other arguments than the body it calls declares.
+	case passedArgumentsDifferFromParameters(body: Int, path: [Int])
+	/// The call at `path` in `body` names no place of the body.
+	case callNamesNoPlace(body: Int, path: [Int])
+	/// The layout of the root's body and its variants kept the path key's body.
+	case layoutKeepsPathKeysBody
+}
+
 extension TypeKeyBody {
-	/// The statements of a root's body laid out from the per-type plan `plan`, or `nil` where the root keeps the path key's
-	/// body: the root's own body is the root's statements, each other body a variant whose function the root declares, and
-	/// each call place a closing record of the body it calls.
-	static func statements(ofPlan plan: some TypeKeyVariantPlan, outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
-		guard let rootStatements = resolvingCalls(in: plan.rootStatements, ofBody: 0, plan: plan) else { return nil }
+	/// The statements of a root's body laid out from the per-type plan `plan`: the root's own body is the root's
+	/// statements, each other body a variant whose function the root declares, and each call place a closing record of the
+	/// body it calls. Throws a `TypeKeyRefusal` where the root keeps the path key's body.
+	static func statements(ofPlan plan: some TypeKeyVariantPlan, outerDeclarations: [Property] = [], namesInScope: Set<String> = []) throws(TypeKeyRefusal) -> [GeneratedCode] {
+		let rootStatements = try resolvingCalls(in: plan.rootStatements, ofBody: 0, plan: plan)
 		var variants = [CycleVariantRecord]()
 		for body in 1..<max(plan.bodyCount, 1) {
-			guard let record = plan.record(ofBody: body),
-			      let children = resolvingCalls(in: TypeKeyLayout.statementCodes(of: record.children), ofBody: body, plan: plan)
-			else { return nil }
+			guard let record = plan.record(ofBody: body) else { throw .bodyBuildsNoPlace(body: body) }
+			let children = try resolvingCalls(in: TypeKeyLayout.statementCodes(of: record.children), ofBody: body, plan: plan)
 			variants.append(CycleVariantRecord(
 				record: record.with(children: children),
 				isInSendableFamily: plan.isInSendableFamily(body),
@@ -82,27 +111,31 @@ extension TypeKeyBody {
 				answers: plan.answers(of: body),
 			))
 		}
-		return statements(ofRootBody: rootStatements, variants: variants, outerDeclarations: outerDeclarations, namesInScope: namesInScope)
+		guard let statements = statements(ofRootBody: rootStatements, variants: variants, outerDeclarations: outerDeclarations, namesInScope: namesInScope) else {
+			throw .layoutKeepsPathKeysBody
+		}
+		return statements
 	}
 
 	/// `statements`, the places of body `body`'s root, with each call place `plan` gives the body a closing record of the
-	/// body it calls, at every depth; `nil` where a call's path names no place, a place is not one a call place can be, or a
+	/// body it calls, at every depth. Throws where a call's path names no place, a place is not one a call place can be, or a
 	/// call is of the root's own body, which no function builds.
-	private static func resolvingCalls(in statements: [GeneratedCode], ofBody body: Int, plan: some TypeKeyVariantPlan) -> [GeneratedCode]? {
+	private static func resolvingCalls(in statements: [GeneratedCode], ofBody body: Int, plan: some TypeKeyVariantPlan) throws(TypeKeyRefusal) -> [GeneratedCode] {
 		let calls = plan.calls(of: body)
 		var callsByPath = [[Int]: VariantCall]()
 		for call in calls {
-			guard call.calledBody > 0, call.calledBody < plan.bodyCount, callsByPath.updateValue(call, forKey: call.path) == nil else { return nil }
+			guard call.calledBody > 0, call.calledBody < plan.bodyCount else { throw .callOfBodyOutsidePlan(body: body, calledBody: call.calledBody) }
+			guard callsByPath.updateValue(call, forKey: call.path) == nil else { throw .twoCallsAtOnePlace(body: body, path: call.path) }
 		}
 		// Only a place on the path to a call changes; every other is kept as its statement is.
 		let pathsToCalls = VariantCall.pathsLeadingTo(calls)
-		var resolvedCalls = 0
+		var resolvedPaths = Set<[Int]>()
 		var resolvedStatements = [GeneratedCode]()
 		var frames = [CallResolutionFrame(path: [], statements: statements, childIndices: plan.childIndices(ofPlaceAt: [], inBody: body), owner: nil)]
 		while var frame = frames.popLast() {
 			guard frame.next < frame.statements.count else {
 				// Every child of the place's generator is a place of its body, in the order the generator builds them.
-				guard frame.places == frame.childIndices.count else { return nil }
+				guard frame.places == frame.childIndices.count else { throw .childrenOutnumberPlaces(body: body, path: frame.path) }
 				if let owner = frame.owner {
 					frames[frames.count - 1].resolved.append(replacingRecord(in: owner.statement, with: .built(owner.record.with(children: frame.resolved))))
 				} else {
@@ -113,12 +146,13 @@ extension TypeKeyBody {
 			let statement = frame.statements[frame.next]
 			frame.next += 1
 			// Every statement of a body the type key reads is a place.
-			guard let record = TypeKeyLayout.record(of: statement), frame.places < frame.childIndices.count else { return nil }
+			guard let record = TypeKeyLayout.record(of: statement) else { throw .statementIsNoPlace(body: body, path: frame.path) }
+			guard frame.places < frame.childIndices.count else { throw .placesOutnumberChildren(body: body, path: frame.path) }
 			let path = frame.path + [frame.childIndices[frame.places]]
 			frame.places += 1
 			if let call = callsByPath[path] {
-				guard let closer = closingRecord(of: call, at: record, plan: plan) else { return nil }
-				resolvedCalls += 1
+				let closer = try closingRecord(of: call, at: record, inBody: body, plan: plan)
+				resolvedPaths.insert(path)
 				frame.resolved.append(replacingRecord(in: statement, with: .closer(closer)))
 				frames.append(frame)
 			} else if case let .built(built) = record, !built.children.isEmpty, pathsToCalls.contains(path) {
@@ -130,13 +164,15 @@ extension TypeKeyBody {
 			}
 		}
 		// Each call names one place, so a call no place took names none.
-		guard resolvedCalls == calls.count else { return nil }
+		for call in calls where !resolvedPaths.contains(call.path) {
+			throw .callNamesNoPlace(body: body, path: call.path)
+		}
 		return resolvedStatements
 	}
 
 	/// The closing record of `call`, made at a call place whose own record is `record`: the call's property, built by
 	/// calling its body's function, which takes the called body's labels.
-	private static func closingRecord(of call: VariantCall, at record: PlaceRecord, plan: some TypeKeyVariantPlan) -> ClosingPlaceRecord? {
+	private static func closingRecord(of call: VariantCall, at record: PlaceRecord, inBody body: Int, plan: some TypeKeyVariantPlan) throws(TypeKeyRefusal) -> ClosingPlaceRecord {
 		let isErased: Bool
 		let isExtension: Bool
 		let forwardedProperties: [Property]
@@ -150,11 +186,15 @@ extension TypeKeyBody {
 			isExtension = closer.isExtension
 			forwardedProperties = closer.forwardedProperties
 		case .alias:
-			return nil
+			throw .callAtRename(body: body, path: call.path)
 		}
 		let labels = plan.labels(of: call.calledBody)
-		guard labels.count == call.arguments.count else { return nil }
-		return ClosingPlaceRecord(
+		guard labels.count == call.arguments.count else { throw .answersDifferFromLabels(body: body, path: call.path) }
+		let parameters = plan.record(ofBody: call.calledBody)?.passedArguments ?? []
+		guard call.passedArguments.map(\.parameterName) == parameters.map(\.parameterName),
+		      call.passedArguments.map(\.type) == parameters.map(\.type)
+		else { throw .passedArgumentsDifferFromParameters(body: body, path: call.path) }
+		var closer = ClosingPlaceRecord(
 			callingVariant: call.calledBody - 1,
 			property: call.property,
 			isErased: isErased,
@@ -163,6 +203,8 @@ extension TypeKeyBody {
 			labels: labels,
 			arguments: call.arguments,
 		)
+		closer.passedArguments = call.passedArguments
+		return closer
 	}
 
 	/// `statement`, a place under its indentations, with its record `record`.

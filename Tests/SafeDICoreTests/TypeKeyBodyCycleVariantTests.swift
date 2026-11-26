@@ -305,7 +305,7 @@ struct TypeKeyBodyCycleVariantTests {
 			],
 			labels: [1: ["p", "q"], 2: ["p", "q"]],
 		)
-		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
+		let statements = try TypeKeyBody.statements(ofPlan: plan)
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let p = P()
 		        let q = Q()
@@ -335,7 +335,7 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: ["x"])]],
 			labels: [1: ["x"]],
 		)
-		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
+		let statements = try TypeKeyBody.statements(ofPlan: plan)
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let x = X()
 		        func __safeDI_aBuilder() -> A {
@@ -360,7 +360,7 @@ struct TypeKeyBodyCycleVariantTests {
 			],
 			labels: [1: ["x"]],
 		)
-		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
+		let statements = try TypeKeyBody.statements(ofPlan: plan)
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let x = X()
 		        func __safeDI_aBuilder() -> A {
@@ -384,7 +384,7 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])]],
 			labels: [1: []],
 		)
-		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
+		let statements = try TypeKeyBody.statements(ofPlan: plan)
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        func __safeDI_aBuilder() -> A {
 		            A()
@@ -402,7 +402,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [1], calling: 1, reading: [])]],
 			labels: [1: []],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.callNamesNoPlace(body: 0, path: [1])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -414,7 +416,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 0, reading: [])]],
 			labels: [:],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.callOfBodyOutsidePlan(body: 0, calledBody: 0)) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -426,7 +430,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: []), Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])]],
 			labels: [1: []],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.twoCallsAtOnePlace(body: 0, path: [0])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -439,7 +445,9 @@ struct TypeKeyBodyCycleVariantTests {
 			labels: [1: []],
 			bodyCount: 2,
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.bodyBuildsNoPlace(body: 1)) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -451,7 +459,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [:],
 			labels: [:],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.childrenOutnumberPlaces(body: 0, path: [])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -463,7 +473,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [:],
 			labels: [:],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.placesOutnumberChildren(body: 0, path: [])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -475,7 +487,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])]],
 			labels: [1: []],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.callAtRename(body: 0, path: [0])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -487,7 +501,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [1], calling: 1, reading: [])]],
 			labels: [1: ["x"]],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.answersDifferFromLabels(body: 0, path: [1])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -499,7 +515,9 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [:],
 			labels: [:],
 		)
-		#expect(TypeKeyBody.statements(ofPlan: plan) == nil)
+		#expect(throws: TypeKeyRefusal.statementIsNoPlace(body: 0, path: [])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	@Test
@@ -511,13 +529,71 @@ struct TypeKeyBodyCycleVariantTests {
 			calls: [0: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])]],
 			labels: [1: []],
 		)
-		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
+		let statements = try TypeKeyBody.statements(ofPlan: plan)
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        func __safeDI_aBuilder() -> A {
 		            A()
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		""")
+	}
+
+	@Test
+	func statementsOfPlan_keepsThePathKeysBody_whenTheLayoutKeepsIt() {
+		let plan = FakePlan(
+			rootStatements: [Self.alias("q", "Q"), Self.leaf("aBuilder", building: "A")],
+			records: [1: Self.variant("aBuilder", building: "A", reading: [], children: [Self.leaf("aBuilder", building: "A"), Self.inline("k", "K", reading: "q", "Q")]).record],
+			childIndices: [0: [[]: [0, 1]], 1: [[]: [0, 1]]],
+			calls: [
+				0: [Self.variantCall("aBuilder", building: "A", at: [1], calling: 1, reading: [])],
+				1: [Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])],
+			],
+			labels: [1: []],
+		)
+		#expect(throws: TypeKeyRefusal.layoutKeepsPathKeysBody) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
+	}
+
+	@Test
+	func statementsOfPlan_handsEachCallsPassedArguments_whenTheCalledBodyDeclaresThem() throws {
+		let cfg = TypeDescription.simple(name: "Cfg")
+		var record = Self.variant("aBuilder", building: "A", reading: [], children: []).record
+		record.passedArguments = [PassedArgument(parameterName: "cfg", type: cfg, value: .emptyInitialization(cfg), staysOutsideSendableFunctions: false)]
+		var call = Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])
+		call.passedArguments = [PassedArgument(parameterName: "cfg", type: cfg, value: .emptyInitialization(cfg), staysOutsideSendableFunctions: false)]
+		let plan = FakePlan(
+			rootStatements: [Self.leaf("aBuilder", building: "A")],
+			records: [1: record],
+			childIndices: [0: [[]: [0]], 1: [[]: []]],
+			calls: [0: [call]],
+			labels: [1: []],
+		)
+		let statements = try TypeKeyBody.statements(ofPlan: plan)
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        func __safeDI_aBuilder(cfg: Cfg) -> A {
+		            A()
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(cfg: Cfg())
+		        }
+		""")
+	}
+
+	@Test
+	func statementsOfPlan_keepsThePathKeysBody_whenACallPassesArgumentsItsBodyDoesNotDeclare() {
+		var call = Self.variantCall("aBuilder", building: "A", at: [0], calling: 1, reading: [])
+		call.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .emptyInitialization(.simple(name: "Cfg")), staysOutsideSendableFunctions: false)]
+		let plan = FakePlan(
+			rootStatements: [Self.leaf("aBuilder", building: "A")],
+			records: [1: Self.variant("aBuilder", building: "A", reading: [], children: []).record],
+			childIndices: [0: [[]: [0]], 1: [[]: []]],
+			calls: [0: [call]],
+			labels: [1: []],
+		)
+		#expect(throws: TypeKeyRefusal.passedArgumentsDifferFromParameters(body: 0, path: [0])) {
+			try TypeKeyBody.statements(ofPlan: plan)
+		}
 	}
 
 	/// A call place of the plan for `label`, an `Instantiator` of `type`, as a body's generator builds it: a place with no
