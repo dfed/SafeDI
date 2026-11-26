@@ -137,59 +137,14 @@ extension DependencyTreeGenerator {
 		}
 		// The bodies the plan builds with no tree of today's: the root's, beneath every binding the mock gives its tree,
 		// then the body of each call place a body holds, beneath the answers that body's path gives it.
-		if let planObserver, let rootCopy = shadow.copy(of: mockRootScope) {
-			let rootLabels = Set(boundProperties.map(\.label)).sorted()
-			var bodiesOfPlan = [Int]()
-			var bodiesToWalk = try [bodies.body(
-				of: rootCopy,
-				as: VariantBodyKey(scope: ObjectIdentifier(mockRootScope), property: nil, twinsBeingBuilt: [:], isInSendableFamily: false),
-				keyedBy: rootLabels,
-				answering: rootLabels,
-				beneath: rootNearestDeclarations,
-				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			)]
-			while let bodyToWalk = bodiesToWalk.popLast() {
-				let body = bodies.bodies[bodyToWalk]
-				var bodyWalk = PlaceContextWalk(
-					ofTodaysTree: body.generator,
-					builtFrom: body.copy,
-					beneath: body.nearestDeclarations,
-					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
-					twinValues: shadow.twinValues,
-					twinsBeingBuilt: body.key.twinsBeingBuilt,
-					isInSendableFamily: body.key.isInSendableFamily,
-					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
-					isMockRoot: body.key.property == nil,
-				)
-				while let (context, _) = bodyWalk.next() {
-					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
-						let labels = labels(readBy: calledScope, builtAs: context.property, cache: &cache)
-						// A call is of the function's property: where the path is building the value the call place builds as
-						// its twin, the call closes the cycle on that property's function, beneath the calling scope's
-						// declarations.
-						let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
-						let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
-						var calledNearestDeclarations = context.nearestDeclarations
-						if functionProperty != context.property {
-							calledNearestDeclarations = context.enclosingNearestDeclarations
-							calledNearestDeclarations.build(functionProperty)
-						}
-						let calledBody = try bodies.body(
-							of: calledCopy,
-							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily),
-							keyedBy: labels,
-							answering: VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter),
-							beneath: calledNearestDeclarations,
-							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
-							builtBy: (context.builder, context.erasedToConcreteExistential),
-						)
-						if !bodiesOfPlan.contains(calledBody) {
-							bodiesOfPlan.append(calledBody)
-							bodiesToWalk.append(calledBody)
-						}
-					}
-				}
-			}
+		if let planObserver, let (_, bodiesOfPlan) = try bodies.plan(
+			ofMockRoot: mockRootScope,
+			keyedBy: Set(boundProperties.map(\.label)).sorted(),
+			beneath: rootNearestDeclarations,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			shadow: shadow,
+			cache: &cache,
+		) {
 			planObserver(
 				mockRoot,
 				bodiesOfPlan.map { bodies.bodies[$0].description },

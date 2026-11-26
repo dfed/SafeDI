@@ -191,6 +191,39 @@ extension DependencyTreeGenerator {
 				beneath: NearestDeclarations(),
 				lazilyInstantiatedInstanceProperties: [],
 			)
+			return try (rootBody, plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: false, cache: &cache))
+		}
+
+		/// Builds a mock root's plan as `plan(ofRoot:shadow:cache:)` builds a production root's: the root's body, built
+		/// beneath the bindings the mock gives its tree (`rootNearestDeclarations`, keyed by their labels, `rootLabels`), its
+		/// declarations joined to them (`PlaceContextWalk`'s `isMockRoot`), then the body of each call place a body holds.
+		/// - Returns: The position of the root's body, and of each body called in the order the plan first calls it, or
+		///   `nil` where `shadow` holds no copy of `scope`.
+		mutating func plan(
+			ofMockRoot scope: Scope,
+			keyedBy rootLabels: [String],
+			beneath rootNearestDeclarations: NearestDeclarations,
+			lazilyInstantiatedInstanceProperties: Set<Property>,
+			shadow: CallPlaceShadow,
+			cache: inout ReceivedPropertiesCache,
+		) throws -> (rootBody: Int, calledBodies: [Int])? {
+			guard let rootCopy = shadow.copy(of: scope) else { return nil }
+			let rootBody = try body(
+				of: rootCopy,
+				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:], isInSendableFamily: false),
+				keyedBy: rootLabels,
+				answering: rootLabels,
+				beneath: rootNearestDeclarations,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			)
+			return try (rootBody, plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: true, cache: &cache))
+		}
+
+		/// The bodies the plan whose root's body is at `rootBody` calls, in the order it first calls each: the body of each
+		/// call place a body holds, beneath the answers that body's path gives it, until no call is answered anew. Keeps
+		/// each body's calls (`calls(of:)`). `isMockRoot` says whether the root's body is a mock root's, whose declarations
+		/// join the bindings it is built beneath.
+		private mutating func plan(fromRootBody rootBody: Int, shadow: CallPlaceShadow, isMockRoot: Bool, cache: inout ReceivedPropertiesCache) throws -> [Int] {
 			var bodiesOfPlan = [Int]()
 			var bodiesToWalk = [rootBody]
 			while let bodyToWalk = bodiesToWalk.popLast() {
@@ -205,6 +238,7 @@ extension DependencyTreeGenerator {
 					twinsBeingBuilt: body.key.twinsBeingBuilt,
 					isInSendableFamily: body.key.isInSendableFamily,
 					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
+					isMockRoot: isMockRoot && bodyToWalk == rootBody,
 				)
 				while let (context, _) = bodyWalk.next() {
 					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
@@ -248,7 +282,7 @@ extension DependencyTreeGenerator {
 				}
 				callsByBody[bodyToWalk] = calls.sorted { $0.path.lexicographicallyPrecedes($1.path) }
 			}
-			return (rootBody, bodiesOfPlan)
+			return bodiesOfPlan
 		}
 
 		/// The position of the body of `copy` built as `key` beneath what `nearestDeclarations` answers `answeredLabels`,
