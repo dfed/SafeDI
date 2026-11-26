@@ -93,6 +93,89 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutTheOrdinaryModuleFromNodeRecords_whenItHasFortyScreens() async throws {
+		// The ordinary module's shape (designs/per-type-facts/ordinary.py): services the root builds, and layers of four
+		// screens, each forwarding an ID to its view model, every third building an avatar, each opening screens of the
+		// next layer. Every node is a constant or an `Instantiator` built by its initializer, so nothing refuses.
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: Self.ordinaryModule(screenCount: 40), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.root) == ["Root"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesARecordPerNode_whenTheTreeReachesEachNodeOnExponentiallyManyPaths() async throws {
+		// Soundness rule 5: each layer builds the next twice, so the tree has a place per path, and node records one record
+		// per node.
+		var counts = [[Int]]()
+		for layerCount in [4, 8] {
+			var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let layer: Layer1"])]
+			for layer in 1...layerCount {
+				let declarations = layer == layerCount
+					? ["@Received let session: Session"]
+					: ["@Received let session: Session", "@Instantiated let first: Layer\(layer + 1)", "@Instantiated let second: Layer\(layer + 1)"]
+				types.append(seamFixtureType(named: "Layer\(layer)", isFinalClass: true, declarations: declarations))
+			}
+			types.append(seamFixtureType(named: "Session", isFinalClass: true, declarations: []))
+			let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { [types] filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			counts += reports.map { [$0.recordCount, $0.treePlaceCount] }
+		}
+		#expect(counts == [[8, 16], [16, 256]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresOneFunctionPerBuilderOfOneLabel_whenSharedPlacesInTwoScopesDeclareIt() async throws {
+		// `Detail`'s `itemBuilder` is one node, reached from `first` and `second`, while `Root` declares an `itemBuilder` of
+		// its own: the allocator meets the label from three scopes, two of them parents of one shared place, and declares one
+		// function for the label, which `Detail`'s function and the root both call.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let itemBuilder: Instantiator<Item>", "@Instantiated let first: First", "@Instantiated let second: Second"]),
+				seamFixtureType(named: "First", isFinalClass: true, declarations: ["@Instantiated let detail: Detail"]),
+				seamFixtureType(named: "Second", isFinalClass: true, declarations: ["@Instantiated let detail: Detail"]),
+				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated let itemBuilder: Instantiator<Item>"]),
+				seamFixtureType(named: "Item", isFinalClass: true, declarations: []),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_itemBuilder() -> Item {
+			            Item()
+			        }
+			        let itemBuilder = Instantiator<Item>(__safeDI_itemBuilder)
+			        func __safeDI_detail() -> Detail {
+			            let itemBuilder = Instantiator<Item>(__safeDI_itemBuilder)
+			            return Detail(itemBuilder: itemBuilder)
+			        }
+			        func __safeDI_first() -> First {
+			            let detail: Detail = __safeDI_detail()
+			            return First(detail: detail)
+			        }
+			        let first: First = __safeDI_first()
+			        func __safeDI_second() -> Second {
+			            let detail: Detail = __safeDI_detail()
+			            return Second(detail: detail)
+			        }
+			        let second: Second = __safeDI_second()
+			        self.init(itemBuilder: itemBuilder, first: first, second: second)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
 	func nodeRecordsFiles_callNoScopeGeneratorAndReadNoText_whenReadAsSource() throws {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
 		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
@@ -187,6 +270,40 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		}
 		""",
 	]
+
+	/// The ordinary module (designs/per-type-facts/ordinary.py) at `screenCount` screens, with each screen opening the
+	/// next layer's screens in turn, two or three of them, in place of the script's seeded sample.
+	private static func ordinaryModule(screenCount: Int) -> [String] {
+		func type(_ name: String, _ properties: [(attribute: String, label: String, type: String)], attribute: String = "@Instantiable") -> String {
+			let parameters = properties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+			let assignments = properties.map { "        self.\($0.label) = \($0.label)\n" }.joined()
+			let declarations = properties.map { "    \($0.attribute) let \($0.label): \($0.type)\n" }.joined()
+			return "\(attribute)\npublic final class \(name): Instantiable {\n    public init(\(parameters)) {\n\(assignments)    }\n\n\(declarations)}\n"
+		}
+		var types = ["Network", "Database", "ImageCache"].map { type($0, []) }
+		types.append(type("ImageLoader", [("@Received", "imageCache", "ImageCache")]))
+		types.append(type("Avatar", [("@Instantiated", "imageLoader", "ImageLoader")]))
+		let layers = stride(from: 0, to: screenCount, by: 4).map { Array($0..<min($0 + 4, screenCount)) }
+		types.append(type("Root", [("@Instantiated", "network", "Network"), ("@Instantiated", "database", "Database"), ("@Instantiated", "imageCache", "ImageCache")] + layers[0].map { ("@Instantiated", "screen\($0)Builder", "Instantiator<Screen\($0)>") }, attribute: "@Instantiable(isRoot: true)"))
+		for (layerIndex, layer) in layers.enumerated() {
+			for screen in layer {
+				types.append(type("Repository\(screen)", [("@Received", "database", "Database"), ("@Received", "network", "Network")]))
+				types.append(type("ViewModel\(screen)", [("@Received", "id", "Int"), ("@Instantiated", "repository", "Repository\(screen)")]))
+				var properties = [("@Forwarded", "id", "Int"), ("@Instantiated", "viewModel", "ViewModel\(screen)")]
+				if screen % 3 == 0 {
+					properties.append(("@Instantiated", "avatar", "Avatar"))
+				}
+				if layerIndex + 1 < layers.count {
+					let next = layers[layerIndex + 1]
+					let openedCount = min(next.count, 2 + screen % 2)
+					let opened = (0..<openedCount).map { next[(screen + $0) % next.count] }.sorted()
+					properties += opened.map { ("@Instantiated", "screen\($0)Builder", "Instantiator<Screen\($0)>") }
+				}
+				types.append(type("Screen\(screen)", properties))
+			}
+		}
+		return types
+	}
 
 	/// What `body` returns with every root node records accept laid out from them, and the report of each root of the run.
 	private static func layingOutRoots<Output>(

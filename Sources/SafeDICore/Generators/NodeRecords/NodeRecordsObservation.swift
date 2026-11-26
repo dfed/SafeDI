@@ -35,9 +35,11 @@ public enum NodeRecordsObservation {
 	@TaskLocal static var rootBodyObserver: (@Sendable (_ rootBody: [GeneratedCode]) -> Void)?
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
-	/// make: a line per difference, each naming the place by the labels on its path.
-	static func differences(between treeBody: [GeneratedCode], and nodeRecordsBody: [GeneratedCode]) -> [String] {
+	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
+	/// holds, each place a shared plan reaches counted once per path.
+	static func differences(between treeBody: [GeneratedCode], and nodeRecordsBody: [GeneratedCode]) -> (differences: [String], treePlaceCount: Int) {
 		var differences = [String]()
+		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
 		while let (tree, nodeRecords, path) = pending.popLast() {
 			guard tree.count == nodeRecords.count else {
@@ -53,9 +55,10 @@ public enum NodeRecordsObservation {
 				}
 				let placePath = "\(path).\(nodeRecordsRecord.property.label)"
 				guard case let .place(treePlan) = treeInner.node, case let .built(treeRecord)? = treePlan.record else {
-					differences.append("\(placePath): the tree writes no built place's record")
+					differences.append("\(placePath): the tree writes no built place’s record")
 					continue
 				}
+				treePlaceCount += 1
 				if treeIndentation != nodeRecordsIndentation {
 					differences.append("\(placePath): indented \(treeIndentation.count) in the tree, \(nodeRecordsIndentation.count) by node records")
 				}
@@ -63,7 +66,7 @@ public enum NodeRecordsObservation {
 				pending.append((tree: treeRecord.children, nodeRecords: nodeRecordsRecord.children, path: placePath))
 			}
 		}
-		return differences
+		return (differences, treePlaceCount)
 	}
 
 	private static func unindented(_ code: GeneratedCode) -> (indentation: String, code: GeneratedCode) {
@@ -112,4 +115,8 @@ public struct NodeRecordsReport: Sendable {
 	public let isLaidOutFromNodeRecords: Bool
 	/// Each way the records differ from the records the tree's places made, where both were made.
 	public let differences: [String]
+	/// How many records node records made: one per variant but the root's (soundness rule 5).
+	public let recordCount: Int
+	/// How many places the tree's body holds, counted per path, where node records made the root's records.
+	public let treePlaceCount: Int
 }

@@ -42,8 +42,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case builderLoop
 	/// A node has more than one variant, so its record would not be a function of the node alone.
 	case nodeHasSeveralVariants
-	/// The node's initializer cannot be called with its dependencies.
-	case initializerArguments
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
 }
@@ -81,7 +79,9 @@ extension TypeFactsGraph: NodeRecordSources {
 /// moves to node records last, at stage 4.
 struct NodeRecords: Sendable {
 	/// - Parameter world: A production root's world.
-	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {
+	/// - Throws: A `NodeRecordRefusal` where the world holds a kind stage 1 does not make, or what an initializer's
+	///   arguments throw.
+	init(world: some NodeRecordSources) throws {
 		let declarationCount = world.declarationCount
 		for declaration in 0..<Int32(declarationCount) {
 			try Self.checkStageOneKind(of: declaration, in: world)
@@ -89,7 +89,7 @@ struct NodeRecords: Sendable {
 		var variantByDeclaration = [VariantID](repeating: -1, count: declarationCount)
 		for variant in 0..<Int32(world.variantCount) {
 			let declaration = Int(world.declaration(of: variant))
-			guard variantByDeclaration[declaration] < 0 else { throw .nodeHasSeveralVariants }
+			guard variantByDeclaration[declaration] < 0 else { throw NodeRecordRefusal.nodeHasSeveralVariants }
 			variantByDeclaration[declaration] = variant
 		}
 		let order = try NodeBuildOrder(world: world)
@@ -140,6 +140,11 @@ struct NodeRecords: Sendable {
 	/// statements are.
 	let rootBody: [GeneratedCode]
 
+	/// How many records were made: one per variant but the root's.
+	var recordCount: Int {
+		records.count - 1
+	}
+
 	/// By variant.
 	private let records: [BuiltPlaceRecord?]
 
@@ -188,16 +193,12 @@ struct NodeRecords: Sendable {
 		in world: some NodeRecordSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
-	) throws(NodeRecordRefusal) -> BuiltPlaceRecord {
+	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`checkStageOneKind(of:in:)`).
-		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw .noInitializer }
-		let arguments: [(argument: CallArgument, dependency: Dependency)]
-		do {
-			arguments = try initializer.createInitializerArguments(given: instantiable.dependencies)
-		} catch {
-			throw .initializerArguments
-		}
+		guard let property = world.property(of: declaration), let initializer = instantiable.initializer else { throw NodeRecordRefusal.noInitializer }
+		// Throws what the tree's construction of the same place throws, which the `@Instantiable` macro rejects first.
+		let arguments = try initializer.createInitializerArguments(given: instantiable.dependencies)
 		let isExtension = instantiable.declarationType.isExtension
 		let isInstantiator = switch world.kind(of: declaration) {
 		case .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:

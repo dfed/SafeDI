@@ -31,8 +31,8 @@ extension DependencyTreeGenerator {
 		let nodeRecords: NodeRecords
 		do {
 			nodeRecords = try NodeRecords(world: TypeFactsGraph(root: constructionScope, forMockGeneration: false))
-		} catch {
-			observer(NodeRecordsReport(root: root, refusal: error.rawValue, isLaidOutFromNodeRecords: false, differences: []))
+		} catch let refusal as NodeRecordRefusal {
+			observer(NodeRecordsReport(root: root, refusal: refusal.rawValue, isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0))
 			return try await rootInfo.scopeGenerator.generatePlan()
 		}
 		let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots {
@@ -43,12 +43,16 @@ extension DependencyTreeGenerator {
 		// The tree's places are planned beside node records' so that the two are compared, even where the root is laid out
 		// from node records.
 		let nodeRecordsBody = nodeRecords.rootBody
+		let recordCount = nodeRecords.recordCount
 		let treeCode = try await NodeRecordsObservation.$rootBodyObserver.withValue({ treeBody in
+			let comparison = NodeRecordsObservation.differences(between: treeBody, and: nodeRecordsBody)
 			observer(NodeRecordsReport(
 				root: root,
 				refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? NodeRecordRefusal.notLaidOut.rawValue : nil,
 				isLaidOutFromNodeRecords: laidOutCode != nil,
-				differences: NodeRecordsObservation.differences(between: treeBody, and: nodeRecordsBody),
+				differences: comparison.differences,
+				recordCount: recordCount,
+				treePlaceCount: comparison.treePlaceCount,
 			))
 		}) {
 			try await rootInfo.scopeGenerator.generatePlan()
