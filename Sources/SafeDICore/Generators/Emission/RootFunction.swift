@@ -242,6 +242,33 @@ public enum RootFunctionHoisting {
 		)
 	}
 
+	/// The names of the root functions `codes` hold outside every other root function: omitting those omits every root
+	/// function the code holds, so the code's text without its root functions omits these alone, read without walking
+	/// the plans the root functions hold.
+	static func outermostNames(in codes: [GeneratedCode]) -> Set<String> {
+		var names = Set<String>()
+		var work = codes
+		while let code = work.popLast() {
+			switch code.node {
+			case .text:
+				break
+			case let .sequence(pieces), let .lines(pieces):
+				work.append(contentsOf: pieces)
+			case let .indented(inner, _),
+			     let .omittingRootFunctions(inner, _),
+			     let .sendableFunction(inner):
+				work.append(inner)
+			case let .place(plan) where plan.code.holdsRootFunction:
+				work.append(plan.code)
+			case .place:
+				break
+			case let .rootFunction(record, _):
+				names.insert(record.name)
+			}
+		}
+		return names
+	}
+
 	/// The root functions `codes` hold, once per name, in the order they are reached, each keyed with the family a
 	/// `@Sendable` function around it gives it.
 	static func records(in codes: [GeneratedCode]) -> [RootFunctionRecord] {

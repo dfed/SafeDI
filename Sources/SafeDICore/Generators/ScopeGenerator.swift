@@ -7649,7 +7649,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if !leadingMemberWhitespace.isEmpty, case let .indented(inner, indentation) = code.node, indentation == leadingMemberWhitespace {
 			fillCode = inner
 		}
-		let heldNames = Set(RootFunctionHoisting.records(in: [fillCode]).map(\.name))
+		let heldNames = RootFunctionHoisting.outermostNames(in: [fillCode])
 		let isSendable = buildsInSendableFunction(ofFill: fill)
 		return RootFunctionRecord(
 			key: RootFunctionKey(
@@ -9711,7 +9711,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let signatureAfterName = "(\(bodyParameters.joined(separator: ", "))) -> \(returnType) {"
 		// Named after the text of its tree in the path key's layout, which the type key's layout is a function of.
 		let statements = GeneratedCode.lines(body.pathStatements)
-		let heldNames = Set(RootFunctionHoisting.records(in: [statements]).map(\.name))
+		let heldNames = RootFunctionHoisting.outermostNames(in: [statements])
 		let statementsText = GeneratedCode.omittingRootFunctions(statements, named: heldNames).spelled()
 		var hash = SeamSignatureHash()
 		hash.combine(prefix + signatureAfterName)
