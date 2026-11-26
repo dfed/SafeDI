@@ -120,38 +120,38 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": generatedFileHeader + """
-			#if canImport(Base)
-			import Base
-			#endif
-			#if canImport(M0)
-			import M0
-			#endif
-			#if canImport(M1)
-			import M1
-			#endif
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(M0)
+		import M0
+		#endif
+		#if canImport(M1)
+		import M1
+		#endif
 
-			extension Root {
-			    public init() {
-			        func __safeDI_s() -> S0 {
-			            _ = S0.__safeDI_S0_BF176DC076DC04EE.self\(integration.seamCallComment(type: "S0", declaringModule: "M0"))
-			            func __safeDI_p0Builder_S0_p() -> any P0 {
-			                func __safeDI_p() -> S1 {
-			                    _ = S1.__safeDI_S1_9C5AE37B60FDC075.self\(integration.seamCallComment(type: "S1", declaringModule: "M1"))
-			                    return S1(__safeDI_p1OptionalBuilder: .init(__safeDI_noScope: { nil }))
-			                }
-			                let p: any P0 = __safeDI_p()
-			                return p
-			            }
-			            func __safeDI_p0Builder_S0() -> S0.__safeDI_P0Carrier<any P0> {
-			                .init(p: { __safeDI_p0Builder_S0_p() })
-			            }
-			            return S0(__safeDI_p0Builder: __safeDI_p0Builder_S0())
-			        }
-			        let s: S0 = __safeDI_s()
-			        self.init(s: s)
-			    }
-			}
-			"""])
+		extension Root {
+		    public init() {
+		        func __safeDI_s() -> S0 {
+		            _ = S0.__safeDI_S0_BF176DC076DC04EE.self\(integration.seamCallComment(type: "S0", declaringModule: "M0"))
+		            func __safeDI_p0Builder_S0_p() -> any P0 {
+		                func __safeDI_p() -> S1 {
+		                    _ = S1.__safeDI_S1_9C5AE37B60FDC075.self\(integration.seamCallComment(type: "S1", declaringModule: "M1"))
+		                    return S1(__safeDI_p1OptionalBuilder: .init(__safeDI_noScope: { nil }))
+		                }
+		                let p: any P0 = __safeDI_p()
+		                return p
+		            }
+		            func __safeDI_p0Builder_S0() -> S0.__safeDI_P0Carrier<any P0> {
+		                .init(p: { __safeDI_p0Builder_S0_p() })
+		            }
+		            return S0(__safeDI_p0Builder: __safeDI_p0Builder_S0())
+		        }
+		        let s: S0 = __safeDI_s()
+		        self.init(s: s)
+		    }
+		}
+		"""])
 	}
 
 	@Test
@@ -185,42 +185,42 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-			#if canImport(Base)
-			import Base
-			#endif
-			#if canImport(M0)
-			import M0
-			#endif
-			#if canImport(M1)
-			import M1
-			#endif
-			#if canImport(Mid)
-			import Mid
-			#endif
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(M0)
+		import M0
+		#endif
+		#if canImport(M1)
+		import M1
+		#endif
+		#if canImport(Mid)
+		import Mid
+		#endif
 
-			extension Root {
-			    public init() {
-			        func __safeDI_p1Builder_Host() -> Host.SafeDIScope_P1.__safeDI_Builder<any P1> {
-			            .init(s_p0Builder: { _ in __safeDI_p1Builder_S1_S0() })
-			        }
-			        func __safeDI_p1Builder_S1() -> S1.__safeDI_P1Carrier<any P1> {
-			            .init(p: {
-			                let p: any P1 = Impl()
-			                return p
-			            })
-			        }
-			        func __safeDI_p1Builder_S1_S0() -> S0.__safeDI_P0Carrier<S1.__safeDI_P1Carrier<any P1>> {
-			            .init(p: { __safeDI_p1Builder_S1() })
-			        }
-			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_BCC4F392FD24940E.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Host(__safeDI_p1Builder: __safeDI_p1Builder_Host())
-			        }
-			        let host: Host = __safeDI_host()
-			        self.init(host: host)
-			    }
-			}
-			"""])
+		extension Root {
+		    public init() {
+		        func __safeDI_p1Builder_Host() -> Host.SafeDIScope_P1.__safeDI_Builder<any P1> {
+		            .init(s_p0Builder: { _ in __safeDI_p1Builder_S1_S0() })
+		        }
+		        func __safeDI_p1Builder_S1() -> S1.__safeDI_P1Carrier<any P1> {
+		            .init(p: {
+		                let p: any P1 = Impl()
+		                return p
+		            })
+		        }
+		        func __safeDI_p1Builder_S1_S0() -> S0.__safeDI_P0Carrier<S1.__safeDI_P1Carrier<any P1>> {
+		            .init(p: { __safeDI_p1Builder_S1() })
+		        }
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_BCC4F392FD24940E.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Host(__safeDI_p1Builder: __safeDI_p1Builder_Host())
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
 	}
 
 	@Test(arguments: [true, false])
@@ -230,14 +230,14 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		let declarations = ["@Instantiated let s: S0", "@Instantiated let t: T"]
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			if nestedFirst {
-				return """
+				"""
 				\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 				\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `p: any P1` here.
 				\(fixtures["App"]!["Root.swift"]):13:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> T. `T` generates its dependency tree in module `Base`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 				\(fixtures["Base"]!["T.swift"]):7:5: note: `T` instantiates `q: any Q` here.
 				"""
 			} else {
-				return """
+				"""
 				\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> T. `T` generates its dependency tree in module `Base`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 				\(fixtures["Base"]!["T.swift"]):7:5: note: `T` instantiates `q: any Q` here.
 				\(fixtures["App"]!["Root.swift"]):13:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
@@ -264,65 +264,65 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
-			#if canImport(Base)
-			import Base
-			#endif
-			#if canImport(M0)
-			import M0
-			#endif
-			#if canImport(M1)
-			import M1
-			#endif
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(M0)
+		import M0
+		#endif
+		#if canImport(M1)
+		import M1
+		#endif
 
-			#if DEBUG
-			extension Screen {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            s: ((@escaping () -> any P0) -> S0)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                s: s
-			            )
-			        }
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            s: ((@escaping () -> any P0) -> S0)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                s: s
+		            )
+		        }
 
-			        var s: ((@escaping () -> any P0) -> S0)? { __safeDI_storage.s }
+		        var s: ((@escaping () -> any P0) -> S0)? { __safeDI_storage.s }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage {
-			            init(
-			                s: ((@escaping () -> any P0) -> S0)?
-			            ) {
-			                self.s = s
-			            }
+		        private final class __safeDI_Storage {
+		            init(
+		                s: ((@escaping () -> any P0) -> S0)?
+		            ) {
+		                self.s = s
+		            }
 
-			            let s: ((@escaping () -> any P0) -> S0)?
-			        }
-			    }
+		            let s: ((@escaping () -> any P0) -> S0)?
+		        }
+		    }
 
-			    static func mock(
-			        p0Builder: (() -> any P0)? = nil,
-			        p1Builder: @escaping () -> any P1,
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        func __safeDI_s() -> S0 {
-			            func __safeDI_p0Builder_S0_p() -> any P0 {
-			                let p: any P0 = S1.__safeDI_mock(p1Builder: .init(__safeDI_noScope: p1Builder))
-			                return p
-			            }
-			            func __safeDI_p0Builder_S0() -> S0.SafeDIMockScope_P0.__safeDI_Builder<any P0> {
-			                .init(p: { _ in __safeDI_p0Builder_S0_p() })
-			            }
-			            _ = S0.__safeDI_S0_mock_A1594E767333DFEF.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.s { safeDIBuilder({ if let p0Builder { p0Builder() } else { __safeDI_p0Builder_S0_p() } }) } else { S0.__safeDI_mock(p0Builder: p0Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_p0Builder_S0()) }
-			        }
-			        let s: S0 = __safeDI_s()
-			        return Screen(s: s)
-			    }
-			}
-			#endif
-			""")
+		    static func mock(
+		        p0Builder: (() -> any P0)? = nil,
+		        p1Builder: @escaping () -> any P1,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_s() -> S0 {
+		            func __safeDI_p0Builder_S0_p() -> any P0 {
+		                let p: any P0 = S1.__safeDI_mock(p1Builder: .init(__safeDI_noScope: p1Builder))
+		                return p
+		            }
+		            func __safeDI_p0Builder_S0() -> S0.SafeDIMockScope_P0.__safeDI_Builder<any P0> {
+		                .init(p: { _ in __safeDI_p0Builder_S0_p() })
+		            }
+		            _ = S0.__safeDI_S0_mock_A1594E767333DFEF.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return if let safeDIBuilder = safeDIOverrides.s { safeDIBuilder({ if let p0Builder { p0Builder() } else { __safeDI_p0Builder_S0_p() } }) } else { S0.__safeDI_mock(p0Builder: p0Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_p0Builder_S0()) }
+		        }
+		        let s: S0 = __safeDI_s()
+		        return Screen(s: s)
+		    }
+		}
+		#endif
+		""")
 	}
 
 	// MARK: Private
