@@ -32,6 +32,10 @@ struct RootFunctionRecord: Sendable {
 		/// A fill's declaration, its attributes included, written after `inPlaceIndentation` where the call declares it. Its
 		/// plan holds the root functions its tree declares, which the root declares where it declares the fill.
 		case code(GeneratedCode, inPlaceIndentation: String)
+		/// A fill's shared body (`ScopeGenerator.sharedFillBodyFunction`), written after `inPlaceIndentation` where the call
+		/// declares it, its tree in the path key's layout, and in the type key's where a root declares it at its top, laid out
+		/// there once for every fill that calls it.
+		case fillBody(FillBodyFunction, inPlaceIndentation: String)
 	}
 
 	/// What the function's text is a function of within one root: two records of one root with equal keys have equal text.
@@ -52,6 +56,8 @@ struct RootFunctionRecord: Sendable {
 			.text(key.indentation + ScopeGenerator.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes)
 		case let .code(code, inPlaceIndentation):
 			.indented(code, by: inPlaceIndentation)
+		case let .fillBody(function, inPlaceIndentation):
+			.indented(function.pathCode, by: inPlaceIndentation)
 		}
 	}
 
@@ -64,6 +70,19 @@ struct RootFunctionRecord: Sendable {
 			.indented(spelled(isSendable: isSendable), by: indentation.hasPrefix(key.indentation) ? String(indentation.dropFirst(key.indentation.count)) : "")
 		case let .code(code, _):
 			.indented(code, by: indentation)
+		case let .fillBody(function, _):
+			.indented(function.laidOutCode, by: indentation)
+		}
+	}
+
+	/// Whether the declaration is a fill's code, whose plan holds the root functions its tree declares.
+	var declaresCode: Bool {
+		switch declaration {
+		case .code,
+		     .fillBody:
+			true
+		case .text:
+			false
 		}
 	}
 
@@ -72,7 +91,8 @@ struct RootFunctionRecord: Sendable {
 		switch declaration {
 		case .text:
 			true
-		case .code:
+		case .code,
+		     .fillBody:
 			isSendable
 		}
 	}
@@ -291,7 +311,7 @@ public enum RootFunctionHoisting {
 					records.append(RootFunctionRecord(key: key, name: record.name, declaration: record.declaration, isSendable: key.isSendable, calls: record.calls))
 				}
 				// A fill's plan holds the root functions its tree declares: each is read where every call wrote it.
-				if case .code = record.declaration, inPlace.holdsRootFunction {
+				if record.declaresCode, inPlace.holdsRootFunction {
 					work.append((inPlace, isInsideSendableFunction || record.isSendable, record.name))
 				}
 			}
@@ -299,5 +319,46 @@ public enum RootFunctionHoisting {
 		GenerationWork.record(levelsRead, by: .findingRootFunctions)
 		observer?(occurrences)
 		return (records, conflictingNames, heldNamesByName)
+	}
+}
+
+/// The function a fill that shares its body calls (`ScopeGenerator.sharedFillBodyFunction`): its declaration line and its body.
+struct FillBodyFunction: Sendable {
+	/// The function's declaration, from its attributes to its opening brace.
+	let declaration: String
+	let body: FillBodyLayout
+	let isSendable: Bool
+
+	/// The function with its tree in the path key's layout, as a call writes it where the root does not declare it.
+	var pathCode: GeneratedCode {
+		ScopeGenerator.fillFunction(declaredBy: declaration, body: body.pathStatements, isSendable: isSendable)
+	}
+
+	/// The function with its tree in the type key's layout, where the type key lays it out, as a root declares it once.
+	var laidOutCode: GeneratedCode {
+		ScopeGenerator.fillFunction(declaredBy: declaration, body: body.laidOutStatements, isSendable: isSendable)
+	}
+}
+
+/// The statements of a fill's shared body: the tree of the fill, between what precedes it, `leading`, and what follows it,
+/// `trailing`, in a function whose parameters are `outerDeclarations`.
+struct FillBodyLayout: Sendable {
+	let leading: [GeneratedCode]
+	let tree: [GeneratedCode]
+	let outerDeclarations: [Property]
+	let trailing: [GeneratedCode]
+
+	/// The statements with the tree in the path key's layout.
+	var pathStatements: [GeneratedCode] {
+		leading + [.lines(tree)] + trailing
+	}
+
+	/// The statements with the tree in the type key's layout, where nothing precedes it and the type key lays it out, and in
+	/// the path key's otherwise.
+	var laidOutStatements: [GeneratedCode] {
+		guard leading.isEmpty,
+		      let statements = TypeKeyBody.statements(ofFillBody: tree, outerDeclarations: outerDeclarations, indentation: ScopeGenerator.standardIndent)
+		else { return pathStatements }
+		return statements + trailing
 	}
 }

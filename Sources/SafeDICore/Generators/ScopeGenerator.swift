@@ -9584,13 +9584,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rebindings = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { GeneratedCode.text("\(indent)let \($0.label) = \($0.rootBindingName)") }
 		// The fill's tree keeps its plan, so the root functions it declares stay visible to the root (`RootFunctionHoisting`).
 		var body = rebindings + [.lines(childCode)]
-		// The statements of the function a fill that shares its body calls, declaring `outerDeclarations`, its parameters: the
-		// type key's layout of the tree where it lays the tree out, with what follows the tree, `trailing`.
-		func sharedBodyStatements(outerDeclarations: [Property], trailing: [GeneratedCode]) -> [GeneratedCode] {
-			guard rebindings.isEmpty,
-			      let statements = TypeKeyBody.statements(ofFillBody: childCode, outerDeclarations: outerDeclarations, indentation: indent)
-			else { return rebindings + [.lines(childCode)] + trailing }
-			return statements + trailing
+		// The body of the function a fill that shares its body calls, declaring `outerDeclarations`, its parameters, with what
+		// follows the tree, `trailing`.
+		func sharedBody(outerDeclarations: [Property], trailing: [GeneratedCode]) -> FillBodyLayout {
+			FillBodyLayout(leading: rebindings, tree: childCode, outerDeclarations: outerDeclarations, trailing: trailing)
 		}
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
@@ -9618,7 +9615,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let builderType = TypeDescription.nested(name: Dependency.wrapperBuilderTypeName, parentType: hole.property.typeDescription.unwrapped, generics: [])
 			guard !sharesBody else {
-				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: fillMemberParameterFields.map(\.property.label), returnType: builderType.asSource, body: sharedBodyStatements(outerDeclarations: fillMemberParameterFields.map(\.property), trailing: []), isSendable: isSendable)
+				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: fillMemberParameterFields.map(\.property.label), returnType: builderType.asSource, body: sharedBody(outerDeclarations: fillMemberParameterFields.map(\.property), trailing: []), isSendable: isSendable)
 			}
 			return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {", body: body, isSendable: isSendable)
 		}
@@ -9631,7 +9628,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let payloadFields = fillMemberParameterFields(takingPayloadFields: true)
 			let parameters = payloadFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			guard !sharesBody else {
-				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: payloadFields.map(\.property.label), returnType: hole.builtType.asSource, body: sharedBodyStatements(outerDeclarations: payloadFields.map(\.property), trailing: returnStatement), isSendable: isSendable)
+				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: payloadFields.map(\.property.label), returnType: hole.builtType.asSource, body: sharedBody(outerDeclarations: payloadFields.map(\.property), trailing: returnStatement), isSendable: isSendable)
 			}
 			return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {", body: body, isSendable: isSendable)
 		}
@@ -9681,7 +9678,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				arguments: boundFields.map(\.read) + fillParameterFields.map(\.property.label),
 				argumentLabels: (boundFields.map(\.field) + fillParameterFields).map(\.property.label),
 				returnType: hole.builtType.asSource,
-				body: sharedBodyStatements(
+				body: sharedBody(
 					outerDeclarations: boundFields.map { Property(label: $0.field.property.label, typeDescription: $0.field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []).strippingEscaping) } + fillParameterFields.map { Property(label: $0.property.label, typeDescription: $0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []).strippingEscaping) },
 					trailing: returnStatement,
 				),
@@ -9706,20 +9703,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		arguments: [String],
 		argumentLabels: [String]? = nil,
 		returnType: String,
-		body: [GeneratedCode],
+		body: FillBodyLayout,
 		isSendable: Bool,
 	) -> GeneratedCode {
 		let indent = Self.standardIndent
 		let prefix = Self.localFunctionPrefix(isSendable: isSendable)
 		let signatureAfterName = "(\(bodyParameters.joined(separator: ", "))) -> \(returnType) {"
-		let statements = GeneratedCode.lines(body)
+		// Named after the text of its tree in the path key's layout, which the type key's layout is a function of.
+		let statements = GeneratedCode.lines(body.pathStatements)
 		let heldNames = Set(RootFunctionHoisting.records(in: [statements]).map(\.name))
 		let statementsText = GeneratedCode.omittingRootFunctions(statements, named: heldNames).spelled()
 		var hash = SeamSignatureHash()
 		hash.combine(prefix + signatureAfterName)
 		hash.combine(statementsText)
 		let bodyName = ReservedName.fillBodyFunctionName(hash: hash.hexadecimal)
-		let bodyCode = Self.fillFunction(declaredBy: "\(prefix)func \(bodyName)\(signatureAfterName)", body: body, isSendable: isSendable)
 		let bodyRecord = RootFunctionRecord(
 			key: RootFunctionKey(
 				calledSeam: nil,
@@ -9733,7 +9730,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				text: prefix + signatureAfterName + "\n" + statementsText,
 			),
 			name: bodyName,
-			declaration: .code(bodyCode, inPlaceIndentation: indent),
+			declaration: .fillBody(FillBodyFunction(declaration: "\(prefix)func \(bodyName)\(signatureAfterName)", body: body, isSendable: isSendable), inPlaceIndentation: indent),
 			isSendable: isSendable,
 			calls: referencedFillNamesByKey.values.sorted(),
 		)
@@ -9749,7 +9746,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A fill's function, declared by `declaration` around `body`. A `@Sendable` fill's body is marked as a `@Sendable`
 	/// function's (`GeneratedCode.sendableFunction(_:)`), so a root function its tree holds that the root declares at its top
 	/// is declared `@Sendable` too, which the fill can then call (`RootFunctionHoisting`).
-	private static func fillFunction(declaredBy declaration: String, body: [GeneratedCode], isSendable: Bool) -> GeneratedCode {
+	static func fillFunction(declaredBy declaration: String, body: [GeneratedCode], isSendable: Bool) -> GeneratedCode {
 		let statements = GeneratedCode.lines(body)
 		return .lines([.text(declaration), isSendable ? .sendableFunction(statements) : statements, .text("}")])
 	}

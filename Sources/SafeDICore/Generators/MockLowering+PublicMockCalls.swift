@@ -248,6 +248,8 @@ extension MockLowering.Walk {
 		switch record.declaration {
 		case let .code(code, _):
 			return !code.holdsRootFunction
+		case let .fillBody(function, _):
+			return !function.pathCode.holdsRootFunction
 		case .text:
 			return false
 		}
