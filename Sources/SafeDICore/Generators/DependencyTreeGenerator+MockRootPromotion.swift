@@ -1263,11 +1263,106 @@ extension DependencyTreeGenerator {
 	/// Told how many scopes each mock root's cycle walk walked, counting none it skipped. Only a test sets it.
 	@TaskLocal public static var mockRootCycleWalkObserver: (@Sendable (_ walkedScopes: Int) -> Void)?
 
-	/// An item of `validateMockRootScopeForCycles`' stack: a scope to walk, or a scope whose subtree has been walked, which
-	/// the walk meets once every scope beneath it is walked.
+	/// An item of `validateMockRootScopeForCycles`' stack: a scope to walk, built for `declaredProperty` inside the place at
+	/// `parentIndex` of the walk's `CycleWalkPlaces` (both `nil` for the mock root), or the place of a scope whose subtree
+	/// has been walked, which the walk meets once every scope beneath it is walked.
 	private enum CycleWalkItem {
-		case walk(ScopeToWalkForCycles)
-		case finished(ScopeToWalkForCycles)
+		case walk(Scope, declaredProperty: Property?, parentIndex: Int?)
+		case finished(placeIndex: Int)
+	}
+
+	/// The places `validateMockRootScopeForCycles` has walked, each naming the place it is built inside, so a place's
+	/// context is its index and the stacks above it are read by following the parents. A copy of the stacks for each item
+	/// and each clean context kept a chain's walk at its depth squared: 1,118 MB against 195 MB on a chain 6,000 deep.
+	///
+	/// Holds one place for each scope the walk met, which dies with the walk, as "Share work by construction" in
+	/// `generator-design.md` allows a pass over a whole tree that looks for cycles.
+	private struct CycleWalkPlaces {
+		struct Place {
+			let scope: Scope
+			/// The scope's property, as cycle validation sees it, or `nil` for the mock root.
+			let property: Property?
+			/// The scope's property as declared, or `nil` for the mock root.
+			let declaredProperty: Property?
+			let parentIndex: Int?
+		}
+
+		private(set) var places = [Place]()
+		/// How many places on the walk's path, the places entered and not yet left, have each property and each label, so
+		/// asking whether the path holds one costs no walk up it: nearly every property and label is on no entry.
+		private var pathEntryCounts = [Property: Int]()
+		private var pathLabelCounts = [String: Int]()
+
+		/// Adds the place of `scope`, built for `declaredProperty` inside the place at `parentIndex`, and returns its index.
+		mutating func append(_ scope: Scope, declaredProperty: Property?, parentIndex: Int?) -> Int {
+			places.append(Place(
+				scope: scope,
+				property: declaredProperty?.asValidatedForDependencyCycles,
+				declaredProperty: declaredProperty,
+				parentIndex: parentIndex,
+			))
+			return places.endIndex - 1
+		}
+
+		/// Puts the place at `index` on the walk's path: the walk is walking its subtree. A place is entered only once the
+		/// places above it are, and left before any place beside it is entered, as a walk depth first visits them.
+		mutating func enter(_ index: Int) {
+			guard let property = places[index].property else { return }
+			pathEntryCounts[property, default: 0] += 1
+			pathLabelCounts[property.label, default: 0] += 1
+		}
+
+		/// Takes the place at `index` off the walk's path: the walk has walked its subtree.
+		mutating func leave(_ index: Int) {
+			guard let property = places[index].property else { return }
+			pathEntryCounts[property, default: 0] -= 1
+			pathLabelCounts[property.label, default: 0] -= 1
+		}
+
+		/// Whether an entry of the walk's path, the property stack of the place it is walking, is labeled `label`.
+		func pathHoldsEntry(labeled label: String) -> Bool {
+			pathLabelCounts[label, default: 0] > 0
+		}
+
+		/// Whether an entry of the property stack of the place at `index`, the place the walk is walking, its own included,
+		/// is `property` built for `concreteType`.
+		func holdsEntry(_ property: Property, builtFor concreteType: TypeDescription, at index: Int) -> Bool {
+			pathEntryCounts[property, default: 0] > 0
+				&& entries(at: index).contains { $0.property == property && $0.scope.instantiable.concreteInstantiable == concreteType }
+		}
+
+		/// The place at `index` with the stacks above it, made where a walk reads them.
+		func scopeToWalk(at index: Int) -> ScopeToWalkForCycles {
+			var propertyStack = [Property]()
+			var scopeStack = [Scope]()
+			var declaredProperties = [Property]()
+			for entry in entries(at: index) {
+				propertyStack.append(entry.property)
+				scopeStack.append(entry.scope)
+				declaredProperties.append(entry.declaredProperty)
+			}
+			var lazilyInstantiatedDeclarations = [Property: Property]()
+			// Outermost first, so a nearer declaration of a constant replaces a farther one, as the walk recorded them.
+			for declaredProperty in declaredProperties.reversed() {
+				lazilyInstantiatedDeclarations = lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredProperty)
+			}
+			return ScopeToWalkForCycles(
+				scope: places[index].scope,
+				propertyStack: propertyStack,
+				scopeStack: scopeStack,
+				lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+			)
+		}
+
+		/// The entries of the property stack of the place at `index`, innermost first: each place from it up to the mock
+		/// root's child.
+		private func entries(at index: Int) -> some Sequence<(property: Property, declaredProperty: Property, scope: Scope)> {
+			sequence(first: index, next: { places[$0].parentIndex }).lazy.compactMap { placeIndex in
+				let place = places[placeIndex]
+				guard let property = place.property, let declaredProperty = place.declaredProperty else { return nil }
+				return (property: property, declaredProperty: declaredProperty, scope: place.scope)
+			}
+		}
 	}
 
 	/// The contexts in which `validateMockRootScopeForCycles` has walked a scope's subtree clean, so a scope reached again
@@ -1290,37 +1385,37 @@ extension DependencyTreeGenerator {
 	/// reads, computed only for a scope reached again; all of it dies with the walk, as "Share work by construction" in
 	/// `generator-design.md` allows a pass over a whole tree that looks for cycles.
 	private struct CleanCycleWalks {
-		/// The first context each scope's subtree was walked clean in, until a second context asks for its key.
-		private var firstCleanContexts = [ObjectIdentifier: ScopeToWalkForCycles]()
+		/// The place of the first context each scope's subtree was walked clean in, until a second context asks for its key.
+		private var firstCleanContexts = [ObjectIdentifier: Int]()
 		/// The keys of the contexts each scope's subtree was walked clean in, once a second context asked.
 		private var cleanKeys = [ObjectIdentifier: Set<CycleWalkContextKey>]()
 		/// What each scope's subtree reads, for the scopes reached again and those beneath them.
 		private var readsByScope = [ObjectIdentifier: CycleWalkReads]()
 
-		/// Whether `scopeToWalk`'s subtree was walked clean in a context it reads alike.
-		mutating func wasWalkedClean(_ scopeToWalk: ScopeToWalkForCycles) -> Bool {
-			let scopeID = ObjectIdentifier(scopeToWalk.scope)
-			keyFirstCleanContext(ofScopeWith: scopeID)
+		/// Whether the subtree of the scope at `placeIndex` of `places` was walked clean in a context it reads alike.
+		mutating func wasWalkedClean(_ placeIndex: Int, in places: CycleWalkPlaces) -> Bool {
+			let scopeID = ObjectIdentifier(places.places[placeIndex].scope)
+			keyFirstCleanContext(ofScopeWith: scopeID, in: places)
 			guard let keys = cleanKeys[scopeID] else { return false }
-			return keys.contains(key(of: scopeToWalk))
+			return keys.contains(key(of: places.scopeToWalk(at: placeIndex)))
 		}
 
-		/// Records that `scopeToWalk`'s subtree was walked clean.
-		mutating func recordWalkedClean(_ scopeToWalk: ScopeToWalkForCycles) {
-			let scopeID = ObjectIdentifier(scopeToWalk.scope)
-			keyFirstCleanContext(ofScopeWith: scopeID)
+		/// Records that the subtree of the scope at `placeIndex` of `places` was walked clean.
+		mutating func recordWalkedClean(_ placeIndex: Int, in places: CycleWalkPlaces) {
+			let scopeID = ObjectIdentifier(places.places[placeIndex].scope)
+			keyFirstCleanContext(ofScopeWith: scopeID, in: places)
 			if cleanKeys[scopeID] != nil {
-				cleanKeys[scopeID, default: []].insert(key(of: scopeToWalk))
+				cleanKeys[scopeID, default: []].insert(key(of: places.scopeToWalk(at: placeIndex)))
 			} else if firstCleanContexts[scopeID] == nil {
-				firstCleanContexts[scopeID] = scopeToWalk
+				firstCleanContexts[scopeID] = placeIndex
 			}
 		}
 
 		/// Keys the first clean context of a scope another context asks about, which costs no more than walking its
 		/// subtree once, and the walk then need not.
-		private mutating func keyFirstCleanContext(ofScopeWith scopeID: ObjectIdentifier) {
+		private mutating func keyFirstCleanContext(ofScopeWith scopeID: ObjectIdentifier, in places: CycleWalkPlaces) {
 			guard let firstCleanContext = firstCleanContexts.removeValue(forKey: scopeID) else { return }
-			cleanKeys[scopeID, default: []].insert(key(of: firstCleanContext))
+			cleanKeys[scopeID, default: []].insert(key(of: places.scopeToWalk(at: firstCleanContext)))
 		}
 
 		/// The context above `scopeToWalk`'s scope, as its subtree reads it.
@@ -1419,7 +1514,8 @@ extension DependencyTreeGenerator {
 		let tokensAbove: [Token]
 	}
 
-	/// A scope that `validateMockRootScopeForCycles` has yet to walk.
+	/// A place of `validateMockRootScopeForCycles`' walk with the stacks above it (`CycleWalkPlaces.scopeToWalk(at:)`),
+	/// made only where the walk reads them.
 	private struct ScopeToWalkForCycles {
 		let scope: Scope
 		/// The properties of the scopes `scope` is built inside, innermost first, as cycle validation sees them.
@@ -1566,20 +1662,23 @@ extension DependencyTreeGenerator {
 		var cleanWalks = CleanCycleWalks()
 		var walkedScopes = 0
 		defer { Self.mockRootCycleWalkObserver?(walkedScopes) }
-		var scopesToWalk = [CycleWalkItem.walk(ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], scopeStack: [], lazilyInstantiatedDeclarations: [:]))]
+		var places = CycleWalkPlaces()
+		var scopesToWalk = [CycleWalkItem.walk(mockRootScope, declaredProperty: nil, parentIndex: nil)]
 		while let item = scopesToWalk.popLast() {
-			let scopeToWalk: ScopeToWalkForCycles
+			let placeIndex: Int
+			let scope: Scope
 			switch item {
-			case let .walk(walkedScope):
-				scopeToWalk = walkedScope
-			case let .finished(walkedScope):
-				cleanWalks.recordWalkedClean(walkedScope)
+			case let .walk(walkedScope, declaredProperty, parentIndex):
+				placeIndex = places.append(walkedScope, declaredProperty: declaredProperty, parentIndex: parentIndex)
+				scope = walkedScope
+			case let .finished(walkedPlaceIndex):
+				places.leave(walkedPlaceIndex)
+				cleanWalks.recordWalkedClean(walkedPlaceIndex, in: places)
 				continue
 			}
-			guard !cleanWalks.wasWalkedClean(scopeToWalk) else { continue }
+			guard !cleanWalks.wasWalkedClean(placeIndex, in: places) else { continue }
+			places.enter(placeIndex)
 			walkedScopes += 1
-			let scope = scopeToWalk.scope
-			let propertyStack = scopeToWalk.propertyStack
 			// Check dependencies for cycles (catches @Received references back to ancestors).
 			for dependency in scope.instantiable.dependencies where !dependency.isForwarded {
 				let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
@@ -1588,9 +1687,11 @@ extension DependencyTreeGenerator {
 				// `onlyIfAvailable` alias is bound to `nil`, which a receive of it reads.
 				guard dependency.canCloseDependencyCycle,
 				      // Every form a stack entry can match has the property's label, and nearly every dependency's label is on no
-				      // entry, so the forms are made only for one whose label is.
-				      propertyStack.contains(where: { $0.label == propertyForDependency.label })
+				      // entry, so the forms, and the stacks, are made only for one whose label is.
+				      places.pathHoldsEntry(labeled: propertyForDependency.label)
 				else { continue }
+				let scopeToWalk = places.scopeToWalk(at: placeIndex)
+				let propertyStack = scopeToWalk.propertyStack
 				let closingReceive = Self.closingReceive(of: dependency, in: scope)
 				// `throwIfInvalidCycle` throws for an instantiation only when every property on the cycle, its own included, is
 				// constant, so an instantiation of an instantiator closes no cycle it could report.
@@ -1630,21 +1731,14 @@ extension DependencyTreeGenerator {
 			}
 
 			// Walk the children next, then record that the scope's subtree was walked clean: a walk that throws ends here.
-			scopesToWalk.append(.finished(scopeToWalk))
+			scopesToWalk.append(.finished(placeIndex: placeIndex))
 			let firstChildIndex = scopesToWalk.endIndex
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
 				case let .instantiated(declaredChildProperty, childScope, _):
 					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
-					guard !propertyStack.indices.contains(where: {
-						propertyStack[$0] == childProperty && scopeToWalk.scopeStack[$0].instantiable.concreteInstantiable == childScope.instantiable.concreteInstantiable
-					}) else { continue }
-					scopesToWalk.append(.walk(ScopeToWalkForCycles(
-						scope: childScope,
-						propertyStack: [childProperty] + propertyStack,
-						scopeStack: [childScope] + scopeToWalk.scopeStack,
-						lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-					)))
+					guard !places.holdsEntry(childProperty, builtFor: childScope.instantiable.concreteInstantiable, at: placeIndex) else { continue }
+					scopesToWalk.append(.walk(childScope, declaredProperty: declaredChildProperty, parentIndex: placeIndex))
 				case .aliased, .hole:
 					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
 					break
