@@ -422,9 +422,14 @@ extension GraphFuzzerToolRuns {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerToolRuns {
+	/// The outcome `query graph`'s export of this graph is judged against: the graph's own, or, for a graph with a seam,
+	/// its build with no seam, since the export builds every seam inline.
+	var outcomeQueryExportIsJudgedAgainst: GraphFuzzerToolOutcome {
+		inlineOutcome ?? firstOutcome
+	}
+
 	/// The failure of a graph in one module the tool rejects whose `query graph` export marks dependencies unfulfilled
-	/// otherwise than its errors say, or `nil`. Where the export reports `partialTrees`, the dependencies it marks
-	/// unfulfilled are exactly those at the errors it reports, one at least; otherwise it marks none.
+	/// otherwise than `generate`'s errors say (`GraphFuzzerUnfulfilledDependencies.problems`), or `nil`.
 	var queryUnfulfilledFailure: GraphFuzzerFailure? {
 		guard let rejectedQueryExport else { return nil }
 		let export: GraphFuzzerUnfulfilledDependencies
@@ -433,66 +438,362 @@ extension GraphFuzzerToolRuns {
 		} catch {
 			return GraphFuzzerFailure(seed: fixture.seed, kind: .queryMarksOtherDependenciesUnfulfilled, details: "The export is not JSON: \(error)\n\(rejectedQueryExport)")
 		}
-		let problems = export.problems
+		let problems = export.problems(
+			generateErrorLocations: GraphFuzzerUnfulfilledDependencies.errorLocations(of: outcomeQueryExportIsJudgedAgainst, fixture: fixture),
+			errorLocationsWithMissingTypesDeclared: missingTypesDeclaredOutcome.map { GraphFuzzerUnfulfilledDependencies.errorLocations(of: $0, fixture: fixture) },
+			fixture: fixture,
+		)
 		guard !problems.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
 			kind: .queryMarksOtherDependenciesUnfulfilled,
-			details: "\(problems.joined(separator: "\n"))\nThe export:\n\(rejectedQueryExport)",
+			details: "\(problems.joined(separator: "\n"))\nThis graph:\n\(outcomeQueryExportIsJudgedAgainst.description)\nWith its missing types declared:\n\(missingTypesDeclaredOutcome?.description ?? "not run")\nThe export:\n\(rejectedQueryExport)",
 		)
 	}
 }
 
-/// What a `query graph` export says of the dependencies it set aside to build its trees.
+/// What a `query graph` export says of the dependencies it marks unfulfilled, which `problems` judges against the errors
+/// `generate` reports: the rule is that the marks are the dependencies `generate` reports, plus the receives it reports
+/// once each missing type is declared.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerUnfulfilledDependencies {
+	/// A dependency the export marks unfulfilled.
+	struct Mark: Equatable {
+		/// The dependency's file and line, as `location(ofFileNamed:line:)` spells it.
+		let location: String
+		/// Whether the dependency is instantiated, so that its type is one no declaration fulfills.
+		let isInstantiated: Bool
+		/// The type an instantiated dependency constructs, as a declaration of it names it.
+		let instantiatedTypeName: String
+	}
+
 	init(exportedJSON json: String) throws {
 		let object = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] ?? [:]
 		isPartial = object["completeness"] as? String == "partialTrees"
-		var errorLocations = [String]()
-		for error in object["errors"] as? [[String: Any]] ?? [] {
-			errorLocations.append(Self.location(of: error))
-		}
-		self.errorLocations = errorLocations
-		var markedLocations = [String]()
+		var marks = [Mark]()
 		for declaration in object["declarations"] as? [[String: Any]] ?? [] {
 			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["isUnfulfilled"] as? Bool == true {
-				markedLocations.append(Self.location(of: dependency))
+				marks.append(Mark(
+					location: Self.location(ofFileNamed: URL(fileURLWithPath: dependency["filePath"] as? String ?? "?").lastPathComponent, line: dependency["line"] as? Int ?? 0),
+					isInstantiated: dependency["source"] as? String == "instantiated",
+					instantiatedTypeName: dependency["fulfilledByType"] as? String ?? dependency["plainType"] as? String ?? "?",
+				))
 			}
 		}
-		self.markedLocations = markedLocations
+		self.marks = marks
 	}
 
 	/// Whether the export's `completeness` is `partialTrees`.
 	let isPartial: Bool
-	/// The file and line of each error the export reports, in its order.
-	let errorLocations: [String]
-	/// The file and line of each dependency the export marks unfulfilled, in its order.
-	let markedLocations: [String]
+	/// Each dependency the export marks unfulfilled, in its order.
+	let marks: [Mark]
 
-	/// Each way the marks disagree with the errors and `completeness`, empty where they agree.
-	var problems: [String] {
+	/// The types no declaration fulfills that the marked instantiated dependencies construct, each once, in name order.
+	var missingTypeNames: [String] {
+		Set(marks.lazy.filter(\.isInstantiated).map(\.instantiatedTypeName)).sorted()
+	}
+
+	/// The outcome of `fixture` with an empty declaration of each missing type, with no seam, where the export has partial
+	/// trees and marks a dependency at none of the errors `generateOutcome`, `generate`'s outcome for the graph, reports:
+	/// a mark only the errors `generate` reports once the missing types are declared can account for. `nil` otherwise.
+	func outcomeWithMissingTypesDeclared(of fixture: GraphFuzzerFixture, generateOutcome: GraphFuzzerToolOutcome) async throws -> GraphFuzzerToolOutcome? {
+		let reported = Set(Self.errorLocations(of: generateOutcome, fixture: fixture))
+		guard isPartial, !missingTypeNames.isEmpty, marks.contains(where: { !reported.contains($0.location) }) else { return nil }
+		return try await GraphFuzzerOracle.toolOutcome(of: fixtureDeclaringMissingTypes(of: fixture).withoutSeams)
+	}
+
+	/// `fixture` with an empty declaration of each of `missingTypeNames` in a last file of its own, so that no line of
+	/// another file moves: the graph `generate` reports its further errors for once the missing types exist.
+	func fixtureDeclaringMissingTypes(of fixture: GraphFuzzerFixture) -> GraphFuzzerFixture {
+		var declarations = [Self.missingTypesFileMarker]
+		for name in missingTypeNames {
+			declarations.append("@Instantiable\nextension \(name): Instantiable {\n\tpublic static func instantiate() -> \(name) {\n\t\t\(name)()\n\t}\n}")
+		}
+		return GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: fixture.swiftFileContent + [declarations.joined(separator: "\n\n") + "\n"])
+	}
+
+	/// The name of the file `fixtureDeclaringMissingTypes(of:)` adds, which names itself.
+	static let missingTypesFileName = "QueryMissingTypes.swift"
+	private static let missingTypesFileMarker = "\(GraphFuzzerFixture.fileNameMarker)\(missingTypesFileName)"
+
+	/// The file and line of each error `outcome` reports, spelled as the marks' locations are, in the tool's order: no
+	/// location where the tool accepts the graph.
+	static func errorLocations(of outcome: GraphFuzzerToolOutcome, fixture: GraphFuzzerFixture) -> [String] {
+		switch outcome {
+		case .accepted:
+			return []
+		case let .rejected(diagnostics):
+			var indexByFileName = [String: Int]()
+			for (index, fileName) in fixture.fileNames.enumerated() {
+				indexByFileName[fileName] = index
+			}
+			return diagnostics.split(separator: "\n").compactMap(GraphFuzzerRemedies.ReportedError.init).map { error in
+				location(ofFileNamed: indexByFileName[error.fileName].map { "File\($0).swift" } ?? error.fileName, line: error.line)
+			}
+		}
+	}
+
+	/// Each way the marks disagree with `generate`'s errors, empty where they agree. Where the export reports partial
+	/// trees, it marks a dependency, every error `generate` reports for the graph (`generateErrorLocations`) is at a mark,
+	/// but one at a dependency instantiated only if available, which the export reads as `nil`, and every further mark is
+	/// at an error `generate` reports once each missing type is declared (`errorLocationsWithMissingTypesDeclared`, `nil`
+	/// where that graph was not run). Otherwise it marks nothing.
+	func problems(generateErrorLocations: [String], errorLocationsWithMissingTypesDeclared: [String]?, fixture: GraphFuzzerFixture) -> [String] {
 		var problems = [String]()
 		if isPartial {
-			if markedLocations.isEmpty {
+			if marks.isEmpty {
 				problems.append("The export reports partial trees and marks no dependency unfulfilled.")
 			}
-			let marked = Set(markedLocations)
-			for location in errorLocations where !marked.contains(location) {
-				problems.append("The export reports an error at \(location), where it marks no dependency unfulfilled.")
+			let marked = Set(marks.map(\.location))
+			for location in generateErrorLocations where !marked.contains(location) && !Self.isInstantiatedOnlyIfAvailable(at: location, in: fixture) {
+				problems.append("`generate` reports an error at \(location), where the export marks no dependency unfulfilled.")
 			}
-			let reported = Set(errorLocations)
-			for location in markedLocations where !reported.contains(location) {
-				problems.append("The export marks the dependency at \(location) unfulfilled, where it reports no error.")
+			let reported = Set(generateErrorLocations)
+			let reportedWithMissingTypesDeclared = Set(errorLocationsWithMissingTypesDeclared ?? [])
+			for mark in marks where !reported.contains(mark.location) && !reportedWithMissingTypesDeclared.contains(mark.location) {
+				problems.append("The export marks the dependency at \(mark.location) unfulfilled, where `generate` reports no error, for the graph or for the graph with \(missingTypeNames.joined(separator: ", ")) declared.")
 			}
 		} else {
-			for location in markedLocations {
-				problems.append("The export reports no partial trees and marks the dependency at \(location) unfulfilled.")
+			for mark in marks {
+				problems.append("The export reports no partial trees and marks the dependency at \(mark.location) unfulfilled.")
 			}
 		}
 		return problems
 	}
 
-	private static func location(of object: [String: Any]) -> String {
-		"\(object["filePath"] as? String ?? "?"):\(object["line"] as? Int ?? 0)"
+	/// Whether the line `location` names in `fixture` declares a dependency instantiated only if available.
+	private static func isInstantiatedOnlyIfAvailable(at location: String, in fixture: GraphFuzzerFixture) -> Bool {
+		for (index, content) in fixture.swiftFileContent.enumerated() {
+			let lines = content.components(separatedBy: "\n")
+			for (lineIndex, line) in lines.enumerated() where Self.location(ofFileNamed: "File\(index).swift", line: lineIndex + 1) == location {
+				return line.contains("@Instantiated(") && line.contains("onlyIfAvailable: true")
+			}
+		}
+		return false
+	}
+
+	private static func location(ofFileNamed fileName: String, line: Int) -> String {
+		"\(fileName):\(line)"
+	}
+}
+
+/// One declaration deleted from a graph the tool accepts, and what `query graph` must then export, which the deletion
+/// oracle checks (`GraphFuzzerToolRuns.queryDeletionFailure`): `query graph` reads a graph with a missing type from its
+/// declarations as written, so deleting a type's declaration moves no other receive's `provenance`.
+///
+/// The declaration is one with no dependency of its own that is no root and that a declaration some root reaches
+/// instantiates, chosen by the graph's seed. Its `@Instantiable` line is blanked, so that no other line moves and its
+/// type is left one no declaration fulfills. The export of that graph must then be the full graph's but for what names
+/// the deleted declaration: each required dependency of a reached declaration that instantiated it is marked
+/// unfulfilled, each provenance entry that named such a dependency names it as `unfulfilled`, each that named a
+/// dependency instantiated only if available is `nil` because that declaration is not instantiated, and every other
+/// entry, mark and `isReachedByRoot` is the full graph's.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+struct GraphFuzzerQueryDeletion: Sendable {
+	/// The deletion to make from `fixture`, whose `query graph` export is `json`, or `nil` where the export built no
+	/// trees or holds no declaration the oracle deletes.
+	init?(exportedJSON json: String, fixture: GraphFuzzerFixture) throws {
+		guard let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+		      export["completeness"] as? String == "trees",
+		      let declarations = export["declarations"] as? [[String: Any]]
+		else { return nil }
+		var reachedIDs = Set<String>()
+		for declaration in declarations where declaration["isReachedByRoot"] as? Bool == true {
+			if let id = declaration["id"] as? String {
+				reachedIDs.insert(id)
+			}
+		}
+		var candidates = [(declaration: [String: Any], fileIndex: Int, lineIndex: Int)]()
+		for declaration in declarations {
+			guard (declaration["dependencies"] as? [[String: Any]])?.isEmpty == true,
+			      declaration["isRoot"] as? Bool == false,
+			      // An extension that conforms to `Instantiable` is read as a declaration without its attribute too.
+			      declaration["declarationKind"] as? String != "extension",
+			      (declaration["constructedBy"] as? [[String: Any]] ?? []).contains(where: { reachedIDs.contains($0["declaredBy"] as? String ?? "") }),
+			      let fileIndex = Self.fileIndex(ofFileAt: declaration["filePath"] as? String ?? ""),
+			      let line = declaration["line"] as? Int,
+			      fixture.swiftFileContent.indices.contains(fileIndex)
+			else { continue }
+			let lines = fixture.swiftFileContent[fileIndex].components(separatedBy: "\n")
+			guard lines.indices.contains(line - 1), lines[line - 1].hasPrefix("@Instantiable") else { continue }
+			candidates.append((declaration, fileIndex, line - 1))
+		}
+		guard !candidates.isEmpty else { return nil }
+		let candidate = candidates[Int(fixture.seed % UInt64(candidates.count))]
+		deletedDeclarationID = candidate.declaration["id"] as? String ?? "?"
+		var contents = fixture.swiftFileContent
+		var lines = contents[candidate.fileIndex].components(separatedBy: "\n")
+		lines[candidate.lineIndex] = ""
+		contents[candidate.fileIndex] = lines.joined(separator: "\n")
+		fixtureWithoutDeclaration = GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: contents)
+		for constructor in candidate.declaration["constructedBy"] as? [[String: Any]] ?? [] {
+			guard let declaredBy = constructor["declaredBy"] as? String, let label = constructor["label"] as? String else { continue }
+			let supplier = Supplier(declaredBy: declaredBy, label: label)
+			let dependency = declarations.first { $0["id"] as? String == declaredBy }
+				.flatMap { ($0["dependencies"] as? [[String: Any]])?.first { $0["label"] as? String == label } }
+			if dependency?["isOnlyIfAvailable"] as? Bool == true {
+				suppliersInstantiatedOnlyIfAvailable.insert(supplier)
+			} else {
+				requiredSuppliers.insert(supplier)
+				if reachedIDs.contains(declaredBy) {
+					leavesDependencyUnfulfilled = true
+				}
+			}
+			suppliersLeftUnfulfilled.insert(supplier)
+		}
+		fullExportJSON = json
+	}
+
+	/// The `id` of the declaration deleted.
+	let deletedDeclarationID: String
+	/// The graph without that declaration, every other line where it was.
+	let fixtureWithoutDeclaration: GraphFuzzerFixture
+
+	/// A dependency that instantiated the deleted declaration.
+	private struct Supplier: Hashable {
+		let declaredBy: String
+		let label: String
+	}
+
+	/// Every dependency that instantiated the deleted declaration, which no declaration fulfills without it.
+	private var suppliersLeftUnfulfilled = Set<Supplier>()
+	/// Those of them that are required. `generate` reports a type no declaration fulfills where a tree of a root
+	/// instantiates it, and then names every required dependency that instantiates it, reached or not.
+	private var requiredSuppliers = Set<Supplier>()
+	/// Those of them instantiated only if available, which are `nil` without the declaration.
+	private var suppliersInstantiatedOnlyIfAvailable = Set<Supplier>()
+	/// The graph's own export, which the export without the declaration is compared with.
+	private let fullExportJSON: String
+
+	/// Whether deleting the declaration leaves a dependency `generate` reports, one a declaration some root reaches
+	/// requires, so that the export has partial trees and marks every required dependency that instantiated it.
+	private(set) var leavesDependencyUnfulfilled = false
+
+	/// Each way `json`, the export of `fixtureWithoutDeclaration`, differs from what the deletion must leave, empty where
+	/// it is that export.
+	func problems(exportedJSONWithoutDeclaration json: String) throws -> [String] {
+		let export = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] ?? [:]
+		let fullExport = try JSONSerialization.jsonObject(with: Data(fullExportJSON.utf8)) as? [String: Any] ?? [:]
+		var problems = [String]()
+		let expectedCompleteness = leavesDependencyUnfulfilled ? "partialTrees" : "trees"
+		if export["completeness"] as? String != expectedCompleteness {
+			problems.append("The export's completeness is \(export["completeness"] as? String ?? "?"), not \(expectedCompleteness).")
+		}
+		var declarationsByID = [String: [String: Any]]()
+		for declaration in export["declarations"] as? [[String: Any]] ?? [] {
+			declarationsByID[declaration["id"] as? String ?? "?"] = declaration
+		}
+		if declarationsByID[deletedDeclarationID] != nil {
+			problems.append("The export still holds the deleted declaration.")
+		}
+		for fullDeclaration in fullExport["declarations"] as? [[String: Any]] ?? [] {
+			guard let id = fullDeclaration["id"] as? String, id != deletedDeclarationID else { continue }
+			guard let declaration = declarationsByID.removeValue(forKey: id) else {
+				problems.append("\(id): the export without the declaration lacks it.")
+				continue
+			}
+			if declaration["isReachedByRoot"] as? Bool != fullDeclaration["isReachedByRoot"] as? Bool {
+				problems.append("\(id): isReachedByRoot is \(String(describing: declaration["isReachedByRoot"])), not \(String(describing: fullDeclaration["isReachedByRoot"])).")
+			}
+			let dependencies = declaration["dependencies"] as? [[String: Any]] ?? []
+			let fullDependencies = fullDeclaration["dependencies"] as? [[String: Any]] ?? []
+			guard dependencies.map({ $0["label"] as? String }) == fullDependencies.map({ $0["label"] as? String }) else {
+				problems.append("\(id): the export without the declaration lists other dependencies.")
+				continue
+			}
+			for (dependency, fullDependency) in zip(dependencies, fullDependencies) {
+				let name = "\(id).\(fullDependency["label"] as? String ?? "?")"
+				let supplier = Supplier(declaredBy: id, label: fullDependency["label"] as? String ?? "?")
+				let isMarked = dependency["isUnfulfilled"] as? Bool == true
+				if isMarked != (leavesDependencyUnfulfilled && requiredSuppliers.contains(supplier)) {
+					problems.append("\(name): \(isMarked ? "marked unfulfilled, which `generate` does not report" : "not marked unfulfilled, which `generate` reports").")
+				}
+				let expectedFulfilledBy = suppliersLeftUnfulfilled.contains(supplier) ? nil : fullDependency["fulfilledBy"] as? String
+				if dependency["fulfilledBy"] as? String != expectedFulfilledBy {
+					problems.append("\(name): fulfilledBy is \(dependency["fulfilledBy"] as? String ?? "absent"), not \(expectedFulfilledBy ?? "absent").")
+				}
+				let provenance = (dependency["provenance"] as? [[String: Any]])?.map(Self.entry(of:)).sorted()
+				let expectedProvenance = (fullDependency["provenance"] as? [[String: Any]])?.map(expectedEntry(ofFullExportEntry:)).sorted()
+				if provenance != expectedProvenance {
+					problems.append("\(name): provenance is \(provenance.map { "\($0)" } ?? "absent"), not \(expectedProvenance.map { "\($0)" } ?? "absent").")
+				}
+			}
+		}
+		for id in declarationsByID.keys.sorted() where id != deletedDeclarationID {
+			problems.append("\(id): only the export without the declaration holds it.")
+		}
+		return problems
+	}
+
+	/// The provenance entry the export without the declaration must hold where the full export holds `entry`.
+	private func expectedEntry(ofFullExportEntry entry: [String: Any]) -> String {
+		guard entry["source"] as? String == "declaration", let declaredBy = entry["declaredBy"] as? String, let label = entry["label"] as? String else {
+			return Self.entry(of: entry)
+		}
+		let supplier = Supplier(declaredBy: declaredBy, label: label)
+		return if suppliersInstantiatedOnlyIfAvailable.contains(supplier) {
+			Self.entry(source: "nil", declaredBy: nil, label: nil, reasonKind: "declarationNotInstantiated", reasonDeclaredBy: declaredBy, reasonLabel: label)
+		} else if suppliersLeftUnfulfilled.contains(supplier) {
+			Self.entry(source: "unfulfilled", declaredBy: declaredBy, label: label, reasonKind: nil, reasonDeclaredBy: nil, reasonLabel: nil)
+		} else {
+			Self.entry(of: entry)
+		}
+	}
+
+	/// A provenance entry as the oracle compares it: everything it holds but its sentences.
+	private static func entry(of entry: [String: Any]) -> String {
+		let reason = entry["reason"] as? [String: Any]
+		return Self.entry(
+			source: entry["source"] as? String ?? "?",
+			declaredBy: entry["declaredBy"] as? String,
+			label: entry["label"] as? String,
+			reasonKind: reason?["kind"] as? String,
+			reasonDeclaredBy: reason?["declaredBy"] as? String,
+			reasonLabel: reason?["label"] as? String,
+		)
+	}
+
+	private static func entry(source: String, declaredBy: String?, label: String?, reasonKind: String?, reasonDeclaredBy: String?, reasonLabel: String?) -> String {
+		var entry = source
+		if let declaredBy, let label {
+			entry += " \(declaredBy).\(label)"
+		}
+		if let reasonKind {
+			entry += " (\(reasonKind)"
+			if let reasonDeclaredBy, let reasonLabel {
+				entry += " \(reasonDeclaredBy).\(reasonLabel)"
+			}
+			entry += ")"
+		}
+		return entry
+	}
+
+	/// The index of the fixture file the export read at `filePath`, which `GraphFuzzerQuerySupplies.export(of:)` names
+	/// `File<index>.swift`.
+	private static func fileIndex(ofFileAt filePath: String) -> Int? {
+		let name = URL(fileURLWithPath: filePath).deletingPathExtension().lastPathComponent
+		guard name.hasPrefix("File") else { return nil }
+		return Int(name.dropFirst("File".count))
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerToolRuns {
+	/// The failure of a graph in one module the tool accepts whose `query graph` export, once one declaration is deleted
+	/// from the graph, moves what another receive is handed (`GraphFuzzerQueryDeletion`), or `nil`.
+	var queryDeletionFailure: GraphFuzzerFailure? {
+		guard let queryDeletion else { return nil }
+		let problems: [String]
+		do {
+			problems = try queryDeletion.deletion.problems(exportedJSONWithoutDeclaration: queryDeletion.export)
+		} catch {
+			return GraphFuzzerFailure(seed: fixture.seed, kind: .queryProvenanceMovesWhenDeclarationIsDeleted, details: "The export is not JSON: \(error)\n\(queryDeletion.export)")
+		}
+		guard !problems.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .queryProvenanceMovesWhenDeclarationIsDeleted,
+			details: "Without \(queryDeletion.deletion.deletedDeclarationID):\n\(problems.joined(separator: "\n"))\nThe export without it:\n\(queryDeletion.export)\nThe graph's export:\n\(queryExport ?? "")",
+		)
 	}
 }
