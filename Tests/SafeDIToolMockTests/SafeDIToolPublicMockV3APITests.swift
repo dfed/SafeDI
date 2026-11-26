@@ -97,10 +97,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tone() -> String? { "loud" }
+		    @usableFromInline static func __safeDI_publicMockDefault_tone() -> String? { "loud" }
 
 		    nonisolated public enum SafeDIMockScope_Client {
 		        nonisolated public struct client_Values {
@@ -116,7 +113,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.client = { _ in __safeDI_builder() }
+		                self.init(client: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -435,10 +432,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tone() -> String? { "loud" }
+		    @usableFromInline static func __safeDI_publicMockDefault_tone() -> String? { "loud" }
 
 		    /// Configures `Screen` wherever a mock builds it: as the mocked type, or inside another module’s mock that calls this
 		    /// one. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its path, or that
@@ -686,10 +680,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 
 		#if DEBUG
 		extension Screen {
-		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
-		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
-		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tone() -> String? { "loud" }
+		    @usableFromInline static func __safeDI_publicMockDefault_tone() -> String? { "loud" }
 
 		    /// Configures `Screen` wherever a mock builds it: as the mocked type, or inside another module’s mock that calls this
 		    /// one. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its path, or that
@@ -1588,7 +1579,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
+		                self.init(api: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
