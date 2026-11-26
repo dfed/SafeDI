@@ -1481,7 +1481,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_reportsNoProvenance_whenTreesBuiltAroundUnfulfilledDependencyReportUnfulfilledReceiveGenerateDoesNot() async throws {
+	mutating func graph_marksReceiveGenerateReportsOnceTypesAreDeclared_whenTreeAlsoInstantiatesTypeNoDeclarationFulfills() async throws {
 		let report = try await graph(of: [
 			"Root.swift": """
 			public final class Missing {}
@@ -1511,14 +1511,19 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 			""",
 		])
 
-		#expect(report.completeness == .fulfillment)
-		#expect(report.errors.count == 1)
-		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, nil, nil])
+		// `generate` reports the type first, and the receive once the type is declared: both are marked, each with its error.
+		#expect(report.completeness == .partialTrees)
+		#expect(report.errors.map { String($0.message.prefix(40)) } == [
+			"No @Instantiable type or extension fulfi",
+			"@Received property `absent: Absent` is n",
+		])
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [true, nil, true])
+		#expect(Self.supplies(in: report) == ["App.Service.absent": "unfulfilled"])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func graph_reportsNoProvenance_whenReceiveOfUnfulfilledDependencyIsHandedNothingUnderAnotherRoot() async throws {
+	mutating func graph_marksReceiveOfUnfulfilledDependency_whenNothingProvidesItUnderAnotherRoot() async throws {
 		let report = try await graph(of: [
 			"Alpha.swift": """
 			public final class Missing {}
@@ -1556,10 +1561,10 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 			""",
 		])
 
-		#expect(report.completeness == .fulfillment)
-		#expect(report.errors.count == 1)
-		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [nil, nil, nil, nil])
-		#expect(Self.supplies(in: report) == [:])
+		#expect(report.completeness == .partialTrees)
+		#expect(report.errors.count == 2)
+		#expect(report.declarations.flatMap(\.dependencies).map(\.isUnfulfilled) == [true, nil, nil, true])
+		#expect(Self.supplies(in: report) == ["App.Service.missing": "unfulfilled, unfulfilled(App.Alpha.missing)"])
 	}
 
 	@Test
@@ -2382,6 +2387,232 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		#expect(Self.supplies(in: report) == [
 			"App.Screen.user": "unfulfilled",
 			"App.Row.user": "App.Screen.user",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesUnfulfilledReceiveAndDeclarationEachCallPasses_whenLazyCycleBuildsReceiverAgainBeneathDeclaration() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(screen: Screen) {
+			        self.screen = screen
+			    }
+
+			    @Instantiated let screen: Screen
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(missing: Missing, aBuilder: Instantiator<A>) {
+			        self.missing = missing
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Received let missing: Missing
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(b: B) {
+			        self.b = b
+			    }
+
+			    @Instantiated let b: B
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(missing: Missing, inner: Inner) {
+			        self.missing = missing
+			        self.inner = inner
+			    }
+
+			    @Received let missing: Missing
+			    @Instantiated let inner: Inner
+			}
+			""",
+			"Inner.swift": """
+			@Instantiable
+			public final class Inner: Instantiable {
+			    public init(missing: Missing, aBuilder: Instantiator<A>) {
+			        self.missing = missing
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"Missing.swift": """
+			@Instantiable
+			public final class Missing: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(report.completeness == .partialTrees)
+		#expect(Self.supplies(in: report) == [
+			"App.Screen.missing": "unfulfilled",
+			"App.B.missing": "App.Inner.missing, unfulfilled(App.Screen.missing)",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesUnfulfilledReceiveInsideLazyCycle_whenFirstCallOfItsFunctionPassesNothing() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(b: B) {
+			        self.b = b
+			    }
+
+			    @Instantiated let b: B
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(missing: Missing, row: Row, inner: Inner) {
+			        self.missing = missing
+			        self.row = row
+			        self.inner = inner
+			    }
+
+			    @Received let missing: Missing
+			    @Instantiated let row: Row
+			    @Instantiated let inner: Inner
+			}
+			""",
+			"Row.swift": """
+			@Instantiable
+			public final class Row: Instantiable {
+			    public init(missing: Missing) {
+			        self.missing = missing
+			    }
+
+			    @Received let missing: Missing
+			}
+			""",
+			"Inner.swift": """
+			@Instantiable
+			public final class Inner: Instantiable {
+			    public init(missing: Missing, aBuilder: Instantiator<A>) {
+			        self.missing = missing
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"Missing.swift": """
+			@Instantiable
+			public final class Missing: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		// The cycle builds `B` again beneath `Inner`, whose `missing` that call passes; the root's call passes nothing.
+		#expect(report.completeness == .partialTrees)
+		#expect(Self.supplies(in: report) == [
+			"App.B.missing": "App.Inner.missing, unfulfilled",
+			"App.Row.missing": "App.Inner.missing, unfulfilled(App.B.missing)",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesUnfulfilledReceiveAbove_whenLazyCycleCallBeneathItPassesNilToReceiveOnlyIfAvailable() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(screen: Screen) {
+			        self.screen = screen
+			    }
+
+			    @Instantiated let screen: Screen
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(missing: Missing, aBuilder: Instantiator<A>) {
+			        self.missing = missing
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Received let missing: Missing
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(b: B) {
+			        self.b = b
+			    }
+
+			    @Instantiated let b: B
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(missing: Missing?, inner: Inner) {
+			        self.missing = missing
+			        self.inner = inner
+			    }
+
+			    @Received(onlyIfAvailable: true) let missing: Missing?
+			    @Instantiated let inner: Inner
+			}
+			""",
+			"Inner.swift": """
+			@Instantiable
+			public final class Inner: Instantiable {
+			    public init(missing: Missing, aBuilder: Instantiator<A>) {
+			        self.missing = missing
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let missing: Missing
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"Missing.swift": """
+			@Instantiable
+			public final class Missing: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(report.completeness == .partialTrees)
+		#expect(Self.supplies(in: report) == [
+			"App.Screen.missing": "unfulfilled",
+			"App.B.missing": "App.Inner.missing, unfulfilled(App.Screen.missing)",
 		])
 	}
 

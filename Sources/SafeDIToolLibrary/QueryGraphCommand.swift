@@ -88,27 +88,42 @@ public struct QueryGraph: AsyncParsableCommand {
 		}
 		// What each receive is handed is read from the trees `generate` builds of the production declarations, which the
 		// export reports only when they are valid, or when only dependencies that cannot be fulfilled keep them from being
-		// valid: then from the trees built once more of the same declarations, around those dependencies, which `generate`
+		// valid: then from the trees built again of the same declarations, around those dependencies, which `generate`
 		// never builds.
 		var supplies: ReceivedValueSupplies?
 		var treeDiagnostics = [SourceDiagnostic]()
 		var unfulfilledDependencies = [UnfulfilledDependency]()
 		if let resolvedMap {
-			let productionMap = resolvedMap.compactMapValues { $0.mockOnly ? nil : $0.withoutHandWrittenMock }
+			var productionMap = resolvedMap.compactMapValues { $0.mockOnly ? nil : $0.withoutHandWrittenMock }
 			do {
 				supplies = try await Self.generator(over: productionMap).receivedValueSupplies()
 			} catch let error as any SourceLocatedError {
 				treeDiagnostics = error.sourceDiagnostics
-				// The dependencies `generate`'s own errors name are the unfulfilled ones. Any error the trees built around
-				// them report is not one `generate` reported, so no provenance is read.
-				if let absentDeclarations = DependencyTreeGenerator.absentDeclarations(ofDependenciesReportedBy: error, in: productionMap) {
-					supplies = try? await Self.generator(
-						over: absentDeclarations.map,
-						unfulfilledReceiveLocations: absentDeclarations.unfulfilledReceiveLocations,
-					).receivedValueSupplies()
-					if supplies != nil {
-						unfulfilledDependencies = absentDeclarations.unfulfilledDependencies
+				// `generate` reports the types no declaration fulfills before any receive nothing provides, which it
+				// reports once those types are declared. So the trees are built again at most twice: around the types,
+				// then around the receives too. Any other error is not of a dependency that cannot be fulfilled, so no
+				// provenance is read, and `generate`'s own error is the only one exported.
+				var latestError: any Error = error
+				var unfulfilledReceiveLocations = Set<Dependency.DeclarationLocation>()
+				var reportedDependencies = [UnfulfilledDependency]()
+				var reportedDiagnostics = [SourceDiagnostic]()
+				for _ in 0..<2 {
+					guard supplies == nil,
+					      let absentDeclarations = DependencyTreeGenerator.absentDeclarations(ofDependenciesReportedBy: latestError, in: productionMap)
+					else { break }
+					productionMap = absentDeclarations.map
+					unfulfilledReceiveLocations.formUnion(absentDeclarations.unfulfilledReceiveLocations)
+					reportedDependencies.append(contentsOf: absentDeclarations.unfulfilledDependencies)
+					do {
+						supplies = try await Self.generator(over: productionMap, unfulfilledReceiveLocations: unfulfilledReceiveLocations).receivedValueSupplies()
+					} catch let error as any SourceLocatedError {
+						latestError = error
+						reportedDiagnostics.append(contentsOf: error.sourceDiagnostics)
 					}
+				}
+				if supplies != nil {
+					unfulfilledDependencies = reportedDependencies
+					treeDiagnostics.append(contentsOf: reportedDiagnostics)
 				}
 			}
 		}
