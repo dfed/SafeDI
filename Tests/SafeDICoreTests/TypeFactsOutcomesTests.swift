@@ -169,11 +169,43 @@ struct TypeFactsOutcomesTests {
 			],
 		).outcomes
 
+		// The root's call of 2 is the second edge.
 		#expect((1...3).map { Array(outcomes.outcomes(of: $0)) } == [
 			[.captured(2)],
-			[.init(form: .readBeforeSendableFunction, declaration: 2)],
+			[.readBeforeSendableFunction(2, before: 1)],
 			[.captured(2), .parameter],
 		])
+	}
+
+	@Test
+	func outcomes_readsStatementBeforeOutermostSendableFunction_whenSendableFunctionCallsAnother() {
+		// The root's call of the `@Sendable` function 1 is edge 0, and 1 calls the `@Sendable` function 2 at edge 1: the
+		// configuration (declaration 2) is read once, before edge 0, and both capture that local.
+		let outcomes = World(
+			variants: [
+				.init(reads: [], calls: [.init(callee: 1, sources: [.bound(2)])]),
+				.init(reads: [.valueOutsideSendableFunctions], family: .sendable, calls: [.init(callee: 2, sources: [.passedThrough(0)])]),
+				.init(reads: [.valueOutsideSendableFunctions], family: .sendable),
+			],
+		).outcomes
+
+		#expect((1...2).map { Array(outcomes.outcomes(of: $0)) } == [[.readBeforeSendableFunction(2, before: 0)], [.readBeforeSendableFunction(2, before: 0)]])
+	}
+
+	@Test
+	func outcomes_makesStatementParameter_whenTwoSendableFunctionsOpenedAtDifferentEdgesShareVariant() {
+		// The root opens the `@Sendable` functions 1 and 2 at edges 0 and 1, and each passes the configuration it read
+		// before it on to the shared `@Sendable` function 3, which no one local reaches.
+		let outcomes = World(
+			variants: [
+				.init(reads: [], calls: [.init(callee: 1, sources: [.bound(2)]), .init(callee: 2, sources: [.bound(2)])]),
+				.init(reads: [.valueOutsideSendableFunctions], family: .sendable, calls: [.init(callee: 3, sources: [.passedThrough(0)])]),
+				.init(reads: [.valueOutsideSendableFunctions], family: .sendable, calls: [.init(callee: 3, sources: [.passedThrough(0)])]),
+				.init(reads: [.valueOutsideSendableFunctions], family: .sendable),
+			],
+		).outcomes
+
+		#expect(Array(outcomes.outcomes(of: 3)) == [.parameter])
 	}
 
 	@Test
@@ -213,6 +245,7 @@ struct TypeFactsOutcomesTests {
 			cellRule: { _, _ in .value },
 			isBeingBuilt: { _ in false },
 			buildsInCallersBody: { variant, _ in variant == 0 },
+			edgeOffset: { graph.edgeOffset(of: $0) },
 		))
 
 		#expect(variants.count == 4)
@@ -300,12 +333,14 @@ private struct World {
 	let variants: [Variant]
 
 	var input: TypeFactsOutcomes.Input {
-		var input = TypeFactsOutcomes.Input(readOffsets: [0], cellRules: [], families: [], callOffsets: [0], callees: [], buildsInCallersBody: [], sourceOffsets: [0], sources: [], sourceIsBeingBuilt: [], rootSources: variants[0].rootSources.map { $0.map { AnswerSource.bound($0, answer: 0) } ?? .none })
+		var input = TypeFactsOutcomes.Input(readOffsets: [0], cellRules: [], families: [], callOffsets: [0], callees: [], callEdges: [], buildsInCallersBody: [], sourceOffsets: [0], sources: [], sourceIsBeingBuilt: [], rootSources: variants[0].rootSources.map { $0.map { AnswerSource.bound($0, answer: 0) } ?? .none })
 		for variant in variants {
 			input.cellRules += variant.reads
 			input.readOffsets.append(Int32(input.cellRules.count))
 			input.families.append(variant.family)
 			for call in variant.calls {
+				// Each call is its own edge, numbered in call order.
+				input.callEdges.append(Int32(input.callees.count))
 				input.callees.append(call.callee)
 				input.buildsInCallersBody.append(variants[Int(call.callee)].isInline)
 				input.sources += call.sources
@@ -322,9 +357,22 @@ private struct World {
 	}
 }
 
+extension TypeFactsOutcomes {
+	/// The outcome of each read of `variant`, in its read order, from the fold’s three columns.
+	func outcomes(of variant: Int32) -> [Outcome] {
+		zip(zip(forms(of: variant), declarations(of: variant)), boundBefore(of: variant)).map {
+			Outcome(form: $0.0, declaration: $0.1, boundBefore: $1)
+		}
+	}
+}
+
 extension TypeFactsOutcomes.Outcome {
 	static func captured(_ declaration: Int32) -> Self {
-		.init(form: .captured, declaration: declaration)
+		.init(form: .captured, declaration: declaration, boundBefore: -1)
+	}
+
+	static func readBeforeSendableFunction(_ declaration: Int32, before edge: Int32) -> Self {
+		.init(form: .readBeforeSendableFunction, declaration: declaration, boundBefore: edge)
 	}
 }
 

@@ -58,15 +58,15 @@ struct TypeFactsOutcomes: Sendable {
 			}
 		}
 
-		/// Each call with its caller, callee and the run of its sources: first the root’s call of itself with the world’s
-		/// sources, which are never still being built.
+		/// Each call with its caller, callee, edge and the run of its sources: first the root’s call of itself with the
+		/// world’s sources, which are never still being built, at no edge.
 		let rootSourcesAreBeingBuilt = [Bool](repeating: false, count: input.rootSources.count)
-		func forEachCall(_ body: (_ caller: Int, _ callee: Int, _ sources: ArraySlice<AnswerSource>, _ isBeingBuilt: ArraySlice<Bool>) -> Void) {
-			body(0, 0, input.rootSources[...], rootSourcesAreBeingBuilt[...])
+		func forEachCall(_ body: (_ caller: Int, _ callee: Int, _ edge: Int32, _ sources: ArraySlice<AnswerSource>, _ isBeingBuilt: ArraySlice<Bool>) -> Void) {
+			body(0, 0, -1, input.rootSources[...], rootSourcesAreBeingBuilt[...])
 			for caller in 0..<variantCount {
 				for call in Int(callOffsets[caller])..<Int(callOffsets[caller + 1]) {
 					let run = Int(sourceOffsets[call])..<Int(sourceOffsets[call + 1])
-					body(caller, Int(callees[call]), input.sources[run], input.sourceIsBeingBuilt[run])
+					body(caller, Int(callees[call]), input.callEdges[call], input.sources[run], input.sourceIsBeingBuilt[run])
 				}
 			}
 		}
@@ -75,7 +75,7 @@ struct TypeFactsOutcomes: Sendable {
 
 		// The callee cells that each caller cell feeds through a source that passes it through, as runs per caller cell.
 		var dependentOffsets = [Int32](repeating: 0, count: cells.count + 1)
-		forEachCall { caller, _, sources, _ in
+		forEachCall { caller, _, _, sources, _ in
 			for source in sources where source.kind == .passedThrough {
 				dependentOffsets[Int(readOffsets[caller] + source.payload) + 1] += 1
 			}
@@ -84,18 +84,20 @@ struct TypeFactsOutcomes: Sendable {
 			dependentOffsets[cell + 1] += dependentOffsets[cell]
 		}
 		var dependents = [Int32](repeating: 0, count: Int(dependentOffsets[cells.count]))
+		var dependentEdges = dependents
 		var nextDependent = dependentOffsets
-		forEachCall { caller, callee, sources, isBeingBuilt in
+		forEachCall { caller, callee, edge, sources, isBeingBuilt in
 			for (read, (source, isBeingBuilt)) in zip(sources, isBeingBuilt).enumerated() {
 				let cell = Int(readOffsets[callee]) + read
 				switch source.kind {
 				case .none:
-					cells.join(.none, into: cell)
+					cells.join(.none, into: cell, through: edge)
 				case .bound:
-					cells.join(bodyIsRoot[caller] && !isBeingBuilt ? .statement(source.payload) : .parameter, into: cell)
+					cells.join(bodyIsRoot[caller] && !isBeingBuilt ? .statement(source.payload) : .parameter, into: cell, through: edge)
 				case .passedThrough:
 					let callerCell = Int(readOffsets[caller] + source.payload)
 					dependents[Int(nextDependent[callerCell])] = Int32(cell)
+					dependentEdges[Int(nextDependent[callerCell])] = edge
 					nextDependent[callerCell] += 1
 				}
 			}
@@ -103,13 +105,15 @@ struct TypeFactsOutcomes: Sendable {
 
 		while let cell = cells.nextChanged() {
 			let outcome = cells.outcomes[cell]
-			for dependent in dependents[Int(dependentOffsets[cell])..<Int(dependentOffsets[cell + 1])] {
-				cells.join(outcome, into: Int(dependent))
+			for index in Int(dependentOffsets[cell])..<Int(dependentOffsets[cell + 1]) {
+				cells.join(outcome, into: Int(dependents[index]), through: dependentEdges[index])
 			}
 		}
 
 		self.readOffsets = readOffsets
-		outcomes = cells.outcomes
+		forms = cells.outcomes.map(\.form)
+		declarations = cells.outcomes.map(\.declaration)
+		boundBefore = cells.outcomes.map(\.boundBefore)
 		joins = cells.joins
 	}
 
@@ -119,18 +123,21 @@ struct TypeFactsOutcomes: Sendable {
 		/// position in its reads; `isBeingBuilt` whether an answer a call binds is still being built where its callee
 		/// reads it; and `buildsInCallersBody` whether a variant’s call at an edge, given by its index among the variant’s
 		/// calls, builds the callee in line in the caller’s own body, with no function of its own and none opened around it,
-		/// which must be false wherever the layout gives the callee a function.
+		/// which must be false wherever the layout gives the callee a function; and `edgeOffset` the offset of a
+		/// declaration’s first edge among every declaration’s (`OrderedGraph.edgeOffset(of:)`).
 		init(
 			variants: TypeFactsVariants,
 			cellRule: (_ variant: Int, _ position: Int) -> CellRule,
 			isBeingBuilt: (_ answer: Int32) -> Bool,
 			buildsInCallersBody: (_ variant: Int, _ edgeIndex: Int) -> Bool,
+			edgeOffset: (_ declaration: Int) -> Int,
 		) {
 			readOffsets = [0]
 			cellRules = []
 			families = []
 			callOffsets = [0]
 			callees = []
+			callEdges = []
 			self.buildsInCallersBody = []
 			sourceOffsets = [0]
 			sources = []
@@ -141,8 +148,10 @@ struct TypeFactsOutcomes: Sendable {
 				}
 				readOffsets.append(Int32(cellRules.count))
 				families.append(variants.family(of: variant))
+				let firstEdge = edgeOffset(Int(variants.node(of: variant)))
 				for (edgeIndex, callee) in variants.callees(of: variant).enumerated() {
 					callees.append(callee)
+					callEdges.append(Int32(firstEdge + edgeIndex))
 					self.buildsInCallersBody.append(buildsInCallersBody(variant, edgeIndex))
 					for source in variants.sources(ofCall: variants.callOffset(of: variant) + edgeIndex) {
 						sources.append(source)
@@ -161,6 +170,7 @@ struct TypeFactsOutcomes: Sendable {
 			families: [VariantFamily],
 			callOffsets: [Int32],
 			callees: [Int32],
+			callEdges: [Int32],
 			buildsInCallersBody: [Bool],
 			sourceOffsets: [Int32],
 			sources: [AnswerSource],
@@ -172,6 +182,7 @@ struct TypeFactsOutcomes: Sendable {
 			self.families = families
 			self.callOffsets = callOffsets
 			self.callees = callees
+			self.callEdges = callEdges
 			self.buildsInCallersBody = buildsInCallersBody
 			self.sourceOffsets = sourceOffsets
 			self.sources = sources
@@ -211,6 +222,9 @@ struct TypeFactsOutcomes: Sendable {
 		var callOffsets: [Int32]
 		/// Per call edge, the variant it calls.
 		var callees: [Int32]
+		/// Per call edge, the offset of its edge among every declaration’s edges (`OrderedGraph.edgeOffset(of:)` plus the
+		/// edge’s index).
+		var callEdges: [Int32]
 		/// Per call edge, whether it builds its callee in line in the caller’s own body.
 		var buildsInCallersBody: [Bool]
 		/// Per call edge, where its sources begin in `sources`, with one more entry for the end. A call edge has one
@@ -224,41 +238,42 @@ struct TypeFactsOutcomes: Sendable {
 		var rootSources: [AnswerSource]
 	}
 
-	/// What a variant’s body uses for the value of one read.
-	enum Form: UInt8, Sendable {
-		/// `nil`: every call passes `nil`.
-		case none
-		/// The statement of the root’s body named by the outcome’s declaration, which every call passes.
-		case captured
-		/// The statement of the root’s body named by the outcome’s declaration, which every call passes, read into a local
-		/// before the `@Sendable` function that could not capture it, which captures the local.
-		case readBeforeSendableFunction
-		/// A parameter of the variant’s function: calls pass different values, `nil` against a value, or a value no
-		/// function can capture. An inline variant reads it from the function whose body holds it.
-		case parameter
-		/// No outcome: the read keys the variant.
-		case keysVariant
-	}
-
+	/// What a variant’s body uses for the value of one read: its form, the statement of the root’s body it reads where it
+	/// reads one, and where that statement is read before a `@Sendable` function.
 	struct Outcome: Hashable, Sendable {
-		let form: Form
+		let form: TypeFactsOutcome
 		/// The declaration of the statement a `captured` or `readBeforeSendableFunction` outcome reads, or -1 for any
 		/// other form.
 		let declaration: Int32
+		/// For a `readBeforeSendableFunction` outcome, the offset of the edge that opens the outermost `@Sendable`
+		/// function around the variant, before which the statement is read into a local; -1 for any other form. Two calls
+		/// that open the function at different edges read two locals, which no one function captures.
+		let boundBefore: Int32
 
-		static let none = Outcome(form: .none, declaration: -1)
-		static let parameter = Outcome(form: .parameter, declaration: -1)
-		static let keysVariant = Outcome(form: .keysVariant, declaration: -1)
+		static let none = Outcome(form: .none, declaration: -1, boundBefore: -1)
+		static let parameter = Outcome(form: .parameter, declaration: -1, boundBefore: -1)
+		static let keysVariant = Outcome(form: .keysVariant, declaration: -1, boundBefore: -1)
 
 		/// A statement of the root’s body, captured until a cell’s rule says how its variant reads it.
 		static func statement(_ declaration: Int32) -> Outcome {
-			Outcome(form: .captured, declaration: declaration)
+			Outcome(form: .captured, declaration: declaration, boundBefore: -1)
 		}
 	}
 
-	/// The outcome of each read of `variant`, in its read order.
-	func outcomes(of variant: Int32) -> ArraySlice<Outcome> {
-		outcomes[Int(readOffsets[Int(variant)])..<Int(readOffsets[Int(variant) + 1])]
+	/// The form of each read of `variant`’s outcome, in its read order (`TypeFactsWorld.outcomes(of:)`).
+	func forms(of variant: Int32) -> ArraySlice<TypeFactsOutcome> {
+		forms[Int(readOffsets[Int(variant)])..<Int(readOffsets[Int(variant) + 1])]
+	}
+
+	/// The declaration each read of `variant` reads, in its read order: the statement a `captured` or
+	/// `readBeforeSendableFunction` outcome reads, -1 for any other.
+	func declarations(of variant: Int32) -> ArraySlice<Int32> {
+		declarations[Int(readOffsets[Int(variant)])..<Int(readOffsets[Int(variant) + 1])]
+	}
+
+	/// The edge each read of `variant` is bound before, in its read order (`TypeFactsWorld.boundBefore(of:)`).
+	func boundBefore(of variant: Int32) -> ArraySlice<Int32> {
+		boundBefore[Int(readOffsets[Int(variant)])..<Int(readOffsets[Int(variant) + 1])]
 	}
 
 	/// How many joins the fold made: one per constant source and at most two per passed-through source, which the tests
@@ -266,7 +281,9 @@ struct TypeFactsOutcomes: Sendable {
 	let joins: Int
 
 	private let readOffsets: [Int32]
-	private let outcomes: [Outcome]
+	private let forms: [TypeFactsOutcome]
+	private let declarations: [Int32]
+	private let boundBefore: [Int32]
 
 	/// The lattice of every cell and the worklist of the cells that changed.
 	private struct Cells {
@@ -291,17 +308,16 @@ struct TypeFactsOutcomes: Sendable {
 		private(set) var outcomes: [Outcome]
 		private(set) var joins = 0
 
-		/// Joins `offered` into the cell. A statement a `@Sendable` function cannot capture is read before it, as the cell’s
-		/// rule says.
-		mutating func join(_ offered: Outcome, into cell: Int) {
+		/// Joins `offered`, which a call at `edge` hands, into the cell. A statement a `@Sendable` function cannot capture is
+		/// read before it, as the cell’s rule says: before `edge`, which opens the function, unless a caller already reads it
+		/// before an edge further out.
+		mutating func join(_ offered: Outcome, into cell: Int, through edge: Int32) {
 			joins += 1
 			let candidate: Outcome = switch offered.form {
-			case .captured, .readBeforeSendableFunction:
-				if readsBeforeFunction[cell] {
-					Outcome(form: .readBeforeSendableFunction, declaration: offered.declaration)
-				} else {
-					Outcome(form: .captured, declaration: offered.declaration)
-				}
+			case .captured:
+				readsBeforeFunction[cell] ? Outcome(form: .readBeforeSendableFunction, declaration: offered.declaration, boundBefore: edge) : offered
+			case .readBeforeSendableFunction:
+				readsBeforeFunction[cell] ? offered : .statement(offered.declaration)
 			case .none, .parameter, .keysVariant:
 				offered
 			}
