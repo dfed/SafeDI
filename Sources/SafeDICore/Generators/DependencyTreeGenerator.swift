@@ -754,7 +754,8 @@ public actor DependencyTreeGenerator {
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
 				var constructionMemo = ConstructionMemo()
 				var roots = [RootScopeInfo]()
-				// A test that compares a root's plan with today's tree has both built for every root that reaches a cycle.
+				// A test that compares a root's plan with today's tree has both built for every root that reaches a cycle,
+				// but a test that sets a limit no tree passes, which counts the work of today's trees alone.
 				let comparesWithTodaysTree = Self.observesPerTypePlan
 				// The `@Sendable` capture walk reads a tree per path, so a module it runs in plans no root per type, a
 				// deliberate gap until the walk reads a plan's bodies.
@@ -805,7 +806,7 @@ public actor DependencyTreeGenerator {
 					// The root's code laid out from the per-type plan of its cycles, where today's tree was abandoned, the root
 					// has a plan and the type key lays it out.
 					var perTypeTree: RootScopeInfo.Tree?
-					if passedLimit || comparesWithTodaysTree {
+					if passedLimit || comparesWithTodaysTree && scopeGeneratorLimit != .max {
 						var perPathReason = perPathReasonOfRun
 						var reachesCycle = false
 						do {
