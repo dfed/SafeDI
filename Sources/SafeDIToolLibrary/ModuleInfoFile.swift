@@ -802,6 +802,11 @@ struct ModuleSeamSignatures: Sendable {
 		}
 	}
 
+	/// The encoding a file holds of `places`.
+	static func encoding(of places: StoredModulePlaces) -> [UInt8] {
+		encoding(places, writingPositionsAsAbsent: true)
+	}
+
 	/// The encoding the file holds of the places, as `encoding(writingPositionsAsAbsent:)` holds the signatures.
 	func placesEncoding(writingPositionsAsAbsent writesPositionsAsAbsent: Bool) -> [UInt8] {
 		switch storage {
@@ -995,14 +1000,31 @@ extension ModuleSeamSignatures: Codable {
 		try self.init(decoder.singleValueContainer().decode([StoredSeamSignature].self))
 	}
 
-	/// Encodes the signatures, as `SafeDITool dump` prints them: with their places where the file's own records hold
-	/// them all, and without places where one was passed up from a seam of another module, whose file holds its record.
+	/// Encodes the signatures, as `SafeDITool dump` prints them. Where the file's own records hold every place, the
+	/// signatures are printed with their places. Where a place was passed up from a seam of another module, whose file
+	/// holds its record, `dump`, which reads one file, cannot make that place whole: it prints the signatures without
+	/// places under `signaturesWithoutPlaces`, and under `storedPlaces` the places as the file holds them, each one
+	/// whole or the record it names (`StoredModulePlaces`), so that nothing the file holds is left out. A file whose
+	/// places are malformed is an error, which `dump` reports.
 	func encode(to encoder: any Encoder) throws {
-		var container = encoder.singleValueContainer()
 		do {
+			let decoded = try decoded
+			var container = encoder.singleValueContainer()
 			try container.encode(decoded)
-		} catch is StoredPlaceError {
-			try container.encode(signaturesWithoutPlaces)
+		} catch let error as StoredPlaceError {
+			switch error {
+			case .lowerPlacesUnavailable:
+				var container = encoder.container(keyedBy: StoredFormCodingKeys.self)
+				try container.encode(signaturesWithoutPlaces, forKey: .signaturesWithoutPlaces)
+				try container.encode(storedPlaces, forKey: .storedPlaces)
+			case .malformedPlace:
+				throw error
+			}
 		}
+	}
+
+	private enum StoredFormCodingKeys: String, CodingKey {
+		case signaturesWithoutPlaces
+		case storedPlaces
 	}
 }

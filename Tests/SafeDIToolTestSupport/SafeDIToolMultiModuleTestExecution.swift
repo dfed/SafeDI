@@ -347,6 +347,9 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     them. Such a run is not compiled.
 ///   - writesDOTTrees: Whether `.moduleInfo` has `generate` write each module's DOT tree (`--dot-file-output`), which
 ///     `ModuleTestOutput.dotTree` holds.
+///   - moduleInfoRewrites: Under `.moduleInfo`, what to write in place of the `.safedi` the run of each named module
+///     wrote, given that file, before the modules above read it: a file only a SafeDITool that wrote one wrong could
+///     make, which the modules above must read as they read a sound one or compute again.
 ///   - modulesBeneath: Under `.moduleInfo`, the order in which `generate` is told, with
 ///     `--transitive-module-info-file-path`, of the `.safedi` of every module the module depends on, directly or not, as
 ///     the Bazel rule tells it of the set it collects. `nil` passes no such option, as the Tuist plugin does and a
@@ -355,8 +358,8 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     `--module-info-views-refer-to-modules`, as the Bazel rule does.
 ///   - expectsPassedUpPlacesWrittenInFull: Whether a module may write a place its seam passes up in full rather than as
 ///     the record of the seam it came from. Otherwise each such place records an issue, unless the modules above compute
-///     every signature (`discardsStoredSeamSignatures`) or read a file another run wrote (`moduleInfoOverrides`), where
-///     a run has read no record to name.
+///     every signature (`discardsStoredSeamSignatures`) or read a file another run wrote (`moduleInfoOverrides`) or one
+///     rewritten (`moduleInfoRewrites`), where a run has read no record to name.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -366,6 +369,7 @@ func executeSafeDIToolMultiModuleTest(
 	scansDuringGenerate: Bool = false,
 	moduleInfoOverrides: [String: String] = [:],
 	discardsStoredSeamSignatures: Bool = false,
+	moduleInfoRewrites: [String: @Sendable (ModuleInfoFile) throws -> ModuleInfoFile] = [:],
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
 	viewsReferToModules: Bool = false,
@@ -638,7 +642,7 @@ func executeSafeDIToolMultiModuleTest(
 		// Every place a seam passes up must be written as the record it copies (`StoredPlaceChecks`).
 		StoredPlaceChecks.expectNoPlaceWrittenInFull(
 			counted: generateOutput?.passedUpPlacesWrittenInFull,
-			unless: expectsPassedUpPlacesWrittenInFull || discardsStoredSeamSignatures || !moduleInfoOverrides.isEmpty,
+			unless: expectsPassedUpPlacesWrittenInFull || discardsStoredSeamSignatures || !moduleInfoOverrides.isEmpty || !moduleInfoRewrites.isEmpty,
 			byRunOfModuleNamed: moduleName,
 			sourceLocation: sourceLocation,
 		)
@@ -654,6 +658,11 @@ func executeSafeDIToolMultiModuleTest(
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
 			moduleInfoFile = writtenFile.withoutSeamSignatures
 			try writtenFile.withoutSeamSignatures.moduleInfoData.write(to: moduleInfoOutput)
+		}
+		if let rewrite = moduleInfoRewrites[moduleName], let moduleInfoOutput, let writtenFile = moduleInfoFile {
+			let rewritten = try rewrite(writtenFile)
+			moduleInfoFile = rewritten
+			try rewritten.moduleInfoData.write(to: moduleInfoOutput)
 		}
 		if let moduleInfo = moduleInfoFile?.module {
 			expectMockConditionAgrees(configured: moduleInfo.configurations.first?.mockConditionalCompilation, fixture: module.fixture, sourceLocation: sourceLocation)
@@ -703,6 +712,7 @@ func executeSafeDIToolMultiModuleTest(
 			inputs.append(("viewsReferToModules", "true"))
 		}
 		inputs.append(("moduleInfoOverrides", moduleInfoOverrides.sorted { $0.key < $1.key }.flatMap { [$0.key, $0.value] }.joinedForRecording))
+		inputs.append(("moduleInfoRewrites", moduleInfoRewrites.keys.sorted().joinedForRecording))
 		inputs.append(("writesDOTTrees", "\(writesDOTTrees)"))
 		ExpectationRecording.recordGeneration(
 			of: recordedOutputs,

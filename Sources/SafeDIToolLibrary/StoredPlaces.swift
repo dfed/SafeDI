@@ -136,6 +136,16 @@ enum StoredPlace: Codable, Sendable {
 	/// A place in the seam's own tree, or a passed-up place that does not read back from its record.
 	case written(SeamSignature.Hole)
 	case passedUp(StoredPassedUpPlace)
+
+	/// Whether the place is held as the record it copies.
+	var isPassedUp: Bool {
+		switch self {
+		case .written:
+			false
+		case .passedUp:
+			true
+		}
+	}
 }
 
 /// The places of a module's seams, which a module info file holds apart from the rest of their signatures, so that a
@@ -149,9 +159,9 @@ struct StoredModulePlaces: Codable, Sendable {
 
 /// The check a run makes of each passed-up place it writes as a record (`ModulePlacesEncoder`).
 enum StoredPlaceWriteCheck {
-	/// Returns the place the check compares in place of `readBack`, what the record written reads back as, given the
-	/// `record` it copies: set by a test that makes the check fail, never by the tool.
-	@TaskLocal static var alteringPlaceReadBack: (@Sendable (_ readBack: SeamSignature.Hole, _ record: SeamSignature.Hole) -> SeamSignature.Hole)?
+	/// Returns the bytes the check compares in place of `readBack`, the bytes of what a record written reads back as:
+	/// set by a test that makes the check fail, never by the tool.
+	@TaskLocal static var alteringReadBackBytes: (@Sendable (_ readBack: [UInt8]) -> [UInt8])?
 }
 
 /// A module info file's places cannot be read: the caller computes every signature instead
@@ -256,16 +266,39 @@ struct ReadPlace {
 		.init(storing: written.scopeSeamType, ownerType: written.ownerType, property: written.property, instantiatedType: written.instantiatedType, builderLabel: presentation.builderLabel, caseName: written.enumPlace?.caseName, isBuiltBySendableBuilder: written.enumPlace?.isBuiltBySendableBuilder ?? false)
 	}
 
+	/// How many records deep a place shares what its record holds (`Prefixed`, `Runs`) before it holds a list of its own.
+	/// Each level shared is a box that owns the one beneath, and releasing the top one releases them nested, a few frames
+	/// a level, on a concurrency thread's half megabyte of stack: a chain of records can be as long as a module has
+	/// seams, so the nesting is bounded here, and a place past the bound copies its record's list once.
+	fileprivate static let maximumSharedDepth = 64
+
 	/// The elements of a record with what each seam above put before them, each seam's kept as it added them: a copy
-	/// passed up shares its record's, so a chain of copies holds each element once.
+	/// passed up shares its record's, so a chain of copies holds each element once, up to `maximumSharedDepth` copies.
 	indirect fileprivate enum Prefixed<Element> {
 		case elements([Element])
-		case prefixed([Element], Prefixed<Element>)
+		case prefixed([Element], Prefixed<Element>, depth: Int)
+
+		/// `following` with `prefix` before it.
+		static func prefixing(_ prefix: [Element], _ following: Prefixed<Element>) -> Prefixed<Element> {
+			following.depth < ReadPlace.maximumSharedDepth
+				? .prefixed(prefix, following, depth: following.depth + 1)
+				: .elements(prefix + following.elements)
+		}
+
+		/// How many levels of `prefixed` this nests.
+		var depth: Int {
+			switch self {
+			case .elements:
+				0
+			case let .prefixed(_, _, depth):
+				depth
+			}
+		}
 
 		var elements: [Element] {
 			var elements = [Element]()
 			var rest = self
-			while case let .prefixed(prefix, following) = rest {
+			while case let .prefixed(prefix, following, _) = rest {
 				elements += prefix
 				rest = following
 			}
@@ -277,17 +310,34 @@ struct ReadPlace {
 	}
 
 	/// The declarations a place cannot read, as the runs each record on the way added, in order: a copy passed up shares
-	/// its record's runs.
+	/// its record's runs, up to `maximumSharedDepth` copies.
 	indirect fileprivate enum Runs {
 		case run(ArraySlice<SeamSignature.Hole.UncarriedDeclaration>)
-		case joined([Runs], count: Int)
+		case joined([Runs], count: Int, depth: Int)
+
+		/// `runs`, which hold `count` declarations, one after another.
+		static func joining(_ runs: [Runs], count: Int) -> Runs {
+			let depth = (runs.map(\.depth).max() ?? 0) + 1
+			let joined = Runs.joined(runs, count: count, depth: depth)
+			return depth <= ReadPlace.maximumSharedDepth ? joined : .run(joined.elements[...])
+		}
 
 		var count: Int {
 			switch self {
 			case let .run(run):
 				run.count
-			case let .joined(_, count):
+			case let .joined(_, count, _):
 				count
+			}
+		}
+
+		/// How many levels of `joined` this nests.
+		var depth: Int {
+			switch self {
+			case .run:
+				0
+			case let .joined(_, _, depth):
+				depth
 			}
 		}
 
@@ -301,7 +351,7 @@ struct ReadPlace {
 				switch next {
 				case let .run(run):
 					elements += run
-				case let .joined(runs, _):
+				case let .joined(runs, _, _):
 					runsToAdd += runs.reversed()
 				}
 			}
@@ -322,15 +372,21 @@ extension StoredPassedUpPlace {
 	func place(record: ReadPlace, innerSeamType: TypeDescription, others: [ReadPlace]) -> ReadPlace? {
 		var runs = [ReadPlace.Runs]()
 		var count = 0
+		// How many declarations the place keeps of its record's. A place holds each of them once at most: a form that
+		// kept them again and again would hold twice as many at each record of a chain, more than memory holds within a
+		// few dozen records and more than `Int` counts within sixty-three.
+		var keptCount = 0
 		for stored in addition.declarations {
 			switch stored {
 			case .record:
 				runs.append(record.declarations)
 				count += record.declarations.count
-			case let .kept(first, keptCount):
-				guard let kept = record.declarations.declarations(first: first, count: keptCount) else { return nil }
+				keptCount += record.declarations.count
+			case let .kept(first, keptHere):
+				guard let kept = record.declarations.declarations(first: first, count: keptHere) else { return nil }
 				runs.append(kept)
-				count += keptCount
+				count += keptHere
+				keptCount += keptHere
 			case let .taken(other, declaration):
 				guard others.indices.contains(other), let taken = others[other].declarations.declarations(first: declaration, count: 1) else { return nil }
 				runs.append(taken)
@@ -344,16 +400,17 @@ extension StoredPassedUpPlace {
 				runs.append(.run([declaration]))
 				count += 1
 			}
+			guard keptCount <= record.declarations.count else { return nil }
 		}
 		var place = record
 		if let presentation {
 			place.presentation = presentation
 		}
-		place.typesToOwner = .prefixed(addition.typesToCall, record.typesToOwner)
-		place.passedUpRoute = .prefixed(addition.route, record.passedUpRoute)
+		place.typesToOwner = .prefixing(addition.typesToCall, record.typesToOwner)
+		place.passedUpRoute = .prefixing(addition.route, record.passedUpRoute)
 		place.innerSeamType = innerSeamType
 		place.isSendable = addition.isSendable
-		place.declarations = .joined(runs, count: count)
+		place.declarations = .joining(runs, count: count)
 		if let reenteringCallDeclarations = addition.reenteringCallDeclarations {
 			place.reenteringCallDeclarations = reenteringCallDeclarations
 		}
@@ -375,8 +432,10 @@ extension SeamSignature.Hole.UncarriedDeclaration {
 /// when a place read came through that module.
 ///
 /// A place passed up through a chain of seams names the record of the seam beneath, which names the next. The chain is
-/// followed with a list of the records still to read, never by a function that calls itself, so a chain as deep as the
-/// module graph reads in constant stack. A resolver is a value one read owns: nothing is shared between tasks.
+/// followed with a list of the records still to read, never by a function that calls itself, so reading a chain as deep
+/// as the module graph nests no call per record; and what a place shares with its record is bounded
+/// (`ReadPlace.maximumSharedDepth`), so letting go of the places read nests no release per record either. A resolver is
+/// a value one read owns: nothing is shared between tasks.
 struct PlaceResolver {
 	/// - Parameters:
 	///   - signaturesByModuleName: What the files hold of each module's seams, by module name.
@@ -566,7 +625,7 @@ enum ModulePlacesEncoder {
 		var encoder = Encoder(signatures: signatures, signaturesRead: signaturesRead, lower: lower)
 		let placesOfSeams = signatures.map { $0.signature?.holes ?? [] }
 		var placesBySeam = placesOfSeams.map { encoder.places(of: $0) }
-		encoder.writeWhole(placesNotReadBackFrom: &placesBySeam, as: placesOfSeams, of: signatures.map(\.seamType))
+		encoder.writeWhole(placesNotReadBackFrom: &placesBySeam, of: signatures)
 		return (StoredModulePlaces(lowerSeams: encoder.lowerSeams, placesBySeam: placesBySeam), encoder.passedUpPlacesWrittenInFull)
 	}
 
@@ -617,43 +676,35 @@ enum ModulePlacesEncoder {
 			}
 		}
 
-		/// Reads every passed-up place of `placesBySeam` back as a later run reads it, and writes whole, and counts, each
-		/// that does not read back as the place it stands for among `placesOfSeams`, the places of the seams
-		/// `seamTypes`: compared as the bytes a file holds, which differ wherever two places do.
+		/// Reads every passed-up place of `placesBySeam` back from the bytes a file holds of them, as a later run reads
+		/// them, and writes whole, and counts, each that does not read back as the place it stands for among the places of
+		/// `signatures`: compared as the bytes a file holds, which differ wherever two places do.
 		///
-		/// A record of the module's own seams is read from the form written for it here, never from the place the run
-		/// holds, so a form that names itself, or two that name one another, read back as nothing and are written whole.
-		/// A record of a module beneath is the place the run read from that module's file. The places are read shortest
-		/// route first: every record a place names has a shorter route than the place, so it is read before the place.
-		mutating func writeWhole(placesNotReadBackFrom placesBySeam: inout [[StoredPlace]], as placesOfSeams: [[SeamSignature.Hole]], of seamTypes: [TypeDescription]) {
-			// Of two signatures of one seam, the first is kept.
-			let ownSeamIndices = Dictionary(zip(seamTypes, seamTypes.indices), uniquingKeysWith: { first, _ in first })
-			var placesRead = placesBySeam.map { [ReadPlace?](repeating: nil, count: $0.count) }
-			let shortestRouteFirst = placesOfSeams.enumerated()
-				.flatMap { seam, places in places.enumerated().map { (seam: seam, place: $0.offset, routeLength: $0.element.typesToOwner.count) } }
-				.sorted { ($0.routeLength, $0.seam, $0.place) < ($1.routeLength, $1.seam, $1.place) }
-			for next in shortestRouteFirst {
-				let place = placesOfSeams[next.seam][next.place]
-				switch placesBySeam[next.seam][next.place] {
-				case .written:
-					placesRead[next.seam][next.place] = ReadPlace(place)
-				case let .passedUp(stored):
-					func read(_ reference: StoredRecordReference) -> ReadPlace? {
-						let lowerSeam = lowerSeams[reference.lowerSeam]
-						return lowerSeam.moduleName.isEmpty
-							? ownSeamIndices[lowerSeam.seamType].flatMap { placesRead[$0][reference.record] }
-							: lowerRecordsBySeam[lowerSeam.seamType].flatMap { $0.map { ReadPlace($0.places[reference.record]) } }
-					}
-					let record = read(stored.record)
-					let readBack = place.innerSeamType.flatMap { innerSeamType in
-						record.flatMap { stored.place(record: $0, innerSeamType: innerSeamType, others: stored.others.compactMap(read)) }
-					}
-					if let record, let readBack, isWritten(StoredPlaceWriteCheck.alteringPlaceReadBack?(readBack.place, record.place) ?? readBack.place, as: place) {
-						placesRead[next.seam][next.place] = readBack
-					} else {
+		/// The read is the one a run makes (`PlaceResolver`), given the encoding of the places as they stand and what the
+		/// files beneath hold: it finds each record by the module name and checksum written for it, reads a record of the
+		/// module's own seams from the form written for it here, never from the place the run holds, and takes each
+		/// site's path from the seam's enums. A read that throws, as one does of a form that names itself, of two that
+		/// name one another, or of a module whose file holds other places, reads none of its seam's places back. Writing a
+		/// place whole changes what a place that names it reads, so the places are read again until every one left as a
+		/// record reads back; each pass writes one more place whole at least.
+		mutating func writeWhole(placesNotReadBackFrom placesBySeam: inout [[StoredPlace]], of signatures: [StoredSeamSignature]) {
+			var readsBack = false
+			while !readsBack, placesBySeam.contains(where: { $0.contains(where: \.isPassedUp) }) {
+				let written = ModuleSeamSignatures(
+					seamTypes: signatures.map(\.seamType),
+					encoding: [],
+					placesEncoding: ModuleSeamSignatures.encoding(of: StoredModulePlaces(lowerSeams: lowerSeams, placesBySeam: placesBySeam)),
+				)
+				// A lower seam of the module's own is written with no module name, and read from the module being read.
+				var resolver = PlaceResolver(signaturesByModuleName: lower.merging(["": written]) { _, own in own })
+				readsBack = true
+				for (seam, stored) in signatures.enumerated() {
+					let places = stored.signature?.holes ?? []
+					let placesRead = (try? resolver.places(ofSeamAt: seam, inModuleNamed: "", sharingSitePathsOf: stored.signature)) ?? []
+					for (index, place) in places.enumerated() where placesBySeam[seam][index].isPassedUp && !(placesRead.indices.contains(index) && isWritten(placesRead[index], as: place)) {
 						passedUpPlacesWrittenInFull += 1
-						placesBySeam[next.seam][next.place] = .written(place)
-						placesRead[next.seam][next.place] = ReadPlace(place)
+						placesBySeam[seam][index] = .written(place)
+						readsBack = false
 					}
 				}
 			}
@@ -843,13 +894,14 @@ enum ModulePlacesEncoder {
 		/// Whether a file holds `first` and `second` as the same bytes, with no position: two places are written as the
 		/// same bytes exactly when a read finds no difference between them. Each is written by a writer of its own, since
 		/// a writer writes a value it wrote before as a reference to it.
-		private func isWritten(_ first: SeamSignature.Hole, as second: SeamSignature.Hole) -> Bool {
+		private func isWritten(_ readBack: SeamSignature.Hole, as place: SeamSignature.Hole) -> Bool {
 			func bytes(_ place: SeamSignature.Hole) -> [UInt8] {
 				var writer = BinaryWriter.writingStringsInline()
 				writer.writingPositionsAsAbsent { $0.write(place) }
 				return writer.bytes
 			}
-			return bytes(first) == bytes(second)
+			let readBackBytes = bytes(readBack)
+			return (StoredPlaceWriteCheck.alteringReadBackBytes?(readBackBytes) ?? readBackBytes) == bytes(place)
 		}
 
 		/// Whether a file holds `first` and `second` as the same bytes, which two empty lists are without being written.

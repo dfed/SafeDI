@@ -222,9 +222,11 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 			workByStep[work.step, default: 0] += work.elementCount
 		}
 		#expect(output.modules["App"]?.generatedFiles.isEmpty == false)
-		// The run of layer n opens the n modules beneath it and resolves one record in each but the bottom one.
-		#expect(workByStep[.openingStoredPlaces] == (0...layerCount).reduce(0, +))
-		#expect(workByStep[.resolvingStoredPlaces] == (0...layerCount).map { max($0 - 1, 0) }.reduce(0, +))
+		// The run of layer n opens the n modules beneath it and resolves one record in each but the bottom one. Then each
+		// layer above the bottom one reads back the place it wrote, from the bytes it wrote: its own places and those of
+		// the n modules beneath, and one record in each but the bottom one.
+		#expect(workByStep[.openingStoredPlaces] == (0...layerCount).reduce(0, +) + (1..<layerCount).map { $0 + 1 }.reduce(0, +))
+		#expect(workByStep[.resolvingStoredPlaces] == (0...layerCount).map { max($0 - 1, 0) }.reduce(0, +) + (1..<layerCount).reduce(0, +))
 		#expect(output.modules.values.compactMap(\.generateOutput?.passedUpPlacesWrittenInFull).reduce(0, +) == 0)
 	}
 
@@ -260,15 +262,39 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func encode_printsSignaturesWithoutPlaces_whenPlaceWasPassedUpFromAnotherModulesSeam() async throws {
-		// `dump` prints one file: a place whose record another module's file holds is left out, with its seam's others.
+	mutating func encode_printsPlacesAsTheFileHoldsThem_whenPlaceWasPassedUpFromAnotherModulesSeam() async throws {
+		// `dump` prints one file. A place whose record another module's file holds cannot be made whole from it, so the
+		// places are printed as stored, the seam's own place whole and the passed-up one as the record it names.
 		let written = try await chainOutput(layerCount: 2, viewsReferToModules: true)
 		let upper = try #require(written.modules["Layer1"]?.moduleInfoFile?.seamSignatures)
 		let lower = try #require(written.modules["Layer0"]?.moduleInfoFile?.seamSignatures)
-		let printedUpper = try JSONDecoder().decode([StoredSeamSignature].self, from: JSONEncoder().encode(upper))
+		struct StoredForm: Decodable {
+			let signaturesWithoutPlaces: [StoredSeamSignature]
+			let storedPlaces: StoredModulePlaces
+		}
+		let printedUpper = try JSONDecoder().decode(StoredForm.self, from: JSONEncoder().encode(upper))
 		let printedLower = try JSONDecoder().decode([StoredSeamSignature].self, from: JSONEncoder().encode(lower))
-		#expect(printedUpper.map { $0.signature?.holes.count } == [0])
+		#expect(printedUpper.signaturesWithoutPlaces.map { $0.signature?.holes.count } == [0])
+		#expect(printedUpper.storedPlaces.lowerSeams.map(\.moduleName) == ["Layer0"])
+		#expect(printedUpper.storedPlaces.placesBySeam.map { $0.map(\.isPassedUp).sorted { !$0 && $1 } } == [[false, true]])
 		#expect(printedLower.map { $0.signature?.holes.count } == [1])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func encode_throws_whenPlacesAreMalformed() async throws {
+		// A file that holds the places of more seams than it has is an error `dump` reports, never a file printed as sound.
+		let written = try await chainOutput(layerCount: 2, viewsReferToModules: true)
+		let signatures = try #require(written.modules["Layer1"]?.moduleInfoFile?.seamSignatures)
+		let places = try signatures.storedPlaces
+		let malformed = ModuleSeamSignatures(
+			seamTypes: signatures.seamTypes,
+			encoding: signatures.encoding(writingPositionsAsAbsent: true),
+			placesEncoding: ModuleSeamSignatures.encoding(of: StoredModulePlaces(lowerSeams: places.lowerSeams, placesBySeam: places.placesBySeam + [[]])),
+		)
+		#expect(throws: StoredPlaceError.self) {
+			try JSONEncoder().encode(malformed)
+		}
 	}
 
 	// MARK: Tests – Places a SafeDITool would not write
@@ -285,6 +311,8 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		case declarationBoundOnPathOfRecordNotNamed
 		case declarationBoundOnPathWithOtherReason
 		case recordThatNamesItself
+		case recordsDeclarationsKeptTwice
+		case oneDeclarationOfRecordKeptTwice
 	}
 
 	@Test(arguments: Malformation.allCases)
@@ -357,6 +385,11 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 				place(record: StoredRecordReference(lowerSeam: 0, record: passedUpIndex)),
 				lowerSeams: [StoredLowerSeam(moduleName: "", seamType: upper.seamTypes[0], checksum: 0)],
 			)
+		case .recordsDeclarationsKeptTwice:
+			// Each record of a chain that did this would hold twice the declarations of the one beneath.
+			malformed = upperHolding(place(declarations: [.record, .record]))
+		case .oneDeclarationOfRecordKeptTwice:
+			malformed = upperHolding(place(declarations: [.record, .kept(first: 0, count: 1)]))
 		}
 		#expect {
 			try malformed.decoded(moduleName: "Layer1", in: ["Layer0": lower])
@@ -365,18 +398,154 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – A chain of records deeper than a stack holds
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func places_readsAndReleasesPlace_whenItsRecordsChainThousandsDeep() async throws {
+		// One seam's places each name the one before as their record, as the places of a chain of seams that deep would,
+		// and another seam's place names the last. Reading it follows every record, and letting go of what was read
+		// releases every record: neither may nest a call per record, on a thread whose stack is half a megabyte.
+		let written = try await chainOutput(layerCount: 2, viewsReferToModules: true)
+		let upper = try #require(written.modules["Layer1"]?.moduleInfoFile?.seamSignatures)
+		let lower = try #require(written.modules["Layer0"]?.moduleInfoFile?.seamSignatures)
+		let places = try upper.storedPlaces
+		let passedUp = try #require(places.placesBySeam[0].lazy.compactMap { place -> StoredPassedUpPlace? in
+			if case let .passedUp(passedUp) = place {
+				passedUp
+			} else {
+				nil
+			}
+		}.first)
+		let whole = try #require(try lower.storedPlaces.placesBySeam[0].first)
+		guard case let .written(wholePlace) = whole else {
+			Issue.record("The bottom seam’s place is written whole.")
+			return
+		}
+		let placeRead = try #require(try upper.decoded(moduleName: "Layer1", in: ["Layer0": lower]).first?.signature?.holes.first { $0.innerSeamType != nil })
+		let declaration = try #require(placeRead.uncarriedDeclarations.first)
+		#expect(!passedUp.addition.typesToCall.isEmpty)
+		#expect(!passedUp.addition.route.isEmpty)
+		let chainLength = 10000
+		func copy(ofRecord record: Int) -> StoredPlace {
+			.passedUp(StoredPassedUpPlace(
+				record: StoredRecordReference(lowerSeam: 0, record: record),
+				others: [],
+				presentation: nil,
+				addition: StoredPlaceAddition(typesToCall: passedUp.addition.typesToCall, route: passedUp.addition.route, isSendable: passedUp.addition.isSendable, declarations: [.record, .written(declaration)], reenteringCallDeclarations: nil, reenteringPlaceFields: nil),
+			))
+		}
+		let chained = ModuleSeamSignatures(
+			seamTypes: [upper.seamTypes[0], lower.seamTypes[0]],
+			encoding: [],
+			placesEncoding: ModuleSeamSignatures.encoding(of: StoredModulePlaces(
+				lowerSeams: [StoredLowerSeam(moduleName: "", seamType: lower.seamTypes[0], checksum: 0)],
+				placesBySeam: [[copy(ofRecord: chainLength - 1)], [whole] + (0..<chainLength - 1).map(copy(ofRecord:))],
+			)),
+		)
+		// On a thread with the stack a concurrency thread has on macOS, whatever this platform gives one.
+		let read: Result<[SeamSignature.Hole], any Error> = await withCheckedContinuation { continuation in
+			let thread = Thread {
+				var resolver = PlaceResolver(signaturesByModuleName: ["Chained": chained])
+				let read = Result { try resolver.places(ofSeamAt: 0, inModuleNamed: "Chained", sharingSitePathsOf: nil) }
+				// Letting go of the resolver releases every record it read.
+				resolver = PlaceResolver(signaturesByModuleName: [:])
+				continuation.resume(returning: read)
+			}
+			thread.stackSize = 512 * 1024
+			thread.start()
+		}
+		let placesOfTop = try read.get()
+		let top = try #require(placesOfTop.first)
+		#expect(placesOfTop.count == 1)
+		#expect(top.uncarriedDeclarations.count == chainLength + wholePlace.uncarriedDeclarations.count)
+		#expect(top.typesToOwner.count == chainLength * passedUp.addition.typesToCall.count + placeRead.typesToOwner.count - passedUp.addition.typesToCall.count)
+		#expect(top.passedUpRoute.count == chainLength * passedUp.addition.route.count)
+	}
+
+	// MARK: Tests – A run given a file whose places it cannot read
+
+	/// A way the file of the module beneath a run's module can fail the read of its seam's places.
+	enum Damage: CaseIterable {
+		case placesCutShort
+		case placeNamesLowerSeamNotListed
+		case lowerSeamWrittenAgainstOtherPlaces
+		case lowerSeamOfModuleNotGiven
+	}
+
+	@Test(arguments: Damage.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameCodeAsComputingEverySignature_whenPlacesOfModuleBeneathCannotBeRead(damage: Damage) async throws {
+		let modules = Self.chainModules(layerCount: 3)
+		let written = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		// A file whose checksum holds over places only a SafeDITool that wrote them wrong could make: the file reads, and
+		// the places throw when the tree of the module above reaches the seam.
+		let rewrite: @Sendable (ModuleInfoFile) throws -> ModuleInfoFile = { file in
+			let places = try file.seamSignatures.storedPlaces
+			let damagedPlacesEncoding: [UInt8] = switch damage {
+			case .placesCutShort:
+				file.seamSignatures.placesEncoding(writingPositionsAsAbsent: true).dropLast()
+			case .placeNamesLowerSeamNotListed:
+				ModuleSeamSignatures.encoding(of: StoredModulePlaces(lowerSeams: [], placesBySeam: places.placesBySeam))
+			case .lowerSeamWrittenAgainstOtherPlaces:
+				ModuleSeamSignatures.encoding(of: StoredModulePlaces(lowerSeams: places.lowerSeams.map { StoredLowerSeam(moduleName: $0.moduleName, seamType: $0.seamType, checksum: $0.checksum &+ 1) }, placesBySeam: places.placesBySeam))
+			case .lowerSeamOfModuleNotGiven:
+				ModuleSeamSignatures.encoding(of: StoredModulePlaces(lowerSeams: places.lowerSeams.map { StoredLowerSeam(moduleName: "Absent", seamType: $0.seamType, checksum: $0.checksum) }, placesBySeam: places.placesBySeam))
+			}
+			return ModuleInfoFile(
+				moduleName: file.moduleName,
+				ownEntryChecksum: file.ownEntryChecksum,
+				packageName: file.packageName,
+				dependencyModuleNames: file.dependencyModuleNames,
+				imports: file.imports,
+				mockImports: file.mockImports,
+				instantiables: file.instantiables,
+				configurations: file.configurations,
+				filesWithUnexpectedNodes: file.filesWithUnexpectedNodes,
+				conditionalCompilationDecisions: file.conditionalCompilationDecisions,
+				instantiableTypeNamesInAnyClause: file.instantiableTypeNamesInAnyClause,
+				plainTypeDeclarations: file.plainTypeDeclarations,
+				seamSignatures: ModuleSeamSignatures(seamTypes: file.seamSignatures.seamTypes, encoding: file.seamSignatures.encoding(writingPositionsAsAbsent: true), placesEncoding: damagedPlacesEncoding),
+				view: file.view,
+			)
+		}
+		#expect(try #require(written.modules["Layer1"]?.moduleInfoFile?.seamSignatures).storedPlaces.placesBySeam.joined().contains { $0.isPassedUp })
+
+		// The run tells of the block that threw, which is all that shows it computed again what the file stores.
+		let (failedBlocks, failedBlocksContinuation) = AsyncStream<StoredBlockDecodeObservation.Block>.makeStream()
+		var filesToDelete = [URL]()
+		let damaged = try await StoredBlockDecodeObservation.$failureObserver.withValue({ failedBlocksContinuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, moduleInfoRewrites: ["Layer1": rewrite], modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		}
+		self.filesToDelete += filesToDelete
+		failedBlocksContinuation.finish()
+		var blocksThatThrew = [StoredBlockDecodeObservation.Block]()
+		for await block in failedBlocks {
+			blocksThatThrew.append(block)
+		}
+		// Once in the run of `Layer2`, whose seam calls the seam of `Layer1`, and once in the run of `App`, whose tree reaches it.
+		#expect(blocksThatThrew == [.seamSignatures, .seamSignatures])
+		#expect(damaged.modules["Layer2"]?.generatedFiles == computed.modules["Layer2"]?.generatedFiles)
+		#expect(damaged.modules["App"]?.generatedFiles == computed.modules["App"]?.generatedFiles)
+		#expect(damaged.modules["App"]?.generatedFiles == written.modules["App"]?.generatedFiles)
+		// The module above names no record of the file it could not read: it writes each place it passes up whole.
+		#expect(damaged.modules["Layer2"]?.generateOutput?.passedUpPlacesWrittenInFull == 2)
+		#expect(try #require(damaged.modules["Layer2"]?.moduleInfoFile?.seamSignatures).storedPlaces.placesBySeam.joined().contains { $0.isPassedUp } == false)
+	}
+
 	// MARK: Tests – A place the form does not hold
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesPlaceInFull_whenRecordDoesNotReadBackAsThePlace() async throws {
 		let modules = Self.chainModules(layerCount: 3)
-		let output = try await StoredPlaceWriteCheck.$alteringPlaceReadBack.withValue({ _, record in record }) {
+		let output = try await StoredPlaceWriteCheck.$alteringReadBackBytes.withValue({ $0 + [0] }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, expectsPassedUpPlacesWrittenInFull: true, filesToDelete: &filesToDelete)
 		}
 		let placesWrittenInFull = output.modules.values.compactMap(\.generateOutput?.passedUpPlacesWrittenInFull).reduce(0, +)
 		let computed = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, discardsStoredSeamSignatures: true, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
-		// Layer1 passes up one place and Layer2 two, and the record handed back in place of each differs from it.
+		// Layer1 passes up one place and Layer2 two, and the bytes handed back in place of each read differ from its own.
 		#expect(placesWrittenInFull == 3)
 		#expect(try #require(output.modules["Layer2"]?.moduleInfoFile?.seamSignatures).storedPlaces.placesBySeam.joined().contains { $0.isPassedUp } == false)
 		#expect(output.modules["App"]?.generatedFiles == computed.modules["App"]?.generatedFiles)
@@ -389,7 +558,7 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 		let modules = Self.chainModules(layerCount: 2)
 		var filesToDelete = [URL]()
 		try await withKnownIssue {
-			_ = try await StoredPlaceWriteCheck.$alteringPlaceReadBack.withValue({ _, record in record }) {
+			_ = try await StoredPlaceWriteCheck.$alteringReadBackBytes.withValue({ $0 + [0] }) {
 				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
 			}
 		} matching: { issue in
@@ -548,16 +717,5 @@ struct SafeDIToolStoredPlacesTests: ~Copyable {
 			""",
 		], dependencies: ["Core", "Layer\(moduleCount - 1)"]))
 		return modules
-	}
-}
-
-extension StoredPlace {
-	fileprivate var isPassedUp: Bool {
-		switch self {
-		case .written:
-			false
-		case .passedUp:
-			true
-		}
 	}
 }
