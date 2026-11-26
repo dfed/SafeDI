@@ -630,7 +630,6 @@ extension DependencyTreeGenerator {
 		}
 	}
 
-
 	/// The passed-up holes that name this seam's builders for the places it passes up, as indices into `passedUpHoles`, and,
 	/// by each passed-up hole, the index among those candidates of the one whose name its builder takes.
 	///
@@ -660,6 +659,7 @@ extension DependencyTreeGenerator {
 		}
 		return (candidates, candidateByHole)
 	}
+
 	/// The holes of the seams the tree `generator` roots calls whose builders it passes up, one per site whatever route
 	/// presents it, each with the seam whose call presented it first, in the order the tree first presents the site, and
 	/// what the calls that present each site of the seam's own tree add to its builder. A site is never passed up twice,
