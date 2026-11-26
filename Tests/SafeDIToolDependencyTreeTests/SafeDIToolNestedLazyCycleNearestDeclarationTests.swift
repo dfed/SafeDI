@@ -985,9 +985,62 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 		}
 	}
 
+	/// `U` declares `l` too, so two declarations of the label are between `W` and the `W` built again: `U`'s own, and the
+	/// one of the type that builds `U` again, which reaches `W` only through `U`'s cycle. The note names the one that comes
+	/// first in source order, here `P`'s, in `P.swift`, whichever the walk met first.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_notesDeclarationOfSecondCycle_whenItPrecedesDeclarationOfTypeBetweenInSourceOrder() async {
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["V.swift"]):7:5: error: @Received property `l: L` is received in chain: W -> V. A dependency cycle builds `W` again beneath `P`, which declares `l: L` with the same label, and SafeDI hands each `W` one value of `l`. `W` and the types it builds receive `l` as `l: L` and `l: LazilyInstantiated<L>?`, which one value cannot carry together. Receive `l: L` and `l: LazilyInstantiated<L>?` under different labels to fix.
+			\(fixtures["P.swift"]):8:5: note: `l: L` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.fixtureWhereTypeBetweenDeclaresLabelToo(typeBuildingUAgain: "P"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	/// The same graph with the type that builds `U` again named `Z`, so `U`'s declaration, in `U.swift`, comes first.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_notesDeclarationOfTypeBetween_whenItPrecedesDeclarationOfSecondCycleInSourceOrder() async {
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["V.swift"]):7:5: error: @Received property `l: L` is received in chain: W -> V. A dependency cycle builds `W` again beneath `U`, which declares `l: L` with the same label, and SafeDI hands each `W` one value of `l`. `W` and the types it builds receive `l` as `l: L` and `l: LazilyInstantiated<L>?`, which one value cannot carry together. Receive `l: L` and `l: LazilyInstantiated<L>?` under different labels to fix.
+			\(fixtures["U.swift"]):9:5: note: `l: L` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.fixtureWhereTypeBetweenDeclaresLabelToo(typeBuildingUAgain: "Z"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// The graph of `fixture()` in which `U` instantiates an `l` of its own before it builds `W` again, `W` also builds
+	/// `X`, which receives `l` only if available as a `LazilyInstantiated`, and the type that instantiates `l` and builds
+	/// `U` again is named `typeBuildingUAgain`, which decides whether its file precedes `U`'s.
+	private static func fixtureWhereTypeBetweenDeclaresLabelToo(typeBuildingUAgain: String) -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let l: L", "@Instantiated let wBuilder: Instantiator<W>"]),
+			seamFixtureType(named: "W", isFinalClass: true, declarations: ["@Instantiated let uBuilder: Instantiator<U>", "@Instantiated let vBuilder: Instantiator<V>", "@Instantiated let xBuilder: Instantiator<X>"]),
+			seamFixtureType(named: "U", isFinalClass: true, declarations: ["@Instantiated let l: L", "@Instantiated let stepBuilder: Instantiator<\(typeBuildingUAgain)>", "@Instantiated let wBuilder: Instantiator<W>"]),
+			seamFixtureType(named: typeBuildingUAgain, isFinalClass: true, declarations: ["@Instantiated let l: L", "@Instantiated let uBuilder: Instantiator<U>"]),
+			seamFixtureType(named: "V", isFinalClass: true, declarations: ["@Received let l: L"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let l: LazilyInstantiated<L>?"]),
+			seamFixtureType(named: "L", isFinalClass: true, declarations: []),
+		]
+	}
 
 	/// `Root` instantiates `l` and `W`; `W` instantiates `U` and `V`, which receives `l`; `U` instantiates `P` and `W`
 	/// again; `P` instantiates its own `l` and `U` again.
