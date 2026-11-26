@@ -1856,12 +1856,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Whether a route to one of the cases at `caseIndices` reads `label` past a fill on it, in the called seam's tree, where
 	/// some route of the filled case holds it and another does not: on that other route inline reads the declaration
-	/// enclosing the call. A route whose own levels hold the label reads none of the called seam's.
+	/// enclosing the call. A route reads past the fill where its nearest declaration is the fill's own level, which holds
+	/// what the called seam hands the fill, or where no level of its own holds the label.
 	private static func innerRoutesLack(_ label: String, atCasesAt caseIndices: [Int], in query: SeamSignature.Places.Query) -> Bool {
 		caseIndices.contains { caseIndex in
 			let ownAnswers = query.answers(ofLabel: label, at: caseIndex)
-			guard ownAnswers.contains(where: { !isHeldByLevel($0, in: query) }) else { return false }
-			return query.filledCases(onRoutesTo: caseIndex).contains { _, filledCase in
+			let readsPastEveryFill = ownAnswers.contains { !isHeldByLevel($0, in: query) }
+			return query.filledCases(onRoutesTo: caseIndex).contains { fillLevel, filledCase in
+				guard readsPastEveryFill || ownAnswers.contains(where: { answer in
+					guard case let .field(level, _) = answer else { return false }
+					return level == fillLevel
+				}) else { return false }
 				let innerAnswers = filledCase.query.answers(ofLabel: label, at: filledCase.caseIndex)
 				return innerAnswers.contains { isHeldByLevel($0, in: filledCase.query) } && innerAnswers.contains { !isHeldByLevel($0, in: filledCase.query) }
 			}
