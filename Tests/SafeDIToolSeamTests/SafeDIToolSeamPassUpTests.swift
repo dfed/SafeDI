@@ -2969,14 +2969,10 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 		#expect(casePlacesBySeam.mapValues { $0.map { $0.hole.sitePath.map(\.label) } } == ["Inner": [["detailBuilder", "api"]], "Middle": [["detailBuilder", "api"]], "Outer": [["detailBuilder", "api"]]])
 	}
 
-	@Test(arguments: [false, true])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func casesPresented_endAtCaseOfSeamTwoModulesBeneath_whenRunIsHandedOnlyTheMiddleModulesFile(viewsReferToModules: Bool) async throws {
-		// `Inner`, in `Base`, holds the place `api`; `Middle`, in `Mid`, calls `Inner` and passes the place up; `Outer`, in
-		// `App`, calls `Middle` and passes it up again. `App` lists only `Mid`: its view carries `Base`'s seam signatures, or,
-		// where views refer to modules, as Bazel's do, the run is told of `Base`'s own file. Either way `Outer`'s case refers
-		// to `Middle`'s, whose reference to `Inner`'s case resolves to the graph `Base`'s own run computed.
-		let modules = [
+	/// `Inner`, in `Base`, holds the place `api`; `Middle`, in `Mid`, calls `Inner` and passes the place up; `Outer`, in
+	/// `App`, calls `Middle` and passes it up again.
+	private static var placePassedUpThroughTwoModules: [ModuleFixture] {
+		[
 			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: AnyObject {}",
 				"""
@@ -2995,6 +2991,168 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				"import Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let middle: Middle"]),
 			], dependencies: ["Mid"]),
 		]
+	}
+
+	/// The place graph of `Outer` as the run of `App` computes it over `placePassedUpThroughTwoModules`, with the graphs its
+	/// references resolve to.
+	private mutating func observationOfOuterOverPlacePassedUpThroughTwoModules() async throws -> SeamSignature.Places.Observation {
+		try await observationOfOuter(over: Self.placePassedUpThroughTwoModules)
+	}
+
+	/// The place graph of `Outer` as the last run over `modules` computes it, with the graphs its references resolve to.
+	private mutating func observationOfOuter(over modules: [ModuleFixture]) async throws -> SeamSignature.Places.Observation {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
+		let enclosingObserver = SeamPlaceLevels.observer
+		var writtenFiles = [URL]()
+		_ = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+			if let observation = placeLevels.placesObservation {
+				continuation.yield(observation)
+			}
+			enclosingObserver?(placeLevels)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &writtenFiles)
+		}
+		filesToDelete += writtenFiles
+		continuation.finish()
+		var observationOfOuter: SeamSignature.Places.Observation?
+		for await observation in stream where observation.seamType.asSource == "Outer" {
+			observationOfOuter = observation
+		}
+		return try #require(observationOfOuter)
+	}
+
+	private static func seamAndCase(_ resolved: SeamSignature.Places.Query.ResolvedCase) -> String {
+		"\(resolved.query.places.levels.first(where: \.key.isSeamRoot)?.key.builtType?.asSource ?? "no seam") \(resolved.caseIndex)"
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func pathToHoldingSeam_runsThroughTheCallOfEachSeam_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		#expect(try Self.seamAndCase(#require(query.holdingCase(of: 0))) == "Inner 0")
+		let path = try #require(query.pathToHoldingSeam(of: 0))
+		// `Outer`'s call is its property `middle`, `Middle`'s its property `inner`; the place's own path, `detailBuilder` then
+		// `api`, is `Inner`'s.
+		#expect(path.calls.map { Self.seamAndCase($0.presentingCase) } == ["Outer 0", "Middle 0"])
+		#expect(path.sitePath.map(\.asSource) == ["middle: Middle", "inner: Inner"])
+		#expect(path.declaredPath.map(\.property.asSource) == ["middle: Middle", "inner: Inner"])
+		#expect(path.types.map(\.type.asSource) == ["Middle", "Inner"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_areDeclarationsOfSeamsOnTheWay_whenNoDeclarationOfHoldingSeamAnswersRead() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		func spelled(_ answers: [SeamSignature.Places.Query.PresentedAnswer]?) -> [String]? {
+			answers?.map { answer in
+				switch answer {
+				case let .ofHoldingSeam(.field(level, index)), let .ofHoldingSeam(.uncarried(level, index)), let .ofHoldingSeam(.boundOutsideSendableFunction(level, index, _)):
+					"Inner’s \(query.holdingCase(of: 0)?.query.places.declaration(level: level, declaration: index).field.property.asSource ?? "nothing")"
+				case .ofHoldingSeam(.callersOwn):
+					"Inner’s caller’s own"
+				case let .boundByPassingUpSeam(presentingCase, .field(level, index)), let .boundByPassingUpSeam(presentingCase, .uncarried(level, index)), let .boundByPassingUpSeam(presentingCase, .boundOutsideSendableFunction(level, index, _)):
+					"\(Self.seamAndCase(presentingCase)) binds \(presentingCase.query.places.declaration(level: level, declaration: index).field.property.asSource)"
+				case let .boundByPassingUpSeam(presentingCase, .callersOwn):
+					"\(Self.seamAndCase(presentingCase)) binds nothing"
+				case .callersOwn:
+					"the caller’s own"
+				}
+			}
+		}
+		// `Inner`'s tree declares `detailBuilder`, which builds the place's owner; `Middle` binds `inner` and `Outer` binds
+		// `middle` on the paths to their calls; nothing declares `logger`.
+		#expect(spelled(query.presentedAnswers(ofLabel: "detailBuilder", at: 0)) == ["Inner’s detailBuilder: Instantiator<Detail>"])
+		#expect(spelled(query.presentedAnswers(ofLabel: "inner", at: 0)) == ["Middle 0 binds inner: Inner"])
+		#expect(spelled(query.presentedAnswers(ofLabel: "middle", at: 0)) == ["Outer 0 binds middle: Middle"])
+		#expect(spelled(query.presentedAnswers(ofLabel: "logger", at: 0)) == ["the caller’s own"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentationAdditions_holdWhatEachSeamBindsOnThePathToItsCall_whenTwoSeamsPassUpThePlaceOfTheSeamTheyCall() async throws {
+		let outer = try await observationOfOuterOverPlacePassedUpThroughTwoModules()
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		let additions = try #require(query.presentationAdditions(of: 0))
+		#expect(additions.boundOnPathsToCalls.map { "\(Self.seamAndCase($0.presentingCase)) binds \($0.declaration.property.asSource)" } == ["Outer 0 binds middle: Middle", "Middle 0 binds inner: Inner"])
+		#expect(additions.calledCopyDeclarations.isEmpty)
+		#expect(!additions.isPassedOnSendable)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func pathToHoldingSeam_runsThroughTheCallDeclaredFirstInSource_whenTwentyCallsPresentOnePlace() async throws {
+		// `Inner`, in `Base`, holds the place `api`. Twenty seams of `Mid` each call `Inner` and pass the place up, and `Outer`
+		// calls all twenty: one place, which twenty calls present. `Outer` declares its calls in an order that follows
+		// neither their labels nor the order in which `Mid` declares their types, so that a choice by label, by type or by
+		// the order of an unordered collection names another call.
+		let declarationOrder = [13, 4, 17, 0, 9, 19, 2, 11, 6, 15, 1, 8, 18, 3, 12, 7, 16, 5, 14, 10]
+		let typeOrder = [8, 15, 3, 19, 11, 0, 6, 14, 2, 17, 10, 5, 13, 1, 18, 7, 12, 4, 16, 9]
+		func name(_ index: Int) -> String {
+			index < 10 ? "0\(index)" : "\(index)"
+		}
+		let modules = [
+			Self.placePassedUpThroughTwoModules[0],
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + typeOrder.map { seamFixtureType(named: "Middle\(name($0))", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let inner: Inner"]) }.joined(separator: "\n\n"),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+				"import Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: declarationOrder.map { "@Instantiated public let middle\(name($0)): Middle\(name($0))" }),
+			], dependencies: ["Mid"]),
+		]
+		let outer = try await observationOfOuter(over: modules)
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		#expect(query.casesPresentingSamePlaces(as: 0).count == 20)
+		for caseIndex in outer.places.cases.indices {
+			let path = try #require(query.pathToHoldingSeam(of: caseIndex))
+			// `middle13` is the call `Outer` declares first.
+			#expect(path.sitePath.map(\.asSource) == ["middle13: Middle13", "inner: Inner"])
+			#expect(path.calls.last.map { Self.seamAndCase($0.presentingCase) } == "Middle13 0")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func presentedAnswers_nameTheDeclarationNearestThePlace_whenTwoSeamsOnTheWayDeclareTheLabel() async throws {
+		// `Inner`'s tree declares no `logger`. `Middle` declares one beside its call of `Inner`, and `Outer` declares another
+		// beside its call of `Middle`: a fill of the place reads `Middle`'s, which stands between it and `Outer`'s.
+		let logger = """
+		@Instantiable
+		public final class Logger: Instantiable { public init() {} }
+		"""
+		let modules = [
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: Self.placePassedUpThroughTwoModules[0].swiftFileContent + [logger]),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+				"import Base\n\n" + seamFixtureType(named: "Middle", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let inner: Inner"]),
+			], dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+				"import Base\nimport Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let middle: Middle"]),
+			], dependencies: ["Base", "Mid"]),
+		]
+		let outer = try await observationOfOuter(over: modules)
+		let query = SeamSignature.Places.Query(of: outer.places, calledPlaces: outer.calledPlaces(of:))
+		let answers = try #require(query.presentedAnswers(ofLabel: "logger", at: 0))
+		let seamsThatBind = answers.map { answer in
+			switch answer {
+			case .ofHoldingSeam:
+				"Inner"
+			case let .boundByPassingUpSeam(presentingCase, _):
+				Self.seamAndCase(presentingCase)
+			case .callersOwn:
+				"the caller"
+			}
+		}
+		#expect(seamsThatBind == ["Middle 0"])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casesPresented_endAtCaseOfSeamTwoModulesBeneath_whenRunIsHandedOnlyTheMiddleModulesFile(viewsReferToModules: Bool) async throws {
+		// `Inner`, in `Base`, holds the place `api`; `Middle`, in `Mid`, calls `Inner` and passes the place up; `Outer`, in
+		// `App`, calls `Middle` and passes it up again. `App` lists only `Mid`: its view carries `Base`'s seam signatures, or,
+		// where views refer to modules, as Bazel's do, the run is told of `Base`'s own file. Either way `Outer`'s case refers
+		// to `Middle`'s, whose reference to `Inner`'s case resolves to the graph `Base`'s own run computed.
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignature.Places.Observation.self)
 		let enclosingObserver = SeamPlaceLevels.observer
 		var writtenFiles = [URL]()
@@ -3005,7 +3163,7 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 			enclosingObserver?(placeLevels)
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
-				modules: modules,
+				modules: Self.placePassedUpThroughTwoModules,
 				integration: .moduleInfo,
 				compileVerification: .skipped,
 				modulesBeneath: viewsReferToModules ? { $0 } : nil,

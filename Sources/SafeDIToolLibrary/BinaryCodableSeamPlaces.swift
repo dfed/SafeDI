@@ -445,6 +445,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 				BinaryLayoutField("isBuiltInSendableFunction", \.isBuiltInSendableFunction),
 				BinaryLayoutField("siteOpensSendableFunction", \.siteOpensSendableFunction),
 				BinaryLayoutField("passedUp", \.passedUp),
+				BinaryLayoutField("firstCasePresentingSamePlaces", \.firstCasePresentingSamePlaces),
 				BinaryLayoutField("isPassedOnSendable", \.isPassedOnSendable),
 				BinaryLayoutField("calledCopyDeclarations", absentWhenEmpty: \.calledCopyDeclarations),
 				BinaryLayoutField("uncarriedReplacedOnPathsToCalls", absentWhenEmpty: \.uncarriedReplacedOnPathsToCalls),
@@ -464,6 +465,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 			isBuiltInSendableFunction: fieldFlags.next(),
 			siteOpensSendableFunction: fieldFlags.next(),
 			passedUp: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.CalledCase?,
+			firstCasePresentingSamePlaces: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			isPassedOnSendable: fieldFlags.next(),
 			calledCopyDeclarations: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			uncarriedReplacedOnPathsToCalls: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
@@ -482,6 +484,7 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 		fieldFlags.append(isBuiltInSendableFunction)
 		fieldFlags.append(siteOpensSendableFunction)
 		writer.writeOptional(passedUp, flaggedIn: &fieldFlags)
+		writer.writeOptional(firstCasePresentingSamePlaces, flaggedIn: &fieldFlags)
 		fieldFlags.append(isPassedOnSendable)
 		writer.writeAbsentWhenEmpty(calledCopyDeclarations, flaggedIn: &fieldFlags)
 		writer.writeAbsentWhenEmpty(uncarriedReplacedOnPathsToCalls, flaggedIn: &fieldFlags)

@@ -386,6 +386,7 @@ extension SeamSignature {
 				isBuiltInSendableFunction: Bool,
 				siteOpensSendableFunction: Bool,
 				passedUp: CalledCase?,
+				firstCasePresentingSamePlaces: Int? = nil,
 				isPassedOnSendable: Bool = false,
 				calledCopyDeclarations: [Hole.UncarriedDeclaration] = [],
 				uncarriedReplacedOnPathsToCalls: [Hole.UncarriedDeclaration] = [],
@@ -400,6 +401,7 @@ extension SeamSignature {
 				self.isBuiltInSendableFunction = isBuiltInSendableFunction
 				self.siteOpensSendableFunction = siteOpensSendableFunction
 				self.passedUp = passedUp
+				self.firstCasePresentingSamePlaces = firstCasePresentingSamePlaces
 				self.isPassedOnSendable = isPassedOnSendable
 				self.calledCopyDeclarations = calledCopyDeclarations
 				self.uncarriedReplacedOnPathsToCalls = uncarriedReplacedOnPathsToCalls
@@ -417,6 +419,13 @@ extension SeamSignature {
 			public let siteOpensSendableFunction: Bool
 			/// For a place a call presents, the inner seam's case it stands for.
 			public let passedUp: CalledCase?
+			/// For a case of a call that presents places a case before it in `cases` presents too, the first such case: another
+			/// call that presents them, or the same call through another case of the seam it calls. `nil` for that first case, and
+			/// for a case of the seam's own places. The cases that name one first case, and it, are every call of the seam's tree
+			/// that presents the places, so a reader finds them in this graph alone, whichever call each seam's hole is filed
+			/// under: two seams that call each other can each present a place first through the other, and then the references
+			/// of those two cases lead to each other and never to the seam that holds the place.
+			public let firstCasePresentingSamePlaces: Int?
 			/// The levels, root first, of the route of the case's first place in builder-label order: the place a name made from a
 			/// path, or a diagnostic that names one place, names, as each did when a seam held a hole per site. Stored, since the
 			/// order of the places is the generated code's, which the levels' parents do not keep.

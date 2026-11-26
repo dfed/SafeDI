@@ -45,13 +45,18 @@ extension SeamSignature.Places {
 		///   range over it; empty, every route of a case's family.
 		/// - Parameter calledPlaces: The place graph of the seam or public mock a passed-up case refers to
 		///   (`CalledCase`), or `nil` where the run holds none; never asked where no case is passed up.
+		/// - Parameter isPublicMock: Whether `places` is the graph of a public mock's plan, not of a seam's signature. Where
+		///   seams call each other, a reference of a seam beneath to this graph's type of the same kind is a case of this
+		///   graph (`pathToHoldingSeam(of:)`).
 		public init(
 			of places: SeamSignature.Places,
 			excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = [],
 			calledPlaces: ((SeamSignature.Places.CalledCase) -> SeamSignature.Places?)? = nil,
+			ofPublicMock isPublicMock: Bool = false,
 		) {
 			self.places = places
 			self.calledPlaces = calledPlaces
+			self.isPublicMock = isPublicMock
 			self.excludedEntries = excludedEntries
 			// Labels are the same before every next property, so each list's are found once.
 			let lastIndexByLabelByList = places.declarationLists.map { declarations in
@@ -935,6 +940,389 @@ extension SeamSignature.Places {
 			}
 		}
 
+		// MARK: Places a call presents, through every seam that presents them
+
+		/// The cases of this graph that present the places the case at `caseIndex` presents, itself among them, in the order
+		/// of `cases`: one per call of the seam's tree that presents them and case of the called seam it presents them
+		/// through (`Case.firstCasePresentingSamePlaces`). The case alone, for a case no other shares its places with.
+		public func casesPresentingSamePlaces(as caseIndex: Int) -> [Int] {
+			casesByFirstCase[places.cases[caseIndex].firstCasePresentingSamePlaces ?? caseIndex] ?? [caseIndex]
+		}
+
+		/// The case of the seam whose tree holds the places of the case at `caseIndex`, with that seam's query: the case itself
+		/// for a case of the seam's own places. A reader asks every question about the places of `query` at `caseIndex` and
+		/// resolves the indices of what it is answered in `query.places`, whether or not a call presents the places; what the
+		/// seams on the way add is `presentationAdditions(of:)`. `nil` where the run does not hold the graph of a seam on a
+		/// way to that seam.
+		///
+		/// It follows every call that presents the places (`casesPresentingSamePlaces(as:)`), in every seam on the way, each
+		/// seam's cases once. So it ends where two seams that call each other each present the places first through the other,
+		/// which the reference of one case alone (`casesPresented(from:)`) does not.
+		public func holdingCase(of caseIndex: Int) -> ResolvedCase? {
+			presentation(of: caseIndex)?.holdingCase
+		}
+
+		/// A declaration a seam binds in its tree on a path to a call that presents places.
+		public struct BoundOnPathToCall {
+			/// The declaration, with no reason: `Hole.UncarriedDeclaration.Reason.boundByPassingUpSeam` names the seam whose
+			/// graph `presentingCase.query` reads and the place of the called seam `presentingCase`'s `passedUp` refers to.
+			public let declaration: SeamSignature.Hole.UncarriedDeclaration
+			/// The case of the call, in the graph of the seam that binds the declaration.
+			public let presentingCase: ResolvedCase
+		}
+
+		/// What the seams that present the places of a case add to them, joined over every call that presents them.
+		public struct PresentationAdditions {
+			/// What the paths to the calls bind, which a fill of the places by a type above cannot read: every distinct
+			/// declaration of each call's case, the seam asked first, then each seam in the order its calls first reach it, a
+			/// seam's cases in the order of its graph, a case's declarations in the order a walk up from the call meets them
+			/// (`declarationsBoundOnRoutes(to:)`).
+			public let boundOnPathsToCalls: [BoundOnPathToCall]
+			/// `Case.calledCopyDeclarations` of every case that presents the places, in that order, the first of each equal
+			/// entry. The holding case's own are read from it.
+			public let calledCopyDeclarations: [SeamSignature.Hole.UncarriedDeclaration]
+			/// Whether a seam takes the builder of the places `@Sendable`: a call that presents them is made inside a `@Sendable`
+			/// function or takes the builder `@Sendable`, or the seam that holds them builds them inside one.
+			public let isPassedOnSendable: Bool
+		}
+
+		/// What the seams that present the places of the case at `caseIndex` add to them, on every way from this seam to the
+		/// seam that holds them; for a case of the seam's own places, nothing, with the case's own `@Sendable`. `nil` where
+		/// the run does not hold the graph of a seam on a way. Computed on each call: a reader keeps what it is given.
+		public func presentationAdditions(of caseIndex: Int) -> PresentationAdditions? {
+			guard let presentation = presentation(of: caseIndex) else { return nil }
+			let holdingCase = presentation.holdingCase.query.places.cases[presentation.holdingCase.caseIndex]
+			// The holding seam's own place takes its builder `@Sendable` where it is built inside a `@Sendable` function, which
+			// its seam settles with its builders, after its places.
+			var isPassedOnSendable = holdingCase.isPassedOnSendable || holdingCase.isBuiltInSendableFunction || holdingCase.siteOpensSendableFunction
+			var boundOnPathsToCalls = [BoundOnPathToCall]()
+			var boundSeen = Set<BoundOnPathToCallKey>()
+			var calledCopyDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
+			var calledCopiesSeen = Set<SeamSignature.Hole.UncarriedDeclaration>()
+			for (seamIndex, seam) in presentation.seams.enumerated() {
+				let query = seam.query ?? self
+				for presentingIndex in seam.cases {
+					let presentingCase = query.places.cases[presentingIndex]
+					isPassedOnSendable = isPassedOnSendable || presentingCase.isPassedOnSendable
+					for declaration in presentingCase.calledCopyDeclarations where calledCopiesSeen.insert(declaration).inserted {
+						calledCopyDeclarations.append(declaration)
+					}
+					for declaration in query.declarationsBoundOnRoutes(to: presentingIndex) where boundSeen.insert(BoundOnPathToCallKey(seam: seamIndex, presented: presentingCase.passedUp, declaration: declaration)).inserted {
+						boundOnPathsToCalls.append(BoundOnPathToCall(declaration: declaration, presentingCase: ResolvedCase(query: query, caseIndex: presentingIndex)))
+					}
+				}
+			}
+			return PresentationAdditions(boundOnPathsToCalls: boundOnPathsToCalls, calledCopyDeclarations: calledCopyDeclarations, isPassedOnSendable: isPassedOnSendable)
+		}
+
+		/// What the places of a case read of a label, where calls may present them.
+		public enum PresentedAnswer {
+			/// An answer in the graph of the seam that holds the places (`holdingCase(of:)`), never the caller's own.
+			case ofHoldingSeam(SeamSignature.Places.Answer)
+			/// No declaration of the holding seam's tree answers the read, and a seam on a way binds the label on a path to a
+			/// call that presents the places: `answer` in the graph `presentingCase.query` reads, at the case of that call.
+			case boundByPassingUpSeam(presentingCase: ResolvedCase, answer: SeamSignature.Places.Answer)
+			/// No seam's tree answers the read on some way: the world of this seam's caller does.
+			case callersOwn
+		}
+
+		/// What the places of the case at `caseIndex` read of `label`: the answers of the case that holds them, in their order.
+		/// An answer that leaves the holding seam's tree (the caller's own, and a value a public mock's root binds from its
+		/// caller's argument) is answered by the seams that present the places: in place of the first such answer stand the
+		/// declarations of `label` nearest above on the paths to the calls, the seam that calls the holding seam first, each
+		/// seam's calls in the order of its graph, a seam above another asked only where a path to a call of the one beneath
+		/// binds none; the answer itself follows only where, on some way up to this seam's caller, no path binds one. `nil`
+		/// where the run does not hold the graph of a seam on a way.
+		public func presentedAnswers(ofLabel label: String, at caseIndex: Int) -> [PresentedAnswer]? {
+			guard let presentation = presentation(of: caseIndex) else { return nil }
+			let holding = presentation.holdingCase
+			// Each call that a read leaving the seam beneath it reaches, the calls of the holding seam first.
+			var calls = presentation.callsOfHoldingSeam
+			var seamsLeft = Set<Int>()
+			var boundAbove = [PresentedAnswer]()
+			// A case of the seam's own places is read by the seam's caller with no seam between.
+			var reachesCaller = presentation.seams.isEmpty
+			var areCallsAsked = false
+			var answers = [PresentedAnswer]()
+			for answer in holding.query.answers(ofLabel: label, at: holding.caseIndex) {
+				guard holding.query.leavesHoldingSeam(answer) else {
+					answers.append(.ofHoldingSeam(answer))
+					continue
+				}
+				if !areCallsAsked {
+					areCallsAsked = true
+					var callIndex = 0
+					while callIndex < calls.count {
+						let call = calls[callIndex]
+						callIndex += 1
+						let query = presentation.seams[call.seam].query ?? self
+						var leavesSeam = false
+						for answerAtCall in query.answers(ofLabel: label, at: call.caseIndex) {
+							if query.leavesPresentingSeam(answerAtCall) {
+								leavesSeam = true
+							} else {
+								boundAbove.append(.boundByPassingUpSeam(presentingCase: ResolvedCase(query: query, caseIndex: call.caseIndex), answer: answerAtCall))
+							}
+						}
+						guard leavesSeam else { continue }
+						// The seam asked is left for its caller, and, where a seam beneath calls it, for that seam too.
+						if call.seam == 0 {
+							reachesCaller = true
+						}
+						if seamsLeft.insert(call.seam).inserted {
+							calls += presentation.seams[call.seam].calls
+						}
+					}
+					answers += boundAbove
+				}
+				if reachesCaller {
+					answers.append(answer == .callersOwn ? .callersOwn : .ofHoldingSeam(answer))
+				}
+			}
+			return answers
+		}
+
+		/// Whether a read that `answer` answers at a case of this seam's own places is answered above the seam: the caller's
+		/// own, and a value a public mock's root binds from its caller's argument, which a declaration on a path to a call of
+		/// the mock stands in place of (`Case.uncarriedReplacedOnPathsToCalls`).
+		private func leavesHoldingSeam(_ answer: SeamSignature.Places.Answer) -> Bool {
+			switch answer {
+			case .callersOwn:
+				true
+			case .field, .uncarried:
+				false
+			case let .boundOutsideSendableFunction(level, declaration, _):
+				places.declaration(level: level, declaration: declaration).isBoundFromCallersArgument
+			}
+		}
+
+		/// Whether a read that `answer` answers at the case of a call that presents places is answered above this seam: the
+		/// caller's own, a parameter of the seam, and a value a public mock's root binds from its caller's argument, which are
+		/// the caller's declarations (`declarationsBoundOnRoutes(to:)`).
+		private func leavesPresentingSeam(_ answer: SeamSignature.Places.Answer) -> Bool {
+			switch answer {
+			case .callersOwn:
+				return true
+			case let .field(level, index), let .uncarried(level, index), let .boundOutsideSendableFunction(level, index, _):
+				let declaration = places.declaration(level: level, declaration: index)
+				return declaration.isSeamParameter || declaration.isBoundFromCallersArgument
+			}
+		}
+
+		/// The calls from this seam down to the seam that holds the places of a case, one of each seam on the way.
+		public struct PathToHoldingSeam {
+			/// The call of each seam, outermost first: its case in its seam's graph, and the route to it from that seam's root.
+			public let calls: [(presentingCase: ResolvedCase, route: Route)]
+
+			/// The properties from this seam's root to the last call (`sitePath(along:)` of each route in turn), which stand
+			/// before the place's path in the holding seam.
+			public var sitePath: [Property] {
+				calls.flatMap { $0.presentingCase.query.sitePath(along: $0.route) }
+			}
+
+			/// The types from this seam, itself excluded, through the last call (`typesToOwner(along:)` of each route in turn).
+			public var types: [SeamSignature.Hole.PathType] {
+				calls.flatMap { $0.presentingCase.query.typesToOwner(along: $0.route) }
+			}
+
+			/// The properties the code declares from this seam's root to the last call (`declaredPathToOwner(along:)` of each
+			/// route in turn), as `Hole.passedUpRoute` holds them.
+			public var declaredPath: [SeamSignature.Hole.DeclaredProperty] {
+				calls.flatMap { $0.presentingCase.query.declaredPathToOwner(along: $0.route) }
+			}
+		}
+
+		/// The path a diagnostic about the places of the case at `caseIndex` prints before the place's own path in the seam
+		/// that holds them: no call for a case of the seam's own places. At each seam in turn, outermost first, it takes the
+		/// call whose least route (`leastRoute(to:)`) precedes the others' in source order, among the calls of the holding
+		/// seam and of a seam from which calls still lead to it through no seam the path has passed, so that the path ends
+		/// where seams call each other; of two calls with one least route, the case first in the seam's graph. So neither a
+		/// name nor the order in which the calls were reached decides it. `nil` where the run does not hold the graph of a
+		/// seam on a way.
+		public func pathToHoldingSeam(of caseIndex: Int) -> PathToHoldingSeam? {
+			guard let presentation = presentation(of: caseIndex) else { return nil }
+			var calls = [(presentingCase: ResolvedCase, route: Route)]()
+			var seamsPassed = Set<Int>()
+			var nextSeam = presentation.seams.isEmpty ? nil : 0 as Int?
+			while let seamIndex = nextSeam {
+				seamsPassed.insert(seamIndex)
+				let seam = presentation.seams[seamIndex]
+				let query = seam.query ?? self
+				var least: (caseIndex: Int, route: Route, seamBeneath: Int?)?
+				for (presentingIndex, called) in zip(seam.cases, seam.called) {
+					let seamBeneath: Int?
+					switch called {
+					case .holdingSeam:
+						seamBeneath = nil
+					case let .seam(beneath):
+						guard presentation.callsLeadToHoldingSeam(from: beneath, throughNoneOf: seamsPassed) else { continue }
+						seamBeneath = beneath
+					}
+					guard let route = query.leastRoute(to: presentingIndex) else { continue }
+					if least.map({ query.precedesInSourceOrder(route, $0.route) }) ?? true {
+						least = (presentingIndex, route, seamBeneath)
+					}
+				}
+				guard let least else { return nil }
+				calls.append((ResolvedCase(query: query, caseIndex: least.caseIndex), least.route))
+				nextSeam = least.seamBeneath
+			}
+			return PathToHoldingSeam(calls: calls)
+		}
+
+		/// The least route to the case at `caseIndex` in its family, by the source locations of the properties the code
+		/// declares along it, root first (`leastRoute(from:level:next:isEnd:)`). `nil` only for a case no place reaches.
+		public func leastRoute(to caseIndex: Int) -> Route? {
+			let placeCase = places.cases[caseIndex]
+			guard let start = startState(of: placeCase) else { return nil }
+			struct Node: Hashable {
+				let level: Int
+				let state: RouteState
+			}
+			return leastRoute(
+				from: Node(level: placeCase.ownerLevel, state: start),
+				level: \.level,
+				next: { [unowned self] node in
+					transitions(from: node.level, state: node.state).map { (Node(level: $0.parent, state: $0.state), true) }
+				},
+				isEnd: { [unowned self] node in
+					places.levels[node.level].parents.isEmpty && isValid(node.level, node.state)
+				},
+			)
+		}
+
+		/// The seams that present the places of one case, from this seam down to the seam that holds them.
+		private struct Presentation {
+			/// A seam on a way to the holding seam, with the cases of its graph that present the places.
+			struct Seam {
+				/// The seam's query, or `nil` for the query that holds this record, which it must not keep alive.
+				let query: Query?
+				/// The cases, in the order of the graph's cases.
+				let cases: [Int]
+				/// For each of `cases`, what its call is of.
+				var called = [Called]()
+				/// The calls of this seam, in the seams above it: where a read that leaves this seam's tree goes on.
+				var calls = [Call]()
+			}
+
+			enum Called {
+				case holdingSeam
+				/// The seam at this index of `seams`.
+				case seam(Int)
+			}
+
+			struct Call {
+				let seam: Int
+				let caseIndex: Int
+			}
+
+			/// This seam first, then each seam in the order the calls of the seams before it first reach it. Empty for a
+			/// case of the seam's own places.
+			var seams: [Seam]
+			let holdingCase: ResolvedCase
+			var callsOfHoldingSeam = [Call]()
+
+			/// Whether calls lead from the seam at `seam` down to the holding seam through no seam of `seamsPassed`, the
+			/// seam itself included.
+			func callsLeadToHoldingSeam(from seam: Int, throughNoneOf seamsPassed: Set<Int>) -> Bool {
+				guard !seamsPassed.contains(seam) else { return false }
+				var seamsSeen = seamsPassed.union([seam])
+				var seamsToVisit = [seam]
+				while let visited = seamsToVisit.popLast() {
+					for called in seams[visited].called {
+						switch called {
+						case .holdingSeam:
+							return true
+						case let .seam(beneath):
+							if seamsSeen.insert(beneath).inserted {
+								seamsToVisit.append(beneath)
+							}
+						}
+					}
+				}
+				return false
+			}
+		}
+
+		private struct PresentingSeam: Hashable {
+			/// `nil` for the seam whose query is asked.
+			let seam: CalledSeam?
+			let firstCase: Int
+		}
+
+		private struct BoundOnPathToCallKey: Hashable {
+			let seam: Int
+			let presented: SeamSignature.Places.CalledCase?
+			let declaration: SeamSignature.Hole.UncarriedDeclaration
+		}
+
+		private func presentation(of caseIndex: Int) -> Presentation? {
+			let firstCase = places.cases[caseIndex].firstCasePresentingSamePlaces ?? caseIndex
+			// The seam's own places, and a call of its tree that presents them back to it. Never kept: it holds this query.
+			guard places.cases[firstCase].passedUp != nil else { return Presentation(seams: [], holdingCase: ResolvedCase(query: self, caseIndex: firstCase)) }
+			if let known = presentationByFirstCase[firstCase] {
+				return known
+			} else {
+				let presentation = presentation(ofCasesFrom: firstCase)
+				presentationByFirstCase.updateValue(presentation, forKey: firstCase)
+				return presentation
+			}
+		}
+
+		/// The presentation of the places the case at `firstCase`, the first of its cases a call presents them through,
+		/// presents. Every graph is resolved by this query, so one query serves a seam however many seams call it.
+		private func presentation(ofCasesFrom firstCase: Int) -> Presentation? {
+			var seams = [Presentation.Seam(query: nil, cases: casesPresentingSamePlaces(as: firstCase))]
+			var seamIndexByKey = [PresentingSeam(seam: nil, firstCase: firstCase): 0]
+			var holdingCase: ResolvedCase?
+			var callsOfHoldingSeam = [Presentation.Call]()
+			var seamIndex = 0
+			while seamIndex < seams.count {
+				let query = seams[seamIndex].query ?? self
+				for presentingIndex in seams[seamIndex].cases {
+					guard let reference = query.places.cases[presentingIndex].passedUp else { return nil }
+					let call = Presentation.Call(seam: seamIndex, caseIndex: presentingIndex)
+					let calledSeam = CalledSeam(seamType: reference.seamType, isPublicMock: reference.isPublicMock)
+					// A seam beneath that calls this seam presents the places through this graph's own cases: the seam asked,
+					// met again, and never a second seam on a way.
+					if calledSeam == ownSeam, places.cases.indices.contains(reference.caseIndex), let seamAsked = seamIndexByKey[PresentingSeam(seam: nil, firstCase: places.cases[reference.caseIndex].firstCasePresentingSamePlaces ?? reference.caseIndex)] {
+						seams[seamIndex].called.append(.seam(seamAsked))
+						seams[seamAsked].calls.append(call)
+						continue
+					}
+					guard let called = resolved(reference) else { return nil }
+					let calledFirstCase = called.query.places.cases[called.caseIndex].firstCasePresentingSamePlaces ?? called.caseIndex
+					if called.query.places.cases[calledFirstCase].passedUp == nil {
+						holdingCase = holdingCase ?? ResolvedCase(query: called.query, caseIndex: calledFirstCase)
+						seams[seamIndex].called.append(.holdingSeam)
+						callsOfHoldingSeam.append(call)
+					} else {
+						let key = PresentingSeam(seam: calledSeam, firstCase: calledFirstCase)
+						let seamBeneath: Int
+						if let known = seamIndexByKey[key] {
+							seamBeneath = known
+						} else {
+							seamBeneath = seams.count
+							seamIndexByKey[key] = seamBeneath
+							seams.append(Presentation.Seam(query: called.query, cases: called.query.casesPresentingSamePlaces(as: calledFirstCase)))
+						}
+						seams[seamIndex].called.append(.seam(seamBeneath))
+						seams[seamBeneath].calls.append(call)
+					}
+				}
+				seamIndex += 1
+			}
+			guard let holdingCase else { return nil }
+			return Presentation(seams: seams, holdingCase: holdingCase, callsOfHoldingSeam: callsOfHoldingSeam)
+		}
+
+		/// The cases of the graph by the first case that presents their places (`Case.firstCasePresentingSamePlaces`), each
+		/// list in the order of `cases`.
+		private lazy var casesByFirstCase = Dictionary(grouping: places.cases.indices) { places.cases[$0].firstCasePresentingSamePlaces ?? $0 }
+		/// The presentation of the places of each case a call presents, by the first case that presents them; `nil` where a
+		/// graph on a way is not in hand.
+		private var presentationByFirstCase = [Int: Presentation?]()
+
 		private struct CalledSeam: Hashable {
 			let seamType: TypeDescription
 			let isPublicMock: Bool
@@ -946,6 +1334,10 @@ extension SeamSignature.Places {
 		}
 
 		private let calledPlaces: ((SeamSignature.Places.CalledCase) -> SeamSignature.Places?)?
+		private let isPublicMock: Bool
+		/// The seam or public mock this graph is of: what a reference of another graph names where it refers to a case of
+		/// this one. `nil` for a graph with no level.
+		private lazy var ownSeam = places.levels.first(where: \.key.isSeamRoot)?.key.builtType.map { CalledSeam(seamType: $0, isPublicMock: isPublicMock) }
 		/// The query of each called seam a case was asked through, kept as long as this query.
 		private var calledQueries = [CalledSeam: Query]()
 

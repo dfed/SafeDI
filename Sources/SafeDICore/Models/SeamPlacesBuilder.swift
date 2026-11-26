@@ -104,6 +104,9 @@ struct SeamPlacesBuilder {
 	private var cases = [CaseDraft]()
 	private var caseIndexByKey = [CaseKey: Int]()
 	private var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
+	/// For each case, itself or a case before it that presents a site it presents: the cases that present the same places
+	/// lead to one case, the first of them.
+	private var earlierCasePresentingSamePlaces = [Int]()
 
 	/// Adds the levels of one site's path, root first, and returns the index of the site's case and the route its levels
 	/// make.
@@ -129,10 +132,27 @@ struct SeamPlacesBuilder {
 		siteOpensSendableFunction: Bool,
 	) -> (caseIndex: Int, route: SeamSignature.Places.Route) {
 		let (caseIndex, route) = addCase(levels: levels, passedUp: reference, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction)
-		if caseIndexBySite[site] == nil {
+		if let firstCase = caseIndexBySite[site] {
+			// The cases of two sites that share a case present the places of one case of the seam that holds them, so the
+			// cases of both sites lead to one first case: the earlier of the two each led to.
+			let first = firstCasePresentingSamePlaces(as: firstCase)
+			let other = firstCasePresentingSamePlaces(as: caseIndex)
+			earlierCasePresentingSamePlaces[max(first, other)] = min(first, other)
+		} else {
 			caseIndexBySite[site] = caseIndex
 		}
 		return (caseIndex, route)
+	}
+
+	/// The first case that presents the places the case at `caseIndex` presents, each case passed on the way led to it
+	/// directly, so the next walk from it is one step.
+	private mutating func firstCasePresentingSamePlaces(as caseIndex: Int) -> Int {
+		var first = caseIndex
+		while earlierCasePresentingSamePlaces[first] != first {
+			first = earlierCasePresentingSamePlaces[first]
+		}
+		earlierCasePresentingSamePlaces[caseIndex] = first
+		return first
 	}
 
 	private mutating func addCase(
@@ -162,6 +182,7 @@ struct SeamPlacesBuilder {
 		} else {
 			caseIndex = cases.count
 			caseIndexByKey[key] = caseIndex
+			earlierCasePresentingSamePlaces.append(caseIndex)
 			cases.append(CaseDraft(ownerLevel: key.ownerLevel, passedUp: passedUp, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction))
 		}
 		return (caseIndex, SeamSignature.Places.Route(levels: route))
@@ -216,6 +237,11 @@ struct SeamPlacesBuilder {
 				declaredSegmentByParent: variant.declaredSegmentByParent,
 			)
 		}
+		// A case leads to an earlier one or to itself, so the first case of each is known once those before it are.
+		var firstCaseByCase = [Int]()
+		for (caseIndex, earlier) in earlierCasePresentingSamePlaces.enumerated() {
+			firstCaseByCase.append(earlier == caseIndex ? caseIndex : firstCaseByCase[earlier])
+		}
 		return SeamSignature.Places(
 			levels: levels,
 			cases: cases.enumerated().map { caseIndex, draft in
@@ -224,6 +250,7 @@ struct SeamPlacesBuilder {
 					isBuiltInSendableFunction: draft.isBuiltInSendableFunction,
 					siteOpensSendableFunction: draft.siteOpensSendableFunction,
 					passedUp: draft.passedUp,
+					firstCasePresentingSamePlaces: firstCaseByCase[caseIndex] == caseIndex ? nil : firstCaseByCase[caseIndex],
 					isPassedOnSendable: draft.isPassedOnSendable,
 					calledCopyDeclarations: draft.calledCopyDeclarations.elements,
 					uncarriedReplacedOnPathsToCalls: draft.uncarriedReplacedOnPathsToCalls.elements,
