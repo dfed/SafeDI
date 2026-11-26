@@ -848,6 +848,15 @@ public actor DependencyTreeGenerator {
 							)
 						}
 					}
+					// Whether the plan's detector of labels no one parameter can pass keeps the root on today's tree, checked
+					// against what today's tree reports only where a test observes it.
+					if let observer = UnpassableCycleLabelObservation.observer, let todaysTree = roots.last?.scopeGenerator {
+						observer(
+							typeDescription.asSource,
+							Self.mayHaveUnpassableCycleLabel(inTreeOf: scope, cache: &receivedPropertiesCache),
+							!todaysTree.unpassableCycleLabelsInTree.isEmpty,
+						)
+					}
 				}
 				rootScopeGenerators = roots
 			} else {
