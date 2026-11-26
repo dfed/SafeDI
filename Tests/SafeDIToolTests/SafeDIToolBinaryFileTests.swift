@@ -447,6 +447,19 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func placeGraphLevel_writesNoByteForItsLists_whenEveryListIsEmpty() throws {
+		// Beside its flags, a level that holds no list writes its key and the index of its declarations alone.
+		let level = try SeamSignature.Places.Level.sample(isDistinct: false)
+		var levelWriter = BinaryWriter()
+		levelWriter.write(level)
+		var keyWriter = BinaryWriter()
+		keyWriter.write(level.key)
+
+		#expect(level.cycleReentries.isEmpty && level.fillBaseStack.isEmpty && level.pathSegment.isEmpty && level.pathTypes.isEmpty && level.parents.isEmpty && level.declaredSegmentByParent.isEmpty)
+		#expect(levelWriter.bytes.count == keyWriter.bytes.count + 2)
+	}
+
+	@Test
 	func binaryFileReadError_explains_whenBodyHoldsFieldFlagNoFieldReads() {
 		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.unreadFieldFlags(offset: 7)))
 
@@ -621,10 +634,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 		// The body `moduleInfoData` wrote of copies of these signatures with every position `nil`, captured when SafeDITool
 		// still made those copies, and captured again when format version 3 moved the signatures into an encoding of their
-		// own; the public mock plans that follow the signatures were added by hand, and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). The bytes each signature ends with, its place graph and the case of each hole, were captured when the graph joined the signature: nothing before them changed but the encoding's length. They were captured again when the graph came to hold each list of declarations once: the encoding's length and the graph's own bytes alone changed. The comparison leaves out the header, whose schema fingerprint every layout change moves.
+		// own; the public mock plans that follow the signatures were added by hand, and format version 4 doubled the count of each list of siblings written whole (`writeDifference(of:in:)`). The bytes each signature ends with, its place graph and the case of each hole, were captured when the graph joined the signature: nothing before them changed but the encoding's length. They were captured again when the graph came to hold each list of declarations once: the encoding's length and the graph's own bytes alone changed. When a level and a case came to write an empty list as a flag alone, the graph lost ten counts of zero, the level's six empty lists and the case's four, and the encoding's length went from 256 to 246. The comparison leaves out the header, whose schema fingerprint every layout change moves.
 		let bodyWithoutPositions: [UInt8] = [
 			0x02, 0x06, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x80, 0x02, 0x03, 0x00, 0x08,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0xF6, 0x01, 0x03, 0x00, 0x08,
 			0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x11, 0x5F, 0x5F, 0x73, 0x61, 0x66, 0x65, 0x44,
 			0x49, 0x5F, 0x64, 0x69, 0x73, 0x74, 0x69, 0x6E, 0x63, 0x74, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01,
 			0x01, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x01,
@@ -639,8 +652,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x02, 0x02, 0x00, 0x02,
 			0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x02, 0x00, 0x02, 0x02, 0x01, 0x02, 0x01, 0x00, 0x02, 0x00,
-			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00,
+			0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+			0x00, 0x02, 0x00,
 			// No public mock plans: no mocked type, `compilesGeneratedMocks` false, and an encoding of no plan.
 			0x00, 0x00, 0x02, 0x00, 0x00,
 			// The empty view.
@@ -2811,7 +2824,12 @@ private func writeFieldSamples<Member: BinarySchemaMember>(
 		var flags = BinaryFieldFlags()
 		let fieldsStart = writer.startFields()
 		for field in fields {
-			if let flaggedType = field.type as? any BinaryFlaggedSample.Type {
+			if field.isAbsentWhenEmpty {
+				guard let listType = field.type as? any BinaryAbsentWhenEmptySample.Type else {
+					throw MissingSampleError(typeName: String(reflecting: field.type))
+				}
+				try listType.writeAbsentWhenEmptySample(isDistinct: isDistinct(field), to: &writer, flags: &flags)
+			} else if let flaggedType = field.type as? any BinaryFlaggedSample.Type {
 				try flaggedType.writeFlaggedSample(isDistinct: isDistinct(field), to: &writer, flags: &flags)
 			} else {
 				try writeSample(of: field.type, isDistinct: isDistinct(field), to: &writer)
@@ -2839,6 +2857,17 @@ extension Bool: BinaryFlaggedSample {
 extension Optional: BinaryFlaggedSample where Wrapped: BinarySample {
 	fileprivate static func writeFlaggedSample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws {
 		try writer.writeOptional(sample(isDistinct: isDistinct), flaggedIn: &flags)
+	}
+}
+
+/// A list a struct that writes field flags writes as a flag alone when it is empty.
+private protocol BinaryAbsentWhenEmptySample {
+	static func writeAbsentWhenEmptySample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws
+}
+
+extension Array: BinaryAbsentWhenEmptySample where Element: BinarySample {
+	fileprivate static func writeAbsentWhenEmptySample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws {
+		try writer.writeAbsentWhenEmpty(sample(isDistinct: isDistinct), flaggedIn: &flags)
 	}
 }
 

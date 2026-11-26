@@ -273,8 +273,8 @@ extension SeamSignature.Places.ChildFacts: BinarySchemaMember {
 				BinaryLayoutField("loop", \.loop),
 				BinaryLayoutField("builtType", \.builtType),
 				BinaryLayoutField("isPlace", \.isPlace),
-				BinaryLayoutField("receivesOnlyIfAvailable", \.receivesOnlyIfAvailable),
-				BinaryLayoutField("carriers", \.carriers),
+				BinaryLayoutField("receivesOnlyIfAvailable", absentWhenEmpty: \.receivesOnlyIfAvailable),
+				BinaryLayoutField("carriers", absentWhenEmpty: \.carriers),
 			],
 			unwrittenProperties: [],
 		)
@@ -288,8 +288,8 @@ extension SeamSignature.Places.ChildFacts: BinarySchemaMember {
 			loop: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			builtType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			isPlace: fieldFlags.next(),
-			receivesOnlyIfAvailable: reader.read(),
-			carriers: reader.read(),
+			receivesOnlyIfAvailable: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			carriers: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 		)
 		try fieldFlags.finish()
 	}
@@ -302,8 +302,8 @@ extension SeamSignature.Places.ChildFacts: BinarySchemaMember {
 		writer.writeOptional(loop, flaggedIn: &fieldFlags)
 		writer.writeOptional(builtType, flaggedIn: &fieldFlags)
 		fieldFlags.append(isPlace)
-		writer.write(receivesOnlyIfAvailable)
-		writer.write(carriers)
+		writer.writeAbsentWhenEmpty(receivesOnlyIfAvailable, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(carriers, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
@@ -358,13 +358,13 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 				BinaryLayoutField("nextPosition", \.nextPosition),
 				BinaryLayoutField("nextLoop", \.nextLoop),
 				BinaryLayoutField("opensSendableFunction", \.opensSendableFunction),
-				BinaryLayoutField("cycleReentries", \.cycleReentries),
-				BinaryLayoutField("fillBaseStack", \.fillBaseStack),
+				BinaryLayoutField("cycleReentries", absentWhenEmpty: \.cycleReentries),
+				BinaryLayoutField("fillBaseStack", absentWhenEmpty: \.fillBaseStack),
 				BinaryLayoutField("fillOwnerType", \.fillOwnerType),
-				BinaryLayoutField("pathSegment", \.pathSegment),
-				BinaryLayoutField("pathTypes", \.pathTypes),
-				BinaryLayoutField("parents", \.parents),
-				BinaryLayoutField("declaredSegmentByParent", \.declaredSegmentByParent),
+				BinaryLayoutField("pathSegment", absentWhenEmpty: \.pathSegment),
+				BinaryLayoutField("pathTypes", absentWhenEmpty: \.pathTypes),
+				BinaryLayoutField("parents", absentWhenEmpty: \.parents),
+				BinaryLayoutField("declaredSegmentByParent", absentWhenEmpty: \.declaredSegmentByParent),
 			],
 			unwrittenProperties: [],
 		)
@@ -378,13 +378,13 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 			nextPosition: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			nextLoop: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			opensSendableFunction: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.SendableFunctionOpened?,
-			cycleReentries: reader.read(),
-			fillBaseStack: reader.read(),
+			cycleReentries: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			fillBaseStack: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			fillOwnerType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
-			pathSegment: reader.read(),
-			pathTypes: reader.read(),
-			parents: reader.read(),
-			declaredSegmentByParent: reader.read(),
+			pathSegment: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			pathTypes: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			parents: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			declaredSegmentByParent: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 		)
 		try fieldFlags.finish()
 	}
@@ -397,13 +397,13 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 		writer.writeOptional(nextPosition, flaggedIn: &fieldFlags)
 		writer.writeOptional(nextLoop, flaggedIn: &fieldFlags)
 		writer.writeOptional(opensSendableFunction, flaggedIn: &fieldFlags)
-		writer.write(cycleReentries)
-		writer.write(fillBaseStack)
+		writer.writeAbsentWhenEmpty(cycleReentries, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(fillBaseStack, flaggedIn: &fieldFlags)
 		writer.writeOptional(fillOwnerType, flaggedIn: &fieldFlags)
-		writer.write(pathSegment)
-		writer.write(pathTypes)
-		writer.write(parents)
-		writer.write(declaredSegmentByParent)
+		writer.writeAbsentWhenEmpty(pathSegment, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(pathTypes, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(parents, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(declaredSegmentByParent, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
@@ -446,10 +446,10 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 				BinaryLayoutField("siteOpensSendableFunction", \.siteOpensSendableFunction),
 				BinaryLayoutField("passedUp", \.passedUp),
 				BinaryLayoutField("isPassedOnSendable", \.isPassedOnSendable),
-				BinaryLayoutField("calledCopyDeclarations", \.calledCopyDeclarations),
-				BinaryLayoutField("uncarriedReplacedOnPathsToCalls", \.uncarriedReplacedOnPathsToCalls),
-				BinaryLayoutField("reenteringCallDeclarations", \.reenteringCallDeclarations),
-				BinaryLayoutField("reenteringPlaceFields", \.reenteringPlaceFields),
+				BinaryLayoutField("calledCopyDeclarations", absentWhenEmpty: \.calledCopyDeclarations),
+				BinaryLayoutField("uncarriedReplacedOnPathsToCalls", absentWhenEmpty: \.uncarriedReplacedOnPathsToCalls),
+				BinaryLayoutField("reenteringCallDeclarations", absentWhenEmpty: \.reenteringCallDeclarations),
+				BinaryLayoutField("reenteringPlaceFields", absentWhenEmpty: \.reenteringPlaceFields),
 				BinaryLayoutField("namingRoute", \.namingRoute),
 				BinaryLayoutField("narrowestAccess", \.narrowestAccess),
 			],
@@ -465,10 +465,10 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 			siteOpensSendableFunction: fieldFlags.next(),
 			passedUp: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.CalledCase?,
 			isPassedOnSendable: fieldFlags.next(),
-			calledCopyDeclarations: reader.read(),
-			uncarriedReplacedOnPathsToCalls: reader.read(),
-			reenteringCallDeclarations: reader.read(),
-			reenteringPlaceFields: reader.read(),
+			calledCopyDeclarations: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			uncarriedReplacedOnPathsToCalls: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			reenteringCallDeclarations: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
+			reenteringPlaceFields: reader.readAbsentWhenEmpty(flaggedIn: &fieldFlags),
 			namingRoute: reader.read(),
 			narrowestAccess: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.Case.Access?,
 		)
@@ -483,10 +483,10 @@ extension SeamSignature.Places.Case: BinarySchemaMember {
 		fieldFlags.append(siteOpensSendableFunction)
 		writer.writeOptional(passedUp, flaggedIn: &fieldFlags)
 		fieldFlags.append(isPassedOnSendable)
-		writer.write(calledCopyDeclarations)
-		writer.write(uncarriedReplacedOnPathsToCalls)
-		writer.write(reenteringCallDeclarations)
-		writer.write(reenteringPlaceFields)
+		writer.writeAbsentWhenEmpty(calledCopyDeclarations, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(uncarriedReplacedOnPathsToCalls, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(reenteringCallDeclarations, flaggedIn: &fieldFlags)
+		writer.writeAbsentWhenEmpty(reenteringPlaceFields, flaggedIn: &fieldFlags)
 		writer.write(namingRoute)
 		writer.writeOptional(narrowestAccess, flaggedIn: &fieldFlags)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
