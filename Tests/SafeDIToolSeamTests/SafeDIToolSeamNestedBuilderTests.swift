@@ -3596,16 +3596,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		// places of the other two, under labels named apart from its own places'. A passed-up place labeled from the label the
 		// called seam's signature of the pass before gave it, which that seam named apart from the places it passes up in turn,
 		// fed each seam's names back into its own next pass, and the labels changed on every pass.
-		let feature = [
-			Self.service,
-			Self.type("Token"),
-			Self.type("S0", seam: true, ["@Received public let token: Token", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>"]),
-			Self.type("S1", seam: true, ["@Received public let token: Token", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>"]),
-			Self.type("S2", seam: true, ["@Received public let token: Token", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>"]),
-			Self.type("P0", ["@Instantiated public let service: any Service", "@Instantiated public let s1Builder: Instantiator<S1>"]),
-			Self.type("P1", ["@Instantiated public let service: any Service", "@Instantiated public let s2Builder: Instantiator<S2>"]),
-			Self.type("P2", ["@Instantiated public let service: any Service", "@Instantiated public let s0Builder: Instantiator<S0>"]),
-		]
+		let feature = Self.threeSeamRing
 		let fulfiller = Self.fulfilling("DefaultService", "Service")
 		let root = Self.root(["@Instantiated public let token: Token", "@Instantiated public let s0: S0"])
 		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
@@ -3717,6 +3708,45 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			}
 			"""],
 		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root().s0.p1Builder.instantiate().s2Builder.instantiate().p0Builder.instantiate().s1Builder.instantiate().p2Builder.instantiate().service")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesEachPassedUpPlaceApartFromSeamsOwnPlaces_whenThreeSeamsEachPassUpThePlacesOfTheOthers() async throws {
+		// Every place of the ring is a `service` property, so each place a seam passes up from another seam of the ring is
+		// labeled `serviceBuilder` from its site, the label of the one builder the seam's own three places share. The
+		// names-apart order names each of the six passed-up places apart from that label and from one another, by the panel
+		// that holds it and the calls that passed it up.
+		let fulfiller = Self.fulfilling("DefaultService", "Service")
+		let root = Self.root(["@Instantiated public let token: Token", "@Instantiated public let s0: S0"])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: Self.threeSeamRing, app: [fulfiller, root]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let signatures = try #require(output.modules["Feature"]?.moduleInfoFile).seamSignatures.decoded
+		let labelsBySeam = signatures.map { stored in
+			let holes = stored.signature?.holes ?? []
+			let ownLabels = holes.filter { $0.innerSeamType == nil }.map(\.builderLabel)
+			let passedUpLabels = holes.filter { $0.innerSeamType != nil }.map { "\($0.innerSeamType?.asSource ?? ""): \($0.builderLabel)" }
+			return "\(stored.seamType.asSource) builds [\(ownLabels.joined(separator: ", "))], passes up [\(passedUpLabels.joined(separator: ", "))]"
+		}
+		#expect(labelsBySeam == [
+			"S0 builds [serviceBuilder, serviceBuilder, serviceBuilder], passes up [S1: serviceBuilder_p1Builder_, S1: serviceBuilder_p2Builder_, S1: serviceBuilder_p0Builder_, S1: serviceBuilder_p1Builder__, S1: serviceBuilder_p2Builder__, S1: serviceBuilder_p0Builder__]",
+			"S1 builds [serviceBuilder, serviceBuilder, serviceBuilder], passes up [S2: serviceBuilder_p2Builder_, S2: serviceBuilder_p0Builder_, S2: serviceBuilder_p1Builder_, S2: serviceBuilder_p2Builder__, S2: serviceBuilder_p0Builder__, S2: serviceBuilder_p1Builder__]",
+			"S2 builds [serviceBuilder, serviceBuilder, serviceBuilder], passes up [S0: serviceBuilder_p0Builder_, S0: serviceBuilder_p1Builder_, S0: serviceBuilder_p2Builder_, S0: serviceBuilder_p0Builder__, S0: serviceBuilder_p1Builder__, S0: serviceBuilder_p2Builder__]",
+		])
+	}
+
+	/// Three seams that each build every panel, each panel holding a place of `Service` and building the next seam, so each
+	/// seam passes up the places of the other two.
+	private static var threeSeamRing: [String] {
+		[
+			service,
+			type("Token"),
+			type("S0", seam: true, ["@Received public let token: Token", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>"]),
+			type("S1", seam: true, ["@Received public let token: Token", "@Instantiated public let p1Builder: Instantiator<P1>", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>"]),
+			type("S2", seam: true, ["@Received public let token: Token", "@Instantiated public let p2Builder: Instantiator<P2>", "@Instantiated public let p0Builder: Instantiator<P0>", "@Instantiated public let p1Builder: Instantiator<P1>"]),
+			type("P0", ["@Instantiated public let service: any Service", "@Instantiated public let s1Builder: Instantiator<S1>"]),
+			type("P1", ["@Instantiated public let service: any Service", "@Instantiated public let s2Builder: Instantiator<S2>"]),
+			type("P2", ["@Instantiated public let service: any Service", "@Instantiated public let s0Builder: Instantiator<S0>"]),
+		]
 	}
 
 	@Test
