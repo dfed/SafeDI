@@ -1467,8 +1467,9 @@ public struct SeamSignature: Sendable {
 		self.scopeEnums = scopeEnums
 		self.callRoutes = callRoutes
 		self.typesDeclaredEscaping = typesDeclaredEscaping
-		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers)
+		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 		guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
+		observeCallShapeFold()
 	}
 
 	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
@@ -1574,8 +1575,9 @@ public struct SeamSignature: Sendable {
 	/// This seam's scope enums, then every enum their cases reach, each once.
 	public internal(set) var scopeEnums: [ScopeEnum] {
 		didSet {
-			callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers)
+			callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 			guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
+			observeCallShapeFold()
 		}
 	}
 
@@ -1913,13 +1915,27 @@ public struct SeamSignature: Sendable {
 				builderLabel = hole.builderLabel
 				narrowerTierBuilderLabels = TierLabel.sorted(hole.narrowerTierBuilderLabels)
 				tierAccess = hole.tierAccess
-				fields = hole.fields.map { Field(label: $0.property.label, type: $0.property.typeDescription.withoutAny.asSource, access: $0.access) }
+				fields = hole.fields.map(Field.init)
+			}
+
+			/// A case's hole: `hole`, its first place, for the builder, with the case's access and fields.
+			init(_ hole: SeamSignature.Hole, tierAccess: AccessLevel, fields: [Field]) {
+				builderLabel = hole.builderLabel
+				narrowerTierBuilderLabels = TierLabel.sorted(hole.narrowerTierBuilderLabels)
+				self.tierAccess = tierAccess
+				self.fields = fields
 			}
 
 			public struct Field: Hashable, Sendable {
 				public let label: String
 				public let type: String
 				public let access: AccessLevel
+
+				init(_ field: SeamSignature.Hole.Field) {
+					label = field.property.label
+					type = field.property.typeDescription.withoutAny.asSource
+					access = field.access
+				}
 			}
 
 			public let builderLabel: String
@@ -1979,12 +1995,82 @@ public struct SeamSignature: Sendable {
 	/// Computed once per signature, since every tree that reaches the seam reads it, and its guard, from each pass's signature.
 	public private(set) var callShape: CallShape
 
-	private static func callShape(parameters: [Parameter], holes: [Hole], builders: [Builder], scopeEnums: [ScopeEnum], tiers: [AccessLevel]) -> CallShape {
+	private static func callShape(parameters: [Parameter], holes: [Hole], builders: [Builder], scopeEnums: [ScopeEnum], tiers: [AccessLevel], places: Places, caseIndexByHole: [Int]) -> CallShape {
+		CallShape(
+			parameters: parameters.map(CallShape.Parameter.init),
+			holes: callShapeHoles(of: holes, places: places, caseIndexByHole: caseIndexByHole),
+			builders: builders.map(CallShape.Builder.init),
+			scopeEnums: scopeEnumShapes(of: scopeEnums, holes: holes),
+			tiers: tiers,
+		)
+	}
+
+	/// What a call depends on of `holes`: one hole per case of the seam's places (`Places.Case`), in the order of each
+	/// case's first place, with the case's narrowest access. Every place of a case has one owner level and one property,
+	/// so one builder and one access; only the fields can differ between them. An own case's fields are every distinct one
+	/// its places carry (`callShapeFields(ofCaseAt:in:)`). A case a call passes up
+	/// takes its first place's fields, which the signature holds itself: a call shape never reads another seam's graph,
+	/// which a calling module that decodes the signature may not hold. Every place of a signature whose graph was not built
+	/// is a hole of its own.
+	static func callShapeHoles(of holes: [Hole], places: Places, caseIndexByHole: [Int]) -> [CallShape.Hole] {
+		let query = places.cases.isEmpty ? nil : Places.Query(of: places)
+		var casesFound = Set<Int>()
+		var shapeHoles = [CallShape.Hole]()
+		for (index, hole) in holes.enumerated() {
+			guard let query, caseIndexByHole.indices.contains(index), caseIndexByHole[index] >= 0, let access = places.cases[caseIndexByHole[index]].narrowestAccess else {
+				shapeHoles.append(CallShape.Hole(hole))
+				continue
+			}
+			let caseIndex = caseIndexByHole[index]
+			if casesFound.insert(caseIndex).inserted {
+				shapeHoles.append(CallShape.Hole(hole, tierAccess: access.level, fields: places.cases[caseIndex].passedUp == nil ? callShapeFields(ofCaseAt: caseIndex, in: query) : hole.fields.map(CallShape.Hole.Field.init)))
+			}
+		}
+		return shapeHoles
+	}
+
+	/// What a call depends on of the fields the places of the case at `caseIndex` carry: per label in label order
+	/// (`Places.Query.labels(reaching:)`), every distinct field the case's routes carry, in the order of the label's answers
+	/// (`Places.Query.answers(ofLabel:at:)`, the naming route's first), which follows no name.
+	/// Where two routes carry one label as two types (`token: Token` and `token: Token?`), both stay, so the call shape
+	/// tells apart every signature a hole per place would, though the case's scope struct declares one
+	/// (`Places.Query.fields(of:)`).
+	private static func callShapeFields(ofCaseAt caseIndex: Int, in query: Places.Query) -> [CallShape.Hole.Field] {
+		query.labels(reaching: caseIndex).flatMap { label in
+			var fieldsOfLabel = [CallShape.Hole.Field]()
+			for case let .field(level, declaration) in query.answers(ofLabel: label, at: caseIndex) {
+				let field = CallShape.Hole.Field(query.places.declaration(level: level, declaration: declaration).field)
+				if !fieldsOfLabel.contains(field) {
+					fieldsOfLabel.append(field)
+				}
+			}
+			return fieldsOfLabel
+		}
+	}
+
+	/// Test only, deleted before merge: hands the tests this signature's call shape holes beside its holes per site
+	/// (`SeamPlaceLevels.CallShapeFold`), so they check that a hole per case keeps what the holes per site of its case hold.
+	private func observeCallShapeFold() {
+		if let observer = SeamPlaceLevels.observer {
+			var observation = SeamPlaceLevels(seamType: seamType, places: [])
+			observation.callShapeFold = .init(
+				caseHoles: callShape.holes,
+				siteHoles: holes.map(CallShape.Hole.init),
+				caseIndexBySite: caseIndexByHole,
+				caseHasAccess: places.cases.map { $0.narrowestAccess != nil },
+			)
+			observer(observation)
+		}
+	}
+
+	/// Test only, deleted before merge: the call shape with a hole per site, as it was before holes were compared per case,
+	/// which the tests compare the per-case comparison with (`SeamPlaceLevels.CallShapeComparison`).
+	public var callShapeHeldPerSite: CallShape {
 		CallShape(
 			parameters: parameters.map(CallShape.Parameter.init),
 			holes: holes.map(CallShape.Hole.init),
 			builders: builders.map(CallShape.Builder.init),
-			scopeEnums: scopeEnumShapes(of: scopeEnums, holes: holes),
+			scopeEnums: Self.scopeEnumShapes(of: scopeEnums, holes: holes),
 			tiers: tiers,
 		)
 	}
