@@ -366,10 +366,10 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootPerPath_whenBodyCalledBeneathOptionalParameterCannotTakeIt() async throws {
-		// `Flow` declares `mark` on the cycle, so `Screen`, whose tree receives `mark: Stamp?` only if available, takes it
-		// optionally. `Flow` forwards its own `mark: Mark?`, so its body cannot take the label optionally, and a body of
-		// `Flow` keyed by `Screen`'s parameter would answer no path: the root keeps today's tree and builds no plan.
+	mutating func generate_buildsPlan_whenBodyCalledBeneathOptionalParameterDeclaresLabelInAnotherForm() async throws {
+		// `Flow` forwards `mark: Mark?` on the cycle, above `Detail`'s receive of `mark: Stamp?` only if available. Hiding is
+		// by label, so `Detail` reads `Flow`'s declaration, which provides no `Stamp?`, and nothing above `Flow` answers a
+		// read: neither `Screen` nor `Flow` is keyed by `mark`, and only `Detail` takes it, optionally.
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
 		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, twinValues in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks, twinValues: twinValues))
@@ -413,7 +413,18 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		for await plan in stream {
 			plans.append(plan)
 		}
-		#expect(plans == [])
+		#expect(plans == [
+			Plan(
+				root: "Root",
+				bodiesOfPlan: [
+					"Screen as screenBuilder: Instantiator<Screen> [screenBuilder = screenBuilder: Instantiator<Screen>, being built]",
+					"Flow as flowBuilder: Instantiator<Flow> [flowBuilder = flowBuilder: Instantiator<Flow>, being built]",
+					"Detail as detailBuilder: Instantiator<Detail> [detailBuilder = detailBuilder: Instantiator<Detail>, being built] [mark = mark: Stamp?, optional]",
+				],
+				todaysBodiesPlanLacks: [],
+				twinValues: [],
+			),
+		])
 	}
 
 	// MARK: Private

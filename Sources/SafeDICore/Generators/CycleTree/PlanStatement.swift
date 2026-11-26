@@ -76,7 +76,4 @@ enum PerPathReason: Hashable, Sendable {
 	/// The bodies of one declaration, built as one property, differ in more answers than a bound allows
 	/// (`VariantBodies.bodiesPerKeyLimit`): a label no optional parameter merges, such as one declared in two forms.
 	case bodiesOfOneDeclarationPassBound
-	/// A body takes a label optionally and calls a body that reads the label but cannot take it optionally, such as one
-	/// that receives it in another form: the parameter answers no path, so no key of the called body stands for it.
-	case optionalParameterNotTakenByCall
 }

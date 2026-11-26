@@ -110,7 +110,7 @@ extension DependencyTreeGenerator {
 				callsOfOtherFunction += VariantAnswers.placesCallingOtherFunctionThanPlan(at: context, twinValues: shadow.twinValues)
 			}
 			if let copy = shadow.copy(of: context.scope) {
-				var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &cache).received.map(\.label))
+				var labelSet = Set(VariantBodies.sortedLabelsReadFromAbove(inTreeOf: context.scope))
 				labelSet.insert(context.property.label)
 				let labels = labelSet.sorted()
 				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)

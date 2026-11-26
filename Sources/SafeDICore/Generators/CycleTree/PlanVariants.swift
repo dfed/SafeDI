@@ -139,16 +139,16 @@ struct PlanVariants: Sendable {
 	private static func labelsReadFromAbove(inGraph graph: OrderedGraph<Declaration>) -> LabelsReadFromAbove {
 		LabelsReadFromAbove(
 			graph: graph,
-			own: { labelsReadFromAbove(byDependenciesOf: graph.nodes[$0].record) },
+			own: { labelsReadFromAbove(byDependenciesOf: graph.nodes[$0].record.instantiable) },
 			bound: { graph.nodes[$0].record.declaredLabels },
 		)
 	}
 
 	/// The labels a scope's own dependencies read from above it: each received property's, and the label an alias is
 	/// fulfilled by unless the scope instantiates or forwards a property of that label, which the alias then renames.
-	private static func labelsReadFromAbove(byDependenciesOf record: ScopeRecord) -> [String] {
+	static func labelsReadFromAbove(byDependenciesOf instantiable: Instantiable) -> [String] {
 		var createdLabels = Set<String>()
-		for dependency in record.instantiable.dependencies {
+		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				createdLabels.insert(dependency.property.label)
@@ -157,7 +157,7 @@ struct PlanVariants: Sendable {
 			}
 		}
 		var labels = [String]()
-		for dependency in record.instantiable.dependencies {
+		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				break
