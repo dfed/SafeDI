@@ -915,7 +915,6 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		"builtPlaceInputs": output + "keyed by path, filled for the first meeting's paths.",
 		"builtRecords": output + "keyed by path, filled for the first meeting's paths.",
 		"placePathsInWalkOrder": output + "the order places are recorded in.",
-		"planNodes": output + "the plan's nodes.",
 		"builtPlaceCalls": output + "computed for each meeting's own place.",
 		"firstUnrecordedPath": output + "a root that falls back walks again unshared.",
 		"pathsWithUnplannedLines": output + "a root that falls back walks again unshared.",

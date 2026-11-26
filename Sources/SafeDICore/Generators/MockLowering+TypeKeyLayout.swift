@@ -91,22 +91,6 @@ extension MockLowering {
 		/// How the node the walk lowered the place to is configured, which the record reads (`relateConfiguration(ofBuiltPlaceAt:…)`).
 		let nodeConfiguration: NodeConfiguration
 		let isPlannedAtPlace: Bool
-
-		/// This call with the plan node of a place alike in everything a node is made once for (`Walk.PlanNodeKey`).
-		func sharing(_ node: PlanNode) -> BuiltPlaceCall {
-			BuiltPlaceCall(
-				generator: generator,
-				property: property,
-				instantiable: instantiable,
-				forwardedProperties: forwardedProperties,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				unavailableProperties: unavailableProperties,
-				inputs: inputs,
-				node: node,
-				nodeConfiguration: nodeConfiguration,
-				isPlannedAtPlace: isPlannedAtPlace,
-			)
-		}
 	}
 }
 
@@ -114,8 +98,6 @@ extension MockLowering.Walk {
 	/// Makes the record of each built place the walk lowered, the places in its builder function first, so each record holds
 	/// its children's.
 	mutating func recordBuiltPlaces() {
-		// Every place has its node, and the keys hold the calls the loop below lets go of one by one.
-		planNodes = []
 		var childPathsByParent = [[Int]: [[Int]]]()
 		for path in placePathsInWalkOrder {
 			childPathsByParent[Array(path.dropLast()), default: []].append(path)
@@ -338,7 +320,6 @@ extension MockLowering.Walk {
 		builtPlaceInputs = [:]
 		builtRecords = [:]
 		placePathsInWalkOrder = []
-		planNodes = []
 		builtPlaceCalls = [:]
 		pathsWithUnplannedLines = []
 		unplannedLineKinds = [:]

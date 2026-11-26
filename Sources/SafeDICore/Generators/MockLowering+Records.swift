@@ -58,32 +58,6 @@ extension MockLowering {
 		/// Where the construction reads defaults from its configuration or calls its type's hand-written mock, what the
 		/// record holds in place of production's call (`MockLowering+ClosersAndDefaults.swift`).
 		var configuredConstruction: ConfiguredConstruction?
-		/// The override the place's construction reads, as the walk spelled it, or `nil`.
-		var overrideReadText: String?
-
-		/// What of these the place's record reads beyond its generator, which a plan node is made once for: one generator
-		/// can be lowered at two places that differ in them, whose records then differ.
-		var recordedKey: RecordedKey {
-			RecordedKey(
-				functionName: functionName,
-				hasFunction: hasFunction,
-				readNames: readNames,
-				labelsPassedNil: labelsPassedNil,
-				labelsPassedValue: labelsPassedValue,
-				configuredConstruction: configuredConstruction,
-				overrideReadText: overrideReadText,
-			)
-		}
-
-		struct RecordedKey: Hashable {
-			let functionName: String
-			let hasFunction: Bool
-			let readNames: [Property: String]
-			let labelsPassedNil: Set<String>
-			let labelsPassedValue: Set<String>
-			let configuredConstruction: ConfiguredConstruction?
-			let overrideReadText: String?
-		}
 	}
 
 	/// The names a construction reads its dependencies under where the walk passes them apart from their labels
@@ -135,31 +109,6 @@ extension ArgumentSource {
 }
 
 extension MockLowering.Walk {
-	/// A generator in one context it is written in: what production makes one plan node for, since it writes a scope's
-	/// code once for each context and every place of that context holds the code it cached (`ScopeGenerator.generateCode`).
-	///
-	/// Mock roots share one construction memo, so whether two places hold one generator follows the order the roots are
-	/// built in. The key therefore also holds what the place's record reads beyond the generator (`BuiltPlaceInputs.RecordedKey`):
-	/// two places of one generator share a node only where their records agree, as places of two generators never do.
-	///
-	/// It reads them of the first place's call rather than holding a copy: a mock none of whose places share a node, tens
-	/// of thousands of them, held a key as large as the call beside every call.
-	struct PlanNodeKey: Hashable {
-		let call: MockLowering.BuiltPlaceCall
-
-		static func == (lhs: PlanNodeKey, rhs: PlanNodeKey) -> Bool {
-			ObjectIdentifier(lhs.call.generator) == ObjectIdentifier(rhs.call.generator)
-				&& lhs.call.unavailableProperties == rhs.call.unavailableProperties
-				&& lhs.call.inputs.recordedKey == rhs.call.inputs.recordedKey
-		}
-
-		func hash(into hasher: inout Hasher) {
-			hasher.combine(ObjectIdentifier(call.generator))
-			hasher.combine(call.unavailableProperties)
-			hasher.combine(call.inputs.recordedKey)
-		}
-	}
-
 	/// Keeps what the walk hands production's record function at the built place it is lowering.
 	mutating func recordInputs(
 		of node: MockLowering.ConstantNode,
@@ -218,7 +167,6 @@ extension MockLowering.Walk {
 			labelsPassedNil: Set(dependencyArguments.filter { $0.value == "nil" }.map(\.label)),
 			labelsPassedValue: Set(dependencyArguments.filter { $0.value != "nil" }.map(\.label)),
 			configuredConstruction: configuredConstruction,
-			overrideReadText: overrideRead?.text,
 		)
 	}
 
@@ -242,7 +190,8 @@ extension MockLowering.Walk {
 			nodeConfiguration: constantNode.configuration,
 			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
 		)
-		let (isFirstOfNode, first) = planNodes.insert(PlanNodeKey(call: call))
-		builtPlaceCalls[childIndexPath] = isFirstOfNode ? call : call.sharing(first.call.node)
+		// Every place has a node of its own: only places whose whole records agree, their children's included, share one
+		// (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`). Two places of one generator can hold children whose records differ.
+		builtPlaceCalls[childIndexPath] = call
 	}
 }

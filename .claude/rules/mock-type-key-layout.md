@@ -1,12 +1,14 @@
 ---
 paths:
-  - "Sources/SafeDICore/Generators/MockLowering+{TypeKeyLayout,Records,Walk}.swift"
+  - "Sources/SafeDICore/Generators/MockLowering+{TypeKeyLayout,Records,Walk,NodeSharing}.swift"
   - "Tests/SafeDIToolMockTests/SafeDIToolMockTypeKey*Tests.swift"
   - "Tests/SafeDIToolMockTests/SafeDIToolPublicMockTypeKeyRefusalTests.swift"
   - "Tests/SafeDIToolTestSupport/MockTypeKeyLayoutChecks.swift"
 ---
 
 # Laying a mock's body out by the type key
+
+**Every place has a plan node of its own.** Only `sharingNode(ofBuiltPlaceAt:nodesByKey:)` merges two places, by `MockLowering.SharedRecordKey`, which holds every field of the record and its children's. A key made of the generator and the place's own reads merged two places whose children's records differed (the same siblings declared in other orders beneath two `SendableInstantiator`s; a rename only one parent declares), and a field left out of the key because "no test fails without it" merged an actor's `@Sendable` closure parameter with a class's. A field leaves the key only with a value test of two places that differ in it alone.
 
 **An internal mock's tree is walked for records, and again for text only where its layout falls back.** `lowerMockRootWithTree(of:context:)` walks an internal mock root's tree (`MockLowering.Walk`), recording a place for each node, and the type key lays the body out from the records (`typeKeyRootLines(declaredAtRoot:)`). That walk writes no statement (`Walk.writesText` is off): a tree has a statement or more for each path, so writing them only for the layout to replace them held a root's largest text beside its records. A place whose record is made of its text, a member of a loop of builders with every place beneath it and a call of another module's public mock, is written to lines of its own, which the record copies. A root whose layout falls back is walked again, from a copy of the walk taken before the first, recording nothing and writing every statement, so its body is the one a root the type key never lays out gets (a public mock's, or any with `laysOutWithTypeKey` off). Such a root pays for two walks, so a reason to fall back that a real shape meets often is decided before the first walk, never found by it. A new statement the walk writes is written only where `writesText` is set: `SafeDIToolMockTypeKeyWalkTextTests` counts the statements each walk of a root writes (`MockLowering.rootWalkObserver`).
 

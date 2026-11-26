@@ -25,9 +25,8 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// A mock's alike places share one plan node (`MockLowering.SharedRecordKey`), and the type key reads the first place's
-/// record for all of them, so the key reads every field of each record type it compares, but the fields that follow from
-/// the ones it reads or that the type key derives again for each call: a field it missed would let two places that
-/// differ in it share one body.
+/// record for all of them, so the key must read every field of each record type it compares: a field it missed would
+/// let two places that differ in it share one body.
 struct SafeDIToolMockNodeSharingTests: ~Copyable {
 	// MARK: Initialization
 
@@ -140,12 +139,11 @@ struct SafeDIToolMockNodeSharingTests: ~Copyable {
 			node: PlanNode(),
 		)
 		record.passedArguments = []
-		let shape = try #require(MockLowering.BuiltRecordShape(record))
+		let shape = try #require(MockLowering.BuiltRecordShape(record, passedArgumentValues: false))
 		let sharingFields = try #require(record.sharingFields)
 		// The node is what the key decides, and the box's fields are read through its accessors.
 		let recordFields = Self.fieldNames(of: record).subtracting(["node", "sharingFields"]).union(Self.fieldNames(of: sharingFields))
-		#expect(recordFields.subtracting(Self.notKeyedFields.keys) == Self.fieldNames(of: shape))
-		#expect(Set(Self.notKeyedFields.keys).isSubset(of: recordFields))
+		#expect(recordFields == Self.fieldNames(of: shape))
 	}
 
 	@Test
@@ -158,6 +156,8 @@ struct SafeDIToolMockNodeSharingTests: ~Copyable {
 		#expect(Self.fieldNames(of: alias) == Self.fieldNames(of: MockLowering.AliasShape(alias)))
 		let alternative = ConstructionAlternative(closure: .passedArgument("screen"), bindingName: nil, requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)
 		#expect(Self.fieldNames(of: alternative) == Self.fieldNames(of: MockLowering.AlternativeShape(alternative)))
+		let argument = PassedArgument(parameterName: "screen", type: type, value: .passedArgument("screen"), staysOutsideSendableFunctions: false)
+		#expect(Self.fieldNames(of: argument) == Self.fieldNames(of: MockLowering.PassedArgumentShape(argument, value: true)))
 	}
 
 	@Test
@@ -210,13 +210,31 @@ struct SafeDIToolMockNodeSharingTests: ~Copyable {
 		// One record per field of the key, each differing from the first in that field alone.
 		let recordsByChangedField = [
 			"property": record(property: otherProperty),
+			"isErased": record(isErased: true),
 			"concreteType": record(concreteType: otherType),
+			"isExtension": record(isExtension: true),
 			"target": record(target: .instantiate(type)),
 			"arguments": record(arguments: [read]),
+			"forwardedProperties": record(forwardedProperties: [otherProperty]),
+			"cycleParameters": record(cycleParameters: [otherProperty]),
+			"callCycleArguments": record(callCycleArguments: [read]),
+			"functionName": record(functionName: "__safeDI_screen_Screen"),
+			"isSendable": record(isSendable: true),
+			"typesDeclaredEscaping": record(typesDeclaredEscaping: [otherType]),
+			"lineEnd": record(lineEnd: " // comment"),
+			"hasFunction": record(hasFunction: false),
 			"children": record(children: [child]),
+			"passedArguments": record(changingSharingFields: {
+				$0.passedArguments = [PassedArgument(parameterName: "panel", type: otherType, value: .passedArgument("panel"), staysOutsideSendableFunctions: false)]
+			}),
+			"constructionValue": record(changingSharingFields: {
+				$0.constructionValue = ConstructionValue(value: .passedArgument("panel"), resultWrapper: nil)
+			}),
 			"alternatives": record(changingSharingFields: {
 				$0.alternatives = [ConstructionAlternative(closure: .passedArgument("panel"), bindingName: nil, requiresAbsent: [], use: .calledWithNoArguments, resultWrapper: nil)]
 			}),
+			"argumentValues": record(changingSharingFields: { $0.argumentValues = [0: .passedArgument("panel")] }),
+			"functionReturnType": record(changingSharingFields: { $0.functionReturnType = otherType }),
 		]
 		let key = try #require(MockLowering.SharedRecordKey(record()))
 		#expect(try #require(MockLowering.SharedRecordKey(record())) == key)
@@ -225,26 +243,6 @@ struct SafeDIToolMockNodeSharingTests: ~Copyable {
 			#expect(try #require(MockLowering.SharedRecordKey(changed)) != key, "The key ignores `\(field)`.")
 		}
 	}
-
-	/// The fields of a built place's record the key leaves out, each with why two places of one mock root that the key
-	/// finds alike cannot differ in it, or why the type key reads it again for each call. No graph of the base, seam and
-	/// public mock fuzzer corpora generates a different mock when the key leaves all of these out.
-	private static let notKeyedFields = [
-		"isErased": "The property’s declaration decides it, and the property, its concrete type and the configuration that the alternatives name fix that declaration.",
-		"isExtension": "The concrete type’s declaration decides it.",
-		"forwardedProperties": "The concrete type’s declaration decides them.",
-		"cycleParameters": "They are the properties of `callCycleArguments`.",
-		"callCycleArguments": "The type key reads a call’s cycle arguments from the call, and the children decide which cycle a place closes.",
-		"functionName": "The type key names each class’s function itself.",
-		"isSendable": "The type key derives each call’s Sendable family from where the call is.",
-		"typesDeclaredEscaping": "The concrete type’s initializer, its mock and the children decide them.",
-		"lineEnd": "The concrete type decides the comment that ends a seam’s line.",
-		"hasFunction": "The children and the arguments decide whether a place needs a function of its own.",
-		"passedArguments": "Each place keeps its own, which its call hands its function (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`).",
-		"constructionValue": "The target, the arguments and the alternatives decide it.",
-		"argumentValues": "They are the values of the arguments, which the key reads.",
-		"functionReturnType": "The property and the concrete type decide it.",
-	]
 
 	private static func fieldNames(of value: Any) -> Set<String> {
 		Set(Mirror(reflecting: value).children.compactMap(\.label))

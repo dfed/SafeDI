@@ -211,11 +211,9 @@ extension PlaceRead {
 }
 
 extension PassedArgument {
-	/// The argument for a caller's structural key: the shape of its value and its two marks. Its parameter's name and type
-	/// are left out: two calls of one function hand it the same parameters, and calls of two functions already differ in
-	/// the function they call.
+	/// The argument for a caller's structural key: its parameter, its type and the shape of its value.
 	var shape: String {
-		"passed|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)"
+		"passed|\(parameterName)|\(type.asSource)|\(value.shape)|\(staysOutsideSendableFunctions)|\(bindsBeforeCall)"
 	}
 }
 
@@ -256,18 +254,21 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// Whether every value path of every place names only passed arguments its function takes, and the root's names none.
-	/// The reads inside a path are not checked: each class's structural key holds them (`constructionReads`), a label the
-	/// mock binds apart reaches the path as a passed argument, and no layout was found that a check of them refuses.
+	/// Whether every value path of every place names only passed arguments its function takes, the root's names none, and
+	/// each ordinary read in a path reads in the type key's code what it reads in the path key's.
 	func checkValuePaths() -> Bool {
 		for body in bodies.indices {
 			let owner = classByBody[body]
 			let takenNames = Set(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
 			let statements = bodies[body].statements
 			func check(_ path: ValuePath, before index: Int) -> Bool {
-				path.passedArgumentNames.allSatisfy(takenNames.contains)
-					// A function is in scope only where a statement before the value's in its own body declares it.
-					&& path.declaredFunctionNames.allSatisfy { bodies[body].positionsByDeclaredFunction[$0]?.contains(where: { $0 < index }) == true }
+				guard path.passedArgumentNames.allSatisfy(takenNames.contains),
+				      // A function is in scope only where a statement before the value's in its own body declares it.
+				      path.declaredFunctionNames.allSatisfy({ bodies[body].positionsByDeclaredFunction[$0]?.contains(where: { $0 < index }) == true })
+				else { return false }
+				return path.reads.allSatisfy { read in
+					checkRead(read, inBody: body, before: index, owner: owner, isNilAtEveryMember: read.source == .nil)
+				}
 			}
 			if let record = bodies[body].record {
 				guard record.argumentValues.keys.allSatisfy({ $0 < record.arguments.count }) else { return false }
