@@ -2130,7 +2130,9 @@ extension DependencyTreeGenerator {
 		var groups = [String: [CaseJudgementEntry]]()
 		for (index, entry) in entries.enumerated() {
 			let key = entry.hole.enumPlace != nil ? ScopeGenerator.fillCaseKey(of: entry.hole) : "#\(index)"
-			if groups[key] == nil { groupKeys.append(key) }
+			if groups[key] == nil {
+				groupKeys.append(key)
+			}
 			groups[key, default: []].append(entry)
 		}
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
@@ -2170,7 +2172,9 @@ extension DependencyTreeGenerator {
 		var treeReads = [String]()
 		var generatorsToVisit = [tree]
 		while let generator = generatorsToVisit.popLast() {
-			if generator.closesCycleOnFillPath { closes = true }
+			if generator.closesCycleOnFillPath {
+				closes = true
+			}
 			treeReads.append("\(generator.property.map(String.init(describing:)) ?? "-")@\(generator.builtInstantiable.map { String(describing: $0.concreteInstantiable) } ?? "-")\(generator.closesPropertyCycle ? "!" : "")")
 			for dependency in generator.builtInstantiable?.dependencies ?? [] {
 				switch dependency.source {
