@@ -97,6 +97,7 @@ extension MockLowering {
 		let cycleArguments: [PlaceRead]
 		let passedArguments: [PassedArgument]
 		let targetVariant: Int?
+		let rebindsLoopMember: Bool
 
 		init(_ record: ClosingPlaceRecord) {
 			property = record.property
@@ -107,6 +108,7 @@ extension MockLowering {
 			cycleArguments = record.cycleArguments
 			passedArguments = record.passedArguments
 			targetVariant = record.targetVariant
+			rebindsLoopMember = record.rebindsLoopMember
 		}
 	}
 
