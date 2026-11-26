@@ -135,16 +135,20 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 		var judged = 0
 		var laidOut = 0
 		var laidOutOnlyUnderV3 = [String: [String]]()
+		var keptByBothForOtherReasons = [String: [String]]()
 		for seed in Self.paritySeeds {
 			let parity = try await GraphFuzzerV3LayoutParity.parity(ofSeed: seed)
 			guard parity.judged else { continue }
 			judged += 1
 			laidOut += parity.laidOutUnderV2
 			for difference in parity.differences {
-				if difference.failsParity {
+				switch difference.kind {
+				case .v3FallsBackWhereV2LaysOut, .mockReportedUnderOneVersionOnly:
 					Issue.record("seed \(seed): \(difference)")
-				} else {
+				case .v3LaysOutWhereV2FallsBack:
 					laidOutOnlyUnderV3[difference.v2FallbackKind ?? "", default: []].append(difference.mockedType)
+				case .fallbackReasonsDiffer:
+					keptByBothForOtherReasons[difference.reasonPair, default: []].append(difference.mockedType)
 				}
 			}
 		}
@@ -154,6 +158,8 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 		// The roots `.v3Unstable` lays out where `.v2` keeps the walk's body, by `.v2`'s reason: a change to `.v2` that lays
 		// one out moves a pin.
 		#expect(laidOutOnlyUnderV3.mapValues(\.count) == Self.laidOutOnlyUnderV3Pins, "\(laidOutOnlyUnderV3.sorted { $0.key < $1.key })")
+		// The roots both keep the walk's body for, for different reasons, by the pair of reasons.
+		#expect(keptByBothForOtherReasons.mapValues(\.count) == Self.keptByBothForOtherReasonsPins, "\(keptByBothForOtherReasons.sorted { $0.key < $1.key })")
 	}
 
 	@Test
@@ -233,7 +239,7 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 	}
 
 	/// The roots of O3's seeds `.v3Unstable` lays out where `.v2` keeps the walk's body, counted by `.v2`'s reason. The
-	/// agreement oracle compares the values of all thirteen with `.v2`'s walk, and hand mutations of `.v3Unstable`'s laid-out
+	/// agreement oracle compares the values of all sixteen with `.v2`'s walk, and hand mutations of `.v3Unstable`'s laid-out
 	/// bodies fail seven of them: calling each builder of a value the mock cannot build twice fails seeds 99 and 584 at
 	/// `S99_T3`, `S99_T7`, `S584_T7` and `S584_ZTwiceHost`; building a root binding read twice once more for its last
 	/// reader fails seed 0 at `S0_WrapKindsHost`; and, through the probes of mocks that take required arguments
@@ -241,12 +247,19 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 	/// `S33_T5` its `t4` holds for its `lazyT5` fails seed 33. None of the three mutations tried on every laid-out body
 	/// (those two, and every laid-out builder function's first result reused for its later calls) changes the values of
 	/// `S23_T4`, `S64_Root0` or `S786_T7`, which call no builder twice and whose bindings the second reaches nowhere a probe
-	/// reads; their probes are compared all the same. Seed 93's `S93_T7`, `S93_T8` and `S93_T9`, whose loop of builders
-	/// keeps the walk's text (`recordLoopUnit`), were not tried against those mutations; their probes are compared too.
+	/// reads; their probes are compared all the same. Seed 93's `S93_T7`, `S93_T8` and `S93_T9`, and seed 212's
+	/// `S212_T2`, `S212_T3` and `S212_WrapKindsHost`, smoke seeds for the loop of builders that keeps the walk's body where
+	/// its text reads a configuration around it (`recordLoopUnit`), are not mutation-tested; their probes are compared.
 	private static let laidOutOnlyUnderV3Pins: [String: Int] = [
 		"engineRefused": 2,
-		"namedApart": 5,
+		"namedApart": 6,
 		"readUnresolved": 1,
-		"unplannedLines": 5,
+		"unplannedLines": 7,
+	]
+
+	/// The roots of O3's seeds both versions keep the walk's body for, for different reasons, by `.v2`'s reason and then
+	/// `.v3Unstable`'s: both build what the walk builds, so they are pinned, not failed.
+	private static let keptByBothForOtherReasonsPins: [String: Int] = [
+		"unrecorded:unplannedLines:overrideExtraction | unrecorded:unplannedLines:rebindings": 3,
 	]
 }

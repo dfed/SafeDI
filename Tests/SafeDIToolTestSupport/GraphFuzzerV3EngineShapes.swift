@@ -381,10 +381,12 @@ extension GraphFuzzerFixture {
 /// O3, layout parity: the type key must lay out under `.v3Unstable` every mock of a graph it lays out under `.v2`. Each
 /// side's tool run reports, per internal mock root, `laidOut` or why the root keeps the walk's body
 /// (`MockLowering.typeKeyLayoutObserver`); the oracle fails a graph where `.v3Unstable` keeps the walk's body for a root
-/// `.v2` lays out, where both keep it for different reasons, or where a root reports under one version only, since each
-/// loses sharing `.v2` has. A root `.v3Unstable` lays out where `.v2` keeps the walk's body is the expected direction:
-/// v3 prunes no cycle edge, and its configuration per type is never named apart, so it is counted by `.v2`'s reason
-/// (`Difference.v2FallbackKind`) and pinned, not failed, and a change to `.v2` that lays one of them out moves a pin.
+/// `.v2` lays out, or where a root reports under one version only, since each loses sharing `.v2` has. A root
+/// `.v3Unstable` lays out where `.v2` keeps the walk's body is the expected direction: v3 prunes no cycle edge, and its
+/// configuration per type is never named apart, so it is counted by `.v2`'s reason (`Difference.v2FallbackKind`) and
+/// pinned, not failed, and a change to `.v2` that lays one of them out moves a pin. A root both keep the walk's body for,
+/// for different reasons, loses nothing either way: it is counted by its pair of reasons (`Difference.reasonPair`) and
+/// pinned, not failed.
 ///
 /// Hand mutation that must make it fire: force one `.v3Unstable` place's record to fall back (`v3FallsBackWhereV2LaysOut`).
 enum GraphFuzzerV3LayoutParity {
@@ -405,12 +407,9 @@ enum GraphFuzzerV3LayoutParity {
 			"\(kind.rawValue): `\(mockedType).mock()` is \(v2Outcome ?? "not reported") under .v2 and \(v3Outcome ?? "not reported") under .v3Unstable"
 		}
 
-		/// Whether the difference fails parity: every kind but a root `.v3Unstable` lays out where `.v2` does not.
-		var failsParity: Bool {
-			switch kind {
-			case .v3FallsBackWhereV2LaysOut, .fallbackReasonsDiffer, .mockReportedUnderOneVersionOnly: true
-			case .v3LaysOutWhereV2FallsBack: false
-			}
+		/// `.v2`'s reason and `.v3Unstable`'s, for a root both keep the walk's body for: `<v2> | <v3>`.
+		var reasonPair: String {
+			"\(v2Outcome ?? "") | \(v3Outcome ?? "")"
 		}
 
 		/// The kind of `.v2`'s reason for keeping the walk's body, without its detail: `namedApart` for

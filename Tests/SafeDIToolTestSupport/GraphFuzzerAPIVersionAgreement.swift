@@ -567,10 +567,10 @@ extension GraphFuzzerAPIVersionAgreement {
 	/// only if available fails seeds 23, 85 and 88 as values that differ; one whose `.v3Unstable` builder of an unbuildable
 	/// dependency is called twice per instance fails seeds 2, 7, 13, 45, 62, 73 and 90 in their D12 graphs; one whose
 	/// builder is called once and its value handed to every instance fails seeds 2, 7, 13, 45, 62 and 73, whose
-	/// `ZTwiceHost` builds the owner twice (`addingTwiceBuiltUnbuildableOwner`). Seed 93 holds a loop of builders inside
-	/// a type the type key builds in a function of its own: where the loop keeps its text though it reads that type's
-	/// configuration, which the key names apart (`recordLoopUnit`), its `.v3Unstable` mock does not compile.
-	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 93, 117]
+	/// `ZTwiceHost` builds the owner twice (`addingTwiceBuiltUnbuildableOwner`). Seeds 93 and 212 hold a loop of builders
+	/// inside a type the type key builds in a function of its own: where the loop keeps its text though it reads that type's
+	/// configuration, which the key names apart (`recordLoopUnit`), their `.v3Unstable` mocks do not compile.
+	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 93, 117, 212]
 
 	/// The public mock corpus's smoke seeds: graphs whose `.v2` and `.v3Unstable` public mocks agree, together holding at
 	/// least ten compared graphs, among them seeds whose probes pass a leaf its own `name` (31) or a consumer a value its mock
