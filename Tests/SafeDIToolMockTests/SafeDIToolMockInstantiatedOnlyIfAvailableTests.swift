@@ -1362,32 +1362,38 @@ struct SafeDIToolMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            analytics: (() -> any Analytics)? = nil
+		            analytics: (() -> any Analytics)? = nil,
+		            analyticsIsUnavailable: Bool = false
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                analytics: analytics
+		                analytics: analytics,
+		                analyticsIsUnavailable: analyticsIsUnavailable
 		            )
 		        }
 
 		        var analytics: (() -> any Analytics)? { __safeDI_storage.analytics }
+		        var analyticsIsUnavailable: Bool { __safeDI_storage.analyticsIsUnavailable }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                analytics: (() -> any Analytics)?
+		                analytics: (() -> any Analytics)?,
+		                analyticsIsUnavailable: Bool
 		            ) {
 		                self.analytics = analytics
+		                self.analyticsIsUnavailable = analyticsIsUnavailable
 		            }
 
 		            let analytics: (() -> any Analytics)?
+		            let analyticsIsUnavailable: Bool
 		        }
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let analytics: any Analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { FakeAnalytics.mock() }
+		        let analytics: (any Analytics)? = if safeDIOverrides.analyticsIsUnavailable { nil } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { FakeAnalytics.mock() }
 		        return Screen(analytics: analytics)
 		    }
 		}
