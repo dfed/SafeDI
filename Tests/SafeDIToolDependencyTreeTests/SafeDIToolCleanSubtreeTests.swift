@@ -70,6 +70,58 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenScreensOfAlternateLayersRenameServiceThatTheOthersReceive() async throws {
+		// Every screen of an odd layer renames `service`, and every screen of the even layers below the first receives the
+		// rename only if available. A walk beneath a screen reads the rename declared closest above it, which the screen
+		// of the layer above declares on each of its paths: a key holds of it whether the child of that screen the
+		// subtree is built inside is the `service` it is bound from, never the path to that screen. With that path in the key,
+		// the walk with the skip validates 23, 79, 87 and 351 scopes.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [4, 5, 6, 7] {
+			let fixture = Self.layeredScreensRenamingServiceInAlternateLayers(
+				layerCount: layerCount,
+				renameDeclaration: "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self) let renamedService: Service",
+				readDeclaration: "@Received(onlyIfAvailable: true) let renamedService: Service?",
+			)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		#expect(walkingCounts == [42, 123, 366, 1_095])
+		#expect(skippingCounts == [23, 47, 55, 83])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_validatesScopesInNumbersThatGrowLinearlyWithLayers_whenScreensOfAlternateLayersRenameServiceOnlyIfAvailableThatTheOthersRequire() async throws {
+		// Every screen of an odd layer renames `service` only if available, bound from the root's `service`, and every
+		// screen of the even layers below the first requires the rename. The cycle check of that receive walks what
+		// `Service` receives from the screen of the layer above, and reads of the path to that screen only the entries
+		// that walk can reach, of which there are none: a key holds no more of the path than that. With the whole path in the
+		// key, the walk with the skip validates 23, 79, 87 and 351 scopes.
+		var skippingCounts = [Int]()
+		var walkingCounts = [Int]()
+		for layerCount in [4, 5, 6, 7] {
+			let fixture = Self.layeredScreensRenamingServiceInAlternateLayers(
+				layerCount: layerCount,
+				renameDeclaration: "@Received(fulfilledByDependencyNamed: \"service\", ofType: Service.self, onlyIfAvailable: true) let renamedService: Service?",
+				readDeclaration: "@Received let renamedService: Service?",
+			)
+			let skipping = try await run(fixture, skippingCleanSubtrees: true)
+			let walking = try await run(fixture, skippingCleanSubtrees: false)
+			#expect(skipping.outcome == walking.outcome)
+			skippingCounts.append(skipping.validatedScopeCount)
+			walkingCounts.append(walking.validatedScopeCount)
+		}
+		#expect(walkingCounts == [42, 123, 366, 1_095])
+		#expect(skippingCounts == [23, 47, 55, 83])
+	}
+
 	// MARK: Tests – Diagnostics
 
 	@Test
@@ -844,6 +896,27 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "Service", isFinalClass: true, declarations: []))
 		fixture.append(seamFixtureType(named: "Home", isSeam: true, isFinalClass: true, declarations: (0..<4).map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" }))
 		fixture.append(seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let home: Home"]))
+		return fixture
+	}
+
+	/// `layerCount` layers of four screens beneath a root that instantiates `service`: each receives `service` and opens
+	/// the three screens of the next layer from its own position on through an `Instantiator`; each screen of an odd layer
+	/// also holds `renameDeclaration`, and each screen of an even layer but the first `readDeclaration`.
+	private static func layeredScreensRenamingServiceInAlternateLayers(layerCount: Int, renameDeclaration: String, readDeclaration: String) -> [String] {
+		var fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let screen0: Screen0"]),
+			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
+		]
+		for index in 0..<(layerCount * 4) {
+			let layer = index / 4
+			let opened = layer < layerCount - 1 ? (0..<3).map { (layer + 1) * 4 + (index + $0) % 4 } : []
+			let renameDeclarations = layer % 2 == 1 ? [renameDeclaration] : layer > 0 ? [readDeclaration] : []
+			fixture.append(seamFixtureType(
+				named: "Screen\(index)",
+				isFinalClass: true,
+				declarations: ["@Received let service: Service"] + renameDeclarations + opened.map { "@Instantiated let screen\($0)Builder: Instantiator<Screen\($0)>" },
+			))
+		}
 		return fixture
 	}
 
