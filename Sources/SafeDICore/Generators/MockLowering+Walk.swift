@@ -1053,13 +1053,7 @@ extension MockLowering {
 				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
 				return .cycleClosing(property, bindingName: isV3 ? property.label : bindingName, concreteType: instantiable.concreteInstantiable)
 			}
-			// A `.v3Unstable` closer hands its function the nearest configurations, which no record holds yet, so its mock keeps
-			// the walk's body.
-			if recordsPlaces, isV3 {
-				unrecordedReasons[childIndexPath] = "v3Closer"
-			}
 			if recordsPlaces,
-			   !isV3,
 			   case let .property(_, _, _, erasedToConcreteExistential, _, _) = generator.scopeData,
 			   let record = closerRecord(of: generator, instantiable: instantiable, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, closedOnFunctionName: closedOnFunctionName)
 			{
