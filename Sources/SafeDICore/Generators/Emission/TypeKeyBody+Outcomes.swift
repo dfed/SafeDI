@@ -66,14 +66,26 @@ extension TypeKeyLayout {
 	/// (`computePlacement`), and a cycle parameter is always read from the caller, so no outcome depends on another: one
 	/// pass settles them.
 	mutating func computeOutcomes() {
+		rootStatementsCapturedByVariant = rootStatementsCapturedByVariants()
 		var outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
 		for owner in membersByClass.indices.dropFirst() {
 			for label in reads[membersByClass[owner][0]] {
-				// A variant of the per-type plan captures nothing: every label it reads from above is a parameter, which each of
-				// its calls passes (`CycleVariantRecord.parameters`), or one its body was built with `nil` for, which it reads
-				// as `nil` (`variantsReadOnlyTheirCycleParameters`).
+				// Every label a variant of the per-type plan reads from above is a parameter of its body
+				// (`CycleVariantRecord.parameters`), or one its body was built with `nil` for, which it reads as `nil`
+				// (`variantsReadOnlyTheirCycleParameters`). Its function captures a parameter every call passes one statement of
+				// the root's body, declared before the function, and takes every other one.
 				if let variant = membersByClass[owner].first(where: { variantBodies.contains($0) }) {
-					outcomes[owner][label] = bodies[variant].cycleParameterLabels.contains(label) ? .passed : ReadOutcome.none
+					let capturedPositions = Set(membersByClass[owner].map { rootStatementsCapturedByVariant[$0]?[label] })
+					if !bodies[variant].cycleParameterLabels.contains(label) {
+						outcomes[owner][label] = ReadOutcome.none
+					} else if capturedPositions.count == 1,
+					          let position = capturedPositions.first ?? nil,
+					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == .statement(owner: 0, index: position)
+					{
+						outcomes[owner][label] = .captured(.statement(owner: 0, index: position))
+					} else {
+						outcomes[owner][label] = .passed
+					}
 				} else {
 					var declarations = [TypeDeclaration]()
 					for member in membersByClass[owner] {
@@ -101,6 +113,72 @@ extension TypeKeyLayout {
 			}
 		}
 		self.outcomes = outcomes
+	}
+
+	/// For each variant body, the cycle parameters every call passes one statement of the root's body, by its position:
+	/// the greatest set where each call passes that statement or the same parameter of a variant body in the set, which
+	/// holds that statement. A call of a variant made inside another variant's body passes on that body's parameter, so
+	/// the variants of one cycle hold each other's parameters, and only the greatest set finds that they all hold the
+	/// root's statement. Each parameter's candidate is the statement its calls pass, directly or through the parameters
+	/// that pass it on, found from the calls of the root's body outward; then every candidate some call contradicts is
+	/// dropped, until none is.
+	func rootStatementsCapturedByVariants() -> [Int: [String: Int]] {
+		var captured = [Int: [String: Int]]()
+		var assigned = true
+		while assigned {
+			assigned = false
+			for variant in variantBodies.sorted() {
+				for label in bodies[variant].cycleParameterLabels.sorted() where captured[variant]?[label] == nil {
+					var positions = Set<Int>()
+					var passesOtherValue = false
+					for closer in closersByTarget[variant] ?? [] {
+						switch closerValue(of: label, closing: closer, onPlace: variant) {
+						case let .statement(body, index):
+							if body == 0 {
+								positions.insert(index)
+							} else {
+								passesOtherValue = true
+							}
+						case let .cycleParameter(body, passedLabel):
+							if passedLabel == label, let position = captured[body]?[label] {
+								positions.insert(position)
+							}
+						case .forwarded,
+						     .none:
+							passesOtherValue = true
+						}
+					}
+					if !passesOtherValue, positions.count == 1, let position = positions.first {
+						captured[variant, default: [:]][label] = position
+						assigned = true
+					}
+				}
+			}
+		}
+		var changed = true
+		while changed {
+			changed = false
+			for variant in captured.keys.sorted() {
+				for (label, position) in captured[variant, default: [:]].sorted(by: { $0.key < $1.key }) {
+					let everyCallPassesStatement = (closersByTarget[variant] ?? []).allSatisfy { closer in
+						switch closerValue(of: label, closing: closer, onPlace: variant) {
+						case let .statement(body, index):
+							body == 0 && index == position
+						case let .cycleParameter(body, passedLabel):
+							passedLabel == label && captured[body]?[label] == position
+						case .forwarded,
+						     .none:
+							false
+						}
+					}
+					if !everyCallPassesStatement {
+						captured[variant]?[label] = nil
+						changed = true
+					}
+				}
+			}
+		}
+		return captured
 	}
 
 	/// What the closing statement `closer` passes the function of `place` for `label`: its argument for a cycle parameter,

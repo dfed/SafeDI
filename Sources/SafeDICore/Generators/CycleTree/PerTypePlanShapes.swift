@@ -80,14 +80,27 @@ extension DependencyTreeGenerator {
 		}
 		if reason == nil {
 			// Today's function captures each label its tree receives that no scope of its cycle declares. A function of the
-			// plan captures nothing yet: it would take the label as a parameter, which is other code than today's.
+			// plan, declared in the root's body, captures a statement of the root's body that every call passes
+			// (`TypeKeyLayout.rootStatementsCapturedByVariants()`), so a label only the root declares is captured as today;
+			// a label another scope declares too could reach a call from that scope, where the plan would take it as a
+			// parameter, which is other code than today's.
 			var labelsDeclaredByComponent = [Int: Set<String>]()
-			for (index, scope) in scopes.enumerated() where graph.isOnCycle(index) {
-				labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
+			var labelsDeclaredOutsideRoot = Set<String>()
+			for (index, scope) in scopes.enumerated() {
+				if graph.isOnCycle(index) {
+					labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
+				}
+				if index > 0 {
+					labelsDeclaredOutsideRoot.formUnion(scope.declaredLabels)
+				}
 			}
 			for (index, scope) in scopes.enumerated() where reason == nil && graph.isOnCycle(index) {
 				let labelsDeclaredInComponent = labelsDeclaredByComponent[graph.componentByNode[index], default: []]
-				if collectReceivedProperties(from: scope, cache: &cache).received.contains(where: { !labelsDeclaredInComponent.contains($0.label) }) {
+				let receivesLabelOnlyAnotherScopeDeclares = collectReceivedProperties(from: scope, cache: &cache).received.contains { receivedProperty in
+					!labelsDeclaredInComponent.contains(receivedProperty.label)
+						&& (labelsDeclaredOutsideRoot.contains(receivedProperty.label) || !scopes[0].declaredLabels.contains(receivedProperty.label))
+				}
+				if receivesLabelOnlyAnotherScopeDeclares {
 					reason = .receivesLabelDeclaredOutsideItsCycle
 				}
 			}

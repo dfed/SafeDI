@@ -65,9 +65,14 @@ extension TypeKeyLayout {
 		for body in bodies.indices.dropFirst() {
 			guard let record = bodies[body].record else { continue }
 			if variantBodies.contains(body) {
-				// A variant of the per-type plan is called only by closing statements, each passing every cycle parameter.
+				// A variant of the per-type plan is called only by closing statements, each passing every cycle parameter, or
+				// passing nothing for one its function captures, which holds the root's statement every call passes
+				// (`rootStatementsCapturedByVariants()`).
+				for (label, position) in rootStatementsCapturedByVariant[body] ?? [:] {
+					normalizedCycleParameters[body, default: [:]][label] = .statement(body: 0, index: position)
+				}
 				let calls = closersByTarget[body] ?? []
-				for label in bodies[body].cycleParameterLabels.sorted() {
+				for label in bodies[body].cycleParameterLabels.sorted() where rootStatementsCapturedByVariant[body]?[label] == nil {
 					let values = calls.map { normalized(closerValue(of: label, closing: $0, onPlace: body)) }
 					if let first = values.first, values.allSatisfy({ $0 == first }) {
 						normalizedCycleParameters[body, default: [:]][label] = first

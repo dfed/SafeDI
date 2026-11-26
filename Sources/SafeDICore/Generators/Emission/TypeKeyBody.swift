@@ -289,6 +289,10 @@ struct TypeKeyLayout {
 	var hoistedFunctions = [CallSite: [Int]]()
 	var attachedFunction = [CallSite: Int]()
 	var outcomes = [[String: ReadOutcome]]()
+	/// For each variant body of the per-type plan, the labels of its cycle parameters that every call passes one
+	/// statement of the root's body, by that statement's position: its function captures the statement, as today's does
+	/// (`rootStatementsCapturedByVariants()`).
+	var rootStatementsCapturedByVariant = [Int: [String: Int]]()
 	var parameterTypes = [[String: TypeDescription]]()
 	/// The value each cycle parameter of a place holds at every call of its function, where every call passes one.
 	var normalizedCycleParameters = [Int: [String: PathValue]]()

@@ -26,7 +26,7 @@ import Testing
 /// variants as the plan would.
 struct TypeKeyBodyCycleVariantTests {
 	@Test
-	func statements_declaresOneFunctionPerVariantTakingEveryLabelItReads_whenTheRootEntersTheCycleFromBothMembers() throws {
+	func statements_declaresOneFunctionPerVariantCapturingWhatEveryCallPasses_whenTheRootEntersTheCycleFromBothMembers() throws {
 		let statements = try #require(TypeKeyBody.statements(
 			ofRootBody: [
 				Self.alias("p", "P"),
@@ -48,26 +48,18 @@ struct TypeKeyBodyCycleVariantTests {
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let p = P()
 		        let q = Q()
-		        func __safeDI_aBuilder(p: P, q: Q) -> A {
-		            let bBuilder = Instantiator<B> {
-		                __safeDI_bBuilder(p: p, q: q)
-		            }
+		        func __safeDI_aBuilder() -> A {
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		            let k = K(q: q)
 		            return A(bBuilder: bBuilder, k: k)
 		        }
-		        func __safeDI_bBuilder(p: P, q: Q) -> B {
-		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(p: p, q: q)
-		            }
+		        func __safeDI_bBuilder() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            let m = M(p: p)
 		            return B(aBuilder: aBuilder, m: m)
 		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(p: p, q: q)
-		        }
-		        let bBuilder = Instantiator<B> {
-		            __safeDI_bBuilder(p: p, q: q)
-		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		""")
 	}
 
@@ -112,6 +104,59 @@ struct TypeKeyBodyCycleVariantTests {
 	}
 
 	@Test
+	func statements_passesAParameter_whenACallOfAnotherVariantPassesOnWhatAVariantDeclaresItself() throws {
+		// The root passes `A` its own `x`, which `A` passes on to `B`, which passes it back; `C` passes `B` an `x` of its own,
+		// so `B`'s and so `A`'s calls do not all pass the root's `x`, though `A`'s first-reached calls do.
+		let statements = try #require(TypeKeyBody.statements(
+			ofRootBody: [
+				Self.alias("x", "X"),
+				Self.call("aBuilder", building: "A", variant: 0, reading: ["x"]),
+				Self.call("cBuilder", building: "C", variant: 2, reading: []),
+			],
+			variants: [
+				Self.variant("aBuilder", building: "A", reading: ["x"], children: [
+					Self.call("bBuilder", building: "B", variant: 1, reading: ["x"]),
+					Self.inline("k", "K", reading: "x", "X"),
+				]),
+				Self.variant("bBuilder", building: "B", reading: ["x"], children: [
+					Self.call("aBuilder", building: "A", variant: 0, reading: ["x"]),
+				]),
+				Self.variant("cBuilder", building: "C", reading: [], children: [
+					Self.alias("x", "X"),
+					Self.call("bBuilder", building: "B", variant: 1, reading: ["x"]),
+				]),
+			],
+		))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let x = X()
+		        func __safeDI_aBuilder(x: X) -> A {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(x: x)
+		            }
+		            let k = K(x: x)
+		            return A(bBuilder: bBuilder, k: k)
+		        }
+		        func __safeDI_bBuilder(x: X) -> B {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(x: x)
+		            }
+		            return B(aBuilder: aBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(x: x)
+		        }
+		        func __safeDI_cBuilder() -> C {
+		            let x = X()
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(x: x)
+		            }
+		            return C(x: x, bBuilder: bBuilder)
+		        }
+		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		""")
+	}
+
+	@Test
 	func statements_keepsThePathKeysBody_whenAVariantReadsALabelItTakesNoCycleParameterOf() {
 		#expect(TypeKeyBody.statements(
 			ofRootBody: [
@@ -148,20 +193,16 @@ struct TypeKeyBodyCycleVariantTests {
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let p = P()
 		        let q = Q()
-		        func __safeDI_aBuilder_(p: P) -> A {
+		        func __safeDI_aBuilder_() -> A {
 		            let m = M(p: p)
 		            return A(m: m)
 		        }
-		        func __safeDI_aBuilder(p: P, q: Q) -> A {
-		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder_(p: p)
-		            }
+		        func __safeDI_aBuilder() -> A {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder_)
 		            let k = K(q: q)
 		            return A(aBuilder: aBuilder, k: k)
 		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(p: p, q: q)
-		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		""")
 	}
 
@@ -268,26 +309,18 @@ struct TypeKeyBodyCycleVariantTests {
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let p = P()
 		        let q = Q()
-		        func __safeDI_aBuilder(p: P, q: Q) -> A {
-		            let bBuilder = Instantiator<B> {
-		                __safeDI_bBuilder(p: p, q: q)
-		            }
+		        func __safeDI_aBuilder() -> A {
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		            let k = K(q: q)
 		            return A(bBuilder: bBuilder, k: k)
 		        }
-		        func __safeDI_bBuilder(p: P, q: Q) -> B {
-		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(p: p, q: q)
-		            }
+		        func __safeDI_bBuilder() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            let m = M(p: p)
 		            return B(aBuilder: aBuilder, m: m)
 		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(p: p, q: q)
-		        }
-		        let bBuilder = Instantiator<B> {
-		            __safeDI_bBuilder(p: p, q: q)
-		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		""")
 	}
 
@@ -305,13 +338,11 @@ struct TypeKeyBodyCycleVariantTests {
 		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let x = X()
-		        func __safeDI_aBuilder(x: X) -> A {
+		        func __safeDI_aBuilder() -> A {
 		            let k = K(x: x)
 		            return A(k: k)
 		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(x: x)
-		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		""")
 	}
 
@@ -332,19 +363,15 @@ struct TypeKeyBodyCycleVariantTests {
 		let statements = try #require(TypeKeyBody.statements(ofPlan: plan))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let x = X()
-		        func __safeDI_aBuilder(x: X) -> A {
+		        func __safeDI_aBuilder() -> A {
 		            let b: B = __safeDI_b(x: x)
 		            return A(b: b)
 		        }
 		        func __safeDI_b(x: X) -> B {
-		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(x: x)
-		            }
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            return B(aBuilder: aBuilder)
 		        }
-		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(x: x)
-		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		""")
 	}
 

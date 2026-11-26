@@ -60,8 +60,9 @@ public enum RootTreeChoiceObservation {
 		/// A type outside every cycle that instantiates dependencies of its own is instantiated at two properties of the
 		/// root's tree, so a plan would build its tree once for each.
 		case buildsTreeOutsideCyclesTwice
-		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares. Today's function
-		/// captures that declaration, and a function of the plan captures nothing yet.
+		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares, and that a type other
+		/// than the root declares, or the root does not: today's function captures that declaration, and a function of
+		/// the plan captures only the root's own statements.
 		case receivesLabelDeclaredOutsideItsCycle
 		/// The root's tree may hold a label no one parameter of a cycle's function can pass
 		/// (`DependencyTreeGenerator.mayHaveUnpassableCycleLabel(inTreeOf:cache:)`).

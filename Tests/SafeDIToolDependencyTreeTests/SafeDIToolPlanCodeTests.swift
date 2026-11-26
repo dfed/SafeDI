@@ -45,7 +45,7 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_declaresOneFunctionPerBody_whenScreensOpenEachOther() async throws {
 		// `Screen` and `Next` open each other beneath `Shell`, which is on no cycle: the plan has one body of each, whose
-		// functions take what their trees read from above, `clock`, and capture nothing.
+		// functions capture what their trees read from above, `clock`, which every call resolves to the root's.
 		let codes = try await planCodes(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let clock: Clock
@@ -76,22 +76,16 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let clock = Clock()
-		        func __safeDI_screenBuilder(clock: Clock) -> Screen {
-		            let nextBuilder = Instantiator<Next> {
-		                __safeDI_nextBuilder(clock: clock)
-		            }
+		        func __safeDI_screenBuilder() -> Screen {
+		            let nextBuilder = Instantiator<Next>(__safeDI_nextBuilder)
 		            return Screen(clock: clock, nextBuilder: nextBuilder)
 		        }
-		        func __safeDI_nextBuilder(clock: Clock) -> Next {
-		            let screenBuilder = Instantiator<Screen> {
-		                __safeDI_screenBuilder(clock: clock)
-		            }
+		        func __safeDI_nextBuilder() -> Next {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		            return Next(screenBuilder: screenBuilder)
 		        }
 		        func __safeDI_shell() -> Shell {
-		            let screenBuilder = Instantiator<Screen> {
-		                __safeDI_screenBuilder(clock: clock)
-		            }
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		            return Shell(screenBuilder: screenBuilder)
 		        }
 		        let shell: Shell = __safeDI_shell()
