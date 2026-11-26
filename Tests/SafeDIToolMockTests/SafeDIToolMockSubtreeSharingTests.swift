@@ -360,6 +360,28 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 		#expect(visits == [3: 24, 6: 102, 12: 420])
 	}
 
+	/// The check that every read of a laid-out body names a declaration (`MockLowering.Walk.unresolvedRead(in:declaredAtRoot:)`)
+	/// reads each place of the plan once, and a shared subtree's places once for all its meetings, so the places it reads grow
+	/// with the layers, never with the paths, which double with each layer. A check that walked each path read 72, 632 and
+	/// 40,952 places.
+	@Test
+	mutating func mock_checksLaidOutReadsInPlacesNotPaths_whenScreensBuildNextLayerBeneathTwoParents() async throws {
+		var reads = [Int: Int]()
+		for layers in [3, 6, 12] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+			_ = try await MockLowering.$unresolvedReadObserver.withValue({ readPlaces in
+				continuation.yield(readPlaces)
+			}) {
+				try await outcomes(of: Self.layeredChain(layers: layers))
+			}
+			continuation.finish()
+			for await readPlaces in stream {
+				reads[layers, default: 0] += readPlaces
+			}
+		}
+		#expect(reads == [3: 26, 6: 50, 12: 98])
+	}
+
 	/// The walk that names a mock's parameters (`ScopeGenerator.treeNames(of:readsFills:)`) visits each node of the layered
 	/// chain once per generator and family, and records each other meeting of it, so both grow with the layers, never with
 	/// the paths, which double with each layer. Each mock's parameters are classified more than once (its signature, its

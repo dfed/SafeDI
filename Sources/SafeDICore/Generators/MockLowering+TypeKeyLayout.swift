@@ -34,6 +34,10 @@ extension MockLowering {
 	/// never by the tool.
 	@TaskLocal static var laysOutPublicMocksWithTypeKey = false
 
+	/// Called, where set, with how many places each check of the reads of a root's laid-out body (`unresolvedRead(in:declaredAtRoot:)`)
+	/// read. Set by the tests that check the check grows with the places of the plan, never with the paths; never by the tool.
+	@TaskLocal public static var unresolvedReadObserver: (@Sendable (_ readPlaces: Int) -> Void)?
+
 	/// Called with each internal mock root's layout outcome while the switch is on: `laidOut`, or why the root keeps the walk's
 	/// body, as `unrecorded:threw:<error case>` where production's record function threw at one of its places. Set by the
 	/// tests and the graph fuzzer, which fails a graph that falls back on an error case it does not expect; never by the
@@ -437,63 +441,118 @@ extension MockLowering.Walk {
 	/// is made binds (a statement before it in its body or one enclosing it, a function's parameter, or a root declaration):
 	/// a value the records do not see, such as one `mock()` binds under a name of its own, keeps the walk's body, since the
 	/// type key would read it as `nil`.
+	///
+	/// A subtree the walk met on several paths is one plan node, which every meeting's record holds, as the type key reads
+	/// it (`TypeKeyBody`'s `domain(of:)`), so each function's reads are found once per node (`unresolvedLabels(ofFunctionOf:)`)
+	/// and the check grows with the plan's nodes, never with its paths.
 	static func unresolvedRead(in rootBody: [GeneratedCode], declaredAtRoot rootLabels: Set<String>) -> String? {
-		// Each frame is a body: the labels visible in it so far, the frames around it holding theirs.
-		var frames: [(children: [GeneratedCode], next: Int, visible: Set<String>, functionReads: [PlaceRead])] = [(rootBody, 0, rootLabels, [])]
-		func resolves(_ reads: [PlaceRead], in visible: Set<String>) -> String? {
-			reads.first { $0.source != .nil && !visible.contains($0.label) }.map(\.label)
-		}
-		while let frame = frames.last {
-			guard frame.next < frame.children.count else {
-				// A function's construction reads what its body binds.
-				if let label = resolves(frame.functionReads, in: frame.visible) {
-					return label
+		var reads = UnresolvedReads()
+		defer { MockLowering.unresolvedReadObserver?(reads.readPlaces) }
+		return reads.unresolvedLabels(of: rootBody, declaredAbove: rootLabels).labels.first
+	}
+
+	/// The reads of a laid-out body that no declaration inside it binds, found once per function's plan node.
+	private struct UnresolvedReads {
+		/// What each function's body and construction read that the function does not bind, in the order the walk meets them.
+		var labelsByFunction = [PlanNode: [String]]()
+		/// The places read, which a test reads through `unresolvedReadObserver`.
+		var readPlaces = 0
+
+		/// The labels the places of `body` read, other than of `nil`, that neither `declaredAbove` nor a place before the
+		/// read in `body` binds, each once, in the order the walk meets them; and the labels `body` binds. A place that
+		/// records nothing reads the label `""`, which nothing binds, as the first unresolved read where it is.
+		mutating func unresolvedLabels(of body: [GeneratedCode], declaredAbove: Set<String>) -> (labels: [String], bound: Set<String>) {
+			var labels = OrderedLabels()
+			var visible = declaredAbove
+			for code in body {
+				readPlaces += 1
+				guard let record = TypeKeyLayout.record(of: code) else {
+					labels.append("")
+					break
 				}
-				frames.removeLast()
-				continue
-			}
-			frames[frames.count - 1].next += 1
-			guard let record = TypeKeyLayout.record(of: frame.children[frame.next]) else { return "" }
-			let visible = frame.visible
-			// A call reads what is declared where it is made, a closer's as a built place's.
-			let callSiteReads: [PlaceRead] = switch record {
-			case let .built(built):
-				built.callSiteReads
-			case let .closer(closer):
-				closer.callSiteReads
-			case .alias:
-				[]
-			}
-			if let label = resolves(callSiteReads, in: visible) {
-				return label
-			}
-			switch record {
-			case let .built(built):
-				if built.hasFunction {
-					var inner = visible
-					inner.formUnion(built.parameterProperties.map(\.label))
-					inner.formUnion(built.cycleParameters.map(\.label))
-					frames[frames.count - 1].visible.insert(built.property.label)
-					frames.append((built.children, 0, inner, built.constructionReads))
-				} else {
-					if let label = resolves(built.constructionReads, in: visible) {
-						return label
+				switch record {
+				case let .built(built):
+					labels.append(contentsOf: built.callSiteReads, unless: visible)
+					if built.hasFunction {
+						labels.append(contentsOf: unresolvedLabels(ofFunctionOf: built), unless: visible)
+					} else {
+						labels.append(contentsOf: built.constructionReads, unless: visible)
 					}
-					frames[frames.count - 1].visible.insert(built.property.label)
+					visible.insert(built.property.label)
+				case let .closer(closer):
+					// A call reads what is declared where it is made, a closer's as a built place's.
+					labels.append(contentsOf: closer.callSiteReads, unless: visible)
+					visible.insert(closer.property.label)
+				case let .alias(alias):
+					// A rename of a name `mock()` binds apart, such as a sibling its root names apart, reads no declaration the
+					// records name.
+					if let fulfillingProperty = alias.fulfillingProperty, !visible.contains(fulfillingProperty.label) {
+						labels.append(fulfillingProperty.label)
+					}
+					visible.insert(alias.property.label)
+					visible.formUnion(alias.otherBindings.map(\.label))
 				}
-			case let .closer(closer):
-				frames[frames.count - 1].visible.insert(closer.property.label)
-			case let .alias(alias):
-				// A rename of a name `mock()` binds apart, such as a sibling its root names apart, reads no declaration the
-				// records name.
-				if let fulfillingProperty = alias.fulfillingProperty, !visible.contains(fulfillingProperty.label) {
-					return fulfillingProperty.label
+			}
+			return (labels.labels, visible)
+		}
+
+		/// What `built`'s function reads that its parameters and its body do not bind: its body's places' reads, then its
+		/// construction's, which reads what its body binds. The functions beneath it are found first, each once, with a stack,
+		/// since a plan can be as deep as the module has types.
+		mutating func unresolvedLabels(ofFunctionOf built: BuiltPlaceRecord) -> [String] {
+			var stack = [built]
+			while let current = stack.last {
+				guard labelsByFunction[current.node] == nil else {
+					stack.removeLast()
+					continue
 				}
-				frames[frames.count - 1].visible.insert(alias.property.label)
-				frames[frames.count - 1].visible.formUnion(alias.otherBindings.map(\.label))
+				let pending = current.children.compactMap { code -> BuiltPlaceRecord? in
+					guard case let .built(child)? = TypeKeyLayout.record(of: code), child.hasFunction, labelsByFunction[child.node] == nil else { return nil }
+					return child
+				}
+				guard pending.isEmpty else {
+					stack.append(contentsOf: pending)
+					continue
+				}
+				stack.removeLast()
+				let parameters = Set(current.parameterProperties.map(\.label)).union(current.cycleParameters.map(\.label))
+				let body = unresolvedLabels(of: current.children, declaredAbove: parameters)
+				var labels = OrderedLabels(body.labels)
+				// A function's construction reads what its body binds.
+				labels.append(contentsOf: current.constructionReads, unless: body.bound)
+				labelsByFunction[current.node] = labels.labels
+			}
+			return labelsByFunction[built.node] ?? []
+		}
+	}
+
+	/// Labels in the order they are first added, each once.
+	private struct OrderedLabels {
+		private(set) var labels: [String]
+		private var added: Set<String>
+
+		init(_ labels: [String] = []) {
+			self.labels = labels
+			added = Set(labels)
+		}
+
+		mutating func append(_ label: String) {
+			if added.insert(label).inserted {
+				labels.append(label)
 			}
 		}
-		return nil
+
+		mutating func append(contentsOf labels: [String], unless bound: Set<String>) {
+			for label in labels where !bound.contains(label) {
+				append(label)
+			}
+		}
+
+		mutating func append(contentsOf reads: [PlaceRead], unless bound: Set<String>) {
+			for read in reads where read.source != .nil && !bound.contains(read.label) {
+				append(read.label)
+			}
+		}
 	}
 }
 
