@@ -43,7 +43,7 @@ struct SafeDIToolStoredPlaceGraphChecksTests {
 		#expect(StoredPlaceGraphChecks.firstDifference(between: String?.some("a") as Any, and: String?.none as Any, at: "value") == "value is read as `a`, and was computed as absent")
 		#expect(StoredPlaceGraphChecks.firstDifference(between: String?.none as Any, and: String?.some("a") as Any, at: "value") == "value is read as absent, and was computed as `a`")
 		#expect(StoredPlaceGraphChecks.firstDifference(between: 1, and: "1", at: "value") == "value is read as a `Int`, and was computed as a `String`")
-		#expect(StoredPlaceGraphChecks.firstDifference(between: Result<Int, Never>.success(1), and: Optional<Int>.some(1) as Any, at: "value") != nil)
+		#expect(StoredPlaceGraphChecks.firstDifference(between: Result<Int, Never>.success(1), and: Int?.some(1) as Any, at: "value") != nil)
 	}
 
 	@Test
@@ -69,6 +69,7 @@ struct SafeDIToolStoredPlaceGraphChecksTests {
 			issue.description.contains("the places of `Seam`.cases.0.isBuiltInSendableFunction is read as `true`, and was computed as `false`")
 		}
 	}
+
 	@Test
 	func expectGraphsReadBackAsComputed_recordsIssue_whenFileHoldsAnotherGraphOfSeamOrOtherSeams() throws {
 		func signature(of seam: String, cases: [SeamSignature.Places.Case]) -> StoredSeamSignature {
