@@ -155,7 +155,7 @@ extension TypeKeyLayout {
 				record.callSiteReads.forEach(note)
 				required.formUnion(requiredReads[target])
 			case let .alias(record):
-				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional {
+				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional, !record.readsOnlyIfAvailable {
 					required.insert(fulfillingProperty.label)
 				}
 				record.listedReads.forEach(note)
