@@ -40,6 +40,10 @@ extension DependencyTreeGenerator {
 		let generator: ScopeGenerator
 		let scope: Scope
 		let property: Property
+		/// The place's position beneath the tree the walk started from: at each scope from that tree's root down, the
+		/// index among the scope's `propertiesToGenerate` of the child that leads to the place. A place inside a function
+		/// a scope that closes a cycle calls has the path of that scope, then the path from the function's scope.
+		let path: [Int]
 		/// The scope that builds the place, and whether it erases what the place builds to a concrete existential.
 		let builder: Scope
 		let erasedToConcreteExistential: Bool
@@ -93,6 +97,7 @@ extension DependencyTreeGenerator {
 				functions: [:],
 				callDescription: nil,
 				twinsBeingBuilt: twinsBeingBuilt,
+				path: [],
 			)]
 		}
 
@@ -128,6 +133,7 @@ extension DependencyTreeGenerator {
 			let functions: [ScopeGenerator.BuiltDeclaration: FunctionPlace]
 			let callDescription: String?
 			let twinsBeingBuilt: [TwinValue: Property]
+			let path: [Int]
 		}
 
 		private let twinValues: Set<TwinValue>
@@ -160,6 +166,7 @@ extension DependencyTreeGenerator {
 							generator: function.generator,
 							scope: function.scope,
 							property: function.property,
+							path: place.path + [child.index],
 							builder: function.builder,
 							erasedToConcreteExistential: function.erasedToConcreteExistential,
 							nearestDeclarations: placeNearestDeclarations,
@@ -191,6 +198,7 @@ extension DependencyTreeGenerator {
 							functions: childFunctions,
 							callDescription: callDescription,
 							twinsBeingBuilt: childTwinsBeingBuilt,
+							path: context.path,
 						), false))
 					} else if callDescription == nil,
 					          let function = child.generator.closedOnDeclaration.flatMap({ functions[$0] })
@@ -208,6 +216,7 @@ extension DependencyTreeGenerator {
 							functions: functions,
 							callDescription: description,
 							twinsBeingBuilt: place.twinsBeingBuilt,
+							path: context.path,
 						), true))
 					}
 				}

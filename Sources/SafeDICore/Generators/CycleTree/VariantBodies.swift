@@ -36,6 +36,14 @@ public enum PlanBodiesObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String], _ twinValues: [String]) -> Void)?
 }
 
+/// Lets a test see the calls each body of a production root's plan makes (`VariantBodies.calls(of:)`). Test only.
+public enum PlanCallsObservation {
+	/// Called for each root that reaches a cycle with the root's type and a line per call of the root's body, then of
+	/// each body the plan builds, in the order the plan first calls it: the calling body's generator and position, the
+	/// call place's path and property, the position of the body called, and what answers each label that body is keyed by.
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ calls: [String]) -> Void)?
+}
+
 extension DependencyTreeGenerator {
 	/// What the bodies of a root are kept by: the scope built and the property it is built as, `nil` for the root's own.
 	struct VariantBodyKey: Hashable {
@@ -88,6 +96,41 @@ extension DependencyTreeGenerator {
 				}
 				return description
 			}
+
+			/// What the body's answers are to a call of it, one per label of `labels`: nothing where no declaration answers
+			/// the label; a declaration being built where its path is building a form of it; the instance of a lazily
+			/// instantiated declaration where the body reads the label through one; else the declaration. Where an answer
+			/// hands its readers more than one property, the first in property order names it.
+			var planAnswers: [Answer] {
+				zip(labels, answers).map { label, answer in
+					guard let answer, let property = answer.bindings.values.min() else { return .none }
+					if !answer.formsBeingBuilt.isEmpty {
+						return .declared(property, isBeingBuilt: true)
+					} else if let instance = lazilyInstantiatedInstanceProperties.filter({ $0.label == label }).min() {
+						return .instance(of: answer.bindings[instance] ?? property)
+					} else {
+						return .declared(property, isBeingBuilt: false)
+					}
+				}
+			}
+		}
+
+		/// A call a body makes: a child on a cycle, which the body's generator holds as a call place.
+		struct Call {
+			/// Where the call place is in the calling body's generator: at each scope from the body's own down, the index
+			/// among the scope's `propertiesToGenerate` of the child that leads to it.
+			let path: [Int]
+			/// The property the call place is built as.
+			let property: Property
+			/// The position of the body called.
+			let calledBody: Int
+			/// What the called body's answers are, one per label of its `labels` (`Body.planAnswers`).
+			let arguments: [Answer]
+			/// The positions of `arguments` in the order a function takes them: the label the called body is built as, then
+			/// each other label in the order a walk of the called scope's tree first receives it (each scope's dependencies
+			/// in declaration order, then its children's trees, depth first). The order follows where the labels are
+			/// received, never how they are named, so renaming a graph reorders no function's parameters.
+			let argumentOrder: [Int]
 		}
 
 		init(frozenScopeMap: FrozenScopeMap, declaredTypeNames: DeclaredTypeNames) {
@@ -96,6 +139,107 @@ extension DependencyTreeGenerator {
 		}
 
 		private(set) var bodies = [Body]()
+
+		/// The generator of the body at a position of `bodies`, built as its property: each child on a cycle is a call
+		/// place, and nothing closes on a stack.
+		func generator(of body: Int) -> ScopeGenerator {
+			bodies[body].generator
+		}
+
+		/// A line per call of `body` (`PlanCallsObservation`).
+		func callDescriptions(of body: Int) -> [String] {
+			calls(of: body).map { call in
+				let arguments = zip(bodies[call.calledBody].labels, call.arguments).map { label, argument in
+					switch argument {
+					case .none:
+						"\(label): nil"
+					case let .declared(property, isBeingBuilt):
+						"\(label): \(property.asSource)\(isBeingBuilt ? ", being built" : "")"
+					case let .instance(of: property):
+						"\(label): instance of \(property.asSource)"
+					}
+				}
+				return "\(generator(of: body).scopeData.asDOTNode) [\(body)] at \(call.path) calls [\(call.calledBody)] as \(call.property.asSource) (\(call.argumentOrder.map { arguments[$0] }.joined(separator: "; ")))"
+			}
+		}
+
+		/// The calls of a body `plan(ofRoot:shadow:cache:)` walked, in the order of their paths; none for any other.
+		func calls(of body: Int) -> [Call] {
+			callsByBody[body] ?? []
+		}
+
+		/// Builds the bodies of a root's plan with no tree of today's: the root's own, then the body of each call place a
+		/// body holds, beneath the answers that body's path gives it, until no call is answered anew, and keeps each
+		/// body's calls (`calls(of:)`).
+		/// - Returns: The position of the root's body, and of each body called in the order the plan first calls it, or
+		///   `nil` where `shadow` holds no copy of `scope`.
+		mutating func plan(ofRoot scope: Scope, shadow: CallPlaceShadow, cache: inout ReceivedPropertiesCache) throws -> (rootBody: Int, calledBodies: [Int])? {
+			guard let rootCopy = shadow.copy(of: scope) else { return nil }
+			let rootBody = try body(
+				of: rootCopy,
+				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
+				keyedBy: [],
+				answering: [],
+				beneath: NearestDeclarations(),
+				lazilyInstantiatedInstanceProperties: [],
+			)
+			var bodiesOfPlan = [Int]()
+			var bodiesToWalk = [rootBody]
+			while let bodyToWalk = bodiesToWalk.popLast() {
+				let body = bodies[bodyToWalk]
+				var calls = [Call]()
+				var bodyWalk = PlaceContextWalk(
+					ofTodaysTree: body.generator,
+					builtFrom: body.copy,
+					beneath: body.nearestDeclarations,
+					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
+					twinValues: shadow.twinValues,
+					twinsBeingBuilt: body.key.twinsBeingBuilt,
+				)
+				while let (context, _) = bodyWalk.next() {
+					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
+						var labelSet = Set(DependencyTreeGenerator.collectReceivedProperties(from: calledScope, cache: &cache).received.map(\.label))
+						labelSet.insert(context.property.label)
+						let labels = labelSet.sorted()
+						// A call is of the function's property: where the path is building the value the call place
+						// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
+						// cycle on that property's function, beneath the calling scope's declarations.
+						let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
+						let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
+						var calledNearestDeclarations = context.nearestDeclarations
+						if functionProperty != context.property {
+							calledNearestDeclarations = context.enclosingNearestDeclarations
+							calledNearestDeclarations.build(functionProperty)
+						}
+						let calledBody = try self.body(
+							of: calledCopy,
+							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
+							keyedBy: labels,
+							answering: labels,
+							beneath: calledNearestDeclarations,
+							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
+							builtBy: (context.builder, context.erasedToConcreteExistential),
+						)
+						let labelsInOrderReceived = [context.property.label] + Self.labelsInOrderFirstReceived(inTreeOf: calledScope)
+						let argumentOrder = labelsInOrderReceived.compactMap { bodies[calledBody].labels.firstIndex(of: $0) }
+						calls.append(Call(
+							path: context.path,
+							property: context.property,
+							calledBody: calledBody,
+							arguments: bodies[calledBody].planAnswers,
+							// A label no receive of the walk names keeps its sorted place after the others.
+							argumentOrder: argumentOrder + bodies[calledBody].labels.indices.filter { !argumentOrder.contains($0) },
+						))
+						if !bodiesOfPlan.contains(calledBody) {
+							bodiesOfPlan.append(calledBody)
+							bodiesToWalk.append(calledBody)
+						}
+					}
+				}
+				callsByBody[bodyToWalk] = calls.sorted { $0.path.lexicographicallyPrecedes($1.path) }
+			}
+			return (rootBody, bodiesOfPlan)
+		}
 
 		/// The position of the body of `copy` built as `key` beneath what `nearestDeclarations` answers `answeredLabels`,
 		/// those of `labels` the body is given an answer for, building it where no body has those answers yet.
@@ -157,6 +301,37 @@ extension DependencyTreeGenerator {
 			}
 		}
 
+		/// The labels the scopes of `scope`'s tree receive, each once, in the order a walk first meets a receive of it: each
+		/// scope's received dependencies and the properties its renames are fulfilled by, in declaration order, then the
+		/// trees of the scopes it instantiates, depth first, each scope once.
+		private static func labelsInOrderFirstReceived(inTreeOf scope: Scope) -> [String] {
+			var labels = [String]()
+			var visitedScopes = Set<ObjectIdentifier>()
+			var scopesToVisit = [scope]
+			while let scope = scopesToVisit.popLast() {
+				guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+				for dependency in scope.instantiable.dependencies {
+					let label: String? = switch dependency.source {
+					case .instantiated, .forwarded:
+						nil
+					case .received:
+						dependency.property.label
+					case let .aliased(fulfillingProperty, _, _):
+						fulfillingProperty.label
+					}
+					if let label, !labels.contains(label) {
+						labels.append(label)
+					}
+				}
+				for propertyToGenerate in scope.propertiesToGenerate.reversed() {
+					if case let .instantiated(_, childScope, _) = propertyToGenerate {
+						scopesToVisit.append(childScope)
+					}
+				}
+			}
+			return labels
+		}
+
 		/// The type of a scope whose one declaration is `dependency` of `builder`: what a body built as its property is the
 		/// child of.
 		private static func holderInstantiable(of builder: Instantiable, declaring dependency: Dependency) -> Instantiable {
@@ -185,5 +360,6 @@ extension DependencyTreeGenerator {
 		private let frozenScopeMap: FrozenScopeMap
 		private let declaredTypeNames: DeclaredTypeNames
 		private var positionsByKey = [VariantBodyKey: [Int]]()
+		private var callsByBody = [Int: [Call]]()
 	}
 }

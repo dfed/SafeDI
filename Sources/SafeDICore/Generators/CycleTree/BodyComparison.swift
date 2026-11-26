@@ -21,7 +21,7 @@
 extension DependencyTreeGenerator {
 	/// Compares each place of a root's tree with a body built from its scope's copy beneath the answers its path gives
 	/// the labels the scope's tree receives (`VariantBodyObservation`), and the bodies today's places take with those the
-	/// root's plan builds with no tree of today's (`PlanBodiesObservation`). Does nothing where no test observes either.
+	/// root's plan builds with no tree of today's (`PlanBodiesObservation`, `PlanCallsObservation`). Does nothing where no test observes any.
 	///
 	/// A tree with a label no one parameter can pass is rejected (`validateCycleLabelsArePassable`), and is not compared:
 	/// a body beneath a call's own answers passes a value there that today's parameter cannot carry.
@@ -40,7 +40,8 @@ extension DependencyTreeGenerator {
 	) throws {
 		let variantBodyObserver = VariantBodyObservation.observer
 		let planBodiesObserver = PlanBodiesObservation.observer
-		guard variantBodyObserver != nil || planBodiesObserver != nil,
+		let planCallsObserver = PlanCallsObservation.observer
+		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil,
 		      todaysTree.unpassableCycleLabelsInTree.isEmpty,
 		      let shadow = CallPlaceShadow(root: scope, cache: &cache)
 		else { return }
@@ -106,58 +107,13 @@ extension DependencyTreeGenerator {
 		}
 		// The bodies the plan builds with no tree of today's: the root's, then the body of each call place a
 		// body holds, beneath the answers that body's path gives it.
-		if let planBodiesObserver, let rootCopy = shadow.copy(of: scope) {
-			var bodiesOfPlan = [Int]()
-			var bodiesToWalk = try [bodies.body(
-				of: rootCopy,
-				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
-				keyedBy: [],
-				answering: [],
-				beneath: NearestDeclarations(),
-				lazilyInstantiatedInstanceProperties: [],
-			)]
-			while let bodyToWalk = bodiesToWalk.popLast() {
-				let body = bodies.bodies[bodyToWalk]
-				var bodyWalk = PlaceContextWalk(
-					ofTodaysTree: body.generator,
-					builtFrom: body.copy,
-					beneath: body.nearestDeclarations,
-					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
-					twinValues: shadow.twinValues,
-					twinsBeingBuilt: body.key.twinsBeingBuilt,
-				)
-				while let (context, _) = bodyWalk.next() {
-					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
-						var labelSet = Set(Self.collectReceivedProperties(from: calledScope, cache: &cache).received.map(\.label))
-						labelSet.insert(context.property.label)
-						let labels = labelSet.sorted()
-						// A call is of the function's property: where the path is building the value the call place
-						// builds as its twin, a `LazilyInstantiated` of a constant or the reverse, the call closes the
-						// cycle on that property's function, beneath the calling scope's declarations.
-						let twinValue = TwinValue(concreteType: calledScope.instantiable.concreteInstantiable, property: context.property.asValidatedForDependencyCycles)
-						let functionProperty = context.twinsBeingBuilt[twinValue] ?? context.property
-						var calledNearestDeclarations = context.nearestDeclarations
-						if functionProperty != context.property {
-							calledNearestDeclarations = context.enclosingNearestDeclarations
-							calledNearestDeclarations.build(functionProperty)
-						}
-						let calledBody = try bodies.body(
-							of: calledCopy,
-							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
-							keyedBy: labels,
-							answering: labels,
-							beneath: calledNearestDeclarations,
-							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
-							builtBy: (context.builder, context.erasedToConcreteExistential),
-						)
-						if !bodiesOfPlan.contains(calledBody) {
-							bodiesOfPlan.append(calledBody)
-							bodiesToWalk.append(calledBody)
-						}
-					}
-				}
-			}
-			planBodiesObserver(
+		if planBodiesObserver != nil || planCallsObserver != nil, let plan = try bodies.plan(ofRoot: scope, shadow: shadow, cache: &cache) {
+			let bodiesOfPlan = plan.calledBodies
+			planCallsObserver?(
+				scope.instantiable.concreteInstantiable.asSource,
+				([plan.rootBody] + bodiesOfPlan).flatMap { bodies.callDescriptions(of: $0) },
+			)
+			planBodiesObserver?(
 				scope.instantiable.concreteInstantiable.asSource,
 				bodiesOfPlan.map { bodies.bodies[$0].description },
 				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
