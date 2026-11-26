@@ -51,7 +51,7 @@ extension DependencyTreeGenerator {
 		// Every node is a scope the walk met, in the graph's order.
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
 		var reason: RootTreeChoiceObservation.PerPathReason?
-		for (index, scope) in scopes.enumerated() where reason == nil {
+		for scope in scopes where reason == nil {
 			if scope.instantiable.generatesDependencyTree {
 				reason = .buildsSeam
 			}
