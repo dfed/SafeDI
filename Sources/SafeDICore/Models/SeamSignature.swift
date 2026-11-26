@@ -1540,9 +1540,23 @@ public struct SeamSignature: Sendable {
 	/// one whose graph was not built is, hands what it holds. `everyPlace` is this signature's own lists, for the one
 	/// reader that lists a place per path, the drawing of the caller's tree, or `nil` where the caller holds every place.
 	var placesHandedToCallers: (holes: [Hole], scopeEnums: [ScopeEnum], caseIndexByHole: [Int], everyPlace: SeamCall.EveryPlace?) {
-		let casePlaces = casePlaces
-		guard casePlaces.count < holes.count else { return (holes, scopeEnums, caseIndexByHole, nil) }
-		let droppedSites = Set(holes.map(\.site)).subtracting(casePlaces.map(\.hole.site))
+		// A place the seam passes up is handed as it is held, beside its case, until a passed-up case's answers follow its
+		// reference.
+		var handedHoles = [Hole]()
+		var handedCaseIndexByHole = [Int]()
+		// Each place's case, or -1 for a place handed whatever its case, for the drawing.
+		var ownCaseIndexByHole = [Int]()
+		var casesFound = Set<Int>()
+		for (index, hole) in holes.enumerated() {
+			let caseIndex = caseIndexByHole.indices.contains(index) ? caseIndexByHole[index] : -1
+			let isOwnCase = places.cases.indices.contains(caseIndex) && places.cases[caseIndex].passedUp == nil
+			ownCaseIndexByHole.append(isOwnCase ? caseIndex : -1)
+			guard !isOwnCase || casesFound.insert(caseIndex).inserted else { continue }
+			handedHoles.append(hole)
+			handedCaseIndexByHole.append(caseIndex)
+		}
+		guard handedHoles.count < holes.count else { return (holes, scopeEnums, caseIndexByHole, nil) }
+		let droppedSites = Set(holes.map(\.site)).subtracting(handedHoles.map(\.site))
 		var handedEnums = scopeEnums
 		for enumIndex in handedEnums.indices {
 			for caseIndex in handedEnums[enumIndex].cases.indices {
@@ -1551,7 +1565,7 @@ public struct SeamSignature: Sendable {
 				}
 			}
 		}
-		return (casePlaces.map(\.hole), handedEnums, casePlaces.map { $0.caseIndex ?? -1 }, SeamCall.EveryPlace(holes: holes, caseIndexByHole: caseIndexByHole))
+		return (handedHoles, handedEnums, handedCaseIndexByHole, SeamCall.EveryPlace(holes: holes, caseIndexByHole: ownCaseIndexByHole))
 	}
 
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
@@ -2510,6 +2524,13 @@ struct CalledBuilders: Sendable {
 	/// The case in `places` of the place at each site (`SeamSignature.caseIndexByHole`). A place a call passes up, which
 	/// is no case of the graph yet, and every place of a call whose graph was not built, has no entry.
 	let caseIndexBySite: [SeamSignature.Hole.Site: Int]
+
+	/// The case in `places` of the place at `site` where it is a case of the called seam's own: a place the called seam
+	/// passes up refers into another seam's graph, whose answers a query does not follow yet, so it is read per place.
+	func ownCaseIndex(ofSite site: SeamSignature.Hole.Site) -> Int? {
+		guard let caseIndex = caseIndexBySite[site], places.cases[caseIndex].passedUp == nil else { return nil }
+		return caseIndex
+	}
 	/// The place graph a case of `places` that the called seam itself passes up refers into (`Places.CalledCase`): that of
 	/// a seam the called seam calls, wherever the run holds its signature, or `nil` where it holds none. It captures the
 	/// run's signatures, which live as long as the run.

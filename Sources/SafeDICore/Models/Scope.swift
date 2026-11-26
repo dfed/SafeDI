@@ -1076,9 +1076,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// The call holds one place per case of the called seam's place graph, and reads what every route to the case
 			// hands from the graph (`SeamSignature.placesHandedToCallers`). A place the call passes up is no case of the
 			// graph yet, and a call whose graph was not built holds every place: both read their places.
-			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places) }
+			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: $0.placesOfSeamsBeneath) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				let caseIndices = places.compactMap { scope.calledBuilders?.caseIndexBySite[$0.site] }
+				let caseIndices = places.compactMap { scope.calledBuilders?.ownCaseIndex(ofSite: $0.site) }
 				var caseFields = if let placesQuery, let firstPlace = places.first, caseIndices.count == places.count {
 					ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: placesQuery)
 				} else {
@@ -1095,7 +1095,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// Test only, deleted before merge: the same fields read from the call's place graph, for the tests' oracle, which
 			// rides on the levels' observer (`SeamPlaceLevels.caseFieldsMismatches`).
 			if let observer = SeamPlaceLevels.observer, let calledBuilders = scope.calledBuilders, !calledBuilders.places.cases.isEmpty {
-				let query = SeamSignature.Places.Query(of: calledBuilders.places)
+				let query = SeamSignature.Places.Query(of: calledBuilders.places, calledPlaces: calledBuilders.placesOfSeamsBeneath)
 				var mismatches = [String]()
 				func spelled(_ fields: [SeamSignature.Hole.Field]) -> [String] {
 					fields.map { "\($0.property.label): \($0.property.typeDescription.asSource)\($0.isDeferredParameter ? " (deferred)" : "")" }
@@ -1104,12 +1104,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					guard let firstPlace = places.first, let perPlace = caseFieldsByCaseKey[caseKey] else { continue }
 					var caseIndices = [Int]()
 					for place in places {
-						if let caseIndex = calledBuilders.caseIndexBySite[place.site], !caseIndices.contains(caseIndex) {
+						if let caseIndex = calledBuilders.ownCaseIndex(ofSite: place.site), !caseIndices.contains(caseIndex) {
 							caseIndices.append(caseIndex)
 						}
 					}
 					guard !caseIndices.isEmpty else { continue }
-					let passedUpCount = places.count(where: { calledBuilders.caseIndexBySite[$0.site] == nil })
+					let passedUpCount = places.count(where: { calledBuilders.ownCaseIndex(ofSite: $0.site) == nil })
 					guard passedUpCount == 0 else {
 						mismatches.append("case \(caseKey): \(passedUpCount) of its places passed up beside graph cases \(caseIndices)")
 						continue

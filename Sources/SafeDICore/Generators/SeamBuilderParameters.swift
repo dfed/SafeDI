@@ -2405,11 +2405,11 @@ extension DependencyTreeGenerator {
 			guard let group = groups[key] else { continue }
 			var caseIndices = [Int]()
 			for entry in group {
-				if let caseIndex = calledBuilders.caseIndexBySite[entry.hole.site], !caseIndices.contains(caseIndex) {
+				if let caseIndex = calledBuilders.ownCaseIndex(ofSite: entry.hole.site), !caseIndices.contains(caseIndex) {
 					caseIndices.append(caseIndex)
 				}
 			}
-			guard !caseIndices.isEmpty, group.allSatisfy({ calledBuilders.caseIndexBySite[$0.hole.site] != nil }) else {
+			guard !caseIndices.isEmpty, group.allSatisfy({ calledBuilders.ownCaseIndex(ofSite: $0.hole.site) != nil }) else {
 				findings += placeCaseJudgement(of: group, call: call, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
 				continue
 			}
@@ -2417,7 +2417,7 @@ extension DependencyTreeGenerator {
 			let reads = FillTreeReads(walking: child, recordsOpenScopes: true)
 			// The case's own place names its builder, of its own family.
 			func casePlace(at caseIndex: Int) -> SeamSignature.Hole {
-				group.first { calledBuilders.caseIndexBySite[$0.hole.site] == caseIndex }?.hole ?? emitting.hole
+				group.first { calledBuilders.ownCaseIndex(ofSite: $0.hole.site) == caseIndex }?.hole ?? emitting.hole
 			}
 			// The entries of the seam's path a scope of the fill closes a cycle on where a route's path holds one: its property
 			// as cycle validation sees it, built for its type, in each form a path stacks it in.
@@ -2511,7 +2511,7 @@ extension DependencyTreeGenerator {
 			// The cases' fills, each judged at the case's first place the call holds.
 			var siteByCaseIndex = [Int: SeamSignature.Hole.Site]()
 			for hole in calledBuilders.holes {
-				if let caseIndex = calledBuilders.caseIndexBySite[hole.site], siteByCaseIndex[caseIndex] == nil {
+				if let caseIndex = calledBuilders.ownCaseIndex(ofSite: hole.site), siteByCaseIndex[caseIndex] == nil {
 					siteByCaseIndex[caseIndex] = hole.site
 				}
 			}
@@ -2758,7 +2758,7 @@ extension DependencyTreeGenerator {
 		for caseKey in caseKeys {
 			guard let places = placesByCaseKey[caseKey], let firstPlace = places.first, let child = emittingFillByCaseKey[caseKey]?.children.first else { continue }
 			// EXPERIMENT: over every route of the place graph where the call holds one.
-			let caseIndices = places.compactMap { calledBuilders?.caseIndexBySite[$0.site] }
+			let caseIndices = places.compactMap { calledBuilders?.ownCaseIndex(ofSite: $0.site) }
 			let irreconcilableFields = if let calledBuilders, !calledBuilders.places.cases.isEmpty, caseIndices.count == places.count {
 				ScopeGenerator.irreconcilableFields(ofCasesAt: caseIndices, hole: firstPlace, in: SeamSignature.Places.Query(of: calledBuilders.places))
 			} else {

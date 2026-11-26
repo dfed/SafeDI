@@ -1847,11 +1847,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				continue
 			}
 			caseFields.fields.append(heldByLevels.first { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == firstHeld.property.asUnwrappedProperty } ?? firstHeld)
-			if heldByLevels.count < answers.count {
+			if heldByLevels.count < answers.count || innerRoutesLack(label, atCasesAt: caseIndices, in: query) {
 				caseFields.callerReadLabels.insert(label)
 			}
 		}
 		return caseFields
+	}
+
+	/// Whether a route to one of the cases at `caseIndices` reads `label` past a fill on it, in the called seam's tree, where
+	/// some route of the filled case holds it and another does not: on that other route inline reads the declaration
+	/// enclosing the call. A route whose own levels hold the label reads none of the called seam's.
+	private static func innerRoutesLack(_ label: String, atCasesAt caseIndices: [Int], in query: SeamSignature.Places.Query) -> Bool {
+		caseIndices.contains { caseIndex in
+			let ownAnswers = query.answers(ofLabel: label, at: caseIndex)
+			guard ownAnswers.contains(where: { !isHeldByLevel($0, in: query) }) else { return false }
+			return query.filledCases(onRoutesTo: caseIndex).contains { _, filledCase in
+				let innerAnswers = filledCase.query.answers(ofLabel: label, at: filledCase.caseIndex)
+				return innerAnswers.contains { isHeldByLevel($0, in: filledCase.query) } && innerAnswers.contains { !isHeldByLevel($0, in: filledCase.query) }
+			}
+		}
+	}
+
+	/// Whether `answer` is a field of a level of `query`'s graph not bound from a deferred parameter.
+	private static func isHeldByLevel(_ answer: SeamSignature.Places.Answer, in query: SeamSignature.Places.Query) -> Bool {
+		guard case let .field(level, declaration) = answer else { return false }
+		return !query.places.declaration(level: level, declaration: declaration).field.isDeferredParameter
 	}
 
 	/// The fields of `places`, the places of one case nested by type, whose label some of them carry in forms that differ in
@@ -4874,7 +4894,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard !captures.isEmpty,
 		      let calledBuilders,
 		      !calledBuilders.places.cases.isEmpty,
-		      let caseIndex = calledBuilders.caseIndexBySite[hole.site]
+		      let caseIndex = calledBuilders.ownCaseIndex(ofSite: hole.site)
 		else { return captures }
 		let query = SeamSignature.Places.Query(of: calledBuilders.places)
 		var everyRoute = captures
