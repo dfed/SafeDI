@@ -878,15 +878,23 @@ extension DependencyTreeGenerator {
 
 	/// The names of the builder functions the properties of the tree `generator` roots would have, which a builder's
 	/// name inside the generated initializer must not equal.
+	///
+	/// The walk visits each generator once: several places of the tree can share one generator (see `ConstructionMemo`),
+	/// whose property and children are the same at each, so a name is a fact of the generator, not of the path to it.
+	/// Visited at every place, a seam whose screens each open three screens of the next layer was walked once per path.
+	/// The set of generators visited dies with the walk.
 	static func builderFunctionNamesOfProperties(in generator: ScopeGenerator, includingHoleSites: Bool = true) -> Set<String> {
 		var names = Set<String>()
 		var generatorsToVisit = [generator]
+		var visitedGenerators = Set<ObjectIdentifier>()
 		while let visited = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(ObjectIdentifier(visited)).inserted else { continue }
 			if let property = visited.property, includingHoleSites || visited.holeSite == nil {
 				names.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
 			}
 			generatorsToVisit.append(contentsOf: visited.children)
 		}
+		GenerationWork.record(visitedGenerators.count, by: .collectingBuilderFunctionNames)
 		return names
 	}
 
