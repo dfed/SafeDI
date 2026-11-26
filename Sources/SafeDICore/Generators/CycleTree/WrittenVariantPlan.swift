@@ -39,8 +39,6 @@ public enum RootTreeChoiceObservation {
 		/// The module's types name both a wrapper that is not `Sendable` and a `Sendable` one, so the `@Sendable` capture
 		/// walk reads its trees.
 		case moduleNamesNonSendableWrapperAndSendableBuilder
-		/// A type of the root's tree holds a `LazilyInstantiated` or a `SendableLazilyInstantiated`.
-		case holdsLazilyInstantiated
 		/// A type of the root's tree receives or instantiates a value only if available, or holds an optional one.
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree renames a dependency (`fulfilledByDependencyNamed:`).
@@ -71,8 +69,6 @@ public enum RootTreeChoiceObservation {
 		case noPlan
 		/// A call of the plan passes a member of a loop of builders made again at the call.
 		case passesLoopMemberMadeAgainAtCall
-		/// A call of the plan passes the instance of a lazily instantiated declaration, read at the call.
-		case passesLazilyInstantiatedInstanceAtCall
 		/// The type key lays out none of the plan.
 		case noLayout
 	}
@@ -124,8 +120,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 
 		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
 		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
-		/// write; or the instance of a lazily instantiated declaration (`Answer.instance`), which the layout reads at the
-		/// call, where today's function takes the wrapper and creates the instance where its body first reads it.
+		/// write.
 		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
 			for callsOfBody in calls {
 				for call in callsOfBody {
@@ -133,8 +128,6 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 						switch argument {
 						case .declaredMadeAgainAtCall:
 							return .passesLoopMemberMadeAgainAtCall
-						case .instance:
-							return .passesLazilyInstantiatedInstanceAtCall
 						case .none, .declared:
 							continue
 						}

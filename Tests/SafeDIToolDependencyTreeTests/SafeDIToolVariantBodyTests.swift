@@ -204,9 +204,9 @@ struct SafeDIToolVariantBodyTests: ~Copyable {
 		// as, then the labels in the order its tree first receives them.
 		#expect(calls == [[
 			"Root",
-			"Root [5] at [2, 0] calls [3] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; logger: instance of logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
-			"\"screenBuilder: Instantiator<Screen>\" [3] at [0] calls [4] as nextBuilder: Instantiator<Next> (nextBuilder: nextBuilder: Instantiator<Next>, being built; logger: instance of logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
-			"\"nextBuilder: Instantiator<Next>\" [4] at [0] calls [3] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; logger: instance of logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
+			"Root [5] at [2, 0] calls [3] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; logger: logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
+			"\"screenBuilder: Instantiator<Screen>\" [3] at [0] calls [4] as nextBuilder: Instantiator<Next> (nextBuilder: nextBuilder: Instantiator<Next>, being built; logger: logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
+			"\"nextBuilder: Instantiator<Next>\" [4] at [0] calls [3] as screenBuilder: Instantiator<Screen> (screenBuilder: screenBuilder: Instantiator<Screen>, being built; logger: logger: LazilyInstantiated<Logger>; clock: clock: Clock; theme: nil)",
 		]])
 	}
 

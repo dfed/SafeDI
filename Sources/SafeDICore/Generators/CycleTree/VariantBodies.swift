@@ -98,16 +98,16 @@ extension DependencyTreeGenerator {
 			}
 
 			/// What the body's answers are to a call of it, one per label of `labels`: nothing where no declaration answers
-			/// the label; a declaration being built where its path is building a form of it; the instance of a lazily
-			/// instantiated declaration where the body reads the label through one; else the declaration. Where an answer
-			/// hands its readers more than one property, the first in property order names it.
+			/// the label; a declaration being built where its path is building a form of it; else the declaration, a lazily
+			/// instantiated one as its wrapper, whose instance the body's readers read where they read it, so a call creates
+			/// no instance. Where an answer hands its readers more than one property, the first in property order names it.
 			var planAnswers: [Answer] {
 				zip(labels, answers).map { label, answer in
 					guard let answer, let property = answer.bindings.values.min() else { return .none }
 					if !answer.formsBeingBuilt.isEmpty {
 						return .declared(property, isBeingBuilt: true)
-					} else if let instance = lazilyInstantiatedInstanceProperties.filter({ $0.label == label }).min() {
-						return .instance(of: answer.bindings[instance] ?? property)
+					} else if let instance = lazilyInstantiatedInstanceProperties.filter({ $0.label == label }).min(), let wrapper = answer.bindings[instance] {
+						return .declared(wrapper, isBeingBuilt: false)
 					} else {
 						return .declared(property, isBeingBuilt: false)
 					}
@@ -180,8 +180,6 @@ extension DependencyTreeGenerator {
 						"\(label): \(property.asSource)\(isBeingBuilt ? ", being built" : "")"
 					case let .declaredMadeAgainAtCall(property):
 						"\(label): \(property.asSource), made again at the call"
-					case let .instance(of: property):
-						"\(label): instance of \(property.asSource)"
 					}
 				}
 				return "\(generator(of: body).scopeData.asDOTNode) [\(body)] at \(call.path) calls [\(call.calledBody)] as \(call.property.asSource) (\(call.argumentOrder.map { arguments[$0] }.joined(separator: "; ")))"

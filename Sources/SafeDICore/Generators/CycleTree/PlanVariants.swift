@@ -37,8 +37,8 @@ struct PlanVariants: Sendable {
 		var targets: [Int]
 	}
 
-	/// What a label a body reads from above resolves to. By label alone, an answer is a declaration or nothing: the form
-	/// a reader takes it in (`Answer.instance`) is not judged yet.
+	/// What a label a body reads from above resolves to. By label alone, an answer is a declaration or nothing; a lazily
+	/// instantiated declaration is its wrapper, whose instance the body's readers read.
 	enum LabelAnswer: Hashable, Sendable {
 		/// Nothing above the body declares the label.
 		case none

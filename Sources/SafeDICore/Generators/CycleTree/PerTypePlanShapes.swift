@@ -49,7 +49,10 @@ extension DependencyTreeGenerator {
 		// Every node is a scope the walk met, in the graph's order.
 		let scopes = graph.nodes.compactMap { scopeByIdentifier[$0] }
 		var reason: RootTreeChoiceObservation.PerPathReason?
+		// Each label's one form, a `LazilyInstantiated` counted as the value it holds, which its receivers read by value,
+		// and whether a type declares it lazily.
 		var formsByLabel = [String: Property]()
+		var isDeclaredLazilyByLabel = [String: Bool]()
 		var timesInstantiated = [Int](repeating: 0, count: scopes.count)
 		for (index, scope) in scopes.enumerated() where reason == nil {
 			if scope.instantiable.generatesDependencyTree {
@@ -59,7 +62,10 @@ extension DependencyTreeGenerator {
 			}
 			for dependency in scope.instantiable.dependencies where reason == nil {
 				reason = Self.shapeOutsidePerTypePlan(of: dependency)
-				if reason == nil, let otherForm = formsByLabel.updateValue(dependency.property, forKey: dependency.property.label), otherForm != dependency.property {
+				if reason == nil, let otherForm = formsByLabel.updateValue(dependency.property.asValidatedForDependencyCycles, forKey: dependency.property.label), otherForm != dependency.property.asValidatedForDependencyCycles {
+					reason = .holdsLabelInSeveralForms
+				}
+				if reason == nil, !dependency.source.isReceived, let isDeclaredLazily = isDeclaredLazilyByLabel.updateValue(dependency.property.propertyType.isLazilyInstantiated, forKey: dependency.property.label), isDeclaredLazily != dependency.property.propertyType.isLazilyInstantiated {
 					reason = .holdsLabelInSeveralForms
 				}
 			}
@@ -125,15 +131,14 @@ extension DependencyTreeGenerator {
 			break
 		}
 		switch property.propertyType {
-		case .lazilyInstantiated,
-		     .sendableLazilyInstantiated:
-			return .holdsLazilyInstantiated
 		case .sendableErasedInstantiator,
-		     .sendableInstantiator:
+		     .sendableInstantiator,
+		     .sendableLazilyInstantiated:
 			return .holdsSendableWrapperOrFunction
 		case .constant,
 		     .erasedInstantiator,
-		     .instantiator:
+		     .instantiator,
+		     .lazilyInstantiated:
 			break
 		}
 		if property.typeDescription.isOptional {

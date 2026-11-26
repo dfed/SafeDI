@@ -248,15 +248,229 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		#expect(codes == ["Root": nil])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsLazilyInstantiatedInstanceOnlyAtItsReader_whenOnlyATypeBuiltBeneathCallReadsIt() async throws {
+		// `Home`, built by value in `Root`'s initializer, reads nothing of `logger`; `Detail`, which `Home` opens, reads its
+		// instance. The functions hold the root's wrapper (captured, since every call passes it), so `Logger` is created
+		// where a `Detail` is first built, as today.
+		let codes = try await planCodes(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let home: Home
+		    public init(logger: LazilyInstantiated<Logger>, home: Home) { self.logger = logger; self.home = home }
+		}
+
+		@Instantiable public final class Logger: Instantiable { public init() {} }
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Received let logger: Logger
+		    @Instantiated let homeBuilder: Instantiator<Home>
+		    public init(logger: Logger, homeBuilder: Instantiator<Home>) { self.logger = logger; self.homeBuilder = homeBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_logger() -> Logger {
+		            Logger()
+		        }
+		        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+		        func __safeDI_home() -> Home {
+		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+		            return Home(detailBuilder: detailBuilder)
+		        }
+		        func __safeDI_detailBuilder() -> Detail {
+		            let homeBuilder = Instantiator<Home>(__safeDI_home)
+		            return Detail(logger: logger.instance, homeBuilder: homeBuilder)
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(logger: logger, home: home)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsLazilyInstantiatedInstanceOnlyAtItsReader_whenOnlyTheScreenOpenedNextReadsIt() async throws {
+		// `Screen` reads nothing of `logger`; `Next`, which it opens, reads the instance. Opening a `Screen` creates no
+		// `Logger`.
+		let codes = try await planCodes(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(logger: LazilyInstantiated<Logger>, screenBuilder: Instantiator<Screen>) { self.logger = logger; self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Logger: Instantiable { public init() {} }
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let nextBuilder: Instantiator<Next>
+		    public init(nextBuilder: Instantiator<Next>) { self.nextBuilder = nextBuilder }
+		}
+
+		@Instantiable public final class Next: Instantiable {
+		    @Received let logger: Logger
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(logger: Logger, screenBuilder: Instantiator<Screen>) { self.logger = logger; self.screenBuilder = screenBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_logger() -> Logger {
+		            Logger()
+		        }
+		        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+		        func __safeDI_screenBuilder() -> Screen {
+		            let nextBuilder = Instantiator<Next>(__safeDI_nextBuilder)
+		            return Screen(nextBuilder: nextBuilder)
+		        }
+		        func __safeDI_nextBuilder() -> Next {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return Next(logger: logger.instance, screenBuilder: screenBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        self.init(logger: logger, screenBuilder: screenBuilder)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsRenameThroughLazilyInstantiatedWrapper_whenTwoTypesOfCycleDeclareIt() async throws {
+		// `Root` and `B` each declare `logger`, and `A`, which both open, renames its instance: `A`'s function takes the
+		// wrapper, so the rename reads `.instance` of a wrapper. The plan's code is compiled.
+		let (codes, fixtures) = try await planCodesAndFixtures(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(logger: LazilyInstantiated<Logger>, aBuilder: Instantiator<A>) { self.logger = logger; self.aBuilder = aBuilder }
+		}
+
+		@Instantiable public final class Logger: Instantiable { public init() {} }
+
+		@Instantiable public final class A: Instantiable {
+		    @Received(fulfilledByDependencyNamed: "logger", ofType: Logger.self) let log: Logger
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(log: Logger, bBuilder: Instantiator<B>) { self.log = log; self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(logger: LazilyInstantiated<Logger>, aBuilder: Instantiator<A>) { self.logger = logger; self.aBuilder = aBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_logger() -> Logger {
+		            Logger()
+		        }
+		        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+		        func __safeDI_aBuilder(logger: LazilyInstantiated<Logger>) -> A {
+		            #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
+		            let log: Logger = logger.instance
+		            #sourceLocation()
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return A(log: log, bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder() -> B {
+		            let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(logger: logger)
+		            }
+		            return B(logger: logger, aBuilder: aBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(logger: logger)
+		        }
+		        self.init(logger: logger, aBuilder: aBuilder)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsRenameOnlyIfAvailableThroughLazilyInstantiatedWrapper_whenTwoTypesOfCycleDeclareIt() async throws {
+		// As above, with the rename only if available.
+		let (codes, fixtures) = try await planCodesAndFixtures(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(logger: LazilyInstantiated<Logger>, aBuilder: Instantiator<A>) { self.logger = logger; self.aBuilder = aBuilder }
+		}
+
+		@Instantiable public final class Logger: Instantiable { public init() {} }
+
+		@Instantiable public final class A: Instantiable {
+		    @Received(fulfilledByDependencyNamed: "logger", ofType: Logger.self, onlyIfAvailable: true) let log: Logger?
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(log: Logger?, bBuilder: Instantiator<B>) { self.log = log; self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(logger: LazilyInstantiated<Logger>, aBuilder: Instantiator<A>) { self.logger = logger; self.aBuilder = aBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_logger() -> Logger {
+		            Logger()
+		        }
+		        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+		        func __safeDI_aBuilder(logger: LazilyInstantiated<Logger>) -> A {
+		            #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
+		            let log: Logger? = logger.instance
+		            #sourceLocation()
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return A(log: log, bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder() -> B {
+		            let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(logger: logger)
+		            }
+		            return B(logger: logger, aBuilder: aBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(logger: logger)
+		        }
+		        self.init(logger: logger, aBuilder: aBuilder)
+		    }
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// The code each root of `swiftFileContent` that reaches a cycle lays out of its plan, by root, `nil` where the type
-	/// key keeps the path key's body.
-	/// The code the type key lays out of each root's plan, compiled in place of the root's generated extension with the
-	/// fixtures beside it, as every test's generated code is compiled.
+	/// key keeps the path key's body, each compiled in place of the root's generated extension with the fixtures beside
+	/// it, as every test's generated code is compiled.
 	private mutating func planCodes(of swiftFileContent: String) async throws -> [String: String?] {
+		try await planCodesAndFixtures(of: swiftFileContent).codes
+	}
+
+	/// `planCodes(of:)`, with the fixtures' paths, which a `#sourceLocation` of the code names.
+	private mutating func planCodesAndFixtures(of swiftFileContent: String) async throws -> (codes: [String: String?], fixtures: FixturePaths) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, String?).self)
 		let output = try await PlanCodeObservation.$observer.withValue({ root, code in
 			continuation.yield((root, code))
@@ -289,6 +503,6 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-		return codes
+		return (codes, output.fixtures)
 	}
 }

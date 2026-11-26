@@ -307,8 +307,8 @@ struct RootDeclarationRecord: Sendable {
 
 extension Answer {
 	/// The parameter a variant's function takes for `label` under this answer: none where nothing above the call provides
-	/// the label or the declaration is still being built, since the body is built with `nil` for it; the declaration's
-	/// type; or a lazily instantiated declaration's instance type, optional where the wrapper is.
+	/// the label or the declaration is still being built, since the body is built with `nil` for it; else the
+	/// declaration's type, a lazily instantiated declaration's wrapper included.
 	func parameter(labeled label: String) -> Property? {
 		switch self {
 		case .none,
@@ -317,27 +317,17 @@ extension Answer {
 		case let .declared(declaration, isBeingBuilt: false),
 		     let .declaredMadeAgainAtCall(declaration):
 			Property(label: label, typeDescription: declaration.typeDescription)
-		case let .instance(of: wrapper):
-			wrapper.typeDescription.unwrapped.lazilyInstantiatedInstanceType.map { instanceType in
-				Property(label: label, typeDescription: wrapper.typeDescription.isOptional ? .optional(instanceType) : instanceType)
-			}
 		}
 	}
 
 	/// What a call passes for `label` under this answer, which takes a parameter: the nearest declaration of the label
-	/// where the call is made, or that wrapper's instance. The one place a call's argument form is decided.
+	/// where the call is made, a lazily instantiated one as its wrapper, so the call creates no instance. The one place a
+	/// call's argument form is decided.
 	///
 	/// A deliberate gap while nothing emits from the plan: a member of a loop of builders made again at the call
 	/// (`declaredMadeAgainAtCall`) is spelled as its binding here, which the call would read before its declaration.
 	/// The layout of a loop member's call owes that wrapper before the plan's code is generated for such a loop.
 	func argumentSource(labeled label: String) -> ArgumentSource {
-		switch self {
-		case let .instance(of: wrapper):
-			.lazyInstance(label: label, throughOptional: wrapper.typeDescription.isOptional)
-		case .none,
-		     .declared,
-		     .declaredMadeAgainAtCall:
-			.binding(label: label)
-		}
+		.binding(label: label)
 	}
 }

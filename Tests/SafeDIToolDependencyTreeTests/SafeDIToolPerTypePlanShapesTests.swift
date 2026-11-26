@@ -101,8 +101,8 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsRootOnTodaysTree_whenTypeHoldsLazilyInstantiated() async throws {
-		// A screen holds a `LazilyInstantiated`.
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenScreenOnCycleHoldsLazilyInstantiated() async throws {
+		// A screen holds a `LazilyInstantiated` no type reads.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let s0Builder: Instantiator<S0>
@@ -123,7 +123,97 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": .holdsLazilyInstantiated])
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeBuiltBeneathCallReadsInstanceOfLazilyInstantiatedItsCycleDeclares() async throws {
+		// `Screen` declares `logger` lazily and builds `Home` by value; `Detail`, which `Home` opens, reads the instance.
+		// `Home`'s function takes the wrapper, so building a `Screen` creates no `Logger`, as today.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let home: Home
+		    public init(logger: LazilyInstantiated<Logger>, home: Home) { self.logger = logger; self.home = home }
+		}
+
+		@Instantiable public final class Home: Instantiable {
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Received let logger: Logger
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(logger: Logger, screenBuilder: Instantiator<Screen>) { self.logger = logger; self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Logger: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenOnlyScreenOpenedNextReadsInstanceOfLazilyInstantiatedItsCycleDeclares() async throws {
+		// `Screen` declares `logger` lazily and reads nothing of it; `Next`, which it opens, reads the instance.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let logger: LazilyInstantiated<Logger>
+		    @Instantiated let nextBuilder: Instantiator<Next>
+		    public init(logger: LazilyInstantiated<Logger>, nextBuilder: Instantiator<Next>) { self.logger = logger; self.nextBuilder = nextBuilder }
+		}
+
+		@Instantiable public final class Next: Instantiable {
+		    @Received let logger: Logger
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(logger: Logger, screenBuilder: Instantiator<Screen>) { self.logger = logger; self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Logger: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsRootOnTodaysTree_whenTreeDeclaresLabelByValueAndLazily() async throws {
+		// `S0` declares `leaf` by value and `S1` lazily: a receive of `leaf: Leaf` reads either, whose builds differ.
+		let choices = try await choicesGeneratingTodaysCode(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(s0Builder: Instantiator<S0>) { self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class S0: Instantiable {
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let s1Builder: Instantiator<S1>
+		    public init(leaf: Leaf, s1Builder: Instantiator<S1>) { self.leaf = leaf; self.s1Builder = s1Builder }
+		}
+
+		@Instantiable public final class S1: Instantiable {
+		    @Instantiated let leaf: LazilyInstantiated<Leaf>
+		    @Instantiated let s0Builder: Instantiator<S0>
+		    public init(leaf: LazilyInstantiated<Leaf>, s0Builder: Instantiator<S0>) { self.leaf = leaf; self.s0Builder = s0Builder }
+		}
+
+		@Instantiable public final class Leaf: Instantiable { public init() {} }
+		""")
+
+		#expect(choices == ["Root": .holdsLabelInSeveralForms])
 	}
 
 	@Test

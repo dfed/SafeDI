@@ -26,15 +26,14 @@
 enum Answer: Hashable, Sendable {
 	/// Nothing above the call provides the label: the function is passed `nil`.
 	case none
-	/// The nearest declaration's property, and whether it is still being built where the call is made.
+	/// The nearest declaration's property, and whether it is still being built where the call is made. A lazily
+	/// instantiated declaration is its wrapper, which the call hands on, and whose instance the body's readers read.
 	case declared(Property, isBeingBuilt: Bool)
 	/// The nearest declaration's property, a member of a loop of builders that the scope making the call builds after
 	/// the call: no call can read that declaration yet, so the call passes the member's wrapper made again around its
 	/// function, as today's `__safeDI_<label>_received` function does (`ReceivedBuilderLoops`). An argument of a call
 	/// only: the body called is keyed by the declaration (`declared`), which every call of it answers alike.
 	case declaredMadeAgainAtCall(Property)
-	/// The instance of the nearest declaration, a lazily instantiated property.
-	case instance(of: Property)
 }
 
 /// One body to build and emit: a declaration on a cycle, in one family, under one set of answers.
