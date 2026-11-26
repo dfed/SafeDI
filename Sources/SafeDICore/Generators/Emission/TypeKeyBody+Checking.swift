@@ -68,6 +68,9 @@ extension TypeKeyLayout {
 			for argument in record.callCycleArguments {
 				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
 				var values = [first]
+				for edge in bodies[body].otherEdges {
+					values.append(normalized(pathValue(of: argument, inBody: edge.parent, before: edge.position)))
+				}
 				for closer in closersByTarget[body] ?? [] {
 					values.append(normalized(closerValue(of: argument.label, closing: closer, onPlace: body)))
 				}
@@ -205,14 +208,36 @@ extension TypeKeyLayout {
 		let callee = classByBody[place]
 		let owner = classByBody[body]
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
-			let expected: PathValue = if closer != nil {
-				normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place))
-			} else {
-				normalized(resolution(of: label, atPlace: place))
-			}
 			let declaration = typeLookUp(label, inClass: owner, before: index)
-			guard normalized(evaluate(declaration, inBody: body)) == expected else { return false }
+			let actual = normalized(evaluate(declaration, inBody: body))
+			if closer == nil {
+				// The call is an edge of the place: it passes what the place resolves the label to there.
+				guard actual == normalized(resolution(of: label, atPlace: place, edge: (parent: body, position: index))) else { return false }
+			} else if bodies[place].cycleParameterLabels.contains(label) {
+				guard actual == normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place)) else { return false }
+			} else if !passesOwnParameter(declaration, inBody: body, of: place) {
+				// A closer that hands on what the place it calls was passed passes, beneath each edge of that place, what that
+				// edge resolves the label to, which the call at the edge is checked for. Any other value is the one every
+				// edge of the place resolves the label to.
+				for edge in bodies[place].edges {
+					guard actual == normalized(resolution(of: label, atPlace: place, edge: edge)) else { return false }
+				}
+			}
 		}
 		return true
+	}
+
+	/// Whether `declaration`, which `typeLookUp` found in the class of `body`, holds there what the function of `place`, a
+	/// view enclosing `body` along its first edges, was passed as its parameter of the label.
+	func passesOwnParameter(_ declaration: TypeDeclaration, inBody body: Int, of place: Int) -> Bool {
+		var declaration = declaration
+		var body = body
+		while case let .read(owner, label) = declaration {
+			guard body != place else { return owner == classByBody[place] }
+			guard !bodies[body].cycleParameterLabels.contains(label) else { return false }
+			declaration = typeLookUp(label, inClass: classByBody[bodies[body].parent], before: bodies[body].position)
+			body = bodies[body].parent
+		}
+		return false
 	}
 }

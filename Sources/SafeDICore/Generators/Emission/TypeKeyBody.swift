@@ -107,11 +107,12 @@ struct CallSite: Hashable {
 
 struct TypeKeyLayout {
 	/// A body of the path key's walk, laid out once for each view (R1b §2a): the root's (body 0), or the builder function
-	/// of the places of one plan node, in one family, whose look-ups outside it resolve to the same declarations and whose
-	/// cycle parameters are passed the same declarations. Every step asks a view what it would ask each of its places, and
-	/// asks it through the view's first place only, since every place answers alike: the key holds what each look-up
-	/// outside the view resolves to (`ViewKey.outerView`), and each place's call is checked where its parent makes it
-	/// (`checkEveryRead`'s `.built` case, run for every body that holds a place of the view).
+	/// of the places of one plan node, in one family, whose look-ups outside it resolve to declarations alike and whose
+	/// cycle parameters are passed declarations alike (`KeyedDeclaration`). Every step asks a view what it would ask each of
+	/// its places through the view's first place, since every place answers alike inside the view, but asks what the view
+	/// resolves a label to outside it at each of its edges (`resolution(of:atPlace:edge:)`): the outcome of each read takes
+	/// every edge, and each place's call is checked where its parent makes it (`checkEveryRead`'s `.built` case, run for
+	/// every body that holds a place of the view).
 	struct Body {
 		/// The body holding the view's first place, which the walk reached it through.
 		let parent: Int
@@ -147,8 +148,28 @@ struct TypeKeyLayout {
 	struct ViewKey: Hashable {
 		let node: PlanNode
 		let isInSendableFamily: Bool
-		let outerView: [String: PathValue]
-		let cycleArguments: [PathValue]
+		let outerView: [String: KeyedDeclaration]
+		let cycleArguments: [KeyedDeclaration]
+	}
+
+	/// What a view's key holds of a declaration outside it. Nothing inside a view depends on which body declares a value it
+	/// reads outside it, only on whether there is one, what kind it is and its type, so places whose reads resolve to
+	/// declarations alike in those share a view, wherever the declarations are: each call of the view's function is
+	/// checked where its parent makes it (`checkCall`), and each read the view's function takes from its callers is passed by
+	/// each call (`computeOutcomes` reads every edge). A statement of the root's body stays itself, since a function can
+	/// capture it. A view a closer inside it calls a function above it from keeps the declarations themselves (`absolute`):
+	/// the closer calls the function its own place's path reaches, which a view standing for several paths could not tell.
+	enum KeyedDeclaration: Hashable {
+		case absolute(PathValue)
+		case none
+		case root(index: Int)
+		case outside(kind: Kind, type: String?)
+
+		enum Kind: Hashable {
+			case statement
+			case forwarded
+			case cycleParameter
+		}
 	}
 
 	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, or a
@@ -178,8 +199,9 @@ struct TypeKeyLayout {
 	var reads = [[String]]()
 	/// The labels of each body's reads that some read inside it requires a value of.
 	var requiredReads = [Set<String>]()
-	/// For each body, the first declaration outside it each label it reads resolves to, `.none` where every such read is
-	/// `nil`.
+	/// For each body, a declaration outside it each label it reads resolves to, `.none` where every such read is `nil`:
+	/// only which labels are `.none` is read (`resolution(of:atPlace:edge:)`), since a view a body holds can stand for
+	/// places beneath other bodies, whose declarations it holds alike, not the same.
 	var escapingReads = [[String: PathValue]]()
 	/// Each body's class, numbered from 1 in the order the walk first reaches a member; the root is class 0.
 	var classByBody = [Int]()
@@ -206,6 +228,10 @@ struct TypeKeyLayout {
 	/// The passed arguments each call of a place's function hands it, keyed by the body and index of the call: the places
 	/// of one view can each hand their own.
 	var passedArgumentsByCall = [[Int]: [PassedArgument]]()
+	/// The declaration each label a view reads outside it resolves to at each of its places, keyed by the body and index of
+	/// the place's statement: what the walk looked up for the view's key, which `resolution(of:atPlace:edge:)` reads rather
+	/// than walking up again.
+	var outerDeclarationsByEdge = [[Int]: [String: PathValue]]()
 }
 
 extension AliasPlaceRecord {
