@@ -96,8 +96,17 @@ extension DependencyTreeGenerator {
 	private static func shapeOutsidePerTypePlan(of dependency: Dependency) -> RootTreeChoiceObservation.PerPathReason? {
 		let property = dependency.property
 		switch dependency.source {
-		case let .aliased(_, _, onlyIfAvailable),
-		     let .received(onlyIfAvailable):
+		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+			// A rename reads the property it renames, whose form may differ from its own: a builder renamed as `Any` is
+			// a receive of the builder. Only the wrapper kinds are read of the fulfilling property here, since a scope of
+			// the same tree declares it, and that declaration refuses the root where it is optional or `Sendable`. A
+			// lift that admits such a declaration reads that form of the fulfilling property here in the same change.
+			if onlyIfAvailable {
+				return .holdsValueOnlyIfAvailable
+			} else if !property.propertyType.isConstant || !fulfillingProperty.propertyType.isConstant {
+				return .receivesInstantiator
+			}
+		case let .received(onlyIfAvailable):
 			if onlyIfAvailable {
 				return .holdsValueOnlyIfAvailable
 			} else if !property.propertyType.isConstant {
@@ -108,15 +117,15 @@ extension DependencyTreeGenerator {
 			break
 		}
 		switch property.propertyType {
-		case .lazilyInstantiated,
-		     .sendableLazilyInstantiated:
+		case .sendableLazilyInstantiated:
 			return .holdsLazilyInstantiated
 		case .sendableErasedInstantiator,
 		     .sendableInstantiator:
 			return .holdsSendableWrapperOrFunction
 		case .constant,
 		     .erasedInstantiator,
-		     .instantiator:
+		     .instantiator,
+		     .lazilyInstantiated:
 			break
 		}
 		if property.typeDescription.isOptional {

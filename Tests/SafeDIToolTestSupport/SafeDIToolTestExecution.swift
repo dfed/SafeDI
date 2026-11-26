@@ -357,8 +357,10 @@ func executeSafeDIToolTest(
 															try await MockVariantBodyChecks.comparing {
 																try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
 																	try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
-																		try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
-																			try await tool.generate()
+																		try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																			try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																				try await tool.generate()
+																			}
 																		}
 																	}
 																}

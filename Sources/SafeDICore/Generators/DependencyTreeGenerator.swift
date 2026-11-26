@@ -405,6 +405,7 @@ public actor DependencyTreeGenerator {
 			callerModule: seams.currentModule,
 		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.compactMap { root in root.scopeGenerator.map { (root.instantiable, $0) } })
+		await observePlanCaptures(of: roots)
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: roots)
 	}
 
@@ -757,13 +758,9 @@ public actor DependencyTreeGenerator {
 				// A test that compares a root's plan with today's tree has both built for every root that reaches a cycle,
 				// but a test that sets a limit no tree passes, which counts the work of today's trees alone.
 				let comparesWithTodaysTree = Self.observesPerTypePlan
-				// The `@Sendable` capture walk reads a tree per path, so a module it runs in plans no root per type, a
-				// deliberate gap until the walk reads a plan's bodies.
-				let perPathReasonOfRun: RootTreeChoiceObservation.PerPathReason? = namesNonSendableWrapperAndSendableBuilder ? .moduleNamesNonSendableWrapperAndSendableBuilder : nil
 				// How many places today's tree of a root may hold before it is abandoned for the root's plan by type, or
-				// `nil` where every root keeps today's tree: the caller generates no code from the trees, or the module
-				// plans none.
-				let scopeGeneratorLimit: Int? = plansCyclesPerType && perPathReasonOfRun == nil
+				// `nil` where every root keeps today's tree: the caller generates no code from the trees.
+				let scopeGeneratorLimit: Int? = plansCyclesPerType
 					? RootTreeChoiceObservation.scopeGeneratorLimitOverride ?? Self.scopeGeneratorLimitOfTodaysTree
 					: nil
 				// A limit a test sets is the whole criterion, so a small tree can be planned.
@@ -807,7 +804,7 @@ public actor DependencyTreeGenerator {
 					// has a plan and the type key lays it out.
 					var perTypeTree: RootScopeInfo.Tree?
 					if passedLimit || comparesWithTodaysTree && scopeGeneratorLimit != .max {
-						var perPathReason = perPathReasonOfRun
+						var perPathReason: RootTreeChoiceObservation.PerPathReason?
 						var reachesCycle = false
 						do {
 							if let choice = try Self.perTypePlan(
@@ -819,15 +816,13 @@ public actor DependencyTreeGenerator {
 								reachesCycle = true
 								switch choice {
 								case let .perType(unplanned):
-									if perPathReason == nil {
-										if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
-											perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
-										} else {
-											perPathReason = .noLayout
-										}
+									if let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplanned)) {
+										perTypeTree = try .perType(code: ScopeGenerator.rootCode(of: scope.instantiable, writing: statements), bodies: unplanned.generators)
+									} else {
+										perPathReason = .noLayout
 									}
 								case let .perPath(reason):
-									perPathReason = perPathReason ?? reason
+									perPathReason = reason
 								}
 							}
 						} catch {

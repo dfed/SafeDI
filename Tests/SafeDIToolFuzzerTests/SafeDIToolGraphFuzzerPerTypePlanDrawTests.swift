@@ -105,13 +105,13 @@ struct SafeDIToolGraphFuzzerPerTypePlanDrawTests {
 	}
 
 	private static let drawnShapeCounts: [Shape: Int] = [
-		.drawn: 132,
-		.opensScreenBeyondRing: 92,
-		.forwardsValue: 82,
-		.buildsPaneOnCycle: 90,
-		.buildsTreeOutsideCycle: 39,
-		.receivesModelCycleDeclaresAgain: 123,
-		.receivesServiceOnlyRootDeclares: 121,
+		.drawn: 227,
+		.opensScreenBeyondRing: 168,
+		.forwardsValue: 144,
+		.buildsPaneOnCycle: 152,
+		.buildsTreeOutsideCycle: 70,
+		.receivesModelCycleDeclaresAgain: 210,
+		.receivesServiceOnlyRootDeclares: 212,
 	]
 
 	/// How many of the first drawn seeds the tool runs over, more than the floor, since another draw of the graph can have

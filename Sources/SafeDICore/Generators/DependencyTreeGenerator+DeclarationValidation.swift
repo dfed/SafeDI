@@ -52,9 +52,21 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// Hands `PlanCaptureObservation` each root of `roots` whose code is laid out from its per-type plan, where today's tree
+	/// of it is built too, with what today's `@Sendable` capture walk finds in that tree. The walk reads no root laid out
+	/// from its plan: such a root's tree holds no `Sendable` wrapper (`shapeOutsidePerTypePlan(of:)`), so it builds nothing
+	/// in a `@Sendable` function and captures nothing. Does nothing where no test observes it.
+	func observePlanCaptures(of roots: [RootScopeInfo]) async {
+		guard let observer = PlanCaptureObservation.observer else { return }
+		for root in roots {
+			guard case .perType = root.tree, let todaysTree = root.drawnTree else { continue }
+			let captures = await todaysTree.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
+			observer(root.instantiable.concreteInstantiable.asSource, !captures.isEmpty)
+		}
+	}
+
 	/// Whether the module's types name both a wrapper that is not `Sendable` and a `Sendable` builder. Walking the trees
-	/// for a `@Sendable` builder function's captures costs a pass over every scope, so only such a module pays for it,
-	/// and only such a module's trees need be built per path for that walk.
+	/// for a `@Sendable` builder function's captures costs a pass over every scope, so only such a module pays for it.
 	var namesNonSendableWrapperAndSendableBuilder: Bool {
 		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
 		return dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable })

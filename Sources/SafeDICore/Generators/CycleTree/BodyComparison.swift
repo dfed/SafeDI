@@ -28,6 +28,7 @@ extension DependencyTreeGenerator {
 			|| TwinIdentityObservation.observer != nil
 			|| PlanCodeObservation.observer != nil
 			|| PlanSendableObservation.observer != nil
+			|| PlanCaptureObservation.observer != nil
 			|| UnpassableCycleLabelObservation.observer != nil
 	}
 

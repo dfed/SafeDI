@@ -287,6 +287,144 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 		#expect(failures.isEmpty, "\(failures.joined(separator: "\n\n"))")
 	}
 
+	/// A `LazilyInstantiated` declaration's instance is built when it is first read, wherever its reader is: beneath the
+	/// declaring type itself (the direct path), and beneath a type on the declaring type's cycle, whose function takes
+	/// the wrapper as a parameter. The fixture counts each `Leaf` built, and each probe lists the count after every
+	/// step, on the root laid out from its plan and on today's tree.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsLazilyInstantiatedInstanceAtFirstRead_whenReaderIsBeneathDeclaringTypeOrAcrossCall() async throws {
+		let source = """
+		@Instantiable(isRoot: true)
+		public final class PlanLazyCountRoot: Instantiable {
+		    public init(s0Builder: Instantiator<PlanLazyCountS0>) {
+		        self.s0Builder = s0Builder
+		    }
+
+		    @Instantiated public let s0Builder: Instantiator<PlanLazyCountS0>
+		}
+
+		@Instantiable
+		public final class PlanLazyCountS0: Instantiable {
+		    public init(leaf: LazilyInstantiated<PlanLazyCountLeaf>, readerBuilder: Instantiator<PlanLazyCountReader>, s1Builder: Instantiator<PlanLazyCountS1>) {
+		        self.leaf = leaf
+		        self.readerBuilder = readerBuilder
+		        self.s1Builder = s1Builder
+		    }
+
+		    @Instantiated public let leaf: LazilyInstantiated<PlanLazyCountLeaf>
+		    @Instantiated public let readerBuilder: Instantiator<PlanLazyCountReader>
+		    @Instantiated public let s1Builder: Instantiator<PlanLazyCountS1>
+		}
+
+		@Instantiable
+		public final class PlanLazyCountS1: Instantiable {
+		    public init(readerBuilder: Instantiator<PlanLazyCountReader>, s0Builder: Instantiator<PlanLazyCountS0>) {
+		        self.readerBuilder = readerBuilder
+		        self.s0Builder = s0Builder
+		    }
+
+		    @Instantiated public let readerBuilder: Instantiator<PlanLazyCountReader>
+		    @Instantiated public let s0Builder: Instantiator<PlanLazyCountS0>
+		}
+
+		@Instantiable
+		public final class PlanLazyCountReader: Instantiable {
+		    public init(leaf: PlanLazyCountLeaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Received public let leaf: PlanLazyCountLeaf
+		}
+
+		@Instantiable
+		public final class PlanLazyCountLeaf: Instantiable {
+		    public init() {
+		        PlanLazyCount.leavesBuilt += 1
+		    }
+		}
+
+		public enum PlanLazyCount {
+		    nonisolated(unsafe) public static var leavesBuilt = 0
+
+		    /// The leaves built after the root, after its screen, and after each of two readers beneath that screen.
+		    public static func leavesBuiltOnDirectPath() -> [Int] {
+		        leavesBuilt = 0
+		        let root = PlanLazyCountRoot()
+		        var counts = [leavesBuilt]
+		        let s0 = root.s0Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let firstReader = s0.readerBuilder.instantiate()
+		        counts.append(leavesBuilt)
+		        let secondReader = s0.readerBuilder.instantiate()
+		        counts.append(leavesBuilt)
+		        counts.append(firstReader.leaf === secondReader.leaf ? 1 : 0)
+		        return counts
+		    }
+
+		    /// The leaves built after the root, after its screen, after the screen that one opens, after a reader beneath
+		    /// that screen, after the first screen opened again from there, and after a reader beneath it.
+		    public static func leavesBuiltThroughParameter() -> [Int] {
+		        leavesBuilt = 0
+		        let root = PlanLazyCountRoot()
+		        var counts = [leavesBuilt]
+		        let s0 = root.s0Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let s1 = s0.s1Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let reader = s1.readerBuilder.instantiate()
+		        counts.append(leavesBuilt)
+		        let innerS0 = s1.s0Builder.instantiate()
+		        counts.append(leavesBuilt)
+		        let innerReader = innerS0.readerBuilder.instantiate()
+		        counts.append(leavesBuilt)
+		        counts.append(reader.leaf === s0.leaf.instance ? 1 : 0)
+		        counts.append(innerReader.leaf === reader.leaf ? 1 : 0)
+		        return counts
+		    }
+		}
+
+		"""
+		let fileName = "PlanLazyCount.swift"
+		let generated = try #require(await PlanValueGraph.generatedCode(ofSource: source, fileName: fileName))
+		#expect(generated.rootsLaidOutFromPlan == ["PlanLazyCountRoot"])
+		let graph = DifferentialValueGraph(
+			name: "lazy count",
+			feature: DifferentialValuePath(fixtureFiles: [fileName: source], generatedFiles: ["SafeDI.swift": generated.planCode]),
+			knownRight: DifferentialValuePath(fixtureFiles: [fileName: source], generatedFiles: ["SafeDI.swift": generated.todaysCode]),
+			probes: [
+				DifferentialValueProbe("PlanLazyCount.leavesBuiltOnDirectPath()"),
+				DifferentialValueProbe("PlanLazyCount.leavesBuiltThroughParameter()"),
+			],
+		)
+		guard let comparison = try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first else { return }
+		let result = try comparison.result.get()
+		#expect(result.differences.map(\.description) == [])
+		// Nothing is built until a reader is: the root, its screen and the screen that one opens build no leaf. Each
+		// screen's readers share its one leaf (the last entries are 1 where two readers hold one instance), and the first
+		// screen opened again declares a leaf of its own.
+		#expect(result.featureDescription == """
+		probe PlanLazyCount.leavesBuiltOnDirectPath()
+		Array<Int>
+		  0: Int 0
+		  1: Int 0
+		  2: Int 1
+		  3: Int 1
+		  4: Int 1
+		probe PlanLazyCount.leavesBuiltThroughParameter()
+		Array<Int>
+		  0: Int 0
+		  1: Int 0
+		  2: Int 0
+		  3: Int 1
+		  4: Int 1
+		  5: Int 2
+		  6: Int 1
+		  7: Int 0
+
+		""")
+	}
+
 	// MARK: Private
 
 	/// Every graph of seeds 0..<23,705 (15,000 laid out from their plans by the long run) whose plan writes other code than
@@ -312,9 +450,9 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 /// some of those before it, up to three models, two to seven screens, each receiving some services and models, declaring
 /// some models, forwarding an `Int` about a third of the time and opening one to three screens, and one or two roots
 /// that build every service and open one or two screens, directly or through a type in between. A few graphs draw a
-/// `Sendable` or lazily instantiated wrapper or a value received only if available, which keep their roots on today's
-/// tree, or a rename, a typealiased closure forwarded and received `@escaping` or a screen opened through an erased
-/// instantiator of a concrete existential, which the plan lays out. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
+/// lazily instantiated wrapper, a rename, a typealiased closure forwarded and received `@escaping` or a screen opened
+/// through an erased instantiator of a concrete existential, which a plan lays out, or a `Sendable` wrapper or a value received only if
+/// available, which keep their roots on today's tree. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
 /// the seed, so that a batch compiles many graphs side by side, and every class stores two counters' values: the
 /// creation stamp the comparator reads (`DifferentialValueCreationStamp`) and `creationOrder`, which it describes.
 struct PlanValueGraph {
@@ -354,12 +492,19 @@ struct PlanValueGraph {
 	/// The graph of `seed` generated both ways, or `nil` where the tool rejects it.
 	static func generated(seed: UInt64) async -> Generated? {
 		let graph = PlanValueGraph(seed: seed)
-		let directory = TestTemporaryDirectory.uniquePath(prefix: "plan-value-\(seed)-")
+		guard let code = await generatedCode(ofSource: graph.source, fileName: graph.fileName) else { return nil }
+		return Generated(graph: graph, planCode: code.planCode, todaysCode: code.todaysCode, rootsLaidOutFromPlan: code.rootsLaidOutFromPlan)
+	}
+
+	/// The code of one fixture file generated as the driver chooses with the limit at 0 and with every root kept on
+	/// today's tree, and the roots the first laid out from their plans, or `nil` where the tool rejects the fixture.
+	static func generatedCode(ofSource source: String, fileName: String) async -> (planCode: String, todaysCode: String, rootsLaidOutFromPlan: Set<String>)? {
+		let directory = TestTemporaryDirectory.uniquePath(prefix: "plan-value-\(fileName)-")
 		defer { try? FileManager.default.removeItem(at: directory) }
 		do {
 			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-			let fixture = directory.appendingPathComponent(graph.fileName)
-			try graph.source.write(to: fixture, atomically: true, encoding: .utf8)
+			let fixture = directory.appendingPathComponent(fileName)
+			try source.write(to: fixture, atomically: true, encoding: .utf8)
 			let csv = directory.appendingPathComponent("sources.csv")
 			try fixture.path.write(to: csv, atomically: true, encoding: .utf8)
 			let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
@@ -378,7 +523,7 @@ struct PlanValueGraph {
 			let todaysCode = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(.max) {
 				try await generate(csv: csv, output: directory.appendingPathComponent("today.swift"))
 			}
-			return Generated(graph: graph, planCode: planCode, todaysCode: todaysCode, rootsLaidOutFromPlan: rootsLaidOutFromPlan)
+			return (planCode, todaysCode, rootsLaidOutFromPlan)
 		} catch {
 			return nil
 		}

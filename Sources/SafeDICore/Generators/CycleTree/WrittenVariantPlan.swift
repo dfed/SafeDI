@@ -32,10 +32,7 @@ public enum PlanCodeObservation {
 public enum RootTreeChoiceObservation {
 	/// Why a root that reaches a cycle has its tree built per path.
 	public enum PerPathReason: String, Sendable {
-		/// The module's types name both a wrapper that is not `Sendable` and a `Sendable` one, so the `@Sendable` capture
-		/// walk reads its trees.
-		case moduleNamesNonSendableWrapperAndSendableBuilder
-		/// A type of the root's tree holds a `LazilyInstantiated` or a `SendableLazilyInstantiated`.
+		/// A type of the root’s tree holds a `SendableLazilyInstantiated`.
 		case holdsLazilyInstantiated
 		/// A type of the root's tree receives, renames or instantiates a value only if available, or holds an optional one.
 		case holdsValueOnlyIfAvailable
@@ -56,8 +53,6 @@ public enum RootTreeChoiceObservation {
 		case noPlan
 		/// A call of the plan passes a member of a loop of builders made again at the call.
 		case passesLoopMemberMadeAgainAtCall
-		/// A call of the plan passes the instance of a lazily instantiated declaration, read at the call.
-		case passesLazilyInstantiatedInstanceAtCall
 		/// The type key lays out none of the plan.
 		case noLayout
 		/// Planning the root threw an error, which is discarded: today's tree reports what a build with no plan reports.
@@ -82,6 +77,15 @@ public enum RootTreeChoiceObservation {
 /// Lets a test compare, for each production root that reaches a cycle, which of its plan's bodies the plan marks
 /// `@Sendable` (`VariantBodies.isSendable(_:)`) with which the type key lays out as `@Sendable` (`WrittenVariantPlan`'s
 /// family), each body at its position in the plan, the root's own first. Test only, until one of the two is removed.
+/// Lets a test see, for each production root whose code is laid out from its per-type plan, whether the `@Sendable`
+/// capture walk of the root's tree per path finds a capture (`ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`).
+/// The walk reads no root laid out from its plan, so it must find none. Test only.
+public enum PlanCaptureObservation {
+	/// Called once per such root, where today's tree is built too, with the root's type and whether today's walk finds a
+	/// capture.
+	@TaskLocal public static var observer: (@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void)?
+}
+
 public enum PlanSendableObservation {
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void)?
 }
@@ -119,8 +123,8 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 
 		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
 		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
-		/// write; or the instance of a lazily instantiated declaration (`Answer.instance`), which the layout reads at the
-		/// call, where today's function takes the wrapper and creates the instance where its body first reads it.
+		/// write. The instance of a lazily instantiated declaration (`Answer.instance`) is no reason: the function takes
+		/// the wrapper (`Answer.parameter(labeled:)`) and creates the instance where its body first reads it.
 		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
 			for callsOfBody in calls {
 				for call in callsOfBody {
@@ -128,9 +132,7 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 						switch argument {
 						case .declaredMadeAgainAtCall:
 							return .passesLoopMemberMadeAgainAtCall
-						case .instance:
-							return .passesLazilyInstantiatedInstanceAtCall
-						case .none, .declared:
+						case .none, .declared, .instance:
 							continue
 						}
 					}
