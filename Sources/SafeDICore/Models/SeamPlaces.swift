@@ -392,8 +392,10 @@ extension SeamSignature {
 				reenteringCallDeclarations: [Hole.ReenteringCallDeclaration] = [],
 				reenteringPlaceFields: [Hole.ReenteringPlaceField] = [],
 				namingRoute: [Int] = [],
+				narrowestAccess: Access? = nil,
 			) {
 				self.namingRoute = namingRoute
+				self.narrowestAccess = narrowestAccess
 				self.ownerLevel = ownerLevel
 				self.isBuiltInSendableFunction = isBuiltInSendableFunction
 				self.siteOpensSendableFunction = siteOpensSendableFunction
@@ -438,6 +440,22 @@ extension SeamSignature {
 			public let reenteringCallDeclarations: [Hole.ReenteringCallDeclaration]
 			/// `Hole.reenteringPlaceFields` of the places.
 			public let reenteringPlaceFields: [Hole.ReenteringPlaceField]
+			/// The narrowest access of a builder of the places (`Hole.tierAccess`), with the cause of the first place in site
+			/// order that has it (`Hole.accessCause`): what a builder that reaches the case is no wider than. Every place of
+			/// a case has one owner level, so one owner type and one property, and so one access; the fold keeps the case's
+			/// answer a fact of its places, not of its first. `nil` while no place was added.
+			public let narrowestAccess: Access?
+
+			/// The access of a builder of a case's places, and what proves it.
+			public struct Access: Codable, Hashable, Sendable {
+				public init(level: AccessLevel, cause: TypeAccessProof.Cause?) {
+					self.level = level
+					self.cause = cause
+				}
+
+				public let level: AccessLevel
+				public let cause: TypeAccessProof.Cause?
+			}
 		}
 
 		/// What the places of a case read of a label, on one or more of the routes to the case.

@@ -576,7 +576,7 @@ extension DependencyTreeGenerator {
 			var builders = Self.shapedBuilders(
 				of: instantiable,
 				generator: generator,
-				holes: holes.holes,
+				holesAndPlaces: holes,
 				parameters: rootLevel.parameters,
 				// The root level's fields are parameters of `mock()` already named apart by `parameters`.
 				otherParameters: otherParameters.filter { !rootLevelLabels.contains($0.label) },

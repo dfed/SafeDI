@@ -133,7 +133,7 @@ extension DependencyTreeGenerator {
 	static func shapedBuilders(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
-		holes flatHoles: [SeamSignature.Hole],
+		holesAndPlaces: HolesAndPlaces,
 		parameters: [SeamSignature.Parameter],
 		otherParameters: [(label: String, access: AccessLevel)] = [],
 		treeFunctionNames: Set<String>,
@@ -144,6 +144,7 @@ extension DependencyTreeGenerator {
 		bindsReceivesAgain: Bool = false,
 		namesApartAtRoot: PublicMockRootLevel.NamesApart = .init(),
 	) -> ShapedBuilders {
+		let flatHoles = holesAndPlaces.holes
 		guard !flatHoles.isEmpty else { return ShapedBuilders(holes: [], builders: [], scopeEnums: [], builderBySite: [:]) }
 		let seamType = seam.concreteInstantiable
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
@@ -347,8 +348,10 @@ extension DependencyTreeGenerator {
 				let rootEnum = SeamSignature.ScopeEnum(key: key, typeName: typeName, builderLabel: builderLabel, cases: cases)
 				let nestedByTypeEnums = byType.enums.filter { $0.rootTypeName != nil }
 				let reachedKeys = Self.enumKeysReached(from: key, in: Dictionary(([rootEnum] + nestedByTypeEnums).map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first }))
-				// The places the builder reaches, which decide the type of the builder a person writes.
-				var reachedPlaces = [SeamSignature.Hole]()
+				// The places the builder reaches: each case once, at the narrowest access over its places
+				// (`Places.Case.narrowestAccess`); a place of no case, one a call passes up or one of a seam whose graph was not
+				// built, by its own.
+				var reachedCaseIndices = Set<Int>()
 				for reachedEnum in [rootEnum] + nestedByTypeEnums where reachedKeys.contains(reachedEnum.key) {
 					for enumCase in reachedEnum.cases {
 						let sites: [SeamSignature.Hole.Site] = switch enumCase.kind {
@@ -358,10 +361,16 @@ extension DependencyTreeGenerator {
 							[]
 						}
 						for site in sites {
-							guard let hole = holesBySite[site] else { continue }
-							reachedPlaces.append(hole)
-							if hole.tierAccess < narrowest.level {
-								narrowest = (hole.tierAccess, hole.accessCause, nil)
+							let access: SeamSignature.Places.Case.Access
+							if let caseIndex = holesAndPlaces.caseIndexBySite[site], let caseAccess = holesAndPlaces.places.cases[caseIndex].narrowestAccess {
+								guard reachedCaseIndices.insert(caseIndex).inserted else { continue }
+								access = caseAccess
+							} else {
+								guard let hole = holesBySite[site] else { continue }
+								access = SeamSignature.Places.Case.Access(level: hole.tierAccess, cause: hole.accessCause)
+							}
+							if access.level < narrowest.level {
+								narrowest = (access.level, access.cause, nil)
 							}
 						}
 					}
