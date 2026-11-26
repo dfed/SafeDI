@@ -152,6 +152,78 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresOneFunctionPerAnswer_whenBodiesOfOneTypeAreAnsweredApart() async throws {
+		// `Home` receives `context` only if available: `Plain` builds it again beneath no `Context`, and `Scoped` beneath
+		// its own. Each `Home` and `Plain` the plan answers apart gets a function of its own, which takes `context` where
+		// its answer declares it.
+		let codes = try await planCodes(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let home: Home
+		    public init(home: Home) { self.home = home }
+		}
+
+		@Instantiable public final class Context: Instantiable { public init() {} }
+
+		@Instantiable public final class Home: Instantiable {
+		    @Received(onlyIfAvailable: true) let context: Context?
+		    @Instantiated let plainBuilder: Instantiator<Plain>
+		    @Instantiated let scopedBuilder: Instantiator<Scoped>
+		    public init(context: Context?, plainBuilder: Instantiator<Plain>, scopedBuilder: Instantiator<Scoped>) { self.context = context; self.plainBuilder = plainBuilder; self.scopedBuilder = scopedBuilder }
+		}
+
+		@Instantiable public final class Plain: Instantiable {
+		    @Instantiated let homeBuilder: Instantiator<Home>
+		    public init(homeBuilder: Instantiator<Home>) { self.homeBuilder = homeBuilder }
+		}
+
+		@Instantiable public final class Scoped: Instantiable {
+		    @Instantiated let context: Context
+		    @Instantiated let homeBuilder: Instantiator<Home>
+		    public init(context: Context, homeBuilder: Instantiator<Home>) { self.context = context; self.homeBuilder = homeBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_home() -> Home {
+		            let plainBuilder = Instantiator<Plain>(__safeDI_plainBuilder)
+		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
+		            return Home(context: nil, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
+		        }
+		        func __safeDI_plainBuilder() -> Plain {
+		            let homeBuilder = Instantiator<Home>(__safeDI_home)
+		            return Plain(homeBuilder: homeBuilder)
+		        }
+		        func __safeDI_scopedBuilder() -> Scoped {
+		            let context = Context()
+		            let homeBuilder = Instantiator<Home> {
+		                __safeDI_homeBuilder(context: context)
+		            }
+		            return Scoped(context: context, homeBuilder: homeBuilder)
+		        }
+		        func __safeDI_homeBuilder(context: Context) -> Home {
+		            let plainBuilder = Instantiator<Plain> {
+		                __safeDI_plainBuilder_(context: context)
+		            }
+		            let scopedBuilder = Instantiator<Scoped>(__safeDI_scopedBuilder)
+		            return Home(context: context, plainBuilder: plainBuilder, scopedBuilder: scopedBuilder)
+		        }
+		        func __safeDI_plainBuilder_(context: Context) -> Plain {
+		            let homeBuilder = Instantiator<Home> {
+		                __safeDI_homeBuilder(context: context)
+		            }
+		            return Plain(homeBuilder: homeBuilder)
+		        }
+		        let home: Home = __safeDI_home()
+		        self.init(home: home)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsPathKeysBody_whenABodyHoldsLoopOfBuilders() async throws {
 		// `Screen`'s builders receive each other, a loop the type key does not plan, so `Screen`'s body is written per
 		// path and the root keeps the path key's body.
@@ -188,12 +260,14 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	/// The code each root of `swiftFileContent` that reaches a cycle lays out of its plan, by root, `nil` where the type
 	/// key keeps the path key's body.
+	/// The code the type key lays out of each root's plan, compiled in place of the root's generated extension with the
+	/// fixtures beside it, as every test's generated code is compiled.
 	private mutating func planCodes(of swiftFileContent: String) async throws -> [String: String?] {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, String?).self)
-		try await PlanCodeObservation.$observer.withValue({ root, code in
+		let output = try await PlanCodeObservation.$observer.withValue({ root, code in
 			continuation.yield((root, code))
 		}) {
-			_ = try await executeSafeDIToolTest(
+			try await executeSafeDIToolTest(
 				swiftFileContent: [swiftFileContent],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -203,6 +277,23 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		var codes = [String: String?]()
 		for await (root, code) in stream {
 			codes[root] = code
+		}
+		for (root, code) in codes.sorted(by: { $0.key < $1.key }) {
+			guard let code else { continue }
+			var generatedFiles = output.generatedFiles ?? [:]
+			// Each root's extension ends the file generated for it, after the file's header and imports.
+			let rootExtension = "extension \(root) {"
+			let fileName = try #require(generatedFiles.keys.sorted().first { generatedFiles[$0]?.contains(rootExtension) == true })
+			let generatedFile = try #require(generatedFiles[fileName])
+			let start = try #require(generatedFile.range(of: rootExtension))
+			generatedFiles[fileName] = String(generatedFile[..<start.lowerBound]) + code + "\n"
+			try await verifyGeneratedCodeCompiles(
+				inputSwiftFiles: output.fixtures.writtenPaths.map(URL.init(fileURLWithPath:)),
+				additionalDirectorySwiftFiles: [],
+				generatedFiles: generatedFiles,
+				mockConditionalCompilation: nil,
+				filesToDelete: &filesToDelete,
+			)
 		}
 		return codes
 	}

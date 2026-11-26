@@ -690,6 +690,11 @@ struct FixturePaths {
 		pathsByFileName[fileName]
 	}
 
+	/// The path of every fixture the harness wrote, sorted.
+	var writtenPaths: [String] {
+		pathsByFileName.values.sorted()
+	}
+
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:
 	/// absolute, beginning with the fixture directory as the build system reports it. `run()` prints a diagnostic at
 	/// this path, but a diagnostic `generate()` returns cites the path the file was parsed under: this path normalized
