@@ -66,7 +66,7 @@ extension DependencyTreeGenerator {
 				var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &cache).received.map(\.label))
 				labelSet.insert(context.property.label)
 				let labels = labelSet.sorted()
-				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily)
+				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
 				// A label whose declaration the scopes above build after the place is `nil` in its tree.
 				let answeredLabels = VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter)
 				let body = try bodies.body(
@@ -128,8 +128,8 @@ extension DependencyTreeGenerator {
 			)
 			planBodiesObserver?(
 				scope.instantiable.concreteInstantiable.asSource,
-				bodiesOfPlan.map { bodies.bodies[$0].description },
-				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
+				bodiesOfPlan.map { bodies.description(of: $0) },
+				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.description(of: $0) },
 				shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
 			)
 			if planCodeObserver != nil {

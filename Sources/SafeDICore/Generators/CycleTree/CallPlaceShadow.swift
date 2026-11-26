@@ -94,7 +94,6 @@ extension DependencyTreeGenerator {
 		/// - Parameters:
 		///   - rootScope: The scope `todaysTree` was built from.
 		///   - nearestDeclarations: The declarations `todaysTree` was built beneath, with their lazily instantiated instances.
-		///   - isInSendableFamily: Whether `todaysTree` is built inside a `@Sendable` function.
 		///   - parameterLabelsByCallPlace: Where `todaysTree` is a body holding call places, the labels each call place's
 		///     function can take as parameters (`CallPlaceShadow.parameterLabelsByCallPlace`).
 		///   - isMockRoot: Whether `todaysTree` is a mock root's, whose declarations join the bindings it is given and
@@ -107,7 +106,6 @@ extension DependencyTreeGenerator {
 			lazilyInstantiatedInstanceProperties: Set<Property> = [],
 			twinValues: Set<TwinValue>,
 			twinsBeingBuilt: [TwinValue: Property] = [:],
-			isInSendableFamily: Bool = false,
 			parameterLabelsByCallPlace: [ObjectIdentifier: Set<String>] = [:],
 			isMockRoot: Bool = false,
 		) {
@@ -125,7 +123,9 @@ extension DependencyTreeGenerator {
 				path: [],
 				propertiesGeneratedLater: [],
 				labelsBuiltAfter: [],
-				isInSendableFunction: isInSendableFamily,
+				// A body's function is plain until some call of it is made in the `@Sendable` family
+				// (`VariantBodies.isSendable(_:)`), so the calls it makes are judged as a plain function's.
+				isInSendableFunction: false,
 				isMockRoot: isMockRoot,
 			)]
 		}

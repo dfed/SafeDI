@@ -83,7 +83,7 @@ extension DependencyTreeGenerator {
 		while let (context, isCalledByCycleClosingScope) = walk.next() {
 			if let copy = shadow.copy(of: context.scope) {
 				let labels = labels(readBy: context.scope, builtAs: context.property, cache: &cache)
-				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily)
+				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
 				// A label whose declaration the scopes above build after the place is `nil` in its tree.
 				let answeredLabels = VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter)
 				let body = try bodies.body(
@@ -147,8 +147,8 @@ extension DependencyTreeGenerator {
 		) {
 			planObserver(
 				mockRoot,
-				bodiesOfPlan.map { bodies.bodies[$0].description },
-				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
+				bodiesOfPlan.map { bodies.description(of: $0) },
+				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.description(of: $0) },
 			)
 		}
 	}
