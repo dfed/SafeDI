@@ -130,6 +130,7 @@ extension MockLowering {
 		let forwardedProperties: [Property]
 		let cycleArguments: [PlaceRead]
 		let passedArguments: [PassedArgument]
+		let targetVariant: Int?
 
 		init(_ record: ClosingPlaceRecord) {
 			property = record.property
@@ -139,6 +140,7 @@ extension MockLowering {
 			forwardedProperties = record.forwardedProperties
 			cycleArguments = record.cycleArguments
 			passedArguments = record.passedArguments
+			targetVariant = record.targetVariant
 		}
 	}
 
@@ -151,6 +153,7 @@ extension MockLowering {
 		let calledFunctionNames: [String]
 		let declaredFunctionNames: [String]
 		let calledRootFunctionNames: [String]
+		let readsOnlyIfAvailable: Bool
 
 		init(_ record: AliasPlaceRecord) {
 			property = record.property
@@ -161,6 +164,7 @@ extension MockLowering {
 			calledFunctionNames = record.calledFunctionNames
 			declaredFunctionNames = record.declaredFunctionNames
 			calledRootFunctionNames = record.calledRootFunctionNames
+			readsOnlyIfAvailable = record.readsOnlyIfAvailable
 		}
 	}
 

@@ -713,6 +713,50 @@ public actor DependencyTreeGenerator {
 							constructionMemo: &constructionMemo,
 						),
 					))
+					// Each scope the root reaches with its children on a cycle as call places, built only where a test compares
+					// the order it gives the scope's children with today's. A tree with a label no one parameter can pass,
+					// which is rejected, is not compared: today's scope that closes the cycle takes no parameter for the
+					// label and so waits for no sibling that declares it, while a call place receives it.
+					if let observer = CallPlaceOrderObservation.observer,
+					   let todaysTree = roots.last?.scopeGenerator,
+					   todaysTree.unpassableCycleLabelsInTree.isEmpty,
+					   let shadow = CallPlaceShadow(root: scope, cache: &receivedPropertiesCache)
+					{
+						var callPlaceOrderByScope = [ObjectIdentifier: [Int]]()
+						for (place, placeScope, todaysOrder) in Self.siblingOrders(ofTodaysTree: todaysTree, builtFrom: scope) {
+							if callPlaceOrderByScope[ObjectIdentifier(placeScope)] == nil, let copy = shadow.copy(of: placeScope) {
+								let (callPlaceTable, callPlaceRecord) = validatedWorld.frozenScopeMap.freezing(rootScope: copy)
+								var callPlaceMemo = ConstructionMemo()
+								callPlaceOrderByScope[ObjectIdentifier(placeScope)] = try callPlaceRecord.createScopeGenerator(
+									in: callPlaceTable,
+									lazilyInstantiatedInstanceProperties: [],
+									erasedToConcreteExistential: false,
+									declaredTypeNames: declaredTypeNames,
+									constructionMemo: &callPlaceMemo,
+								).orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.index)
+							}
+							if let callPlaceOrder = callPlaceOrderByScope[ObjectIdentifier(placeScope)] {
+								observer(place, todaysOrder, callPlaceOrder)
+							}
+						}
+					}
+					// Each place of the root's tree against the bodies of its plan, built only where a test compares the two.
+					if let todaysTree = roots.last?.scopeGenerator {
+						if let unplannedPlan = try Self.compareBodies(
+							ofRoot: scope,
+							todaysTree: todaysTree,
+							frozenScopeMap: validatedWorld.frozenScopeMap,
+							declaredTypeNames: declaredTypeNames,
+							cache: &receivedPropertiesCache,
+						), let planCodeObserver = PlanCodeObservation.observer {
+							// The root's body laid out from the plan's bodies: one function per body, which the root declares.
+							let statements = try await TypeKeyBody.statements(ofPlan: WrittenVariantPlan(planning: unplannedPlan))
+							try planCodeObserver(
+								scope.instantiable.concreteInstantiable.asSource,
+								statements.map { try ScopeGenerator.rootCode(of: scope.instantiable, writing: $0).spelled() },
+							)
+						}
+					}
 				}
 				rootScopeGenerators = roots
 			} else {
