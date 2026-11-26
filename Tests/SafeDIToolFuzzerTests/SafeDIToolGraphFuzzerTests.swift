@@ -2523,6 +2523,10 @@ struct SafeDIToolGraphFuzzerTests {
 		// fulfilled for a floor, so this judges the first base corpus graphs the tool rejects as the marks oracle does,
 		// with one run of the tool each. Only an export with partial trees counts, so a change that stops `query graph`
 		// building them fails here rather than quietly judging nothing.
+		//
+		// What the marks and deletion oracles add to a long run, measured in a debug build on one core over base corpus
+		// seeds 0..<1250, a shard: 221 seconds (the rejected graphs’ exports 69, the runs with missing types declared 8,
+		// the two deletions with their exports 144), where one `generate` run of each of those graphs takes 277.
 		var partialSeeds = [UInt64]()
 		for seed in UInt64(0)..<120 {
 			guard let marks = try await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)) else { continue }
@@ -2538,8 +2542,10 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func queryGraph_marksReceivesGenerateReportsOnceMissingTypesAreDeclared_inBaseCorpusGraphThatHoldsBoth(seed: UInt64) async throws {
 		// A graph that instantiates a type no declaration fulfills and receives a value nothing provides is rare, so the
-		// marks oracle's second check, that each further mark is an error `generate` reports once the missing types are
-		// declared, has named seeds: each must still run the graph with its missing types declared and agree with it.
+		// marks oracle's checks against the graph with its missing types declared have named seeds: each further mark is
+		// an error `generate` reports of that graph, and each error it reports of that graph is at a mark. Each seed must
+		// still run the graph so and agree with it. With the receives the second build reports left unmarked, every one
+		// of these seeds fails.
 		let marks = try #require(await GraphFuzzerQueryJudgment.marks(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
 		#expect(marks.isPartial)
 		#expect(marks.ranWithMissingTypesDeclared)

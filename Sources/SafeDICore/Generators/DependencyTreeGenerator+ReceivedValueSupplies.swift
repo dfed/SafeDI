@@ -24,8 +24,12 @@ extension DependencyTreeGenerator {
 	/// their code, and the types those trees construct. A generator that holds no seam builds every type inline, a seam's
 	/// tree included, as a module that declares no seam generates it. Each supply and each type is listed once, however
 	/// many places hand or build it; the order is the trees'.
+	/// - Returns: The supplies, or `nil` where a tree built around received dependencies nothing provides
+	///   (`unfulfilledReceiveLocations`) holds one whose label a builder function a lazy cycle closes on takes as a
+	///   parameter that it or a receive beneath it reads, or that a call made beneath it passes, which the walk does not
+	///   judge.
 	/// - Throws: The error `generate` reports when the trees are not valid.
-	public func receivedValueSupplies() async throws -> ReceivedValueSupplies {
+	public func receivedValueSupplies() async throws -> ReceivedValueSupplies? {
 		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof()).roots
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
@@ -39,7 +43,7 @@ extension DependencyTreeGenerator {
 		}
 		let unfulfilledReceives = ScopeGenerator.UnfulfilledReceives(locations: unfulfilledReceiveLocations, labels: unfulfilledReceiveLabels)
 		for root in roots {
-			let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives)
+			guard let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
 			supplies.append(contentsOf: tree.supplies)
 			constructedTypes.append(contentsOf: tree.constructedTypes)
 		}

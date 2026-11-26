@@ -3700,7 +3700,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func receivedValueSupplies(
 		ofTreeRootedAt instantiable: Instantiable,
 		unfulfilledReceives: UnfulfilledReceives,
-	) async -> (supplies: [ReceivedValueSupply], constructedTypes: [TypeDescription]) {
+	) async -> (supplies: [ReceivedValueSupply], constructedTypes: [TypeDescription])? {
 		let findings = await receivedValueSupplies(
 			of: instantiable,
 			unavailableProperties: [],
@@ -3711,6 +3711,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingCycleFunctions: [:],
 			visitNumber: 0,
 		)
+		guard findings.isJudged else { return nil }
 		return (findings.judged(), findings.constructedTypes)
 	}
 
@@ -3752,6 +3753,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		func recordSupply(
 			of receivedProperty: Property,
 			label: String,
+			isRequired: Bool,
 			isReportedUnfulfilled: Bool,
 			among declarationsByLabel: [String: [VisibleDeclaration]],
 			isPassedNil: Bool,
@@ -3760,21 +3762,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			func supply(_ value: ReceivedValueSupply.Value) -> ReceivedValueSupply {
 				ReceivedValueSupply(receivingType: declaringType, label: label, value: value)
 			}
-			func unfulfilled(reading absentDeclaration: VisibleDeclaration) -> ReceivedValueSupply? {
-				absentDeclaration.declaringType.map { supply(.unfulfilled(ReceivedValueSupply.Supplier(declaringType: $0, label: absentDeclaration.property.label))) }
-			}
 			let declarations = declarationsByLabel[receivedProperty.label, default: []]
-			let provider = declarations.first(where: { $0.provides(unwrappedProperty) })
-			let readsCycleParameter = provider?.cycleFunction != nil
-			// Validation finds a receive unfulfillable exactly where the property it requires is not receivable. One that
-			// reads a parameter of a builder function a lazy cycle closes on is judged at each call of the function.
-			guard !isReportedUnfulfilled || readsCycleParameter || receivableProperties.contains(receivedProperty) else {
+			// Beneath a receive nothing provides, a required receive reads the declaration of exactly the property it
+			// requires, the absent one included, as validation judges it. Generation hands a receive the nearest
+			// declaration that provides any form of it, which in a valid tree is that one.
+			let exactProvider = isRequired && declarations.contains(where: \.isAbsent) ? declarations.first(where: { $0.declares(receivedProperty) }) : nil
+			let provider = exactProvider ?? declarations.first(where: { $0.provides(unwrappedProperty) })
+			// A parameter of a builder function a lazy cycle closes on hands a receive what each call of the function
+			// passes. Validation's test of where the function is declared does not judge that for a receive nothing
+			// provides, and an absent declaration beside the parameter is no declaration the calls know of: the walk
+			// reports no supply of such trees.
+			guard provider?.cycleFunction == nil || !(isReportedUnfulfilled || declarations.contains(where: \.isAbsent)) else {
+				findings.leaveUnjudged()
+				return .unfulfilled
+			}
+			// Validation finds a receive unfulfillable exactly where the property it requires is not receivable.
+			guard !isReportedUnfulfilled || receivableProperties.contains(receivedProperty) else {
 				findings.append(supply(.unfulfilled(nil)))
 				return .unfulfilled
 			}
-			if let provider, provider.isAbsent, let unfulfilled = unfulfilled(reading: provider) {
+			if let provider, provider.isAbsent, let absentDeclaringType = provider.declaringType {
 				// Generation, which knows of no absent declaration, passes the receive `nil` or names nothing for it.
-				findings.append(unfulfilled)
+				findings.append(supply(.unfulfilled(ReceivedValueSupply.Supplier(declaringType: absentDeclaringType, label: provider.property.label))))
 				return .handedValue
 			}
 			let passedNil = supply(.passedNil(.noProvidingDeclaration))
@@ -3783,25 +3792,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				findings.append(provider == nil ? passedNil : passedNil.passingNil(because: .providerNotYetBuilt))
 				return .passedNil
 			}
-			// A call that passes a parameter nothing hands this receive nothing when `generate` reports it, and otherwise
-			// what the absent declaration of a receive between the function and this one stands for, which follows the
-			// parameter among the declarations of its label.
-			let passedNothing = isReportedUnfulfilled
-				? supply(.unfulfilled(nil))
-				: declarations.first(where: { $0.isAbsent && $0.provides(unwrappedProperty) }).flatMap(unfulfilled(reading:)) ?? passedNil
-			findings.append(reading: unwrappedProperty, from: provider, passedNothing: passedNothing) { provider in
+			findings.append(reading: unwrappedProperty, from: provider, passedNothing: passedNil) { provider in
 				// Every provider a supply is judged at is a declaration of a type of the tree: a parameter of a builder
 				// function a lazy cycle closes on, whose declaring type is `nil`, is judged at the calls of the function.
 				ReceivedValueSupply(
 					receivingType: declaringType,
 					label: label,
-					value: provider.declaringType.map { declaringType in
-						let supplier = ReceivedValueSupply.Supplier(declaringType: declaringType, label: provider.property.label)
-						return provider.isAbsent ? .unfulfilled(supplier) : .declaration(supplier)
-					} ?? .passedNil(.noProvidingDeclaration),
+					value: provider.declaringType.map { .declaration(ReceivedValueSupply.Supplier(declaringType: $0, label: provider.property.label)) } ?? .passedNil(.noProvidingDeclaration),
 				)
 			}
-			return isReportedUnfulfilled && readsCycleParameter ? .unfulfilled : .handedValue
+			return .handedValue
 		}
 		func visibleDeclaration(of property: Property, instanceProperty: Property?, isAbsent: Bool = false) -> VisibleDeclaration {
 			VisibleDeclaration(
@@ -3822,6 +3822,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let outcome = recordSupply(
 				of: dependency.property,
 				label: dependency.property.label,
+				isRequired: dependency.source == .received(onlyIfAvailable: false),
 				isReportedUnfulfilled: unfulfilledReceives.contains(dependency),
 				among: declarationsByLabel,
 				isPassedNil: ownUnavailableProperties.contains(dependency.property),
@@ -3829,7 +3830,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard unfulfilledReceives.labels.contains(dependency.property.label) else { continue }
 			switch outcome {
 			case .unfulfilled:
-				absentDeclarations.append(visibleDeclaration(of: dependency.property, instanceProperty: nil, isAbsent: true))
+				// As every declaration that provides a lazily instantiated property does, the absent one provides its instance.
+				absentDeclarations.append(visibleDeclaration(
+					of: dependency.property,
+					instanceProperty: dependency.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
+					isAbsent: true,
+				))
 				childReceivableProperties.insert(dependency.property)
 			case .handedValue:
 				childReceivableProperties.insert(dependency.property)
@@ -3882,7 +3888,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				_ = recordSupply(
 					of: fulfillingProperty,
 					label: property.label,
-					isReportedUnfulfilled: instantiable.dependencies.contains { $0.property == property && unfulfilledReceives.contains($0) },
+					isRequired: !onlyIfAvailable,
+					isReportedUnfulfilled: instantiable.dependencies.contains { unfulfilledReceives.contains($0) && $0.property == property },
 					among: fulfillingDeclarationsByLabel,
 					isPassedNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties),
 				)
@@ -3920,8 +3927,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case handedValue
 		/// `nil`, which generation passes it.
 		case passedNil
-		/// Nothing, or nothing from some call of the function whose parameter it reads: `generate` reports that nothing
-		/// provides it.
+		/// Nothing: `generate` reports that nothing provides it.
 		case unfulfilled
 	}
 
@@ -4263,6 +4269,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		func provides(_ unwrappedProperty: Property) -> Bool {
 			property.asUnwrappedProperty == unwrappedProperty || instanceProperty?.asUnwrappedProperty == unwrappedProperty
 		}
+
+		/// Whether this declaration makes exactly `property` receivable, as validation judges a required receive of it.
+		func declares(_ property: Property) -> Bool {
+			self.property == property || instanceProperty == property
+		}
 	}
 
 	/// What a walk finds of the values a tree passes the calls it makes of seams' tiers (`seamTierOmissions`) or of other
@@ -4403,6 +4414,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var calls = [Call]()
 		/// The concrete type of each scope the walk constructs, in the order it meets them.
 		private(set) var constructedTypes: [TypeDescription]
+		/// Whether the walk judged every receive it met. It judges none of a tree in which a receive nothing provides, or
+		/// the absent declaration beneath one, meets a parameter of a builder function a lazy cycle closes on: the receive
+		/// or a receive beneath it reads the parameter, or a call of the function is made beneath it.
+		private(set) var isJudged = true
 
 		/// The findings of a visit of a scope that constructs `constructedType`, whose first visit beneath it is numbered
 		/// `nextVisitNumber`.
@@ -4433,6 +4448,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			omissions.append(omission)
 		}
 
+		/// Records that the walk met a receive it does not judge.
+		mutating func leaveUnjudged() {
+			isJudged = false
+		}
+
 		/// Records the call `child` makes of `function`, which it declares or closes a cycle on, with the declarations of
 		/// each parameter's label among `declarationsByLabel`, where the call is made, and none for those it passes `nil`.
 		/// `function` is `nil` for a function that takes no parameters.
@@ -4444,10 +4464,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for parameter in child.generator.cycleParameters {
 				let unwrappedProperty = parameter.property.asUnwrappedProperty
 				let isPassedLoopMember = loopMembers.contains(unwrappedProperty) || loopMembers.contains(unwrappedProperty.asOptionalProperty)
+				let declarations = declarationsByLabel[parameter.property.label, default: []]
+				// A call made beneath a receive nothing provides would pass what its absent declaration stands for, which
+				// no call generation makes knows of.
+				isJudged = isJudged && !declarations.contains(where: \.isAbsent)
 				calls.append(Call(
 					function: function,
 					label: parameter.property.label,
-					declarations: declarationsByLabel[parameter.property.label, default: []],
+					declarations: declarations,
 					passesNil: !isPassedLoopMember && child.unavailableProperties.contains(parameter.property),
 				))
 			}
@@ -4461,6 +4485,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameterReads.append(contentsOf: findings.parameterReads)
 			calls.append(contentsOf: findings.calls)
 			constructedTypes.append(contentsOf: findings.constructedTypes)
+			isJudged = isJudged && findings.isJudged
 		}
 
 		/// The omissions, with each parameter read judged at every call of its function: an omission at each declaration a
@@ -4479,11 +4504,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				while let function = functionsToJudge.popLast() {
 					for call in callsByFunction[function, default: []] where call.label == read.label {
 						let provider = call.declarations.first(where: { $0.provides(read.unwrappedProperty) })
-						if let provider, provider.isAbsent {
-							// Generation knows of no absent declaration, so the call passes `nil` or names nothing for it.
-							omissions.append(read.omission(provider))
-							continue
-						}
 						guard !call.passesNil, let provider else {
 							// A call passes `nil` where no declaration provides the value, or where one does that is not built yet.
 							if let passedNothing = read.passedNothing {

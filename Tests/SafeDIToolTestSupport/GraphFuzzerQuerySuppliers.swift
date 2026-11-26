@@ -440,21 +440,22 @@ extension GraphFuzzerToolRuns {
 		}
 		let problems = export.problems(
 			generateErrorLocations: GraphFuzzerUnfulfilledDependencies.errorLocations(of: outcomeQueryExportIsJudgedAgainst, fixture: fixture),
-			errorLocationsWithMissingTypesDeclared: missingTypesDeclaredOutcome.map { GraphFuzzerUnfulfilledDependencies.errorLocations(of: $0, fixture: fixture) },
+			errorLocationsWithMissingTypesDeclared: missingTypesDeclaredOutcome?.productionErrorLocations,
 			fixture: fixture,
 		)
 		guard !problems.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
 			kind: .queryMarksOtherDependenciesUnfulfilled,
-			details: "\(problems.joined(separator: "\n"))\nThis graph:\n\(outcomeQueryExportIsJudgedAgainst.description)\nWith its missing types declared:\n\(missingTypesDeclaredOutcome?.description ?? "not run")\nThe export:\n\(rejectedQueryExport)",
+			details: "\(problems.joined(separator: "\n"))\nThis graph:\n\(outcomeQueryExportIsJudgedAgainst.description)\nWith its missing types declared:\n\(missingTypesDeclaredOutcome?.outcome.description ?? "not run")\nThe export:\n\(rejectedQueryExport)",
 		)
 	}
 }
 
 /// What a `query graph` export says of the dependencies it marks unfulfilled, which `problems` judges against the errors
 /// `generate` reports: the rule is that the marks are the dependencies `generate` reports, plus the receives it reports
-/// once each missing type is declared.
+/// once each missing type is declared, which are then its only errors, and that no dependency instantiated only if
+/// available is marked.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerUnfulfilledDependencies {
 	/// A dependency the export marks unfulfilled.
@@ -465,11 +466,15 @@ struct GraphFuzzerUnfulfilledDependencies {
 		let isInstantiated: Bool
 		/// The type an instantiated dependency constructs, as a declaration of it names it.
 		let instantiatedTypeName: String
+		/// Whether the dependency is instantiated or received only if available, so that it is `nil` where nothing
+		/// fulfills or provides it.
+		let isOnlyIfAvailable: Bool
 	}
 
 	init(exportedJSON json: String) throws {
 		let object = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] ?? [:]
 		isPartial = object["completeness"] as? String == "partialTrees"
+		hasWholeTrees = object["completeness"] as? String == "trees"
 		var marks = [Mark]()
 		for declaration in object["declarations"] as? [[String: Any]] ?? [] {
 			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["isUnfulfilled"] as? Bool == true {
@@ -477,6 +482,7 @@ struct GraphFuzzerUnfulfilledDependencies {
 					location: Self.location(ofFileNamed: URL(fileURLWithPath: dependency["filePath"] as? String ?? "?").lastPathComponent, line: dependency["line"] as? Int ?? 0),
 					isInstantiated: dependency["source"] as? String == "instantiated",
 					instantiatedTypeName: dependency["fulfilledByType"] as? String ?? dependency["plainType"] as? String ?? "?",
+					isOnlyIfAvailable: dependency["isOnlyIfAvailable"] as? Bool == true,
 				))
 			}
 		}
@@ -485,6 +491,8 @@ struct GraphFuzzerUnfulfilledDependencies {
 
 	/// Whether the export's `completeness` is `partialTrees`.
 	let isPartial: Bool
+	/// Whether the export's `completeness` is `trees`: the production trees are valid.
+	let hasWholeTrees: Bool
 	/// Each dependency the export marks unfulfilled, in its order.
 	let marks: [Mark]
 
@@ -493,13 +501,34 @@ struct GraphFuzzerUnfulfilledDependencies {
 		Set(marks.lazy.filter(\.isInstantiated).map(\.instantiatedTypeName)).sorted()
 	}
 
-	/// The outcome of `fixture` with an empty declaration of each missing type, with no seam, where the export has partial
-	/// trees and marks a dependency at none of the errors `generateOutcome`, `generate`'s outcome for the graph, reports:
-	/// a mark only the errors `generate` reports once the missing types are declared can account for. `nil` otherwise.
-	func outcomeWithMissingTypesDeclared(of fixture: GraphFuzzerFixture, generateOutcome: GraphFuzzerToolOutcome) async throws -> GraphFuzzerToolOutcome? {
-		let reported = Set(Self.errorLocations(of: generateOutcome, fixture: fixture))
-		guard isPartial, !missingTypeNames.isEmpty, marks.contains(where: { !reported.contains($0.location) }) else { return nil }
-		return try await GraphFuzzerOracle.toolOutcome(of: fixtureDeclaringMissingTypes(of: fixture).withoutSeams)
+	/// `generate`'s outcome for a graph with an empty declaration of each missing type, and which of its errors are of the
+	/// production trees.
+	struct OutcomeWithMissingTypesDeclared {
+		/// `generate`'s outcome for the graph, with no seam.
+		let outcome: GraphFuzzerToolOutcome
+		/// The file and line of each error of it that the production trees report, spelled as the marks' locations are.
+		let productionErrorLocations: [String]
+	}
+
+	/// The outcome of `fixture` with an empty declaration of each missing type, where the export has partial trees and
+	/// marks an instantiated dependency: the graph whose only production errors, if the trees were rightly built around
+	/// the missing types, are the receives the export marks. `nil` otherwise.
+	///
+	/// Once the production trees are valid, `generate` goes on to its mocks and reports their errors, which
+	/// `query graph` does not read (base corpus seed 106 reports a cycle in a mock's tree so). So where an error is at no
+	/// mark, the graph is exported, and where that export has whole trees none of the errors is of the production trees.
+	func outcomeWithMissingTypesDeclared(of fixture: GraphFuzzerFixture) async throws -> OutcomeWithMissingTypesDeclared? {
+		guard isPartial, !missingTypeNames.isEmpty else { return nil }
+		let fixtureDeclaringMissingTypes = fixtureDeclaringMissingTypes(of: fixture)
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixtureDeclaringMissingTypes.withoutSeams)
+		let errorLocations = Self.errorLocations(of: outcome, fixture: fixture)
+		let marked = Set(marks.map(\.location))
+		guard errorLocations.contains(where: { !marked.contains($0) }),
+		      try await Self(exportedJSON: GraphFuzzerQuerySupplies.export(of: fixtureDeclaringMissingTypes)).hasWholeTrees
+		else {
+			return OutcomeWithMissingTypesDeclared(outcome: outcome, productionErrorLocations: errorLocations)
+		}
+		return OutcomeWithMissingTypesDeclared(outcome: outcome, productionErrorLocations: [])
 	}
 
 	/// `fixture` with an empty declaration of each of `missingTypeNames` in a last file of its own, so that no line of
@@ -535,9 +564,11 @@ struct GraphFuzzerUnfulfilledDependencies {
 
 	/// Each way the marks disagree with `generate`'s errors, empty where they agree. Where the export reports partial
 	/// trees, it marks a dependency, every error `generate` reports for the graph (`generateErrorLocations`) is at a mark,
-	/// but one at a dependency instantiated only if available, which the export reads as `nil`, and every further mark is
-	/// at an error `generate` reports once each missing type is declared (`errorLocationsWithMissingTypesDeclared`, `nil`
-	/// where that graph was not run). Otherwise it marks nothing.
+	/// but one at a dependency instantiated only if available, which the export reads as `nil` and so never marks, every
+	/// further mark is at an error the production trees report once each missing type is declared
+	/// (`errorLocationsWithMissingTypesDeclared`, `nil` where that graph was not run), and every error they then report
+	/// is at a mark: an error anywhere else is a receive the export did not mark, or one the trees could not be built
+	/// around, so that the export had no partial trees to report. Otherwise it marks nothing.
 	func problems(generateErrorLocations: [String], errorLocationsWithMissingTypesDeclared: [String]?, fixture: GraphFuzzerFixture) -> [String] {
 		var problems = [String]()
 		if isPartial {
@@ -552,6 +583,12 @@ struct GraphFuzzerUnfulfilledDependencies {
 			let reportedWithMissingTypesDeclared = Set(errorLocationsWithMissingTypesDeclared ?? [])
 			for mark in marks where !reported.contains(mark.location) && !reportedWithMissingTypesDeclared.contains(mark.location) {
 				problems.append("The export marks the dependency at \(mark.location) unfulfilled, where `generate` reports no error, for the graph or for the graph with \(missingTypeNames.joined(separator: ", ")) declared.")
+			}
+			for mark in marks where mark.isInstantiated && mark.isOnlyIfAvailable {
+				problems.append("The export marks the dependency at \(mark.location) unfulfilled, which is instantiated only if available and so is `nil`.")
+			}
+			for location in errorLocationsWithMissingTypesDeclared ?? [] where !marked.contains(location) {
+				problems.append("With \(missingTypeNames.joined(separator: ", ")) declared, `generate` reports an error at \(location), where the export marks no dependency unfulfilled, so its trees are not partial trees of this graph.")
 			}
 		} else {
 			for mark in marks {
@@ -781,14 +818,17 @@ struct GraphFuzzerQueryDeletion: Sendable {
 /// which the deletion oracle checks beside `GraphFuzzerQueryDeletion`: `query graph` reads a receive nothing provides
 /// from the declarations as written, so deleting a property moves only what read that property.
 ///
-/// The property is an instantiated dependency of a declaration some root reaches, the first that declaration declares,
-/// so that its siblings keep their order without it, whose type's declaration has no dependency of its own, so that no
-/// tree goes with it; chosen by the graph's seed. The export of the graph without it, where it has trees, must be the
-/// full graph's but for the dependencies that receive or rename its label. Of those, none is handed the property, each
-/// keeps every other declaration it was handed, one that never read the property keeps its `provenance` whole, a
-/// dependency is marked exactly where a value of it is `unfulfilled` and names nothing, and each `unfulfilled` value
-/// that names a dependency names a marked receive of the label. Every other dependency's `provenance`, and every
-/// `isReachedByRoot` but the property's type's, is the full graph's.
+/// The property is an instantiated dependency of a declaration some root reaches whose type's declaration has no
+/// dependency of its own, so that no tree goes with it and no sibling waits on it: the one whose value the most
+/// receives beneath another receive of it are handed, then the one the most receives are handed, and among equals one
+/// chosen by the graph's seed. The export of the graph without it, where it has trees, must be the full graph's but for
+/// the dependencies that receive or rename its label. Of those, none is handed the property, each keeps every other
+/// declaration it was handed, one that never read the property keeps its `provenance` whole, a dependency is marked
+/// exactly where a value of it is `unfulfilled` and names nothing, and each `unfulfilled` value that names a dependency
+/// names a marked receive of the label. What takes the property's place is judged too: each `declaration` a reader is
+/// handed is a dependency of the export that provides a value (instantiated, forwarded or an alias), a reader that was
+/// handed the property is handed something in its place, and a required receive that is not optional is never `nil`.
+/// Every other dependency's `provenance`, and every `isReachedByRoot` but the property's type's, is the full graph's.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerQueryProviderDeletion: Sendable {
 	/// The deletion to make from `fixture`, whose `query graph` export is `json`, or `nil` where the export built no
@@ -901,10 +941,14 @@ struct GraphFuzzerQueryProviderDeletion: Sendable {
 		var problems = [String]()
 		var declarationsByID = [String: [String: Any]]()
 		var markedReceivesOfLabel = Set<String>()
+		var providingDependencies = Set<String>()
 		var marksDependency = false
 		for declaration in export["declarations"] as? [[String: Any]] ?? [] {
 			let id = declaration["id"] as? String ?? "?"
 			declarationsByID[id] = declaration
+			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["source"] as? String != "received" || dependency["aliasOf"] != nil {
+				providingDependencies.insert("declaration \(id).\(dependency["label"] as? String ?? "?")")
+			}
 			for dependency in declaration["dependencies"] as? [[String: Any]] ?? [] where dependency["isUnfulfilled"] as? Bool == true {
 				marksDependency = true
 				if dependency["label"] as? String == label, dependency["aliasOf"] == nil {
@@ -964,9 +1008,18 @@ struct GraphFuzzerQueryProviderDeletion: Sendable {
 				for entry in fullEntries where entry.hasPrefix("declaration ") && entry != deleted && !provenance.contains(entry) {
 					problems.append("\(name): is no longer handed `\(entry)`.")
 				}
+				if provenance.isEmpty, fullEntries.contains(deleted) {
+					problems.append("\(name): was handed the deleted property and is handed nothing in its place.")
+				}
+				let type = dependency["type"] as? String ?? ""
+				let isRequiredAndNotOptional = dependency["isOnlyIfAvailable"] as? Bool != true && !type.hasSuffix("?") && !type.hasPrefix("Optional<")
 				for entry in provenance {
 					if entry == deleted {
 						problems.append("\(name): is handed the deleted property.")
+					} else if entry.hasPrefix("declaration "), !providingDependencies.contains(entry) {
+						problems.append("\(name): is handed `\(entry)`, which is no instantiated, forwarded or aliased dependency of the export.")
+					} else if entry.hasPrefix("nil"), isRequiredAndNotOptional {
+						problems.append("\(name): required and not optional, and a value of it is `\(entry)`.")
 					} else if entry == "unfulfilled" {
 						if dependency["isOnlyIfAvailable"] as? Bool == true {
 							problems.append("\(name): received only if available, and a value of it is `unfulfilled` naming nothing.")
@@ -1029,8 +1082,8 @@ enum GraphFuzzerQueryJudgment {
 	struct Marks {
 		/// Whether the export has partial trees.
 		let isPartial: Bool
-		/// Whether the export marks a dependency only the graph with its missing types declared accounts for, so that the
-		/// graph was run again so.
+		/// Whether the export marks an instantiated dependency, so that the graph was run again with its missing types
+		/// declared.
 		let ranWithMissingTypesDeclared: Bool
 		let problems: [String]
 	}
@@ -1040,13 +1093,13 @@ enum GraphFuzzerQueryJudgment {
 		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture.withoutSeams)
 		guard case .rejected = outcome else { return nil }
 		let marks = try await GraphFuzzerUnfulfilledDependencies(exportedJSON: GraphFuzzerQuerySupplies.export(of: fixture))
-		let outcomeWithMissingTypesDeclared = try await marks.outcomeWithMissingTypesDeclared(of: fixture, generateOutcome: outcome)
+		let outcomeWithMissingTypesDeclared = try await marks.outcomeWithMissingTypesDeclared(of: fixture)
 		return Marks(
 			isPartial: marks.isPartial,
 			ranWithMissingTypesDeclared: outcomeWithMissingTypesDeclared != nil,
 			problems: marks.problems(
 				generateErrorLocations: GraphFuzzerUnfulfilledDependencies.errorLocations(of: outcome, fixture: fixture),
-				errorLocationsWithMissingTypesDeclared: outcomeWithMissingTypesDeclared.map { GraphFuzzerUnfulfilledDependencies.errorLocations(of: $0, fixture: fixture) },
+				errorLocationsWithMissingTypesDeclared: outcomeWithMissingTypesDeclared?.productionErrorLocations,
 				fixture: fixture,
 			),
 		)
@@ -1054,8 +1107,7 @@ enum GraphFuzzerQueryJudgment {
 
 	/// What `queryDeletionFailure` finds in a graph in one module whose export has trees.
 	struct Deletions {
-		/// Whether a type's declaration was deleted, and whether that left a dependency `generate` reports.
-		let deletesDeclaration: Bool
+		/// Whether a type's declaration was deleted and that left a dependency `generate` reports.
 		let declarationLeavesDependencyUnfulfilled: Bool
 		/// Whether the export without a property that provides a value has partial trees, and whether a receive in it is
 		/// `unfulfilled` naming a marked receive above it.
@@ -1082,7 +1134,6 @@ enum GraphFuzzerQueryJudgment {
 			problems += try propertyDeletion.problems(exportedJSONWithoutProperty: exportWithoutProperty)
 		}
 		return Deletions(
-			deletesDeclaration: declarationDeletion != nil,
 			declarationLeavesDependencyUnfulfilled: declarationDeletion?.leavesDependencyUnfulfilled == true,
 			propertyLeavesPartialTrees: propertyLeavesPartialTrees,
 			propertyLeavesReceiveBeneathMarkedReceive: propertyLeavesReceiveBeneathMarkedReceive,

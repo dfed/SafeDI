@@ -15122,7 +15122,7 @@ struct GraphFuzzerToolRuns {
 	///   - rejectedQueryExport: The JSON `query graph` exports for a graph in one module the tool rejects, which
 	///     `queryUnfulfilledFailure` judges.
 	///   - missingTypesDeclaredOutcome: The outcome of that graph with an empty declaration of each type the export marks
-	///     missing, with no seam, where the export marks a dependency `generate` reports no error at.
+	///     missing, with no seam, where the export has partial trees built around such a type.
 	///   - queryDeletion: The declaration the deletion oracle deletes from a graph in one module the tool accepts, with
 	///     the JSON `query graph` exports for the graph without it, which `queryDeletionFailure` judges.
 	///   - queryProviderDeletion: The property that provides a value the deletion oracle deletes from that graph, with
@@ -15153,7 +15153,7 @@ struct GraphFuzzerToolRuns {
 		drawnHolePlaces: [GraphFuzzerDrawnHolePlace] = [],
 		queryExport: String? = nil,
 		rejectedQueryExport: String? = nil,
-		missingTypesDeclaredOutcome: GraphFuzzerToolOutcome? = nil,
+		missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared? = nil,
 		queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)? = nil,
 		queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)? = nil,
 	) {
@@ -15217,7 +15217,7 @@ struct GraphFuzzerToolRuns {
 	let drawnHolePlaces: [GraphFuzzerDrawnHolePlace]
 	let queryExport: String?
 	let rejectedQueryExport: String?
-	let missingTypesDeclaredOutcome: GraphFuzzerToolOutcome?
+	let missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
 	let queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
 	let queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 
@@ -17005,7 +17005,7 @@ enum GraphFuzzerOracle {
 		// A graph in one module the tool rejects is exported too, whose dependencies marked unfulfilled must be where the
 		// errors it reports are (`queryUnfulfilledFailure`).
 		var rejectedQueryExport: String?
-		var missingTypesDeclaredOutcome: GraphFuzzerToolOutcome?
+		var missingTypesDeclaredOutcome: GraphFuzzerUnfulfilledDependencies.OutcomeWithMissingTypesDeclared?
 		var queryDeletion: (deletion: GraphFuzzerQueryDeletion, export: String)?
 		var queryProviderDeletion: (deletion: GraphFuzzerQueryProviderDeletion, export: String)?
 		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic) {
@@ -17024,9 +17024,9 @@ enum GraphFuzzerOracle {
 			case .rejected:
 				let export = try await GraphFuzzerQuerySupplies.export(of: fixture)
 				rejectedQueryExport = export
-				// Where the export marks a dependency `generate` reports no error at, the graph is run again with each missing
-				// type declared, whose errors the further marks must be at.
-				missingTypesDeclaredOutcome = try await (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: export))?.outcomeWithMissingTypesDeclared(of: fixture, generateOutcome: inlineOutcome ?? firstOutcome)
+				// Where the export has partial trees built around a missing type, the graph is run again with each missing
+				// type declared: its errors are the further marks, and the export marks every one of them.
+				missingTypesDeclaredOutcome = try await (try? GraphFuzzerUnfulfilledDependencies(exportedJSON: export))?.outcomeWithMissingTypesDeclared(of: fixture)
 			}
 		}
 		return try await GraphFuzzerToolRuns(

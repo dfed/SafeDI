@@ -31,7 +31,7 @@ public struct QueryGraph: AsyncParsableCommand {
 	public static let configuration = CommandConfiguration(
 		commandName: "graph",
 		abstract: "Export every `@Instantiable` declaration, its dependencies, which declaration fulfills each one and which declarations each fulfills, and where each received dependency’s value comes from, as JSON (alpha).",
-		discussion: "Reads the modules named with `--include` and `--module-info` once, as `query needs` reads them, and prints one JSON document: each production `@Instantiable` declaration with its module, file and line, the dependencies it declares, each with its type as declared and as a plain type and an instantiated one with the `fulfilledByType:` it names, the declaration that fulfills each instantiated dependency (`fulfilledBy`) and, on each declaration, the dependencies it fulfills (`constructedBy`), the declaration that fulfills each type, and, read from the trees `generate` builds, each declaration whose value a received dependency is handed, or why it is handed `nil` (`provenance`). Each declaration and dependency appears once, however many trees reach it. The same inputs give the same bytes. `completeness` says how much SafeDI worked out: when two declarations fulfill one type, only the declarations are exported; when only dependencies that cannot be fulfilled keep the trees from being valid, those dependencies are marked `isUnfulfilled` and provenance is read from the trees built around them, with every declaration as written; when the trees are not valid otherwise, no provenance is; `errors` says why, and the command still succeeds. This command is in alpha: its options and JSON may change in any release, which the JSON’s `formatVersion` of 0 says. SafeDI’s Documentation/QueryGraph.md documents the format.",
+		discussion: "Reads the modules named with `--include` and `--module-info` once, as `query needs` reads them, and prints one JSON document: each production `@Instantiable` declaration with its module, file and line, the dependencies it declares, each with its type as declared and as a plain type and an instantiated one with the `fulfilledByType:` it names, the declaration that fulfills each instantiated dependency (`fulfilledBy`) and, on each declaration, the dependencies it fulfills (`constructedBy`), the declaration that fulfills each type, and, read from the trees `generate` builds, each declaration whose value a received dependency is handed, or why it is handed `nil` (`provenance`). Each declaration and dependency appears once, however many trees reach it. The same inputs give the same bytes. `completeness` says how much SafeDI worked out: when two declarations fulfill one type, only the declarations are exported; when only dependencies that cannot be fulfilled keep the trees from being valid, those dependencies are marked `isUnfulfilled` and provenance is read from the trees built around them, with every declaration as written; when the trees are not valid otherwise, no provenance is; `errors` lists what `generate` reports, and the command still succeeds. This command is in alpha: its options and JSON may change in any release, which the JSON’s `formatVersion` of 0 says. SafeDI’s Documentation/QueryGraph.md documents the format.",
 	)
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, as `query needs` takes them.") var include: [String] = []
@@ -102,7 +102,9 @@ public struct QueryGraph: AsyncParsableCommand {
 				// `generate` reports the types no declaration fulfills before any receive nothing provides, which it
 				// reports once those types are declared. So the trees are built again at most twice: around the types,
 				// then around the receives too. Any other error is not of a dependency that cannot be fulfilled, so no
-				// provenance is read, and `generate`'s own error is the only one exported.
+				// provenance is read, and `generate`'s own error is the only one exported; nor is any read where a builder
+				// function a lazy cycle closes on takes the label of one of those receives as a parameter the receive
+				// reads or a call beneath it passes.
 				var latestError: any Error = error
 				var unfulfilledReceiveLocations = Set<Dependency.DeclarationLocation>()
 				var reportedDependencies = [UnfulfilledDependency]()
@@ -115,7 +117,8 @@ public struct QueryGraph: AsyncParsableCommand {
 					unfulfilledReceiveLocations.formUnion(absentDeclarations.unfulfilledReceiveLocations)
 					reportedDependencies.append(contentsOf: absentDeclarations.unfulfilledDependencies)
 					do {
-						supplies = try await Self.generator(over: productionMap, unfulfilledReceiveLocations: unfulfilledReceiveLocations).receivedValueSupplies()
+						guard let suppliesAroundDependencies = try await Self.generator(over: productionMap, unfulfilledReceiveLocations: unfulfilledReceiveLocations).receivedValueSupplies() else { break }
+						supplies = suppliesAroundDependencies
 					} catch let error as any SourceLocatedError {
 						latestError = error
 						reportedDiagnostics.append(contentsOf: error.sourceDiagnostics)
@@ -315,8 +318,8 @@ public struct QueryGraphReport: Encodable, Equatable, Sendable {
 	/// The modules read, in name order.
 	public let modules: [GraphModule]
 	/// How much of the graph SafeDI could work out: the declarations alone, which type fulfills each type too, the trees
-	/// of the roots built around the dependencies that cannot be fulfilled, or the trees of the roots. `errors` says why
-	/// it stopped short.
+	/// of the roots built around the dependencies that cannot be fulfilled, or the trees of the roots. `errors` lists
+	/// what `generate` reports of a graph it stopped short on.
 	public let completeness: Completeness
 	/// The errors that kept SafeDI from resolving the graph or from building its trees.
 	public let errors: [GraphError]
