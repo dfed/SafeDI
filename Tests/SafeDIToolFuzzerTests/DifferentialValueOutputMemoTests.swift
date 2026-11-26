@@ -60,7 +60,8 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 
 	@Test(arguments: [
 		"a fixture file", "a fixture file's name", "a generated file", "main", "the executable's module name", "the module's name",
-		"the package name", "a dependency", "a compilation condition", "the mock condition", "the harness", "the build",
+		"the package name", "a dependency", "a compilation condition", "the mock condition", "the language mode", "the harness",
+		"the build",
 	])
 	func key_changes_whenOneInputOfTheProgramChanges(input: String) throws {
 		var fixtureFiles = ["Root.swift": Self.fixture]
@@ -72,6 +73,7 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 		var dependencyModuleNames = [String]()
 		var activeCompilationConditions = [String]()
 		var mockConditionalCompilation: String?
+		var swiftLanguageMode = "6"
 		var harness = "harness"
 		var build = "build"
 		switch input {
@@ -85,6 +87,7 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 		case "a dependency": dependencyModuleNames = ["Other"]
 		case "a compilation condition": activeCompilationConditions = ["CUSTOM"]
 		case "the mock condition": mockConditionalCompilation = "DEBUG"
+		case "the language mode": swiftLanguageMode = "5"
 		case "the harness": harness = "another harness"
 		case "the build": build = "another build"
 		default: Issue.record("No change is written for \(input).")
@@ -98,6 +101,7 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 				generatedFiles: generatedFiles,
 				activeCompilationConditions: activeCompilationConditions,
 				mockConditionalCompilation: mockConditionalCompilation,
+				swiftLanguageMode: swiftLanguageMode,
 			)]),
 			main: main,
 			executableModuleName: executableModuleName,

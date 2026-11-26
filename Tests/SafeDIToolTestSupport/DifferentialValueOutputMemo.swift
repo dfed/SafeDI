@@ -134,7 +134,7 @@ struct DifferentialValueOutputMemo: Sendable {
 	/// canonical description of `build` (what compiles it, as `CompileCheckBuild.description` gives it), `harness`
 	/// (the sources that decide what a program is and prints, and its runtime's, as
 	/// `harnessDescription(runtimeSourcesDirectory:macrosTool:describerSource:)` gives them), each module's name,
-	/// package, dependencies and conditions, the name and contents of each of its files in name order, and `main`.
+	/// package, dependencies, conditions and language mode, the name and contents of each of its files in name order, and `main`.
 	///
 	/// Each of `fixtureRoots` and each UUID is rewritten as a compile check's key rewrites them
 	/// (`CompileCheckTextNormalization`), so that a file that spells a path of this run has the same key in the next.
@@ -160,6 +160,7 @@ struct DifferentialValueOutputMemo: Sendable {
 				dependencyModuleNames: module.dependencyModuleNames,
 				activeCompilationConditions: module.activeCompilationConditions,
 				mockConditionalCompilation: module.mockConditionalCompilation,
+				swiftLanguageMode: module.swiftLanguageMode,
 				fixtureFiles: files(module.fixtureFiles),
 				generatedFiles: files(module.generatedFiles),
 			))
@@ -167,7 +168,7 @@ struct DifferentialValueOutputMemo: Sendable {
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
 		return try sha256HexDigest(of: encoder.encode(ProgramDescription(
-			formatVersion: 1,
+			formatVersion: 2,
 			build: build,
 			harness: harness,
 			modules: modules,
@@ -270,6 +271,7 @@ private struct ProgramDescription: Encodable {
 		let dependencyModuleNames: [String]
 		let activeCompilationConditions: [String]
 		let mockConditionalCompilation: String?
+		let swiftLanguageMode: String
 		let fixtureFiles: [File]
 		let generatedFiles: [File]
 	}

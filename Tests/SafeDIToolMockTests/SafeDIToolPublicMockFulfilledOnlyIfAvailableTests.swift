@@ -25,7 +25,7 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// A public mock of a type whose tree instantiates only if available a dependency a declaration fulfills builds it, as
-/// production does, and takes the entry `<label>IsUnavailable: Bool = false` beside the dependency’s own, in its
+/// production does, and takes the entry `<label>IsUnavailable: Bool = false` before the dependency’s own, in its
 /// `SafeDIOverrides` and in the module-level configuration of the type that declares the dependency, whose `true`
 /// binds the dependency to `nil`, as an internal mock does. A mock in another module that calls the public mock hands
 /// it its `SafeDIOverrides` entry whole, so a test sets the entry through the calling mock.

@@ -34,6 +34,8 @@ struct DifferentialValueModule {
 	///   - generatedFiles: The files SafeDI generated for the module, by name.
 	///   - mockConditionalCompilation: The condition the module's generated mocks are wrapped in, which the compile
 	///     defines so the mocks compile too. `DEBUG` is always defined.
+	///   - swiftLanguageMode: The `-swift-version` the module compiles in, so that a fixture can call generated code
+	///     as code of that language mode does.
 	init(
 		name: String,
 		packageName: String? = nil,
@@ -42,6 +44,7 @@ struct DifferentialValueModule {
 		generatedFiles: [String: String] = [:],
 		activeCompilationConditions: [String] = [],
 		mockConditionalCompilation: String? = nil,
+		swiftLanguageMode: String = "6",
 	) {
 		self.name = name
 		self.packageName = packageName
@@ -50,6 +53,7 @@ struct DifferentialValueModule {
 		self.generatedFiles = generatedFiles
 		self.activeCompilationConditions = activeCompilationConditions
 		self.mockConditionalCompilation = mockConditionalCompilation
+		self.swiftLanguageMode = swiftLanguageMode
 	}
 
 	var name: String
@@ -59,6 +63,7 @@ struct DifferentialValueModule {
 	var generatedFiles: [String: String]
 	var activeCompilationConditions: [String]
 	var mockConditionalCompilation: String?
+	var swiftLanguageMode: String
 
 	/// Everything about the module but its files: the modules of graphs whose paths have one layout compile as one.
 	fileprivate struct Layout: Hashable {
@@ -67,6 +72,7 @@ struct DifferentialValueModule {
 		let dependencyModuleNames: [String]
 		let activeCompilationConditions: [String]
 		let mockConditionalCompilation: String?
+		let swiftLanguageMode: String
 	}
 
 	fileprivate var layout: Layout {
@@ -76,6 +82,7 @@ struct DifferentialValueModule {
 			dependencyModuleNames: dependencyModuleNames,
 			activeCompilationConditions: activeCompilationConditions,
 			mockConditionalCompilation: mockConditionalCompilation,
+			swiftLanguageMode: swiftLanguageMode,
 		)
 	}
 }
@@ -1130,6 +1137,7 @@ enum DifferentialValueOracle {
 				moduleSearchPaths: path.moduleNames(dependedOnBy: module).compactMap { moduleDirectoriesByName[$0] },
 				enablesTesting: true,
 				parsesAsLibrary: true,
+				swiftLanguageMode: module.swiftLanguageMode,
 			)
 			guard result.exitCode == 0 else {
 				throw DifferentialValueOracleError(
@@ -2404,6 +2412,7 @@ extension DifferentialValuePath {
 				dependencyModuleNames: module.dependencies,
 				fixtureFiles: fixtureFiles,
 				generatedFiles: output.modules[module.name]?.generatedFiles ?? [:],
+				swiftLanguageMode: module.compilerSettings.swiftLanguageMode,
 			)
 		})
 	}

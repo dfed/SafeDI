@@ -607,13 +607,14 @@ extension MockLowering {
 		/// The name of the entry that builds each of `generators`, one level's nodes bound as `bindingNames`, as `nil`, `nil`
 		/// for a node that has none: a mock's node of a property its parent's type instantiates only if available that a
 		/// declaration fulfills (`@Instantiated(onlyIfAvailable: true)`), which production builds, takes an entry
-		/// `<binding name>IsUnavailable: Bool = false` beside its own, set to build it as `nil`, as production binds it where
-		/// nothing fulfills it, in an internal mock's configurations and in a public mock's, which declare it beside the
+		/// `<binding name>IsUnavailable: Bool = false` before its own, set to build it as `nil`, as production binds it where
+		/// nothing fulfills it, in an internal mock's configurations and in a public mock's, which declare it before the
 		/// node's member (`PublicConstructionRecord.ChildMember.members(of:)`). Each name is claimed after every field the
 		/// level's configuration declares, the nodes' own, its defaults' and its builder's
-		/// (`parentConfigurationReservedNames`), `_` appended while one has it, so no existing field moves. A node that
-		/// closes a cycle takes none, and one that reads no field of its own (beneath a pruned cycle edge) reads none,
-		/// deliberate gaps: neither reads its own override, which the entry stands beside.
+		/// (`parentConfigurationReservedNames`), `_` appended while one has it, so no existing field moves. Not yet written,
+		/// though the Manual promises the entry there (`SafeDIToolMockUnavailableEntryAcceptanceTests`' known issues, which
+		/// the mock writer's rewrite closes): a node another module's public mock builds, a node that closes a cycle, and
+		/// one that reads no field of its own (beneath a pruned cycle edge).
 		private func unavailableEntryNames(of generators: [ScopeGenerator], boundAs bindingNames: [String?]) -> [String?] {
 			guard !parentInstantiatedOnlyIfAvailableProperties.isEmpty else { return Array(repeating: nil, count: generators.count) }
 			var takenNames = parentConfigurationReservedNames
@@ -1574,7 +1575,7 @@ extension MockLowering {
 		/// The builder `mock()` takes that the node reads where it is a place of another module's public mock the tree builds
 		/// inline, with the read of its override outside its builder function.
 		var inlinePlace: InlinePlace?
-		/// The name of the entry beside the node's own in its parent's configuration that builds the node as `nil`, where its
+		/// The name of the entry before the node's own in its parent's configuration that builds the node as `nil`, where its
 		/// parent's type instantiates it only if available (`Walk.unavailableEntryNames(of:boundAs:)`), else `nil`.
 		var unavailableEntryName: String?
 		/// The read of that entry where the node is bound, or `nil` where the node reads none: it reads no override of its own,

@@ -26,7 +26,7 @@ import Testing
 
 /// A mock of a type whose tree declares `@Instantiated(onlyIfAvailable: true) let analytics: (any Analytics)?`, where a
 /// production declaration fulfills `Analytics`. Production builds `analytics`; so does an internal mock, which also takes an
-/// entry `analyticsIsUnavailable: Bool = false` beside the property's own, which builds it as `nil`, as production binds it in
+/// entry `analyticsIsUnavailable: Bool = false` before the property's own, which builds it as `nil`, as production binds it in
 /// an app where nothing fulfills the type.
 struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 	// MARK: Initialization
@@ -46,7 +46,7 @@ struct SafeDIToolMockFulfilledOnlyIfAvailableTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_takesEntryBuildingPropertyAsNil_whenMockedTypeInstantiatesFulfilledTypeOnlyIfAvailable() async throws {
-		// `analytics` is built by value and `logger` with a configuration of its own: each takes an entry beside its own.
+		// `analytics` is built by value and `logger` with a configuration of its own: each takes an entry before its own.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
