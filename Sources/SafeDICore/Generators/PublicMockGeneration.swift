@@ -1313,13 +1313,40 @@ extension ScopeGenerator {
 	}
 
 	/// Each dependency a declaration in the tree of `nodes` (`MockTreeNames.propertyNodes`, each before its children)
-	/// declares, with that declaration, in tree order: the mocked type's own first.
+	/// declares, with that declaration, in tree order: the mocked type's own first. A tree has a node per path, each of
+	/// which lists its type's dependencies again, so each declaration is kept once, where the tree first reaches it, as a
+	/// seam's receivers are (`DependencyTreeGenerator.receivers(in:of:instantiables:)`): a diagnostic names it once, and
+	/// the list never follows the number of paths.
 	static func treeReceivers(in nodes: [MockTreeNames.PropertyNode], mockedType: Instantiable) -> [(declaringType: TypeDescription, dependency: Dependency)] {
 		var receivers = mockedType.dependencies.map { (declaringType: mockedType.concreteInstantiable, dependency: $0) }
+		var declarations = Set(receivers.map { TreeReceiverDeclaration(declaringType: $0.declaringType, dependency: $0.dependency) })
 		for node in nodes {
-			receivers += node.instantiable.dependencies.map { (declaringType: node.instantiable.concreteInstantiable, dependency: $0) }
+			let declaringType = node.instantiable.concreteInstantiable
+			for dependency in node.instantiable.dependencies
+				where declarations.insert(TreeReceiverDeclaration(declaringType: declaringType, dependency: dependency)).inserted
+			{
+				receivers.append((declaringType: declaringType, dependency: dependency))
+			}
 		}
 		return receivers
+	}
+
+	/// A declaration of a dependency in a mock's tree, as `treeReceivers(in:mockedType:)` keeps it once. A declaration read
+	/// from another module's info carries no location, so the source is part of it too: two declarations of one type and
+	/// property that differ only in how the value reaches them stay two receivers, and which one is kept never follows
+	/// the order of the walk.
+	private struct TreeReceiverDeclaration: Hashable {
+		init(declaringType: TypeDescription, dependency: Dependency) {
+			self.declaringType = declaringType
+			declarationLocation = dependency.declarationLocation
+			property = dependency.property
+			source = dependency.source
+		}
+
+		let declaringType: TypeDescription
+		let declarationLocation: Dependency.DeclarationLocation?
+		let property: Property
+		let source: Dependency.Source
 	}
 }
 
