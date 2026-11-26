@@ -1011,7 +1011,12 @@ extension DependencyTreeGenerator {
 		// or at the limit, which no input reaches by the argument above and which reports the component if one does. The
 		// argument needs each pass to read the component's other seams as one pass left them: an enum a seam's builders
 		// reach is read from the seam that declares it (`ownScopeEnums`), since copies of different ages, each carried
-		// by a different neighbor, would differ on every pass around a cycle of four seams.
+		// by a different neighbor, would differ on every pass around a cycle of four seams. For the same reason a place
+		// a seam passes up is labeled by the seam that declares it, with that seam's own builder label for the place's
+		// hole type and family (`holes(of:…)`), which follows only from that seam's hole types and parameters, both of
+		// which only grow: a label is a function of the places a pass settles, and never an input to another seam's
+		// label. A label a passing seam named apart from its own holes would carry each seam's names into the next
+		// around a ring, and change on every pass.
 		var errorsOfLastPass = [DependencyTreeGeneratorError]()
 		var failedSeamsOfLastPass = Set<TypeDescription>()
 		var settled = false
@@ -1086,7 +1091,6 @@ extension DependencyTreeGenerator {
 						ownScopeEnums: ownScopeEnums,
 						generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
 						declaredTypeNames: declaredTypeNames,
-						unsettledSeams: component,
 					)
 					if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 						changed = true
@@ -2002,9 +2006,7 @@ extension DependencyTreeGenerator {
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
 	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
 	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
-	/// - Parameter unsettledSeams: The seams whose signatures are computed beside this one's, the seams of its component,
-	///   whose holes this seam names from their sites when it passes them up (`holes(of:…)`).
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames, unsettledSeams: Set<TypeDescription>) throws -> ScopeGenerator.SeamRoot? {
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -2196,7 +2198,7 @@ extension DependencyTreeGenerator {
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,
-			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables, unsettledSeams: unsettledSeams),
+			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables),
 			parameters: parameters,
 			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
 			proof: proof,

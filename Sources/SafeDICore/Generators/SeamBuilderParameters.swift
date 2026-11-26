@@ -39,13 +39,6 @@ extension DependencyTreeGenerator {
 	/// scope that makes it, bound before its children, and `parameters` are the mock's root level
 	/// (`PublicMockRootLevel`), whose `namesApartAtRoot` no level declares and whose `receiversByParameter` are the declarations
 	/// that receive each parameter's own form (`PublicMockRootLevel.receiversByField`).
-	/// - Parameter unsettledSeams: The seams whose signatures are still being settled beside `seam`'s, the seams of its
-	///   strongly connected component. A hole that one of them passes up in turn, and a call of it passes up here, is
-	///   labeled from its site, as the seam's own sites are, never from the label that seam's signature of the pass before
-	///   gave it: that label is named apart from that seam's holes, which include this seam's, so copying it around a
-	///   cycle of seams fed each seam's names into the next pass of its own, and the labels changed on every pass. A hole
-	///   that seam builds itself keeps its label there, its builder's, which follows only from the seam's hole types and
-	///   parameters, both of which only grow.
 	static func holes(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
@@ -55,7 +48,6 @@ extension DependencyTreeGenerator {
 		receiversByParameter: [Property: [SeamSignature.Receiver]] = [:],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
-		unsettledSeams: Set<TypeDescription> = [],
 	) -> [SeamSignature.Hole] {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
@@ -142,9 +134,10 @@ extension DependencyTreeGenerator {
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
 		// are named apart by their owner, their declared type simplified, their declared type, and their site path, a
-		// parameter keeping its label. A hole a call passes up keeps the label the called seam's signature gives it,
-		// but one that a seam of this seam's component, whose signature is not settled, passes up in turn is labeled from
-		// its site (`unsettledSeams`). A scope struct is named after the owner and the property, with the site path
+		// parameter keeping its label. A hole a call passes up starts from the label the seam that declares it gives it,
+		// its own root enum's builder for the hole's type and family, never the label a seam that passes it up in turn
+		// gave it, which that seam named apart from its own holes: around a ring of seams whose signatures settle
+		// together, such a label carried each seam's names into the next, and changed on every pass. A scope struct is named after the owner and the property, with the site path
 		// appended for a property built at several sites, and an underscore appended while it equals an earlier one.
 		struct Candidate {
 			let label: String
@@ -162,7 +155,7 @@ extension DependencyTreeGenerator {
 			)
 		} + passedUpHoles.map { passedUp in
 			Candidate(
-				label: unsettledSeams.contains(passedUp.innerSeamType) && passedUp.hole.innerSeamType != nil ? "\(passedUp.hole.property.label)Builder".spelledAsJoinedIdentifier : passedUp.hole.builderLabel,
+				label: passedUp.declaringSeamLabel,
 				suffixTypes: [
 					passedUp.hole.ownerType,
 					passedUp.hole.property.typeDescription.simplified,
@@ -463,8 +456,8 @@ extension DependencyTreeGenerator {
 		seamModule: ModuleIdentity,
 		ownSitePaths: [[Property]],
 		hiddenByCall: inout [ObjectIdentifier: [String: FillReentryHidings]],
-	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions]) {
-		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)]()
+	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole, declaringSeamLabel: String)], ownSiteAdditions: [[Property]: SiteAdditions]) {
+		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole, declaringSeamLabel: String)]()
 		var takenSites = Set(ownSitePaths.map { SeamSignature.Hole.Site(seamType: seamType, path: $0) })
 		var additionsBySite = [SeamSignature.Hole.Site: SiteAdditions]()
 		var generatorsToVisit = [(generator: generator, typesToCall: [SeamSignature.Hole.PathType](), route: [SeamSignature.Hole.DeclaredProperty](), pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration](), isInSendableFunction: false, fillContexts: [FillContext]())]
@@ -480,7 +473,11 @@ extension DependencyTreeGenerator {
 			if let innerSeamType = visited.builtInstantiable?.concreteInstantiable {
 				for hole in visited.passedUpHoles {
 					if takenSites.insert(hole.site).inserted {
-						passedUpHoles.append((innerSeamType, typesToCall, route, hole))
+						// The seam that declares the place labels it: its own root enum's builder for the place's hole type and family,
+						// which the called seam's signature carries, since a builder of the called seam reaches the place from it. That
+						// label follows only from the declaring seam's hole types and parameters, so no passed-up label feeds another.
+						let declaringSeamLabel = visited.calledBuilders?.enumsByKey[SeamSignature.ScopeEnum.rootKey(of: hole)]?.builderLabel ?? hole.builderLabel
+						passedUpHoles.append((innerSeamType, typesToCall, route, hole, declaringSeamLabel))
 					}
 					// The call captures the builder when it is made in a `@Sendable` builder function, and takes it `@Sendable`
 					// when the presented copy is.
@@ -515,12 +512,12 @@ extension DependencyTreeGenerator {
 			ownSiteAdditions[path] = additionsBySite[SeamSignature.Hole.Site(seamType: seamType, path: path)]
 		}
 		return (
-			passedUpHoles.map { innerSeamType, typesToCall, route, hole in
+			passedUpHoles.map { innerSeamType, typesToCall, route, hole, declaringSeamLabel in
 				let additions = additionsBySite[hole.site, default: SiteAdditions()]
 				var passedUpHole = additions.presenting(hole)
 				passedUpHole.reenteringCallDeclarations = additions.reenteringCallDeclarations
 				passedUpHole.reenteringPlaceFields = additions.reenteringPlaceFields
-				return (innerSeamType, typesToCall, route, passedUpHole)
+				return (innerSeamType, typesToCall, route, passedUpHole, declaringSeamLabel)
 			},
 			ownSiteAdditions,
 		)
