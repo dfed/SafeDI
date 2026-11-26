@@ -718,6 +718,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		SeamSignature.Places.Level.self,
 		SeamSignature.Places.LevelKey.self,
 		SeamSignature.Places.Declaration.self,
+		SeamSignature.Places.ChildFacts.self,
 		SeamSignature.Places.Buildability.self,
 		SeamSignature.Places.FillFieldHiding.self,
 		SeamSignature.Places.SendableFunctionOpened.self,
@@ -3045,6 +3046,7 @@ extension SeamSignature.Places: BinarySample {}
 extension SeamSignature.Places.Level: BinarySample {}
 extension SeamSignature.Places.LevelKey: BinarySample {}
 extension SeamSignature.Places.Declaration: BinarySample {}
+extension SeamSignature.Places.ChildFacts: BinarySample {}
 extension SeamSignature.Places.Buildability: BinarySample {}
 extension SeamSignature.Places.FillFieldHiding: BinarySample {}
 extension SeamSignature.Places.SendableFunctionOpened: BinarySample {}

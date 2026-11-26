@@ -20,10 +20,12 @@
 
 import SafeDICore
 
-// A seam's places as a module info file carries them (`SeamSignature.Places`): the levels and the cases, each type
-// written as `BinaryCodableSeamSignatures.swift` writes the rest of a signature, every field it stores in the order its
-// initializer takes them. A level, a declaration and a level's key write their optional and Boolean fields as flags: a
-// file holds one declaration per level that binds it, and most of what a declaration can hold is absent.
+// A seam's places as a module info file carries them (`SeamSignature.Places`): the levels, the cases and the levels'
+// lists of declarations, each type written as `BinaryCodableSeamSignatures.swift` writes the rest of a signature, every
+// field it stores in the order its initializer takes them. A level, a declaration, what a declaration holds as a child
+// of its scope and a level's key write their optional and Boolean fields as flags: most of what a declaration can hold
+// is absent. A file holds each list of declarations once, whichever of a type's properties its levels lead on through,
+// so a type with many places is written with one declaration per property, not one per pair of them.
 
 extension SeamSignature.Places: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
@@ -31,6 +33,7 @@ extension SeamSignature.Places: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("levels", \.levels),
 				BinaryLayoutField("cases", \.cases),
+				BinaryLayoutField("declarationLists", \.declarationLists),
 			],
 			unwrittenProperties: [],
 		)
@@ -40,12 +43,14 @@ extension SeamSignature.Places: BinarySchemaMember {
 		try self.init(
 			levels: reader.read(),
 			cases: reader.read(),
+			declarationLists: reader.read(),
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(levels)
 		writer.write(cases)
+		writer.write(declarationLists)
 	}
 }
 
@@ -204,6 +209,7 @@ extension SeamSignature.Places.Declaration: BinarySchemaMember {
 				BinaryLayoutField("isFieldOfSeamParameter", \.isFieldOfSeamParameter),
 				BinaryLayoutField("fillFieldHiding", \.fillFieldHiding),
 				BinaryLayoutField("buildability", \.buildability),
+				BinaryLayoutField("child", \.child),
 			],
 			unwrittenProperties: [],
 		)
@@ -211,7 +217,7 @@ extension SeamSignature.Places.Declaration: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		var fieldFlags = try reader.readFieldFlags()
-		try self.init(
+		let declaration = try Self(
 			field: reader.read(),
 			isBoundBeforeNextProperty: fieldFlags.next(),
 			builtAfter: reader.readOptional(flaggedIn: &fieldFlags) as Property?,
@@ -226,7 +232,10 @@ extension SeamSignature.Places.Declaration: BinarySchemaMember {
 			fillFieldHiding: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.FillFieldHiding?,
 			buildability: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.Buildability?,
 		)
+		// What it holds as a child of its scope is no argument of its initializer.
+		let child = try reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.ChildFacts?
 		try fieldFlags.finish()
+		self = child.map(declaration.asChild) ?? declaration
 	}
 
 	func write(to writer: inout BinaryWriter) {
@@ -245,6 +254,53 @@ extension SeamSignature.Places.Declaration: BinarySchemaMember {
 		fieldFlags.append(isFieldOfSeamParameter)
 		writer.writeOptional(fillFieldHiding, flaggedIn: &fieldFlags)
 		writer.writeOptional(buildability, flaggedIn: &fieldFlags)
+		writer.writeOptional(child, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
+	}
+}
+
+extension SeamSignature.Places.ChildFacts: BinarySchemaMember {
+	static let writesFieldFlags = true
+
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("position", \.position),
+				BinaryLayoutField("isBuilder", \.isBuilder),
+				BinaryLayoutField("loop", \.loop),
+				BinaryLayoutField("builtType", \.builtType),
+				BinaryLayoutField("isPlace", \.isPlace),
+				BinaryLayoutField("receivesOnlyIfAvailable", \.receivesOnlyIfAvailable),
+				BinaryLayoutField("carriers", \.carriers),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
+		try self.init(
+			position: reader.read(),
+			isBuilder: fieldFlags.next(),
+			loop: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
+			builtType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
+			isPlace: fieldFlags.next(),
+			receivesOnlyIfAvailable: reader.read(),
+			carriers: reader.read(),
+		)
+		try fieldFlags.finish()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
+		writer.write(position)
+		fieldFlags.append(isBuilder)
+		writer.writeOptional(loop, flaggedIn: &fieldFlags)
+		writer.writeOptional(builtType, flaggedIn: &fieldFlags)
+		fieldFlags.append(isPlace)
+		writer.write(receivesOnlyIfAvailable)
+		writer.write(carriers)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
@@ -295,7 +351,9 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 		.structure(
 			fields: [
 				BinaryLayoutField("key", \.key),
-				BinaryLayoutField("declarations", \.declarations),
+				BinaryLayoutField("declarationList", \.declarationList),
+				BinaryLayoutField("nextPosition", \.nextPosition),
+				BinaryLayoutField("nextLoop", \.nextLoop),
 				BinaryLayoutField("opensSendableFunction", \.opensSendableFunction),
 				BinaryLayoutField("cycleReentries", \.cycleReentries),
 				BinaryLayoutField("fillBaseStack", \.fillBaseStack),
@@ -313,7 +371,9 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			key: reader.read(),
-			declarations: reader.read(),
+			declarationList: reader.read(),
+			nextPosition: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
+			nextLoop: reader.readOptional(flaggedIn: &fieldFlags) as Int?,
 			opensSendableFunction: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Places.SendableFunctionOpened?,
 			cycleReentries: reader.read(),
 			fillBaseStack: reader.read(),
@@ -330,7 +390,9 @@ extension SeamSignature.Places.Level: BinarySchemaMember {
 		var fieldFlags = BinaryFieldFlags()
 		let fieldsStart = writer.startFields()
 		writer.write(key)
-		writer.write(declarations)
+		writer.write(declarationList)
+		writer.writeOptional(nextPosition, flaggedIn: &fieldFlags)
+		writer.writeOptional(nextLoop, flaggedIn: &fieldFlags)
 		writer.writeOptional(opensSendableFunction, flaggedIn: &fieldFlags)
 		writer.write(cycleReentries)
 		writer.write(fillBaseStack)
