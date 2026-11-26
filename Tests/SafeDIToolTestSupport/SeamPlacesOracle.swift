@@ -41,6 +41,8 @@ public enum SeamPlacesOracle {
 		public var cases = 0
 		/// Sites a call passes up, which no case holds yet.
 		public var passedUpSites = 0
+		/// Places a buildable tree holds that a call passes up, which no case holds yet.
+		public var passedUpPlacesInTree = 0
 		public var siteQuestions = 0
 		public var caseQuestions = 0
 		public var mismatchCount = 0
@@ -95,6 +97,8 @@ public enum SeamPlacesOracle {
 		// 1. Per site, along its route.
 		var routeAnswersBySite = [Int: RouteAnswers]()
 		var siteFacts = [Int: SiteFacts]()
+		var casesInTreeByDeclaration = [String: Set<Int>]()
+		var casesInTreePathByDeclaration = [String: (path: String, property: String)]()
 		for (site, caseIndex) in observation.caseIndexBySite.enumerated() where caseIndex >= 0 && places.cases.indices.contains(caseIndex) {
 			let hole = holes[site]
 			let route = observation.routeBySite[site]
@@ -125,11 +129,13 @@ public enum SeamPlacesOracle {
 			var ownMatches = today.count >= ownGraph.count
 			for (index, graphJSON) in ownGraph.enumerated() where index < today.count {
 				let label = hole.uncarriedDeclarations[index].property.label
-				if today[index] == graphJSON {
-					ownToday.append((label, graphJSON))
-				} else if graphUncarried[index].isBoundFromCallersArgument, replacedOfCase.contains(today[index]) {
-					ownToday.append((label, graphJSON))
+				// The case records, for each declaration bound from the caller's argument, what the place holds in its place,
+				// replaced or not.
+				if graphUncarried[index].isBoundFromCallersArgument {
 					replaced.append(today[index])
+				}
+				if today[index] == graphJSON || graphUncarried[index].isBoundFromCallersArgument && replacedOfCase.contains(today[index]) {
+					ownToday.append((label, graphJSON))
 				} else {
 					ownMatches = false
 				}
@@ -139,20 +145,30 @@ public enum SeamPlacesOracle {
 				report.record("uncarried declarations at \(path): today \(today) graph \(ownGraph) then of the case's called copies \(placeCase.calledCopyDeclarations.map { uncarriedJSON($0) })")
 			}
 			siteFacts[site] = SiteFacts(ownUncarried: ownToday, calledCopies: added, replaced: replaced)
-			// The cases of the places a tree the seam's caller could build holds, in the order the tree reaches them.
+			// The cases of the places a tree the seam's caller could build holds: a level variant is shared by routes whose places
+			// in the tree fall in different cases, so the graph holds, per declaration, the union over every site that reads it.
 			for (uncarried, answer) in zip(hole.uncarriedDeclarations, answers.uncarried) where uncarried.isBuildableAboveSeam {
-				var todayCases = [String]()
+				guard let located = answer.located else { continue }
+				let key = "\(located.level).\(located.declaration)"
 				for placeInTree in uncarried.placesInTree {
-					let spelling = caseIndexBySitePath[placeInTree.path].map(String.init) ?? "unmatched \(spelled(placeInTree.path))"
-					if !todayCases.contains(spelling) {
-						todayCases.append(spelling)
+					if let caseIndex = caseIndexBySitePath[placeInTree.path] {
+						casesInTreeByDeclaration[key, default: []].insert(caseIndex)
+					} else {
+						// A place a call passes up has no case yet.
+						report.passedUpPlacesInTree += 1
 					}
 				}
-				let graphCases = answer.located.flatMap { places.declaration(level: $0.level, declaration: $0.declaration).buildability }?.placesInTree.map(String.init) ?? ["no buildability"]
-				compare("cases in the tree of \(uncarried.property.asSource)", at: path, today: todayCases, graph: graphCases, into: &report)
+				casesInTreePathByDeclaration[key] = casesInTreePathByDeclaration[key] ?? (path, uncarried.property.asSource)
 			}
 			compare("cycle re-entries", at: path, today: hole.cycleReentryDeclarations.map { json($0) }, graph: answers.cycleReentries.map { json($0) }, into: &report)
 			compare("declarations hidden by fields", at: path, today: hole.declarationsHiddenByFields.map { json($0) }, graph: answers.hiddenByFields.map { json($0) }, into: &report)
+		}
+
+		for (key, todayCases) in casesInTreeByDeclaration.sorted(by: { $0.key < $1.key }) {
+			let parts = key.split(separator: ".").compactMap { Int($0) }
+			let graphCases = places.declaration(level: parts[0], declaration: parts[1]).buildability.map { Set($0.placesInTree) }
+			guard graphCases != todayCases, let (path, property) = casesInTreePathByDeclaration[key] else { continue }
+			report.record("cases in the tree of \(property), first read at \(path): today \(todayCases.sorted()) graph \(graphCases.map { $0.sorted().map(String.init) } ?? ["no buildability"])")
 		}
 
 		// 2. Per case, the query against the union over its sites.
