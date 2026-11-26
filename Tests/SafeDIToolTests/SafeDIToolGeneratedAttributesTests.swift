@@ -306,10 +306,12 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		    @MainActor static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        func __safeDI_childBuilder() -> Child {
-		            if let safeDIBuilder = safeDIOverrides.childBuilder { safeDIBuilder() } else { Child() }
+		        func __safeDI_childBuilder(__safeDI_Child_configuration: (() -> Child)?) -> Child {
+		            if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder() } else { Child() }
 		        }
-		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+		        let childBuilder = Instantiator<Child> {
+		            __safeDI_childBuilder(__safeDI_Child_configuration: safeDIOverrides.childBuilder)
+		        }
 		        return Parent(childBuilder: childBuilder)
 		    }
 		}

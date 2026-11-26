@@ -33,6 +33,11 @@
 /// labels once, from the layers beneath it (`removeRedeclarations(closedOn:)`). Which declaration of a label a reader is
 /// handed is the one `CycleParameter.Redeclaration.preceding(_:)` puts first among them all, an order that depends on no
 /// walk, so neither the order layers are joined in nor the order they are read in reaches output.
+///
+/// One copy remains: a scope a cycle closes on while another cycle is still open beneath it adds the labels its own
+/// cycle declares to its layer (`ScopeGenerator.cycleParameterSearch`, `redeclarationsOfOwnCycle`), since the type the
+/// open cycle builds again is built beneath those declarations too. So a layer of such a scope holds as many labels as
+/// its cycle declares, and cycles nested `n` deep merge on the order of `n` cubed labels where they merged `n` squared.
 struct CycleClosingRedeclaredLabels: Sendable {
 	init() {}
 

@@ -143,11 +143,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_profileBuilder() -> Profile {
+		        func __safeDI_profileBuilder(__safeDI_Profile_configuration: ((any UserService) -> Profile)?) -> Profile {
 		            let userService: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.profileBuilder { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
-		        let profileBuilder = Instantiator<Profile>(__safeDI_profileBuilder)
+		        let profileBuilder = Instantiator<Profile> {
+		            __safeDI_profileBuilder(__safeDI_Profile_configuration: safeDIOverrides.profileBuilder)
+		        }
 		        return Service(profileBuilder: profileBuilder)
 		    }
 		}
@@ -293,16 +295,16 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_profile() -> Profile {
+		        func __safeDI_profile(__safeDI_Profile_configuration: ((any UserService) -> Profile)?) -> Profile {
 		            let userService: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
-		        let profile: Profile = __safeDI_profile()
-		        func __safeDI_settings() -> Settings {
+		        let profile: Profile = __safeDI_profile(__safeDI_Profile_configuration: safeDIOverrides.profile)
+		        func __safeDI_settings(__safeDI_Settings_configuration: ((any UserService) -> Settings)?) -> Settings {
 		            let service: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(service) } else { Settings(service: service) }
+		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(service) } else { Settings(service: service) }
 		        }
-		        let settings: Settings = __safeDI_settings()
+		        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
 		        return Service(profile: profile, settings: settings)
 		    }
 		}
@@ -461,11 +463,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_inner() -> Inner {
+		        func __safeDI_inner(__safeDI_Inner_configuration: ((any UserService) -> Inner)?) -> Inner {
 		            let userService: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(userService) } else { Inner(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Inner_configuration { safeDIBuilder(userService) } else { Inner(userService: userService) }
 		        }
-		        let inner: Inner = __safeDI_inner()
+		        let inner: Inner = __safeDI_inner(__safeDI_Inner_configuration: safeDIOverrides.inner)
 		        return Service(inner: inner)
 		    }
 		}
@@ -594,11 +596,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        defaultUserService_AnyUserServiceBuilder: @escaping () -> AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_profile() -> Profile {
+		        func __safeDI_profile(__safeDI_Profile_configuration: ((AnyUserService) -> Profile)?) -> Profile {
 		            let userService: AnyUserService = defaultUserService_AnyUserServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
-		        let profile: Profile = __safeDI_profile()
+		        let profile: Profile = __safeDI_profile(__safeDI_Profile_configuration: safeDIOverrides.profile)
 		        return Service(profile: profile)
 		    }
 		}
@@ -726,16 +728,16 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_settings() -> Settings {
+		        func __safeDI_settings(__safeDI_Settings_configuration: ((any UserService) -> Settings)?) -> Settings {
 		            let service: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(service) } else { Settings(service: service) }
+		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(service) } else { Settings(service: service) }
 		        }
-		        let settings: Settings = __safeDI_settings()
-		        func __safeDI_account() -> Account {
+		        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
+		        func __safeDI_account(__safeDI_Account_configuration: ((any UserService) -> Account)?) -> Account {
 		            let service: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.account { safeDIBuilder(service) } else { Account(service: service) }
+		            return if let safeDIBuilder = __safeDI_Account_configuration { safeDIBuilder(service) } else { Account(service: service) }
 		        }
-		        let account: Account = __safeDI_account()
+		        let account: Account = __safeDI_account(__safeDI_Account_configuration: safeDIOverrides.account)
 		        return Service(settings: settings, account: account)
 		    }
 		}
@@ -874,11 +876,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_settings() -> Settings {
+		        func __safeDI_settings(__safeDI_Settings_configuration: ((any UserService) -> Settings)?) -> Settings {
 		            let service: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(service) } else { Settings(service: service) }
+		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(service) } else { Settings(service: service) }
 		        }
-		        let settings: Settings = __safeDI_settings()
+		        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
 		        let reader = if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(service) } else { Reader(service: service) }
 		        return Service(settings: settings, reader: reader)
 		    }
@@ -995,15 +997,17 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_userServiceBuilder_ = userServiceBuilder
-		        func __safeDI_userServiceBuilder() -> Analytics {
-		            if let safeDIBuilder = safeDIOverrides.userServiceBuilder { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_userServiceBuilder(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
+		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
 		        }
-		        let userServiceBuilder = Instantiator<Analytics>(__safeDI_userServiceBuilder)
-		        func __safeDI_profile() -> Profile {
+		        let userServiceBuilder = Instantiator<Analytics> {
+		            __safeDI_userServiceBuilder(__safeDI_Analytics_configuration: safeDIOverrides.userServiceBuilder)
+		        }
+		        func __safeDI_profile(__safeDI_Profile_configuration: ((any UserService) -> Profile)?) -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder_()
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
-		        let profile: Profile = __safeDI_profile()
+		        let profile: Profile = __safeDI_profile(__safeDI_Profile_configuration: safeDIOverrides.profile)
 		        return Service(userServiceBuilder: userServiceBuilder, profile: profile)
 		    }
 		}
@@ -1126,15 +1130,17 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_userServiceBuilder_ = userServiceBuilder
-		        func __safeDI_badge() -> Badge {
-		            let userService: any UserService = __safeDI_userServiceBuilder_()
-		            func __safeDI_userServiceBuilder() -> Analytics {
-		                if let safeDIBuilder = safeDIOverrides.badge.userServiceBuilder { safeDIBuilder() } else { Analytics() }
-		            }
-		            let userServiceBuilder = Instantiator<Analytics>(__safeDI_userServiceBuilder)
-		            return if let safeDIBuilder = safeDIOverrides.badge.safeDIBuilder { safeDIBuilder(userService, userServiceBuilder) } else { Badge(userService: userService, userServiceBuilder: userServiceBuilder) }
+		        func __safeDI_userServiceBuilder(__safeDI_Analytics_configuration: (() -> Analytics)?) -> Analytics {
+		            if let safeDIBuilder = __safeDI_Analytics_configuration { safeDIBuilder() } else { Analytics() }
 		        }
-		        let badge: Badge = __safeDI_badge()
+		        func __safeDI_badge(__safeDI_Badge_configuration: Badge.SafeDIMockConfiguration) -> Badge {
+		            let userService: any UserService = __safeDI_userServiceBuilder_()
+		            let userServiceBuilder = Instantiator<Analytics> {
+		                __safeDI_userServiceBuilder(__safeDI_Analytics_configuration: __safeDI_Badge_configuration.userServiceBuilder)
+		            }
+		            return if let safeDIBuilder = __safeDI_Badge_configuration.safeDIBuilder { safeDIBuilder(userService, userServiceBuilder) } else { Badge(userService: userService, userServiceBuilder: userServiceBuilder) }
+		        }
+		        let badge: Badge = __safeDI_badge(__safeDI_Badge_configuration: safeDIOverrides.badge)
 		        return Service(badge: badge)
 		    }
 		}
@@ -1405,12 +1411,14 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceSendableBuilder: @escaping @Sendable () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        let __safeDI_profileBuilder__safeDIBuilder = safeDIOverrides.profileBuilder
-		        @Sendable nonisolated func __safeDI_profileBuilder() -> SendableProfile {
+		        @Sendable nonisolated func __safeDI_profileBuilder(__safeDI_SendableProfile_configuration: (@Sendable (any UserService) -> SendableProfile)?) -> SendableProfile {
 		            let userService: any UserService = userServiceSendableBuilder()
-		            return if let safeDIBuilder = __safeDI_profileBuilder__safeDIBuilder { safeDIBuilder(userService) } else { SendableProfile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_SendableProfile_configuration { safeDIBuilder(userService) } else { SendableProfile(userService: userService) }
 		        }
-		        let profileBuilder = SendableInstantiator<SendableProfile>(__safeDI_profileBuilder)
+		        let __safeDI_profileBuilder____safeDI_SendableProfile_configuration: (@Sendable (any UserService) -> SendableProfile)? = safeDIOverrides.profileBuilder
+		        let profileBuilder = SendableInstantiator<SendableProfile> {
+		            __safeDI_profileBuilder(__safeDI_SendableProfile_configuration: __safeDI_profileBuilder____safeDI_SendableProfile_configuration)
+		        }
 		        return Service(profileBuilder: profileBuilder)
 		    }
 		}
@@ -1600,11 +1608,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        zone: Clock,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_settings() -> Settings {
+		        func __safeDI_settings(__safeDI_Settings_configuration: ((any UserService) -> Settings)?) -> Settings {
 		            let service: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(service) } else { Settings(service: service) }
+		            return if let safeDIBuilder = __safeDI_Settings_configuration { safeDIBuilder(service) } else { Settings(service: service) }
 		        }
-		        let settings: Settings = __safeDI_settings()
+		        let settings: Settings = __safeDI_settings(__safeDI_Settings_configuration: safeDIOverrides.settings)
 		        let reader = if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(alarm, zone) } else { Reader(alarm: alarm, zone: zone) }
 		        return Service(settings: settings, reader: reader)
 		    }
@@ -1849,8 +1857,8 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_userServiceBuilder = userServiceBuilder
-		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
+		            _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let userServiceBuilder: () -> any UserService = __safeDI_userServiceBuilder
 		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
 		        }
@@ -1955,11 +1963,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        func __safeDI_profile() -> Profile {
+		        func __safeDI_profile(__safeDI_Profile_configuration: ((any UserService) -> Profile)?) -> Profile {
 		            let userService: any UserService = userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
-		        let profile = LazilyInstantiated<Profile>(__safeDI_profile)
+		        let profile = LazilyInstantiated<Profile> {
+		            __safeDI_profile(__safeDI_Profile_configuration: safeDIOverrides.profile)
+		        }
 		        return Service(profile: profile)
 		    }
 		}
@@ -2073,13 +2083,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_userServiceBuilder = userServiceBuilder
-		        func __safeDI_profile() -> Profile {
+		        func __safeDI_profile(__safeDI_Profile_configuration: ((any UserService) -> Profile)?) -> Profile {
 		            let userService: any UserService = __safeDI_userServiceBuilder()
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
+		            return if let safeDIBuilder = __safeDI_Profile_configuration { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
-		        let profile: Profile = __safeDI_profile()
-		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let profile: Profile = __safeDI_profile(__safeDI_Profile_configuration: safeDIOverrides.profile)
 		        func __safeDI_panel() -> Panel {
+		            _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let userServiceBuilder: () -> any UserService = __safeDI_userServiceBuilder
 		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
 		        }
@@ -2408,19 +2418,23 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        apiSendableBuilder: @escaping @Sendable () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = D.__safeDI_D_mock_1410F11B00C13F09.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let __safeDI_dBuilder__safeDIBuilder = safeDIOverrides.dBuilder
-		        @Sendable nonisolated func __safeDI_dBuilder() -> D {
+		        @Sendable nonisolated func __safeDI_dBuilder(safeDIBuilder: (@Sendable (@escaping () -> any Api) -> D)?) -> D {
+		            _ = D.__safeDI_D_mock_1410F11B00C13F09.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let apiBuilder: () -> any Api = apiSendableBuilder
-		            return if let safeDIBuilder = __safeDI_dBuilder__safeDIBuilder { safeDIBuilder(apiBuilder) } else { D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
+		            return if let safeDIBuilder = safeDIBuilder { safeDIBuilder(apiBuilder) } else { D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
 		        }
-		        let dBuilder = SendableInstantiator<D>(__safeDI_dBuilder)
-		        let __safeDI_gadgetBuilder__safeDIBuilder = safeDIOverrides.gadgetBuilder
-		        @Sendable nonisolated func __safeDI_gadgetBuilder() -> Gadget {
+		        let __safeDI_dBuilder__safeDIBuilder: (@Sendable (@escaping () -> any Api) -> D)? = safeDIOverrides.dBuilder
+		        let dBuilder = SendableInstantiator<D> {
+		            __safeDI_dBuilder(safeDIBuilder: __safeDI_dBuilder__safeDIBuilder)
+		        }
+		        @Sendable nonisolated func __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: (@Sendable (any Api) -> Gadget)?) -> Gadget {
 		            let api: any Api = apiSendableBuilder()
-		            return if let safeDIBuilder = __safeDI_gadgetBuilder__safeDIBuilder { safeDIBuilder(api) } else { Gadget(api: api) }
+		            return if let safeDIBuilder = __safeDI_Gadget_configuration { safeDIBuilder(api) } else { Gadget(api: api) }
 		        }
-		        let gadgetBuilder = SendableInstantiator<Gadget>(__safeDI_gadgetBuilder)
+		        let __safeDI_gadgetBuilder____safeDI_Gadget_configuration: (@Sendable (any Api) -> Gadget)? = safeDIOverrides.gadgetBuilder
+		        let gadgetBuilder = SendableInstantiator<Gadget> {
+		            __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: __safeDI_gadgetBuilder____safeDI_Gadget_configuration)
+		        }
 		        return Screen(dBuilder: dBuilder, gadgetBuilder: gadgetBuilder)
 		    }
 		}

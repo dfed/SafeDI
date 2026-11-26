@@ -283,16 +283,10 @@ extension ScopeGenerator {
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
+		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
+		lines.append(parameterLines.joined(separator: ",\n"))
 		// The type the mocked type's hand-written mock returns.
-		let returnType = MockLowering.rootReturnType(of: instantiable)
-		if parameterLines.isEmpty {
-			// A tree that only binds properties to `nil`, each instantiated only if available with nothing to fulfill it.
-			lines.append("\(indent)\(mockAttributesPrefix)static func mock() -> \(returnType) {")
-		} else {
-			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-			lines.append(parameterLines.joined(separator: ",\n"))
-			lines.append("\(indent)) -> \(returnType) {")
-		}
+		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
 		lines.append(contentsOf: bindingLines)
 		// The mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
@@ -556,15 +550,6 @@ extension MockLowering {
 		var builtPlaceInputs = [[Int]: BuiltPlaceInputs]()
 		/// The records production's record function makes of the built places, by their paths of child indices.
 		var builtRecords = [[Int]: PlaceRecord]()
-		/// The records of the sites of holes a public mock's walk lowered, by their paths of child indices
-		/// (`MockLowering+PublicRecords.swift`).
-		var publicHoleSiteRecords = [[Int]: PlaceRecord]()
-		/// The construction function each of a public mock's configured places calls instead, by its path of child indices
-		/// (`MockLowering+PublicRecords.swift`), kept apart from `builtPlaceInputs` so that an internal mock's places do not
-		/// carry room for it.
-		var publicConstructionInputs = [[Int]: MockLowering.PublicConstructionInputs]()
-		/// What a public mock's records hold, by kind.
-		var publicRecordCounts = PublicRecordCounts()
 		/// The paths of the places the walk lowered, in the order it started them.
 		var placePathsInWalkOrder = [[Int]]()
 		/// The plan node of each generator in each context it is written in: one node however many places share it.
@@ -1404,11 +1389,6 @@ extension MockLowering {
 					fieldName: bindingName,
 					parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
 					nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
-					ownParameterName: hasConfiguration ? MockLowering.ConfigurationParameter(
-						concreteType: instantiable.concreteInstantiable,
-						builtWithHandWrittenMock: usesMockInitializer,
-						configurationType: .nested(name: "SafeDIMockConfiguration", parentType: instantiable.concreteInstantiable, generics: []),
-					).name : nil,
 					pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
 				)
 			}
@@ -1820,7 +1800,6 @@ extension MockLowering {
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
 			recordInputs(of: node.configured(byChildren: children), hasFunction: true, overrideRead: functionOverrideRead, initializer: initializer, instantiable: instantiable, dependencyArguments: dependencyArguments, usesMockInitializer: usesMockInitializer)
-			recordPublicConstruction(of: node.configured(byChildren: children), children: children, builderRead: functionOverrideRead?.text)
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
 			if recordsPlaces {

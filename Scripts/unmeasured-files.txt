@@ -19,6 +19,7 @@ Sources/SafeDI/Decorators/SafeDIAPIVersion.swift: an enum of cases without paylo
 Sources/SafeDI/Decorators/SafeDIConfiguration.swift: macro declarations only, which compile to no executable code
 Sources/SafeDI/Mocks/SafeDIReceived.swift: an enum of cases and a conditional conformance only, which compile to no executable lines a coverage report records
 Sources/SafeDICore/Errors/DiagnosticError.swift: a protocol declaration only, which compiles to no executable code
+Sources/SafeDICore/Generators/SeamFillSharing.swift: an enum of @TaskLocal declarations and a struct of stored properties only, which compile to no executable lines a coverage report records
 Sources/SafeDICore/Generators/ValidationWalkObservation.swift: an enum of cases and @TaskLocal declarations only, which compile to no executable lines a coverage report records
 Sources/SafeDICore/Models/SafeDIAPIVersion.swift: an enum of cases with a synthesized raw value only, which compiles to no executable lines a coverage report records
 Sources/SafeDITool/SafeDIToolMain.swift: the executable's entry point; test targets depend on SafeDIToolLibrary, never on an executable target

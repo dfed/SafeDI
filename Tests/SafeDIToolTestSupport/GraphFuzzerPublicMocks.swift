@@ -687,7 +687,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// - Parameters:
 	///   - omitsSecondHolePlace: Whether the draw leaves out `secondHolePlace`, drawing the rest as with it.
 	///   - builderSurfaceEdit: The edit the hole draw makes to `T6`'s hole after every roll, for the builder surface's checks.
-	init(seed: UInt64, omitsSecondHolePlace: Bool = false, builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit? = nil) {
+	///   - omitsDrawsOlderReleasesReject: Whether the draw leaves out `drawOptionalPlacePublicMock`, whose
+	///     `@Instantiated(onlyIfAvailable: true)` 2.3.0 rejects, for release acceptance; it draws from a stream of its own,
+	///     so the rest is drawn as with it.
+	init(seed: UInt64, omitsSecondHolePlace: Bool = false, builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit? = nil, omitsDrawsOlderReleasesReject: Bool = false) {
 		self.omitsSecondHolePlace = omitsSecondHolePlace
 		self.builderSurfaceEdit = builderSurfaceEdit
 		prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -769,8 +772,10 @@ struct GraphFuzzerPublicMockDraw {
 		drawWrapperReadByValuePublicMock(random: &wrapperReadByValueRandom)
 		var valueFormsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockValueFormsRandomSeedMask)
 		drawValueFormsBesidePublicMockCall(random: &valueFormsRandom)
-		var optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOptionalPlaceRandomSeedMask)
-		drawOptionalPlacePublicMock(random: &optionalPlaceRandom)
+		if !omitsDrawsOlderReleasesReject {
+			var optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOptionalPlaceRandomSeedMask)
+			drawOptionalPlacePublicMock(random: &optionalPlaceRandom)
+		}
 		var outerFulfillerRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOuterFulfillerRandomSeedMask)
 		drawFulfillerOnlyCallingModuleCanBuild(random: &outerFulfillerRandom)
 	}

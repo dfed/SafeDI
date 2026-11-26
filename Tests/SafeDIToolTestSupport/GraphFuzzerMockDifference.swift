@@ -82,21 +82,21 @@ struct GraphFuzzerMockDifference: Sendable {
 		let otherFile = Parser.parse(source: otherCode)
 		guard !file.hasError, !otherFile.hasError else { return [] }
 
-		func form(of file: SourceFileSyntax, in fields: Fields, dropping droppedFields: Set<ConfigurationField>, sorted: Bool, recordingTo movableLists: MovableLists = MovableLists()) -> [UInt8] {
+		func form(of file: SourceFileSyntax, in fields: Fields, dropping droppedFields: Set<ConfigurationField>, lacking fieldsTheOtherOutcomeDrops: Set<ConfigurationField>, sorted: Bool, recordingTo movableLists: MovableLists = MovableLists()) -> [UInt8] {
 			let collector = MockMethodCollector(viewMode: .sourceAccurate)
 			collector.walk(file)
-			let rendering = Rendering(fields: fields, droppedFields: droppedFields, mockMethods: collector, sortsParametersAndFields: sorted, breaksLabelTiesByText: renaming?.changesOrderOfTypeNames == true, movableLists: movableLists)
+			let rendering = Rendering(fields: fields, droppedFields: droppedFields, fieldsTheOtherOutcomeDrops: fieldsTheOtherOutcomeDrops, mockMethods: collector, sortsParametersAndFields: sorted, breaksLabelTiesByText: renaming?.changesOrderOfTypeNames == true, movableLists: movableLists)
 			return GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: rendering.text(of: Syntax(file), in: Rendering.Scope()))
 		}
 		let sortsParametersAndFields = renaming.map { $0.reversesLabels || $0.changesOrderOfTypeNames } ?? false
-		let unchanged = form(of: file, in: fields, dropping: [], sorted: false)
-		let otherUnchanged = form(of: otherFile, in: otherFields, dropping: [], sorted: false)
-		let withoutFields = form(of: file, in: fields, dropping: droppedFields, sorted: false)
-		let otherWithoutFields = form(of: otherFile, in: otherFields, dropping: otherDroppedFields, sorted: false)
+		let unchanged = form(of: file, in: fields, dropping: [], lacking: [], sorted: false)
+		let otherUnchanged = form(of: otherFile, in: otherFields, dropping: [], lacking: [], sorted: false)
+		let withoutFields = form(of: file, in: fields, dropping: droppedFields, lacking: otherDroppedFields, sorted: false)
+		let otherWithoutFields = form(of: otherFile, in: otherFields, dropping: otherDroppedFields, lacking: droppedFields, sorted: false)
 		let movableLists = MovableLists()
 		let otherMovableLists = MovableLists()
-		let withoutFieldsSorted = form(of: file, in: fields, dropping: droppedFields, sorted: sortsParametersAndFields, recordingTo: movableLists)
-		let otherWithoutFieldsSorted = form(of: otherFile, in: otherFields, dropping: otherDroppedFields, sorted: sortsParametersAndFields, recordingTo: otherMovableLists)
+		let withoutFieldsSorted = form(of: file, in: fields, dropping: droppedFields, lacking: otherDroppedFields, sorted: sortsParametersAndFields, recordingTo: movableLists)
+		let otherWithoutFieldsSorted = form(of: otherFile, in: otherFields, dropping: otherDroppedFields, lacking: droppedFields, sorted: sortsParametersAndFields, recordingTo: otherMovableLists)
 
 		guard withoutFieldsSorted == otherWithoutFieldsSorted, listsThatMovedAreInLabelOrder(movableLists, otherMovableLists) else { return [] }
 		var reasons = [Reason]()
@@ -420,6 +420,9 @@ private struct Rendering {
 
 	let fields: GraphFuzzerMockDifference.Fields
 	let droppedFields: Set<GraphFuzzerMockDifference.ConfigurationField>
+	/// The fields the other outcome holds and drops, which this outcome lacks: where it hands a hoisted builder function a
+	/// configuration built afresh in the place of one of them, the other outcome reads that field.
+	let fieldsTheOtherOutcomeDrops: Set<GraphFuzzerMockDifference.ConfigurationField>
 	let mockMethods: MockMethodCollector
 	let sortsParametersAndFields: Bool
 	/// Whether elements of one label may have moved: a mock orders those by type, which a renaming that changes the
@@ -815,10 +818,13 @@ private struct Rendering {
 	/// when it reads the configuration a dropped field holds: `<owner>.<label>` or `<nearest> ?? <owner>.<label>`, where
 	/// the function builds `label` and `parameterLabel` is `__safeDI_<T>_configuration` for the field's type,
 	/// `T.SafeDIMockConfiguration`. The other outcome's configuration has no such field, so it hands the function a
-	/// configuration built afresh, `T.SafeDIMockConfiguration()`. Any other expression is `nil`.
+	/// configuration built afresh, `T.SafeDIMockConfiguration()`. Both are rendered as that, marked, as is such a
+	/// configuration built afresh in an outcome that lacks a field the other outcome drops, where a configuration in
+	/// scope would hold it: so the outcome that holds the field must read it there, and one that builds a configuration
+	/// afresh where it holds the field still differs. Any other expression is `nil`.
 	private func expressionTextReadingNoDroppedField(of expression: ExprSyntax, handedAs parameterLabel: String, toBuilderOf builtName: String, at position: Syntax, in scope: Scope) -> String? {
 		guard parameterLabel.hasPrefix(Self.builderFunctionPrefix),
-		      parameterLabel.hasSuffix(Self.hoistedConfigurationParameterSuffix)
+		      let suffix = Self.hoistedConfigurationParameterSuffixes.first(where: { parameterLabel.hasSuffix($0) })
 		else { return nil }
 		let nearest: ExprSyntax?
 		let read: ExprSyntax
@@ -833,18 +839,54 @@ private struct Rendering {
 			nearest = nil
 			read = expression
 		}
-		guard let member = read.as(MemberAccessExprSyntax.self),
-		      let base = member.base?.as(DeclReferenceExprSyntax.self),
-		      let owner = configurationOwnerRead(byName: base.baseName.text, at: position, in: scope)
-		else { return nil }
-		let label = member.declName.baseName.text
-		guard builtName == label || builtName.hasPrefix("\(label)_"),
-		      let field = fields[owner]?[label],
-		      droppedFields.contains(field),
+		let field: GraphFuzzerMockDifference.ConfigurationField
+		if let member = read.as(MemberAccessExprSyntax.self) {
+			guard let base = member.base?.as(DeclReferenceExprSyntax.self),
+			      let owner = configurationOwnerRead(byName: base.baseName.text, at: position, in: scope),
+			      let readField = fields[owner]?[member.declName.baseName.text],
+			      droppedFields.contains(readField)
+			else { return nil }
+			field = readField
+		} else if nearest == nil,
+		          let construction = read.as(FunctionCallExprSyntax.self),
+		          construction.arguments.isEmpty,
+		          construction.trailingClosure == nil,
+		          let fieldTheOtherOutcomeReads = fieldTheOtherOutcomeDrops(constructedAfreshBy: construction, forBuilderOf: builtName, at: position, in: scope)
+		{
+			field = fieldTheOtherOutcomeReads
+		} else {
+			return nil
+		}
+		guard builtName == field.label || builtName.hasPrefix("\(field.label)_"),
 		      field.type.hasSuffix(".\(mockConfigurationStructName)"),
-		      parameterLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(Self.hoistedConfigurationParameterSuffix)"
+		      parameterLabel == "\(Self.builderFunctionPrefix)\(String(field.type.dropLast(".\(mockConfigurationStructName)".count)))\(suffix)"
 		else { return nil }
-		return "\(nearest.map { "\($0.trimmedDescription) ?? " } ?? "")\(field.type)()"
+		if let nearest {
+			return "\(nearest.trimmedDescription) ?? \(field.type)()"
+		} else {
+			return "\(field.type)() \(Self.dropMarker)"
+		}
+	}
+
+	/// The field the other outcome drops whose configuration `construction`, `T.SafeDIMockConfiguration()`, stands in the
+	/// place of: a field of type `T` that the builder function of `builtName` builds, of a configuration this outcome holds
+	/// at `position` (the mock's overrides, or a parameter of a function around it), which this outcome lacks.
+	private func fieldTheOtherOutcomeDrops(constructedAfreshBy construction: FunctionCallExprSyntax, forBuilderOf builtName: String, at position: Syntax, in scope: Scope) -> GraphFuzzerMockDifference.ConfigurationField? {
+		let type = construction.calledExpression.trimmedDescription
+		var owners = [String]()
+		if scope.enclosingBuilderFunctions.isEmpty, let extendedType = scope.extendedType {
+			owners.append(configurationOwner(named: mockOverridesStructName, extendedType: extendedType))
+		}
+		var ancestor = position.parent
+		while let node = ancestor {
+			if let function = node.as(FunctionDeclSyntax.self) {
+				owners += function.signature.parameterClause.parameters.map(\.type.trimmedDescription)
+			}
+			ancestor = node.parent
+		}
+		return fieldsTheOtherOutcomeDrops.sorted { ($0.owner, $0.label) < ($1.owner, $1.label) }.first { field in
+			field.type == type && (builtName == field.label || builtName.hasPrefix("\(field.label)_")) && owners.contains(field.owner)
+		}
 	}
 
 	/// The configuration owner that the value named `name` holds at `position`: the mock's overrides for `safeDIOverrides`,
@@ -959,7 +1001,12 @@ private struct Rendering {
 	}
 
 	private static let builderFunctionPrefix = "__safeDI_"
-	private static let hoistedConfigurationParameterSuffix = "_configuration"
+	/// What follows a configuration built afresh where one outcome reads a dropped field and the other lacks it, so that
+	/// it is never equal to a configuration built afresh where an outcome holds the field and reads none.
+	private static let dropMarker = "/* in the place of a dropped field */"
+	/// The suffixes of the parameter a hoisted builder function takes its configuration by: `_mockConfiguration` where the
+	/// function builds its type with the type's hand-written mock, `_configuration` otherwise.
+	private static let hoistedConfigurationParameterSuffixes = ["_mockConfiguration", "_configuration"]
 	private static let lazilyInstantiatedWrapperSuffix = "_lazilyInstantiated"
 	private static let sendableLazilyInstantiatedWrapperSuffix = "_sendableLazilyInstantiated"
 	private static let overrideBuilderName = "safeDIBuilder"

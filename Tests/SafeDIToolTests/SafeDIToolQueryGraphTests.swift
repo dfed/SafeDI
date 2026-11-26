@@ -203,12 +203,13 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		        {
 		          "filePath" : "\(path)/Root.swift",
 		          "fulfilledBy" : "App.DefaultService",
+		          "fulfilledByType" : "DefaultService",
 		          "isErased" : false,
 		          "isOnlyIfAvailable" : false,
 		          "label" : "service",
 		          "lifetime" : "eager",
 		          "line" : 11,
-		          "plainType" : "DefaultService",
+		          "plainType" : "Service",
 		          "source" : "instantiated",
 		          "type" : "any Service"
 		        },
@@ -1065,6 +1066,38 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		#expect(report.errors.map(\.message).allSatisfy { $0.hasPrefix("No @Instantiable type or extension fulfills `Missing`") })
 		#expect(report.declarations.flatMap(\.dependencies).map(\.provenance) == [nil, nil, nil])
 		#expect(report.declarations.map(\.isReachedByRoot) == [nil, nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsPropertysPlainType_whenInstantiatedDependencyIsFulfilledByAnotherType() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: any Service, serviceBuilder: Instantiator<any Service>) {
+			        self.service = service
+			        self.serviceBuilder = serviceBuilder
+			    }
+
+			    @Instantiated(fulfilledByType: "DefaultService") let service: any Service
+			    @Instantiated(fulfilledByType: "DefaultService") let serviceBuilder: Instantiator<any Service>
+			}
+			""",
+			"DefaultService.swift": """
+			public protocol Service {}
+
+			@Instantiable(fulfillingAdditionalTypes: [Service.self])
+			public final class DefaultService: Service, Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		let dependencies = report.declarations.first { $0.typeName == "Root" }?.dependencies ?? []
+		#expect(dependencies.map(\.plainType) == ["Service", "Service"])
+		#expect(dependencies.map(\.fulfilledByType) == ["DefaultService", "DefaultService"])
+		#expect(dependencies.map(\.fulfilledBy) == ["App.DefaultService", "App.DefaultService"])
 	}
 
 	@Test

@@ -993,6 +993,19 @@ public struct SeamSignature: Sendable {
 			storage.fields.fillPropertyStack
 		}
 
+		/// How many declarations of the path this place's fill is built beneath lie beneath `declaration`, which a scope of
+		/// the fill's tree closes a cycle on: `0` when it is the property whose type declares the hole, and `nil` when the path
+		/// holds no such declaration. A lazily instantiated declaration's instance is its own entry of the stack, and no
+		/// declaration. A scope closes on the innermost entry of its property and concrete type, which is the innermost one
+		/// that equals the declaration closed on.
+		func fillPathDeclarationsBeneath(_ declaration: ScopeGenerator.BuiltDeclaration) -> Int? {
+			let propertyStack = fillPropertyStack
+			let concreteTypeStack = fillConcreteTypeStack
+			return propertyStack.indices.first { propertyStack[$0] == declaration.property && concreteTypeStack[$0] == declaration.concreteType }.map { declarationIndex in
+				propertyStack[..<declarationIndex].indices.count { propertyStack[$0 + 1].asLazilyInstantiatedInstanceProperty != propertyStack[$0] }
+			}
+		}
+
 		/// The concrete type each entry of `fillPropertyStack` is built for, beside it: a fill's scope closes a cycle only where it
 		/// repeats an entry of the same property built for the same concrete type, as inline's does.
 		public var fillConcreteTypeStack: [TypeDescription] {
