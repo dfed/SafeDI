@@ -260,7 +260,11 @@ extension MockLowering.Walk {
 				if record == nil, unrecordedReasons[path] == nil {
 					unrecordedReasons[path] = "noRecord"
 				}
-				builtRecords[path] = record
+				builtRecords[path] = if isV3, call.inputs.hasFunction, case let .built(built)? = record {
+					.built(Self.passingNilAsWritten(built))
+				} else {
+					record
+				}
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.nodeConfiguration)
 				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
 					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
@@ -389,6 +393,20 @@ extension MockLowering.Walk {
 		record.constructionValue = record.constructionValue.map { ConstructionValue(value: substituting($0.value), resultWrapper: $0.resultWrapper) }
 		record.passedArguments = []
 		builtRecords[path] = .built(record)
+	}
+
+	/// `record`, with each argument its construction passes `nil` (a receive only if available of a value not available
+	/// there, such as the property its place is building) written as `nil`, a value of its own rather than a read: in
+	/// `.v3Unstable` a place builds its type in a function wherever it binds a value the mock is handed a builder of, so
+	/// two places of one type, one of which passes `nil` where the other reads a declaration, would otherwise be one
+	/// function whose caller passes the declaration in scope. `.v2` builds such a place inline, and its records are as
+	/// they were.
+	static func passingNilAsWritten(_ record: BuiltPlaceRecord) -> BuiltPlaceRecord {
+		var record = record
+		for (position, argument) in record.arguments.enumerated() where argument.source == .nil && record.argumentValues[position] == nil {
+			record.argumentValues[position] = .spliced([.text("nil")])
+		}
+		return record
 	}
 
 	func placeCode(at path: [Int]) -> GeneratedCode {
