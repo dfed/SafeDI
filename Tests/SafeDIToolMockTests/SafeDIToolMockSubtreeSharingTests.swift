@@ -307,13 +307,13 @@ struct SafeDIToolMockSubtreeSharingTests: ~Copyable {
 	/// builds an `x` above both, and only the values in scope where it builds none.
 	private static func childContextGraph(rootBuildsX: Bool) -> [String] {
 		[
-			Self.type("Root", kind: "final class", generateMock: true, properties: (rootBuildsX ? ["@Instantiated let x: X"] : []) + ["@Instantiated let p1: P1", "@Instantiated let p2: P2"]),
-			Self.type("P1", kind: "final class", properties: ["@Instantiated let screen: Screen", "@Instantiated let x: X"]),
-			Self.type("P2", kind: "final class", properties: ["@Instantiated let x: X", "@Instantiated let screen: Screen", "@Instantiated let y: Y"]),
-			Self.type("Screen", kind: "final class", properties: ["@Instantiated let model: Model"]),
-			Self.type("Model", kind: "final class", properties: ["@Received(onlyIfAvailable: true) let x: X?"]),
-			Self.type("Y", kind: "final class", properties: ["@Received let screen: Screen"]),
-			Self.type("X", kind: "final class", properties: ["@Received(onlyIfAvailable: true) let y: Y?"]),
+			type("Root", kind: "final class", generateMock: true, properties: (rootBuildsX ? ["@Instantiated let x: X"] : []) + ["@Instantiated let p1: P1", "@Instantiated let p2: P2"]),
+			type("P1", kind: "final class", properties: ["@Instantiated let screen: Screen", "@Instantiated let x: X"]),
+			type("P2", kind: "final class", properties: ["@Instantiated let x: X", "@Instantiated let screen: Screen", "@Instantiated let y: Y"]),
+			type("Screen", kind: "final class", properties: ["@Instantiated let model: Model"]),
+			type("Model", kind: "final class", properties: ["@Received(onlyIfAvailable: true) let x: X?"]),
+			type("Y", kind: "final class", properties: ["@Received let screen: Screen"]),
+			type("X", kind: "final class", properties: ["@Received(onlyIfAvailable: true) let y: Y?"]),
 		]
 	}
 

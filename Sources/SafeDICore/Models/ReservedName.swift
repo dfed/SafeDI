@@ -179,12 +179,12 @@ public enum ReservedName: Hashable, Sendable {
 	/// name and the renamed declaration.
 	static func sharedBuilder(named declaration: String) -> (name: String, declaration: String) {
 		// The hash `SeamSignatureHash` computes, which the macro target, compiling this file alone, cannot name.
-		var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+		var hash: UInt64 = 0xCBF29CE484222325
 		for line in declaration.split(separator: "\n", omittingEmptySubsequences: false) where !line.drop(while: { $0 == " " || $0 == "\t" }).hasPrefix("#sourceLocation") {
 			for byte in line.utf8 {
-				hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01B3
+				hash = (hash ^ UInt64(byte)) &* 0x00000100000001B3
 			}
-			hash = (hash ^ 0xFF) &* 0x0000_0100_0000_01B3
+			hash = (hash ^ 0xFF) &* 0x00000100000001B3
 		}
 		let digits = String(hash, radix: 16, uppercase: true)
 		let name = "\(sharedBuilderFunctionName)_\(String(repeating: "0", count: 16 - digits.count))\(digits)"
