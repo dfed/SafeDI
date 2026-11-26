@@ -598,6 +598,120 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
+	func statements_keepsEachPlacesOwnFunction_whenTwoPlacesDifferOnlyInWhetherACallBindsItsArgumentBeforeTheCall() throws {
+		func c(bindsBeforeCall: Bool) -> GeneratedCode {
+			.place(PlacePlan(code: .text("let c = C()"), record: .built(Self.builtRecord(label: "c", typeName: "C", hasFunction: true) { c in
+				c.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false, bindsBeforeCall: bindsBeforeCall)]
+			})))
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [
+			Self.idDeclaration,
+			.place(PlacePlan(code: .text("let b = B()"), record: .built(Self.bRecord(arguments: [Self.cRead], children: [c(bindsBeforeCall: false)])))),
+			.place(PlacePlan(code: .text("let d = B()"), record: .built(Self.bRecord(label: "d", arguments: [Self.cRead], children: [c(bindsBeforeCall: true)])))),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_c(cfg: Int) -> C {
+		            C()
+		        }
+		        func __safeDI_b() -> B {
+		            let c: C = __safeDI_c(cfg: id)
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		        func __safeDI_d() -> B {
+		            let __safeDI_c__cfg: Int = id
+		            let c: C = __safeDI_c(cfg: __safeDI_c__cfg)
+		            return B(c: c)
+		        }
+		        let d: B = __safeDI_d()
+		""")
+	}
+
+	@Test
+	func statements_keepsEachPlacesOwnFunction_whenTwoPlacesDifferOnlyInWhetherACloserBindsItsArgumentBeforeTheCall() throws {
+		// Each place takes `cfg` and builds a closer on its own function, which hands that function what `id` reads.
+		func place(_ label: String, closerBindsBeforeCall: Bool) -> GeneratedCode {
+			var closer = ClosingPlaceRecord(
+				property: Property(label: "bBuilder", typeDescription: .simple(name: "Instantiator", generics: [.simple(name: "B")])),
+				isErased: false,
+				isExtension: false,
+				closedOnFunctionName: "__safeDI_\(label)",
+				forwardedProperties: [],
+				cycleArguments: [],
+			)
+			closer.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .read(Self.idRead), staysOutsideSendableFunctions: false, bindsBeforeCall: closerBindsBeforeCall)]
+			var built = Self.bRecord(
+				label: label,
+				arguments: [PlaceRead(argumentLabel: "bBuilder", label: "bBuilder", property: closer.property, source: .binding(label: "bBuilder"))],
+				children: [.place(PlacePlan(code: .text(""), record: .closer(closer)))],
+			)
+			built.passedArguments = [PassedArgument(parameterName: "cfg", type: .simple(name: "Int"), value: .emptyInitialization(.simple(name: "Int")), staysOutsideSendableFunctions: false)]
+			return .place(PlacePlan(code: .text("let \(label) = B()"), record: .built(built)))
+		}
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [
+			Self.idDeclaration,
+			place("b", closerBindsBeforeCall: false),
+			place("d", closerBindsBeforeCall: true),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Int) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: id)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Int())
+		        func __safeDI_d(cfg: Int) -> B {
+		            let __safeDI_d__cfg: Int = id
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_d(cfg: __safeDI_d__cfg)
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let d: B = __safeDI_d(cfg: Int())
+		""")
+	}
+
+	@Test
+	func statements_passesNilOnlyWhereTheStatementReadsNil_whenAnotherStatementOfTheBodyReadsADeclarationAtTheSamePosition() throws {
+		// `e` reads `id`; `f` is passed `nil` for a form of `id` its declaration, before both, does not provide, at the same
+		// position among its arguments.
+		func inline(_ label: String, typeName: String, reading read: PlaceRead) -> GeneratedCode {
+			.place(PlacePlan(code: .text(""), record: .built(BuiltPlaceRecord(
+				property: Property(label: label, typeDescription: .simple(name: typeName)),
+				isErased: false,
+				concreteType: .simple(name: typeName),
+				isExtension: false,
+				target: .initializer(.simple(name: typeName)),
+				arguments: [read],
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: "__safeDI_\(label)",
+				isSendable: false,
+				typesDeclaredEscaping: [],
+				lineEnd: "",
+				hasFunction: false,
+				children: [],
+				node: PlanNode(),
+			))))
+		}
+		let nilRead = PlaceRead(argumentLabel: "id", label: "id", property: Property(label: "id", typeDescription: .optional(.simple(name: "String"))), source: .nil)
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [
+			Self.idDeclaration,
+			inline("e", typeName: "E", reading: Self.idRead),
+			inline("f", typeName: "F", reading: nilRead),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        let e = E(id: id)
+		        let f = F(id: nil)
+		""")
+	}
+
+	@Test
 	func statements_readsAnotherBindingOfATextPlaceAtItsOwnType_whenAPlaceInsideAFunctionCapturesIt() throws {
 		let d = Self.builtRecord(label: "d", typeName: "D", hasFunction: false) { d in
 			d.argumentValues = [0: .read(Self.idRead)]
@@ -649,10 +763,10 @@ struct TypeKeyBodyValuePathTests {
 		)))),
 	]
 
-	/// A place that builds `b: B` in a function of its own, taking `arguments`, whose body builds `children`.
-	private static func bRecord(arguments: [PlaceRead] = [], children: [GeneratedCode]) -> BuiltPlaceRecord {
+	/// A place that builds `<label>: B` in a function of its own, taking `arguments`, whose body builds `children`.
+	private static func bRecord(label: String = "b", arguments: [PlaceRead] = [], children: [GeneratedCode]) -> BuiltPlaceRecord {
 		BuiltPlaceRecord(
-			property: Property(label: "b", typeDescription: .simple(name: "B")),
+			property: Property(label: label, typeDescription: .simple(name: "B")),
 			isErased: false,
 			concreteType: .simple(name: "B"),
 			isExtension: false,
@@ -661,7 +775,7 @@ struct TypeKeyBodyValuePathTests {
 			forwardedProperties: [],
 			cycleParameters: [],
 			callCycleArguments: [],
-			functionName: "__safeDI_b",
+			functionName: "__safeDI_\(label)",
 			isSendable: false,
 			typesDeclaredEscaping: [],
 			lineEnd: "",
@@ -670,6 +784,9 @@ struct TypeKeyBodyValuePathTests {
 			node: PlanNode(),
 		)
 	}
+
+	/// A place written as text that binds `id: Int`.
+	private static let idDeclaration = GeneratedCode.place(PlacePlan(code: .text("let id = 1"), record: .alias(AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1", reads: []))))
 
 	private static let idRead = PlaceRead(
 		argumentLabel: "id",

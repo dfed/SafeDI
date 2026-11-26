@@ -218,11 +218,13 @@ extension TypeKeyLayout {
 		     .sendableLazilyInstantiated:
 			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased))"
 		case .constant:
+			// A binding to a builder function's call is annotated unless its value is erased, whatever type the function
+			// returns (`BindingDeclaration.AnnotationRule.constant`), so no type is compared here.
 			let declaration = BindingDeclaration(
 				property: property,
 				rule: .constant(
 					isErased: isErased,
-					constructedTypeIsPropertyType: (representative.functionReturnType ?? representative.concreteType).asSource == property.typeDescription.asSource,
+					constructedTypeIsPropertyType: false,
 					hasBuilderFunction: true,
 					isExtension: isExtension,
 				),
