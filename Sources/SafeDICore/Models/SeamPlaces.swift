@@ -82,7 +82,7 @@ extension SeamSignature {
 
 		/// The `@Sendable` function a level's scope opens, which encloses what the level binds and everything beneath it: the
 		/// scope's builder function, or a `@Sendable` fill.
-		public struct SendableFunctionOpened: Codable, Sendable {
+		public struct SendableFunctionOpened: Codable, Hashable, Sendable {
 			public init(property: Property, function: Hole.UncarriedDeclaration.SendableFunction) {
 				self.property = property
 				self.function = function
@@ -95,7 +95,7 @@ extension SeamSignature {
 
 		/// For a fill's field bound from a parameter of the filled seam: what a diagnostic about the declaration it hides
 		/// names (`Hole.DeclarationHiddenByField`), beside the hidden declaration, which the route above the fill decides.
-		public struct FillFieldHiding: Codable, Sendable {
+		public struct FillFieldHiding: Codable, Hashable, Sendable {
 			public init(calledSeam: TypeDescription, receivingSeam: TypeDescription) {
 				self.calledSeam = calledSeam
 				self.receivingSeam = receivingSeam
@@ -108,7 +108,7 @@ extension SeamSignature {
 		}
 
 		/// Where a type above the seam can build the tree a declaration instantiates (`Hole.UncarriedDeclaration.isBuildableAboveSeam`).
-		public struct Buildability: Codable, Sendable {
+		public struct Buildability: Codable, Hashable, Sendable {
 			public init(labelsHeldAboveSeam: [String], placesInTree: [Int]) {
 				self.labelsHeldAboveSeam = labelsHeldAboveSeam
 				self.placesInTree = placesInTree
@@ -122,7 +122,7 @@ extension SeamSignature {
 		}
 
 		/// A declaration of a level, with everything any place beneath reads of it.
-		public struct Declaration: Codable, Sendable {
+		public struct Declaration: Codable, Hashable, Sendable {
 			public init(
 				field: Hole.Field,
 				isBoundBeforeNextProperty: Bool,
@@ -191,7 +191,7 @@ extension SeamSignature {
 		/// What a scope between a closed-on level and one of its cycle-closing scopes declares, which the cycle hands the
 		/// type built again (`Hole.CycleReentryDeclaration`, whose `closedOnDeclaringType` is the type that declares the
 		/// level's own property, read from the route).
-		public struct CycleReentry: Codable, Sendable {
+		public struct CycleReentry: Codable, Hashable, Sendable {
 			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, reenteringType: TypeDescription) {
 				self.property = property
 				self.declaringType = declaringType
