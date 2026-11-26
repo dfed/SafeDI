@@ -35,8 +35,10 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements. `outerDeclarations` are the declarations in scope before the root's
 	/// body that it does not write: a seam's parameters, as its narrowest tier binds them. A read the path key resolves to one
 	/// is resolved to it in the type key's layout too, never to `nil`. No function the layout declares takes a name of
-	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names.
-	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = []) -> [GeneratedCode]? {
+	/// `namesInScope`, the names bound around the body, such as a seam's parameters' internal names. A mock, whose body the
+	/// type key's layout replaces whatever it holds, lays out every loop of builders (`laysOutEveryLoop`); production keeps
+	/// the path key's body where it writes each member's function once.
+	static func statements(ofRootBody rootBody: [GeneratedCode], outerDeclarations: [Property] = [], namesInScope: Set<String> = [], laysOutEveryLoop: Bool = false) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
 		layout.declareOuter(outerDeclarations)
 		layout.namesInScope = namesInScope
@@ -58,7 +60,7 @@ enum TypeKeyBody {
 		layout.computeClasses()
 		// A root whose loops of builders the path key writes once each keeps the path key's body, the members' functions
 		// nested as before the type key laid loops out.
-		guard layout.laysOutLoops(), layout.computePlacement() else { return nil }
+		guard laysOutEveryLoop || layout.laysOutLoops(), layout.computePlacement() else { return nil }
 		layout.computeOutcomes()
 		guard layout.computeParameterTypes(),
 		      layout.checkEveryRead(),

@@ -148,10 +148,15 @@ extension MockLowering.Walk {
 			let unavailableProperties: Set<Property>
 		}
 		var constructionReadsByContext = [ConstructionContext: Result<[PlaceRead]?, Initializer.GenerationError>]()
+		// The configurations the functions of the members of the root's loops of builders take, read while every member's
+		// call is known.
+		let loopConfigurations = loopMemberConfigurations()
 		for call in builtPlaceCalls.values where call.isPlannedAtPlace {
 			let context = ConstructionContext(generator: ObjectIdentifier(call.generator), unavailableProperties: call.unavailableProperties)
 			if constructionReadsByContext[context] == nil {
-				constructionReadsByContext[context] = call.generator.isPlannedByGenerator()
+				// A member of a loop of builders writes its rebindings as places of their own, its closers, or keeps the walk's body
+				// (`unplannedLines:rebindings`).
+				constructionReadsByContext[context] = call.generator.isPlannedByGenerator(plansRebindings: true)
 					? Result { () throws(Initializer.GenerationError) in try call.generator.constructionReads(of: call.instantiable, unavailableProperties: call.unavailableProperties) }
 					: .success(nil)
 			}
@@ -173,7 +178,7 @@ extension MockLowering.Walk {
 			defer {
 				builtPlaceCalls[path] = nil
 				builtPlaceConfigurationContexts[path] = nil
-				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil, loopUnitRecords[path] == nil, !pathsCoveredByLoopUnits.contains(path) {
+				if builtRecords[path] == nil, closerAndDefaultRecords[path] == nil {
 					if firstUnrecordedPath.map({ (walkIndexByPath[$0] ?? 0) < (walkIndexByPath[path] ?? 0) }) != true {
 						firstUnrecordedPath = path
 					}
@@ -201,19 +206,36 @@ extension MockLowering.Walk {
 				closerAndDefaultRecords[path] = .closer(record)
 				closerParentFieldReads[path] = nil
 			}
-			// A place a loop of builders' text holds is that text's, which records it whole.
-			guard let call = builtPlaceCalls[path], !pathsCoveredByLoopUnits.contains(path), loopUnitRecords[path] == nil else { continue }
+			guard let call = builtPlaceCalls[path] else { continue }
 			guard !pathsNamedApart.contains(path) else {
 				unrecordedReasons[path] = "namedApart"
 				continue
 			}
+			// A member of a loop of builders whose function rebinds another member hands each closer that member's
+			// configuration and its level's, as the level hands them (`MockLowering+LoopPlaces.swift`).
+			var rebindingCodes = [GeneratedCode]()
+			if let rebindings = loopRebindings.removeValue(forKey: path) {
+				guard let configuration = loopConfigurations[path] else {
+					unrecordedReasons[path] = "loopMemberUnrecorded"
+					continue
+				}
+				var nearestArgumentsByMember = [[Int]: [PassedArgument]]()
+				if let nearest {
+					for rebinding in rebindings {
+						if let callee = loopConfigurations[rebinding.memberPath] {
+							nearestArgumentsByMember[rebinding.memberPath] = nearestArguments(nearest, ofCallTo: MockLowering.ConfigurationParameter(name: callee.own.parameterName, type: callee.own.type), at: path + [0])
+						}
+					}
+				}
+				rebindingCodes = Self.rebindingCodes(of: rebindings, at: path, configuration: configuration, among: loopConfigurations, nearestArguments: nearestArgumentsByMember)
+			}
 			// A meeting of a subtree met before takes that meeting's child records.
 			let childCodes = subtreeSharing?.sourcePathByPath[path].flatMap { subtreeSharing?.childCodesBySourcePath[$0] }
-				?? (childPathsByParent[path] ?? []).filter { !pathsCoveredByLoopUnits.contains($0) }.map(placeCode(at:))
+				?? (childPathsByParent[path] ?? []).map(placeCode(at:))
 			if let subtreeSharing, subtreeSharing.sourcePaths.contains(path) {
 				subtreeSharing.childCodesBySourcePath[path] = childCodes
 			}
-			let children = call.inputs.hasFunction ? (leadingBodyPlaces[path] ?? []) + childCodes : []
+			let children = call.inputs.hasFunction ? rebindingCodes + (leadingBodyPlaces[path] ?? []) + childCodes : []
 			// The record made below holds its children's, so the walk's tables let go of them, and of what the walk kept to
 			// record this place, as soon as they are read: the tables then hold the places still waiting for their parents,
 			// never every place of the tree at once.
@@ -254,6 +276,7 @@ extension MockLowering.Walk {
 					readNames: call.inputs.readNames,
 					alternatives: call.inputs.alternatives,
 					constructionReads: constructionReadsByContext[ConstructionContext(generator: ObjectIdentifier(call.generator), unavailableProperties: call.unavailableProperties)],
+					plansRebindings: true,
 				)
 				// A construction that reads defaults or calls a hand-written mock records it in place of production's call
 				// (`MockLowering+ClosersAndDefaults.swift`).
@@ -277,6 +300,9 @@ extension MockLowering.Walk {
 				}
 				builtRecords[path] = recordOfWalksPlace
 				relateConfiguration(ofBuiltPlaceAt: path, of: call.nodeConfiguration)
+				if let configuration = loopConfigurations[path] {
+					handLevelConfiguration(of: configuration, toBuiltPlaceAt: path, among: loopConfigurations)
+				}
 				if overrideCanReturnAnotherType, case var .built(built)? = builtRecords[path], !built.alternatives.isEmpty {
 					built.functionReturnType = call.property.typeDescription.asInstantiatedTypeSpelledAsDeclared
 					builtRecords[path] = .built(built)
@@ -325,6 +351,7 @@ extension MockLowering.Walk {
 		unplannedLineKinds = [:]
 		pathsStartingExtraction = []
 		leadingBodyPlaces = [:]
+		loopRebindings = [:]
 		unrecordedReasons = [:]
 		closedOnPlacesByLabel = [:]
 		builtPlaceConfigurationContexts = [:]
@@ -375,9 +402,7 @@ extension MockLowering.Walk {
 
 	/// The code of the place at `path` as the type key reads it: its record, or text, which keeps the root's walk body.
 	func placeCode(at path: [Int]) -> GeneratedCode {
-		let record: PlaceRecord? = if let loopUnit = loopUnitRecords[path] {
-			loopUnit
-		} else if let built = builtRecords[path] {
+		let record: PlaceRecord? = if let built = builtRecords[path] {
 			built
 		} else if case let .closer(closer) = closerAndDefaultRecords[path] {
 			.closer(closer)
@@ -399,7 +424,7 @@ extension MockLowering.Walk {
 		for property in rootDeclarations {
 			rootBody.append(.place(PlacePlan(code: .empty, record: .alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))))
 		}
-		for path in placePathsInWalkOrder where path.count == 1 && !pathsCoveredByLoopUnits.contains(path) {
+		for path in placePathsInWalkOrder where path.count == 1 {
 			rootBody.append(placeCode(at: path))
 		}
 		if let path = firstUnrecordedPath {
@@ -408,7 +433,7 @@ extension MockLowering.Walk {
 		if let label = Self.unresolvedRead(in: rootBody, declaredAtRoot: Set(rootDeclarations.map(\.label))) {
 			return (nil, "readUnresolved:\(label)")
 		}
-		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody) else { return (nil, "engineRefused") }
+		guard let statements = TypeKeyBody.statements(ofRootBody: rootBody, laysOutEveryLoop: true) else { return (nil, "engineRefused") }
 		var lines = [String]()
 		for statement in statements {
 			let spelled = statement.spelled()

@@ -92,6 +92,36 @@ extension MockLowering {
 			}
 		}
 
+		/// The name of the parameter under which the function of a member of a loop of builders takes the configuration of
+		/// the loop's level, a place of `concreteType` built with its hand-written mock or not (`loopMemberConfigurations()`),
+		/// claimed apart from the name of the level's own function's parameter, which a place of the type beneath the member
+		/// reads as the nearest.
+		mutating func name(ofLoopLevelConfigurationOf concreteType: TypeDescription, builtWithHandWrittenMock: Bool) -> String {
+			let construction = Construction(concreteType: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock)
+			if let name = loopLevelNamesByConstruction[construction] {
+				return name
+			} else {
+				let name = allocator.claim("\(ReservedName.builderFunctionNamePrefix)\(concreteType.asIdentifier)\(builtWithHandWrittenMock ? "_mockLoopConfiguration" : "_loopConfiguration")".spelledAsJoinedIdentifier)
+				loopLevelNamesByConstruction[construction] = name
+				return name
+			}
+		}
+
+		/// The name of the parameter under which the function of a member of a loop of builders takes the configuration of
+		/// another member of its loop whose level declares it under `label`, where the members take each other's in place of
+		/// their level's (`loopMemberConfigurations()`). Two members of one loop can be of one type, so these are named by
+		/// their labels, which no two members of a level share, and two loops of one root that declare a label alike share its
+		/// name, since no function takes the members of two loops.
+		mutating func name(ofMemberConfigurationLabeled label: String) -> String {
+			if let name = namesByMemberLabel[label] {
+				return name
+			} else {
+				let name = allocator.claim("\(ReservedName.builderFunctionNamePrefix)\(label)_memberConfiguration".spelledAsJoinedIdentifier)
+				namesByMemberLabel[label] = name
+				return name
+			}
+		}
+
 		private struct Construction: Hashable {
 			let concreteType: TypeDescription
 			let builtWithHandWrittenMock: Bool
@@ -103,6 +133,8 @@ extension MockLowering {
 		}
 
 		private var namesByConstruction = [Construction: String]()
+		private var loopLevelNamesByConstruction = [Construction: String]()
+		private var namesByMemberLabel = [String: String]()
 		private var allocator: GeneratedNameAllocator
 	}
 

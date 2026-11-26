@@ -11094,7 +11094,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        router_AnyRoutingBuilder: (() -> AnyRouting)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let analytics: Analytics? = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_serviceBuilder() -> Service {
 		            let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() -> ErasedInstantiator<(), AnyRouting>.Builder {

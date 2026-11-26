@@ -2410,16 +2410,14 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed: Instantiator<X>? = safeDIOverrides.renamed
 		        func __safeDI_aBuilder(renamed: Instantiator<X>?, __safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
 		            let midBuilder = Instantiator<Mid> {
-		                __safeDI_midBuilder(renamed: renamed, __safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
+		                __safeDI_midBuilder(__safeDI_Mid_configuration: __safeDI_A_configuration.midBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 		            }
 		            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
 		        }
-		        func __safeDI_midBuilder(renamed: Instantiator<X>?, __safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
-		            func __safeDI_xBuilder() -> X {
-		                let renamed: Instantiator<X>? = Instantiator<X>(__safeDI_xBuilder)
-		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.xBuilder { safeDIBuilder(renamed) } else { X(renamed: renamed) }
+		        func __safeDI_midBuilder(__safeDI_Mid_configuration: Mid.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Mid {
+		            let xBuilder = Instantiator<X> {
+		                __safeDI_xBuilder(__safeDI_X_configuration: __safeDI_Mid_configuration.xBuilder, __safeDI_Mid_loopConfiguration: __safeDI_Mid_configuration)
 		            }
-		            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
 		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
 		            let renamed: Instantiator<X>? = xBuilder
 		            #sourceLocation()
@@ -2427,6 +2425,12 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration())
 		            }
 		            return if let safeDIBuilder = __safeDI_Mid_configuration.safeDIBuilder { safeDIBuilder(xBuilder, renamed, aBuilder) } else { Mid(xBuilder: xBuilder, renamed: renamed, aBuilder: aBuilder) }
+		        }
+		        func __safeDI_xBuilder(__safeDI_X_configuration: ((Instantiator<X>?) -> X)?, __safeDI_Mid_loopConfiguration: Mid.SafeDIMockConfiguration) -> X {
+		            let renamed: Instantiator<X>? = Instantiator<X> {
+		                __safeDI_xBuilder(__safeDI_X_configuration: __safeDI_Mid_loopConfiguration.xBuilder, __safeDI_Mid_loopConfiguration: __safeDI_Mid_loopConfiguration)
+		            }
+		            return if let safeDIBuilder = __safeDI_X_configuration { safeDIBuilder(renamed) } else { X(renamed: renamed) }
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed, __safeDI_A_configuration: safeDIOverrides.aBuilder)

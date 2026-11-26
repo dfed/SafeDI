@@ -142,6 +142,13 @@ extension MockLowering.Walk {
 					calledNamesByName[own.name, default: []].insert(closedOn.name)
 				}
 			}
+			// A member of a loop of builders calls, through the closers its function begins with, the functions of the
+			// members it rebinds (`MockLowering+LoopPlaces.swift`).
+			for rebinding in loopRebindings[path] ?? [] {
+				if let rebound = ownParameterByPath[rebinding.memberPath] {
+					calledNamesByName[own.name, default: []].insert(rebound.name)
+				}
+			}
 		}
 		var parametersByName = [String: Set<MockLowering.ConfigurationParameter>]()
 		var changed = true

@@ -302,13 +302,73 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsWalksBody_whenPlaceBeneathSendableBuilderIsUnrecorded() async throws {
-		let mocks = try await generatedMocks(of: Self.unrecordedPlaceBeneathFixture)
+	mutating func mock_handsLoopMembersTheirConfigurations_whenLoopOfBuildersSitsBeneathSendableBuilder() async throws {
+		let mocks = try await generatedMocks(of: Self.loopBeneathSendableBuilderFixture)
 		let laidOut = mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] ?? ""
-		let walk = mocks.walk.mockFiles["Root+SafeDIMock.swift"] ?? ""
 
-		#expect(laidOut == walk)
-		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: Self.unrecordedPlaceBeneathFixture, probes: [
+		#expect(laidOut == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        @Sendable nonisolated func __safeDI_aBuilder(leaf: Leaf, __safeDI_A_configuration: (@Sendable (Instantiator<B>) -> A)?, __safeDI_Screen_loopConfiguration: Screen.SafeDIMockConfiguration) -> A {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(leaf: leaf, __safeDI_B_configuration: __safeDI_Screen_loopConfiguration.bBuilder, __safeDI_Screen_loopConfiguration: __safeDI_Screen_loopConfiguration)
+		            }
+		            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+		        }
+		        @Sendable nonisolated func __safeDI_bBuilder(leaf: Leaf, __safeDI_B_configuration: (@Sendable (Instantiator<A>, Leaf) -> B)?, __safeDI_Screen_loopConfiguration: Screen.SafeDIMockConfiguration) -> B {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(leaf: leaf, __safeDI_A_configuration: __safeDI_Screen_loopConfiguration.aBuilder, __safeDI_Screen_loopConfiguration: __safeDI_Screen_loopConfiguration)
+		            }
+		            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder, leaf) } else { B(aBuilder: aBuilder, leaf: leaf) }
+		        }
+		        @Sendable nonisolated func __safeDI_screenBuilder(__safeDI_Screen_configuration: Screen.SafeDIMockConfiguration) -> Screen {
+		            let leaf = if let safeDIBuilder = __safeDI_Screen_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(leaf: leaf, __safeDI_A_configuration: __safeDI_Screen_configuration.aBuilder, __safeDI_Screen_loopConfiguration: __safeDI_Screen_configuration)
+		            }
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(leaf: leaf, __safeDI_B_configuration: __safeDI_Screen_configuration.bBuilder, __safeDI_Screen_loopConfiguration: __safeDI_Screen_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(leaf, aBuilder, bBuilder) } else { Screen(leaf: leaf, aBuilder: aBuilder, bBuilder: bBuilder) }
+		        }
+		        let __safeDI_screenBuilder____safeDI_Screen_configuration: Screen.SafeDIMockConfiguration = safeDIOverrides.screenBuilder
+		        let screenBuilder = SendableInstantiator<Screen> {
+		            __safeDI_screenBuilder(__safeDI_Screen_configuration: __safeDI_screenBuilder____safeDI_Screen_configuration)
+		        }
+		        return Root(screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(laidOut)")
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: Self.loopBeneathSendableBuilderFixture, probes: [
 			DifferentialValueProbe("Root.mock().screenBuilder.instantiate().aBuilder.instantiate().bBuilder.instantiate().leaf.tag"),
 			DifferentialValueProbe("Root.mock(safeDIOverrides: .init(screenBuilder: .init(leaf: { Leaf.tagged(3) }))).screenBuilder.instantiate().leaf.tag"),
 		])
@@ -1186,9 +1246,9 @@ struct SafeDIToolMockTypeKeyOverrideLocalTests: ~Copyable {
 	]
 
 	/// `Screen`, built in `screenBuilder`'s `@Sendable` function, instantiates `aBuilder` and `bBuilder`, which receive one
-	/// another: a loop of builders, whose functions rebind each other at their tops, statements no record holds, so the
-	/// root keeps the walk's text.
-	private static let unrecordedPlaceBeneathFixture = [
+	/// another: a loop of builders, whose functions rebind each other at their tops, closers that hand each member the
+	/// configurations `Screen`'s function was handed, which it reads before no `@Sendable` closure captures them.
+	private static let loopBeneathSendableBuilderFixture = [
 		"Leaf.swift": leaf,
 		"A.swift": """
 		@Instantiable

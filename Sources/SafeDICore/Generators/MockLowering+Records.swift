@@ -171,7 +171,7 @@ extension MockLowering.Walk {
 	}
 
 	/// Records, through production's record function, the built place the walk lowered `node` at.
-	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, isLoopMember: Bool, unavailableProperties: Set<Property>) {
+	mutating func recordBuiltPlace(of generator: ScopeGenerator, node: MockLowering.TreeNode, unavailableProperties: Set<Property>) {
 		guard case let .built(constantNode) = node,
 		      let inputs = builtPlaceInputs.removeValue(forKey: childIndexPath),
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, _, seamCall) = generator.scopeData
@@ -188,7 +188,7 @@ extension MockLowering.Walk {
 			inputs: inputs,
 			node: PlanNode(),
 			nodeConfiguration: constantNode.configuration,
-			isPlannedAtPlace: seamCall == nil && !isLoopMember && !pathsWithUnplannedLines.contains(childIndexPath),
+			isPlannedAtPlace: seamCall == nil && !pathsWithUnplannedLines.contains(childIndexPath),
 		)
 		// Every place has a node of its own: only places whose whole records agree, their children's included, share one
 		// (`sharingNode(ofBuiltPlaceAt:nodesByKey:)`). Two places of one generator can hold children whose records differ.

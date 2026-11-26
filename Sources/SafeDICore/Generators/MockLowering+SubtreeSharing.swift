@@ -196,7 +196,7 @@ extension MockLowering {
 	final class SubtreeSharing {
 		/// The sharing of the walk of `root`'s tree, or `nil` where it can share nothing: a node in the tree closes a cycle or
 		/// a level holds a loop of builders, whose records read every path's place (`nearestConfigurations`,
-		/// `loopUnitRecords`); the tree builds one concrete type both with its hand-written mock and with its initializer,
+		/// `loopMemberConfigurations`); the tree builds one concrete type both with its hand-written mock and with its initializer,
 		/// whose configuration the first node of each construction decides (`configurationsBuiltTwoWays`), a type built
 		/// beneath itself among them; or no generator is reached on more than one path.
 		init?(sharingBeneath root: ScopeGenerator) {

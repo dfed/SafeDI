@@ -2711,7 +2711,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				            _ = Other.__safeDI_Other_mock_98F7041399DB6FFD.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder({ if let apiBuilder { apiBuilder() } else { __safeDI_apiBuilder_Other_api() } }) } else { Other.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Other()) }
 				        }
-				        let other: Other? = __safeDI_other()
+				        let other: Other = __safeDI_other()
 				        func __safeDI_d() -> D {
 				            let d = Instantiator<D>(__safeDI_d)
 				            func __safeDI_apiBuilder_D() -> D.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -3323,7 +3323,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				            _ = Other.__safeDI_Other_mock_98F7041399DB6FFD.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder({ if let apiBuilder { apiBuilder() } else { __safeDI_apiBuilder_Other_api() } }) } else { Other.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Other()) }
 				        }
-				        let other: Instantiator<Other>? = Instantiator<Other>(__safeDI_other)
+				        let other = Instantiator<Other>(__safeDI_other)
 				        func __safeDI_d() -> D {
 				            let d = Instantiator<D>(__safeDI_d)
 				            func __safeDI_apiBuilder_D() -> D.SafeDIMockScope_Api.__safeDI_Builder<any Api> {

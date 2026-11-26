@@ -90,7 +90,8 @@ struct SafeDIToolMockTypeKeyWalkTextTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_writesNoStatementOfLoop_whenLaidOutRootHoldsLoopOfBuilders() async throws {
 		// `Child`, built inside the `Node` the promoted `nodeBuilder` builds, receives `nodeBuilder` back, a loop of
-		// builders, whose record is made of its members' text: the members are written to lines of their own.
+		// builders, whose members are recorded as built places and whose rebinding is a closer: no member is written as
+		// text. `SafeDIToolMockTypeKeyLoopValueTests` compares what such a layout builds with the walk's body.
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -117,13 +118,9 @@ struct SafeDIToolMockTypeKeyWalkTextTests: ~Copyable {
 		let observed = try await observingWalks { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		let walk = try await MockLowering.$laysOutWithTypeKey.withValue(false) {
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
 
 		#expect(observed.outcomes == ["Screen: laidOut"])
 		#expect(observed.walks == ["Screen: 0"])
-		#expect(observed.output.mockFiles == walk.mockFiles)
 	}
 
 	@Test

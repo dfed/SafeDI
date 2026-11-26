@@ -542,10 +542,10 @@ extension MockLowering {
 		var loopMembers = [Property: LoopMember]()
 		var loopUnit: LoopUnit?
 		var lastLoopMemberLineCounts: LoopMemberLineCounts?
-		/// The text place each loop of builders is written as, at its first member's path, and the paths its text covers: its
-		/// other members and every place beneath a member (`MockLowering+LoopPlaces.swift`).
-		var loopUnitRecords = [[Int]: PlaceRecord]()
-		var pathsCoveredByLoopUnits = Set<[Int]>()
+		/// The path of each member of the loops of builders at the level being walked, by its property, and the closers that
+		/// begin each member's function, by the member's path, each rebinding a member (`MockLowering+LoopPlaces.swift`).
+		var loopMemberPaths = [Property: [Int]]()
+		var loopRebindings = [[Int]: [MockLowering.LoopRebindingCloser]]()
 		/// The places the walk binds under a name apart from their labels, which keep the walk's body.
 		var pathsNamedApart = Set<[Int]>()
 		/// The receives only if available the node being lowered is passed `nil` for, given the siblings built before it.
@@ -690,24 +690,31 @@ extension MockLowering {
 			defer { leaveLevel() }
 			// The loops of builders among the level's children, each emitted as one unit.
 			let enclosingLoopMembers = loopMembers
+			let enclosingLoopMemberPaths = loopMemberPaths
 			let enclosingLoopUnit = loopUnit
 			// The enclosing functions a cycle-closing node beneath refers to by name are in scope too.
 			// A level without a loop has no member, and nearly every level has none.
 			loopMembers = loops.contains(where: { $0 != nil })
 				? MockLowering.loopMembers(among: generators, loops: loops, bindingNames: bindingNames, namesInScope: Set(ancestorDeclarationsByLabel.values.flatMap { $0.map(\.functionName) }))
 				: [:]
+			// The path of each member, which a closer that rebinds it closes on (`MockLowering+LoopPlaces.swift`).
+			loopMemberPaths = [:]
+			if recordsPlaces, !loopMembers.isEmpty {
+				for (index, generator) in generators.enumerated() where index < loops.count && loops[index] != nil {
+					if let property = generator.property {
+						loopMemberPaths[property] = childIndexPath + [orderedChildren[index].index]
+					}
+				}
+			}
 			loopUnit = nil
 			defer {
 				loopMembers = enclosingLoopMembers
+				loopMemberPaths = enclosingLoopMemberPaths
 				loopUnit = enclosingLoopUnit
 			}
-			// A loop's unit is recorded from its members' text, so a member and every place beneath it are written whatever
-			// the level writes.
-			let levelWritesText = writesText
 			for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
 				let membership = index < loops.count ? loops[index] : nil
 				loopMembership = membership
-				writesText = levelWritesText || membership != nil
 				// What the node is built where its siblings ordered after it are not bound yet, as
 				// the emitter orders the level (`ScopeGenerator.OrderedChild`).
 				unavailableProperties = orderedChildren[index].unavailableProperties
@@ -733,22 +740,18 @@ extension MockLowering {
 					// A call that fills a builder names its guard inside its function, after its fills.
 					let memberScope = generator.publicMockCall == nil ? scope : scope.union(generator.reboundProperties)
 					node = try await self.node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, pathValue: pathValue, indent: indent, lines: &memberLines)
-					if generator.publicMockCall != nil, !generator.fillsABuilder {
-						let guardLine = memberLines.removeFirst()
-						if levelWritesText {
-							lines.append(guardLine)
-						}
+					if writesText, generator.publicMockCall != nil, !generator.fillsABuilder {
+						lines.append(memberLines.removeFirst())
 					}
 				}
-				writesText = levelWritesText
 				// A child that builds no node is a hole without a site or a fill, which only a public mock's tree holds
 				// (`createMockTypeDescriptionToScopeMapping`'s `buildsHoles`), and a public mock records no places
 				// (`lowerMockRoot`).
 				if recordsPlaces, let node {
-					recordBuiltPlace(of: generator, node: node, isLoopMember: membership != nil, unavailableProperties: orderedChildren[index].unavailableProperties)
+					recordBuiltPlace(of: generator, node: node, unavailableProperties: orderedChildren[index].unavailableProperties)
 					// A node the level binds under a name apart from its label is read by that name, which a record spelled
-					// from its property does not bind.
-					if membership == nil, let bindingName, case let .property(_, property, _, _, _, _) = generator.scopeData, bindingName != property.label {
+					// from its property does not bind, a member of a loop of builders too.
+					if let bindingName, case let .property(_, property, _, _, _, _) = generator.scopeData, bindingName != property.label {
 						pathsNamedApart.insert(childIndexPath)
 					}
 					if builtPlaceCalls[childIndexPath] == nil, unrecordedReasons[childIndexPath] == nil {
@@ -769,7 +772,6 @@ extension MockLowering {
 				}
 				if let membership {
 					append(memberLines, ofMemberOf: membership, to: &lines)
-					noteLoopMember(generator, path: childIndexPath + [orderedChildren[index].index], bindingName: bindingName)
 				}
 			}
 			endLoopUnit(appendingTo: &lines)
@@ -980,8 +982,9 @@ extension MockLowering {
 				lines.append(alias.bindingLines(indent: indent))
 			}
 			// The type key lays the alias out as a place written as text whose one read is the name it reads: the property in
-			// scope, or the wrapper whose instance it reads. A rename a loop's members bind again keeps the walk's body.
-			if recordsPlaces, loopMembership == nil {
+			// scope, or the wrapper whose instance it reads. A rename a loop's members bind again is one too, which their
+			// functions bind again as closers (`loopRebindings(of:)`).
+			if recordsPlaces {
 				let read: Property? = if alias.isBoundToNil {
 					nil
 				} else if let instanceWrapper {
@@ -1299,15 +1302,19 @@ extension MockLowering {
 			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: generator.mockLoweringBodyPropertiesGeneratedLater(propertiesGeneratedLater))
 			let childGenerators = orderedChildren.map(\.generator)
 			// A member of a loop of builders first rebinds the members its tree receives
-			// (`MockLowering+Loops.swift`).
+			// (`MockLowering+Loops.swift`), each a closer on that member's function, where the type key plans every one
+			// (`loopRebindingPlaces(of:ownProperty:)`). A member a public mock promotes at its root is rebound as the caller's
+			// own, a read no closer records.
 			var rebindingLines = [String]()
 			// The walk of the node's children sets and clears the membership of each child.
 			let ownLoopMembership = loopMembership
-			if ownLoopMembership != nil {
+			let rebindsPromotedMember = ownLoopMembership != nil && parentConcreteType == nil && generator.reboundProperties.contains(where: promotedProperties.contains)
+			let rebindings = recordsPlaces && ownLoopMembership != nil && !rebindsPromotedMember ? loopRebindings(of: generator) : nil
+			if writesText, ownLoopMembership != nil {
 				var memberRebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: "\(indent)\(ScopeGenerator.standardIndent)")
 				// A member a public mock promotes at its root is rebound as the caller's own where it passed
 				// one.
-				if parentConcreteType == nil, generator.reboundProperties.contains(where: promotedProperties.contains) {
+				if rebindsPromotedMember {
 					memberRebindingLines = []
 					for reboundProperty in generator.reboundProperties {
 						if let member = loopMembers[reboundProperty], promotedProperties.contains(reboundProperty), member.rename == nil, reboundProperty != property || member.receivedFunctionName == nil {
@@ -1529,14 +1536,28 @@ extension MockLowering {
 			if !generator.memberCallsInsideBuilderFunction.isEmpty {
 				unplannedKinds.append("memberCalls")
 			}
-			if !rebindingLines.isEmpty {
-				unplannedKinds.append("rebindings")
+			if let ownLoopMembership, let member = loopMembers[property] {
+				if !generator.reboundProperties.isEmpty, rebindings == nil {
+					unplannedKinds.append("rebindings")
+				}
+				// The `_received` function a member's wrappers hand is declared after its builder function, text no record holds.
+				if member.receivedFunctionName != nil {
+					unplannedKinds.append("receivedFunction")
+				}
+				// A member its level does not bind, only a mock root's, declares its function and binds no wrapper, which no
+				// built record holds.
+				if !ownLoopMembership.declaresBinding {
+					unplannedKinds.append("unboundLoopMember")
+				}
 			}
 			if recordsPlaces, !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty {
 				leadingBodyPlaces[childIndexPath] = MockLowering.receiverBindingPlaces(
 					receiverBindings: receiverBindings,
 					sendableAutoclosureBindings: uncoveredInstantiatedProperties.compactMap { property in sendableAutoclosureBindings[property].map { (property, $0) } },
 				)
+			}
+			if let rebindings, !rebindings.isEmpty {
+				loopRebindings[childIndexPath] = rebindings
 			}
 			// A function that reads overrides into locals because its construction hands a configuration read to a `@Sendable`
 			// autoclosure keeps the walk's body: the record would read the configuration inside the autoclosure.

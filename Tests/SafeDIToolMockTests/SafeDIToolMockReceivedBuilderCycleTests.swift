@@ -89,16 +89,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_aBuilder() -> A {
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: ((Instantiator<B>) -> A)?) -> A {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
 			        }
-			        func __safeDI_bBuilder() -> B {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<A>) -> B)?) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			        }
 			        return Root(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }
 			}
@@ -167,26 +175,42 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_aBuilder() -> A {
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: ((Instantiator<B>) -> A)?) -> A {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
 			        }
-			        func __safeDI_bBuilder() -> B {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<A>) -> B)?) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			        func __safeDI_cBuilder() -> C {
-			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.cBuilder { safeDIBuilder(dBuilder) } else { C(dBuilder: dBuilder) }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
 			        }
-			        func __safeDI_dBuilder() -> D {
-			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.dBuilder { safeDIBuilder(cBuilder) } else { D(cBuilder: cBuilder) }
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
 			        }
-			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			        let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			        func __safeDI_cBuilder(__safeDI_C_configuration: ((Instantiator<D>) -> C)?) -> C {
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(__safeDI_D_configuration: safeDIOverrides.dBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_C_configuration { safeDIBuilder(dBuilder) } else { C(dBuilder: dBuilder) }
+			        }
+			        func __safeDI_dBuilder(__safeDI_D_configuration: ((Instantiator<C>) -> D)?) -> D {
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(__safeDI_C_configuration: safeDIOverrides.cBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_D_configuration { safeDIBuilder(cBuilder) } else { D(cBuilder: cBuilder) }
+			        }
+			        let cBuilder = Instantiator<C> {
+			            __safeDI_cBuilder(__safeDI_C_configuration: safeDIOverrides.cBuilder)
+			        }
+			        let dBuilder = Instantiator<D> {
+			            __safeDI_dBuilder(__safeDI_D_configuration: safeDIOverrides.dBuilder)
+			        }
 			        return Root(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder, dBuilder: dBuilder)
 			    }
 			}
@@ -371,174 +395,366 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_s0Builder() -> any Screen {
-			            let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
-			            let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
-			            let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s0Builder { safeDIBuilder(s1Builder, s2Builder, s5Builder) } else { S0(s1Builder: s1Builder, s2Builder: s2Builder, s5Builder: s5Builder) }
+			        func __safeDI_s0Builder(__safeDI_S0_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s1Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s1Builder(__safeDI_S1_configuration: safeDIOverrides.s1Builder)
+			            }
+			            let s2Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s2Builder(__safeDI_S2_configuration: safeDIOverrides.s2Builder)
+			            }
+			            let s5Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s5Builder(__safeDI_S5_configuration: safeDIOverrides.s5Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S0_configuration { safeDIBuilder(s1Builder, s2Builder, s5Builder) } else { S0(s1Builder: s1Builder, s2Builder: s2Builder, s5Builder: s5Builder) }
 			        }
-			        func __safeDI_s1Builder() -> any Screen {
-			            let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
-			            let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
-			            let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s1Builder { safeDIBuilder(s2Builder, s3Builder, s6Builder) } else { S1(s2Builder: s2Builder, s3Builder: s3Builder, s6Builder: s6Builder) }
+			        func __safeDI_s1Builder(__safeDI_S1_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s2Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s2Builder(__safeDI_S2_configuration: safeDIOverrides.s2Builder)
+			            }
+			            let s3Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s3Builder(__safeDI_S3_configuration: safeDIOverrides.s3Builder)
+			            }
+			            let s6Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s6Builder(__safeDI_S6_configuration: safeDIOverrides.s6Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S1_configuration { safeDIBuilder(s2Builder, s3Builder, s6Builder) } else { S1(s2Builder: s2Builder, s3Builder: s3Builder, s6Builder: s6Builder) }
 			        }
-			        func __safeDI_s2Builder() -> any Screen {
-			            let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
-			            let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
-			            let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s2Builder { safeDIBuilder(s3Builder, s4Builder, s7Builder) } else { S2(s3Builder: s3Builder, s4Builder: s4Builder, s7Builder: s7Builder) }
+			        func __safeDI_s2Builder(__safeDI_S2_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s3Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s3Builder(__safeDI_S3_configuration: safeDIOverrides.s3Builder)
+			            }
+			            let s4Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s4Builder(__safeDI_S4_configuration: safeDIOverrides.s4Builder)
+			            }
+			            let s7Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s7Builder(__safeDI_S7_configuration: safeDIOverrides.s7Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S2_configuration { safeDIBuilder(s3Builder, s4Builder, s7Builder) } else { S2(s3Builder: s3Builder, s4Builder: s4Builder, s7Builder: s7Builder) }
 			        }
-			        func __safeDI_s3Builder() -> any Screen {
-			            let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
-			            let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
-			            let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s3Builder { safeDIBuilder(s4Builder, s5Builder, s8Builder) } else { S3(s4Builder: s4Builder, s5Builder: s5Builder, s8Builder: s8Builder) }
+			        func __safeDI_s3Builder(__safeDI_S3_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s4Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s4Builder(__safeDI_S4_configuration: safeDIOverrides.s4Builder)
+			            }
+			            let s5Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s5Builder(__safeDI_S5_configuration: safeDIOverrides.s5Builder)
+			            }
+			            let s8Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s8Builder(__safeDI_S8_configuration: safeDIOverrides.s8Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S3_configuration { safeDIBuilder(s4Builder, s5Builder, s8Builder) } else { S3(s4Builder: s4Builder, s5Builder: s5Builder, s8Builder: s8Builder) }
 			        }
-			        func __safeDI_s4Builder() -> any Screen {
-			            let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
-			            let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
-			            let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s4Builder { safeDIBuilder(s5Builder, s6Builder, s9Builder) } else { S4(s5Builder: s5Builder, s6Builder: s6Builder, s9Builder: s9Builder) }
+			        func __safeDI_s4Builder(__safeDI_S4_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s5Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s5Builder(__safeDI_S5_configuration: safeDIOverrides.s5Builder)
+			            }
+			            let s6Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s6Builder(__safeDI_S6_configuration: safeDIOverrides.s6Builder)
+			            }
+			            let s9Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s9Builder(__safeDI_S9_configuration: safeDIOverrides.s9Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S4_configuration { safeDIBuilder(s5Builder, s6Builder, s9Builder) } else { S4(s5Builder: s5Builder, s6Builder: s6Builder, s9Builder: s9Builder) }
 			        }
-			        func __safeDI_s5Builder() -> any Screen {
-			            let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
-			            let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
-			            let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s5Builder { safeDIBuilder(s6Builder, s7Builder, s10Builder) } else { S5(s6Builder: s6Builder, s7Builder: s7Builder, s10Builder: s10Builder) }
+			        func __safeDI_s5Builder(__safeDI_S5_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s6Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s6Builder(__safeDI_S6_configuration: safeDIOverrides.s6Builder)
+			            }
+			            let s7Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s7Builder(__safeDI_S7_configuration: safeDIOverrides.s7Builder)
+			            }
+			            let s10Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s10Builder(__safeDI_S10_configuration: safeDIOverrides.s10Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S5_configuration { safeDIBuilder(s6Builder, s7Builder, s10Builder) } else { S5(s6Builder: s6Builder, s7Builder: s7Builder, s10Builder: s10Builder) }
 			        }
-			        func __safeDI_s6Builder() -> any Screen {
-			            let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
-			            let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
-			            let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s6Builder { safeDIBuilder(s7Builder, s8Builder, s11Builder) } else { S6(s7Builder: s7Builder, s8Builder: s8Builder, s11Builder: s11Builder) }
+			        func __safeDI_s6Builder(__safeDI_S6_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s7Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s7Builder(__safeDI_S7_configuration: safeDIOverrides.s7Builder)
+			            }
+			            let s8Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s8Builder(__safeDI_S8_configuration: safeDIOverrides.s8Builder)
+			            }
+			            let s11Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s11Builder(__safeDI_S11_configuration: safeDIOverrides.s11Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S6_configuration { safeDIBuilder(s7Builder, s8Builder, s11Builder) } else { S6(s7Builder: s7Builder, s8Builder: s8Builder, s11Builder: s11Builder) }
 			        }
-			        func __safeDI_s7Builder() -> any Screen {
-			            let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
-			            let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
-			            let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s7Builder { safeDIBuilder(s8Builder, s9Builder, s12Builder) } else { S7(s8Builder: s8Builder, s9Builder: s9Builder, s12Builder: s12Builder) }
+			        func __safeDI_s7Builder(__safeDI_S7_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s8Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s8Builder(__safeDI_S8_configuration: safeDIOverrides.s8Builder)
+			            }
+			            let s9Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s9Builder(__safeDI_S9_configuration: safeDIOverrides.s9Builder)
+			            }
+			            let s12Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s12Builder(__safeDI_S12_configuration: safeDIOverrides.s12Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S7_configuration { safeDIBuilder(s8Builder, s9Builder, s12Builder) } else { S7(s8Builder: s8Builder, s9Builder: s9Builder, s12Builder: s12Builder) }
 			        }
-			        func __safeDI_s8Builder() -> any Screen {
-			            let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
-			            let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
-			            let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s8Builder { safeDIBuilder(s9Builder, s10Builder, s13Builder) } else { S8(s9Builder: s9Builder, s10Builder: s10Builder, s13Builder: s13Builder) }
+			        func __safeDI_s8Builder(__safeDI_S8_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s9Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s9Builder(__safeDI_S9_configuration: safeDIOverrides.s9Builder)
+			            }
+			            let s10Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s10Builder(__safeDI_S10_configuration: safeDIOverrides.s10Builder)
+			            }
+			            let s13Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s13Builder(__safeDI_S13_configuration: safeDIOverrides.s13Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S8_configuration { safeDIBuilder(s9Builder, s10Builder, s13Builder) } else { S8(s9Builder: s9Builder, s10Builder: s10Builder, s13Builder: s13Builder) }
 			        }
-			        func __safeDI_s9Builder() -> any Screen {
-			            let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
-			            let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
-			            let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s9Builder { safeDIBuilder(s10Builder, s11Builder, s14Builder) } else { S9(s10Builder: s10Builder, s11Builder: s11Builder, s14Builder: s14Builder) }
+			        func __safeDI_s9Builder(__safeDI_S9_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s10Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s10Builder(__safeDI_S10_configuration: safeDIOverrides.s10Builder)
+			            }
+			            let s11Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s11Builder(__safeDI_S11_configuration: safeDIOverrides.s11Builder)
+			            }
+			            let s14Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s14Builder(__safeDI_S14_configuration: safeDIOverrides.s14Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S9_configuration { safeDIBuilder(s10Builder, s11Builder, s14Builder) } else { S9(s10Builder: s10Builder, s11Builder: s11Builder, s14Builder: s14Builder) }
 			        }
-			        func __safeDI_s10Builder() -> any Screen {
-			            let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
-			            let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
-			            let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s10Builder { safeDIBuilder(s11Builder, s12Builder, s15Builder) } else { S10(s11Builder: s11Builder, s12Builder: s12Builder, s15Builder: s15Builder) }
+			        func __safeDI_s10Builder(__safeDI_S10_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s11Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s11Builder(__safeDI_S11_configuration: safeDIOverrides.s11Builder)
+			            }
+			            let s12Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s12Builder(__safeDI_S12_configuration: safeDIOverrides.s12Builder)
+			            }
+			            let s15Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s15Builder(__safeDI_S15_configuration: safeDIOverrides.s15Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S10_configuration { safeDIBuilder(s11Builder, s12Builder, s15Builder) } else { S10(s11Builder: s11Builder, s12Builder: s12Builder, s15Builder: s15Builder) }
 			        }
-			        func __safeDI_s11Builder() -> any Screen {
-			            let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
-			            let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
-			            let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s11Builder { safeDIBuilder(s12Builder, s13Builder, s16Builder) } else { S11(s12Builder: s12Builder, s13Builder: s13Builder, s16Builder: s16Builder) }
+			        func __safeDI_s11Builder(__safeDI_S11_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s12Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s12Builder(__safeDI_S12_configuration: safeDIOverrides.s12Builder)
+			            }
+			            let s13Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s13Builder(__safeDI_S13_configuration: safeDIOverrides.s13Builder)
+			            }
+			            let s16Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s16Builder(__safeDI_S16_configuration: safeDIOverrides.s16Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S11_configuration { safeDIBuilder(s12Builder, s13Builder, s16Builder) } else { S11(s12Builder: s12Builder, s13Builder: s13Builder, s16Builder: s16Builder) }
 			        }
-			        func __safeDI_s12Builder() -> any Screen {
-			            let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
-			            let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
-			            let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s12Builder { safeDIBuilder(s13Builder, s14Builder, s17Builder) } else { S12(s13Builder: s13Builder, s14Builder: s14Builder, s17Builder: s17Builder) }
+			        func __safeDI_s12Builder(__safeDI_S12_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s13Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s13Builder(__safeDI_S13_configuration: safeDIOverrides.s13Builder)
+			            }
+			            let s14Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s14Builder(__safeDI_S14_configuration: safeDIOverrides.s14Builder)
+			            }
+			            let s17Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s17Builder(__safeDI_S17_configuration: safeDIOverrides.s17Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S12_configuration { safeDIBuilder(s13Builder, s14Builder, s17Builder) } else { S12(s13Builder: s13Builder, s14Builder: s14Builder, s17Builder: s17Builder) }
 			        }
-			        func __safeDI_s13Builder() -> any Screen {
-			            let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
-			            let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
-			            let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s13Builder { safeDIBuilder(s14Builder, s15Builder, s18Builder) } else { S13(s14Builder: s14Builder, s15Builder: s15Builder, s18Builder: s18Builder) }
+			        func __safeDI_s13Builder(__safeDI_S13_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s14Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s14Builder(__safeDI_S14_configuration: safeDIOverrides.s14Builder)
+			            }
+			            let s15Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s15Builder(__safeDI_S15_configuration: safeDIOverrides.s15Builder)
+			            }
+			            let s18Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s18Builder(__safeDI_S18_configuration: safeDIOverrides.s18Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S13_configuration { safeDIBuilder(s14Builder, s15Builder, s18Builder) } else { S13(s14Builder: s14Builder, s15Builder: s15Builder, s18Builder: s18Builder) }
 			        }
-			        func __safeDI_s14Builder() -> any Screen {
-			            let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
-			            let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
-			            let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s14Builder { safeDIBuilder(s15Builder, s16Builder, s19Builder) } else { S14(s15Builder: s15Builder, s16Builder: s16Builder, s19Builder: s19Builder) }
+			        func __safeDI_s14Builder(__safeDI_S14_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s15Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s15Builder(__safeDI_S15_configuration: safeDIOverrides.s15Builder)
+			            }
+			            let s16Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s16Builder(__safeDI_S16_configuration: safeDIOverrides.s16Builder)
+			            }
+			            let s19Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s19Builder(__safeDI_S19_configuration: safeDIOverrides.s19Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S14_configuration { safeDIBuilder(s15Builder, s16Builder, s19Builder) } else { S14(s15Builder: s15Builder, s16Builder: s16Builder, s19Builder: s19Builder) }
 			        }
-			        func __safeDI_s15Builder() -> any Screen {
-			            let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
-			            let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
-			            let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s15Builder { safeDIBuilder(s16Builder, s17Builder, s20Builder) } else { S15(s16Builder: s16Builder, s17Builder: s17Builder, s20Builder: s20Builder) }
+			        func __safeDI_s15Builder(__safeDI_S15_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s16Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s16Builder(__safeDI_S16_configuration: safeDIOverrides.s16Builder)
+			            }
+			            let s17Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s17Builder(__safeDI_S17_configuration: safeDIOverrides.s17Builder)
+			            }
+			            let s20Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s20Builder(__safeDI_S20_configuration: safeDIOverrides.s20Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S15_configuration { safeDIBuilder(s16Builder, s17Builder, s20Builder) } else { S15(s16Builder: s16Builder, s17Builder: s17Builder, s20Builder: s20Builder) }
 			        }
-			        func __safeDI_s16Builder() -> any Screen {
-			            let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
-			            let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
-			            let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s16Builder { safeDIBuilder(s17Builder, s18Builder, s21Builder) } else { S16(s17Builder: s17Builder, s18Builder: s18Builder, s21Builder: s21Builder) }
+			        func __safeDI_s16Builder(__safeDI_S16_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s17Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s17Builder(__safeDI_S17_configuration: safeDIOverrides.s17Builder)
+			            }
+			            let s18Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s18Builder(__safeDI_S18_configuration: safeDIOverrides.s18Builder)
+			            }
+			            let s21Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s21Builder(__safeDI_S21_configuration: safeDIOverrides.s21Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S16_configuration { safeDIBuilder(s17Builder, s18Builder, s21Builder) } else { S16(s17Builder: s17Builder, s18Builder: s18Builder, s21Builder: s21Builder) }
 			        }
-			        func __safeDI_s17Builder() -> any Screen {
-			            let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
-			            let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
-			            let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s17Builder { safeDIBuilder(s18Builder, s19Builder, s22Builder) } else { S17(s18Builder: s18Builder, s19Builder: s19Builder, s22Builder: s22Builder) }
+			        func __safeDI_s17Builder(__safeDI_S17_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s18Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s18Builder(__safeDI_S18_configuration: safeDIOverrides.s18Builder)
+			            }
+			            let s19Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s19Builder(__safeDI_S19_configuration: safeDIOverrides.s19Builder)
+			            }
+			            let s22Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s22Builder(__safeDI_S22_configuration: safeDIOverrides.s22Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S17_configuration { safeDIBuilder(s18Builder, s19Builder, s22Builder) } else { S17(s18Builder: s18Builder, s19Builder: s19Builder, s22Builder: s22Builder) }
 			        }
-			        func __safeDI_s18Builder() -> any Screen {
-			            let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
-			            let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
-			            let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s18Builder { safeDIBuilder(s19Builder, s20Builder, s23Builder) } else { S18(s19Builder: s19Builder, s20Builder: s20Builder, s23Builder: s23Builder) }
+			        func __safeDI_s18Builder(__safeDI_S18_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s19Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s19Builder(__safeDI_S19_configuration: safeDIOverrides.s19Builder)
+			            }
+			            let s20Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s20Builder(__safeDI_S20_configuration: safeDIOverrides.s20Builder)
+			            }
+			            let s23Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s23Builder(__safeDI_S23_configuration: safeDIOverrides.s23Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S18_configuration { safeDIBuilder(s19Builder, s20Builder, s23Builder) } else { S18(s19Builder: s19Builder, s20Builder: s20Builder, s23Builder: s23Builder) }
 			        }
-			        func __safeDI_s19Builder() -> any Screen {
-			            let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
-			            let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
-			            let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s19Builder { safeDIBuilder(s20Builder, s21Builder, s0Builder) } else { S19(s20Builder: s20Builder, s21Builder: s21Builder, s0Builder: s0Builder) }
+			        func __safeDI_s19Builder(__safeDI_S19_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s20Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s20Builder(__safeDI_S20_configuration: safeDIOverrides.s20Builder)
+			            }
+			            let s21Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s21Builder(__safeDI_S21_configuration: safeDIOverrides.s21Builder)
+			            }
+			            let s0Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s0Builder(__safeDI_S0_configuration: safeDIOverrides.s0Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S19_configuration { safeDIBuilder(s20Builder, s21Builder, s0Builder) } else { S19(s20Builder: s20Builder, s21Builder: s21Builder, s0Builder: s0Builder) }
 			        }
-			        func __safeDI_s20Builder() -> any Screen {
-			            let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
-			            let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
-			            let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s20Builder { safeDIBuilder(s21Builder, s22Builder, s1Builder) } else { S20(s21Builder: s21Builder, s22Builder: s22Builder, s1Builder: s1Builder) }
+			        func __safeDI_s20Builder(__safeDI_S20_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s21Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s21Builder(__safeDI_S21_configuration: safeDIOverrides.s21Builder)
+			            }
+			            let s22Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s22Builder(__safeDI_S22_configuration: safeDIOverrides.s22Builder)
+			            }
+			            let s1Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s1Builder(__safeDI_S1_configuration: safeDIOverrides.s1Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S20_configuration { safeDIBuilder(s21Builder, s22Builder, s1Builder) } else { S20(s21Builder: s21Builder, s22Builder: s22Builder, s1Builder: s1Builder) }
 			        }
-			        func __safeDI_s21Builder() -> any Screen {
-			            let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
-			            let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
-			            let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s21Builder { safeDIBuilder(s22Builder, s23Builder, s2Builder) } else { S21(s22Builder: s22Builder, s23Builder: s23Builder, s2Builder: s2Builder) }
+			        func __safeDI_s21Builder(__safeDI_S21_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s22Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s22Builder(__safeDI_S22_configuration: safeDIOverrides.s22Builder)
+			            }
+			            let s23Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s23Builder(__safeDI_S23_configuration: safeDIOverrides.s23Builder)
+			            }
+			            let s2Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s2Builder(__safeDI_S2_configuration: safeDIOverrides.s2Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S21_configuration { safeDIBuilder(s22Builder, s23Builder, s2Builder) } else { S21(s22Builder: s22Builder, s23Builder: s23Builder, s2Builder: s2Builder) }
 			        }
-			        func __safeDI_s22Builder() -> any Screen {
-			            let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
-			            let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
-			            let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s22Builder { safeDIBuilder(s23Builder, s0Builder, s3Builder) } else { S22(s23Builder: s23Builder, s0Builder: s0Builder, s3Builder: s3Builder) }
+			        func __safeDI_s22Builder(__safeDI_S22_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s23Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s23Builder(__safeDI_S23_configuration: safeDIOverrides.s23Builder)
+			            }
+			            let s0Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s0Builder(__safeDI_S0_configuration: safeDIOverrides.s0Builder)
+			            }
+			            let s3Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s3Builder(__safeDI_S3_configuration: safeDIOverrides.s3Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S22_configuration { safeDIBuilder(s23Builder, s0Builder, s3Builder) } else { S22(s23Builder: s23Builder, s0Builder: s0Builder, s3Builder: s3Builder) }
 			        }
-			        func __safeDI_s23Builder() -> any Screen {
-			            let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
-			            let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
-			            let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
-			            return if let safeDIBuilder = safeDIOverrides.s23Builder { safeDIBuilder(s0Builder, s1Builder, s4Builder) } else { S23(s0Builder: s0Builder, s1Builder: s1Builder, s4Builder: s4Builder) }
+			        func __safeDI_s23Builder(__safeDI_S23_configuration: ((ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>, ErasedInstantiator<(), any Screen>) -> any Screen)?) -> any Screen {
+			            let s0Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s0Builder(__safeDI_S0_configuration: safeDIOverrides.s0Builder)
+			            }
+			            let s1Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s1Builder(__safeDI_S1_configuration: safeDIOverrides.s1Builder)
+			            }
+			            let s4Builder = ErasedInstantiator<(), any Screen> {
+			                __safeDI_s4Builder(__safeDI_S4_configuration: safeDIOverrides.s4Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_S23_configuration { safeDIBuilder(s0Builder, s1Builder, s4Builder) } else { S23(s0Builder: s0Builder, s1Builder: s1Builder, s4Builder: s4Builder) }
 			        }
-			        let s0Builder = ErasedInstantiator<(), any Screen>(__safeDI_s0Builder)
-			        let s1Builder = ErasedInstantiator<(), any Screen>(__safeDI_s1Builder)
-			        let s2Builder = ErasedInstantiator<(), any Screen>(__safeDI_s2Builder)
-			        let s3Builder = ErasedInstantiator<(), any Screen>(__safeDI_s3Builder)
-			        let s4Builder = ErasedInstantiator<(), any Screen>(__safeDI_s4Builder)
-			        let s5Builder = ErasedInstantiator<(), any Screen>(__safeDI_s5Builder)
-			        let s6Builder = ErasedInstantiator<(), any Screen>(__safeDI_s6Builder)
-			        let s7Builder = ErasedInstantiator<(), any Screen>(__safeDI_s7Builder)
-			        let s8Builder = ErasedInstantiator<(), any Screen>(__safeDI_s8Builder)
-			        let s9Builder = ErasedInstantiator<(), any Screen>(__safeDI_s9Builder)
-			        let s10Builder = ErasedInstantiator<(), any Screen>(__safeDI_s10Builder)
-			        let s11Builder = ErasedInstantiator<(), any Screen>(__safeDI_s11Builder)
-			        let s12Builder = ErasedInstantiator<(), any Screen>(__safeDI_s12Builder)
-			        let s13Builder = ErasedInstantiator<(), any Screen>(__safeDI_s13Builder)
-			        let s14Builder = ErasedInstantiator<(), any Screen>(__safeDI_s14Builder)
-			        let s15Builder = ErasedInstantiator<(), any Screen>(__safeDI_s15Builder)
-			        let s16Builder = ErasedInstantiator<(), any Screen>(__safeDI_s16Builder)
-			        let s17Builder = ErasedInstantiator<(), any Screen>(__safeDI_s17Builder)
-			        let s18Builder = ErasedInstantiator<(), any Screen>(__safeDI_s18Builder)
-			        let s19Builder = ErasedInstantiator<(), any Screen>(__safeDI_s19Builder)
-			        let s20Builder = ErasedInstantiator<(), any Screen>(__safeDI_s20Builder)
-			        let s21Builder = ErasedInstantiator<(), any Screen>(__safeDI_s21Builder)
-			        let s22Builder = ErasedInstantiator<(), any Screen>(__safeDI_s22Builder)
-			        let s23Builder = ErasedInstantiator<(), any Screen>(__safeDI_s23Builder)
+			        let s0Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s0Builder(__safeDI_S0_configuration: safeDIOverrides.s0Builder)
+			        }
+			        let s1Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s1Builder(__safeDI_S1_configuration: safeDIOverrides.s1Builder)
+			        }
+			        let s2Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s2Builder(__safeDI_S2_configuration: safeDIOverrides.s2Builder)
+			        }
+			        let s3Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s3Builder(__safeDI_S3_configuration: safeDIOverrides.s3Builder)
+			        }
+			        let s4Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s4Builder(__safeDI_S4_configuration: safeDIOverrides.s4Builder)
+			        }
+			        let s5Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s5Builder(__safeDI_S5_configuration: safeDIOverrides.s5Builder)
+			        }
+			        let s6Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s6Builder(__safeDI_S6_configuration: safeDIOverrides.s6Builder)
+			        }
+			        let s7Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s7Builder(__safeDI_S7_configuration: safeDIOverrides.s7Builder)
+			        }
+			        let s8Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s8Builder(__safeDI_S8_configuration: safeDIOverrides.s8Builder)
+			        }
+			        let s9Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s9Builder(__safeDI_S9_configuration: safeDIOverrides.s9Builder)
+			        }
+			        let s10Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s10Builder(__safeDI_S10_configuration: safeDIOverrides.s10Builder)
+			        }
+			        let s11Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s11Builder(__safeDI_S11_configuration: safeDIOverrides.s11Builder)
+			        }
+			        let s12Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s12Builder(__safeDI_S12_configuration: safeDIOverrides.s12Builder)
+			        }
+			        let s13Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s13Builder(__safeDI_S13_configuration: safeDIOverrides.s13Builder)
+			        }
+			        let s14Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s14Builder(__safeDI_S14_configuration: safeDIOverrides.s14Builder)
+			        }
+			        let s15Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s15Builder(__safeDI_S15_configuration: safeDIOverrides.s15Builder)
+			        }
+			        let s16Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s16Builder(__safeDI_S16_configuration: safeDIOverrides.s16Builder)
+			        }
+			        let s17Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s17Builder(__safeDI_S17_configuration: safeDIOverrides.s17Builder)
+			        }
+			        let s18Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s18Builder(__safeDI_S18_configuration: safeDIOverrides.s18Builder)
+			        }
+			        let s19Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s19Builder(__safeDI_S19_configuration: safeDIOverrides.s19Builder)
+			        }
+			        let s20Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s20Builder(__safeDI_S20_configuration: safeDIOverrides.s20Builder)
+			        }
+			        let s21Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s21Builder(__safeDI_S21_configuration: safeDIOverrides.s21Builder)
+			        }
+			        let s22Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s22Builder(__safeDI_S22_configuration: safeDIOverrides.s22Builder)
+			        }
+			        let s23Builder = ErasedInstantiator<(), any Screen> {
+			            __safeDI_s23Builder(__safeDI_S23_configuration: safeDIOverrides.s23Builder)
+			        }
 			        return Root(s0Builder: s0Builder, s1Builder: s1Builder, s2Builder: s2Builder, s3Builder: s3Builder, s4Builder: s4Builder, s5Builder: s5Builder, s6Builder: s6Builder, s7Builder: s7Builder, s8Builder: s8Builder, s9Builder: s9Builder, s10Builder: s10Builder, s11Builder: s11Builder, s12Builder: s12Builder, s13Builder: s13Builder, s14Builder: s14Builder, s15Builder: s15Builder, s16Builder: s16Builder, s17Builder: s17Builder, s18Builder: s18Builder, s19Builder: s19Builder, s20Builder: s20Builder, s21Builder: s21Builder, s22Builder: s22Builder, s23Builder: s23Builder)
 			    }
 			}
@@ -637,14 +853,18 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_t4Builder() -> T4 {
-			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        func __safeDI_t4Builder(__safeDI_T4_configuration: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?) -> T4 {
+			            let t4Builder = Instantiator<T4> {
+			                __safeDI_t4Builder(__safeDI_T4_configuration: safeDIOverrides.t4Builder)
+			            }
 			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
 			            let t4BuilderAlias: Instantiator<T4> = t4Builder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
+			            return if let safeDIBuilder = __safeDI_T4_configuration { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
 			        }
-			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        let t4Builder = Instantiator<T4> {
+			            __safeDI_t4Builder(__safeDI_T4_configuration: safeDIOverrides.t4Builder)
+			        }
 			        func __safeDI_t4(__safeDI_T4_configuration: ((Instantiator<T4>, Instantiator<T2>?) -> T4)?) -> T4 {
 			            #sourceLocation(file: "\(output.fixtures["T4.swift"])", line: 8)
 			            let t4BuilderAlias: Instantiator<T4> = t4Builder
@@ -734,11 +954,15 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_t4Builder() -> T4 {
-			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-			            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4Builder, nil) } else { T4(t4Builder: t4Builder, t2Builder: nil) }
+			        func __safeDI_t4Builder(__safeDI_T4_configuration: ((Instantiator<T4>?, Instantiator<T2>?) -> T4)?) -> T4 {
+			            let t4Builder = Instantiator<T4> {
+			                __safeDI_t4Builder(__safeDI_T4_configuration: safeDIOverrides.t4Builder)
+			            }
+			            return if let safeDIBuilder = __safeDI_T4_configuration { safeDIBuilder(t4Builder, nil) } else { T4(t4Builder: t4Builder, t2Builder: nil) }
 			        }
-			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        let t4Builder = Instantiator<T4> {
+			            __safeDI_t4Builder(__safeDI_T4_configuration: safeDIOverrides.t4Builder)
+			        }
 			        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder(t4Builder) } else { T3(t4Builder: t4Builder) }
 			        func __safeDI_t2Builder(__safeDI_T2_configuration: ((T3?) -> T2)?) -> T2 {
 			            if let safeDIBuilder = __safeDI_T2_configuration { safeDIBuilder(t3) } else { T2(t3: t3) }
@@ -871,17 +1095,27 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_aBuilder() -> A {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder { safeDIBuilder(aBuilder, bBuilder) } else { A(aBuilder: aBuilder, bBuilder: bBuilder) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: ((Instantiator<A>, Instantiator<B>) -> A)?) -> A {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(aBuilder, bBuilder) } else { A(aBuilder: aBuilder, bBuilder: bBuilder) }
 			        }
-			        func __safeDI_bBuilder() -> B {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<A>) -> B)?) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			        }
 			        return A(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }
 			}
@@ -928,11 +1162,15 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_screenBuilder() -> Screen {
-			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(screenBuilder) } else { Screen(screenBuilder: screenBuilder) }
+			        func __safeDI_screenBuilder(__safeDI_Screen_configuration: ((Instantiator<Screen>) -> Screen)?) -> Screen {
+			            let screenBuilder = Instantiator<Screen> {
+			                __safeDI_screenBuilder(__safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_Screen_configuration { safeDIBuilder(screenBuilder) } else { Screen(screenBuilder: screenBuilder) }
 			        }
-			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(__safeDI_Screen_configuration: safeDIOverrides.screenBuilder)
+			        }
 			        return Screen(screenBuilder: screenBuilder)
 			    }
 			}
@@ -1387,16 +1625,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_bBuilder() -> B {
-			            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(xBuilder) } else { B(xBuilder: xBuilder) }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<X>) -> B)?) -> B {
+			            let xBuilder = Instantiator<X> {
+			                __safeDI_xBuilder(__safeDI_X_configuration: safeDIOverrides.xBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(xBuilder) } else { B(xBuilder: xBuilder) }
 			        }
-			        func __safeDI_xBuilder() -> X {
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.xBuilder { safeDIBuilder(bBuilder) } else { X(bBuilder: bBuilder) }
+			        func __safeDI_xBuilder(__safeDI_X_configuration: ((Instantiator<B>) -> X)?) -> X {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_X_configuration { safeDIBuilder(bBuilder) } else { X(bBuilder: bBuilder) }
 			        }
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			        }
+			        let xBuilder = Instantiator<X> {
+			            __safeDI_xBuilder(__safeDI_X_configuration: safeDIOverrides.xBuilder)
+			        }
 			        let c = if let safeDIBuilder = safeDIOverrides.c { safeDIBuilder(xBuilder) } else { C(xBuilder: xBuilder) }
 			        return A(bBuilder: bBuilder, c: c)
 			    }
@@ -1507,16 +1753,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_aBuilder() -> A {
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: ((Instantiator<B>?) -> A)?) -> A {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
 			        }
-			        func __safeDI_bBuilder() -> B {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<A>?) -> B)?) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			        }
 			        return Root(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }
 			}
@@ -1784,12 +2038,10 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			            __safeDI_screenBuilder(session: session)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received_)
-			        func __safeDI_screenBuilder_received(__safeDI_Other_configuration: (() -> Other)?) -> Other {
-			            if let safeDIBuilder = __safeDI_Other_configuration { safeDIBuilder() } else { Other() }
+			        func __safeDI_screenBuilder_received() -> Other {
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder_received { safeDIBuilder() } else { Other() }
 			        }
-			        let screenBuilder_received = Instantiator<Other> {
-			            __safeDI_screenBuilder_received(__safeDI_Other_configuration: safeDIOverrides.screenBuilder_received)
-			        }
+			        let screenBuilder_received = Instantiator<Other>(__safeDI_screenBuilder_received)
 			        return Root(session: session, screenBuilder: screenBuilder, screenBuilder_received: screenBuilder_received)
 			    }
 			}
@@ -1844,8 +2096,8 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_screenBuilder_received(__safeDI_Flow_configuration: Flow.SafeDIMockConfiguration) -> Flow {
-			            let session = if let safeDIBuilder = __safeDI_Flow_configuration.session { safeDIBuilder() } else { Session() }
+			        func __safeDI_screenBuilder_received() -> Flow {
+			            let session = if let safeDIBuilder = safeDIOverrides.screenBuilder_received.session { safeDIBuilder() } else { Session() }
 			            func __safeDI_screenBuilder(session: Session) -> Screen {
 			                let screenBuilder = Instantiator<Screen> {
 			                    __safeDI_screenBuilder(session: session)
@@ -1865,18 +2117,14 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			                __safeDI_screenBuilder(session: session)
 			            }
 			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received_)
-			            let tail: Tail = __safeDI_tail(__safeDI_Tail_configuration: __safeDI_Flow_configuration.tail, __safeDI_Flow_configuration_nearest: __safeDI_Flow_configuration)
-			            return if let safeDIBuilder = __safeDI_Flow_configuration.safeDIBuilder { safeDIBuilder(session, screenBuilder, tail) } else { Flow(session: session, screenBuilder: screenBuilder, tail: tail) }
-			        }
-			        func __safeDI_tail(__safeDI_Tail_configuration: Tail.SafeDIMockConfiguration, __safeDI_Flow_configuration_nearest: Flow.SafeDIMockConfiguration?) -> Tail {
-			            let screenBuilder_received = Instantiator<Flow> {
-			                __safeDI_screenBuilder_received(__safeDI_Flow_configuration: __safeDI_Flow_configuration_nearest ?? Flow.SafeDIMockConfiguration())
+			            func __safeDI_tail() -> Tail {
+			                let screenBuilder_received = Instantiator<Flow>(__safeDI_screenBuilder_received)
+			                return if let safeDIBuilder = safeDIOverrides.screenBuilder_received.tail.safeDIBuilder { safeDIBuilder(screenBuilder_received) } else { Tail(screenBuilder_received: screenBuilder_received) }
 			            }
-			            return if let safeDIBuilder = __safeDI_Tail_configuration.safeDIBuilder { safeDIBuilder(screenBuilder_received) } else { Tail(screenBuilder_received: screenBuilder_received) }
+			            let tail: Tail = __safeDI_tail()
+			            return if let safeDIBuilder = safeDIOverrides.screenBuilder_received.safeDIBuilder { safeDIBuilder(session, screenBuilder, tail) } else { Flow(session: session, screenBuilder: screenBuilder, tail: tail) }
 			        }
-			        let screenBuilder_received = Instantiator<Flow> {
-			            __safeDI_screenBuilder_received(__safeDI_Flow_configuration: safeDIOverrides.screenBuilder_received)
-			        }
+			        let screenBuilder_received = Instantiator<Flow>(__safeDI_screenBuilder_received)
 			        return Root(screenBuilder_received: screenBuilder_received)
 			    }
 			}
@@ -2220,12 +2468,16 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_aBuilder() -> A {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let b = if let safeDIBuilder = safeDIOverrides.aBuilder.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            let b = if let safeDIBuilder = __safeDI_A_configuration.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
 			        let b = if let safeDIBuilder = safeDIOverrides.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        return A(b: b)
 			    }
@@ -2299,12 +2551,16 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
-			        func __safeDI_aBuilder() -> A {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let b = if let safeDIBuilder = safeDIOverrides.aBuilder.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            let b = if let safeDIBuilder = __safeDI_A_configuration.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
 			        return B(aBuilder: aBuilder)
 			    }
 			}
@@ -2341,12 +2597,16 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        func __safeDI_aBuilder() -> A {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let b = if let safeDIBuilder = safeDIOverrides.aBuilder.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            let b = if let safeDIBuilder = __safeDI_A_configuration.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
 			        return Root(aBuilder: aBuilder)
 			    }
 			}
@@ -2417,12 +2677,16 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_aBuilder() -> A {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let b = if let safeDIBuilder = safeDIOverrides.aBuilder.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            let b = if let safeDIBuilder = __safeDI_A_configuration.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
 			        let b = if let safeDIBuilder = safeDIOverrides.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        return A(b: b)
 			    }
@@ -2496,12 +2760,16 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
-			        func __safeDI_aBuilder() -> A {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let b = if let safeDIBuilder = safeDIOverrides.aBuilder.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration) -> A {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            let b = if let safeDIBuilder = __safeDI_A_configuration.b { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
 			        return B(aBuilder: aBuilder)
 			    }
 			}
@@ -2583,16 +2851,24 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
-			        func __safeDI_aBuilder() -> A {
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.aBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: ((Instantiator<B>) -> A)?) -> A {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
 			        }
-			        func __safeDI_bBuilder() -> B {
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<A>) -> B)?) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        }
-			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(__safeDI_A_configuration: safeDIOverrides.aBuilder)
+			        }
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder)
+			        }
 			        return Parent(aBuilder: aBuilder, bBuilder: bBuilder)
 			    }
 			}
@@ -2676,17 +2952,25 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Top {
+			        func __safeDI_aBuilder(__safeDI_A_configuration: ((Instantiator<B>) -> A)?, __safeDI_Holder_loopConfiguration: Holder.SafeDIMockConfiguration) -> A {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_Holder_loopConfiguration.bBuilder, __safeDI_Holder_loopConfiguration: __safeDI_Holder_loopConfiguration)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			        }
+			        func __safeDI_bBuilder(__safeDI_B_configuration: ((Instantiator<A>) -> B)?, __safeDI_Holder_loopConfiguration: Holder.SafeDIMockConfiguration) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_Holder_loopConfiguration.aBuilder, __safeDI_Holder_loopConfiguration: __safeDI_Holder_loopConfiguration)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        }
 			        func __safeDI_holder(__safeDI_Holder_configuration: Holder.SafeDIMockConfiguration) -> Holder {
-			            func __safeDI_aBuilder() -> A {
-			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			                return if let safeDIBuilder = safeDIOverrides.holder.aBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_Holder_configuration.aBuilder, __safeDI_Holder_loopConfiguration: __safeDI_Holder_configuration)
 			            }
-			            func __safeDI_bBuilder() -> B {
-			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			                return if let safeDIBuilder = safeDIOverrides.holder.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: __safeDI_Holder_configuration.bBuilder, __safeDI_Holder_loopConfiguration: __safeDI_Holder_configuration)
 			            }
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            return if let safeDIBuilder = __safeDI_Holder_configuration.safeDIBuilder { safeDIBuilder(aBuilder, bBuilder) } else { Holder(aBuilder: aBuilder, bBuilder: bBuilder) }
 			        }
 			        let holder: Holder = __safeDI_holder(__safeDI_Holder_configuration: safeDIOverrides.holder)
@@ -2788,32 +3072,46 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Parent {
-			        func __safeDI_bBuilder() -> B {
-			            let qBuilder = Instantiator<Q>(__safeDI_qBuilder)
-			            func __safeDI_innerABuilder() -> A {
-			                func __safeDI_innerBBuilder() -> B {
-			                    let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
-			                    return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(innerABuilder) } else { B(innerABuilder: innerABuilder) }
-			                }
-			                let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
-			                return A(innerBBuilder: innerBBuilder, qBuilder: qBuilder)
+			        func __safeDI_bBuilder(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
+			            let qBuilder = Instantiator<Q> {
+			                __safeDI_qBuilder(__safeDI_Q_configuration: safeDIOverrides.qBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
 			            }
-			            let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
-			            return if let safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder { safeDIBuilder(innerABuilder) } else { B(innerABuilder: innerABuilder) }
+			            let innerABuilder = Instantiator<A> {
+			                __safeDI_innerABuilder(qBuilder: qBuilder, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(innerABuilder) } else { B(innerABuilder: innerABuilder) }
 			        }
-			        func __safeDI_qBuilder() -> Q {
-			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			            return if let safeDIBuilder = safeDIOverrides.qBuilder { safeDIBuilder(bBuilder) } else { Q(bBuilder: bBuilder) }
+			        func __safeDI_qBuilder(__safeDI_Q_configuration: ((Instantiator<B>) -> Q)?, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> Q {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration_nearest)
+			            }
+			            return if let safeDIBuilder = __safeDI_Q_configuration { safeDIBuilder(bBuilder) } else { Q(bBuilder: bBuilder) }
 			        }
-			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			        let qBuilder = Instantiator<Q>(__safeDI_qBuilder)
-			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
+			        func __safeDI_innerABuilder(qBuilder: Instantiator<Q>, __safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
 			            let innerBBuilder = Instantiator<B> {
-			                __safeDI_innerBBuilder(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? __safeDI_A_configuration.innerBBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
+			                __safeDI_innerBBuilder(qBuilder: qBuilder, __safeDI_B_configuration: __safeDI_B_configuration_nearest ?? B.SafeDIMockConfiguration(), __safeDI_A_configuration_nearest: __safeDI_A_configuration)
 			            }
 			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(innerBBuilder, qBuilder) } else { A(innerBBuilder: innerBBuilder, qBuilder: qBuilder) }
 			        }
-			        func __safeDI_innerBBuilder(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
+			        func __safeDI_innerBBuilder(qBuilder: Instantiator<Q>, __safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
+			            let innerABuilder = Instantiator<A> {
+			                __safeDI_innerABuilder(qBuilder: qBuilder, __safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration)
+			            }
+			            return if let safeDIBuilder = __safeDI_B_configuration.safeDIBuilder { safeDIBuilder(innerABuilder) } else { B(innerABuilder: innerABuilder) }
+			        }
+			        let bBuilder = Instantiator<B> {
+			            __safeDI_bBuilder(__safeDI_B_configuration: safeDIOverrides.bBuilder, __safeDI_A_configuration_nearest: nil)
+			        }
+			        let qBuilder = Instantiator<Q> {
+			            __safeDI_qBuilder(__safeDI_Q_configuration: safeDIOverrides.qBuilder, __safeDI_A_configuration_nearest: nil)
+			        }
+			        func __safeDI_aBuilder(__safeDI_A_configuration: A.SafeDIMockConfiguration, __safeDI_B_configuration_nearest: B.SafeDIMockConfiguration?) -> A {
+			            let innerBBuilder = Instantiator<B> {
+			                __safeDI_innerBBuilder_(__safeDI_B_configuration: __safeDI_B_configuration_nearest ?? __safeDI_A_configuration.innerBBuilder, __safeDI_A_configuration_nearest: __safeDI_A_configuration)
+			            }
+			            return if let safeDIBuilder = __safeDI_A_configuration.safeDIBuilder { safeDIBuilder(innerBBuilder, qBuilder) } else { A(innerBBuilder: innerBBuilder, qBuilder: qBuilder) }
+			        }
+			        func __safeDI_innerBBuilder_(__safeDI_B_configuration: B.SafeDIMockConfiguration, __safeDI_A_configuration_nearest: A.SafeDIMockConfiguration?) -> B {
 			            let innerABuilder = Instantiator<A> {
 			                __safeDI_aBuilder(__safeDI_A_configuration: __safeDI_A_configuration_nearest ?? A.SafeDIMockConfiguration(), __safeDI_B_configuration_nearest: __safeDI_B_configuration)
 			            }
@@ -3266,14 +3564,18 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Node {
-			        func __safeDI_nodeBuilder() -> Node {
-			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: ((Instantiator<Node>) -> Node)?) -> Node {
+			            let nodeBuilder = Instantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			            }
 			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			            let childBuilder: Instantiator<Node> = nodeBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
+			            return if let safeDIBuilder = __safeDI_Node_configuration { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
-			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        let nodeBuilder = Instantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
 			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			        let childBuilder: Instantiator<Node> = nodeBuilder
 			        #sourceLocation()
@@ -3333,15 +3635,19 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Node {
-			        let __safeDI_nodeBuilder__safeDIBuilder = safeDIOverrides.nodeBuilder
-			        @Sendable nonisolated func __safeDI_nodeBuilder() -> Node {
-			            let nodeBuilder = SendableInstantiator<Node>(__safeDI_nodeBuilder)
+			        @Sendable nonisolated func __safeDI_nodeBuilder(__safeDI_Node_configuration: (@Sendable (SendableInstantiator<Node>) -> Node)?) -> Node {
+			            let nodeBuilder = SendableInstantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: __safeDI_Node_configuration)
+			            }
 			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			            let childBuilder: SendableInstantiator<Node> = nodeBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = __safeDI_nodeBuilder__safeDIBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
+			            return if let safeDIBuilder = __safeDI_Node_configuration { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
-			        let nodeBuilder = SendableInstantiator<Node>(__safeDI_nodeBuilder)
+			        let __safeDI_nodeBuilder____safeDI_Node_configuration: (@Sendable (SendableInstantiator<Node>) -> Node)? = safeDIOverrides.nodeBuilder
+			        let nodeBuilder = SendableInstantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: __safeDI_nodeBuilder____safeDI_Node_configuration)
+			        }
 			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			        let childBuilder: SendableInstantiator<Node> = nodeBuilder
 			        #sourceLocation()
@@ -3419,14 +3725,18 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Node {
-			        func __safeDI_nodeBuilder() -> AnyNode {
-			            let nodeBuilder = ErasedInstantiator<(), AnyNode>(__safeDI_nodeBuilder)
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: ((AnyNodeFactory) -> AnyNode)?) -> AnyNode {
+			            let nodeBuilder = ErasedInstantiator<(), AnyNode> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			            }
 			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			            let childBuilder: AnyNodeFactory = AnyNodeFactory(nodeBuilder)
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { AnyNode(Node(childBuilder: childBuilder)) }
+			            return if let safeDIBuilder = __safeDI_Node_configuration { safeDIBuilder(childBuilder) } else { AnyNode(Node(childBuilder: childBuilder)) }
 			        }
-			        let nodeBuilder = ErasedInstantiator<(), AnyNode>(__safeDI_nodeBuilder)
+			        let nodeBuilder = ErasedInstantiator<(), AnyNode> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
 			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			        let childBuilder: AnyNodeFactory = AnyNodeFactory(nodeBuilder)
 			        #sourceLocation()
@@ -3503,31 +3813,29 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Node {
-			        func __safeDI_nodeBuilder() -> Node {
-			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: Node.SafeDIMockConfiguration) -> Node {
+			            let nodeBuilder = Instantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			            }
 			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			            let middleBuilder: Instantiator<Node> = nodeBuilder
 			            #sourceLocation()
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			                let childBuilder: Instantiator<Node> = middleBuilder
-			                #sourceLocation()
-			                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.child { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
-			            }
-			            let child: Child = __safeDI_child()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder.safeDIBuilder { safeDIBuilder(middleBuilder, child) } else { Node(middleBuilder: middleBuilder, child: child) }
+			            let child: Child = __safeDI_child(middleBuilder: middleBuilder, __safeDI_Child_configuration: __safeDI_Node_configuration.child)
+			            return if let safeDIBuilder = __safeDI_Node_configuration.safeDIBuilder { safeDIBuilder(middleBuilder, child) } else { Node(middleBuilder: middleBuilder, child: child) }
 			        }
-			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-			        let middleBuilder: Instantiator<Node> = nodeBuilder
-			        #sourceLocation()
-			        func __safeDI_child(__safeDI_Child_configuration: ((Instantiator<Node>) -> Child)?) -> Child {
+			        func __safeDI_child(middleBuilder: Instantiator<Node>, __safeDI_Child_configuration: ((Instantiator<Node>) -> Child)?) -> Child {
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
 			            let childBuilder: Instantiator<Node> = middleBuilder
 			            #sourceLocation()
 			            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
 			        }
-			        let child: Child = __safeDI_child(__safeDI_Child_configuration: safeDIOverrides.child)
+			        let nodeBuilder = Instantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
+			        #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
+			        let middleBuilder: Instantiator<Node> = nodeBuilder
+			        #sourceLocation()
+			        let child: Child = __safeDI_child(middleBuilder: middleBuilder, __safeDI_Child_configuration: safeDIOverrides.child)
 			        return Node(middleBuilder: middleBuilder, child: child)
 			    }
 			}
@@ -3636,18 +3944,22 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_nodeBuilder() -> Node {
-			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			                let childBuilder: Instantiator<Node> = nodeBuilder
-			                #sourceLocation()
-			                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.child { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: Node.SafeDIMockConfiguration) -> Node {
+			            let nodeBuilder = Instantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
 			            }
-			            let child: Child = __safeDI_child()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder.safeDIBuilder { safeDIBuilder(child) } else { Node(child: child) }
+			            let child: Child = __safeDI_child(nodeBuilder: nodeBuilder, __safeDI_Child_configuration: __safeDI_Node_configuration.child)
+			            return if let safeDIBuilder = __safeDI_Node_configuration.safeDIBuilder { safeDIBuilder(child) } else { Node(child: child) }
 			        }
-			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        func __safeDI_child(nodeBuilder: Instantiator<Node>, __safeDI_Child_configuration: ((Instantiator<Node>) -> Child)?) -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+			            let childBuilder: Instantiator<Node> = nodeBuilder
+			            #sourceLocation()
+			            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
+			        }
+			        let nodeBuilder = Instantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
 			        return Screen(nodeBuilder: nodeBuilder)
 			    }
 			}
@@ -3727,14 +4039,18 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Node {
-			        func __safeDI_nodeBuilder() -> Node {
-			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: ((Instantiator<Node>) -> Node)?) -> Node {
+			            let nodeBuilder = Instantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			            }
 			            #sourceLocation(file: "\(dependentModuleFixtures["Node.swift"])", line: 4)
 			            let childBuilder: Instantiator<Node> = nodeBuilder
 			            #sourceLocation()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
+			            return if let safeDIBuilder = __safeDI_Node_configuration { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 			        }
-			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        let nodeBuilder = Instantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
 			        #sourceLocation(file: "\(dependentModuleFixtures["Node.swift"])", line: 4)
 			        let childBuilder: Instantiator<Node> = nodeBuilder
 			        #sourceLocation()

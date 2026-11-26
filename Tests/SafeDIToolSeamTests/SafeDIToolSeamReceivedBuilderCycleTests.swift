@@ -1971,133 +1971,133 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
-			        func __safeDI_screen0Builder(id: Int) -> Screen {
+			        func __safeDI_screen0Builder(id: Int, __safeDI_Screen0_configuration: Screen0.SafeDIMockConfiguration) -> Screen {
 			            let screen2Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen2Builder(id: $0)
+			                __safeDI_screen2Builder(id: $0, __safeDI_Screen2_configuration: safeDIOverrides.screen2Builder)
 			            }
 			            let screen3Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen3Builder(id: $0)
+			                __safeDI_screen3Builder(id: $0, __safeDI_Screen3_configuration: safeDIOverrides.screen3Builder)
 			            }
 			            let screen4Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen4Builder(id: $0)
+			                __safeDI_screen4Builder(id: $0, __safeDI_Screen4_configuration: safeDIOverrides.screen4Builder)
 			            }
-			            let model0 = if let safeDIBuilder = safeDIOverrides.screen0Builder.model0 { safeDIBuilder(id, service) } else { Model0(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen0Builder.safeDIBuilder { safeDIBuilder(id, service, model0, screen2Builder, screen3Builder, screen4Builder) } else { Screen0(id: id, service: service, model0: model0, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen4Builder: screen4Builder) }
+			            let model0 = if let safeDIBuilder = __safeDI_Screen0_configuration.model0 { safeDIBuilder(id, service) } else { Model0(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen0_configuration.safeDIBuilder { safeDIBuilder(id, service, model0, screen2Builder, screen3Builder, screen4Builder) } else { Screen0(id: id, service: service, model0: model0, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen4Builder: screen4Builder) }
 			        }
-			        func __safeDI_screen1Builder(id: Int) -> Screen {
+			        func __safeDI_screen1Builder(id: Int, __safeDI_Screen1_configuration: Screen1.SafeDIMockConfiguration) -> Screen {
 			            let screen2Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen2Builder(id: $0)
+			                __safeDI_screen2Builder(id: $0, __safeDI_Screen2_configuration: safeDIOverrides.screen2Builder)
 			            }
 			            let screen3Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen3Builder(id: $0)
+			                __safeDI_screen3Builder(id: $0, __safeDI_Screen3_configuration: safeDIOverrides.screen3Builder)
 			            }
 			            let screen7Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen7Builder(id: $0)
+			                __safeDI_screen7Builder(id: $0, __safeDI_Screen7_configuration: safeDIOverrides.screen7Builder)
 			            }
-			            let model1 = if let safeDIBuilder = safeDIOverrides.screen1Builder.model1 { safeDIBuilder(id, service) } else { Model1(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen1Builder.safeDIBuilder { safeDIBuilder(id, service, model1, screen2Builder, screen3Builder, screen7Builder) } else { Screen1(id: id, service: service, model1: model1, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen7Builder: screen7Builder) }
+			            let model1 = if let safeDIBuilder = __safeDI_Screen1_configuration.model1 { safeDIBuilder(id, service) } else { Model1(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen1_configuration.safeDIBuilder { safeDIBuilder(id, service, model1, screen2Builder, screen3Builder, screen7Builder) } else { Screen1(id: id, service: service, model1: model1, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen7Builder: screen7Builder) }
 			        }
-			        func __safeDI_screen2Builder(id: Int) -> Screen {
+			        func __safeDI_screen2Builder(id: Int, __safeDI_Screen2_configuration: Screen2.SafeDIMockConfiguration) -> Screen {
 			            let screen1Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen1Builder(id: $0)
+			                __safeDI_screen1Builder(id: $0, __safeDI_Screen1_configuration: safeDIOverrides.screen1Builder)
 			            }
 			            let screen4Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen4Builder(id: $0)
+			                __safeDI_screen4Builder(id: $0, __safeDI_Screen4_configuration: safeDIOverrides.screen4Builder)
 			            }
 			            let screen7Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen7Builder(id: $0)
+			                __safeDI_screen7Builder(id: $0, __safeDI_Screen7_configuration: safeDIOverrides.screen7Builder)
 			            }
-			            let model2 = if let safeDIBuilder = safeDIOverrides.screen2Builder.model2 { safeDIBuilder(id, service) } else { Model2(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen2Builder.safeDIBuilder { safeDIBuilder(id, service, model2, screen1Builder, screen4Builder, screen7Builder) } else { Screen2(id: id, service: service, model2: model2, screen1Builder: screen1Builder, screen4Builder: screen4Builder, screen7Builder: screen7Builder) }
+			            let model2 = if let safeDIBuilder = __safeDI_Screen2_configuration.model2 { safeDIBuilder(id, service) } else { Model2(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen2_configuration.safeDIBuilder { safeDIBuilder(id, service, model2, screen1Builder, screen4Builder, screen7Builder) } else { Screen2(id: id, service: service, model2: model2, screen1Builder: screen1Builder, screen4Builder: screen4Builder, screen7Builder: screen7Builder) }
 			        }
-			        func __safeDI_screen3Builder(id: Int) -> Screen {
+			        func __safeDI_screen3Builder(id: Int, __safeDI_Screen3_configuration: Screen3.SafeDIMockConfiguration) -> Screen {
 			            let screen0Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen0Builder(id: $0)
+			                __safeDI_screen0Builder(id: $0, __safeDI_Screen0_configuration: safeDIOverrides.screen0Builder)
 			            }
 			            let screen2Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen2Builder(id: $0)
+			                __safeDI_screen2Builder(id: $0, __safeDI_Screen2_configuration: safeDIOverrides.screen2Builder)
 			            }
 			            let screen6Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen6Builder(id: $0)
+			                __safeDI_screen6Builder(id: $0, __safeDI_Screen6_configuration: safeDIOverrides.screen6Builder)
 			            }
-			            let model3 = if let safeDIBuilder = safeDIOverrides.screen3Builder.model3 { safeDIBuilder(id, service) } else { Model3(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen3Builder.safeDIBuilder { safeDIBuilder(id, service, model3, screen0Builder, screen2Builder, screen6Builder) } else { Screen3(id: id, service: service, model3: model3, screen0Builder: screen0Builder, screen2Builder: screen2Builder, screen6Builder: screen6Builder) }
+			            let model3 = if let safeDIBuilder = __safeDI_Screen3_configuration.model3 { safeDIBuilder(id, service) } else { Model3(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen3_configuration.safeDIBuilder { safeDIBuilder(id, service, model3, screen0Builder, screen2Builder, screen6Builder) } else { Screen3(id: id, service: service, model3: model3, screen0Builder: screen0Builder, screen2Builder: screen2Builder, screen6Builder: screen6Builder) }
 			        }
-			        func __safeDI_screen4Builder(id: Int) -> Screen {
+			        func __safeDI_screen4Builder(id: Int, __safeDI_Screen4_configuration: Screen4.SafeDIMockConfiguration) -> Screen {
 			            let screen2Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen2Builder(id: $0)
+			                __safeDI_screen2Builder(id: $0, __safeDI_Screen2_configuration: safeDIOverrides.screen2Builder)
 			            }
 			            let screen3Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen3Builder(id: $0)
+			                __safeDI_screen3Builder(id: $0, __safeDI_Screen3_configuration: safeDIOverrides.screen3Builder)
 			            }
 			            let screen5Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen5Builder(id: $0)
+			                __safeDI_screen5Builder(id: $0, __safeDI_Screen5_configuration: safeDIOverrides.screen5Builder)
 			            }
-			            let model4 = if let safeDIBuilder = safeDIOverrides.screen4Builder.model4 { safeDIBuilder(id, service) } else { Model4(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen4Builder.safeDIBuilder { safeDIBuilder(id, service, model4, screen2Builder, screen3Builder, screen5Builder) } else { Screen4(id: id, service: service, model4: model4, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen5Builder: screen5Builder) }
+			            let model4 = if let safeDIBuilder = __safeDI_Screen4_configuration.model4 { safeDIBuilder(id, service) } else { Model4(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen4_configuration.safeDIBuilder { safeDIBuilder(id, service, model4, screen2Builder, screen3Builder, screen5Builder) } else { Screen4(id: id, service: service, model4: model4, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen5Builder: screen5Builder) }
 			        }
-			        func __safeDI_screen5Builder(id: Int) -> Screen {
+			        func __safeDI_screen5Builder(id: Int, __safeDI_Screen5_configuration: Screen5.SafeDIMockConfiguration) -> Screen {
 			            let screen3Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen3Builder(id: $0)
+			                __safeDI_screen3Builder(id: $0, __safeDI_Screen3_configuration: safeDIOverrides.screen3Builder)
 			            }
 			            let screen6Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen6Builder(id: $0)
+			                __safeDI_screen6Builder(id: $0, __safeDI_Screen6_configuration: safeDIOverrides.screen6Builder)
 			            }
 			            let screen7Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen7Builder(id: $0)
+			                __safeDI_screen7Builder(id: $0, __safeDI_Screen7_configuration: safeDIOverrides.screen7Builder)
 			            }
-			            let model5 = if let safeDIBuilder = safeDIOverrides.screen5Builder.model5 { safeDIBuilder(id, service) } else { Model5(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen5Builder.safeDIBuilder { safeDIBuilder(id, service, model5, screen3Builder, screen6Builder, screen7Builder) } else { Screen5(id: id, service: service, model5: model5, screen3Builder: screen3Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder) }
+			            let model5 = if let safeDIBuilder = __safeDI_Screen5_configuration.model5 { safeDIBuilder(id, service) } else { Model5(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen5_configuration.safeDIBuilder { safeDIBuilder(id, service, model5, screen3Builder, screen6Builder, screen7Builder) } else { Screen5(id: id, service: service, model5: model5, screen3Builder: screen3Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder) }
 			        }
-			        func __safeDI_screen6Builder(id: Int) -> Screen {
+			        func __safeDI_screen6Builder(id: Int, __safeDI_Screen6_configuration: Screen6.SafeDIMockConfiguration) -> Screen {
 			            let screen0Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen0Builder(id: $0)
+			                __safeDI_screen0Builder(id: $0, __safeDI_Screen0_configuration: safeDIOverrides.screen0Builder)
 			            }
 			            let screen4Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen4Builder(id: $0)
+			                __safeDI_screen4Builder(id: $0, __safeDI_Screen4_configuration: safeDIOverrides.screen4Builder)
 			            }
 			            let screen5Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen5Builder(id: $0)
+			                __safeDI_screen5Builder(id: $0, __safeDI_Screen5_configuration: safeDIOverrides.screen5Builder)
 			            }
-			            let model6 = if let safeDIBuilder = safeDIOverrides.screen6Builder.model6 { safeDIBuilder(id, service) } else { Model6(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen6Builder.safeDIBuilder { safeDIBuilder(id, service, model6, screen0Builder, screen4Builder, screen5Builder) } else { Screen6(id: id, service: service, model6: model6, screen0Builder: screen0Builder, screen4Builder: screen4Builder, screen5Builder: screen5Builder) }
+			            let model6 = if let safeDIBuilder = __safeDI_Screen6_configuration.model6 { safeDIBuilder(id, service) } else { Model6(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen6_configuration.safeDIBuilder { safeDIBuilder(id, service, model6, screen0Builder, screen4Builder, screen5Builder) } else { Screen6(id: id, service: service, model6: model6, screen0Builder: screen0Builder, screen4Builder: screen4Builder, screen5Builder: screen5Builder) }
 			        }
-			        func __safeDI_screen7Builder(id: Int) -> Screen {
+			        func __safeDI_screen7Builder(id: Int, __safeDI_Screen7_configuration: Screen7.SafeDIMockConfiguration) -> Screen {
 			            let screen0Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen0Builder(id: $0)
+			                __safeDI_screen0Builder(id: $0, __safeDI_Screen0_configuration: safeDIOverrides.screen0Builder)
 			            }
 			            let screen2Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen2Builder(id: $0)
+			                __safeDI_screen2Builder(id: $0, __safeDI_Screen2_configuration: safeDIOverrides.screen2Builder)
 			            }
 			            let screen3Builder = ErasedInstantiator<Int, Screen> {
-			                __safeDI_screen3Builder(id: $0)
+			                __safeDI_screen3Builder(id: $0, __safeDI_Screen3_configuration: safeDIOverrides.screen3Builder)
 			            }
-			            let model7 = if let safeDIBuilder = safeDIOverrides.screen7Builder.model7 { safeDIBuilder(id, service) } else { Model7(id: id, service: service) }
-			            return if let safeDIBuilder = safeDIOverrides.screen7Builder.safeDIBuilder { safeDIBuilder(id, service, model7, screen0Builder, screen2Builder, screen3Builder) } else { Screen7(id: id, service: service, model7: model7, screen0Builder: screen0Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder) }
+			            let model7 = if let safeDIBuilder = __safeDI_Screen7_configuration.model7 { safeDIBuilder(id, service) } else { Model7(id: id, service: service) }
+			            return if let safeDIBuilder = __safeDI_Screen7_configuration.safeDIBuilder { safeDIBuilder(id, service, model7, screen0Builder, screen2Builder, screen3Builder) } else { Screen7(id: id, service: service, model7: model7, screen0Builder: screen0Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder) }
 			        }
 			        let screen0Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen0Builder(id: $0)
+			            __safeDI_screen0Builder(id: $0, __safeDI_Screen0_configuration: safeDIOverrides.screen0Builder)
 			        }
 			        let screen1Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen1Builder(id: $0)
+			            __safeDI_screen1Builder(id: $0, __safeDI_Screen1_configuration: safeDIOverrides.screen1Builder)
 			        }
 			        let screen2Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen2Builder(id: $0)
+			            __safeDI_screen2Builder(id: $0, __safeDI_Screen2_configuration: safeDIOverrides.screen2Builder)
 			        }
 			        let screen3Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen3Builder(id: $0)
+			            __safeDI_screen3Builder(id: $0, __safeDI_Screen3_configuration: safeDIOverrides.screen3Builder)
 			        }
 			        let screen4Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen4Builder(id: $0)
+			            __safeDI_screen4Builder(id: $0, __safeDI_Screen4_configuration: safeDIOverrides.screen4Builder)
 			        }
 			        let screen5Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen5Builder(id: $0)
+			            __safeDI_screen5Builder(id: $0, __safeDI_Screen5_configuration: safeDIOverrides.screen5Builder)
 			        }
 			        let screen6Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen6Builder(id: $0)
+			            __safeDI_screen6Builder(id: $0, __safeDI_Screen6_configuration: safeDIOverrides.screen6Builder)
 			        }
 			        let screen7Builder = ErasedInstantiator<Int, Screen> {
-			            __safeDI_screen7Builder(id: $0)
+			            __safeDI_screen7Builder(id: $0, __safeDI_Screen7_configuration: safeDIOverrides.screen7Builder)
 			        }
 			        return Root(service: service, screen0Builder: screen0Builder, screen1Builder: screen1Builder, screen2Builder: screen2Builder, screen3Builder: screen3Builder, screen4Builder: screen4Builder, screen5Builder: screen5Builder, screen6Builder: screen6Builder, screen7Builder: screen7Builder)
 			    }
@@ -2558,16 +2558,22 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		lines += screens.map { "            let screen\($0)Builder: Screen\($0).SafeDIMockConfiguration" }
 		lines += ["        }", "    }", "", "    static func mock(", "        safeDIOverrides: SafeDIOverrides = .init()", "    ) -> Root {"]
 		lines.append("        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }")
-		// A loop's members declare every function first, then every wrapper, and read their overrides through the mock's
-		// overrides. A screen outside the loop is laid out by type: its function is handed its configuration.
+		// A loop's members declare every function first, then every wrapper. Every screen's function is handed its
+		// configuration, which a member's rebinding reads from the mock's overrides, as the loop's level declares it.
+		func mockWrapper(of screen: Int, indentation: String) -> [String] {
+			[
+				"\(indentation)let screen\(screen)Builder = ErasedInstantiator<Int, Screen> {",
+				"\(indentation)    __safeDI_screen\(screen)Builder(id: $0, __safeDI_Screen\(screen)_configuration: safeDIOverrides.screen\(screen)Builder)",
+				"\(indentation)}",
+			]
+		}
 		for unit in units {
-			let isLoop = unit.count > 1
 			for screen in unit {
 				let opened = edges[screen].map { "screen\($0)Builder" }
-				let configuration = isLoop ? "safeDIOverrides.screen\(screen)Builder" : "__safeDI_Screen\(screen)_configuration"
-				lines.append("        func __safeDI_screen\(screen)Builder(id: Int\(isLoop ? "" : ", __safeDI_Screen\(screen)_configuration: Screen\(screen).SafeDIMockConfiguration")) -> Screen {")
+				let configuration = "__safeDI_Screen\(screen)_configuration"
+				lines.append("        func __safeDI_screen\(screen)Builder(id: Int, __safeDI_Screen\(screen)_configuration: Screen\(screen).SafeDIMockConfiguration) -> Screen {")
 				for openedScreen in screensRebound(by: screen) {
-					lines += wrapper(of: openedScreen, indentation: "            ")
+					lines += mockWrapper(of: openedScreen, indentation: "            ")
 				}
 				lines.append("            let model\(screen) = if let safeDIBuilder = \(configuration).model\(screen) { safeDIBuilder(id, service) } else { Model\(screen)(id: id, service: service) }")
 				let builderArguments = (["id", "service", "model\(screen)"] + opened).joined(separator: ", ")
@@ -2576,15 +2582,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 				lines.append("        }")
 			}
 			for screen in unit {
-				if isLoop {
-					lines += wrapper(of: screen, indentation: "        ")
-				} else {
-					lines += [
-						"        let screen\(screen)Builder = ErasedInstantiator<Int, Screen> {",
-						"            __safeDI_screen\(screen)Builder(id: $0, __safeDI_Screen\(screen)_configuration: safeDIOverrides.screen\(screen)Builder)",
-						"        }",
-					]
-				}
+				lines += mockWrapper(of: screen, indentation: "        ")
 			}
 		}
 		lines += ["        return Root(\(rootArguments))", "    }", "}", "#endif", "", "#if DEBUG"]

@@ -105,18 +105,22 @@ struct SafeDIToolMockTypeKeyLoopIndentationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        func __safeDI_nodeBuilder() -> Node {
-			            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			                let childBuilder: Instantiator<Node> = nodeBuilder
-			                #sourceLocation()
-			                return if let safeDIBuilder = safeDIOverrides.nodeBuilder.child { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
+			        func __safeDI_nodeBuilder(__safeDI_Node_configuration: Node.SafeDIMockConfiguration) -> Node {
+			            let nodeBuilder = Instantiator<Node> {
+			                __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
 			            }
-			            let child: Child = __safeDI_child()
-			            return if let safeDIBuilder = safeDIOverrides.nodeBuilder.safeDIBuilder { safeDIBuilder(child) } else { Node(child: child) }
+			            let child: Child = __safeDI_child(nodeBuilder: nodeBuilder, __safeDI_Child_configuration: __safeDI_Node_configuration.child)
+			            return if let safeDIBuilder = __safeDI_Node_configuration.safeDIBuilder { safeDIBuilder(child) } else { Node(child: child) }
 			        }
-			        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+			        func __safeDI_child(nodeBuilder: Instantiator<Node>, __safeDI_Child_configuration: ((Instantiator<Node>) -> Child)?) -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+			            let childBuilder: Instantiator<Node> = nodeBuilder
+			            #sourceLocation()
+			            return if let safeDIBuilder = __safeDI_Child_configuration { safeDIBuilder(childBuilder) } else { Child(childBuilder: childBuilder) }
+			        }
+			        let nodeBuilder = Instantiator<Node> {
+			            __safeDI_nodeBuilder(__safeDI_Node_configuration: safeDIOverrides.nodeBuilder)
+			        }
 			        return Screen(nodeBuilder: nodeBuilder)
 			    }
 			}

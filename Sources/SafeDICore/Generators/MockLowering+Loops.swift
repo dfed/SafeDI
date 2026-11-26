@@ -40,6 +40,8 @@ extension MockLowering {
 		/// For a rename the level declares of a member, the rename as it is bound, wrapping the member's function: its
 		/// binding name and its own type.
 		let rename: Property?
+		/// For a rename, the property of the member it renames, whose place builds what the rename wraps.
+		let renamedProperty: Property?
 		/// The name of the function every wrapper of the member that its level makes hands: its builder function, or the
 		/// `_received` function that calls it where it takes parameters a lazy cycle needs.
 		let functionName: String
@@ -51,6 +53,10 @@ extension MockLowering {
 		let forwardedProperties: [Property]
 		/// The parameters of the member's builder function that a lazy cycle needs.
 		let cycleParameters: [Property]
+		/// Whether the member's property is erased to a concrete existential, as a closer that rebinds it records.
+		let isErased: Bool
+		/// Whether the member's type is built through an extension's `instantiate()`, as a closer that rebinds it records.
+		let isExtension: Bool
 	}
 
 	/// The lines of the loop of builders being emitted at a level, which the level appends when the loop ends.
@@ -59,8 +65,6 @@ extension MockLowering {
 		var prelude = [String]()
 		var functions = [String]()
 		var bindings = [String]()
-		/// The members in the order the level emits them, each with its path of child indices and the name it is bound under.
-		var members = [(generator: ScopeGenerator, path: [Int], bindingName: String?)]()
 
 		var lines: [String] {
 			prelude + functions + bindings
@@ -103,7 +107,7 @@ extension MockLowering {
 		var names = GeneratedNameAllocator(reserving: reservedNames)
 		var members = [Property: LoopMember]()
 		for (generator, bindingName) in memberGenerators {
-			guard case let .property(instantiable, property, _, _, _, _) = generator.scopeData else { continue }
+			guard case let .property(instantiable, property, _, erasedToConcreteExistential, _, _) = generator.scopeData else { continue }
 			// A member named apart from a sibling of its label is bound again, and built, under its name.
 			let bindingName = bindingName ?? property.label
 			let builderFunctionName = MockLowering.builderFunctionName(boundAs: bindingName)
@@ -112,11 +116,14 @@ extension MockLowering {
 				typeDescription: property.typeDescription,
 				bindingName: bindingName,
 				rename: nil,
+				renamedProperty: nil,
 				functionName: receivedFunctionName ?? builderFunctionName,
 				builderFunctionName: builderFunctionName,
 				receivedFunctionName: receivedFunctionName,
 				forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
 				cycleParameters: generator.cycleParameters.map(\.property),
+				isErased: erasedToConcreteExistential,
+				isExtension: instantiable.declarationType.isExtension,
 			)
 		}
 		for (index, generator) in generators.enumerated() where index < loops.count && loops[index] != nil {
@@ -128,11 +135,14 @@ extension MockLowering {
 				typeDescription: member.typeDescription,
 				bindingName: bindingName,
 				rename: Property(label: bindingName, typeDescription: property.typeDescription),
+				renamedProperty: fulfillingProperty,
 				functionName: member.functionName,
 				builderFunctionName: member.builderFunctionName,
 				receivedFunctionName: nil,
 				forwardedProperties: member.forwardedProperties,
 				cycleParameters: [],
+				isErased: member.isErased,
+				isExtension: member.isExtension,
 			)
 		}
 		return members
@@ -239,10 +249,7 @@ extension MockLowering.Walk {
 	/// Appends the loop being emitted, if any, to `lines`.
 	mutating func endLoopUnit(appendingTo lines: inout [String]) {
 		if let loopUnit {
-			if writesText {
-				lines.append(contentsOf: loopUnit.lines)
-			}
-			recordLoopUnit(loopUnit)
+			lines.append(contentsOf: loopUnit.lines)
 		}
 		loopUnit = nil
 	}
