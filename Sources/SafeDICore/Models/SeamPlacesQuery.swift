@@ -43,8 +43,15 @@ extension SeamSignature.Places {
 	public final class Query {
 		/// - Parameter excludedEntries: The entries a route's stack (`stack(along:)`) must hold none of for any question to
 		///   range over it; empty, every route of a case's family.
-		public init(of places: SeamSignature.Places, excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = []) {
+		/// - Parameter calledPlaces: The place graph of the seam or public mock a passed-up case refers to
+		///   (`PassedUpReference`), or `nil` where the run holds none; never asked where no case is passed up.
+		public init(
+			of places: SeamSignature.Places,
+			excludingRoutesWhoseStackHolds excludedEntries: Set<SeamSignature.Places.StackEntry> = [],
+			calledPlaces: @escaping (SeamSignature.Places.PassedUpReference) -> SeamSignature.Places? = { _ in nil },
+		) {
 			self.places = places
+			self.calledPlaces = calledPlaces
 			self.excludedEntries = excludedEntries
 			// Labels are the same before every next property, so each list's are found once.
 			let lastIndexByLabelByList = places.declarationLists.map { declarations in
@@ -818,6 +825,104 @@ extension SeamSignature.Places {
 			}
 			return levels
 		}
+
+		// MARK: Places a call presents
+
+		/// A case of a called seam's graph, with the query that answers it.
+		public struct CalledCase {
+			public init(query: Query, caseIndex: Int) {
+				self.query = query
+				self.caseIndex = caseIndex
+			}
+
+			public let query: Query
+			public let caseIndex: Int
+		}
+
+		/// The case of the called seam's graph that the case at `caseIndex` stands for, or `nil` for a case of the seam's own
+		/// places, or where the run holds no graph of the called seam. One query per called seam serves every case that refers
+		/// into it, so its memos are shared between them.
+		public func calledCase(of caseIndex: Int) -> CalledCase? {
+			guard let reference = places.cases[caseIndex].passedUp else { return nil }
+			let key = CalledSeam(seamType: reference.innerSeamType, isPublicMock: reference.innerIsPublicMock)
+			let query: Query
+			if let known = calledQueries[key] {
+				query = known
+			} else {
+				guard let called = calledPlaces(reference) else { return nil }
+				query = Query(of: called, calledPlaces: calledPlaces)
+				calledQueries[key] = query
+			}
+			guard query.places.cases.indices.contains(reference.innerCaseIndex) else { return nil }
+			return CalledCase(query: query, caseIndex: reference.innerCaseIndex)
+		}
+
+		/// The case at `caseIndex`, then the case each stands for in turn, down to the case of the seam whose tree holds the
+		/// places. A case met again ends the chain: seams that call each other inside a lazy cycle can each present the
+		/// other's places.
+		public func casesPresented(from caseIndex: Int) -> [CalledCase] {
+			var chain = [CalledCase(query: self, caseIndex: caseIndex)]
+			var seen = Set<PresentedCase>()
+			while let last = chain.last, let reference = last.query.places.cases[last.caseIndex].passedUp,
+			      seen.insert(PresentedCase(seam: CalledSeam(seamType: reference.innerSeamType, isPublicMock: reference.innerIsPublicMock), caseIndex: reference.innerCaseIndex)).inserted,
+			      let called = last.query.calledCase(of: last.caseIndex)
+			{
+				chain.append(called)
+			}
+			return chain
+		}
+
+		/// The types from the seam, itself excluded, to the owner of the places of the case at `caseIndex`, along the route
+		/// each seam on the way names its case by: for a case of the seam's own, `typesToOwner(along:)` of its route; for a
+		/// place a call presents, the types to the call and then the called seam's (`Hole.typesToOwner` of a passed-up place).
+		public func typesToOwner(ofCase caseIndex: Int) -> [SeamSignature.Hole.PathType] {
+			casesPresented(from: caseIndex).flatMap { presented in
+				presented.query.representativeRoute(of: presented.caseIndex).map { presented.query.typesToOwner(along: $0) } ?? []
+			}
+		}
+
+		/// The properties the code declares from the seam's root to the call that presents the places of the case at
+		/// `caseIndex`, and on through each seam that presents them in turn (`Hole.passedUpRoute`); empty for a case of the
+		/// seam's own.
+		public func passedUpRoute(ofCase caseIndex: Int) -> [SeamSignature.Hole.DeclaredProperty] {
+			casesPresented(from: caseIndex).dropLast().flatMap { presented in
+				presented.query.representativeRoute(of: presented.caseIndex).map { presented.query.declaredPathToOwner(along: $0) } ?? []
+			}
+		}
+
+		/// What the levels on the routes to the case at `caseIndex` declare, in the order a walk up from its owner meets them,
+		/// each with no reason: for a place a call presents, what the paths to the call bind, which a fill of the place by a
+		/// type above this seam cannot read (`Hole.UncarriedDeclaration.Reason.boundByPassingUpSeam`). A parameter of the seam,
+		/// and a value a public mock's root binds from its caller's argument, is the caller's own declaration, so it is left
+		/// out.
+		public func declarationsBoundOnRoutes(to caseIndex: Int) -> [SeamSignature.Hole.UncarriedDeclaration] {
+			levelsReaching(caseIndex).flatMap { level in
+				places.declarationsBeforeAnyNextProperty(ofLevel: level).filter { !$0.isSeamParameter && !$0.isBoundFromCallersArgument }.map { declaration in
+					SeamSignature.Hole.UncarriedDeclaration(
+						property: declaration.field.property,
+						declaringType: declaration.field.declaringType,
+						declarationLocation: declaration.field.declarationLocation,
+						parameterTakingType: declaration.field.parameterTakingType,
+						builtAfter: nil,
+						reason: .other,
+					)
+				}
+			}
+		}
+
+		private struct CalledSeam: Hashable {
+			let seamType: TypeDescription
+			let isPublicMock: Bool
+		}
+
+		private struct PresentedCase: Hashable {
+			let seam: CalledSeam
+			let caseIndex: Int
+		}
+
+		private let calledPlaces: (SeamSignature.Places.PassedUpReference) -> SeamSignature.Places?
+		/// The query of each called seam a case was asked through, kept as long as this query.
+		private var calledQueries = [CalledSeam: Query]()
 
 		// MARK: Private
 

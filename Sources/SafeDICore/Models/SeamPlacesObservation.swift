@@ -24,7 +24,21 @@ extension SeamSignature.Places {
 	/// It rides on the levels a test observes (`SeamPlaceLevels.placesObservation`), so a test sets no task-local value of its
 	/// own for it.
 	public struct Observation: Sendable {
-		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route]) {
+		/// The place graph of a seam or public mock a call in the tree presents places of.
+		public struct CalledPlaces: Sendable {
+			public init(seamType: TypeDescription, isPublicMock: Bool, places: SeamSignature.Places) {
+				self.seamType = seamType
+				self.isPublicMock = isPublicMock
+				self.places = places
+			}
+
+			public let seamType: TypeDescription
+			public let isPublicMock: Bool
+			public let places: SeamSignature.Places
+		}
+
+		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route], calledPlaces: [CalledPlaces] = []) {
+			self.calledPlaces = calledPlaces
 			self.seamType = seamType
 			self.places = places
 			self.siteHoles = siteHoles
@@ -44,5 +58,7 @@ extension SeamSignature.Places {
 		/// For each of `siteHoles`, the levels the walk that built the graph took to the site's owner, root first; empty for a
 		/// place a call passes up.
 		public let routeBySite: [Route]
+		/// The graphs of the seams and public mocks whose places a call in the tree presents, one per such call.
+		public let calledPlaces: [CalledPlaces]
 	}
 }

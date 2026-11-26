@@ -55,7 +55,10 @@ extension DependencyTreeGenerator {
 		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
 		// What the calls inside the fills of each seam call on a place's path hide from those fills, by the call's identity.
 		var hiddenByCall = [ObjectIdentifier: [String: FillReentryHidings]]()
-		let (passedUpHoles, ownSiteAdditions) = holesPassedUp(in: generator, seamType: seam.concreteInstantiable, seamModule: seamModule, ownSitePaths: sites.map(\.sitePath), hiddenByCall: &hiddenByCall)
+		// The place graph rides on the levels' observer, which hands it on at the end, so the tests set no task-local value of
+		// their own around `generate()` (`serialization.md`: one more made the tests' release build abort on Linux).
+		let draftsPlaceLevels = SeamPlaceLevels.observer != nil
+		let (passedUpHoles, ownSiteAdditions, callPresentations) = holesPassedUp(in: generator, seamType: seam.concreteInstantiable, seamModule: seamModule, ownSitePaths: sites.map(\.sitePath), hiddenByCall: &hiddenByCall, draftsPlaceLevels: draftsPlaceLevels)
 
 		// Every site's fields and what it does not carry.
 		struct SiteContent {
@@ -78,7 +81,6 @@ extension DependencyTreeGenerator {
 		// Places are drafted into the place graph, which the signature holds beside the per-site holes, only while a test
 		// observes it: drafting per site costs a seam with a place on every screen as much as the rest of its generation, and
 		// nothing outside the tests reads the graph until the builder that walks the seam's tree once replaces this walk.
-		let draftsPlaceLevels = SeamPlaceLevels.observer != nil
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
@@ -296,6 +298,80 @@ extension DependencyTreeGenerator {
 			}
 			holes.append(hole)
 		}
+		// While a test observes the place graph: a case for each call that presents places and each case of the called seam's
+		// it presents, owned by the level that declares the call, which the same pass drafts that drafts a site's levels.
+		var passedUpCaseBySite = [SeamSignature.Hole.Site: (caseIndex: Int, route: SeamSignature.Places.Route)]()
+		for presentation in callPresentations {
+			// A scope on the path to a call can be shared between paths, so what it declares is found for each call.
+			var childDeclarationsOnPathToCall = [ObjectIdentifier: ChildDeclarations]()
+			var levels = fields(
+				of: BuildSite(frames: presentation.frames, property: presentation.callProperty, erasedToConcreteExistential: false, fillPropertyStack: [], fillConcreteTypeStack: []),
+				seam: seam,
+				bindsReceivesAgain: bindsReceivesAgain,
+				namesApartAtRoot: namesApartAtRoot,
+				parameters: parameters,
+				receiversByParameter: receiversByParameter,
+				seamTypeAccess: seamTypeAccess,
+				proof: proof,
+				instantiables: instantiables,
+				declarationsBetweenByClosedOnScope: &declarationsBetweenByClosedOnScope,
+				placesByTreePath: &placesByTreePath,
+				seamDependencies: seamDependencies,
+				dependenciesByGenerator: &dependenciesByGenerator,
+				childDeclarationsByGenerator: &childDeclarationsOnPathToCall,
+				draftsPlaceLevels: true,
+			).placeLevels
+			// The call's own level, which declares nothing: the called seam's root stands beneath it.
+			var opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
+			if presentation.opensSendableFunction {
+				let function: SeamSignature.Hole.UncarriedDeclaration.SendableFunction = if ScopeGenerator.isBuilder(presentation.callProperty) {
+					.instantiator(builtType: presentation.innerSeamType)
+				} else if case .sendableLazilyInstantiated = presentation.callProperty.propertyType {
+					.sendableLazyWrapper(builtType: presentation.innerSeamType)
+				} else {
+					.other
+				}
+				opensSendableFunction = SeamSignature.Places.SendableFunctionOpened(property: presentation.callProperty, function: function)
+			}
+			levels.append(SeamPlacesBuilder.LevelDraft(
+				key: SeamSignature.Places.LevelKey(builtType: presentation.innerSeamType, nextProperty: nil, isSeamRoot: false, isInFill: levels.last?.key.isInFill ?? false, filledType: nil),
+				declarations: [],
+				opensSendableFunction: opensSendableFunction,
+				cycleReentries: [],
+				fillBaseStack: [],
+				fillOwnerType: nil,
+				pathSegment: [presentation.callProperty],
+				pathTypes: presentation.pathTypes,
+				declaredSegment: presentation.declaredSegment,
+				nextPosition: nil,
+				nextLoop: nil,
+			))
+			for place in presentation.places {
+				let (caseIndex, route) = placesBuilder.addPassedUpPlace(
+					place.hole.site,
+					levels: levels,
+					reference: SeamSignature.Places.PassedUpReference(
+						innerSeamType: presentation.innerSeamType,
+						innerIsPublicMock: presentation.innerIsPublicMock,
+						innerCaseIndex: place.innerCaseIndex,
+					),
+					isBuiltInSendableFunction: presentation.isInSendableFunction,
+					siteOpensSendableFunction: presentation.opensSendableFunction,
+				)
+				placesBuilder.addPresentation(
+					ofCase: caseIndex,
+					isPassedOnSendable: presentation.isInSendableFunction,
+					calledCopyDeclarations: place.calledCopyDeclarations,
+					uncarriedReplacedOnPathsToCalls: [],
+					reenteringCallDeclarations: place.reenteringCallDeclarations,
+					reenteringPlaceFields: place.reenteringPlaceFields,
+				)
+				// The per-site hole of a place several calls present is the first call's.
+				if passedUpCaseBySite[place.hole.site] == nil {
+					passedUpCaseBySite[place.hole.site] = (caseIndex, route)
+				}
+			}
+		}
 		for (offset, passedUp) in passedUpHoles.enumerated() {
 			let builderLabel = builderLabels[siteContents.count + offset]
 			let inner = passedUp.hole
@@ -340,9 +416,10 @@ extension DependencyTreeGenerator {
 			passedUpHole.declarationsHiddenByFields = inner.declarationsHiddenByFields
 			holes.append(passedUpHole)
 			if draftsPlaceLevels {
-				// A place a call passes up is no case yet.
-				caseIndexByHole.append(-1)
-				routeByHole.append(SeamSignature.Places.Route(levels: []))
+				// The case of the first call that presents the place, and the route to that call.
+				let passedUpCase = passedUpCaseBySite[inner.site]
+				caseIndexByHole.append(passedUpCase?.caseIndex ?? -1)
+				routeByHole.append(passedUpCase?.route ?? SeamSignature.Places.Route(levels: []))
 			}
 		}
 		let order = holes.indices.sorted { holes[$0].builderLabel < holes[$1].builderLabel }
@@ -363,6 +440,7 @@ extension DependencyTreeGenerator {
 			siteHoles: sortedHoles,
 			caseIndexBySite: order.map { caseIndexByHole[$0] },
 			routeBySite: order.map { routeByHole[$0] },
+			calledPlaces: callPresentations.map { SeamSignature.Places.Observation.CalledPlaces(seamType: $0.innerSeamType, isPublicMock: $0.innerIsPublicMock, places: $0.innerPlaces) },
 		)
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
 		for (hole, caseIndex) in zip(holes, caseIndexByHole) where caseIndex >= 0 {
@@ -546,12 +624,21 @@ extension DependencyTreeGenerator {
 		seamModule: ModuleIdentity,
 		ownSitePaths: [[Property]],
 		hiddenByCall: inout [ObjectIdentifier: [String: FillReentryHidings]],
-	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions]) {
+		draftsPlaceLevels: Bool = false,
+	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions], callPresentations: [CallPresentation]) {
+		var callPresentations = [CallPresentation]()
+		// While a test observes the place graph: beside each scope still to visit, the frames from the seam's root to the scope
+		// that declares it, as `buildSites(in:)` gives a site's, and what it is generated with.
+		var framesToVisit = [(frames: [PathFrame], propertiesGeneratedLater: Set<Property>, fillIsSendable: Bool)]()
+		if draftsPlaceLevels {
+			framesToVisit.append(([], [], false))
+		}
 		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], route: [SeamSignature.Hole.DeclaredProperty], hole: SeamSignature.Hole)]()
 		var takenSites = Set(ownSitePaths.map { SeamSignature.Hole.Site(seamType: seamType, path: $0) })
 		var additionsBySite = [SeamSignature.Hole.Site: SiteAdditions]()
 		var generatorsToVisit = [(generator: generator, typesToCall: [SeamSignature.Hole.PathType](), route: [SeamSignature.Hole.DeclaredProperty](), pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration](), isInSendableFunction: false, fillContexts: [FillContext]())]
 		while let (visited, typesToCall, route, pathDeclarations, isInSendableFunction, fillContexts) = generatorsToVisit.popLast() {
+			let framesToVisited = framesToVisit.popLast()
 			// The call is made in its scope's builder function, inside every function above it.
 			let callIsInSendableFunction = isInSendableFunction || visited.buildsInSendableFunction
 			// The fills around the call, each with what the scopes from its root down to the call declare. A fill's own bound
@@ -561,6 +648,7 @@ extension DependencyTreeGenerator {
 				fillContextsAtCall[fillContextsAtCall.count - 1] = ownContext
 			}
 			if let innerSeamType = visited.builtInstantiable?.concreteInstantiable {
+				var presentedPlaces = [CallPresentation.Place]()
 				for hole in visited.passedUpHoles {
 					if takenSites.insert(hole.site).inserted {
 						passedUpHoles.append((innerSeamType, typesToCall, route, hole))
@@ -578,6 +666,28 @@ extension DependencyTreeGenerator {
 						reenteringPlaceFields: hole.reenteringPlaceFields + insideFills.reenteringPlaceFields,
 						isSendable: callIsInSendableFunction || hole.isSendable,
 					)
+					presentedPlaces.append(CallPresentation.Place(
+						hole: hole,
+						// A call whose seam's graph was not built names no case.
+						innerCaseIndex: visited.calledBuilders?.caseIndexBySite[hole.site] ?? -1,
+						calledCopyDeclarations: insideFills.calledCopyDeclarations,
+						reenteringCallDeclarations: insideFills.reenteringCallDeclarations,
+						reenteringPlaceFields: insideFills.reenteringPlaceFields,
+					))
+				}
+				if let framesToVisited, let callProperty = visited.property, !presentedPlaces.isEmpty {
+					callPresentations.append(CallPresentation(
+						frames: framesToVisited.frames,
+						callProperty: callProperty,
+						pathTypes: SeamSignature.Hole.PathType.pathTypes(through: visited),
+						declaredSegment: declaredProperties(reaching: visited, from: framesToVisited.frames.last?.generator),
+						innerSeamType: innerSeamType,
+						innerIsPublicMock: visited.publicMockCall != nil,
+						innerPlaces: visited.calledBuilders?.places ?? SeamSignature.Places(levels: [], cases: []),
+						isInSendableFunction: callIsInSendableFunction,
+						opensSendableFunction: visited.buildsInSendableFunction,
+						places: presentedPlaces,
+					))
 				}
 			}
 			// The seam's own forwarded properties come from its caller, which fills the builder. Each declaration's reason names
@@ -585,6 +695,23 @@ extension DependencyTreeGenerator {
 			let childPathDeclarations = pathDeclarations + declarationsBound(by: visited, includingForwardedProperties: visited !== generator, reason: .other)
 			// A fill whose code another fill of its case generates makes no call of its own.
 			let children = visited.children.filter { $0.passesUpBuilder && $0.fillEmitsCode }
+			if let framesToVisited {
+				// A scope tells its children apart by their index, never by generator, which two of them can share.
+				let childIndices = visited.children.indices.filter { visited.children[$0].passesUpBuilder && visited.children[$0].fillEmitsCode }
+				let orderedChildren = visited.orderedChildrenComputedAfresh(propertiesGeneratedLater: framesToVisited.propertiesGeneratedLater)
+				var positionByChildIndex = [Int: Int]()
+				for (position, child) in orderedChildren.enumerated() {
+					positionByChildIndex[child.index] = position
+				}
+				framesToVisit.append(contentsOf: childIndices.reversed().map { childIndex in
+					let position = positionByChildIndex[childIndex, default: 0]
+					return (
+						framesToVisited.frames + [PathFrame(generator: visited, orderedChildren: orderedChildren, nextPosition: position + 1, fillIsSendable: framesToVisited.fillIsSendable)],
+						orderedChildren[position].propertiesGeneratedLater,
+						visited.buildsInSendableFunction(ofFill: visited.children[childIndex]),
+					)
+				})
+			}
 			generatorsToVisit.append(contentsOf: children.reversed().map { child in
 				var childFillContexts = fillContextsAtCall
 				if let fillHole = child.fillHole, let fillKey = child.fillKey {
@@ -606,7 +733,39 @@ extension DependencyTreeGenerator {
 				return (innerSeamType, typesToCall, route, passedUpHole)
 			},
 			ownSiteAdditions,
+			callPresentations,
 		)
+	}
+
+	/// A call of a seam, or of another module's public mock, in a seam's tree that presents places, as the place graph reads
+	/// it while a test observes the graph: where the call is, and what this seam's tree adds to each place it presents.
+	private struct CallPresentation {
+		struct Place {
+			/// The called seam's hole of the place.
+			let hole: SeamSignature.Hole
+			/// The index of the place's case in the called seam's places, or `-1` where its signature holds none.
+			let innerCaseIndex: Int
+			/// What the fills around the call add to the place (`unreadableInsideFills(_:placeFields:fillingModule:)`).
+			let calledCopyDeclarations: [SeamSignature.Hole.UncarriedDeclaration]
+			let reenteringCallDeclarations: [SeamSignature.Hole.ReenteringCallDeclaration]
+			let reenteringPlaceFields: [SeamSignature.Hole.ReenteringPlaceField]
+		}
+
+		/// The scopes from the seam's root to the one that declares the call, each with the position of the next on the path.
+		let frames: [PathFrame]
+		let callProperty: Property
+		/// The types the call's own scope adds to the types on the way to it, and its property as the code declares it.
+		let pathTypes: [SeamSignature.Hole.PathType]
+		let declaredSegment: [SeamSignature.Hole.DeclaredProperty]
+		let innerSeamType: TypeDescription
+		let innerIsPublicMock: Bool
+		/// The called seam's place graph, which the cases of the places refer into.
+		let innerPlaces: SeamSignature.Places
+		/// Whether the call is made inside a `@Sendable` function, its own builder function included.
+		let isInSendableFunction: Bool
+		/// Whether the call's own builder function is `@Sendable`.
+		let opensSendableFunction: Bool
+		let places: [Place]
 	}
 
 	/// A fill of a seam call on a place's path: what the calls inside the fills of that call hide from it, its hole, and the

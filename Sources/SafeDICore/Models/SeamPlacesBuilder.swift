@@ -71,6 +71,7 @@ struct SeamPlacesBuilder {
 
 	private struct CaseDraft {
 		let ownerLevel: Int
+		let passedUp: SeamSignature.Places.PassedUpReference?
 		let isBuiltInSendableFunction: Bool
 		let siteOpensSendableFunction: Bool
 		var isPassedOnSendable = false
@@ -83,6 +84,10 @@ struct SeamPlacesBuilder {
 	private struct CaseKey: Hashable {
 		let ownerLevel: Int
 		let isBuiltInSendableFunction: Bool
+		/// For a place a call presents, the called seam's case: its seam, whether it is a public mock's, and its index.
+		var innerSeamType: TypeDescription?
+		var innerIsPublicMock = false
+		var innerCaseIndex = 0
 	}
 
 	private struct EdgeKey: Hashable {
@@ -107,6 +112,34 @@ struct SeamPlacesBuilder {
 		isBuiltInSendableFunction: Bool,
 		siteOpensSendableFunction: Bool,
 	) -> (caseIndex: Int, route: SeamSignature.Places.Route) {
+		let (caseIndex, route) = addCase(levels: levels, passedUp: nil, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction)
+		caseIndexBySite[site] = caseIndex
+		return (caseIndex, route)
+	}
+
+	/// Adds the levels of the path to a call that presents `site`, a place of the seam it calls, root first, the last the
+	/// level that declares the call, and returns the index of the case of that call and of `reference`, the called seam's
+	/// case, and the route to the call. A site several calls present keeps the case of the call added first.
+	mutating func addPassedUpPlace(
+		_ site: SeamSignature.Hole.Site,
+		levels: [LevelDraft],
+		reference: SeamSignature.Places.PassedUpReference,
+		isBuiltInSendableFunction: Bool,
+		siteOpensSendableFunction: Bool,
+	) -> (caseIndex: Int, route: SeamSignature.Places.Route) {
+		let (caseIndex, route) = addCase(levels: levels, passedUp: reference, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction)
+		if caseIndexBySite[site] == nil {
+			caseIndexBySite[site] = caseIndex
+		}
+		return (caseIndex, route)
+	}
+
+	private mutating func addCase(
+		levels: [LevelDraft],
+		passedUp: SeamSignature.Places.PassedUpReference?,
+		isBuiltInSendableFunction: Bool,
+		siteOpensSendableFunction: Bool,
+	) -> (caseIndex: Int, route: SeamSignature.Places.Route) {
 		var route = [Int]()
 		for draft in levels {
 			let index = variantIndex(of: draft)
@@ -116,16 +149,20 @@ struct SeamPlacesBuilder {
 			}
 			route.append(index)
 		}
-		let key = CaseKey(ownerLevel: route.last ?? 0, isBuiltInSendableFunction: isBuiltInSendableFunction)
+		var key = CaseKey(ownerLevel: route.last ?? 0, isBuiltInSendableFunction: isBuiltInSendableFunction)
+		if let passedUp {
+			key.innerSeamType = passedUp.innerSeamType
+			key.innerIsPublicMock = passedUp.innerIsPublicMock
+			key.innerCaseIndex = passedUp.innerCaseIndex
+		}
 		let caseIndex: Int
 		if let known = caseIndexByKey[key] {
 			caseIndex = known
 		} else {
 			caseIndex = cases.count
 			caseIndexByKey[key] = caseIndex
-			cases.append(CaseDraft(ownerLevel: key.ownerLevel, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction))
+			cases.append(CaseDraft(ownerLevel: key.ownerLevel, passedUp: passedUp, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction))
 		}
-		caseIndexBySite[site] = caseIndex
 		return (caseIndex, SeamSignature.Places.Route(levels: route))
 	}
 
@@ -180,7 +217,7 @@ struct SeamPlacesBuilder {
 					ownerLevel: draft.ownerLevel,
 					isBuiltInSendableFunction: draft.isBuiltInSendableFunction,
 					siteOpensSendableFunction: draft.siteOpensSendableFunction,
-					passedUp: nil,
+					passedUp: draft.passedUp,
 					isPassedOnSendable: draft.isPassedOnSendable,
 					calledCopyDeclarations: draft.calledCopyDeclarations.elements,
 					uncarriedReplacedOnPathsToCalls: draft.uncarriedReplacedOnPathsToCalls.elements,

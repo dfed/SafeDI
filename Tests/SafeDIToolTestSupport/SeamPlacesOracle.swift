@@ -43,6 +43,10 @@ public enum SeamPlacesOracle {
 		public var passedUpSites = 0
 		/// Places a buildable tree holds that a call passes up, which no case holds yet.
 		public var passedUpPlacesInTree = 0
+		/// The cases of places a call presents that were compared through the called seam's graph, and those whose called
+		/// graph, or one beneath it, was not in hand.
+		public var passedUpCaseQuestions = 0
+		public var passedUpCasesUnresolved = 0
 		public var siteQuestions = 0
 		public var caseQuestions = 0
 		public var mismatchCount = 0
@@ -68,11 +72,15 @@ public enum SeamPlacesOracle {
 			report.record("\(holes.count) sites but \(observation.caseIndexBySite.count) case indices and \(observation.routeBySite.count) routes")
 			return report
 		}
-		let query = SeamSignature.Places.Query(of: places)
+		let query = SeamSignature.Places.Query(of: places, calledPlaces: { reference in
+			observation.calledPlaces.first { $0.seamType == reference.innerSeamType && $0.isPublicMock == reference.innerIsPublicMock }?.places
+		})
 
 		// The sites of each case, in site order.
 		var sitesByCase = [[Int]](repeating: [], count: places.cases.count)
 		var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
+		// The sites a call passes up, by the case of the first call that presents each.
+		var passedUpSitesByCase = [Int: [Int]]()
 		for (site, caseIndex) in observation.caseIndexBySite.enumerated() {
 			let hole = holes[site]
 			guard caseIndex >= 0 else {
@@ -86,10 +94,19 @@ public enum SeamPlacesOracle {
 				report.record("site \(spelled(hole.sitePath)) names case \(caseIndex) of \(places.cases.count)")
 				continue
 			}
+			guard places.cases[caseIndex].passedUp == nil else {
+				report.passedUpSites += 1
+				if hole.innerSeamType == nil {
+					report.record("site \(spelled(hole.sitePath)) has the case of a call but no call passes it up")
+				}
+				passedUpSitesByCase[caseIndex, default: []].append(site)
+				caseIndexBySite[hole.site] = caseIndex
+				continue
+			}
 			sitesByCase[caseIndex].append(site)
 			caseIndexBySite[hole.site] = caseIndex
 		}
-		for (caseIndex, sites) in sitesByCase.enumerated() where sites.isEmpty {
+		for (caseIndex, sites) in sitesByCase.enumerated() where sites.isEmpty && places.cases[caseIndex].passedUp == nil {
 			report.record("case \(caseIndex) holds no site")
 		}
 		checkCasePartition(of: observation, sitesByCase: sitesByCase, into: &report)
@@ -99,7 +116,7 @@ public enum SeamPlacesOracle {
 		var siteFacts = [Int: SiteFacts]()
 		var casesInTreeByDeclaration = [String: Set<Int>]()
 		var casesInTreePathByDeclaration = [String: (path: String, property: String)]()
-		for (site, caseIndex) in observation.caseIndexBySite.enumerated() where caseIndex >= 0 && places.cases.indices.contains(caseIndex) {
+		for (site, caseIndex) in observation.caseIndexBySite.enumerated() where caseIndex >= 0 && places.cases.indices.contains(caseIndex) && places.cases[caseIndex].passedUp == nil {
 			let hole = holes[site]
 			let route = observation.routeBySite[site]
 			guard checkRoute(route, of: hole, caseIndex: caseIndex, places: places, into: &report) else { continue }
@@ -169,6 +186,26 @@ public enum SeamPlacesOracle {
 			let graphCases = places.declaration(level: parts[0], declaration: parts[1]).buildability.map { Set($0.placesInTree) }
 			guard graphCases != todayCases, let (path, property) = casesInTreePathByDeclaration[key] else { continue }
 			report.record("cases in the tree of \(property), first read at \(path): today \(todayCases.sorted()) graph \(graphCases.map { $0.sorted().map(String.init) } ?? ["no buildability"])")
+		}
+
+		// A place a call passes up, along the route to the first call that presents it: the route is one of the graph's to the
+		// level that declares the call, whose types and declared properties begin the copy's, the call's property next, and
+		// the case refers to the seam whose call presented the place.
+		for (caseIndex, sites) in passedUpSitesByCase.sorted(by: { $0.key < $1.key }) {
+			for site in sites {
+				let hole = holes[site]
+				let route = observation.routeBySite[site]
+				guard checkRoute(route, of: hole, caseIndex: caseIndex, places: places, into: &report) else { continue }
+				report.siteQuestions += 1
+				let path = spelled(hole.sitePath)
+				compare("seam whose call presents the place", at: path, today: [hole.innerSeamType?.asSource ?? "none"], graph: [places.cases[caseIndex].passedUp?.innerSeamType.asSource ?? "none"], into: &report)
+				let typesToCall = query.typesToOwner(along: route)
+				compare("types to the call", at: path, today: json(Array(hole.typesToOwner.prefix(typesToCall.count))), graph: json(typesToCall), into: &report)
+				let declaredPathToCall = query.declaredPathToOwner(along: route)
+				compare("declared path to the call", at: path, today: json(Array(hole.passedUpRoute.prefix(declaredPathToCall.count))), graph: json(declaredPathToCall), into: &report)
+				compare("seam the call's level builds", at: path, today: [hole.innerSeamType?.asSource ?? "none"], graph: [places.levels[places.cases[caseIndex].ownerLevel].key.builtType?.asSource ?? "none"], into: &report)
+			}
+			checkPassedUpCase(caseIndex, sites: sites, of: observation, query: query, into: &report)
 		}
 
 		// 2. Per case, the query against the union over its sites.
@@ -285,6 +322,139 @@ public enum SeamPlacesOracle {
 			}
 			if enumCasesOfCase.count > 1 {
 				report.record("case \(caseIndex) holds places of enum cases \(enumCasesOfCase.sorted())")
+			}
+		}
+	}
+
+	// MARK: Places a call presents
+
+	/// The case of the seam whose tree holds the places of the case at `caseIndex` of `query`'s graph, as that seam and the
+	/// case's index, or `nil` where a graph on the way is not in hand.
+	private static func holdingCase(of caseIndex: Int, query: SeamSignature.Places.Query) -> String? {
+		let chain = query.casesPresented(from: caseIndex)
+		guard let last = chain.last, last.query.places.cases[last.caseIndex].passedUp == nil else { return nil }
+		let seam = chain.dropLast().last.flatMap { $0.query.places.cases[$0.caseIndex].passedUp }.map { "\($0.innerSeamType.asSource) \($0.innerIsPublicMock)" } ?? "own"
+		return "\(seam) \(last.caseIndex)"
+	}
+
+	/// The cases of `query`'s graph whose places are those of the case at `caseIndex`: one per call that presents them,
+	/// whichever seam each call is of.
+	private static func casesPresentingSamePlaces(as caseIndex: Int, query: SeamSignature.Places.Query) -> [Int]? {
+		guard let holding = holdingCase(of: caseIndex, query: query) else { return nil }
+		return query.places.cases.indices.filter { holdingCase(of: $0, query: query) == holding }
+	}
+
+	/// An uncarried declaration without its reason and what follows from it, as a path to a call binds it.
+	private static func boundKey(_ declaration: SeamSignature.Hole.UncarriedDeclaration) -> String {
+		"\(declaration.property.asSource) of \(declaration.declaringType.asSource) taken by \(declaration.parameterTakingType?.asSource ?? "none")"
+	}
+
+	/// What the graph says the places of the case at `caseIndex` of `query`'s graph hold, through every seam that presents
+	/// them in turn, or `nil` where a graph on the way is not in hand.
+	private struct PresentedFacts {
+		var fields = Set<String>()
+		var uncarried = Set<String>()
+		var boundOnPathsToCalls = Set<String>()
+		var labelsBoundOnPathsToCalls = Set<String>()
+		var isPassedOnSendable = false
+		var typesToOwner = [SeamSignature.Hole.PathType]()
+		var passedUpRoute = [SeamSignature.Hole.DeclaredProperty]()
+	}
+
+	private static func presentedFacts(of caseIndex: Int, query: SeamSignature.Places.Query) -> PresentedFacts? {
+		var facts = PresentedFacts()
+		var seen = Set<String>()
+		return addPresentedFacts(of: caseIndex, query: query, depth: 0, seen: &seen, to: &facts) ? facts : nil
+	}
+
+	/// Adds what the graph says of the places of the case at `caseIndex` of `query`'s graph to `facts`, and returns whether
+	/// every graph on the way was in hand. A seam's hole of a place several of its calls present holds what each adds.
+	private static func addPresentedFacts(of caseIndex: Int, query: SeamSignature.Places.Query, depth: Int, seen: inout Set<String>, to facts: inout PresentedFacts) -> Bool {
+		let places = query.places
+		let placeCase = places.cases[caseIndex]
+		guard placeCase.passedUp != nil else {
+			for label in query.labels(reaching: caseIndex) {
+				for answer in query.answers(ofLabel: label, at: caseIndex) {
+					switch answer {
+					case let .field(level, declaration):
+						facts.fields.insert(json(places.declaration(level: level, declaration: declaration).field))
+					case .callersOwn:
+						break
+					case .uncarried, .boundOutsideSendableFunction:
+						if let uncarried = query.uncarriedDeclaration(of: answer, at: caseIndex) {
+							facts.uncarried.insert(uncarriedJSON(uncarried))
+						}
+					}
+				}
+			}
+			facts.uncarried.formUnion(placeCase.calledCopyDeclarations.map { uncarriedJSON($0) })
+			facts.uncarried.formUnion(placeCase.uncarriedReplacedOnPathsToCalls.map { uncarriedJSON($0) })
+			// The called seam's own place takes its builder `@Sendable` where it is built inside a `@Sendable` function, which
+			// its seam settles with its builders, after its places.
+			facts.isPassedOnSendable = facts.isPassedOnSendable || placeCase.isPassedOnSendable || placeCase.isBuiltInSendableFunction || placeCase.siteOpensSendableFunction
+			return true
+		}
+		guard depth < 64, let presentingCases = casesPresentingSamePlaces(as: caseIndex, query: query) else { return false }
+		for presenting in presentingCases {
+			guard let reference = places.cases[presenting].passedUp, let rootType = places.levels.first(where: \.key.isSeamRoot)?.key.builtType else { return false }
+			// Seams that call each other present one another's places: each case is read once.
+			guard seen.insert("\(rootType.asSource) \(presenting) \(reference.innerSeamType.asSource) \(reference.innerCaseIndex)").inserted else { continue }
+			let presentingCase = places.cases[presenting]
+			facts.uncarried.formUnion(presentingCase.calledCopyDeclarations.map { uncarriedJSON($0) })
+			facts.isPassedOnSendable = facts.isPassedOnSendable || presentingCase.isPassedOnSendable
+			for declaration in query.declarationsBoundOnRoutes(to: presenting) {
+				facts.boundOnPathsToCalls.insert(boundKey(declaration))
+				if depth == 0 {
+					facts.labelsBoundOnPathsToCalls.insert(declaration.property.label)
+				}
+			}
+			guard let called = query.calledCase(of: presenting), addPresentedFacts(of: called.caseIndex, query: called.query, depth: depth + 1, seen: &seen, to: &facts) else { return false }
+		}
+		return true
+	}
+
+	/// Compares the places of the case at `caseIndex`, which a call presents, with what the graph says of them through
+	/// the called seam's graph: their fields are the called seam's case's, and each declaration they carry no field of is the
+	/// called seam's case's, one a path to a call that presents them binds, or one the fills around such a call add.
+	private static func checkPassedUpCase(_ caseIndex: Int, sites: [Int], of observation: SeamSignature.Places.Observation, query: SeamSignature.Places.Query, into report: inout Report) {
+		let holes = observation.siteHoles
+		let places = observation.places
+		guard let firstSite = sites.first, let reference = places.cases[caseIndex].passedUp else { return }
+		let path = spelled(holes[firstSite].sitePath) + (sites.count > 1 ? " (+\(sites.count - 1) sites)" : "")
+		// A called seam whose graph the run does not hold (one read from a module info file that stores none yet) names no
+		// case; one whose graph it holds names a case for every place.
+		let calledGraphIsHeld = observation.calledPlaces.contains { $0.seamType == reference.innerSeamType && $0.isPublicMock == reference.innerIsPublicMock && !$0.places.cases.isEmpty }
+		guard reference.innerCaseIndex >= 0 || calledGraphIsHeld else {
+			report.passedUpCasesUnresolved += 1
+			return
+		}
+		guard reference.innerCaseIndex >= 0 else {
+			report.record("passed-up case \(caseIndex) at \(path) names no case of \(reference.innerSeamType.asSource)")
+			return
+		}
+		guard let facts = presentedFacts(of: caseIndex, query: query) else {
+			report.passedUpCasesUnresolved += 1
+			return
+		}
+		report.passedUpCaseQuestions += 1
+		compare("fields of the presented places", at: path, today: Set(sites.flatMap { holes[$0].fields.map { json($0) } }).sorted(), graph: facts.fields.sorted(), into: &report)
+		compare("presented places passed on @Sendable", at: path, today: String(sites.contains { holes[$0].isSendable }), graph: String(facts.isPassedOnSendable), into: &report)
+		for site in sites {
+			let hole = holes[site]
+			let sitePath = spelled(hole.sitePath)
+			for declaration in hole.uncarriedDeclarations {
+				var isKnown = facts.uncarried.contains(uncarriedJSON(declaration))
+				if case .boundByPassingUpSeam = declaration.reason, facts.boundOnPathsToCalls.contains(boundKey(declaration)) {
+					isKnown = true
+				}
+				if !isKnown {
+					report.record("uncarried declaration of the presented place \(sitePath): today \(uncarriedJSON(declaration)), which the graph holds neither on a path to a call nor in the called seam's case")
+				}
+			}
+			let labelsToday = Set(hole.uncarriedDeclarations.map(\.property.label))
+			let missing = facts.labelsBoundOnPathsToCalls.subtracting(labelsToday)
+			if !missing.isEmpty {
+				report.record("presented place \(sitePath): the graph binds \(missing.sorted()) on the paths to its calls, which today's place does not list")
 			}
 		}
 	}
