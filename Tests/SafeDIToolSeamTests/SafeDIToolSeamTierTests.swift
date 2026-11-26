@@ -1557,6 +1557,9 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		extension MidRoot {
 		    public init() {
 		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host_service() -> any Service {
+		            return __safeDI_fillBody_5FBBC4481789DD61()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_5FBBC4481789DD61() -> any Service {
 		            @Sendable nonisolated func __safeDI_service() -> ServiceImpl {
 		                ServiceImpl()
 		            }
@@ -1582,6 +1585,9 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		extension AppRoot {
 		    public init() {
 		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host_service() -> any Service {
+		            return __safeDI_fillBody_5FBBC4481789DD61()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_5FBBC4481789DD61() -> any Service {
 		            @Sendable nonisolated func __safeDI_service() -> ServiceImpl {
 		                ServiceImpl()
 		            }

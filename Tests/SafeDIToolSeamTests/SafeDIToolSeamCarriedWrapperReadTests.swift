@@ -68,7 +68,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		            let token = scope_token
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
 		            func __safeDI_service() -> ServiceImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
@@ -142,7 +144,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		            let token = scope_token
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
 		            func __safeDI_service() -> ServiceImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
@@ -216,7 +220,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: LazilyInstantiated<Token>, _ scope_leafBuilder: Instantiator<Leaf>) -> any Service {
-		            let token = scope_token
+		            return __safeDI_fillBody_E17ECDEA093583B7(token: scope_token)
+		        }
+		        func __safeDI_fillBody_E17ECDEA093583B7(token: LazilyInstantiated<Token>) -> any Service {
 		            func __safeDI_service() -> ServiceImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
@@ -360,7 +366,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		            let token = scope_token
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
 		            func __safeDI_service() -> ServiceImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
@@ -438,11 +446,13 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		            let token = scope_token
+		            return __safeDI_fillBody_AB21BC287196C9D2(token: scope_token)
+		        }
+		        func __safeDI_fillBody_AB21BC287196C9D2(token: SendableLazilyInstantiated<Token>) -> any Service {
+		            @Sendable nonisolated func __safeDI_wrapperReader() -> WrapperReader {
+		                WrapperReader(token: token)
+		            }
 		            func __safeDI_service() -> ServiceImpl {
-		                @Sendable nonisolated func __safeDI_wrapperReader() -> WrapperReader {
-		                    WrapperReader(token: token)
-		                }
 		                let wrapperReader = SendableInstantiator<WrapperReader>(__safeDI_wrapperReader)
 		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
 		            }
@@ -516,7 +526,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_serviceBuilder_Inner_service(_ scope_token: SendableLazilyInstantiated<Token>, _ scope_leafBuilder: SendableInstantiator<Leaf>) -> any Service {
-		            let token = scope_token
+		            return __safeDI_fillBody_C19BEC02F504E2F1(token: scope_token)
+		        }
+		        func __safeDI_fillBody_C19BEC02F504E2F1(token: SendableLazilyInstantiated<Token>) -> any Service {
 		            func __safeDI_service() -> ServiceImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return ServiceImpl(token: token.instance, wrapperReader: wrapperReader)
@@ -1504,6 +1516,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		            return __safeDI_fillBody_63A49411F7AF521F(token: token)
+		        }
+		        func __safeDI_fillBody_63A49411F7AF521F(token: SendableLazilyInstantiated<Token>) -> any Gizmo {
 		            func __safeDI_gizmo() -> GizmoImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
@@ -1553,6 +1568,9 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		            return __safeDI_fillBody_63A49411F7AF521F(token: token)
+		        }
+		        func __safeDI_fillBody_63A49411F7AF521F(token: SendableLazilyInstantiated<Token>) -> any Gizmo {
 		            func __safeDI_gizmo() -> GizmoImpl {
 		                let wrapperReader = WrapperReader(token: token)
 		                return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)

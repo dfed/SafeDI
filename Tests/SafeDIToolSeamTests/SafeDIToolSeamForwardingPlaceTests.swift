@@ -113,12 +113,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
+		            return __safeDI_fillBody_F2A172BAB83DC6CB(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_F2A172BAB83DC6CB(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
 		            func __safeDI_erased(count: Int, name: String) -> PairGadget {
 		                PairGadget(count: count, name: name, analytics: analytics)
 		            }
 		            return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
 		        }
 		        func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+		            return __safeDI_fillBody_D0ADDD197C3103A2(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_D0ADDD197C3103A2(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
 		            func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
 		                DefaultPairPanel(count: count, name: name, analytics: analytics)
 		            }
@@ -247,6 +253,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_liveGadget_AnyGadgetBuilder_Host_Toolbar_Scope_panelBuilder(theme: Theme, style: Style) -> ErasedInstantiator<String, AnyGadget>.Builder {
+		            return __safeDI_fillBody_55DFD00D277FF10B(theme: theme, style: style)
+		        }
+		        func __safeDI_fillBody_55DFD00D277FF10B(theme: Theme, style: Style) -> ErasedInstantiator<String, AnyGadget>.Builder {
 		            func __safeDI_panelBuilder(title: String) -> LiveGadget {
 		                LiveGadget(title: title, theme: theme, style: style)
 		            }
@@ -328,6 +337,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_628717A157D1CC3F(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_628717A157D1CC3F(analytics: Analytics) -> Instantiator<Panel>.Builder {
 		            func __safeDI_held(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
@@ -403,6 +415,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
 		            func __safeDI_held() -> DefaultEmptyPanel {
 		                DefaultEmptyPanel(analytics: analytics)
 		            }
@@ -605,12 +620,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_628717A157D1CC3F(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_628717A157D1CC3F(analytics: Analytics) -> Instantiator<Panel>.Builder {
 		            func __safeDI_held(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
 		            return { forwarded in __safeDI_held(name: forwarded) }
 		        }
 		        func __safeDI_panelBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<Panel.ForwardedProperties, Panel>.Builder {
+		            return __safeDI_fillBody_F125FAB6F2AD609C(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_F125FAB6F2AD609C(analytics: Analytics) -> ErasedInstantiator<Panel.ForwardedProperties, Panel>.Builder {
 		            func __safeDI_erased(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
@@ -692,12 +713,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+		            return __safeDI_fillBody_D0ADDD197C3103A2(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_D0ADDD197C3103A2(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
 		            func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
 		                DefaultPairPanel(count: count, name: name, analytics: analytics)
 		            }
 		            return { forwarded in __safeDI_held(count: forwarded.count, name: forwarded.name) }
 		        }
 		        func __safeDI_pairPanelBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<PairPanel.ForwardedProperties, PairPanel>.Builder {
+		            return __safeDI_fillBody_0E323E46C02A8EC3(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_0E323E46C02A8EC3(analytics: Analytics) -> ErasedInstantiator<PairPanel.ForwardedProperties, PairPanel>.Builder {
 		            func __safeDI_erased(count: Int, name: String) -> DefaultPairPanel {
 		                DefaultPairPanel(count: count, name: name, analytics: analytics)
 		            }
@@ -1023,13 +1050,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_defaultGadget_GadgetBuilder_Host_lazy(_ scope_navigator: Navigator, _ scope_analytics: Analytics, _ scope_now: any Gadget) -> any Gadget {
-		            let analytics = scope_analytics
+		            return __safeDI_fillBody_3E990D9978E9E106(analytics: scope_analytics)
+		        }
+		        func __safeDI_fillBody_3E990D9978E9E106(analytics: Analytics) -> any Gadget {
 		            func __safeDI_lazy() -> DefaultGadget {
 		                DefaultGadget(analytics: analytics)
 		            }
 		            return __safeDI_lazy()
 		        }
 		        func __safeDI_defaultGadget_GadgetBuilder_Host_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            return __safeDI_fillBody_6747DB56BF68B622(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_6747DB56BF68B622(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
 		            func __safeDI_later() -> DefaultGadget {
 		                DefaultGadget(analytics: analytics)
 		            }
@@ -1114,6 +1146,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
 		            func __safeDI_held() -> DefaultEmptyPanel {
 		                DefaultEmptyPanel(analytics: analytics)
 		            }
@@ -1197,12 +1232,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_defaultGadget_GadgetBuilder_Host_tuple(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            return __safeDI_fillBody_A94164D402F7AB0E(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_A94164D402F7AB0E(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
 		            func __safeDI_tuple() -> DefaultGadget {
 		                DefaultGadget(analytics: analytics)
 		            }
 		            return { _ in __safeDI_tuple() }
 		        }
 		        func __safeDI_defaultGadget_GadgetBuilder_Host_void(analytics: Analytics) -> ErasedInstantiator<Void, any Gadget>.Builder {
+		            return __safeDI_fillBody_B28582127DE82181(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_B28582127DE82181(analytics: Analytics) -> ErasedInstantiator<Void, any Gadget>.Builder {
 		            func __safeDI_void() -> DefaultGadget {
 		                DefaultGadget(analytics: analytics)
 		            }
@@ -1278,12 +1319,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
 		            func __safeDI_held() -> DefaultEmptyPanel {
 		                DefaultEmptyPanel(analytics: analytics)
 		            }
 		            return { _ in __safeDI_held() }
 		        }
 		        func __safeDI_emptyPanelBuilder_Host_later(analytics: Analytics) -> ErasedInstantiator<(), EmptyPanel>.Builder {
+		            return __safeDI_fillBody_5E39DB487259F8A9(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_5E39DB487259F8A9(analytics: Analytics) -> ErasedInstantiator<(), EmptyPanel>.Builder {
 		            func __safeDI_later() -> DefaultEmptyPanel {
 		                DefaultEmptyPanel(analytics: analytics)
 		            }
@@ -1712,6 +1759,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_BEA678126FB96713(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_BEA678126FB96713(analytics: Analytics) -> Instantiator<Panel>.Builder {
 		            func __safeDI_part(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
@@ -1873,6 +1923,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_defaultGadget_GadgetBuilder_Inner_later(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
+		            return __safeDI_fillBody_6747DB56BF68B622(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_6747DB56BF68B622(analytics: Analytics) -> ErasedInstantiator<(), any Gadget>.Builder {
 		            func __safeDI_later() -> DefaultGadget {
 		                DefaultGadget(analytics: analytics)
 		            }
@@ -1975,6 +2028,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		    public convenience init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        func __safeDI_panelBuilder_Inner_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_BEA678126FB96713(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_BEA678126FB96713(analytics: Analytics) -> Instantiator<Panel>.Builder {
 		            func __safeDI_part(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
@@ -2087,6 +2143,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_liveGadget_GadgetBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_55D071755F974A0E(id: id)
+		        }
+		        func __safeDI_fillBody_55D071755F974A0E(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
 		            func __safeDI_panel(title: String) -> LiveGadget {
 		                LiveGadget(title: title, id: id)
 		            }
@@ -2234,6 +2293,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_liveGadget_GadgetBuilder_screenBuilder_Home_Screen_Scope_panel(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_55D071755F974A0E(id: id)
+		        }
+		        func __safeDI_fillBody_55D071755F974A0E(id: Int) -> ErasedInstantiator<String, any Gadget>.Builder {
 		            func __safeDI_panel(title: String) -> LiveGadget {
 		                LiveGadget(title: title, id: id)
 		            }
@@ -2338,12 +2400,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_builtGadget_GadgetBuilder_Host_built() -> ErasedInstantiator<Built, any Gadget>.Builder {
+		            return __safeDI_fillBody_CECD642F876C292A()
+		        }
+		        func __safeDI_fillBody_CECD642F876C292A() -> ErasedInstantiator<Built, any Gadget>.Builder {
 		            func __safeDI_built(built: Built) -> BuiltGadget {
 		                BuiltGadget(built: built)
 		            }
 		            return { forwarded in __safeDI_built(built: forwarded) }
 		        }
 		        @Sendable nonisolated func __safeDI_pairBuiltGadget_GadgetSendableBuilder_Host_pair() -> SendableErasedInstantiator<(built: Built, count: Int), any Gadget>.Builder {
+		            return __safeDI_fillBody_D6FCEEC806CF9AFB()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_D6FCEEC806CF9AFB() -> SendableErasedInstantiator<(built: Built, count: Int), any Gadget>.Builder {
 		            @Sendable nonisolated func __safeDI_pair(built: Built, count: Int) -> PairBuiltGadget {
 		                PairBuiltGadget(built: built, count: count)
 		            }
@@ -2459,12 +2527,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_builtBuilder_Host_held() -> Instantiator<Built>.Builder {
+		            return __safeDI_fillBody_416036851B49B5D3()
+		        }
+		        func __safeDI_fillBody_416036851B49B5D3() -> Instantiator<Built>.Builder {
 		            func __safeDI_held(title: String) -> DefaultBuilt {
 		                DefaultBuilt(title: title)
 		            }
 		            return { forwarded in __safeDI_held(title: forwarded) }
 		        }
 		        @Sendable nonisolated func __safeDI_builtSendableBuilder_Host_sendableHeld() -> SendableInstantiator<Built>.Builder {
+		            return __safeDI_fillBody_A7B5EAE082D70A79()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_A7B5EAE082D70A79() -> SendableInstantiator<Built>.Builder {
 		            @Sendable nonisolated func __safeDI_sendableHeld(title: String) -> DefaultBuilt {
 		                DefaultBuilt(title: title)
 		            }
@@ -2529,6 +2603,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_held(forwarded: Mark) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_1778578639CCA1FC(forwarded: forwarded)
+		        }
+		        func __safeDI_fillBody_1778578639CCA1FC(forwarded: Mark) -> Instantiator<Panel>.Builder {
 		            func __safeDI_held(name: String, forwarded: Mark?) -> LoopPanel {
 		                let reader = MarkReader(forwarded: forwarded)
 		                func __safeDI_tangleBuilder() -> Tangle {
@@ -2637,6 +2714,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_themedGadget_GadgetBuilder_Host_panel(theme: LazilyInstantiated<Theme>) -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_6FDFCC3DFAD08048(theme: theme)
+		        }
+		        func __safeDI_fillBody_6FDFCC3DFAD08048(theme: LazilyInstantiated<Theme>) -> ErasedInstantiator<String, any Gadget>.Builder {
 		            func __safeDI_panel(title: String) -> ThemedGadget {
 		                ThemedGadget(title: title, theme: theme.instance)
 		            }
@@ -2757,6 +2837,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        @Sendable nonisolated func __safeDI_emptyPanelBuilder_Host_Owner_Scope_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+		            return __safeDI_fillBody_7EA3C0230632739A(analytics: analytics)
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_7EA3C0230632739A(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
 		            func __safeDI_held() -> DefaultEmptyPanel {
 		                DefaultEmptyPanel(analytics: analytics)
 		            }
@@ -2876,18 +2959,27 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_stringPanelBuilder_Host_later() -> ErasedInstantiator<(), StringPanel>.Builder {
+		            return __safeDI_fillBody_B704D99203BC79A3()
+		        }
+		        func __safeDI_fillBody_B704D99203BC79A3() -> ErasedInstantiator<(), StringPanel>.Builder {
 		            func __safeDI_later() -> DefaultStringPanel {
 		                DefaultStringPanel()
 		            }
 		            return { _ in __safeDI_later() }
 		        }
 		        func __safeDI_stringPanelBuilder_Host_same() -> ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>.Builder {
+		            return __safeDI_fillBody_D60F78598A42244C()
+		        }
+		        func __safeDI_fillBody_D60F78598A42244C() -> ErasedInstantiator<StringPanel.ForwardedProperties, StringPanel>.Builder {
 		            func __safeDI_same() -> DefaultStringPanel {
 		                DefaultStringPanel()
 		            }
 		            return { _ in __safeDI_same() }
 		        }
 		        func __safeDI_stringPanelBuilder_Host_Owner_Scope_held() -> Instantiator<StringPanel>.Builder {
+		            return __safeDI_fillBody_71D4BDDA71817384()
+		        }
+		        func __safeDI_fillBody_71D4BDDA71817384() -> Instantiator<StringPanel>.Builder {
 		            func __safeDI_held() -> DefaultStringPanel {
 		                DefaultStringPanel()
 		            }
@@ -2987,12 +3079,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host_later() -> SendableErasedInstantiator<(), StringPanel>.Builder {
+		            return __safeDI_fillBody_AC778246C54A0661()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_AC778246C54A0661() -> SendableErasedInstantiator<(), StringPanel>.Builder {
 		            @Sendable nonisolated func __safeDI_later() -> DefaultStringPanel {
 		                DefaultStringPanel()
 		            }
 		            return { _ in __safeDI_later() }
 		        }
 		        @Sendable nonisolated func __safeDI_stringPanelSendableBuilder_Host_Owner_Scope_held() -> Instantiator<StringPanel>.Builder {
+		            return __safeDI_fillBody_C50320B184DB28F2()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_C50320B184DB28F2() -> Instantiator<StringPanel>.Builder {
 		            func __safeDI_held() -> DefaultStringPanel {
 		                DefaultStringPanel()
 		            }
@@ -3263,12 +3361,18 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_mainPanelBuilder_Host_held() -> Instantiator<MainPanel>.Builder {
+		            return __safeDI_fillBody_908F59B88CB6973C()
+		        }
+		        func __safeDI_fillBody_908F59B88CB6973C() -> Instantiator<MainPanel>.Builder {
 		            func __safeDI_held(name: String) -> DefaultMainPanel {
 		                DefaultMainPanel(name: name)
 		            }
 		            return { forwarded in __safeDI_held(name: forwarded) }
 		        }
 		        @Sendable nonisolated func __safeDI_mainPanelSendableBuilder_Host_sendableHeld() -> SendableInstantiator<MainPanel>.Builder {
+		            return __safeDI_fillBody_FE17763FFDE47B1A()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_FE17763FFDE47B1A() -> SendableInstantiator<MainPanel>.Builder {
 		            @Sendable nonisolated func __safeDI_sendableHeld(name: String) -> DefaultMainPanel {
 		                DefaultMainPanel(name: name)
 		            }
@@ -3387,6 +3491,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_Owner_Scope_held(analytics: Analytics) -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_628717A157D1CC3F(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_628717A157D1CC3F(analytics: Analytics) -> Instantiator<Panel>.Builder {
 		            func __safeDI_held(name: String) -> DefaultPanel {
 		                DefaultPanel(name: name, analytics: analytics)
 		            }
@@ -3476,6 +3583,9 @@ struct SafeDIToolSeamForwardingPlaceTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_tokenGadget_GadgetBuilder_Host_erased() -> ErasedInstantiator<Token, any Gadget>.Builder {
+		            return __safeDI_fillBody_E8B252AB1D6F5FF4()
+		        }
+		        func __safeDI_fillBody_E8B252AB1D6F5FF4() -> ErasedInstantiator<Token, any Gadget>.Builder {
 		            func __safeDI_erased(token: Token) -> TokenGadget {
 		                TokenGadget(token: token)
 		            }

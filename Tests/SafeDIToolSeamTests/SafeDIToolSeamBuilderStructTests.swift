@@ -1141,6 +1141,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_livePanel_PanelBuilder_Home_panelBuilder() -> ErasedInstantiator<String, any Panel>.Builder {
+		            return __safeDI_fillBody_BDEDBAEE5FA5B0CC()
+		        }
+		        func __safeDI_fillBody_BDEDBAEE5FA5B0CC() -> ErasedInstantiator<String, any Panel>.Builder {
 		            func __safeDI_panelBuilder(title: String) -> LivePanel {
 		                LivePanel(title: title)
 		            }
@@ -1794,6 +1797,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_holeServiceBuilder_HoleSeam_HoleOwner_Scope_holeService(holeAnalytics: HoleAnalytics) -> any HoleService {
+		            return __safeDI_fillBody_E25464D6E84F8AA8(holeAnalytics: holeAnalytics)
+		        }
+		        func __safeDI_fillBody_E25464D6E84F8AA8(holeAnalytics: HoleAnalytics) -> any HoleService {
 		            func __safeDI_holeService() -> HoleImpl {
 		                func __safeDI_holeRelayBuilder() -> HoleRelay {
 		                    _ = HoleRelay.__safeDI_HoleRelay_635E3D11CE7DF41B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
@@ -2465,6 +2471,9 @@ struct SafeDIToolSeamBuilderStructTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_holeServiceBuilder_HoleSeam_holeService() -> any HoleService {
+		            return __safeDI_fillBody_BFF0C45440BBA73E()
+		        }
+		        func __safeDI_fillBody_BFF0C45440BBA73E() -> any HoleService {
 		            func __safeDI_holeService() -> HoleImpl {
 		                func __safeDI_holeServiceBuilder_HoleSeam_Wrapper() -> Wrapper {
 		                    func __safeDI_holeSeam() -> HoleSeam {

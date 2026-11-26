@@ -1231,15 +1231,18 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        func __safeDI_f() -> F {
 		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values, log: Log) -> any Api2 {
-		                func __safeDI_api2() -> Live2 {
-		                    func __safeDI_builder() -> F {
-		                        F.__safeDI_mock(api2Builder: api2Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_api2Builder_F(log: log), apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(log: log))
+		                func __safeDI_fillBody_A73A5FFDE1C9B538(log: Log) -> any Api2 {
+		                    func __safeDI_api2() -> Live2 {
+		                        func __safeDI_builder() -> F {
+		                            F.__safeDI_mock(api2Builder: api2Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_api2Builder_F(log: log), apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(log: log))
+		                        }
+		                        let builder = Instantiator<F>(__safeDI_builder)
+		                        return Live2(log: log, builder: builder)
 		                    }
-		                    let builder = Instantiator<F>(__safeDI_builder)
-		                    return Live2(log: log, builder: builder)
+		                    let api2: any Api2 = __safeDI_api2()
+		                    return api2
 		                }
-		                let api2: any Api2 = __safeDI_api2()
-		                return api2
+		                return __safeDI_fillBody_A73A5FFDE1C9B538(log: log)
 		            }
 		            func __safeDI_api2Builder_F(log: Log) -> F.SafeDIMockScope_Api2.__safeDI_Builder<any Api2> {
 		                .init(b: { _ in __safeDI_api2Builder_F_B_Scope(log: log) })
@@ -1335,17 +1338,20 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		        func __safeDI_f() -> F {
 		            _ = F.__safeDI_F_6CCC739C88CBB5C8.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_api2Builder_F_B_Scope_api2() -> any Api2 {
-		                func __safeDI_api2() -> Live2 {
-		                    let log = Log()
-		                    func __safeDI_builder() -> F {
-		                        _ = F.__safeDI_F_6CCC739C88CBB5C8.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                        return F(__safeDI_log: log, __safeDI_api2Builder: __safeDI_api2Builder_F(), __safeDI_apiBuilder: __safeDI_apiBuilder_F())
+		                func __safeDI_fillBody_81E0F8A25F8817B3() -> any Api2 {
+		                    func __safeDI_api2() -> Live2 {
+		                        let log = Log()
+		                        func __safeDI_builder() -> F {
+		                            _ = F.__safeDI_F_6CCC739C88CBB5C8.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return F(__safeDI_log: log, __safeDI_api2Builder: __safeDI_api2Builder_F(), __safeDI_apiBuilder: __safeDI_apiBuilder_F())
+		                        }
+		                        let builder = Instantiator<F>(__safeDI_builder)
+		                        return Live2(log: log, builder: builder)
 		                    }
-		                    let builder = Instantiator<F>(__safeDI_builder)
-		                    return Live2(log: log, builder: builder)
+		                    let api2: any Api2 = __safeDI_api2()
+		                    return api2
 		                }
-		                let api2: any Api2 = __safeDI_api2()
-		                return api2
+		                return __safeDI_fillBody_81E0F8A25F8817B3()
 		            }
 		            func __safeDI_api2Builder_F() -> F.__safeDI_Api2Carrier<any Api2> {
 		                .init(b: { values_log, values_z, values_a in __safeDI_api2Builder_F_B_Scope() })
@@ -1401,16 +1407,19 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        func __safeDI_f() -> F {
 		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values) -> any Api2 {
-		                func __safeDI_api2() -> Live2 {
-		                    let log = Log()
-		                    func __safeDI_builder() -> F {
-		                        F.__safeDI_mock(api2Builder: api2Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_api2Builder_F(), apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), log: log)
+		                func __safeDI_fillBody_F5F0319C2F07108D() -> any Api2 {
+		                    func __safeDI_api2() -> Live2 {
+		                        let log = Log()
+		                        func __safeDI_builder() -> F {
+		                            F.__safeDI_mock(api2Builder: api2Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_api2Builder_F(), apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), log: log)
+		                        }
+		                        let builder = Instantiator<F>(__safeDI_builder)
+		                        return Live2(log: log, builder: builder)
 		                    }
-		                    let builder = Instantiator<F>(__safeDI_builder)
-		                    return Live2(log: log, builder: builder)
+		                    let api2: any Api2 = __safeDI_api2()
+		                    return api2
 		                }
-		                let api2: any Api2 = __safeDI_api2()
-		                return api2
+		                return __safeDI_fillBody_F5F0319C2F07108D()
 		            }
 		            func __safeDI_api2Builder_F() -> F.SafeDIMockScope_Api2.__safeDI_Builder<any Api2> {
 		                .init(b: { _ in __safeDI_api2Builder_F_B_Scope() })
@@ -2332,22 +2341,20 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func __safeDI_fillBody_A303510A72F6F6C4() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let gizmo: any Gizmo = gizmoBuilder()
+			                return DefaultService(gizmo: gizmo)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service(_ scope: Panel.SafeDIMockScope_Service.service_Values) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gizmo: any Gizmo = gizmoBuilder()
-			                    return DefaultService(gizmo: gizmo)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_A303510A72F6F6C4()
 			            }
 			            func __safeDI_serviceBuilder_Panel_Row_Scope_service(_ scope: Panel.SafeDIMockScope_Service.Row_Scope.service_Values) -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let gizmo: any Gizmo = gizmoBuilder()
-			                    return DefaultService(gizmo: gizmo)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return __safeDI_fillBody_A303510A72F6F6C4()
 			            }
 			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(row: { _ in __safeDI_serviceBuilder_Panel_Row_Scope() }, service: { scope in __safeDI_serviceBuilder_Panel_service(scope) })

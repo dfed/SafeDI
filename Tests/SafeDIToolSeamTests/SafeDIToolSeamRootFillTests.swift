@@ -62,6 +62,9 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_appScreen_AnyScreenBuilder_Last_screenBuilder(service: Service) -> ErasedInstantiator<Int, AnyScreen>.Builder {
+		            return __safeDI_fillBody_A9A9FB6A5ED20C19(service: service)
+		        }
+		        func __safeDI_fillBody_A9A9FB6A5ED20C19(service: Service) -> ErasedInstantiator<Int, AnyScreen>.Builder {
 		            func __safeDI_screenBuilder(id: Int) -> AppScreen {
 		                func __safeDI_lastBuilder(id: Int) -> Last {
 		                    _ = Last.__safeDI_Last_64640399A387E1E1.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
@@ -203,17 +206,20 @@ struct SafeDIToolSeamRootFillTests: ~Copyable {
 		        @Sendable nonisolated func __safeDI_lastBuilder(id: Int) -> Last {
 		            _ = Last.__safeDI_Last_64640399A387E1E1.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_appScreen_AnyScreenBuilder_Last_screenBuilder(service: Service) -> ErasedInstantiator<Int, AnyScreen>.Builder {
-		                func __safeDI_screenBuilder(id: Int) -> AppScreen {
-		                    func __safeDI_lastBuilder(id: Int) -> Last {
-		                        _ = Last.__safeDI_Last_64640399A387E1E1.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                        return Last(__safeDI_id: id, __safeDI_service: service, __safeDI_appScreen_AnyScreenBuilder: __safeDI_appScreen_AnyScreenBuilder_Last())
+		                func __safeDI_fillBody_A9A9FB6A5ED20C19(service: Service) -> ErasedInstantiator<Int, AnyScreen>.Builder {
+		                    func __safeDI_screenBuilder(id: Int) -> AppScreen {
+		                        func __safeDI_lastBuilder(id: Int) -> Last {
+		                            _ = Last.__safeDI_Last_64640399A387E1E1.self // If this line does not compile, compile the code SafeDI generates for module Seam into Seam: under Bazel, add Seam’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return Last(__safeDI_id: id, __safeDI_service: service, __safeDI_appScreen_AnyScreenBuilder: __safeDI_appScreen_AnyScreenBuilder_Last())
+		                        }
+		                        let lastBuilder = ErasedInstantiator<Int, AnyScreen> {
+		                            AnyScreen(__safeDI_lastBuilder(id: $0))
+		                        }
+		                        return AppScreen(id: id, service: service, lastBuilder: lastBuilder)
 		                    }
-		                    let lastBuilder = ErasedInstantiator<Int, AnyScreen> {
-		                        AnyScreen(__safeDI_lastBuilder(id: $0))
-		                    }
-		                    return AppScreen(id: id, service: service, lastBuilder: lastBuilder)
+		                    return { forwarded in AnyScreen(__safeDI_screenBuilder(id: forwarded)) }
 		                }
-		                return { forwarded in AnyScreen(__safeDI_screenBuilder(id: forwarded)) }
+		                return __safeDI_fillBody_A9A9FB6A5ED20C19(service: service)
 		            }
 		            func __safeDI_appScreen_AnyScreenBuilder_Last() -> Last.__safeDI_AppScreen_AnyScreenCarrier<AnyScreen> {
 		                .init(screenBuilder: { values_id, values_service in __safeDI_appScreen_AnyScreenBuilder_Last_screenBuilder(service: values_service) })

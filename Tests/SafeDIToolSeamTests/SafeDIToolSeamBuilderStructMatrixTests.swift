@@ -872,6 +872,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_apiBuilder_Home_Detail_Scope_api() -> any Api {
+		            return __safeDI_fillBody_1F9F882246763FBF()
+		        }
+		        func __safeDI_fillBody_1F9F882246763FBF() -> any Api {
 		            func __safeDI_api() -> LiveApi {
 		                let client = Client()
 		                return LiveApi(client: client)
@@ -2032,6 +2035,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_panel() -> Panel {
+		            return __safeDI_fillBody_9CD22B5194C1EA93()
+		        }
+		        func __safeDI_fillBody_9CD22B5194C1EA93() -> Panel {
 		            func __safeDI_panel() -> DefaultPanel {
 		                let tag = Tag()
 		                return DefaultPanel(tag: tag)
@@ -2040,6 +2046,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            return panel
 		        }
 		        @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_heldBuilder() -> SendableInstantiator<Panel>.Builder {
+		            return __safeDI_fillBody_530214BA5CDD42A6()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_530214BA5CDD42A6() -> SendableInstantiator<Panel>.Builder {
 		            @Sendable nonisolated func __safeDI_heldBuilder() -> DefaultPanel {
 		                let tag = Tag()
 		                return DefaultPanel(tag: tag)
@@ -2143,6 +2152,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_held() -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_0A0A97B9289C1564()
+		        }
+		        func __safeDI_fillBody_0A0A97B9289C1564() -> Instantiator<Panel>.Builder {
 		            func __safeDI_held() -> DefaultPanel {
 		                let tag = Tag()
 		                return DefaultPanel(tag: tag)
@@ -2150,6 +2162,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            return { _ in __safeDI_held() }
 		        }
 		        @Sendable nonisolated func __safeDI_panelSendableBuilder_Host_Worker_Scope_panel() -> Panel {
+		            return __safeDI_fillBody_66F20D67D545FFB5()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_66F20D67D545FFB5() -> Panel {
 		            func __safeDI_panel() -> DefaultPanel {
 		                let tag = Tag()
 		                return DefaultPanel(tag: tag)
@@ -2226,6 +2241,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_panelBuilder_Host_panel() -> Panel {
+		            return __safeDI_fillBody_9CD22B5194C1EA93()
+		        }
+		        func __safeDI_fillBody_9CD22B5194C1EA93() -> Panel {
 		            func __safeDI_panel() -> DefaultPanel {
 		                let tag = Tag()
 		                return DefaultPanel(tag: tag)
@@ -2234,6 +2252,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            return panel
 		        }
 		        func __safeDI_panelBuilder_Host_held() -> Instantiator<Panel>.Builder {
+		            return __safeDI_fillBody_0A0A97B9289C1564()
+		        }
+		        func __safeDI_fillBody_0A0A97B9289C1564() -> Instantiator<Panel>.Builder {
 		            func __safeDI_held() -> DefaultPanel {
 		                let tag = Tag()
 		                return DefaultPanel(tag: tag)

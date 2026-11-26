@@ -1253,6 +1253,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
+			            return __safeDI_fillBody_0B54C86B751C20C0()
+			        }
+			        func __safeDI_fillBody_0B54C86B751C20C0() -> any UserService {
 			            func __safeDI_userService() -> DefaultUserService {
 			                _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 			                return DefaultUserService()
@@ -1331,6 +1334,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_userServiceBuilder_Service_userService() -> any UserService {
+			            return __safeDI_fillBody_0B54C86B751C20C0()
+			        }
+			        func __safeDI_fillBody_0B54C86B751C20C0() -> any UserService {
 			            func __safeDI_userService() -> DefaultUserService {
 			                _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 			                return DefaultUserService()

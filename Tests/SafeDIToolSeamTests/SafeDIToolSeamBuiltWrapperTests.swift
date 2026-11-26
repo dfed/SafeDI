@@ -304,7 +304,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_gadgetBuilder_Host_part(_ scope_analytics: Analytics) -> any Gadget {
-				            let analytics = scope_analytics
+				            return __safeDI_fillBody_8B0E70A01AC9327E(analytics: scope_analytics)
+				        }
+				        func __safeDI_fillBody_8B0E70A01AC9327E(analytics: Analytics) -> any Gadget {
 				            func __safeDI_part() -> DefaultGadget {
 				                DefaultGadget(analytics: analytics)
 				            }
@@ -363,6 +365,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_panelBuilder_Host_part(analytics: Analytics) -> Instantiator<Panel>.Builder {
+				            return __safeDI_fillBody_BEA678126FB96713(analytics: analytics)
+				        }
+				        func __safeDI_fillBody_BEA678126FB96713(analytics: Analytics) -> Instantiator<Panel>.Builder {
 				            func __safeDI_part(name: String) -> DefaultPanel {
 				                DefaultPanel(name: name, analytics: analytics)
 				            }
@@ -421,6 +426,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_namedGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<String, AnyGadget>.Builder {
+				            return __safeDI_fillBody_28C282CAA634FDCF(analytics: analytics)
+				        }
+				        func __safeDI_fillBody_28C282CAA634FDCF(analytics: Analytics) -> ErasedInstantiator<String, AnyGadget>.Builder {
 				            func __safeDI_part(name: String) -> NamedGadget {
 				                NamedGadget(name: name, analytics: analytics)
 				            }
@@ -541,6 +549,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_actionGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget>.Builder {
+			            return __safeDI_fillBody_2B4719521591DD1A(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_2B4719521591DD1A(analytics: Analytics) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget>.Builder {
 			            func __safeDI_part(run: nonisolated(nonsending) @escaping () async -> Void) -> ActionGadget {
 			                ActionGadget(run: run, analytics: analytics)
 			            }
@@ -734,12 +745,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_pairGadget_GadgetBuilder_Host_erased(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
+			            return __safeDI_fillBody_F2A172BAB83DC6CB(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_F2A172BAB83DC6CB(analytics: Analytics) -> ErasedInstantiator<(count: Int, name: String), any Gadget>.Builder {
 			            func __safeDI_erased(count: Int, name: String) -> PairGadget {
 			                PairGadget(count: count, name: name, analytics: analytics)
 			            }
 			            return { forwarded in __safeDI_erased(count: forwarded.count, name: forwarded.name) }
 			        }
 			        func __safeDI_pairPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
+			            return __safeDI_fillBody_D0ADDD197C3103A2(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_D0ADDD197C3103A2(analytics: Analytics) -> Instantiator<PairPanel>.Builder {
 			            func __safeDI_held(count: Int, name: String) -> DefaultPairPanel {
 			                DefaultPairPanel(count: count, name: name, analytics: analytics)
 			            }
@@ -781,6 +798,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			#"@Instantiated(fulfilledByType: "DefaultGadget") let part: ErasedInstantiator<\#(spelling), any Gadget>"#,
 		])
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: Self.fulfillers + [Self.root])
+		// The fill's body is named after the hash of its text, which spells the forwarded value as written.
+		let fillBodyName = spelling == "()" ? "__safeDI_fillBody_763AC7074CD87592" : "__safeDI_fillBody_8FD969695F77761B"
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
@@ -820,6 +839,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_defaultGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<\(spelling), any Gadget>.Builder {
+			            return \(fillBodyName)(analytics: analytics)
+			        }
+			        func \(fillBodyName)(analytics: Analytics) -> ErasedInstantiator<\(spelling), any Gadget>.Builder {
 			            func __safeDI_part() -> DefaultGadget {
 			                DefaultGadget(analytics: analytics)
 			            }
@@ -904,6 +926,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_emptyPanelBuilder_Host_held(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
+			            return __safeDI_fillBody_1FAB92EF0A237880(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_1FAB92EF0A237880(analytics: Analytics) -> Instantiator<EmptyPanel>.Builder {
 			            func __safeDI_held() -> DefaultEmptyPanel {
 			                DefaultEmptyPanel(analytics: analytics)
 			            }
@@ -946,6 +971,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_panelBuilder_Host_forwarded(analytics: Analytics) -> Instantiator<Panel>.Builder {
+			            return __safeDI_fillBody_994C06F79EC0112D(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_994C06F79EC0112D(analytics: Analytics) -> Instantiator<Panel>.Builder {
 			            func __safeDI_forwarded(name: String) -> DefaultPanel {
 			                DefaultPanel(name: name, analytics: analytics)
 			            }
@@ -992,6 +1020,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        @Sendable nonisolated func __safeDI_loopingGadget_GadgetSendableBuilder_Host_again() -> SendableErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_69CA4B87868BAAC8()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_69CA4B87868BAAC8() -> SendableErasedInstantiator<String, any Gadget>.Builder {
 		            @Sendable nonisolated func __safeDI_again(name: String) -> LoopingGadget {
 		                let again = SendableErasedInstantiator<String, any Gadget> {
 		                    __safeDI_again(name: $0)
@@ -1019,6 +1050,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_loopingGadget_GadgetBuilder_Host_again() -> ErasedInstantiator<String, any Gadget>.Builder {
+		            return __safeDI_fillBody_C21F334F68518DF4()
+		        }
+		        func __safeDI_fillBody_C21F334F68518DF4() -> ErasedInstantiator<String, any Gadget>.Builder {
 		            func __safeDI_again(name: String) -> LoopingGadget {
 		                let again = ErasedInstantiator<String, any Gadget> {
 		                    __safeDI_again(name: $0)
@@ -1364,6 +1398,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_panelBuilder_Inner_part() -> Instantiator<Panel>.Builder {
+			            return __safeDI_fillBody_5576EF71E670497F()
+			        }
+			        func __safeDI_fillBody_5576EF71E670497F() -> Instantiator<Panel>.Builder {
 			            func __safeDI_part(name: String) -> DefaultPanel {
 			                DefaultPanel(name: name)
 			            }
@@ -1627,6 +1664,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
+		            return __safeDI_fillBody_01CABEC4B4955108(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_01CABEC4B4955108(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
 		            func __safeDI_part(label: Label) -> LabeledGadget {
 		                LabeledGadget(label: label, analytics: analytics)
 		            }
@@ -1651,6 +1691,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_labeledGadget_GadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
+		            return __safeDI_fillBody_01CABEC4B4955108(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_01CABEC4B4955108(analytics: Analytics) -> ErasedInstantiator<Label, any Gadget>.Builder {
 		            func __safeDI_part(label: Label) -> LabeledGadget {
 		                LabeledGadget(label: label, analytics: analytics)
 		            }
@@ -2088,6 +2131,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
+			            return __safeDI_fillBody_DB847B9546740658(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_DB847B9546740658(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
 			            func __safeDI_part(forwardedAction: @escaping () -> Void) -> DefaultActionPanel {
 			                DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 			            }
@@ -2239,6 +2285,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_actionPanelBuilder_Host_part(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
+			            return __safeDI_fillBody_F26CFAD11C0AD1A6(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_F26CFAD11C0AD1A6(analytics: Analytics) -> Instantiator<ActionPanel>.Builder {
 			            func __safeDI_part(forwardedAction: @escaping OnTap) -> DefaultActionPanel {
 			                DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 			            }
@@ -2390,6 +2439,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_tapGadget_AnyGadgetBuilder_Host_part(analytics: Analytics) -> ErasedInstantiator<OnTap, AnyGadget>.Builder {
+			            return __safeDI_fillBody_86F373E2147139ED(analytics: analytics)
+			        }
+			        func __safeDI_fillBody_86F373E2147139ED(analytics: Analytics) -> ErasedInstantiator<OnTap, AnyGadget>.Builder {
 			            func __safeDI_part(onTap: @escaping OnTap) -> TapGadget {
 			                TapGadget(onTap: onTap, analytics: analytics)
 			            }
@@ -2723,6 +2775,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_gadgetBuilder_Host_part() -> any Gadget {
+			            return __safeDI_fillBody_EDDE2E21BA2B06AD()
+			        }
+			        func __safeDI_fillBody_EDDE2E21BA2B06AD() -> any Gadget {
 			            func __safeDI_part() -> DefaultGadget {
 			                let kid = Kid(part: nil)
 			                return DefaultGadget(kid: kid)
@@ -2816,6 +2871,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Label, AnyGadget>.Builder {
+		            return __safeDI_fillBody_7D710856D246C18D()
+		        }
+		        func __safeDI_fillBody_7D710856D246C18D() -> ErasedInstantiator<Label, AnyGadget>.Builder {
 		            func __safeDI_part(label: Feature.Label) -> NamedGadget {
 		                NamedGadget(label: label)
 		            }
@@ -2840,6 +2898,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_namedGadget_AnyGadgetBuilder_Host_part() -> ErasedInstantiator<Feature.Label, AnyGadget>.Builder {
+		            return __safeDI_fillBody_27E6724FF37A54C9()
+		        }
+		        func __safeDI_fillBody_27E6724FF37A54C9() -> ErasedInstantiator<Feature.Label, AnyGadget>.Builder {
 		            func __safeDI_part(label: Label) -> NamedGadget {
 		                NamedGadget(label: label)
 		            }

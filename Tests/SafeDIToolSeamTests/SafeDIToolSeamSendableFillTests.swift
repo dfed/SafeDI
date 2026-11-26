@@ -1559,28 +1559,34 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			        func __safeDI_top() -> Top {
 			            _ = Top.__safeDI_Top_2C9038B6F47B5DFF.self\(seamCallComment(seam: "Top", module: "Feature"))
 			            @Sendable nonisolated func __safeDI_firstBuilder_SubA_first() -> any First {
-			                func __safeDI_first() -> DefaultFirst {
-			                    func __safeDI_subB() -> SubB {
-			                        _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "Top", module: "Feature"))
-			                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                @Sendable nonisolated func __safeDI_fillBody_3E34E760DD8FF510() -> any First {
+			                    func __safeDI_first() -> DefaultFirst {
+			                        func __safeDI_subB() -> SubB {
+			                            _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "Top", module: "Feature"))
+			                            return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                        }
+			                        let subB: SubB = __safeDI_subB()
+			                        return DefaultFirst(subB: subB)
 			                    }
-			                    let subB: SubB = __safeDI_subB()
-			                    return DefaultFirst(subB: subB)
+			                    let first: any First = __safeDI_first()
+			                    return first
 			                }
-			                let first: any First = __safeDI_first()
-			                return first
+			                return __safeDI_fillBody_3E34E760DD8FF510()
 			            }
 			            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second() -> any Second {
-			                func __safeDI_second() -> DefaultSecond {
-			                    func __safeDI_subC() -> SubC {
-			                        _ = SubC.__safeDI_SubC_F882055416364258.self\(seamCallComment(seam: "Top", module: "Feature"))
-			                        return SubC(__safeDI_thirdBuilder: __safeDI_thirdBuilder_SubC())
+			                @Sendable nonisolated func __safeDI_fillBody_7260191B9F91ED5C() -> any Second {
+			                    func __safeDI_second() -> DefaultSecond {
+			                        func __safeDI_subC() -> SubC {
+			                            _ = SubC.__safeDI_SubC_F882055416364258.self\(seamCallComment(seam: "Top", module: "Feature"))
+			                            return SubC(__safeDI_thirdBuilder: __safeDI_thirdBuilder_SubC())
+			                        }
+			                        let subC: SubC = __safeDI_subC()
+			                        return DefaultSecond(subC: subC)
 			                    }
-			                    let subC: SubC = __safeDI_subC()
-			                    return DefaultSecond(subC: subC)
+			                    let second: any Second = __safeDI_second()
+			                    return second
 			                }
-			                let second: any Second = __safeDI_second()
-			                return second
+			                return __safeDI_fillBody_7260191B9F91ED5C()
 			            }
 			            @Sendable nonisolated func __safeDI_firstSendableBuilder_Top() -> Top.__safeDI_FirstSendableCarrier<any First> {
 			                .init(subABuilder: { __safeDI_firstBuilder_SubA() })
@@ -1649,34 +1655,40 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			        func __safeDI_top() -> Top {
 			            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 			            func __safeDI_firstBuilder_SubA_first() -> any First {
-			                func __safeDI_first() -> DefaultFirst {
-			                    func __safeDI_thirdShell() -> ThirdShell {
-			                        _ = ThirdShell.__safeDI_ThirdShell_574B3FB75FC44198.self\(seamCallComment(seam: "Top", module: "Feature"))
-			                        @Sendable nonisolated func __safeDI_thirdBuilder_SubC_third() -> any Third {
-			                            func __safeDI_third() -> DefaultThird {
-			                                func __safeDI_subB() -> SubB {
-			                                    _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "Top", module: "Feature"))
-			                                    return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                func __safeDI_fillBody_C0562426E5E76CCB() -> any First {
+			                    func __safeDI_first() -> DefaultFirst {
+			                        func __safeDI_thirdShell() -> ThirdShell {
+			                            _ = ThirdShell.__safeDI_ThirdShell_574B3FB75FC44198.self\(seamCallComment(seam: "Top", module: "Feature"))
+			                            @Sendable nonisolated func __safeDI_thirdBuilder_SubC_third() -> any Third {
+			                                @Sendable nonisolated func __safeDI_fillBody_1FBEF03EA4C054B0() -> any Third {
+			                                    func __safeDI_third() -> DefaultThird {
+			                                        func __safeDI_subB() -> SubB {
+			                                            _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "Top", module: "Feature"))
+			                                            return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                                        }
+			                                        let subB: SubB = __safeDI_subB()
+			                                        return DefaultThird(subB: subB)
+			                                    }
+			                                    let third: any Third = __safeDI_third()
+			                                    return third
 			                                }
-			                                let subB: SubB = __safeDI_subB()
-			                                return DefaultThird(subB: subB)
+			                                return __safeDI_fillBody_1FBEF03EA4C054B0()
 			                            }
-			                            let third: any Third = __safeDI_third()
-			                            return third
+			                            @Sendable nonisolated func __safeDI_thirdSendableBuilder_ThirdShell() -> ThirdShell.__safeDI_ThirdSendableCarrier<any Third> {
+			                                .init(subCBuilder: { __safeDI_thirdBuilder_SubC() })
+			                            }
+			                            @Sendable nonisolated func __safeDI_thirdBuilder_SubC() -> SubC.__safeDI_ThirdCarrier<any Third> {
+			                                .init(third: { __safeDI_thirdBuilder_SubC_third() })
+			                            }
+			                            return ThirdShell(__safeDI_thirdSendableBuilder: __safeDI_thirdSendableBuilder_ThirdShell())
 			                        }
-			                        @Sendable nonisolated func __safeDI_thirdSendableBuilder_ThirdShell() -> ThirdShell.__safeDI_ThirdSendableCarrier<any Third> {
-			                            .init(subCBuilder: { __safeDI_thirdBuilder_SubC() })
-			                        }
-			                        @Sendable nonisolated func __safeDI_thirdBuilder_SubC() -> SubC.__safeDI_ThirdCarrier<any Third> {
-			                            .init(third: { __safeDI_thirdBuilder_SubC_third() })
-			                        }
-			                        return ThirdShell(__safeDI_thirdSendableBuilder: __safeDI_thirdSendableBuilder_ThirdShell())
+			                        let thirdShell: ThirdShell = __safeDI_thirdShell()
+			                        return DefaultFirst(thirdShell: thirdShell)
 			                    }
-			                    let thirdShell: ThirdShell = __safeDI_thirdShell()
-			                    return DefaultFirst(thirdShell: thirdShell)
+			                    let first: any First = __safeDI_first()
+			                    return first
 			                }
-			                let first: any First = __safeDI_first()
-			                return first
+			                return __safeDI_fillBody_C0562426E5E76CCB()
 			            }
 			            func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
 			                .init(subA: __safeDI_firstBuilder_SubA())
@@ -2424,16 +2436,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            func __safeDI_inner() -> Inner {
 			                _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
 			                func __safeDI_widgetBuilder_Inner_widget() -> any Widget {
-			                    func __safeDI_widget() -> DefaultWidget {
-			                        func __safeDI_innerBuilder() -> Inner {
-			                            _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			                            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
+			                    func __safeDI_fillBody_AB27A6AF2540C3CD() -> any Widget {
+			                        func __safeDI_widget() -> DefaultWidget {
+			                            func __safeDI_innerBuilder() -> Inner {
+			                                _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
+			                                return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
+			                            }
+			                            let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
+			                            return DefaultWidget(innerBuilder: innerBuilder)
 			                        }
-			                        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
-			                        return DefaultWidget(innerBuilder: innerBuilder)
+			                        let widget: any Widget = __safeDI_widget()
+			                        return widget
 			                    }
-			                    let widget: any Widget = __safeDI_widget()
-			                    return widget
+			                    return __safeDI_fillBody_AB27A6AF2540C3CD()
 			                }
 			                func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                    .init(widget: { __safeDI_widgetBuilder_Inner_widget() })
@@ -2490,16 +2505,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			        @Sendable nonisolated func __safeDI_innerBuilder() -> Inner {
 			            _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
 			            func __safeDI_widgetBuilder_Inner_widget() -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
-			                    func __safeDI_innerBuilder() -> Inner {
-			                        _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			                        return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
+			                func __safeDI_fillBody_AB27A6AF2540C3CD() -> any Widget {
+			                    func __safeDI_widget() -> DefaultWidget {
+			                        func __safeDI_innerBuilder() -> Inner {
+			                            _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
+			                            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
+			                        }
+			                        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
+			                        return DefaultWidget(innerBuilder: innerBuilder)
 			                    }
-			                    let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
-			                    return DefaultWidget(innerBuilder: innerBuilder)
+			                    let widget: any Widget = __safeDI_widget()
+			                    return widget
 			                }
-			                let widget: any Widget = __safeDI_widget()
-			                return widget
+			                return __safeDI_fillBody_AB27A6AF2540C3CD()
 			            }
 			            func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { __safeDI_widgetBuilder_Inner_widget() })
@@ -2629,6 +2647,9 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session) {
 			        @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
+			            return __safeDI_fillBody_4427EFF0AF0DB14A()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_4427EFF0AF0DB14A() -> any Widget {
 			            func __safeDI_widget() -> DefaultWidget {
 			                func __safeDI_part() -> Part {
 			                    _ = Part.__safeDI_Part_6EBD3668CBE30F42.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -2938,16 +2959,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			        func __safeDI_top() -> Top {
 			            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 			            func __safeDI_firstBuilder_SubA_first() -> any First {
-			                func __safeDI_first() -> DefaultFirst {
-			                    @Sendable nonisolated func __safeDI_subBBuilder() -> SubB {
-			                        _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "Top", module: "Feature"))
-			                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                func __safeDI_fillBody_AA94C54CFDE2AF69() -> any First {
+			                    func __safeDI_first() -> DefaultFirst {
+			                        @Sendable nonisolated func __safeDI_subBBuilder() -> SubB {
+			                            _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "Top", module: "Feature"))
+			                            return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+			                        }
+			                        let subBBuilder = SendableInstantiator<SubB>(__safeDI_subBBuilder)
+			                        return DefaultFirst(subBBuilder: subBBuilder)
 			                    }
-			                    let subBBuilder = SendableInstantiator<SubB>(__safeDI_subBBuilder)
-			                    return DefaultFirst(subBBuilder: subBBuilder)
+			                    let first: any First = __safeDI_first()
+			                    return first
 			                }
-			                let first: any First = __safeDI_first()
-			                return first
+			                return __safeDI_fillBody_AA94C54CFDE2AF69()
 			            }
 			            func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
 			                .init(subA: __safeDI_firstBuilder_SubA())

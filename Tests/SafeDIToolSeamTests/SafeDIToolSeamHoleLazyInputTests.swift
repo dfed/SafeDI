@@ -913,11 +913,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_uploaderBuilder_ExportFeature_uploader(_ scope_exportService: any Exporting, _ scope_screenBuilder: Instantiator<ExportScreen>) -> any Uploader {
-			            let exportService = scope_exportService
+			            return __safeDI_fillBody_7B443D67920E8ADB(exportService: scope_exportService)
+			        }
+			        func __safeDI_fillBody_7B443D67920E8ADB(exportService: any Exporting) -> any Uploader {
+			            func __safeDI_jobBuilder() -> UploadJob {
+			                UploadJob(exportService: exportService)
+			            }
 			            func __safeDI_uploader() -> DefaultUploader {
-			                func __safeDI_jobBuilder() -> UploadJob {
-			                    UploadJob(exportService: exportService)
-			                }
 			                let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
 			                return DefaultUploader(jobBuilder: jobBuilder)
 			            }
@@ -1103,11 +1105,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_uploaderBuilder_ExportFeature_uploader(_ scope_exportService: LazilyInstantiated<ExportService>, _ scope_screenBuilder: Instantiator<ExportScreen>) -> any Uploader {
-			            let exportService = scope_exportService
+			            return __safeDI_fillBody_7F8BAC28344D63D6(exportService: scope_exportService)
+			        }
+			        func __safeDI_fillBody_7F8BAC28344D63D6(exportService: LazilyInstantiated<ExportService>) -> any Uploader {
+			            func __safeDI_jobBuilder() -> UploadJob {
+			                UploadJob(exportService: exportService.instance)
+			            }
 			            func __safeDI_uploader() -> DefaultUploader {
-			                func __safeDI_jobBuilder() -> UploadJob {
-			                    UploadJob(exportService: exportService.instance)
-			                }
 			                let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
 			                return DefaultUploader(jobBuilder: jobBuilder)
 			            }
@@ -1407,7 +1411,9 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_uploaderBuilder_ExportFeature_uploader(_ scope_exportService: LazilyInstantiated<ExportService>, _ scope_screenBuilder: Instantiator<ExportScreen>) -> any Uploader {
-			            let exportService = scope_exportService
+			            return __safeDI_fillBody_1A3C0A5558A8DE41(exportService: scope_exportService)
+			        }
+			        func __safeDI_fillBody_1A3C0A5558A8DE41(exportService: LazilyInstantiated<ExportService>) -> any Uploader {
 			            func __safeDI_uploader() -> DefaultUploader {
 			                func __safeDI_jobBuilder() -> UploadJob {
 			                    UploadJob(exportService: exportService.instance)
@@ -1466,7 +1472,9 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_uploaderBuilder_ExportFeature_uploader(_ scope_exportService: LazilyInstantiated<ExportService>, _ scope_screenBuilder: Instantiator<ExportScreen>) -> any Uploader {
-			            let exportService = scope_exportService
+			            return __safeDI_fillBody_5288686F09B25680(exportService: scope_exportService)
+			        }
+			        func __safeDI_fillBody_5288686F09B25680(exportService: LazilyInstantiated<ExportService>) -> any Uploader {
 			            func __safeDI_uploader() -> DefaultUploader {
 			                func __safeDI_jobBuilder() -> UploadJob {
 			                    UploadJob(exportService: exportService.instance)

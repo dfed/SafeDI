@@ -285,6 +285,9 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() -> SendableErasedInstantiator<Int, any Widget>.Builder {
+			            return __safeDI_fillBody_2766CFCBD48DBBAE()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_2766CFCBD48DBBAE() -> SendableErasedInstantiator<Int, any Widget>.Builder {
 			            @Sendable nonisolated func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
 			                DefaultWidget(id: id)
 			            }
@@ -1482,6 +1485,9 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
+			            return __safeDI_fillBody_4CFCCAACE99E98C4()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_4CFCCAACE99E98C4() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
 			            @Sendable nonisolated func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
 			                DefaultWidget(scope: scope)
 			            }

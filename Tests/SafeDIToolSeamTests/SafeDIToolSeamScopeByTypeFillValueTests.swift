@@ -955,6 +955,9 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
+				            return __safeDI_fillBody_6D9B4F7D5E7D3744(token: token)
+				        }
+				        func __safeDI_fillBody_6D9B4F7D5E7D3744(token: LazilyInstantiated<Token>?) -> any UserService {
 				            func __safeDI_userService() -> DefaultUserService {
 				                #sourceLocation(file: "\(appSources)/DefaultUserService.swift", line: 9)
 				                let renamed: Token? = token?.instance
@@ -1014,6 +1017,9 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
+			            return __safeDI_fillBody_2FBECD390E5D3E4D(token: token)
+			        }
+			        func __safeDI_fillBody_2FBECD390E5D3E4D(token: LazilyInstantiated<Token>?) -> any UserService {
 			            func __safeDI_userService() -> DefaultUserService {
 			                func __safeDI_loopABuilder(token: Token?) -> LoopA {
 			                    func __safeDI_loopBBuilder() -> LoopB {
@@ -1140,6 +1146,9 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>) -> any UserService {
+			            return __safeDI_fillBody_9AC434D11E33A0F9(token: token)
+			        }
+			        func __safeDI_fillBody_9AC434D11E33A0F9(token: LazilyInstantiated<Token>) -> any UserService {
 			            func __safeDI_userService() -> DefaultUserService {
 			                func __safeDI_panel() -> Panel {
 			                    _ = Panel.__safeDI_Panel_9CC66A47349ADC17.self // \(Self.moduleInfoComment)

@@ -140,6 +140,9 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope_maker(scope: Value) -> ErasedInstantiator<Name, AnyGadget>.Builder {
+		            return __safeDI_fillBody_618FFFBC818B6B52(scope: scope)
+		        }
+		        func __safeDI_fillBody_618FFFBC818B6B52(scope: Value) -> ErasedInstantiator<Name, AnyGadget>.Builder {
 		            func __safeDI_maker(name: Name) -> NamedGadget {
 		                NamedGadget(name: name, scope: scope)
 		            }

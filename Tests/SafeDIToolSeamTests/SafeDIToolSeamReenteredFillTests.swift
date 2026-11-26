@@ -378,17 +378,20 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            let __safeDI_gadgetSendableBuilder_top_secondBuilder = __safeDI_gadgetSendableBuilder.top_secondBuilder(SafeDISendableScope_Gadget.top_secondBuilder_Values())
 		            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 		            func __safeDI_firstBuilder_SubA_first() -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    @Sendable nonisolated func __safeDI_subBBuilder() -> SubB {
-		                        let __safeDI_gadgetSendableBuilder_subBBuilder_secondBuilder = __safeDI_gadgetSendableBuilder_top_firstBuilder_Sendable.subBBuilder_secondBuilder(SafeDISendableScope_Gadget.DefaultFirst_Scope.subBBuilder_secondBuilder_Values())
-		                        _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "SubB", module: "Feature"))
-		                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB(up: __safeDI_gadgetSendableBuilder_subBBuilder_secondBuilder))
+		                func __safeDI_fillBody_BC4EEEA9F9104D71() -> any First {
+		                    func __safeDI_first() -> DefaultFirst {
+		                        @Sendable nonisolated func __safeDI_subBBuilder() -> SubB {
+		                            let __safeDI_gadgetSendableBuilder_subBBuilder_secondBuilder = __safeDI_gadgetSendableBuilder_top_firstBuilder_Sendable.subBBuilder_secondBuilder(SafeDISendableScope_Gadget.DefaultFirst_Scope.subBBuilder_secondBuilder_Values())
+		                            _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "SubB", module: "Feature"))
+		                            return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB(up: __safeDI_gadgetSendableBuilder_subBBuilder_secondBuilder))
+		                        }
+		                        let subBBuilder = SendableInstantiator<SubB>(__safeDI_subBBuilder)
+		                        return DefaultFirst(subBBuilder: subBBuilder)
 		                    }
-		                    let subBBuilder = SendableInstantiator<SubB>(__safeDI_subBBuilder)
-		                    return DefaultFirst(subBBuilder: subBBuilder)
+		                    let first: any First = __safeDI_first()
+		                    return first
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
+		                return __safeDI_fillBody_BC4EEEA9F9104D71()
 		            }
 		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(__safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
@@ -1724,6 +1727,9 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_defaultGadget_GadgetBuilder_Host_DefaultSecond_Scope_gadgetBuilder() -> ErasedInstantiator<Int, any Gadget>.Builder {
+		            return __safeDI_fillBody_276D5A0E02338750()
+		        }
+		        func __safeDI_fillBody_276D5A0E02338750() -> ErasedInstantiator<Int, any Gadget>.Builder {
 		            func __safeDI_gadgetBuilder(id: Int) -> DefaultGadget {
 		                DefaultGadget(id: id)
 		            }
@@ -1975,16 +1981,19 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		        func __safeDI_top() -> Top {
 		            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 		            func __safeDI_firstBuilder_SubA_first() -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    func __safeDI_subB() -> SubB {
-		                        _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "SubB", module: "Feature"))
-		                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+		                func __safeDI_fillBody_E77262F5B6D37C1E() -> any First {
+		                    func __safeDI_first() -> DefaultFirst {
+		                        func __safeDI_subB() -> SubB {
+		                            _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "SubB", module: "Feature"))
+		                            return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB())
+		                        }
+		                        let subB: SubB = __safeDI_subB()
+		                        return DefaultFirst(subB: subB)
 		                    }
-		                    let subB: SubB = __safeDI_subB()
-		                    return DefaultFirst(subB: subB)
+		                    let first: any First = __safeDI_first()
+		                    return first
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
+		                return __safeDI_fillBody_E77262F5B6D37C1E()
 		            }
 		            func __safeDI_firstBuilder_Top() -> Top.__safeDI_FirstCarrier<any First> {
 		                .init(subA: __safeDI_firstBuilder_SubA())
@@ -3291,6 +3300,9 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        func __safeDI_firstBuilder_SubA_first() -> any First {
+		            return __safeDI_fillBody_16A46FEB2FECC977()
+		        }
+		        func __safeDI_fillBody_16A46FEB2FECC977() -> any First {
 		            func __safeDI_first() -> DefaultFirst {
 		                let x = X()
 		                func __safeDI_subB() -> SubB {
@@ -5179,20 +5191,23 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            let __safeDI_gadgetSendableBuilder_top_secondBuilder = __safeDI_gadgetSendableBuilder.top_secondBuilder(SafeDISendableScope_Gadget.top_secondBuilder_Values())
 		            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 		            func __safeDI_firstBuilder_SubA_first() -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    @Sendable nonisolated func __safeDI_relayBuilder() -> Relay {
-		                        let __safeDI_gadgetSendableBuilder_relayBuilder_secondBuilder = __safeDI_gadgetSendableBuilder_top_firstBuilder_Sendable.relayBuilder_secondBuilder(SafeDISendableScope_Gadget.DefaultFirst_Scope.relayBuilder_secondBuilder_Values())
-		                        _ = Relay.__safeDI_Relay_8EFA7EEA9C19A38B.self\(seamCallComment(seam: "Relay", module: "Feature"))
-		                        func __safeDI_secondBuilder_Relay(up: Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Relay.__safeDI_SecondCarrier<any Second> {
-		                            .init(subB: __safeDI_secondBuilder_SubB(up: up.subB))
+		                func __safeDI_fillBody_FCF4C5C94BEA4BE7() -> any First {
+		                    func __safeDI_first() -> DefaultFirst {
+		                        @Sendable nonisolated func __safeDI_relayBuilder() -> Relay {
+		                            let __safeDI_gadgetSendableBuilder_relayBuilder_secondBuilder = __safeDI_gadgetSendableBuilder_top_firstBuilder_Sendable.relayBuilder_secondBuilder(SafeDISendableScope_Gadget.DefaultFirst_Scope.relayBuilder_secondBuilder_Values())
+		                            _ = Relay.__safeDI_Relay_8EFA7EEA9C19A38B.self\(seamCallComment(seam: "Relay", module: "Feature"))
+		                            func __safeDI_secondBuilder_Relay(up: Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Relay.__safeDI_SecondCarrier<any Second> {
+		                                .init(subB: __safeDI_secondBuilder_SubB(up: up.subB))
+		                            }
+		                            return Relay(__safeDI_secondBuilder: __safeDI_secondBuilder_Relay(up: __safeDI_gadgetSendableBuilder_relayBuilder_secondBuilder))
 		                        }
-		                        return Relay(__safeDI_secondBuilder: __safeDI_secondBuilder_Relay(up: __safeDI_gadgetSendableBuilder_relayBuilder_secondBuilder))
+		                        let relayBuilder = SendableInstantiator<Relay>(__safeDI_relayBuilder)
+		                        return DefaultFirst(relayBuilder: relayBuilder)
 		                    }
-		                    let relayBuilder = SendableInstantiator<Relay>(__safeDI_relayBuilder)
-		                    return DefaultFirst(relayBuilder: relayBuilder)
+		                    let first: any First = __safeDI_first()
+		                    return first
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
+		                return __safeDI_fillBody_FCF4C5C94BEA4BE7()
 		            }
 		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(__safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
@@ -5785,25 +5800,28 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            let __safeDI_gadgetSendableBuilder_top_secondBuilder = __safeDI_gadgetSendableBuilder.top_secondBuilder(SafeDISendableScope_Gadget.top_secondBuilder_Values())
 		            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
 		            func __safeDI_firstBuilder_SubA_first() -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    @Sendable nonisolated func __safeDI_hubBuilder() -> Hub {
-		                        let __safeDI_gadgetSendableBuilder_hubBuilder = __safeDI_gadgetSendableBuilder_top_firstBuilder_Sendable.hubBuilder(SafeDISendableScope_Gadget.DefaultFirst_Scope.hubBuilder_Values())
-		                        let __safeDI_gadgetSendableBuilder_relay_secondBuilder = __safeDI_gadgetSendableBuilder_hubBuilder.relay_secondBuilder(SafeDIScope_Gadget.Hub_Scope.relay_secondBuilder_Values())
-		                        func __safeDI_relay() -> Relay {
-		                            _ = Relay.__safeDI_Relay_8EFA7EEA9C19A38B.self\(seamCallComment(seam: "Relay", module: "Feature"))
-		                            func __safeDI_secondBuilder_Relay(up: Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Relay.__safeDI_SecondCarrier<any Second> {
-		                                .init(subB: __safeDI_secondBuilder_SubB(up: up.subB))
+		                func __safeDI_fillBody_86C3512E730A1E93() -> any First {
+		                    func __safeDI_first() -> DefaultFirst {
+		                        @Sendable nonisolated func __safeDI_hubBuilder() -> Hub {
+		                            let __safeDI_gadgetSendableBuilder_hubBuilder = __safeDI_gadgetSendableBuilder_top_firstBuilder_Sendable.hubBuilder(SafeDISendableScope_Gadget.DefaultFirst_Scope.hubBuilder_Values())
+		                            let __safeDI_gadgetSendableBuilder_relay_secondBuilder = __safeDI_gadgetSendableBuilder_hubBuilder.relay_secondBuilder(SafeDIScope_Gadget.Hub_Scope.relay_secondBuilder_Values())
+		                            func __safeDI_relay() -> Relay {
+		                                _ = Relay.__safeDI_Relay_8EFA7EEA9C19A38B.self\(seamCallComment(seam: "Relay", module: "Feature"))
+		                                func __safeDI_secondBuilder_Relay(up: Relay.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Relay.__safeDI_SecondCarrier<any Second> {
+		                                    .init(subB: __safeDI_secondBuilder_SubB(up: up.subB))
+		                                }
+		                                return Relay(__safeDI_secondBuilder: __safeDI_secondBuilder_Relay(up: __safeDI_gadgetSendableBuilder_relay_secondBuilder))
 		                            }
-		                            return Relay(__safeDI_secondBuilder: __safeDI_secondBuilder_Relay(up: __safeDI_gadgetSendableBuilder_relay_secondBuilder))
+		                            let relay: Relay = __safeDI_relay()
+		                            return Hub(relay: relay)
 		                        }
-		                        let relay: Relay = __safeDI_relay()
-		                        return Hub(relay: relay)
+		                        let hubBuilder = SendableInstantiator<Hub>(__safeDI_hubBuilder)
+		                        return DefaultFirst(hubBuilder: hubBuilder)
 		                    }
-		                    let hubBuilder = SendableInstantiator<Hub>(__safeDI_hubBuilder)
-		                    return DefaultFirst(hubBuilder: hubBuilder)
+		                    let first: any First = __safeDI_first()
+		                    return first
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
+		                return __safeDI_fillBody_86C3512E730A1E93()
 		            }
 		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(__safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {

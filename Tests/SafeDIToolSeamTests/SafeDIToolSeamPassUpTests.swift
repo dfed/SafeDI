@@ -823,10 +823,13 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_apiBuilder_Inner_Detail_Scope_api(_ scope_readerBuilder: Instantiator<Reader>, logger: LazilyInstantiated<Logger>) -> any Api {
+				            return __safeDI_fillBody_B445A709CD95B397(logger: logger)
+				        }
+				        func __safeDI_fillBody_B445A709CD95B397(logger: LazilyInstantiated<Logger>) -> any Api {
+				            func __safeDI_jobBuilder() -> Job {
+				                Job(logger: logger.instance)
+				            }
 				            func __safeDI_api() -> LiveApi {
-				                func __safeDI_jobBuilder() -> Job {
-				                    Job(logger: logger.instance)
-				                }
 				                let jobBuilder = Instantiator<Job>(__safeDI_jobBuilder)
 				                return LiveApi(jobBuilder: jobBuilder)
 				            }
@@ -2273,6 +2276,9 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
+				            return __safeDI_fillBody_150ACE2CF9F52F50()
+				        }
+				        @Sendable nonisolated func __safeDI_fillBody_150ACE2CF9F52F50() -> any Gadget {
 				            @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
 				                LiveGadget()
 				            }

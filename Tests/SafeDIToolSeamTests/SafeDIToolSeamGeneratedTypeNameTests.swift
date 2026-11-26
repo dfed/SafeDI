@@ -471,6 +471,9 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<Built, any Api>.Builder {
+		            return __safeDI_fillBody_AE6C668D9EABCAE6()
+		        }
+		        func __safeDI_fillBody_AE6C668D9EABCAE6() -> ErasedInstantiator<Built, any Api>.Builder {
 		            func __safeDI_apiBuilder(built: Built) -> LiveApi {
 		                LiveApi(built: built)
 		            }
@@ -580,6 +583,9 @@ struct SafeDIToolSeamGeneratedTypeNameTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_liveApi_ApiBuilder_Home_Leaf_Scope_apiBuilder() -> ErasedInstantiator<(built: Built, id: Int), any Api>.Builder {
+		            return __safeDI_fillBody_6BB989D8FE1BA293()
+		        }
+		        func __safeDI_fillBody_6BB989D8FE1BA293() -> ErasedInstantiator<(built: Built, id: Int), any Api>.Builder {
 		            func __safeDI_apiBuilder(built: Built, id: Int) -> LiveApi {
 		                LiveApi(built: built, id: id)
 		            }

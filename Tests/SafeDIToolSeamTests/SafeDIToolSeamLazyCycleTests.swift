@@ -352,6 +352,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() -> ErasedInstantiator<(), AnyRouting>.Builder {
+		            return __safeDI_fillBody_BB5D89F3C3E3578A()
+		        }
+		        func __safeDI_fillBody_BB5D89F3C3E3578A() -> ErasedInstantiator<(), AnyRouting>.Builder {
 		            func __safeDI_routerBuilder() -> Router {
 		                let x = X(renamed: nil)
 		                #sourceLocation(file: "\(appOutput.fixtures["Router.swift"])", line: 11)
@@ -470,6 +473,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() -> ErasedInstantiator<(), AnyRouting>.Builder {
+		            return __safeDI_fillBody_701BD6C0CD3B6BA1()
+		        }
+		        func __safeDI_fillBody_701BD6C0CD3B6BA1() -> ErasedInstantiator<(), AnyRouting>.Builder {
 		            func __safeDI_routerBuilder() -> Router {
 		                let renamed = X(renamed: nil)
 		                return Router(renamed: renamed)
@@ -936,6 +942,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
+		            return __safeDI_fillBody_568BD8F59A10016B(analytics: analytics)
+		        }
+		        func __safeDI_fillBody_568BD8F59A10016B(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
 		            func __safeDI_routerBuilder(analytics: Analytics) -> Router {
 		                func __safeDI_tBuilder() -> T {
 		                    let analytics = Analytics()

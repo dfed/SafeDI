@@ -103,6 +103,9 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_livePanel_PanelBuilder_Toolbar_panelBuilder(theme: Theme) -> ErasedInstantiator<String, any Panel>.Builder {
+		            return __safeDI_fillBody_9DB559CA6CA23750(theme: theme)
+		        }
+		        func __safeDI_fillBody_9DB559CA6CA23750(theme: Theme) -> ErasedInstantiator<String, any Panel>.Builder {
 		            func __safeDI_panelBuilder(title: String) -> LivePanel {
 		                LivePanel(title: title, theme: theme)
 		            }
@@ -182,6 +185,9 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        @Sendable nonisolated func __safeDI_livePanel_PanelSendableBuilder_Toolbar_panelBuilder() -> SendableErasedInstantiator<String, any Panel>.Builder {
+		            return __safeDI_fillBody_55B6CFB6A08455F2()
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_55B6CFB6A08455F2() -> SendableErasedInstantiator<String, any Panel>.Builder {
 		            @Sendable nonisolated func __safeDI_panelBuilder(title: String) -> LivePanel {
 		                LivePanel(title: title)
 		            }

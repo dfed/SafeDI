@@ -2131,18 +2131,24 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        tapService_AnyServiceSendableBuilder: SendableErasedInstantiator<OnTap, AnyService>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HostScreen {
+		        func __safeDI_fillBody_39362D083D546AA9() -> ErasedInstantiator<OnTap, AnyService>.Builder {
+		            func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
+		                TapService(onTap: onTap)
+		            }
+		            return { forwarded in AnyService(__safeDI_maker(onTap: forwarded)) }
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_83516D7732B0AE27() -> SendableErasedInstantiator<OnTap, AnyService>.Builder {
+		            @Sendable nonisolated func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
+		                TapService(onTap: onTap)
+		            }
+		            return { forwarded in AnyService(__safeDI_sendableMaker(onTap: forwarded)) }
+		        }
 		        func __safeDI_host() -> Host {
 		            func __safeDI_tapService_AnyServiceBuilder_Host_maker() -> ErasedInstantiator<OnTap, AnyService>.Builder {
-		                func __safeDI_maker(onTap: @escaping OnTap) -> TapService {
-		                    TapService(onTap: onTap)
-		                }
-		                return { forwarded in AnyService(__safeDI_maker(onTap: forwarded)) }
+		                return __safeDI_fillBody_39362D083D546AA9()
 		            }
 		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() -> SendableErasedInstantiator<OnTap, AnyService>.Builder {
-		                @Sendable nonisolated func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
-		                    TapService(onTap: onTap)
-		                }
-		                return { forwarded in AnyService(__safeDI_sendableMaker(onTap: forwarded)) }
+		                return __safeDI_fillBody_83516D7732B0AE27()
 		            }
 		            func __safeDI_tapService_AnyServiceBuilder_Host() -> Host.SafeDIMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
 		                .init(maker: { _ in __safeDI_tapService_AnyServiceBuilder_Host_maker() })
@@ -2272,18 +2278,24 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        tapService_AnyServiceSendableBuilder: (@Sendable () -> AnyService)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HostScreen {
+		        func __safeDI_fillBody_6F6E80D6D1D3D885() -> ErasedInstantiator<(), AnyService>.Builder {
+		            func __safeDI_maker() -> TapService {
+		                TapService()
+		            }
+		            return { _ in AnyService(__safeDI_maker()) }
+		        }
+		        @Sendable nonisolated func __safeDI_fillBody_B686065B0450B91F() -> SendableErasedInstantiator<(), AnyService>.Builder {
+		            @Sendable nonisolated func __safeDI_sendableMaker() -> TapService {
+		                TapService()
+		            }
+		            return { _ in AnyService(__safeDI_sendableMaker()) }
+		        }
 		        func __safeDI_host() -> Host {
 		            func __safeDI_tapService_AnyServiceBuilder_Host_maker() -> ErasedInstantiator<(), AnyService>.Builder {
-		                func __safeDI_maker() -> TapService {
-		                    TapService()
-		                }
-		                return { _ in AnyService(__safeDI_maker()) }
+		                return __safeDI_fillBody_6F6E80D6D1D3D885()
 		            }
 		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() -> SendableErasedInstantiator<(), AnyService>.Builder {
-		                @Sendable nonisolated func __safeDI_sendableMaker() -> TapService {
-		                    TapService()
-		                }
-		                return { _ in AnyService(__safeDI_sendableMaker()) }
+		                return __safeDI_fillBody_B686065B0450B91F()
 		            }
 		            func __safeDI_tapService_AnyServiceBuilder_Host() -> Host.SafeDIMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
 		                .init(maker: { _ in __safeDI_tapService_AnyServiceBuilder_Host_maker() })
@@ -2496,10 +2508,13 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        apiBuilder __safeDI_apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_2682B6143B23F319(session: Session) -> any Api {
+		            let api: any Api = Live(session: session)
+		            return api
+		        }
 		        func __safeDI_detailBuilder() -> Detail {
 		            func __safeDI_apiBuilder_Detail_api(session: Session) -> any Api {
-		                let api: any Api = Live(session: session)
-		                return api
+		                return __safeDI_fillBody_2682B6143B23F319(session: session)
 		            }
 		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { values in __safeDI_apiBuilder_Detail_api(session: values.session) })
@@ -3761,14 +3776,20 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        storeBuilder: (() -> any Store)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_2682B6143B23F319(session: Session) -> any Api {
+		            let api: any Api = Live(session: session)
+		            return api
+		        }
+		        func __safeDI_fillBody_04819F693FEF8428(session: Session) -> any Store {
+		            let store: any Store = LiveStore(session: session)
+		            return store
+		        }
 		        func __safeDI_detailBuilder() -> Detail {
 		            func __safeDI_apiBuilder_Detail_api(session: Session) -> any Api {
-		                let api: any Api = Live(session: session)
-		                return api
+		                return __safeDI_fillBody_2682B6143B23F319(session: session)
 		            }
 		            func __safeDI_storeBuilder_Detail_store(session: Session) -> any Store {
-		                let store: any Store = LiveStore(session: session)
-		                return store
+		                return __safeDI_fillBody_04819F693FEF8428(session: session)
 		            }
 		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { values in __safeDI_apiBuilder_Detail_api(session: values.session) })
@@ -3954,11 +3975,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        apiBuilder __safeDI_apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        func __safeDI_fillBody_2682B6143B23F319(session: Session) -> any Api {
+		            let api: any Api = Live(session: session)
+		            return api
+		        }
 		        func __safeDI_middle() -> Middle {
 		            func __safeDI_detailBuilder() -> Detail {
 		                func __safeDI_apiBuilder_Detail_api(session: Session) -> any Api {
-		                    let api: any Api = Live(session: session)
-		                    return api
+		                    return __safeDI_fillBody_2682B6143B23F319(session: session)
 		                }
 		                func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                    .init(api: { values in __safeDI_apiBuilder_Detail_api(session: values.session) })
@@ -3974,8 +3998,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		            func __safeDI_middleBuilder() -> Middle {
 		                func __safeDI_detailBuilder() -> Detail {
 		                    func __safeDI_apiBuilder_Detail_api(session: Session) -> any Api {
-		                        let api: any Api = Live(session: session)
-		                        return api
+		                        return __safeDI_fillBody_2682B6143B23F319(session: session)
 		                    }
 		                    func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                        .init(api: { values in __safeDI_apiBuilder_Detail_api(session: values.session) })

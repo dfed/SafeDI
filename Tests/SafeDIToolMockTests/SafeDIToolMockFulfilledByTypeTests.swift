@@ -1676,10 +1676,13 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        appFilter_FilterProtocolBuilder: (() -> any FilterProtocol)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
+		        func __safeDI_fillBody_5F49AA14AA9EAEE4() -> any FilterProtocol {
+		            let filter: any FilterProtocol = AppFilter()
+		            return filter
+		        }
 		        func __safeDI_root() -> Root {
 		            func __safeDI_appFilter_FilterProtocolBuilder_Root_filter() -> any FilterProtocol {
-		                let filter: any FilterProtocol = AppFilter()
-		                return filter
+		                return __safeDI_fillBody_5F49AA14AA9EAEE4()
 		            }
 		            func __safeDI_appFilter_FilterProtocolBuilder_Root() -> Root.SafeDIMockScope_AppFilter_FilterProtocol.__safeDI_Builder<any FilterProtocol> {
 		                .init(filter: { _ in __safeDI_appFilter_FilterProtocolBuilder_Root_filter() })

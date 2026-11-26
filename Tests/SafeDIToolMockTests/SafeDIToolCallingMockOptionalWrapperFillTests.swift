@@ -411,14 +411,17 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		        let session = LazilyInstantiated<Session>(__safeDI_session)
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>) -> ErasedInstantiator<Int, AnyHole>.Builder {
-		                func __safeDI_holeBuilder(ticket: Int) -> Fill {
-		                    func __safeDI_screenBuilder() -> Screen {
-		                        Screen.__safeDI_mock(session: session, fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen())
+		                func __safeDI_fillBody_43952CEE87F9BD22(session: LazilyInstantiated<Session>) -> ErasedInstantiator<Int, AnyHole>.Builder {
+		                    func __safeDI_holeBuilder(ticket: Int) -> Fill {
+		                        func __safeDI_screenBuilder() -> Screen {
+		                            Screen.__safeDI_mock(session: session, fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen())
+		                        }
+		                        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		                        return Fill(ticket: ticket, session: session.instance, screenBuilder: screenBuilder)
 		                    }
-		                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
-		                    return Fill(ticket: ticket, session: session.instance, screenBuilder: screenBuilder)
+		                    return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
 		                }
-		                return { forwarded in AnyHole(__safeDI_holeBuilder(ticket: forwarded)) }
+		                return __safeDI_fillBody_43952CEE87F9BD22(session: session)
 		            }
 		            func __safeDI_fill_AnyHoleBuilder_Screen() -> Screen.SafeDIMockScope_Fill_AnyHole.__safeDI_Builder<AnyHole> {
 		                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })

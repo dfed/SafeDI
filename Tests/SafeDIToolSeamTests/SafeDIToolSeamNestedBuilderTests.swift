@@ -2605,6 +2605,9 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_namedGadget_AnyGadgetBuilder_Host_maker() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
+			            return __safeDI_fillBody_60F13CDE44B58A54()
+			        }
+			        func __safeDI_fillBody_60F13CDE44B58A54() -> ErasedInstantiator<(count: Int, name: Name), AnyGadget>.Builder {
 			            func __safeDI_maker(count: Int, name: Name) -> NamedGadget {
 			                NamedGadget(name: name, count: count)
 			            }
@@ -3423,6 +3426,9 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_serviceBuilder_Inner_service(_ scope_deep: Deep) -> any Service {
+			            return __safeDI_fillBody_220E4FCEBC0CCEE2()
+			        }
+			        func __safeDI_fillBody_220E4FCEBC0CCEE2() -> any Service {
 			            func __safeDI_service() -> DefaultService {
 			                let gadget: any Gadget = DefaultGadget()
 			                return DefaultService(gadget: gadget)
