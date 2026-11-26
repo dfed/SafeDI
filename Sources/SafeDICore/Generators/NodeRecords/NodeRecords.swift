@@ -72,6 +72,13 @@ extension TypeFactsGraph: NodeRecordSources {
 ///
 /// Stage 1 makes records only for a world each of whose nodes is a constant or an `Instantiator`, built by its type's
 /// initializer, off every cycle, with one variant; any other world is refused with the first kind it holds.
+///
+/// One variant per node is enough here because a stage-1 record reads no answer: each `PlaceRead.source` is the label
+/// `createInitializerArguments` names, and the engine resolves it per view. That holds only while both key projections
+/// are inert: no receive only if available, and no cycle, so nothing is still being built where it is read. The first
+/// stage that admits either reads what each call hands its callee (`TypeFactsWorld.sources(ofCall:of:)`), never a
+/// variant's keys. Records still carry today's `functionName`, which the engine's allocator names apart; the allocation
+/// moves to node records last, at stage 4.
 struct NodeRecords: Sendable {
 	/// - Parameter world: A production root's world.
 	init(world: some NodeRecordSources) throws(NodeRecordRefusal) {

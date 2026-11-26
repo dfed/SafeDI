@@ -95,7 +95,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	@Test
 	func nodeRecordsFiles_callNoScopeGeneratorAndReadNoText_whenReadAsSource() throws {
 		// Soundness rule 2: a record is made from per-type facts, never from a tree's generator or text it spelled. Only
-		// the static spelling helpers of `ScopeGenerator` are called, until they move.
+		// the static helpers of `ScopeGenerator` listed here are called, until they move: a new one is a decision. The
+		// generator's hook (`DependencyTreeGenerator+NodeRecords.swift`) also calls `rootInitializer(of:)`, and plans the
+		// tree beside the records for the comparison.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
