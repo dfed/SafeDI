@@ -1073,8 +1073,17 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
 			// caller's declaration, as for a label one place of the case carries and another does not.
 			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+			// The call holds one place per case of the called seam's place graph, and reads what every route to the case
+			// hands from the graph (`SeamSignature.placesHandedToCallers`). A place the call passes up is no case of the
+			// graph yet, and a call whose graph was not built holds every place: both read their places.
+			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places) }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var caseFields = ScopeGenerator.caseFields(of: places)
+				let caseIndices = places.compactMap { scope.calledBuilders?.caseIndexBySite[$0.site] }
+				var caseFields = if let placesQuery, let firstPlace = places.first, caseIndices.count == places.count {
+					ScopeGenerator.caseFields(ofCasesAt: caseIndices, hole: firstPlace, in: placesQuery)
+				} else {
+					ScopeGenerator.caseFields(of: places)
+				}
 				if let innerScopeReaders {
 					let fieldLabels = Set(caseFields.fields.map(\.property.label))
 					for place in places {

@@ -1532,6 +1532,27 @@ public struct SeamSignature: Sendable {
 		CasePlace.casePlaces(of: holes, caseIndexByHole: caseIndexByHole)
 	}
 
+	/// What a module that calls the seam builds its call from: one place per case, the case's first in builder order
+	/// (`casePlaces`), each with its case, and the scope enums with every other place of this signature taken out of the
+	/// place cases that list it. A caller generates one function per case and reads what differs between a case's routes
+	/// from `places`, so it never holds a place per path. A place case of an enum another seam declares lists that
+	/// seam's sites, which are none of this signature's holes and stay. A signature with one place per case already, as
+	/// one whose graph was not built is, hands what it holds.
+	var placesHandedToCallers: (holes: [Hole], scopeEnums: [ScopeEnum], caseIndexByHole: [Int]) {
+		let casePlaces = casePlaces
+		guard casePlaces.count < holes.count else { return (holes, scopeEnums, caseIndexByHole) }
+		let droppedSites = Set(holes.map(\.site)).subtracting(casePlaces.map(\.hole.site))
+		var handedEnums = scopeEnums
+		for enumIndex in handedEnums.indices {
+			for caseIndex in handedEnums[enumIndex].cases.indices {
+				if case let .place(sites) = handedEnums[enumIndex].cases[caseIndex].kind {
+					handedEnums[enumIndex].cases[caseIndex].kind = .place(sites: sites.filter { !droppedSites.contains($0) })
+				}
+			}
+		}
+		return (casePlaces.map(\.hole), handedEnums, casePlaces.map { $0.caseIndex ?? -1 })
+	}
+
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
 	/// a plain builder over its enum, then a `@Sendable` builder over its enum.
 	public let builders: [Builder]

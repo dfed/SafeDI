@@ -129,13 +129,11 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesEachPlaceStoodForOnceInCaptureWalk_whenCallsCasesGrowWithThreePlacesEach() async throws {
-		// `Home` builds n holders of a place of `Api`, a case each, beneath three parents each: the first parent's fill
-		// generates code, and the second's stands for the third's. `Root` names an `Instantiator` and a
-		// `SendableInstantiator`, so the walk for captured wrappers reaches the call, where each fill takes the places
-		// it stands for: n places gathered once and taken once. Each of the three passes over the call also looks a
-		// standing fill up for each of its 3n places and asks the one set of its case for each third place: 14n units
-		// in all. Scanned for by each of the 2n fills, the n places stood for were compared 2n² times.
+	mutating func generate_looksUpStandingFillOncePerCaseInEachPass_whenCallsCasesGrowWithThreePlacesEach() async throws {
+		// `Home` builds n holders of a place of `Api`, a case each, beneath three parents each. The call holds one place
+		// per case, so no fill stands for another place, and the walk for captured wrappers, which `Root`'s `Instantiator`
+		// and `SendableInstantiator` send to the call, takes none. Each of the three passes over the call looks a standing
+		// fill up once for each of its n places: 3n units in all, where a call holding every place spent 14n.
 		var work = [Int]()
 		for holderCount in [8, 16] {
 			var feature = ["public protocol Api {}"]
@@ -177,7 +175,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 			}
 			work.append(count)
 		}
-		#expect(work == [112, 224])
+		#expect(work == [24, 48])
 	}
 
 	// MARK: Private

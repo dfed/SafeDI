@@ -24,9 +24,11 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// A caller generates one function per case of a seam's enums, and builds a fill for a case's other places only to judge
-/// each. It builds one such fill for the places of a case that hand their fills the same values, and judges the others
-/// against it, each with its own place (`ScopeGenerator.FillStoodFor`).
+/// A caller generates one function per case of a seam's enums. A call whose seam's place graph was built holds one place
+/// per case (`SeamSignature.placesHandedToCallers`) and builds one fill for it, which is judged for every route to the
+/// case from the graph. A call that holds every place of a case, as one of places a seam passes up does, builds a fill
+/// for a case's other places only to judge each: one for the places that hand their fills the same values, with the
+/// others judged against it, each with its own place (`ScopeGenerator.FillStoodFor`).
 struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 	// MARK: Initialization
 
@@ -44,11 +46,11 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillsGrowingWithTheCasesNotThePaths_whenSeamReachesItsPlacesAlongManyPaths() async {
+	mutating func generate_buildsOneFillPerCase_whenSeamReachesItsPlacesAlongManyPaths() async {
 		// Shape E (`SafeDIToolSeamScopeByTypeTests.shapeEModules`) triples the paths to its places, those of the last layer's
-		// four screens, with each layer of screens: 36, 108 and 324 paths to four cases. The caller builds two fills per case,
-		// the one that generates code and one that stands for every other place, whatever the paths.
-		for (screenCount, pathCount) in [(12, 36), (16, 108), (20, 324)] {
+		// four screens, with each layer of screens: 36, 108 and 324 paths to four cases. The caller holds one place per case
+		// and builds one fill for each, whatever the paths, and no fill stands for another place.
+		for screenCount in [12, 16, 20] {
 			let (fills, error) = await fillsOfCalls { filesToDelete in
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: SafeDIToolSeamScopeByTypeTests.shapeEModules(screenCount: screenCount),
@@ -58,7 +60,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 				)
 			}
 			#expect(error == nil)
-			#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [8, pathCount - 8])
+			#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [4, 0])
 		}
 	}
 
@@ -352,9 +354,10 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillOfItsOwnForPlace_whenItHandsItsFillOptionalOfValueOtherPlacesHand(buildsFillOfEveryPlace: Bool) async {
+	mutating func generate_buildsOneFillForCase_whenOneRouteHandsItsFillOptionalOfValueOtherRoutesHand(buildsFillOfEveryPlace: Bool) async {
 		// `First` and `Second` hand their fills a `token` of `Token`, and `Third`, built behind an instantiator, the
-		// `Token?` it forwards, which `LiveApi` receives only if available: the fields differ in their type alone.
+		// `Token?` it forwards, which `LiveApi` receives only if available: the fields differ in their type alone, and the
+		// case's one fill reads the label as every route hands it.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 				try await executeSafeDIToolMultiModuleTest(
@@ -379,14 +382,15 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			}
 		}
 		#expect(error == nil)
-		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [1, 0])
 	}
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillOfItsOwnForPlace_whenItHandsItsFillValueOtherPlacesHandDeferred(buildsFillOfEveryPlace: Bool) async {
+	mutating func generate_buildsOneFillForCase_whenOneRouteHandsItsFillValueOtherRoutesHandDeferred(buildsFillOfEveryPlace: Bool) async {
 		// `Home` receives `token` for `Detail`, built behind an instantiator, so its parameter is deferred, and `First`'s and
-		// `Second`'s places hand their fills the deferred parameter. `Third` builds a `token` of its own, by value.
+		// `Second`'s places hand their fills the deferred parameter. `Third` builds a `token` of its own, by value. The
+		// case's one fill is judged on all three routes.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 				try await executeSafeDIToolMultiModuleTest(
@@ -412,13 +416,14 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			}
 		}
 		#expect(error == nil)
-		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [1, 0])
 	}
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillOfItsOwnForPlace_whenOnlyItsBuilderIsSendable(buildsFillOfEveryPlace: Bool) async {
-		// `Third` builds `Panel` behind a `SendableInstantiator`, so only its place's builder is `@Sendable`.
+	mutating func generate_buildsFillForEachFamilysCase_whenOnlyOnePlacesBuilderIsSendable(buildsFillOfEveryPlace: Bool) async {
+		// `Third` builds `Panel` behind a `SendableInstantiator`, so only its place's builder is `@Sendable`: its place is a
+		// case of the `@Sendable` builders' routes, and `First`'s and `Second`'s places are one case of the others'.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 				try await executeSafeDIToolMultiModuleTest(
@@ -442,7 +447,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			}
 		}
 		#expect(error == nil)
-		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 0])
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [2, 0])
 	}
 
 	@Test(arguments: [false, true])
@@ -484,10 +489,10 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillOfItsOwnForPlace_whenPlacesOfOneCaseHandTheirFillsOtherValues() async {
-		// `First`, `Third` and `Fourth` build `token` before `panel`, and `Second` builds none, so the place beneath `Second`
-		// hands its fill no `token`, which `LiveApi` then reads from `Root`: that place is judged with a fill of its own,
-		// `Third`'s with another, and `Fourth`'s against `Third`'s.
+	mutating func generate_buildsOneFillForCase_whenRoutesToOneCaseHandTheirFillsOtherValues() async {
+		// `First`, `Third` and `Fourth` build `token` before `panel`, and `Second` builds none, so the route through `Second`
+		// hands its fill no `token`, which `LiveApi` then reads from `Root`: the case's one fill is judged on that route and
+		// on the others from the graph, and no fill is built for another place.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
@@ -506,14 +511,14 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			)
 		}
 		#expect(error == nil)
-		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [3, 1])
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [1, 0])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillOfEveryPlaceInLaterPass_whenFillOfAnotherPlaceBuildsSeamAgain() async {
+	mutating func generate_buildsOneFillPerCaseInEveryPass_whenFillOfAnotherPlaceBuildsSeamAgain() async {
 		// `LiveGadget`, which fills `Home`'s `gadget`, builds `Home` again, and that call passes on every fill of the call
-		// that encloses it, by the key of each fill's place: every place gets a fill of its own from the next pass on.
+		// that encloses it, by the key of each fill's place, which is its case's one place in every pass.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
@@ -528,15 +533,15 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			)
 		}
 		#expect(error == nil)
-		// The fill of `gadget` and two of the three places of `api`, then all four.
-		#expect(fills.prefix(2).map { [$0.builtFillCount, $0.placeStoodForCount] } == [[3, 1], [4, 0]])
+		// The fill of `gadget` and the fill of `api`'s case, in the first pass and in the next.
+		#expect(fills.prefix(2).map { [$0.builtFillCount, $0.placeStoodForCount] } == [[2, 0], [2, 0]])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsFillOfEveryPlace_whenFillsTreeCallsSeam() async {
-		// `LiveApi` builds `Other`, a seam, so what its tree hands on is keyed by each fill's own place: no fill stands for
-		// another place, and after the first such fill of a case the call keeps none to compare later places with.
+	mutating func generate_buildsOneFillForCase_whenFillsTreeCallsSeam() async {
+		// `LiveApi` builds `Other`, a seam, so what its tree hands on is keyed by the fill's own place, the one place the
+		// call holds of the case `Home` reaches through four parents.
 		let (fills, error) = await fillsOfCalls { filesToDelete in
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
@@ -551,24 +556,23 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			)
 		}
 		#expect(error == nil)
-		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [4, 0])
+		#expect(fills.last.map { [$0.builtFillCount, $0.placeStoodForCount] } == [1, 0])
 	}
 
 	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_drawsEveryPlaceInDOTTree_whenAnotherPlacesFillStandsForPlace(buildsFillOfEveryPlace: Bool, placeStoodForIsLast: Bool) async throws {
-		// One parent builds no `token`, so its place is judged with a fill of its own. `First`'s fill generates code, and
-		// of the other two parents' fills the first stands for the second, which the call meets last or before the fill
-		// that parent's place is judged with. The tree draws each of the four places beneath the call, in the order the
-		// call meets them, each with `LiveApi`'s tree, whichever fills the call built.
+	mutating func generate_drawsCaseOnceInDOTTree_whenSeamReachesItsPlaceAlongFourPaths(buildsFillOfEveryPlace: Bool, parentBuildingNoTokenIsLast: Bool) async throws {
+		// Four parents build `Panel`, whose `api` is one case of `Home`'s places, and one of them builds no `token`. The
+		// call holds one place of the case, so the tree draws the case once beneath the call, with `LiveApi`'s tree,
+		// wherever the parent that builds no `token` stands and whichever fills the call built.
 		let parentWithoutToken = ["@Instantiated let panel: Panel"]
 		let parentWithToken = ["@Instantiated let token: Token", "@Instantiated let panel: Panel"]
 		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
-					parentDeclarations: placeStoodForIsLast
-						? [parentWithToken, parentWithoutToken, parentWithToken, parentWithToken]
-						: [parentWithToken, parentWithToken, parentWithToken, parentWithoutToken],
+					parentDeclarations: parentBuildingNoTokenIsLast
+						? [parentWithToken, parentWithToken, parentWithToken, parentWithoutToken]
+						: [parentWithToken, parentWithoutToken, parentWithToken, parentWithToken],
 					panelDeclarations: ["@Instantiated let api: any Api"],
 					liveApiDeclarations: ["@Received let token: Token", "@Instantiated let row: Row"],
 					rootDeclarations: ["@Instantiated let token: Token"],
@@ -585,12 +589,6 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		    Root -- "token: Token"
 		    Root -- "home: Home"
 		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "api: any Api"
-		    "api: any Api" -- "row: Row"
-		    "api: any Api" -- "row: Row"
-		    "api: any Api" -- "row: Row"
 		    "api: any Api" -- "row: Row"
 		}
 		""")
@@ -598,12 +596,12 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_drawsPlaceStoodForAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool, buildsFillAfterPlaceStoodFor: Bool) async throws {
+	mutating func generate_drawsCaseAmongFillsThatHoldNoPlace_whenFillBuiltBeforeItHoldsPlaceOfItsOwn(buildsFillOfEveryPlace: Bool, buildsFillAfterCase: Bool) async throws {
 		// `MidSeam` calls `Home` and fills `agent` with `LiveAgent`, which holds a place of its own, `leaf`, so that fill
-		// is drawn after the fills that hold none, though the call builds it first. `Second`'s fill of `api` stands for
-		// `Third`'s, which is drawn after it and before `zed`'s, as its own fill would be, or, where `Home` has no `zed`
-		// and the call builds no fill after it, before `agent`'s.
-		let zedDeclarations = buildsFillAfterPlaceStoodFor ? ["@Instantiated let zed: any Zed"] : []
+		// is drawn after the fills that hold none, though the call builds it first. `api` is one case, which `Home`
+		// reaches through `First`, `Second` and `Third`: it is drawn once, before `zed`'s where `Home` has a `zed`, and
+		// before `agent`'s.
+		let zedDeclarations = buildsFillAfterCase ? ["@Instantiated let zed: any Zed"] : []
 		let output = try await SeamFillSharing.$buildsFillOfEveryPlace.withValue(buildsFillOfEveryPlace) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: SafeDIToolSeamBuilderParameterTests.modules(
@@ -640,12 +638,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		graph SafeDI {
 		    ranksep=2
 		    MidSeam -- "home: Home"
-		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "api: any Api"
-		    "home: Home" -- "api: any Api"\(buildsFillAfterPlaceStoodFor ? "\n    \"home: Home\" -- \"zed: any Zed\"" : "")
+		    "home: Home" -- "api: any Api"\(buildsFillAfterCase ? "\n    \"home: Home\" -- \"zed: any Zed\"" : "")
 		    "home: Home" -- "agent: any Agent"
-		    "api: any Api" -- "row: Row"
-		    "api: any Api" -- "row: Row"
 		    "api: any Api" -- "row: Row"
 		    "agent: any Agent" -- "leaf: any Leaf"
 		}
