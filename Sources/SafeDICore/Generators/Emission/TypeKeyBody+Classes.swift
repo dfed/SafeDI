@@ -116,6 +116,14 @@ extension TypeKeyLayout {
 		for argument in record.passedArguments {
 			key.append("parameter|\(argument.parameterName)|\(argument.type.asSource)")
 		}
+		// A variant of the per-type plan takes a parameter per label its body's answers declare (`CycleVariantRecord.parameters`):
+		// two variants of one declaration answered apart take other parameters, so they are no class of one, whose outcomes
+		// one member decides (`computeOutcomes`).
+		if variantBodies.contains(body) {
+			for parameter in bodies[body].cycleParameters {
+				key.append("variantParameter|\(parameter.asSource)")
+			}
+		}
 		for (index, statement) in bodies[body].statements.enumerated() {
 			key.append(statementShape(statement))
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
