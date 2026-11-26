@@ -131,21 +131,29 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func layoutParity_laysOutTheSameMocks_forAgreementSmokeAndDrawSeeds() async throws {
+	func layoutParity_laysOutEveryMockV2LaysOut_forAgreementSmokeAndDrawSeeds() async throws {
 		var judged = 0
 		var laidOut = 0
+		var laidOutOnlyUnderV3 = [String: [String]]()
 		for seed in Self.paritySeeds {
 			let parity = try await GraphFuzzerV3LayoutParity.parity(ofSeed: seed)
 			guard parity.judged else { continue }
 			judged += 1
 			laidOut += parity.laidOutUnderV2
 			for difference in parity.differences {
-				Issue.record("seed \(seed): \(difference)")
+				if difference.failsParity {
+					Issue.record("seed \(seed): \(difference)")
+				} else {
+					laidOutOnlyUnderV3[difference.v2FallbackKind ?? "", default: []].append(difference.mockedType)
+				}
 			}
 		}
 		// The oracle judges only graphs both versions accept, and only where the engine lays some mock out.
 		#expect(judged >= 10)
 		#expect(laidOut >= 10)
+		// The roots `.v3Unstable` lays out where `.v2` keeps the walk's body, by `.v2`'s reason: a change to `.v2` that lays
+		// one out moves a pin.
+		#expect(laidOutOnlyUnderV3.mapValues(\.count) == Self.laidOutOnlyUnderV3Pins, "\(laidOutOnlyUnderV3.sorted { $0.key < $1.key })")
 	}
 
 	// MARK: O1 on the draws
@@ -179,6 +187,23 @@ struct SafeDIToolGraphFuzzerV3EngineTests: ~Copyable {
 	/// and second closer, plus step 2's regression seeds, which must stay class B.
 	private static let drawSmokeSeeds: [UInt64] = [0, 2, 13, 14, 15, 33, 35, 36, 38, 51, 59, 64, 68, 99, 383, 584, 764, 786, 1_496, 1_758]
 
-	/// O3's seeds: the agreement oracle's smoke seeds and the draws' smoke seeds.
-	private static let paritySeeds: [UInt64] = GraphFuzzerAPIVersionAgreement.smokeSeeds + drawSmokeSeeds
+	/// O3's seeds: the agreement oracle's smoke seeds and the draws' smoke seeds, each once.
+	private static let paritySeeds: [UInt64] = (GraphFuzzerAPIVersionAgreement.smokeSeeds + drawSmokeSeeds).reduce(into: []) { seeds, seed in
+		if !seeds.contains(seed) {
+			seeds.append(seed)
+		}
+	}
+
+	/// The roots of O3's seeds `.v3Unstable` lays out where `.v2` keeps the walk's body, counted by `.v2`'s reason. The
+	/// agreement oracle compares the values of eight of the ten with `.v2`'s walk: a hand mutation of `.v3Unstable`'s laid-out
+	/// bodies that calls each builder of a value the mock cannot build twice fails seeds 99 and 584 at `S99_T3`, `S99_T7`,
+	/// `S584_T7` and `S584_ZTwiceHost`, and one that builds a root binding read twice once more for its last reader fails
+	/// seed 0 at `S0_WrapKindsHost`. `S33_T2` and `S59_T2` take a required parameter the comparator has no value for, so no
+	/// probe calls them.
+	private static let laidOutOnlyUnderV3Pins: [String: Int] = [
+		"engineRefused": 2,
+		"namedApart": 5,
+		"readUnresolved": 1,
+		"unplannedLines": 2,
+	]
 }

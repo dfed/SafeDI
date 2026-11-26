@@ -129,15 +129,16 @@ extension MockLowering {
 	/// The statements that begin a node's builder function, before its children's, as places the type key reads: each
 	/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the node
 	/// instantiates, as `ConstantNode.receiverBindingLines(indent:)` writes them, unindented. Each is a place written as
-	/// text whose one read is the name it binds from: the name the receive is bound apart under, or the local `mock()`
-	/// reads the autoclosure into (`RootDeclarationRecord`).
+	/// text whose one read is the name it binds from: the name the receive is bound apart under, of its type in
+	/// `readTypes` where it has one there, or the local `mock()` reads the autoclosure into (`RootDeclarationRecord`).
 	static func receiverBindingPlaces(
 		receiverBindings: [(property: Property, name: String)],
+		readTypes: [String: TypeDescription],
 		sendableAutoclosureBindings: [(property: Property, parameter: ScopeGenerator.SendableAutoclosureParameter)],
 	) -> [GeneratedCode] {
 		var places = [GeneratedCode]()
 		for binding in receiverBindings {
-			let read = Property(label: binding.name, typeDescription: binding.property.typeDescription)
+			let read = Property(label: binding.name, typeDescription: readTypes[binding.name] ?? binding.property.typeDescription)
 			places.append(.place(PlacePlan(
 				code: .text("let \(binding.property.label): \(binding.property.typeDescription.asSource) = \(binding.name)"),
 				record: .alias(AliasPlaceRecord(

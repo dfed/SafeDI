@@ -53,6 +53,17 @@ extension MockLowering {
 		let cycleParameters: [Property]
 	}
 
+	/// In `.v3Unstable`, the lines that bind a configured loop member an internal mock promotes from the `SafeDIReceived`
+	/// `mock()` is passed for it, before its loop: what the loop's text place holds at its top.
+	struct PromotedLoopMemberPrelude {
+		/// The lines, at the level's indent.
+		let lines: [String]
+		/// The parameter of `mock()` the lines read.
+		let parameter: Property
+		/// The instance and the configuration the lines bind, which the loop's functions and bindings read.
+		let boundNames: Set<String>
+	}
+
 	/// The lines of the loop of builders being emitted at a level, which the level appends when the loop ends.
 	struct LoopUnit {
 		let loop: Int

@@ -488,6 +488,8 @@ extension MockLowering {
 		var v3ScopePushes = [(types: [TypeDescription], pushedTarget: Bool)]()
 		// The configured loop members `mock()` promotes, each bound from its `SafeDIReceived` before its loop.
 		var v3PromotedLoopMemberInstanceNames = [Property: String]()
+		// What binds each of those members from its `SafeDIReceived`, which its loop's text place holds at its top.
+		var v3PromotedLoopMemberPreludes = [Property: MockLowering.PromotedLoopMemberPrelude]()
 		/// In `.v3Unstable`, what the module names each type's configuration.
 		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
 		/// In `.v3Unstable`, the name of the mocked type's configuration parameter in the type key's form, whose nearest
@@ -581,7 +583,7 @@ extension MockLowering {
 		var pathsStartingExtraction = Set<[Int]>()
 		/// The statements each place's builder function begins with before its children's, as places the type key reads: each
 		/// receive named apart bound again under its label, then the value of each `@Sendable` autoclosure parameter the
-		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:sendableAutoclosureBindings:)`).
+		/// place instantiates (`MockLowering.receiverBindingPlaces(receiverBindings:readTypes:sendableAutoclosureBindings:)`).
 		var leadingBodyPlaces = [[Int]: [GeneratedCode]]()
 		/// Why each place has no record, which names its root's fallback (`MockLowering.typeKeyLayoutObserver`).
 		var unrecordedReasons = [[Int]: String]()
@@ -694,11 +696,20 @@ extension MockLowering {
 					let parameterName = promotedParameterNames[property] ?? bindingName
 					let instanceName = ReservedName.receivedInstanceName(of: bindingName)
 					let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
-					lines.append("\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(v3ConfigurationNames.typeName(of: instantiable.concreteInstantiable))) = switch \(parameterName) {")
-					lines.append("\(indent)case let .instance(instance): (instance, .init())")
-					lines.append("\(indent)case let .built(configuration): (nil, configuration)")
-					lines.append("\(indent)}")
+					let configurationTypeName = v3ConfigurationNames.typeName(of: instantiable.concreteInstantiable)
+					let preludeLines = [
+						"\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(configurationTypeName)) = switch \(parameterName) {",
+						"\(indent)case let .instance(instance): (instance, .init())",
+						"\(indent)case let .built(configuration): (nil, configuration)",
+						"\(indent)}",
+					]
+					lines.append(contentsOf: preludeLines)
 					v3PromotedLoopMemberInstanceNames[property] = instanceName
+					v3PromotedLoopMemberPreludes[property] = MockLowering.PromotedLoopMemberPrelude(
+						lines: preludeLines,
+						parameter: Property(label: parameterName, typeDescription: .simple(name: "SafeDIReceived", generics: [MockLowering.v3ReceivedValueType(of: property), .simple(name: configurationTypeName, generics: [])])),
+						boundNames: [instanceName, configurationName],
+					)
 				}
 			}
 			for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
@@ -1053,13 +1064,7 @@ extension MockLowering {
 				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
 				return .cycleClosing(property, bindingName: isV3 ? property.label : bindingName, concreteType: instantiable.concreteInstantiable)
 			}
-			// A `.v3Unstable` closer hands its function the nearest configurations, which no record holds yet, so its mock keeps
-			// the walk's body.
-			if recordsPlaces, isV3 {
-				unrecordedReasons[childIndexPath] = "v3Closer"
-			}
 			if recordsPlaces,
-			   !isV3,
 			   case let .property(_, _, _, erasedToConcreteExistential, _, _) = generator.scopeData,
 			   let record = closerRecord(of: generator, instantiable: instantiable, property: property, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, closedOnFunctionName: closedOnFunctionName)
 			{
@@ -1445,6 +1450,10 @@ extension MockLowering {
 			let argumentLazilyInstantiatedNames = generator.cycleParameters.isEmpty ? lazilyInstantiatedNames : functionLazilyInstantiatedNames
 			MockLowering.routeReceives(of: uncoveredInstantiatedProperties, toParametersNamed: uncoveredParameterNames, in: &functionRenames)
 			var receiverBindings = [(property: Property, name: String)]()
+			// The type of the declaration each binding reads, by the name it reads: where the receive is optional and the name
+			// binds its unwrapped form, the unwrapped type, which a `.v3Unstable` record lists, so the type key passes a function
+			// that reads it a value of that type. `.v2` lists the receive's type, and its output stays as it was.
+			var receiverBindingReadTypes = [String: TypeDescription]()
 			var publicWrapperParametersReadByName = [String: String]()
 			let functionPublicMockWrapperParameterNames = buildsPublicMock ? MockLowering.removingRenames(hiddenBy: declarationsHidingRenames, from: publicMockWrapperParameterNames) : [:]
 			// In `.v3Unstable`, a receive the builder function's own cycle parameter provides reads that parameter, which a
@@ -1478,8 +1487,13 @@ extension MockLowering {
 					} else {
 						receiverBindings.append(wrapper)
 					}
-				} else if let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription] {
+				} else if let name = names[dependency.property.typeDescription] {
 					receiverBindings.append((dependency.property, name))
+				} else if let name = names[dependency.property.asUnwrappedProperty.typeDescription] {
+					receiverBindings.append((dependency.property, name))
+					if isV3 {
+						receiverBindingReadTypes[name] = dependency.property.asUnwrappedProperty.typeDescription
+					}
 				}
 			}
 			// A receive named apart whose label a receive beneath reads by name is handed the name instead of bound again
@@ -1626,6 +1640,7 @@ extension MockLowering {
 			if recordsPlaces, !receiverBindings.isEmpty || !node.sendableAutoclosureBindings.isEmpty {
 				leadingBodyPlaces[childIndexPath] = MockLowering.receiverBindingPlaces(
 					receiverBindings: receiverBindings,
+					readTypes: receiverBindingReadTypes,
 					sendableAutoclosureBindings: uncoveredInstantiatedProperties.compactMap { property in sendableAutoclosureBindings[property].map { (property, $0) } },
 				)
 			}

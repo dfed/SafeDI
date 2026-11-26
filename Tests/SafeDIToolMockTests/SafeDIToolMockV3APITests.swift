@@ -396,20 +396,21 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> List {
-		        func __safeDI_detailBuilder(_ detailBuilderConfiguration: Detail.SafeDIOverrides, _ __safeDI_nearest_List: List.SafeDIOverrides?) -> Detail {
-		            let leaf = if let safeDIBuilder = detailBuilderConfiguration.leaf { safeDIBuilder() } else { Leaf() }
-		            let listBuilderConfiguration = detailBuilderConfiguration.listBuilder ?? __safeDI_nearest_List ?? .init()
-		            func __safeDI_listBuilder() -> List {
-		                let detailBuilder = Instantiator<Detail> {
-		                    __safeDI_detailBuilder(listBuilderConfiguration.detailBuilder ?? detailBuilderConfiguration, listBuilderConfiguration)
-		                }
-		                return if let safeDIBuilder = listBuilderConfiguration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
+		        func __safeDI_detailBuilder(__safeDI_Detail_configuration: Detail.SafeDIOverrides, __safeDI_List_configuration_nearest: List.SafeDIOverrides?) -> Detail {
+		            let leaf = if let safeDIBuilder = __safeDI_Detail_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            let listBuilder = Instantiator<List> {
+		                __safeDI_listBuilder(__safeDI_List_configuration: __safeDI_Detail_configuration.listBuilder ?? __safeDI_List_configuration_nearest ?? .init(), __safeDI_Detail_configuration_nearest: __safeDI_Detail_configuration)
 		            }
-		            let listBuilder = Instantiator<List>(__safeDI_listBuilder)
-		            return if let safeDIBuilder = detailBuilderConfiguration.safeDIBuilder { safeDIBuilder(leaf, listBuilder) } else { Detail(leaf: leaf, listBuilder: listBuilder) }
+		            return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(leaf, listBuilder) } else { Detail(leaf: leaf, listBuilder: listBuilder) }
+		        }
+		        func __safeDI_listBuilder(__safeDI_List_configuration: List.SafeDIOverrides, __safeDI_Detail_configuration_nearest: Detail.SafeDIOverrides?) -> List {
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_Detail_configuration: __safeDI_List_configuration.detailBuilder ?? __safeDI_Detail_configuration_nearest ?? .init(), __safeDI_List_configuration_nearest: __safeDI_List_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_List_configuration.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		        }
 		        let detailBuilder = Instantiator<Detail> {
-		            __safeDI_detailBuilder(safeDIOverrides.detailBuilder ?? .init(), safeDIOverrides)
+		            __safeDI_detailBuilder(__safeDI_Detail_configuration: safeDIOverrides.detailBuilder ?? .init(), __safeDI_List_configuration_nearest: safeDIOverrides)
 		        }
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(detailBuilder) } else { List(detailBuilder: detailBuilder) }
 		    }
@@ -2316,6 +2317,530 @@ struct SafeDIToolMockV3APITests: ~Copyable {
 		            }
 
 		            let safeDIBuilder: ((Poller) -> Screen)?
+		        }
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsPromotedLoopMemberBeforeLaidOutLoop_whenMockedTypeIsLoopMember() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Gadget: Instantiable {
+				    public init(gadgetBuilder: Instantiator<Gadget>) {
+				        self.gadgetBuilder = gadgetBuilder
+				    }
+
+				    @Instantiated let gadgetBuilder: Instantiator<Gadget>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Alpha: Instantiable {
+				    public init(gadgetBuilder: Instantiator<Gadget>, betaBuilder: Instantiator<Beta>) {
+				        self.gadgetBuilder = gadgetBuilder
+				        self.betaBuilder = betaBuilder
+				    }
+
+				    @Instantiated let gadgetBuilder: Instantiator<Gadget>
+				    @Received let betaBuilder: Instantiator<Beta>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Beta: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
+
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// The loop's text place binds the received member before the functions that read it, where the mock lays out its root.
+		#expect(try #require(output.generatedFiles?["Alpha+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Alpha {
+		    static func mock(
+		        betaBuilder: Instantiator<Beta>? = nil,
+		        alphaBuilder: SafeDIReceived<Instantiator<Alpha>, Alpha.SafeDIOverrides> = .built(.init()),
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Alpha {
+		        func __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: Gadget.SafeDIOverrides) -> Gadget {
+		            let gadgetBuilder = Instantiator<Gadget> {
+		                __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: __safeDI_Gadget_configuration.gadgetBuilder ?? __safeDI_Gadget_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Gadget_configuration.safeDIBuilder { safeDIBuilder(gadgetBuilder) } else { Gadget(gadgetBuilder: gadgetBuilder) }
+		        }
+		        let gadgetBuilder = Instantiator<Gadget> {
+		            __safeDI_gadgetBuilder(__safeDI_Gadget_configuration: safeDIOverrides.gadgetBuilder ?? .init())
+		        }
+		        let (__safeDI_received_alphaBuilder, alphaBuilderConfiguration): (Instantiator<Alpha>?, Alpha.SafeDIOverrides) = switch alphaBuilder {
+		        case let .instance(instance): (instance, .init())
+		        case let .built(configuration): (nil, configuration)
+		        }
+		        func __safeDI_betaBuilder() -> Beta {
+		            let alphaBuilder = if let __safeDI_received_alphaBuilder { __safeDI_received_alphaBuilder } else { Instantiator<Alpha>(__safeDI_alphaBuilder) }
+		            return Beta(alphaBuilder: alphaBuilder)
+		        }
+		        func __safeDI_alphaBuilder() -> Alpha {
+		            let betaBuilder = if let betaBuilder { betaBuilder } else { Instantiator<Beta>(__safeDI_betaBuilder) }
+		            func __safeDI_gadgetBuilder(_ gadgetBuilderConfiguration: Gadget.SafeDIOverrides) -> Gadget {
+		                let gadgetBuilder = Instantiator<Gadget> {
+		                    __safeDI_gadgetBuilder(gadgetBuilderConfiguration.gadgetBuilder ?? gadgetBuilderConfiguration)
+		                }
+		                return if let safeDIBuilder = gadgetBuilderConfiguration.safeDIBuilder { safeDIBuilder(gadgetBuilder) } else { Gadget(gadgetBuilder: gadgetBuilder) }
+		            }
+		            let gadgetBuilder = Instantiator<Gadget> {
+		                __safeDI_gadgetBuilder(alphaBuilderConfiguration.gadgetBuilder ?? .init())
+		            }
+		            return if let safeDIBuilder = alphaBuilderConfiguration.safeDIBuilder { safeDIBuilder(gadgetBuilder, betaBuilder) } else { Alpha(gadgetBuilder: gadgetBuilder, betaBuilder: betaBuilder) }
+		        }
+		        let betaBuilder = if let betaBuilder { betaBuilder } else { Instantiator<Beta>(__safeDI_betaBuilder) }
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(gadgetBuilder, betaBuilder) } else { Alpha(gadgetBuilder: gadgetBuilder, betaBuilder: betaBuilder) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Alpha {
+		    /// Configures `Alpha` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            gadgetBuilder: Gadget.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Instantiator<Gadget>, Instantiator<Beta>) -> Alpha)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                gadgetBuilder: gadgetBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var gadgetBuilder: Gadget.SafeDIOverrides? { __safeDI_storage.gadgetBuilder }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Instantiator<Gadget>, Instantiator<Beta>) -> Alpha)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                gadgetBuilder: Gadget.SafeDIOverrides?,
+		                safeDIBuilder: ((Instantiator<Gadget>, Instantiator<Beta>) -> Alpha)?
+		            ) {
+		                self.gadgetBuilder = gadgetBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let gadgetBuilder: Gadget.SafeDIOverrides?
+		            let safeDIBuilder: ((Instantiator<Gadget>, Instantiator<Beta>) -> Alpha)?
+		        }
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_passesUnwrappedNameToLaidOutFunction_whenReceiveOnlyIfAvailableReadsValueEnclosingTypeBuilds() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Panel: Instantiable {
+				    public init(rowBuilder: Instantiator<Row>, token: Token?) {
+				        self.rowBuilder = rowBuilder
+				        self.token = token
+				    }
+
+				    @Instantiated let rowBuilder: Instantiator<Row>
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Row: Instantiable {
+				    public init(panelBuilder: Instantiator<Panel>, token: Token) {
+				        self.panelBuilder = panelBuilder
+				        self.token = token
+				    }
+
+				    @Instantiated let panelBuilder: Instantiator<Panel>
+				    @Instantiated let token: Token
+				}
+
+				public final class Token {}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Row`'s function binds the token it builds, and the laid-out `Panel` function, which binds its optional receive from
+		// that name, takes the token as the value `Row` binds, not optionally.
+		#expect(try #require(output.generatedFiles?["Panel+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Panel {
+		    static func mock(
+		        token: Token? = nil,
+		        token_Token: @escaping () -> Token,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Panel {
+		        let __safeDI_token_Token = token_Token
+		        func __safeDI_rowBuilder(__safeDI_Row_configuration: Row.SafeDIOverrides, __safeDI_Panel_configuration_nearest: Panel.SafeDIOverrides?) -> Row {
+		            let token_Token = __safeDI_token_Token()
+		            let panelBuilder = Instantiator<Panel> {
+		                __safeDI_panelBuilder(token_Token: token_Token, __safeDI_Panel_configuration: __safeDI_Row_configuration.panelBuilder ?? __safeDI_Panel_configuration_nearest ?? .init(), __safeDI_Row_configuration_nearest: __safeDI_Row_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Row_configuration.safeDIBuilder { safeDIBuilder(panelBuilder, token_Token) } else { Row(panelBuilder: panelBuilder, token: token_Token) }
+		        }
+		        func __safeDI_panelBuilder(token_Token: Token, __safeDI_Panel_configuration: Panel.SafeDIOverrides, __safeDI_Row_configuration_nearest: Row.SafeDIOverrides?) -> Panel {
+		            let token: Token? = token_Token
+		            let rowBuilder = Instantiator<Row> {
+		                __safeDI_rowBuilder(__safeDI_Row_configuration: __safeDI_Panel_configuration.rowBuilder ?? __safeDI_Row_configuration_nearest ?? .init(), __safeDI_Panel_configuration_nearest: __safeDI_Panel_configuration)
+		            }
+		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(rowBuilder, token) } else { Panel(rowBuilder: rowBuilder, token: token) }
+		        }
+		        let rowBuilder = Instantiator<Row> {
+		            __safeDI_rowBuilder(__safeDI_Row_configuration: safeDIOverrides.rowBuilder ?? .init(), __safeDI_Panel_configuration_nearest: safeDIOverrides)
+		        }
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(rowBuilder, token) } else { Panel(rowBuilder: rowBuilder, token: token) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Panel {
+		    /// Configures `Panel` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            rowBuilder: Row.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Instantiator<Row>, Token?) -> Panel)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                rowBuilder: rowBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var rowBuilder: Row.SafeDIOverrides? { __safeDI_storage.rowBuilder }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Instantiator<Row>, Token?) -> Panel)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                rowBuilder: Row.SafeDIOverrides?,
+		                safeDIBuilder: ((Instantiator<Row>, Token?) -> Panel)?
+		            ) {
+		                self.rowBuilder = rowBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let rowBuilder: Row.SafeDIOverrides?
+		            let safeDIBuilder: ((Instantiator<Row>, Token?) -> Panel)?
+		        }
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_laysOutPlaceThatPassesNilInFunctionOfItsOwn_whenAnotherPlaceOfItsTypeReadsDeclaration() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Host: Instantiable {
+				    public init(widgetBuilder: Instantiator<Widget>, panelBuilder: Instantiator<Panel>, widget: Widget?) {
+				        self.widgetBuilder = widgetBuilder
+				        self.panelBuilder = panelBuilder
+				        self.widget = widget
+				    }
+
+				    @Instantiated let widgetBuilder: Instantiator<Widget>
+				    @Instantiated let panelBuilder: Instantiator<Panel>
+				    @Received(onlyIfAvailable: true) let widget: Widget?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Panel: Instantiable {
+				    public init(widget: Widget) {
+				        self.widget = widget
+				    }
+
+				    @Instantiated let widget: Widget
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Widget: Instantiable {
+				    public init(widget: Widget?, token: Token) {
+				        self.widget = widget
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let widget: Widget?
+				    @Instantiated let token: Token
+				}
+
+				public final class Token {}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Panel`'s `Widget` passes `nil` for the widget it is building, and the root's reads the mock's: each is a function
+		// of its own, which passes what its place passes, where the mock lays out its root.
+		#expect(try #require(output.generatedFiles?["Host+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Host {
+		    static func mock(
+		        widget: Widget? = nil,
+		        token: @escaping () -> Token,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Host {
+		        let __safeDI_token = token
+		        func __safeDI_widgetBuilder(__safeDI_Widget_configuration: ((Widget?, Token) -> Widget)?) -> Widget {
+		            let token = __safeDI_token()
+		            return if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder(widget, token) } else { Widget(widget: widget, token: token) }
+		        }
+		        let widgetBuilder = Instantiator<Widget> {
+		            __safeDI_widgetBuilder(__safeDI_Widget_configuration: safeDIOverrides.widgetBuilder)
+		        }
+		        func __safeDI_widget(__safeDI_Widget_configuration: ((Widget?, Token) -> Widget)?) -> Widget {
+		            let token = __safeDI_token()
+		            return if let safeDIBuilder = __safeDI_Widget_configuration { safeDIBuilder(nil, token) } else { Widget(widget: nil, token: token) }
+		        }
+		        func __safeDI_panelBuilder(__safeDI_Panel_configuration: Panel.SafeDIOverrides) -> Panel {
+		            let widget: Widget = __safeDI_widget(__safeDI_Widget_configuration: __safeDI_Panel_configuration.widget)
+		            return if let safeDIBuilder = __safeDI_Panel_configuration.safeDIBuilder { safeDIBuilder(widget) } else { Panel(widget: widget) }
+		        }
+		        let panelBuilder = Instantiator<Panel> {
+		            __safeDI_panelBuilder(__safeDI_Panel_configuration: safeDIOverrides.panelBuilder ?? .init())
+		        }
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(widgetBuilder, panelBuilder, widget) } else { Host(widgetBuilder: widgetBuilder, panelBuilder: panelBuilder, widget: widget) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Host {
+		    /// Configures `Host` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            widgetBuilder: ((Widget?, Token) -> Widget)? = nil,
+		            panelBuilder: Panel.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Instantiator<Widget>, Instantiator<Panel>, Widget?) -> Host)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                widgetBuilder: widgetBuilder,
+		                panelBuilder: panelBuilder,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var widgetBuilder: ((Widget?, Token) -> Widget)? { __safeDI_storage.widgetBuilder }
+		        var panelBuilder: Panel.SafeDIOverrides? { __safeDI_storage.panelBuilder }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Instantiator<Widget>, Instantiator<Panel>, Widget?) -> Host)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                widgetBuilder: ((Widget?, Token) -> Widget)?,
+		                panelBuilder: Panel.SafeDIOverrides?,
+		                safeDIBuilder: ((Instantiator<Widget>, Instantiator<Panel>, Widget?) -> Host)?
+		            ) {
+		                self.widgetBuilder = widgetBuilder
+		                self.panelBuilder = panelBuilder
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let widgetBuilder: ((Widget?, Token) -> Widget)?
+		            let panelBuilder: Panel.SafeDIOverrides?
+		            let safeDIBuilder: ((Instantiator<Widget>, Instantiator<Panel>, Widget?) -> Host)?
+		        }
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	mutating func mock_laysOutRootBesideLoop_whenLoopMemberReadsConfigurationBoundBeforeItsFunction() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>, gamma: Gamma) {
+				        self.alphaBuilder = alphaBuilder
+				        self.betaBuilder = betaBuilder
+				        self.gamma = gamma
+				    }
+
+				    @Instantiated let alphaBuilder: Instantiator<Alpha>
+				    @Instantiated let betaBuilder: Instantiator<Beta>
+				    @Instantiated let gamma: Gamma
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Alpha: Instantiable {
+				    public init(betaBuilder: Instantiator<Beta>, leaf: Leaf) {
+				        self.betaBuilder = betaBuilder
+				        self.leaf = leaf
+				    }
+
+				    @Received let betaBuilder: Instantiator<Beta>
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Beta: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
+
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Gamma: Instantiable {
+				    public init(leaf: Leaf) {
+				        self.leaf = leaf
+				    }
+
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(apiVersion: .v3Unstable)\n"],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		// The loop's text binds `alphaBuilderConfiguration` before its functions, and `Gamma`'s place beside it is laid out.
+		#expect(try #require(output.generatedFiles?["Root+SafeDIMock.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let alphaBuilderConfiguration = safeDIOverrides.alphaBuilder ?? .init()
+		        func __safeDI_alphaBuilder() -> Alpha {
+		            let betaBuilder = Instantiator<Beta>(__safeDI_betaBuilder)
+		            let leaf = if let safeDIBuilder = alphaBuilderConfiguration.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = alphaBuilderConfiguration.safeDIBuilder { safeDIBuilder(betaBuilder, leaf) } else { Alpha(betaBuilder: betaBuilder, leaf: leaf) }
+		        }
+		        func __safeDI_betaBuilder() -> Beta {
+		            let alphaBuilder = Instantiator<Alpha>(__safeDI_alphaBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.betaBuilder { safeDIBuilder(alphaBuilder) } else { Beta(alphaBuilder: alphaBuilder) }
+		        }
+		        let alphaBuilder = Instantiator<Alpha>(__safeDI_alphaBuilder)
+		        let betaBuilder = Instantiator<Beta>(__safeDI_betaBuilder)
+		        func __safeDI_gamma(__safeDI_Gamma_configuration: Gamma.SafeDIOverrides) -> Gamma {
+		            let leaf = if let safeDIBuilder = __safeDI_Gamma_configuration.leaf { safeDIBuilder() } else { Leaf() }
+		            return if let safeDIBuilder = __safeDI_Gamma_configuration.safeDIBuilder { safeDIBuilder(leaf) } else { Gamma(leaf: leaf) }
+		        }
+		        let gamma: Gamma = __safeDI_gamma(__safeDI_Gamma_configuration: safeDIOverrides.gamma ?? .init())
+		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(alphaBuilder, betaBuilder, gamma) } else { Root(alphaBuilder: alphaBuilder, betaBuilder: betaBuilder, gamma: gamma) }
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Configures `Root` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of
+		    /// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its
+		    /// path, or that type’s defaults where there is none.
+		    struct SafeDIOverrides {
+		        init(
+		            alphaBuilder: Alpha.SafeDIOverrides? = nil,
+		            betaBuilder: ((Instantiator<Alpha>) -> Beta)? = nil,
+		            gamma: Gamma.SafeDIOverrides? = nil,
+		            _ safeDIBuilder: ((Instantiator<Alpha>, Instantiator<Beta>, Gamma) -> Root)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                alphaBuilder: alphaBuilder,
+		                betaBuilder: betaBuilder,
+		                gamma: gamma,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var alphaBuilder: Alpha.SafeDIOverrides? { __safeDI_storage.alphaBuilder }
+		        var betaBuilder: ((Instantiator<Alpha>) -> Beta)? { __safeDI_storage.betaBuilder }
+		        var gamma: Gamma.SafeDIOverrides? { __safeDI_storage.gamma }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Instantiator<Alpha>, Instantiator<Beta>, Gamma) -> Root)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                alphaBuilder: Alpha.SafeDIOverrides?,
+		                betaBuilder: ((Instantiator<Alpha>) -> Beta)?,
+		                gamma: Gamma.SafeDIOverrides?,
+		                safeDIBuilder: ((Instantiator<Alpha>, Instantiator<Beta>, Gamma) -> Root)?
+		            ) {
+		                self.alphaBuilder = alphaBuilder
+		                self.betaBuilder = betaBuilder
+		                self.gamma = gamma
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let alphaBuilder: Alpha.SafeDIOverrides?
+		            let betaBuilder: ((Instantiator<Alpha>) -> Beta)?
+		            let gamma: Gamma.SafeDIOverrides?
+		            let safeDIBuilder: ((Instantiator<Alpha>, Instantiator<Beta>, Gamma) -> Root)?
 		        }
 		    }
 		}

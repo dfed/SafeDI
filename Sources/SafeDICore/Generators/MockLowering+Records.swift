@@ -191,12 +191,6 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "promotedBinding"
 			return
 		}
-		// A function a `.v3Unstable` closer closes on takes the nearest configurations as parameters, which no record holds
-		// yet.
-		guard node.v3TargetParameters.isEmpty else {
-			unrecordedReasons[childIndexPath] = "v3CycleTarget"
-			return
-		}
 		// A type a `.v3Unstable` module configures publicly is built with its construction function, reading its public
 		// configuration's fields as that configuration holds them (`buildsPublicly(_:)`), which no record says.
 		guard !buildsPublicly(instantiable.concreteInstantiable) else {
