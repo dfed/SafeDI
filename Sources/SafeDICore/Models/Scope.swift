@@ -473,7 +473,7 @@ extension ScopeRecord {
 					typeFactsPlaces: &places,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration, tree: treeBuiltWithoutMemo))
 		}
 		return scopeGenerator
 	}
