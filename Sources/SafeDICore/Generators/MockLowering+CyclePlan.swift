@@ -35,6 +35,9 @@ extension MockLowering.Walk {
 			childPathsByParent[Array(path.dropLast()), default: []].append(path[path.count - 1])
 		}
 		let rootStatements = childPathsByParent[[], default: []].map { placeCode(at: [$0]) }
+		// A value `mock()` binds under a name of its own (`session_lazilyInstantiated`) is no label a body's function can
+		// take, so a root whose places read one keeps the walk's body, as the type key's layout does.
+		guard Self.unresolvedRead(in: rootStatements, declaredAtRoot: Set(rootDeclarations.map(\.label))) == nil else { return (nil, "readUnresolved") }
 		guard let childIndicesByPath = Self.childIndicesByPath(of: rootStatements, childPathsByParent: childPathsByParent) else { return (nil, "unrecorded") }
 		var representativePaths = [[Int]]()
 		var records = [BuiltPlaceRecord]()

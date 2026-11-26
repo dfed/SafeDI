@@ -1280,6 +1280,111 @@ struct SafeDIToolMockPlanCodeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsRootPerPath_whenBodyReadsWrapperMockBindsApart() async throws {
+		// The mock cannot build `Session`, which forwards its `id`, so it takes the instance and binds the wrapper
+		// `Screen` receives apart (`session_lazilyInstantiated`): a name no body's function can take as a label, so the root
+		// keeps the walk's body, counted.
+		let fixtureFiles = [
+			"Session.swift": """
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init(id: String) {
+			        self.id = id
+			    }
+
+			    @Forwarded public let id: String
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public struct Root: Instantiable {
+			    public init(screenBuilder: Instantiator<Screen>) {
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated public let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public struct Screen: Instantiable {
+			    public init(session: LazilyInstantiated<Session>, nextBuilder: Instantiator<Next>) {
+			        self.session = session
+			        self.nextBuilder = nextBuilder
+			    }
+
+			    @Received public let session: LazilyInstantiated<Session>
+			    @Instantiated public let nextBuilder: Instantiator<Next>
+			}
+			""",
+			"Next.swift": """
+			@Instantiable
+			public struct Next: Instantiable {
+			    public init(screenBuilder: Instantiator<Screen>) {
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated public let screenBuilder: Instantiator<Screen>
+			}
+			""",
+		]
+		let mocks = try await generatedMocks(of: fixtureFiles)
+
+		#expect(mocks.outcomes == ["Root": "readUnresolved"])
+		#expect(mocks.laidOut.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
+		        func __safeDI_screenBuilder() -> Screen {
+		            func __safeDI_nextBuilder() -> Next {
+		                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		                return Next(screenBuilder: screenBuilder)
+		            }
+		            let nextBuilder = Instantiator<Next>(__safeDI_nextBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { safeDIBuilder(session_lazilyInstantiated, nextBuilder) } else { Screen(session: session_lazilyInstantiated, nextBuilder: nextBuilder) }
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        return Root(screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""")
+		try await expectLaidOutValuesEqualWalks(mocks, fixtureFiles: fixtureFiles, probes: [
+			DifferentialValueProbe("Root.mock(session: Session(id: \"a\")).screenBuilder.instantiate().nextBuilder.instantiate().screenBuilder.instantiate().session.instance.id"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
