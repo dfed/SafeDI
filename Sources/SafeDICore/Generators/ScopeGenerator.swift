@@ -8248,7 +8248,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			return .place(PlacePlan(code: fillCode))
+			return Self.fillPlace(fillCode)
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 			return aliasPlace(
 				of: property,
@@ -8261,7 +8261,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	// The four functions below build a place's record, a struct of many fields, in a frame of their own: inlined into
+	// The five functions below build a place's record, a struct of many fields, in a frame of their own: inlined into
 	// `generatePropertyCode`, whose async frame every task planning a scope holds, the record's temporaries grew that frame
 	// by about 5.6 KB, and the peak memory of a module of 1,200 seams by about 15 MB.
 
@@ -8269,6 +8269,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	@inline(never)
 	private static func textPlace(_ text: String) -> GeneratedCode {
 		.place(PlacePlan(code: .text(text)))
+	}
+
+	/// The place of a fill, which records nothing, written as `code`.
+	@inline(never)
+	private static func fillPlace(_ code: GeneratedCode) -> GeneratedCode {
+		.place(PlacePlan(code: code))
 	}
 
 	/// The place of a scope that closes a cycle, written as `closingCode`.
