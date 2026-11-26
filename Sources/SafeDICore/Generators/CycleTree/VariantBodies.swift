@@ -52,6 +52,9 @@ extension DependencyTreeGenerator {
 		/// The twin a path is building of each value two properties build (`CallPlaceShadow.twinValues`): a call of the
 		/// value beneath closes the cycle on that property's function, whichever property makes the call.
 		let twinsBeingBuilt: [TwinValue: Property]
+		/// Whether the body is built inside a `@Sendable` function (`VariantAnswers.isInSendableFamily(calledInSendableFunction:property:)`):
+		/// its function is then `@Sendable`, and so is every body it calls.
+		let isInSendableFamily: Bool
 	}
 
 	/// A type on a cycle and a property that builds it, as cycle validation sees the property: what a cycle closes on.
@@ -93,6 +96,9 @@ extension DependencyTreeGenerator {
 				}
 				for twin in key.twinsBeingBuilt.values.map(\.asSource).sorted() {
 					description.append(" [building \(twin)]")
+				}
+				if key.isInSendableFamily {
+					description.append(" [@Sendable]")
 				}
 				return description
 			}
@@ -177,7 +183,7 @@ extension DependencyTreeGenerator {
 			guard let rootCopy = shadow.copy(of: scope) else { return nil }
 			let rootBody = try body(
 				of: rootCopy,
-				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:]),
+				as: VariantBodyKey(scope: ObjectIdentifier(scope), property: nil, twinsBeingBuilt: [:], isInSendableFamily: false),
 				keyedBy: [],
 				answering: [],
 				beneath: NearestDeclarations(),
@@ -195,6 +201,8 @@ extension DependencyTreeGenerator {
 					lazilyInstantiatedInstanceProperties: body.lazilyInstantiatedInstanceProperties,
 					twinValues: shadow.twinValues,
 					twinsBeingBuilt: body.key.twinsBeingBuilt,
+					isInSendableFamily: body.key.isInSendableFamily,
+					parameterLabelsByCallPlace: shadow.parameterLabelsByCallPlace,
 				)
 				while let (context, _) = bodyWalk.next() {
 					if let calledScope = shadow.scope(calledAt: context.scope), let calledCopy = shadow.copy(of: calledScope) {
@@ -213,9 +221,9 @@ extension DependencyTreeGenerator {
 						}
 						let calledBody = try self.body(
 							of: calledCopy,
-							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt),
+							as: VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily),
 							keyedBy: labels,
-							answering: labels,
+							answering: VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter),
 							beneath: calledNearestDeclarations,
 							lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 							builtBy: (context.builder, context.erasedToConcreteExistential),

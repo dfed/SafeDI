@@ -41,7 +41,8 @@ extension DependencyTreeGenerator {
 		let variantBodyObserver = VariantBodyObservation.observer
 		let planBodiesObserver = PlanBodiesObservation.observer
 		let planCallsObserver = PlanCallsObservation.observer
-		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil,
+		let twinIdentityObserver = TwinIdentityObservation.observer
+		guard variantBodyObserver != nil || planBodiesObserver != nil || planCallsObserver != nil || twinIdentityObserver != nil,
 		      todaysTree.unpassableCycleLabelsInTree.isEmpty,
 		      let shadow = CallPlaceShadow(root: scope, cache: &cache)
 		else { return }
@@ -51,18 +52,25 @@ extension DependencyTreeGenerator {
 		var callsCompared = [ObjectIdentifier: [(nearestDeclarations: [NearestDeclaration?], lazilyInstantiatedInstanceProperties: Set<Property>, labelsPassedNil: Set<String>)]]()
 		// The bodies today's places of scopes on a cycle take, in the order the walk first meets each.
 		var todaysBodies = [Int]()
+		// The calls of today's tree that run another function than the plan's call names.
+		var callsOfOtherFunction = [String]()
 		var walk = PlaceContextWalk(ofTodaysTree: todaysTree, builtFrom: scope, twinValues: shadow.twinValues)
 		while let (context, isCalledByCycleClosingScope) = walk.next() {
+			if isCalledByCycleClosingScope {
+				callsOfOtherFunction += VariantAnswers.placesCallingOtherFunctionThanPlan(at: context, twinValues: shadow.twinValues)
+			}
 			if let copy = shadow.copy(of: context.scope) {
 				var labelSet = Set(Self.collectReceivedProperties(from: context.scope, cache: &cache).received.map(\.label))
 				labelSet.insert(context.property.label)
 				let labels = labelSet.sorted()
-				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt)
+				let key = VariantBodyKey(scope: ObjectIdentifier(context.scope), property: context.property, twinsBeingBuilt: context.twinsBeingBuilt, isInSendableFamily: context.isInSendableFamily)
+				// A label whose declaration the scopes above build after the place is `nil` in its tree.
+				let answeredLabels = VariantAnswers.answeredLabels(labels, builtAfter: context.labelsBuiltAfter)
 				let body = try bodies.body(
 					of: copy,
 					as: key,
 					keyedBy: labels,
-					answering: labels,
+					answering: answeredLabels,
 					beneath: context.nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 					builtBy: (context.builder, context.erasedToConcreteExistential),
@@ -70,13 +78,13 @@ extension DependencyTreeGenerator {
 				// Today's place reads a parameter of a function it is built in where the call's path declares the
 				// label, and the parameter is `nil` where the call passes `nil`: every receive of that label is then
 				// `nil`, as in a body no declaration answers the label for.
-				var todaysUnavailableOptionalProperties = context.generator.unavailableOptionalProperties
+				var todaysUnavailableOptionalProperties = context.orderedUnavailableProperties
 				if !context.labelsPassedNil.isDisjoint(with: labelSet) {
 					let bodyWithoutAnswers = try bodies.body(
 						of: copy,
 						as: key,
 						keyedBy: labels,
-						answering: labels.filter { !context.labelsPassedNil.contains($0) },
+						answering: answeredLabels.filter { !context.labelsPassedNil.contains($0) },
 						beneath: context.nearestDeclarations,
 						lazilyInstantiatedInstanceProperties: context.lazilyInstantiatedInstanceProperties,
 						builtBy: (context.builder, context.erasedToConcreteExistential),
@@ -118,6 +126,15 @@ extension DependencyTreeGenerator {
 				bodiesOfPlan.map { bodies.bodies[$0].description },
 				todaysBodies.filter { !bodiesOfPlan.contains($0) }.map { bodies.bodies[$0].description },
 				shadow.twinValues.map { "\($0.concreteType.asSource) as \($0.property.asSource)" }.sorted(),
+			)
+		}
+		if let twinIdentityObserver, !shadow.twinValues.isEmpty {
+			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+			twinIdentityObserver(
+				scope.instantiable.concreteInstantiable.asSource,
+				VariantAnswers.shadowsTwinValues(of: shadow),
+				PerTypePlan(root: ConstructionScope(table: table, record: record)).map(VariantAnswers.plansTwinValues(of:)) ?? [],
+				callsOfOtherFunction,
 			)
 		}
 	}
