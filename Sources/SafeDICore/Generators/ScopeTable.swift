@@ -70,6 +70,8 @@ final class ScopeRecord: Sendable {
 	let isUnavailableDependency: Bool
 	/// See `Scope.isCallPlace`.
 	let isCallPlace: Bool
+	/// See `Scope.callPlaceRequiredAliasFulfillingProperties`.
+	let callPlaceRequiredAliasFulfillingProperties: Set<Property>
 	/// See `Scope.seamCall`.
 	let seamCall: SeamCall?
 	/// See `Scope.publicMockCall`.
@@ -122,6 +124,7 @@ final class ScopeRecord: Sendable {
 		builtInlineSeamComment = scope.builtInlineSeamComment
 		isUnavailableDependency = scope.isUnavailableDependency
 		isCallPlace = scope.isCallPlace
+		callPlaceRequiredAliasFulfillingProperties = scope.callPlaceRequiredAliasFulfillingProperties
 		seamCall = scope.seamCall
 		publicMockCall = scope.publicMockCall
 		self.propertiesToGenerate = propertiesToGenerate

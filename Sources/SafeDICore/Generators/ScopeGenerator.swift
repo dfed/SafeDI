@@ -62,6 +62,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isUnavailableDependency: Bool = false,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
+		callPlaceRequiredAliasFulfillingProperties: Set<Property> = [],
 		seamRoot: SeamRoot? = nil,
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		holeCallArguments: [HoleCallArgument] = [],
@@ -296,7 +297,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesToDeclare: propertiesToDeclare,
 			forwardedProperties: forwardedProperties,
 			cycleParameters: isPropertyCycle ? cycleParameters : [],
-			seamCallRequiredThroughAliasProperties: seamCall?.requiredThroughAliasProperties ?? [],
+			// A call place of the per-type plan requires what the tree it stands for requires, as a seam's call does.
+			seamCallRequiredThroughAliasProperties: (seamCall?.requiredThroughAliasProperties ?? []).union(callPlaceRequiredAliasFulfillingProperties),
 		)
 		requiredOnlyIfAvailableAliasProperties = aliasRequirements.requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = aliasRequirements.requiredAliasFulfillingProperties
@@ -501,6 +503,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamCall: SeamCall?,
 		children: [ScopeGenerator],
 	) -> Set<TypeDescription> {
+		var typesDeclaredEscaping = typesDeclaredEscaping(ownedBy: instantiable, publicMockCall: publicMockCall, seamCall: seamCall)
+		for child in children where !child.typesDeclaredEscaping.isEmpty {
+			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
+		}
+		return typesDeclaredEscaping
+	}
+
+	/// The names a scope of `instantiable` declares `@escaping` itself, without its children's: those its initializers'
+	/// parameters declare so, those its aliases name in place of one, and those of the seam or public mock it calls. A call
+	/// place of the per-type plan declares the union of these over every scope its tree reaches (`CallPlaceShadow`).
+	nonisolated static func typesDeclaredEscaping(
+		ownedBy instantiable: Instantiable,
+		publicMockCall: PublicMockCall?,
+		seamCall: SeamCall?,
+	) -> Set<TypeDescription> {
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
 		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
@@ -517,9 +534,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
-		for child in children where !child.typesDeclaredEscaping.isEmpty {
-			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
-		}
 		return typesDeclaredEscaping
 	}
 

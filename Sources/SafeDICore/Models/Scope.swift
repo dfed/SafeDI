@@ -35,6 +35,8 @@ final class Scope: Hashable {
 	///     no production declaration fulfills: it builds nothing, and generated code binds its property to `nil`.
 	///   - isCallPlace: Whether the scope stands, in a body of a tree's plan by declaration, for a child on a cycle: see
 	///     the property.
+	///   - callPlaceRequiredAliasFulfillingProperties: For a call place, what the tree it stands for requires through
+	///     `onlyIfAvailable` aliases: see the property.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
@@ -43,9 +45,11 @@ final class Scope: Hashable {
 		publicMockCall: PublicMockCall? = nil,
 		isUnavailableDependency: Bool = false,
 		isCallPlace: Bool = false,
+		callPlaceRequiredAliasFulfillingProperties: Set<Property> = [],
 	) {
 		self.isUnavailableDependency = isUnavailableDependency
 		self.isCallPlace = isCallPlace
+		self.callPlaceRequiredAliasFulfillingProperties = callPlaceRequiredAliasFulfillingProperties
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.builtInlineSeamComment = builtInlineSeamComment
@@ -97,6 +101,12 @@ final class Scope: Hashable {
 	/// close on it alike. No seam's or public mock's call (`seamCall`, `publicMockCall`), so no reader of those takes it
 	/// for a seam's leaf.
 	let isCallPlace: Bool
+
+	/// For a call place, the properties the tree it stands for requires through `onlyIfAvailable` aliases whose label no
+	/// scope of that tree declares (`DependencyTreeGenerator.ReceivedProperties.requiredAliasFulfillingProperties`): the
+	/// call place has no children to carry them, so its generator carries them up, and the sibling that declares one is
+	/// built before it, as before the child it stands for today. Empty for every other scope.
+	let callPlaceRequiredAliasFulfillingProperties: Set<Property>
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
@@ -2538,6 +2548,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			isUnavailableDependency: scope.isUnavailableDependency,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
+			callPlaceRequiredAliasFulfillingProperties: scope.callPlaceRequiredAliasFulfillingProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
 			holeCallArguments: holeArguments.map { holeArgument in

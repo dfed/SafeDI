@@ -343,8 +343,7 @@ extension DependencyTreeGenerator {
 	/// children whose types receive what the child's whole tree receives from above it (`collectReceivedProperties`, the
 	/// least sets, which no order of siblings feeds).
 	///
-	/// A first model, read by a test's comparison only: a call place does not yet carry what its tree requires through an
-	/// alias received only if available. Holds one copy and one call place per scope reached, for as long as the
+	/// Read by a test's comparison only. Holds one copy and one call place per scope reached, for as long as the
 	/// comparison of one root runs.
 	struct CallPlaceShadow {
 		/// `nil` where `root` reaches no cycle.
@@ -367,6 +366,22 @@ extension DependencyTreeGenerator {
 					labelsDeclaredByComponent[graph.componentByNode[index], default: []].formUnion(scope.declaredLabels)
 				}
 			}
+			// The names each scope's tree declares `@escaping`, which a call place declares for the tree it stands for: SafeDI
+			// cannot see that a name is a function type, so a function that only passes a value of one on learns it from the
+			// tree beneath it, as today's `ScopeGenerator.typesDeclaredEscaping` does. A component's set is its members' own
+			// and those of every component it reaches, each numbered below it (`OrderedGraph.componentByNode`).
+			var typesDeclaredEscapingByComponent = [Int: Set<TypeDescription>]()
+			for index in graph.nodes.indices.sorted(by: { graph.componentByNode[$0] < graph.componentByNode[$1] }) {
+				let component = graph.componentByNode[index]
+				var typesDeclaredEscaping = typesDeclaredEscapingByComponent[component, default: []]
+				if let scope = scopeByIdentifier[graph.nodes[index]] {
+					typesDeclaredEscaping.formUnion(ScopeGenerator.typesDeclaredEscaping(ownedBy: scope.instantiable, publicMockCall: scope.publicMockCall, seamCall: scope.seamCall))
+				}
+				for target in graph.edges(from: index) where graph.componentByNode[target] != component {
+					typesDeclaredEscaping.formUnion(typesDeclaredEscapingByComponent[graph.componentByNode[target], default: []])
+				}
+				typesDeclaredEscapingByComponent[component] = typesDeclaredEscaping
+			}
 			var copyByIdentifier = [ObjectIdentifier: Scope]()
 			var callPlaceByIdentifier = [ObjectIdentifier: Scope]()
 			var parameterLabelsByCallPlace = [ObjectIdentifier: Set<String>]()
@@ -380,7 +395,16 @@ extension DependencyTreeGenerator {
 						isUnavailableDependency: scope.isUnavailableDependency,
 					)
 					if graph.isOnCycle(index) {
-						let callPlace = Scope(instantiable: callPlaceInstantiable(of: scope, receiving: collectReceivedProperties(from: scope, cache: &cache)), isCallPlace: true)
+						let receivedProperties = collectReceivedProperties(from: scope, cache: &cache)
+						let callPlace = Scope(
+							instantiable: callPlaceInstantiable(
+								of: scope,
+								receiving: receivedProperties,
+								declaringEscaping: typesDeclaredEscapingByComponent[graph.componentByNode[index], default: []],
+							),
+							isCallPlace: true,
+							callPlaceRequiredAliasFulfillingProperties: receivedProperties.requiredAliasFulfillingProperties,
+						)
 						callPlaceByIdentifier[identifier] = callPlace
 						calledScopeByCallPlace[ObjectIdentifier(callPlace)] = scope
 						parameterLabelsByCallPlace[ObjectIdentifier(callPlace)] = labelsDeclaredByComponent[graph.componentByNode[index], default: []].subtracting(scope.declaredLabels)
@@ -462,8 +486,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The type of `scope` as a call place: its own type and construction, receiving `receivedProperties`, each only if
-	/// available where every receiver beneath receives it so, in `Property` order.
-	private static func callPlaceInstantiable(of scope: Scope, receiving receivedProperties: ReceivedProperties) -> Instantiable {
+	/// available where every receiver beneath receives it so, in `Property` order, and declaring `@escaping` each parameter
+	/// of a name in `typesDeclaredEscaping`, the names the tree it stands for declares so.
+	private static func callPlaceInstantiable(of scope: Scope, receiving receivedProperties: ReceivedProperties, declaringEscaping typesDeclaredEscaping: Set<TypeDescription>) -> Instantiable {
 		let instantiable = scope.instantiable
 		let received = receivedProperties.received.sorted()
 		var callPlace = Instantiable(
@@ -473,7 +498,9 @@ extension DependencyTreeGenerator {
 				arguments: received.map { property in
 					Initializer.Argument(
 						innerLabel: property.label,
-						typeDescription: property.asFunctionParamter.typeDescription,
+						typeDescription: typesDeclaredEscaping.contains(property.typeDescription)
+							? .attributed(property.typeDescription, specifiers: [], attributes: ["escaping"])
+							: property.asFunctionParamter.typeDescription,
 						defaultValueExpression: nil,
 					)
 				},

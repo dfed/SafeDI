@@ -248,6 +248,130 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		#expect(codes == ["Root": nil])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresParameterEscaping_whenBodyOnlyPassesOnTypealiasedClosureItsTreeTakesEscaping() async throws {
+		// `A` only passes `callback` on to `B`, whose initializer takes it `@escaping`: SafeDI cannot see that `Callback` is a
+		// function type, so `A`'s function learns it from the tree it builds, which a call place of `B` stands for.
+		let codes = try await planCodes(of: """
+		public typealias Callback = () -> Void
+
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let sessionBuilder: Instantiator<Session>
+		    public init(sessionBuilder: Instantiator<Session>) { self.sessionBuilder = sessionBuilder }
+		}
+
+		@Instantiable public final class Session: Instantiable {
+		    @Forwarded let callback: Callback
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(callback: @escaping Callback, aBuilder: Instantiator<A>) { self.callback = callback; self.aBuilder = aBuilder }
+		}
+
+		@Instantiable public final class A: Instantiable {
+		    @Instantiated let bBuilder: Instantiator<B>
+		    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+		}
+
+		@Instantiable public final class B: Instantiable {
+		    @Received let callback: Callback
+		    @Instantiated let aBuilder: Instantiator<A>
+		    public init(callback: @escaping Callback, aBuilder: Instantiator<A>) { self.callback = callback; self.aBuilder = aBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(callback: @escaping Callback) -> A {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(callback: callback)
+		            }
+		            return A(bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder(callback: @escaping Callback) -> B {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(callback: callback)
+		            }
+		            return B(callback: callback, aBuilder: aBuilder)
+		        }
+		        func __safeDI_sessionBuilder(callback: @escaping Callback) -> Session {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(callback: callback)
+		            }
+		            return Session(callback: callback, aBuilder: aBuilder)
+		        }
+		        let sessionBuilder = Instantiator<Session> {
+		            __safeDI_sessionBuilder(callback: $0)
+		        }
+		        self.init(sessionBuilder: sessionBuilder)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsRenameSourceFirst_whenCalledTreeRequiresRenameOnlyIfAvailable() async throws {
+		// `Detail` requires `y`, which `Screen` renames from `x` only if available, so `x` is built before `screenBuilder`,
+		// as today: `X` is passed `nil` for the builder it receives only if available, and `Screen` and `Detail` read `x`.
+		let (codes, fixtures) = try await planCodesAndFixtures(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let x: X
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(x: X, screenBuilder: Instantiator<Screen>) { self.x = x; self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class X: Instantiable {
+		    @Received(onlyIfAvailable: true) let screenBuilder: Instantiator<Screen>?
+		    public init(screenBuilder: Instantiator<Screen>?) { self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+		    @Instantiated let nextBuilder: Instantiator<Next>
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(y: X?, nextBuilder: Instantiator<Next>, detailBuilder: Instantiator<Detail>) { self.y = y; self.nextBuilder = nextBuilder; self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Received let y: X?
+		    public init(y: X?) { self.y = y }
+		}
+
+		@Instantiable public final class Next: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        let x = X(screenBuilder: nil)
+		        func __safeDI_screenBuilder() -> Screen {
+		            #sourceLocation(file: "\(fixtures["Root.swift"])", line: 13)
+		            let y: X? = x
+		            #sourceLocation()
+		            let nextBuilder = Instantiator<Next>(__safeDI_nextBuilder)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(y: y)
+		            }
+		            return Screen(y: y, nextBuilder: nextBuilder, detailBuilder: detailBuilder)
+		        }
+		        func __safeDI_nextBuilder() -> Next {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return Next(screenBuilder: screenBuilder)
+		        }
+		        func __safeDI_detailBuilder(y: X?) -> Detail {
+		            Detail(y: y)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        self.init(x: x, screenBuilder: screenBuilder)
+		    }
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -257,6 +381,11 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 	/// The code the type key lays out of each root's plan, compiled in place of the root's generated extension with the
 	/// fixtures beside it, as every test's generated code is compiled.
 	private mutating func planCodes(of swiftFileContent: String) async throws -> [String: String?] {
+		try await planCodesAndFixtures(of: swiftFileContent).codes
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func planCodesAndFixtures(of swiftFileContent: String) async throws -> (codes: [String: String?], fixtures: FixturePaths) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, String?).self)
 		let output = try await PlanCodeObservation.$observer.withValue({ root, code in
 			continuation.yield((root, code))
@@ -289,6 +418,6 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-		return codes
+		return (codes, output.fixtures)
 	}
 }

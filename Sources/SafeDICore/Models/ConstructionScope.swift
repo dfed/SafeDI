@@ -58,6 +58,10 @@ struct ConstructionScope: Sendable {
 		record.isCallPlace
 	}
 
+	var callPlaceRequiredAliasFulfillingProperties: Set<Property> {
+		record.callPlaceRequiredAliasFulfillingProperties
+	}
+
 	var seamCall: SeamCall? {
 		record.seamCall
 	}
