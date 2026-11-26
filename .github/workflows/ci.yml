@@ -316,7 +316,28 @@ jobs:
     # leaves no record, main's job then runs, and it saves the caches as before. The job names below are the two
     # jobs' `name:`; when one is renamed and this is not, no record is found and main runs the job.
     #
-    # Nothing here fails a run: whatever goes wrong, the outputs are empty and both jobs run. It runs on every
+    # The same holds for the Linux checks that only judge the tree and save nothing a later run restores: the
+    # fuzzer's shards and "Check Graph Fuzzer Corpus on Linux", the four repeat passes, Release Acceptance, "Build
+    # Release SafeDITool on Linux" and "Check Function Compile Time on Linux". They took 370 of the 519 Linux
+    # runner minutes of a push to main (the mean of 41 runs, 2026-11-21 to 2026-11-25), on a tree the pull
+    # request's run had passed minutes before. "Record the Linux Checks That Passed on This Tree" uploads one
+    # record for each of them that passed in a pull request's run, and a push to main skips each one this job
+    # finds a record for. A record counts only when every job of its check concluded in success in the run that
+    # uploaded it: for a matrix, every job whose name starts as the matrix's does, and at least one.
+    #
+    # What a record proves: it is named for the tree of the commit the pull request's run checked out (the merge
+    # of the pull request with its base, which is what the merge leaves on main when the head held main's tip),
+    # and the workflow files, the scripts and Package.resolved are part of that tree, so the same tree means the
+    # same jobs, matrices and dependencies. What it does not prove is that the runner image or the container has
+    # not moved in between, which is why a record lasts three days and the weekly scheduled run skips nothing.
+    #
+    # Every job that saves a cache another run restores, or makes a coverage report, still runs on every push to
+    # main: "Build Tests on Linux", "Build and Test on Linux" (the build cache, the passed compile checks, and
+    # with "Build and Test on Xcode 26" the coverage behind the README badge), "Check Generate Time on Linux"
+    # (the tool the next change is measured against) and "Build and Test on Latest Swift". So main's run still
+    # builds and tests every commit, and its badge still says so.
+    #
+    # Nothing here fails a run: whatever goes wrong, the outputs are empty and every job runs. It runs on every
     # event, in seconds, so that a pull request exercises it; only a push to main reads its answers. No
     # container, since it only reads, as "Check Line Coverage on Linux" does.
     name: Find Builds a Pull Request Passed on This Tree
@@ -329,6 +350,11 @@ jobs:
       tree: ${{ steps.tree.outputs.tree }}
       apple-platforms: ${{ steps.find.outputs.apple-platforms }}
       example-integrations: ${{ steps.find.outputs.example-integrations }}
+      graph-fuzzer: ${{ steps.find.outputs.graph-fuzzer }}
+      linux-repeat: ${{ steps.find.outputs.linux-repeat }}
+      release-acceptance: ${{ steps.find.outputs.release-acceptance }}
+      linux-release-build: ${{ steps.find.outputs.linux-release-build }}
+      function-compile-time: ${{ steps.find.outputs.function-compile-time }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -351,29 +377,61 @@ jobs:
           TREE: ${{ steps.tree.outputs.tree }}
         with:
           script: |
-            const jobNames = {
-              'apple-platforms': 'Build for Apple Platforms, DocC and Xcode Projects on Xcode 26',
-              'example-integrations': 'Build Package, Tuist and Bazel Integrations on Xcode 26',
+            // For each check: the jobs that must have concluded in success in the run that uploaded the record,
+            // by whole name, and by the start of a matrix's or a called workflow's names (at least one such job,
+            // and every one of them in success). A job named under `skipped` is one the called workflow never
+            // runs when this workflow calls it, so its "skipped" counts as nothing.
+            const checks = {
+              'apple-platforms': { names: ['Build for Apple Platforms, DocC and Xcode Projects on Xcode 26'], prefixes: [] },
+              'example-integrations': { names: ['Build Package, Tuist and Bazel Integrations on Xcode 26'], prefixes: [] },
+              'graph-fuzzer': { names: ['Check Graph Fuzzer Corpus on Linux'], prefixes: ['Fuzz Dependency Graphs on Linux ('] },
+              'linux-repeat': { names: ['Repeat Tests on Linux'], prefixes: ['Repeat Tests on Linux (pass '] },
+              'release-acceptance': { names: ['Release Acceptance / Check Release Acceptance on Linux'], prefixes: ['Release Acceptance / '], skipped: ['Release Acceptance / Build for Release Acceptance on Linux'] },
+              'linux-release-build': { names: ['Build Release SafeDITool on Linux'], prefixes: [] },
+              'function-compile-time': { names: ['Check Function Compile Time on Linux'], prefixes: [] },
             }
-            for (const [key, jobName] of Object.entries(jobNames)) {
+            const runsById = new Map()
+            const jobsByRunId = new Map()
+            for (const [key, check] of Object.entries(checks)) {
               const name = `passed-${key}-${process.env.TREE}`
-              const { data } = await github.rest.actions.listArtifactsForRepo({ ...context.repo, name, per_page: 20 })
               let passed = false
-              for (const artifact of data.artifacts) {
-                if (artifact.expired || !artifact.workflow_run) { continue }
-                const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifact.workflow_run.id })
-                if (run.path !== '.github/workflows/ci.yml' || run.event !== 'pull_request' || !run.head_repository || run.head_repository.id !== run.repository.id) {
-                  core.info(`${name}: run ${run.id} is not a pull request's run of this workflow in this repository.`)
-                  continue
+              try {
+                const { data } = await github.rest.actions.listArtifactsForRepo({ ...context.repo, name, per_page: 20 })
+                for (const artifact of data.artifacts) {
+                  if (artifact.expired || !artifact.workflow_run) { continue }
+                  const runId = artifact.workflow_run.id
+                  if (!runsById.has(runId)) {
+                    runsById.set(runId, (await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: runId })).data)
+                  }
+                  const run = runsById.get(runId)
+                  if (run.path !== '.github/workflows/ci.yml' || run.event !== 'pull_request' || !run.head_repository || run.head_repository.id !== run.repository.id) {
+                    core.info(`${name}: run ${run.id} is not a pull request's run of this workflow in this repository.`)
+                    continue
+                  }
+                  if (!jobsByRunId.has(runId)) {
+                    jobsByRunId.set(runId, await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: runId, filter: 'latest', per_page: 100 }))
+                  }
+                  const jobs = jobsByRunId.get(runId)
+                  const missing = check.names.find(jobName => !jobs.some(job => job.name === jobName && job.conclusion === 'success'))
+                  if (missing !== undefined) {
+                    core.info(`${name}: "${missing}" did not conclude in success in run ${run.id}.`)
+                    continue
+                  }
+                  const incomplete = check.prefixes.find(prefix => {
+                    const matching = jobs.filter(job => job.name.startsWith(prefix) && !(job.conclusion === 'skipped' && (check.skipped || []).includes(job.name)))
+                    return matching.length === 0 || matching.some(job => job.conclusion !== 'success')
+                  })
+                  if (incomplete !== undefined) {
+                    core.info(`${name}: not every "${incomplete}…" job concluded in success in run ${run.id}.`)
+                    continue
+                  }
+                  core.info(`${name}: passed in run ${run.id}.`)
+                  passed = true
+                  break
                 }
-                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, filter: 'latest', per_page: 100 })
-                if (!jobs.some(job => job.name === jobName && job.conclusion === 'success')) {
-                  core.info(`${name}: "${jobName}" did not conclude in success in run ${run.id}.`)
-                  continue
-                }
-                core.info(`${name}: passed in run ${run.id}.`)
-                passed = true
-                break
+              } catch (error) {
+                core.info(`${name}: could not be looked up (${error.message}); the check runs.`)
+                passed = false
               }
               if (!passed) { core.info(`${name}: no record.`) }
               core.setOutput(key, String(passed))
@@ -2172,8 +2230,10 @@ jobs:
 
   release-acceptance:
     name: Release Acceptance
-    needs: [changes, linux-build]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    # On main it skips when a pull request's run passed every one of its jobs on the same tree ("Find Builds a
+    # Pull Request Passed on This Tree").
+    needs: [changes, linux-build, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.release-acceptance == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     permissions:
       contents: read
     uses: ./.github/workflows/release-acceptance.yml
@@ -2238,8 +2298,10 @@ jobs:
 
   linux-repeat-pass:
     name: Repeat Tests on Linux (pass ${{ matrix.pass }})
-    needs: [changes, linux-build]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    # On main it skips when a pull request's run passed the four passes on the same tree ("Find Builds a Pull
+    # Request Passed on This Tree").
+    needs: [changes, linux-build, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2276,8 +2338,9 @@ jobs:
   # satisfy a required check.
   linux-repeat:
     name: Repeat Tests on Linux
-    needs: [changes, linux-repeat-pass]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # Skips on main when the passes do, since it would have no result to require.
+    needs: [changes, linux-repeat-pass, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-repeat == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -2313,8 +2376,10 @@ jobs:
   # here.
   linux-release-build:
     name: Build Release SafeDITool on Linux
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # On main it skips when a pull request's run passed it on the same tree ("Find Builds a Pull Request Passed
+    # on This Tree").
+    needs: [changes, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.linux-release-build == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.3
     permissions:
@@ -2686,8 +2751,10 @@ jobs:
   # times: SafeDICore's sources, the package manifest or the check itself.
   function-compile-time:
     name: Check Function Compile Time on Linux
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # On main it skips when a pull request's run passed it on the same tree ("Find Builds a Pull Request Passed
+    # on This Tree").
+    needs: [changes, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.function-compile-time == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     permissions:
@@ -2771,8 +2838,10 @@ jobs:
     # The base tool, which only a pull request builds, is waited for but not
     # required: a shard runs whatever its build's result, and compares with
     # the base only when it built.
-    needs: [changes, linux-build, base-tool]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    # On main it skips when a pull request's run passed every shard and the corpus check on the same tree
+    # ("Find Builds a Pull Request Passed on This Tree").
+    needs: [changes, linux-build, base-tool, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     # Above the fuzzer's and the base comparison's limits together by more
@@ -2986,8 +3055,9 @@ jobs:
   # This is the one check to require for the fuzzer.
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux
-    needs: [changes, graph-fuzzer, base-tool]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # Skips on main when the shards do, since it would have no report to read.
+    needs: [changes, graph-fuzzer, base-tool, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -3168,8 +3238,9 @@ jobs:
   # .claude/rules/fuzzer-corpora.md.
   graph-fuzzer-coverage:
     name: Report Changed Lines No Fuzzer Graph Executed on Linux
-    needs: [changes, linux, graph-fuzzer]
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+    # Skips on main when the shards do, since it would have no report to read.
+    needs: [changes, linux, graph-fuzzer, passed-on-this-tree]
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.graph-fuzzer == 'true') && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 15
@@ -3451,6 +3522,80 @@ jobs:
           echo "The $groups groups ran $sum tests; the build lists $every_test."
           test "$groups" -eq "$EXPECTED_GROUPS"
           test "$sum" -eq "$every_test"
+  # Uploads, for each Linux check a push to main may skip, the record that it passed on this tree in this pull
+  # request's run ("Find Builds a Pull Request Passed on This Tree" says what a record proves and which jobs
+  # read it). A check gets a record only when its job, and for a matrix every one of its jobs, ended in success:
+  # a failed, cancelled or skipped check leaves none, and main then runs it. The job first checks that the
+  # commit it checked out has the tree the records are named for. Nothing here fails a pull request: a record
+  # that is not uploaded only means main runs the check. No container, since it only uploads.
+  record-passed-on-this-tree:
+    name: Record the Linux Checks That Passed on This Tree
+    needs: [changes, passed-on-this-tree, graph-fuzzer, graph-fuzzer-corpus, linux-repeat-pass, linux-repeat, release-acceptance, linux-release-build, function-compile-time]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Check That This Commit Has the Recorded Tree
+        id: tree
+        continue-on-error: true
+        env:
+          TREE: ${{ needs.passed-on-this-tree.outputs.tree }}
+        run: |
+          test "$(git rev-parse 'HEAD^{tree}')" = "$TREE"
+          printf '%s\n' "$TREE" > "$RUNNER_TEMP/passed-tree.txt"
+      - name: Upload the Record That the Fuzzer's Corpora Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.graph-fuzzer.result == 'success' && needs.graph-fuzzer-corpus.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-graph-fuzzer-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That the Repeat Passes Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.linux-repeat-pass.result == 'success' && needs.linux-repeat.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-linux-repeat-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That Release Acceptance Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.release-acceptance.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-release-acceptance-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That the Release SafeDITool Built
+        if: ${{ steps.tree.outcome == 'success' && needs.linux-release-build.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-linux-release-build-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
+      - name: Upload the Record That the Function Compile Time Check Passed
+        if: ${{ steps.tree.outcome == 'success' && needs.function-compile-time.result == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-function-compile-time-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
 
   readme-validation:
     name: Check Markdown links
