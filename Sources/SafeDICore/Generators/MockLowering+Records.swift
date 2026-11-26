@@ -179,6 +179,12 @@ extension MockLowering.Walk {
 			unrecordedReasons[childIndexPath] = "inlinePlaceBuilder"
 			return
 		}
+		// A wrapper a public mock promotes reads its caller's wrapper where the wrapper is made
+		// (`promotedWrapperBindingLine`), outside the builder function, which no alternative of its construction records.
+		guard node.promotedParameterName == nil || !node.isWrapped else {
+			unrecordedReasons[childIndexPath] = "promotedWrapper"
+			return
+		}
 		let configuredConstruction = configuredConstruction(of: node, instantiable: instantiable, usesMockInitializer: usesMockInitializer)
 		var alternatives = [ConstructionAlternative]()
 		// A public mock's construction function tries the override itself, handed it as its last argument

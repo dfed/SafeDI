@@ -103,8 +103,14 @@ extension TypeKeyLayout {
 			if let functionReturnType = representative.functionReturnType {
 				value = value.erased(to: functionReturnType, where: representative.isErased)
 			}
-			if !representative.alternatives.isEmpty || representative.constructionValue != nil {
-				guard let construction = spelledConstruction(of: representative, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
+			// A value tried before the function is called is tried where the function is called (`spelledCall`), so the
+			// function's own construction leaves it out.
+			var constructed = representative
+			if Self.valueTriedAtCall(of: representative) != nil {
+				constructed.alternatives.removeFirst()
+			}
+			if !constructed.alternatives.isEmpty || constructed.constructionValue != nil {
+				guard let construction = spelledConstruction(of: constructed, call: value.spelled, argumentValues: argumentValues, inClass: owner, before: statements(ofClass: owner).count) else { return nil }
 				value = .spelledConstruction(construction)
 			}
 			functionCode[owner] = BuilderNode(
@@ -160,16 +166,17 @@ extension TypeKeyLayout {
 			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
-			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, triesValueFirst: true, inClass: owner, at: index)
 		case let .closer(record, target):
-			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
+			// A call that closes a cycle builds again what the function builds, so it tries no value first.
+			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, triesValueFirst: false, inClass: owner, at: index)
 		case let .alias(record):
 			return record.text
 		}
 	}
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.
-	func spelledCall(of callee: Int, binding property: Property, isErased placeIsErased: Bool, isExtension: Bool, inClass owner: Int, at index: Int) -> String? {
+	func spelledCall(of callee: Int, binding property: Property, isErased placeIsErased: Bool, isExtension: Bool, triesValueFirst: Bool, inClass owner: Int, at index: Int) -> String? {
 		guard let representative = representative(of: callee) else { return nil }
 		// A function that returns a type of its own erased the value already (`spelledRootStatements`).
 		let isErased = placeIsErased && representative.functionReturnType == nil
@@ -192,11 +199,20 @@ extension TypeKeyLayout {
 				arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
 			}
 		}
-		return bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative)
+		let valueTriedFirst = triesValueFirst ? Self.valueTriedAtCall(of: representative) : nil
+		guard let call = spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative, tryingFirst: valueTriedFirst, inClass: owner, at: index) else { return nil }
+		return bindings + call
+	}
+
+	/// The value a constant's place reads before it calls its builder function, where its record tries one first: it is
+	/// read where the function is called, so that a place handed a value builds nothing beneath it.
+	static func valueTriedAtCall(of record: BuiltPlaceRecord) -> ConstructionAlternative? {
+		guard record.property.propertyType.isConstant, let first = record.alternatives.first, case .usedAsValue = first.use else { return nil }
+		return first
 	}
 
 	/// The binding of `property` to a call of `callee`'s function that hands it `arguments`.
-	private func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], representative: BuiltPlaceRecord) -> String {
+	private func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], representative: BuiltPlaceRecord, tryingFirst valueTriedFirst: ConstructionAlternative?, inClass owner: Int, at index: Int) -> String? {
 		let functionName = functionNames[callee]
 		switch property.propertyType {
 		case .instantiator,
@@ -229,7 +245,10 @@ extension TypeKeyLayout {
 					isExtension: isExtension,
 				),
 			)
-			return "\(declaration.spelled) = \(Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription.unwrapped, where: isErased).spelled)"
+			let call = Expression.call(function: functionName, arguments: arguments.joined(separator: ", ")).erased(to: property.typeDescription.unwrapped, where: isErased).spelled
+			guard let valueTriedFirst else { return "\(declaration.spelled) = \(call)" }
+			guard let value = spelledAlternative(valueTriedFirst, before: call, argumentValues: [], inClass: owner, before: index) else { return nil }
+			return "\(declaration.spelled) = \(value)"
 		}
 	}
 

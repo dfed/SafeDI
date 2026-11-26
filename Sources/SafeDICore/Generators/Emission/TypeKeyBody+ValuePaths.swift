@@ -387,34 +387,37 @@ extension TypeKeyLayout {
 			construction = constructionValue.resultWrapper.map { "\($0.asSource)(\(value))" } ?? value
 		}
 		for alternative in record.alternatives.reversed() {
-			guard let closure = spelledValuePath(alternative.closure, inClass: owner, before: index) else { return nil }
-			var conditions = [String]()
-			if let bindingName = alternative.bindingName {
-				conditions.append(bindingName == closure ? "let \(bindingName)" : "let \(bindingName) = \(closure)")
-			}
-			for absent in alternative.requiresAbsent {
-				guard let value = spelledValuePath(absent, inClass: owner, before: index) else { return nil }
-				conditions.append("\(value) == nil")
-			}
-			let callee = alternative.bindingName ?? closure
-			let result = switch alternative.use {
-			case .calledWithConstructionArguments:
-				"\(callee)(\(argumentValues.joined(separator: ", ")))"
-			case .calledWithNoArguments:
-				"\(callee)()"
-			case let .wrapped(wrapperType):
-				"\(wrapperType.spelledForConstruction)(\(callee))"
-			case .usedAsValue:
-				callee
-			}
-			let value = alternative.resultWrapper.map { "\($0.asSource)(\(result))" } ?? result
-			if conditions.isEmpty {
-				construction = value
-			} else {
-				let otherwise = construction.hasPrefix("if ") ? construction : "{ \(construction) }"
-				construction = "if \(conditions.joined(separator: ", ")) { \(value) } else \(otherwise)"
-			}
+			guard let tried = spelledAlternative(alternative, before: construction, argumentValues: argumentValues, inClass: owner, before: index) else { return nil }
+			construction = tried
 		}
 		return construction
+	}
+
+	/// `construction` tried after `alternative`, made before the statement at `index` of `owner`'s body.
+	func spelledAlternative(_ alternative: ConstructionAlternative, before construction: String, argumentValues: [String], inClass owner: Int, before index: Int) -> String? {
+		guard let closure = spelledValuePath(alternative.closure, inClass: owner, before: index) else { return nil }
+		var conditions = [String]()
+		if let bindingName = alternative.bindingName {
+			conditions.append(bindingName == closure ? "let \(bindingName)" : "let \(bindingName) = \(closure)")
+		}
+		for absent in alternative.requiresAbsent {
+			guard let value = spelledValuePath(absent, inClass: owner, before: index) else { return nil }
+			conditions.append("\(value) == nil")
+		}
+		let callee = alternative.bindingName ?? closure
+		let result = switch alternative.use {
+		case .calledWithConstructionArguments:
+			"\(callee)(\(argumentValues.joined(separator: ", ")))"
+		case .calledWithNoArguments:
+			"\(callee)()"
+		case let .wrapped(wrapperType):
+			"\(wrapperType.spelledForConstruction)(\(callee))"
+		case .usedAsValue:
+			callee
+		}
+		let value = alternative.resultWrapper.map { "\($0.asSource)(\(result))" } ?? result
+		guard !conditions.isEmpty else { return value }
+		let otherwise = construction.hasPrefix("if ") ? construction : "{ \(construction) }"
+		return "if \(conditions.joined(separator: ", ")) { \(value) } else \(otherwise)"
 	}
 }
