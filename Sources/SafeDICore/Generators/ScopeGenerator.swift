@@ -1859,12 +1859,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// their declarations' locations, so the one a diagnostic is reported at never depends on a type's name.
 	static func irreconcilableFields(of places: [SeamSignature.Hole]) -> [String: [SeamSignature.Hole.Field]] {
 		guard let firstPlace = places.first else { return [:] }
-		let payloadLabels = Set((firstPlace.enumPlace?.values ?? []).map(\.property.label))
-		var fieldsByLabel = [String: [Property: SeamSignature.Hole.Field]]()
-		for place in places {
-			for field in place.fields where !field.isDeferredParameter && !payloadLabels.contains(field.property.label) {
-				fieldsByLabel[field.property.label, default: [:]][field.property] = fieldsByLabel[field.property.label]?[field.property] ?? field
+		return irreconcilableFields(among: places.flatMap(\.fields), payloadOf: firstPlace)
+	}
+
+	/// `irreconcilableFields(of:)` read over every route to the cases at `caseIndices` of `query`'s place graph, the graph's
+	/// cases of one case nested by type whose emitting place is `hole`: the field answers of each label's routes
+	/// (`SeamSignature.Places.Query.answers(ofLabel:at:)`) in place of the fields of its places.
+	static func irreconcilableFields(ofCasesAt caseIndices: [Int], hole: SeamSignature.Hole, in query: SeamSignature.Places.Query) -> [String: [SeamSignature.Hole.Field]] {
+		var fields = [SeamSignature.Hole.Field]()
+		for caseIndex in caseIndices {
+			for label in query.labels(reaching: caseIndex) {
+				for answer in query.answers(ofLabel: label, at: caseIndex) {
+					guard case let .field(level, declaration) = answer else { continue }
+					fields.append(query.places.declaration(level: level, declaration: declaration).field)
+				}
 			}
+		}
+		return irreconcilableFields(among: fields, payloadOf: hole)
+	}
+
+	/// The fields among `fields` whose label they carry in forms that differ in more than optionality, from levels, beside the
+	/// payload of `place`'s enum case (`irreconcilableFields(of:)`).
+	private static func irreconcilableFields(among fields: [SeamSignature.Hole.Field], payloadOf place: SeamSignature.Hole) -> [String: [SeamSignature.Hole.Field]] {
+		let payloadLabels = Set((place.enumPlace?.values ?? []).map(\.property.label))
+		var fieldsByLabel = [String: [Property: SeamSignature.Hole.Field]]()
+		for field in fields where !field.isDeferredParameter && !payloadLabels.contains(field.property.label) {
+			fieldsByLabel[field.property.label, default: [:]][field.property] = fieldsByLabel[field.property.label]?[field.property] ?? field
 		}
 		return fieldsByLabel.compactMapValues { fieldsByProperty in
 			guard Set(fieldsByProperty.keys.map(\.asUnwrappedProperty)).count > 1 else { return nil }
@@ -3531,6 +3551,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let wrapperDeclaringType: TypeDescription?
 		/// Where `wrapperProperty` is declared, when a type in the tree declares it.
 		let wrapperDeclarationLocation: Dependency.DeclarationLocation?
+
+		/// This capture of the same wrapper declared by `declaringType` at `declarationLocation`.
+		func readingWrapper(declaredBy declaringType: TypeDescription, at declarationLocation: Dependency.DeclarationLocation?) -> NonSendableWrapperCapture {
+			NonSendableWrapperCapture(
+				receivedProperty: receivedProperty,
+				declarationLocation: self.declarationLocation,
+				chain: chain,
+				sendableBuilder: sendableBuilder,
+				sendableBuilderDeclaringType: sendableBuilderDeclaringType,
+				capturingSeamType: capturingSeamType,
+				capturingFillSeamType: capturingFillSeamType,
+				capturingFillIsPassedOn: capturingFillIsPassedOn,
+				wrapperProperty: wrapperProperty,
+				wrapperDeclaringType: declaringType,
+				wrapperDeclarationLocation: declarationLocation,
+			)
+		}
 	}
 
 	/// The dependencies in the tree rooted at this scope that a `@Sendable` builder function would capture an
@@ -4818,7 +4855,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if builtChild.generator.buildsInSendableFunction {
 			sendableBuilders.append(SendableBuilder(property: builtProperty, declaringType: hole.ownerType))
 		}
-		return await builtChild.generator.nonSendableWrapperCaptures(
+		let captures = await builtChild.generator.nonSendableWrapperCaptures(
 			of: builtInstantiable,
 			unavailableProperties: builtChild.unavailableProperties,
 			propertiesGeneratedLater: builtChild.generator.bodyPropertiesGeneratedLater(builtChild.propertiesGeneratedLater),
@@ -4826,6 +4863,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingSendableBuilders: sendableBuilders,
 			chain: chain,
 		)
+		return capturesOnEveryRoute(of: captures, readingFieldsOf: hole)
+	}
+
+	/// EXPERIMENT: `captures`, the captures of the fill of `hole`, with each capture of a field `hole` carries made again of
+	/// that label's field on every route of the place graph to `hole`'s case that another type declares: one fill fills the
+	/// case for every route, and each capture names the declaration it reads. Found only where a capture is, so a fill that
+	/// captures nothing asks the graph nothing.
+	private func capturesOnEveryRoute(of captures: [NonSendableWrapperCapture], readingFieldsOf hole: SeamSignature.Hole) -> [NonSendableWrapperCapture] {
+		guard !captures.isEmpty,
+		      let calledBuilders,
+		      !calledBuilders.places.cases.isEmpty,
+		      let caseIndex = calledBuilders.caseIndexBySite[hole.site]
+		else { return captures }
+		let query = SeamSignature.Places.Query(of: calledBuilders.places)
+		var everyRoute = captures
+		for capture in captures {
+			guard let declaringType = capture.wrapperDeclaringType,
+			      hole.fields.contains(where: { $0.property == capture.wrapperProperty && $0.declaringType == declaringType && $0.declarationLocation == capture.wrapperDeclarationLocation })
+			else { continue }
+			for answer in query.answers(ofLabel: capture.wrapperProperty.label, at: caseIndex) {
+				guard case let .field(level, declaration) = answer else { continue }
+				let field = query.places.declaration(level: level, declaration: declaration).field
+				guard field.property == capture.wrapperProperty,
+				      field.declaringType != declaringType || field.declarationLocation != capture.wrapperDeclarationLocation
+				else { continue }
+				let routeCapture = capture.readingWrapper(declaredBy: field.declaringType, at: field.declarationLocation)
+				if !everyRoute.contains(routeCapture) {
+					everyRoute.append(routeCapture)
+				}
+			}
+		}
+		return everyRoute
 	}
 
 	enum ScopeData {
