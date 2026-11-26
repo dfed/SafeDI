@@ -827,14 +827,14 @@ extension DependencyTreeGenerator {
 	/// site is among them, and the children that hold a place.
 	private struct ChildDeclarations {
 		/// Each child's declaration, in the scope's child order, or `nil` for a child that declares nothing there.
-		let declarations: [PathDeclaration?]
+		let declarations: [ChildDeclaration?]
 		/// The properties of the children that start as carriers (`ScopeGenerator.startsAsCarrier(_:)`).
 		let carrierProperties: [Property]
 
 		/// Each carrier property's first position among `carrierProperties`, and the carrier there.
 		private let firstCarrierByProperty: [Property: (position: Int, carrier: Property)]
 
-		init(declarations: [PathDeclaration?], carrierProperties: [Property]) {
+		init(declarations: [ChildDeclaration?], carrierProperties: [Property]) {
 			self.declarations = declarations
 			self.carrierProperties = carrierProperties
 			firstCarrierByProperty = Dictionary(
@@ -921,6 +921,50 @@ extension DependencyTreeGenerator {
 			generatorsToVisit.append(contentsOf: visited.children)
 		}
 		return names
+	}
+
+	/// What a scope's child declares, whatever path reaches the scope: a function of the scope's generator alone, so a
+	/// generator shared between paths has one. What depends on the path – the `@Sendable` functions enclosing the scope,
+	/// its position on the path and the path to it – is no field of it: `onPath(sendableDepth:frameLevel:pathToFrame:)`
+	/// stamps them on at each site's path.
+	private struct ChildDeclaration {
+		let property: Property
+		let access: AccessLevel
+		let accessCause: TypeAccessProof.Cause?
+		let declaringType: TypeDescription
+		let declarationLocation: Dependency.DeclarationLocation?
+		/// See `PathDeclaration.alias`.
+		var alias: SeamSignature.Hole.UncarriedDeclaration.AliasOrigin?
+		/// See `PathDeclaration.isBoundFromCallersArgument`.
+		var isBoundFromCallersArgument = false
+		/// See `PathDeclaration.isBoundByPublicMockRoot`.
+		var isBoundByPublicMockRoot = false
+		/// The generator of the tree the child instantiates where a type above the seam could build it, which
+		/// `PathDeclaration.treeBuildableAboveSeam` pairs with the path to the scope.
+		var treeBuildableAboveSeam: ScopeGenerator?
+
+		/// The declaration on a site's path through the scope: not bound before the site, which the site decides.
+		/// - Parameters:
+		///   - sendableDepth: How many `@Sendable` functions on the path enclose the scope.
+		///   - frameLevel: The scope's position on the path.
+		///   - pathToFrame: The properties from the seam's root to the scope.
+		func onPath(sendableDepth: Int, frameLevel: Int, pathToFrame: [Property]) -> PathDeclaration {
+			var declaration = PathDeclaration(
+				property: property,
+				isBoundBeforeSite: false,
+				sendableDepth: sendableDepth,
+				access: access,
+				accessCause: accessCause,
+				declaringType: declaringType,
+				declarationLocation: declarationLocation,
+				frameLevel: frameLevel,
+			)
+			declaration.alias = alias
+			declaration.isBoundFromCallersArgument = isBoundFromCallersArgument
+			declaration.isBoundByPublicMockRoot = isBoundByPublicMockRoot
+			declaration.treeBuildableAboveSeam = treeBuildableAboveSeam.map { ($0, pathToFrame) }
+			return declaration
+		}
 	}
 
 	/// A declaration on a site's path: the value it binds and whether it is bound before the site.
@@ -1320,42 +1364,51 @@ extension DependencyTreeGenerator {
 			let pathPosition = frame.nextPosition - 1
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
 			// What a child declares does not depend on the site, but for where the site is among the children: each scope's are
-			// found once across the sites through it, keyed by its generator. A scope on a site's path holds a place beneath it,
-			// so no construction memo shares its generator between paths, and its level, its `@Sendable` depth and the path to
-			// it are the same at every site through it.
+			// found once across the sites through it, keyed by its generator. A generator can be shared between paths, so what
+			// is cached is a function of the generator alone (`ChildDeclaration`), and the scope's `@Sendable` depth, its level
+			// and the path to it are stamped on for this site's path. Level 0 is the seam's root, which no other path holds, so
+			// what the closure asks of `level == 0` is the generator's too.
 			let childDeclarations = childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] ?? ChildDeclarations(
-				declarations: frame.orderedChildren.map { child -> PathDeclaration? in
+				declarations: frame.orderedChildren.map { child -> ChildDeclaration? in
 					guard let childProperty = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(childProperty.label) else { return nil }
 					// A mock's root binds what it promotes as the non-optional value it builds.
 					let property = level == 0 && bindsReceivesAgain ? mockRootBinding(ofChild: childProperty, isDependencyOfMockedType: { dependencies.dependencyByProperty[childProperty] != nil }) : childProperty
 					// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
 					// child is. Whether it is bound before the site is the site's.
-					var pathDeclaration = declaration(of: property, isBoundBeforeSite: false)
+					let propertyAccess = access(of: property, declaredBy: instantiable.moduleName)
+					var childDeclaration = ChildDeclaration(
+						property: property,
+						access: propertyAccess.level,
+						accessCause: propertyAccess.cause,
+						declaringType: instantiable.concreteInstantiable,
+						declarationLocation: dependencies.dependencyByProperty[property]?.declarationLocation,
+					)
 					// A public mock's root binds each received dependency it promotes, which it builds where its caller passes `nil`,
 					// among the mocked type's own children.
-					pathDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain && level == 0
+					childDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain && level == 0
 						&& !dependencies.labelsNotReceived.contains(property.label)
 					let source = dependencies.dependencyByProperty[property]?.source
 					if case let .aliased(fulfillingProperty, _, _)? = source {
 						// An alias binds its label to `fulfillingProperty`: the seam's, to the caller's, and any other type's, to one
 						// the seam's tree binds.
-						pathDeclaration.alias = .init(fulfillingProperty: fulfillingProperty, isSeams: level == 0)
+						childDeclaration.alias = .init(fulfillingProperty: fulfillingProperty, isSeams: level == 0)
 					} else if child.generator.receivedProperties.allSatisfy({ receivedLabels.contains($0.label) || $0.label == property.label }) {
 						// A type above the seam can build what the tree instantiates when the seam's caller holds everything its
 						// tree receives, or the tree receives what that type would then declare.
-						pathDeclaration.treeBuildableAboveSeam = (child.generator, pathToFrame)
+						childDeclaration.treeBuildableAboveSeam = child.generator
 					}
 					// A public mock's root child that the mocked type or a type in its tree receives, which the mock promoted, is
 					// bound from the optional parameter `mock()` takes, which a calling mock passes its own nearest declaration of
 					// the label.
-					pathDeclaration.isBoundFromCallersArgument = bindsReceivesAgain && level == 0 && source?.isReceived ?? true
-					return pathDeclaration
+					childDeclaration.isBoundFromCallersArgument = bindsReceivesAgain && level == 0 && source?.isReceived ?? true
+					return childDeclaration
 				},
 				carrierProperties: frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil },
 			)
 			childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] = childDeclarations
 			for (position, child) in frame.orderedChildren.enumerated() {
-				guard var pathDeclaration = childDeclarations.declarations[position] else { continue }
+				guard let childDeclaration = childDeclarations.declarations[position] else { continue }
+				var pathDeclaration = childDeclaration.onPath(sendableDepth: sendableDepth, frameLevel: level, pathToFrame: pathToFrame)
 				let property = pathDeclaration.property
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
 				// being built where the loop's payloads are bound, before the loop's first function.
@@ -1446,8 +1499,8 @@ extension DependencyTreeGenerator {
 		// at each level. Any other value a fill reads is the same at every level.
 		var cycleReentryDeclarations = [SeamSignature.Hole.CycleReentryDeclaration]()
 		for (level, generator, closedOnDeclaration, closedOnDeclaringType) in scopesACycleClosesOn {
-			// Keyed by the generator's identity: a closed-on scope on a site's path holds a hole, so no construction memo
-			// shares it between places.
+			// Keyed by the generator's identity: what a scope between a closed-on scope and the cycle-closing scopes in its
+			// tree declares, and the declaration closed on, are facts of the closed-on scope's subtree, whatever path reaches it.
 			let declarationsBetween = declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] ?? declarationsBetween(closedOnScope: generator, closedOnDeclaration: closedOnDeclaration)
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
 			if let levelIndex = levelIndexByClosedOnFrameLevel[level], levelIndex < levels.count {
