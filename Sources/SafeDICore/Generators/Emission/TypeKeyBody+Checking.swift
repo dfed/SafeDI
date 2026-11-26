@@ -229,7 +229,7 @@ extension TypeKeyLayout {
 			siblingEdges = edges
 		}
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
-			let declaration = typeLookUp(label, inClass: owner, before: index)
+			let declaration = passedDeclaration(label, toParameterOf: callee, inClass: owner, before: index)
 			let actual = normalized(evaluate(declaration, inBody: body))
 			if let siblingEdges {
 				// A member of a loop of builders calls a sibling's function: at each of its own places, the sibling its body's

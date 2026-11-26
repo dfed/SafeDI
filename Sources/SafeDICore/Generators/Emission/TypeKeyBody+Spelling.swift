@@ -152,7 +152,7 @@ extension TypeKeyLayout {
 		var arguments = [String]()
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
 			guard let parameterType = parameterTypes[callee][label],
-			      let value = spelledArgument(label, passedTo: parameterType, inClass: owner, before: index)
+			      let value = spelledArgument(label, passing: passedDeclaration(label, toParameterOf: callee, inClass: owner, before: index), to: parameterType)
 			else { return nil }
 			arguments.append("\(label.spelledAsArgumentLabel): \(value)")
 		}
@@ -196,10 +196,10 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What a call made before the statement at `index` of `owner`'s body passes a parameter `label` of type
-	/// `parameterType`: its nearest declaration, `nil`, or a wrapper made of a value where the parameter takes a wrapper.
-	func spelledArgument(_ label: String, passedTo parameterType: TypeDescription, inClass owner: Int, before index: Int) -> String? {
-		let declaration = typeLookUp(label, inClass: owner, before: index)
+	/// What a call passes a parameter `label` of type `parameterType` where it passes `declaration`
+	/// (`passedDeclaration(_:toParameterOf:inClass:before:)`): the declaration, `nil`, or a wrapper made of a value where
+	/// the parameter takes a wrapper.
+	func spelledArgument(_ label: String, passing declaration: TypeDeclaration, to parameterType: TypeDescription) -> String? {
 		guard let declaredType = type(of: declaration) else {
 			return parameterType.isOptional ? "nil" : nil
 		}

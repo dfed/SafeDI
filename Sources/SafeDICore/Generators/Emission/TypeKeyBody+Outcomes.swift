@@ -39,6 +39,28 @@ extension TypeKeyLayout {
 		}
 	}
 
+	/// The declaration a call made before the statement at `index` of `owner`'s body passes `callee`'s parameter `label`:
+	/// the nearest declaration of the label, or none where that declaration provides no form of the optional parameter's
+	/// type. Hiding is by label, so the nearest declaration hides every one above it whatever its form, and a forward of
+	/// `mark: Mark?` above a parameter `mark: Stamp?` passes `nil`, as today's tree does.
+	func passedDeclaration(_ label: String, toParameterOf callee: Int, inClass owner: Int, before index: Int) -> TypeDeclaration {
+		let declaration = typeLookUp(label, inClass: owner, before: index)
+		guard let parameterType = parameterTypes[callee][label],
+		      parameterType.isOptional,
+		      let declaredType = type(of: declaration),
+		      !Self.provides(declaredType, parameterType)
+		else { return declaration }
+		return .none
+	}
+
+	/// Whether a declaration typed `declaredType` provides a parameter typed `parameterType`: the type itself, its
+	/// unwrapped type where the parameter is optional, or the instance of the lazy wrapper the parameter takes.
+	static func provides(_ declaredType: TypeDescription, _ parameterType: TypeDescription) -> Bool {
+		declaredType == parameterType
+			|| (parameterType.isOptional && parameterType.unwrapped == declaredType)
+			|| (parameterType.unwrapped.lazilyInstantiatedInstanceType == declaredType && !declaredType.isOptional)
+	}
+
 	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
 	func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
 		let statements = statements(ofClass: owner)

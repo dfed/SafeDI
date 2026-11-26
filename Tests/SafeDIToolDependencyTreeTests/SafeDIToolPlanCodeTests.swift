@@ -210,6 +210,67 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToOptionalParameter_whenNearestDeclarationOfLabelIsOfAnotherForm() async throws {
+		// `Detail` receives `mark: Stamp?` only if available, so its function takes `mark` optionally, as `Flow`, another
+		// scope of the cycle, declares it. `Flow` forwards `mark: Mark?`: hiding is by label, so the call beneath `Flow`
+		// passes what its nearest declaration of `mark` provides of `Stamp?`, which is nothing, and passes `nil`, as today's
+		// tree does.
+		let codes = try await planCodes(of: """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+		}
+
+		@Instantiable public final class Screen: Instantiable {
+		    @Instantiated let flowBuilder: Instantiator<Flow>
+		    public init(flowBuilder: Instantiator<Flow>) { self.flowBuilder = flowBuilder }
+		}
+
+		@Instantiable public final class Flow: Instantiable {
+		    @Forwarded let mark: Mark?
+		    @Instantiated let detailBuilder: Instantiator<Detail>
+		    public init(mark: Mark?, detailBuilder: Instantiator<Detail>) { self.mark = mark; self.detailBuilder = detailBuilder }
+		}
+
+		@Instantiable public final class Detail: Instantiable {
+		    @Received(onlyIfAvailable: true) let mark: Stamp?
+		    @Instantiated let screenBuilder: Instantiator<Screen>
+		    public init(mark: Stamp?, screenBuilder: Instantiator<Screen>) { self.mark = mark; self.screenBuilder = screenBuilder }
+		}
+
+		public final class Mark {}
+
+		public final class Stamp {}
+		""")
+
+		#expect(codes == ["Root": """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_screenBuilder() -> Screen {
+		            let flowBuilder = Instantiator<Flow> {
+		                __safeDI_flowBuilder(mark: $0)
+		            }
+		            return Screen(flowBuilder: flowBuilder)
+		        }
+		        func __safeDI_flowBuilder(mark: Mark?) -> Flow {
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(mark: nil)
+		            }
+		            return Flow(mark: mark, detailBuilder: detailBuilder)
+		        }
+		        func __safeDI_detailBuilder(mark: Stamp?) -> Detail {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return Detail(mark: mark, screenBuilder: screenBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsPathKeysBody_whenABodyHoldsLoopOfBuilders() async throws {
 		// `Screen`'s builders receive each other, a loop the type key does not plan, so `Screen`'s body is written per
 		// path and the root keeps the path key's body.
