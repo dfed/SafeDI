@@ -60,14 +60,36 @@ extension SeamSignature.Places {
 			called(of: reference)?.places
 		}
 
-		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route], calledPlaces: [CalledPlaces] = []) {
+		public init(seamType: TypeDescription, places: SeamSignature.Places, siteHoles: [SeamSignature.Hole], caseIndexBySite: [Int], routeBySite: [Route], calledPlaces: [CalledPlaces] = [], walkedOnce: WalkedOnce? = nil) {
 			self.calledPlaces = calledPlaces
 			self.seamType = seamType
 			self.places = places
 			self.siteHoles = siteHoles
 			self.caseIndexBySite = caseIndexBySite
 			self.routeBySite = routeBySite
+			self.walkedOnce = walkedOnce
 		}
+
+		/// The place graph one walk of the seam's tree built (`DependencyTreeGenerator.placesWalkingTreeOnce`), which must equal
+		/// `places`, with what that walk gave each of `siteHoles`, in the same order: its case and its route, for a place a call
+		/// passes up the first call's, and the paths of the sites of the seam's own tree it visited.
+		public struct WalkedOnce: Sendable {
+			public init(places: SeamSignature.Places, sitePaths: [[Property]], caseIndexBySite: [Int], routeBySite: [Route]) {
+				self.places = places
+				self.sitePaths = sitePaths
+				self.caseIndexBySite = caseIndexBySite
+				self.routeBySite = routeBySite
+			}
+
+			public let places: SeamSignature.Places
+			/// The sites of the seam's own tree the walk visited, in the order it visited them.
+			public let sitePaths: [[Property]]
+			public let caseIndexBySite: [Int]
+			public let routeBySite: [Route]
+		}
+
+		/// The place graph one walk of the seam's tree built, beside the one the per-site walk built.
+		public let walkedOnce: WalkedOnce?
 
 		/// The seam, or the public mock, whose places these are.
 		public let seamType: TypeDescription

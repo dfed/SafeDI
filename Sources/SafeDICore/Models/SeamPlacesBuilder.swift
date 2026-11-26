@@ -209,6 +209,73 @@ struct SeamPlacesBuilder {
 		cases[caseIndex].reenteringPlaceFields.add(reenteringPlaceFields)
 	}
 
+	// The one walk of a seam's tree (`DependencyTreeGenerator.placesWalkingTreeOnce`) adds a level once per scope and next
+	// property, and a case once per site, through these.
+
+	/// What tells apart the declaration list of every level that has every fact of `draft`'s but its next property
+	/// (`declarationListIndex(of:)`).
+	func listProjection(of draft: LevelDraft) -> ListProjection {
+		ListProjection(
+			key: SeamSignature.Places.LevelKey(builtType: draft.key.builtType, nextProperty: nil, isSeamRoot: draft.key.isSeamRoot, isInFill: draft.key.isInFill, filledType: draft.key.filledType, filledCase: draft.key.filledCase),
+			declarations: draft.declarations.map(\.declaration),
+			opensSendableFunction: draft.opensSendableFunction,
+			cycleReentries: draft.cycleReentries,
+			fillBaseStack: draft.fillBaseStack,
+			fillOwnerType: draft.fillOwnerType,
+			pathSegment: draft.pathSegment,
+			pathTypes: draft.pathTypes,
+		)
+	}
+
+	/// Adds the level `draft`, whose declaration list's projection is `listProjection`, beneath `parent`, and the edge from
+	/// `parent` where it is new, and returns the level's index. The places in its declarations' trees are added apart, by
+	/// `addPlacesInTree`.
+	mutating func addLevel(_ draft: LevelDraft, listProjection: ListProjection, parent: Int?) -> Int {
+		let listIndex = listIndexByProjection[listProjection] ?? addList(draft, projection: listProjection)
+		let index = variantIndex(of: draft, inList: listIndex)
+		if let parent, edges.insert(EdgeKey(level: index, parent: parent)).inserted {
+			variants[index].parents.append(parent)
+			variants[index].declaredSegmentByParent.append(draft.declaredSegment)
+		}
+		return index
+	}
+
+	/// Adds the sites of the places the tree of the declaration at `declarationIndex` of the level at `level` holds on one
+	/// route through the level to those of the routes before it, each once.
+	mutating func addPlacesInTree(_ sites: [SeamSignature.Hole.Site], ofDeclaration declarationIndex: Int, atLevel level: Int) {
+		addPlacesInTree(sites, ofDeclaration: declarationIndex, inList: variants[level].declarationList)
+	}
+
+	/// Adds `site`'s place to the case of its owner level and family, and returns the case's index. For a place a call
+	/// presents, `ownerLevel` is the call's level and `passedUp` the called seam's case; a site several calls present keeps
+	/// the case of the call added first.
+	mutating func addCase(
+		ofSite site: SeamSignature.Hole.Site,
+		ownerLevel: Int,
+		passedUp: SeamSignature.Places.CalledCase?,
+		isBuiltInSendableFunction: Bool,
+		siteOpensSendableFunction: Bool,
+	) -> Int {
+		var key = CaseKey(ownerLevel: ownerLevel, isBuiltInSendableFunction: isBuiltInSendableFunction)
+		if let passedUp {
+			key.innerSeamType = passedUp.seamType
+			key.innerIsPublicMock = passedUp.isPublicMock
+			key.innerCaseIndex = passedUp.caseIndex
+		}
+		let caseIndex: Int
+		if let known = caseIndexByKey[key] {
+			caseIndex = known
+		} else {
+			caseIndex = cases.count
+			caseIndexByKey[key] = caseIndex
+			cases.append(CaseDraft(ownerLevel: ownerLevel, passedUp: passedUp, isBuiltInSendableFunction: isBuiltInSendableFunction, siteOpensSendableFunction: siteOpensSendableFunction))
+		}
+		if passedUp == nil || caseIndexBySite[site] == nil {
+			caseIndexBySite[site] = caseIndex
+		}
+		return caseIndex
+	}
+
 	/// The graph, each declaration's places in its tree mapped to their cases, a site of no case left out, and each case
 	/// named by the route in `namingRouteByCase`.
 	func places(namingRouteByCase: [Int: [Int]]) -> SeamSignature.Places {
@@ -267,7 +334,11 @@ struct SeamPlacesBuilder {
 	/// The index of the variant `draft` is of: every fact of the level but the sites of the places in a declaration's tree,
 	/// which differ by path and become one case, and the edge it was reached by.
 	private mutating func variantIndex(of draft: LevelDraft) -> Int {
-		let listIndex = declarationListIndex(of: draft)
+		variantIndex(of: draft, inList: declarationListIndex(of: draft))
+	}
+
+	/// The index of the variant of `draft`, whose declaration list is at `listIndex`.
+	private mutating func variantIndex(of draft: LevelDraft, inList listIndex: Int) -> Int {
 		let projection = VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop)
 		if let known = variantIndexByProjection[projection] {
 			return known
@@ -279,29 +350,29 @@ struct SeamPlacesBuilder {
 
 	/// The index of the declaration list of every level that has every fact of `draft`'s but its next property.
 	private mutating func declarationListIndex(of draft: LevelDraft) -> Int {
-		let projection = ListProjection(
-			key: SeamSignature.Places.LevelKey(builtType: draft.key.builtType, nextProperty: nil, isSeamRoot: draft.key.isSeamRoot, isInFill: draft.key.isInFill, filledType: draft.key.filledType, filledCase: draft.key.filledCase),
-			declarations: draft.declarations.map(\.declaration),
-			opensSendableFunction: draft.opensSendableFunction,
-			cycleReentries: draft.cycleReentries,
-			fillBaseStack: draft.fillBaseStack,
-			fillOwnerType: draft.fillOwnerType,
-			pathSegment: draft.pathSegment,
-			pathTypes: draft.pathTypes,
-		)
-		if let known = listIndexByProjection[projection] {
-			// A declaration's tree holds the places of every route through the levels: a place's family, and so its case, can
-			// differ by the route above.
-			for (index, declaration) in draft.declarations.enumerated() {
-				for site in declaration.placesInTree where lists[known].placesInTreeSeen[index].insert(site).inserted {
-					lists[known].declarations[index].placesInTree.append(site)
-				}
-			}
-			return known
+		let projection = listProjection(of: draft)
+		guard let known = listIndexByProjection[projection] else {
+			return addList(draft, projection: projection)
 		}
+		// A declaration's tree holds the places of every route through the levels: a place's family, and so its case, can
+		// differ by the route above.
+		for (index, declaration) in draft.declarations.enumerated() {
+			addPlacesInTree(declaration.placesInTree, ofDeclaration: index, inList: known)
+		}
+		return known
+	}
+
+	/// Adds the declaration list of `draft`, whose projection is `projection`, and returns its index.
+	private mutating func addList(_ draft: LevelDraft, projection: ListProjection) -> Int {
 		listIndexByProjection[projection] = lists.count
 		lists.append(DeclarationList(declarations: draft.declarations))
 		return lists.count - 1
+	}
+
+	private mutating func addPlacesInTree(_ sites: [SeamSignature.Hole.Site], ofDeclaration declarationIndex: Int, inList listIndex: Int) {
+		for site in sites where lists[listIndex].placesInTreeSeen[declarationIndex].insert(site).inserted {
+			lists[listIndex].declarations[declarationIndex].placesInTree.append(site)
+		}
 	}
 
 	/// A level's facts: its declaration list's, and the next property's.
@@ -316,7 +387,7 @@ struct SeamPlacesBuilder {
 	/// Types compare as types (`any Service` equals `Service`), not as spelled: every fact of a level comes from the
 	/// declarations of its type and of the edge above it, which spell each type once, so two routes to one level spell its
 	/// types alike. The tests' oracle compares every place's fields, spelling included, with the per-site walk's.
-	private struct ListProjection: Hashable {
+	struct ListProjection: Hashable {
 		let key: SeamSignature.Places.LevelKey
 		let declarations: [SeamSignature.Places.Declaration]
 		let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
