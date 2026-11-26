@@ -148,7 +148,7 @@ extension DependencyTreeGenerator {
 					storedSignatureBySeam[stored.seamType] = stored
 				}
 				storedSeamRoots = module.seams.compactMap { seam in
-					storedSignatureBySeam[seam.type].map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0) }) }
+					storedSignatureBySeam[seam.type].map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0, callRoutes: []) }) }
 				}
 			} else {
 				storedSeamRoots = []
@@ -764,6 +764,7 @@ extension DependencyTreeGenerator {
 			let parameters = Self.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
 				signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: Self.tiers(of: seam, parameters: parameters)),
+				callRoutes: [],
 			)
 		}
 		// Until a seam's signature is computed, a tree that reaches it calls an initializer taking the seam's own
@@ -954,6 +955,7 @@ extension DependencyTreeGenerator {
 			let parameters = DependencyTreeGenerator.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
 				signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: DependencyTreeGenerator.tiers(of: seam, parameters: parameters)),
+				callRoutes: [],
 			)
 		}
 	}
@@ -2162,17 +2164,19 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		return ScopeGenerator.SeamRoot(signature: SeamSignature(
-			seamType: seam.concreteInstantiable,
-			parameters: parameters,
-			tiers: tiers,
-			noTierParameters: noTierParameters,
-			holes: holes,
-			builders: shapedBuilders.builders,
-			scopeEnums: shapedBuilders.scopeEnums,
+		return ScopeGenerator.SeamRoot(
+			signature: SeamSignature(
+				seamType: seam.concreteInstantiable,
+				parameters: parameters,
+				tiers: tiers,
+				noTierParameters: noTierParameters,
+				holes: holes,
+				builders: shapedBuilders.builders,
+				scopeEnums: shapedBuilders.scopeEnums,
+				typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
+			),
 			callRoutes: shapedBuilders.callRoutes,
-			typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
-		))
+		)
 	}
 
 	/// Whether a call of `initializer` can pass exactly `labels`, in order: they match its arguments' labels in order,

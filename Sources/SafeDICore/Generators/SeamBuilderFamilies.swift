@@ -1046,7 +1046,7 @@ extension DependencyTreeGenerator {
 			// The enums are marked in a copy, assigned once, since each assignment computes the signature's call shape again.
 			var signature = seamRoot.signature
 			signature.scopeEnums = markingIndirectCases(of: seamRoot.signature.scopeEnums, componentByKey: componentByKey)
-			return ScopeGenerator.SeamRoot(signature: signature, unreadTypeComment: seamRoot.unreadTypeComment)
+			return ScopeGenerator.SeamRoot(signature: signature, callRoutes: seamRoot.callRoutes, unreadTypeComment: seamRoot.unreadTypeComment)
 		}
 	}
 

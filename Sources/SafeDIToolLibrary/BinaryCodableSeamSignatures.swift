@@ -59,7 +59,6 @@ extension SeamSignature: BinarySchemaMember {
 				BinaryLayoutField("holes", \.holes),
 				BinaryLayoutField("builders", \.builders),
 				BinaryLayoutField("scopeEnums", \.scopeEnums),
-				BinaryLayoutField("callRoutes", \.callRoutes),
 				BinaryLayoutField("typesDeclaredEscaping", \.typesDeclaredEscaping),
 			],
 			unwrittenProperties: ["callShape", "guardTypeName"],
@@ -75,7 +74,6 @@ extension SeamSignature: BinarySchemaMember {
 			holes: reader.read(),
 			builders: reader.read(),
 			scopeEnums: reader.read(),
-			callRoutes: reader.read(),
 			typesDeclaredEscaping: reader.read(),
 		)
 	}
@@ -88,7 +86,6 @@ extension SeamSignature: BinarySchemaMember {
 		writer.write(holes)
 		writer.write(builders)
 		writer.write(scopeEnums)
-		writer.write(callRoutes)
 		writer.write(typesDeclaredEscaping)
 	}
 }
@@ -1125,48 +1122,6 @@ extension SeamSignature.Hole.Site: BinarySchemaMember {
 	func write(to writer: inout BinaryWriter) {
 		writer.write(seamType)
 		writer.write(path)
-	}
-}
-
-extension SeamSignature.CallRoute: BinarySchemaMember {
-	static var binaryLayout: BinaryLayout<Self> {
-		.structure(
-			fields: [
-				BinaryLayoutField("sitePath", \.sitePath),
-				BinaryLayoutField("innerKey", \.innerKey),
-				BinaryLayoutField("rootKey", \.rootKey),
-				BinaryLayoutField("route", \.route),
-				BinaryLayoutField("caseName", \.caseName),
-				BinaryLayoutField("memberValuesType", \.memberValuesType),
-				BinaryLayoutField("handsFillLevelStruct", \.handsFillLevelStruct),
-				BinaryLayoutField("reentersEnclosingFill", \.reentersEnclosingFill),
-			],
-			unwrittenProperties: [],
-		)
-	}
-
-	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			sitePath: reader.read(),
-			innerKey: reader.read(),
-			rootKey: reader.read(),
-			route: reader.read(),
-			caseName: reader.read(),
-			memberValuesType: reader.read() as TypeDescription?,
-			handsFillLevelStruct: reader.read(),
-			reentersEnclosingFill: reader.read(),
-		)
-	}
-
-	func write(to writer: inout BinaryWriter) {
-		writer.write(sitePath)
-		writer.write(innerKey)
-		writer.write(rootKey)
-		writer.write(route)
-		writer.write(caseName)
-		writer.write(memberValuesType)
-		writer.write(handsFillLevelStruct)
-		writer.write(reentersEnclosingFill)
 	}
 }
 
