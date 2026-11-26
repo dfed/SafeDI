@@ -211,6 +211,11 @@ extension MockLowering.Walk {
 				unrecordedReasons[path] = "namedApart"
 				continue
 			}
+			// A place bound as `nil` where its entry says so binds what production's record never does.
+			guard !pathsReadingUnavailableEntries.contains(path) else {
+				unrecordedReasons[path] = "readsUnavailableEntry"
+				continue
+			}
 			// A member of a loop of builders whose function rebinds another member hands each closer that member's
 			// configuration and its level's, as the level hands them (`MockLowering+LoopPlaces.swift`).
 			var rebindingCodes = [GeneratedCode]()
@@ -350,6 +355,7 @@ extension MockLowering.Walk {
 		pathsWithUnplannedLines = []
 		unplannedLineKinds = [:]
 		pathsStartingExtraction = []
+		pathsReadingUnavailableEntries = []
 		leadingBodyPlaces = [:]
 		loopRebindings = [:]
 		unrecordedReasons = [:]

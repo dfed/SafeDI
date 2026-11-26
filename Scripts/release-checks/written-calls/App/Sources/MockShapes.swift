@@ -50,6 +50,23 @@ public final class ReportScreen: Instantiable {
 	@Instantiated private let reportService: LazilyInstantiated<ReportService>
 }
 
+/// “Dependency kinds in the generated mock”: a dependency instantiated only if available that a declaration fulfills.
+public protocol ReportAnalytics {}
+
+@Instantiable(fulfillingAdditionalTypes: [ReportAnalytics.self])
+public final class DefaultReportAnalytics: ReportAnalytics, Instantiable {
+	public init() {}
+}
+
+@Instantiable(generateMock: true)
+public final class ReportSummaryScreen: Instantiable {
+	public init(analytics: (any ReportAnalytics)?) {
+		self.analytics = analytics
+	}
+
+	@Instantiated(onlyIfAvailable: true) private let analytics: (any ReportAnalytics)?
+}
+
 /// “Overriding dependencies”: a labeled default-valued `@autoclosure` parameter. (The manual names the type `Service`.)
 @Instantiable(generateMock: true)
 public final class Retrier: Instantiable {

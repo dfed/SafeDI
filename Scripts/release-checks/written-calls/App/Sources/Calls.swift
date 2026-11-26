@@ -129,6 +129,11 @@ func callMocks() {
 	// the instance.
 	let _: ReportScreen = ReportScreen.mock(safeDIOverrides: .init(reportService: { ReportService() }))
 
+	// “Dependency kinds in the generated mock”: a dependency instantiated only if available that a declaration
+	// fulfills is built, and an entry named after its label with `IsUnavailable` binds it to `nil`.
+	let _: ReportSummaryScreen = ReportSummaryScreen.mock()
+	let _: ReportSummaryScreen = ReportSummaryScreen.mock(safeDIOverrides: .init(analyticsIsUnavailable: true))
+
 	// “Dependency kinds in the generated mock”, under “Names”: two flat parameters that share a label.
 	let _: ItemsView = ItemsView.mock(items_Set__String: ["b"], items_Array_String: ["a"])
 

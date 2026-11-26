@@ -1784,6 +1784,7 @@ struct GraphFuzzerValueOraclePlan {
 			)
 			: nil
 		nestedCycleShape = NestedCycleShape(of: fixture)
+		unavailableEntryShape = UnavailableEntryShape(of: fixture)
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -1841,6 +1842,107 @@ struct GraphFuzzerValueOraclePlan {
 			featureExpression: "\(fixture.typeNamePrefix)NestRoot()",
 			knownRightExpression: "\(fixture.typeNamePrefix)\(Self.nestedCycleMirrorName).build()",
 		)
+	}
+
+	/// In a graph that draws a dependency instantiated only if available that a declaration fulfills
+	/// (`addingDependencyInstantiatedOnlyIfAvailable`), what the draw drew of `IfAvailableRoot`'s tree, read from the
+	/// graph's source. `nil` in every other graph.
+	let unavailableEntryShape: UnavailableEntryShape?
+
+	/// `IfAvailableRoot`'s mock passed `true` for `ifAvailableTokenIsUnavailable`, the entry that binds the screen's
+	/// fulfilled `ifAvailableToken` to `nil`, against the tree production builds where no declaration fulfills the token,
+	/// built by hand by `ZIfAvailableMirror.build()`, which only the value-oracle fixture declares: the screen and every
+	/// leaf beneath it hold `nil`. A root's own pair passes the entry its default, which builds the token, so only this
+	/// pair reads the entry's `true`. `nil` in every graph without the draw's fulfilled token.
+	var unavailableEntryPair: DifferentialValueProbePair? {
+		guard unavailableEntryShape != nil else { return nil }
+		let prefix = fixture.typeNamePrefix
+		return DifferentialValueProbePair(
+			name: "\(prefix)IfAvailableRoot.mock() with the token unavailable against a tree built by hand",
+			featureExpression: "\(prefix)IfAvailableRoot.mock(safeDIOverrides: .init(ifAvailableScreen: .init(ifAvailableTokenIsUnavailable: true)))",
+			knownRightExpression: "\(prefix)\(Self.unavailableEntryMirrorName).build()",
+		)
+	}
+
+	/// The name, after the graph's prefix, of the type whose `build()` builds `IfAvailableRoot`'s tree by hand, the
+	/// token `nil`, in the value-oracle fixture of a graph with an `unavailableEntryPair`.
+	static let unavailableEntryMirrorName = "ZIfAvailableMirror"
+
+	/// What `addingDependencyInstantiatedOnlyIfAvailable` drew where a declaration fulfills the token, read from a
+	/// graph's source.
+	struct UnavailableEntryShape: Equatable {
+		/// `nil` for a graph without `IfAvailableRoot`, or whose token no declaration fulfills.
+		init?(of fixture: GraphFuzzerFixture) {
+			let prefix = fixture.typeNamePrefix
+			var propertiesByTypeName = [String: [(label: String, type: String)]]()
+			var instantiableTypeNames = Set<String>()
+			var currentTypeName = ""
+			var pendingAttribute = false
+			for line in fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)) {
+				switch line {
+				case .instantiableAttribute:
+					pendingAttribute = true
+				case let .typeDeclaration(name):
+					currentTypeName = name
+					if pendingAttribute {
+						instantiableTypeNames.insert(name)
+					}
+					pendingAttribute = false
+				case let .property(_, label, type):
+					propertiesByTypeName[currentTypeName, default: []].append((label, type))
+				case .instantiateMethod, .other:
+					break
+				}
+			}
+			guard let rootProperties = propertiesByTypeName["\(prefix)IfAvailableRoot"],
+			      let screenProperties = propertiesByTypeName["\(prefix)IfAvailableScreen"],
+			      instantiableTypeNames.contains("\(prefix)IfAvailableToken")
+			else { return nil }
+			screenLabelsAndTypes = screenProperties.map { ($0.label, $0.type) }
+			rootBuildsLeaf = rootProperties.contains { $0.label == "ifAvailableOuterLeaf" }
+		}
+
+		/// The screen's properties, in declaration order, each with its type as spelled.
+		let screenLabelsAndTypes: [(label: String, type: String)]
+		/// The root builds a second leaf, outside the screen's tree.
+		let rootBuildsLeaf: Bool
+
+		static func == (lhs: UnavailableEntryShape, rhs: UnavailableEntryShape) -> Bool {
+			lhs.screenLabelsAndTypes.map(\.label) == rhs.screenLabelsAndTypes.map(\.label)
+				&& lhs.screenLabelsAndTypes.map(\.type) == rhs.screenLabelsAndTypes.map(\.type)
+				&& lhs.rootBuildsLeaf == rhs.rootBuildsLeaf
+		}
+
+		/// The file of `ZIfAvailableMirror`, which names itself (`GraphFuzzerFixture.fileNameMarker`), as it declares no
+		/// `@Instantiable` type, and whose `build()` builds `IfAvailableRoot`'s tree by hand with the token `nil`, as
+		/// production builds it where no declaration fulfills the token: every leaf, the screen's and the root's, is
+		/// handed `nil`.
+		func mirrorSource(typeNamePrefix prefix: String) -> String {
+			let leaf = "\(prefix)IfAvailableLeaf(ifAvailableToken: nil)"
+			let screenArguments = screenLabelsAndTypes.map { label, type in
+				switch label {
+				case "ifAvailableToken":
+					"\(label): nil"
+				case "ifAvailableLeafBuilder":
+					"\(label): \(type) { \(leaf) }"
+				default:
+					"\(label): \(leaf)"
+				}
+			}
+			var rootArguments = ["ifAvailableScreen: \(prefix)IfAvailableScreen(\(screenArguments.joined(separator: ", ")))"]
+			if rootBuildsLeaf {
+				rootArguments.append("ifAvailableOuterLeaf: \(leaf)")
+			}
+			let lines = [
+				"\(GraphFuzzerFixture.fileNameMarker)\(prefix)\(GraphFuzzerValueOraclePlan.unavailableEntryMirrorName).swift",
+				"enum \(prefix)\(GraphFuzzerValueOraclePlan.unavailableEntryMirrorName) {",
+				"\tstatic func build() -> \(prefix)IfAvailableRoot {",
+				"\t\t\(prefix)IfAvailableRoot(\(rootArguments.joined(separator: ", ")))",
+				"\t}",
+				"}",
+			]
+			return lines.joined(separator: "\n") + "\n"
+		}
 	}
 
 	/// The name, after the graph's prefix, of the type whose `build()` builds `NestRoot`'s tree by hand in the
@@ -1971,6 +2073,9 @@ struct GraphFuzzerValueOraclePlan {
 		if let nestedCycleShape {
 			swiftFileContent.append(nestedCycleShape.mirrorSource(typeNamePrefix: fixture.typeNamePrefix))
 		}
+		if let unavailableEntryShape {
+			swiftFileContent.append(unavailableEntryShape.mirrorSource(typeNamePrefix: fixture.typeNamePrefix))
+		}
 		if storingEveryParameter {
 			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
 		}
@@ -1995,7 +2100,7 @@ struct GraphFuzzerValueOraclePlan {
 	}
 
 	/// The pairs the oracle compares: each root's mock with its production build, then each mirrored mock with its
-	/// mirror's value, then `pinnedPlacePair` and `nestedCyclePair`. Never a mirror itself, which builds the mocked type's dependencies the
+	/// mirror's value, then `pinnedPlacePair`, `nestedCyclePair` and `unavailableEntryPair`. Never a mirror itself, which builds the mocked type's dependencies the
 	/// mocked type does not hold.
 	var probePairs: [DifferentialValueProbePair] {
 		var pairs = rootTypeNames.map { DifferentialValueProbePair(name: "\($0).mock()", featureExpression: "\($0).mock()", knownRightExpression: "\($0)()") }
@@ -2005,6 +2110,9 @@ struct GraphFuzzerValueOraclePlan {
 		}
 		if let nestedCyclePair {
 			pairs.append(nestedCyclePair)
+		}
+		if let unavailableEntryPair {
+			pairs.append(unavailableEntryPair)
 		}
 		return pairs
 	}
@@ -2311,6 +2419,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	/// The compared pairs of a production build of a type built again through a second lazy cycle against the tree built
 	/// by hand (`GraphFuzzerValueOraclePlan.nestedCyclePair`).
 	var nestedCyclePairCount = 0
+	/// The compared pairs of a mock passed `true` for the entry that binds a fulfilled dependency instantiated only if
+	/// available to `nil` against the tree built by hand (`GraphFuzzerValueOraclePlan.unavailableEntryPair`).
+	var unavailableEntryPairCount = 0
 
 	/// Counts the skips and the drawn mock files R6 normalizes of a graph the value oracle inspected and, when its
 	/// value-oracle graph was compared, its pairs and their shapes.
@@ -2347,6 +2458,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		if plan.nestedCyclePair != nil {
 			nestedCyclePairCount += 1
 		}
+		if plan.unavailableEntryPair != nil {
+			unavailableEntryPairCount += 1
+		}
 	}
 
 	/// The counts as one report field, `key=value` separated by commas, every key present: what
@@ -2368,6 +2482,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields += GraphFuzzerOverrideFieldKind.allCases.map { "override.\($0.rawValue)=\(overrideFieldKindCounts[$0, default: 0])" }
 		fields.append("pinnedPlacePairs=\(pinnedPlacePairCount)")
 		fields.append("nestedCyclePairs=\(nestedCyclePairCount)")
+		fields.append("unavailableEntryPairs=\(unavailableEntryPairCount)")
 		return fields.joined(separator: ",")
 	}
 

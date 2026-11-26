@@ -22,7 +22,8 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// The base corpus's draw of a dependency instantiated only if available
-/// (`addingDependencyInstantiatedOnlyIfAvailable`).
+/// (`addingDependencyInstantiatedOnlyIfAvailable`), and the value oracle's pair that passes the root's mock `true` for the
+/// entry that binds the fulfilled token to `nil` (`GraphFuzzerValueOraclePlan.unavailableEntryPair`).
 struct SafeDIToolGraphFuzzerInstantiatedOnlyIfAvailableTests {
 	@Test
 	func baseCorpus_drawsEachShapeOfDependencyInstantiatedOnlyIfAvailable_inPinnedNumberOfGraphs() {
@@ -38,6 +39,73 @@ struct SafeDIToolGraphFuzzerInstantiatedOnlyIfAvailableTests {
 			#expect(counts[shape, default: 0] == Self.drawnShapeCounts[shape], "\(shape.rawValue) drawn in \(counts[shape, default: 0]) graphs")
 			#expect(counts[shape, default: 0] >= SafeDIToolGraphFuzzerTests.gatingDrawJudgedGraphFloor, "\(shape.rawValue) drawn in fewer than ten graphs")
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueOraclePlan_comparesRootsMockWithTokenUnavailableWithTreeBuiltByHand_forSeed31() {
+		// Seed 31 draws the token fulfilled and the screen's leaf through an `Instantiator`. The root's mock passed `true` for
+		// the entry binds the screen's token to `nil`, which each leaf the builder makes is passed, as production binds the
+		// token where no declaration fulfills it. With the entry ignored (the
+		// node's read of it in `MockLowering.Walk` left out), the corpus fails this pair on seed 31 and on twelve other seeds of
+		// the first 300, each at the token the mock then builds.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 31)
+
+		let plan = GraphFuzzerValueOraclePlan(fixture: fixture, generatedFiles: [:])
+		#expect(plan.unavailableEntryPair == DifferentialValueProbePair(
+			name: "S31_IfAvailableRoot.mock() with the token unavailable against a tree built by hand",
+			featureExpression: "S31_IfAvailableRoot.mock(safeDIOverrides: .init(ifAvailableScreen: .init(ifAvailableTokenIsUnavailable: true)))",
+			knownRightExpression: "S31_ZIfAvailableMirror.build()",
+		))
+		#expect(plan.valueOracleFixture(storingEveryParameter: false).swiftFileContent.last == """
+		// file: S31_ZIfAvailableMirror.swift
+		enum S31_ZIfAvailableMirror {
+			static func build() -> S31_IfAvailableRoot {
+				S31_IfAvailableRoot(ifAvailableScreen: S31_IfAvailableScreen(ifAvailableToken: nil, ifAvailableLeafBuilder: Instantiator<S31_IfAvailableLeaf> { S31_IfAvailableLeaf(ifAvailableToken: nil) }))
+			}
+		}
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueOraclePlan_buildsLeafThroughSendableInstantiator_forSeed186() {
+		// Seed 186 draws the screen's leaf through a `SendableInstantiator`, which the tree built by hand builds alike.
+		let plan = GraphFuzzerValueOraclePlan(fixture: GraphFuzzerGenerator.fixture(forSeed: 186), generatedFiles: [:])
+
+		#expect(plan.valueOracleFixture(storingEveryParameter: false).swiftFileContent.last == """
+		// file: S186_ZIfAvailableMirror.swift
+		enum S186_ZIfAvailableMirror {
+			static func build() -> S186_IfAvailableRoot {
+				S186_IfAvailableRoot(ifAvailableScreen: S186_IfAvailableScreen(ifAvailableLeafBuilder: SendableInstantiator<S186_IfAvailableLeaf> { S186_IfAvailableLeaf(ifAvailableToken: nil) }, ifAvailableToken: nil))
+			}
+		}
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueOraclePlan_comparesNoUnavailableEntryPair_whenNoDeclarationFulfillsToken() {
+		// Where no declaration fulfills the token, the mock takes no entry, and the root's own pair compares the `nil`.
+		var unfulfilledSeeds = [UInt64]()
+		for seed in 0..<UInt64(SafeDIToolGraphFuzzerTests.corpusSeedCount) where Self.shapes(of: GraphFuzzerGenerator.fixture(forSeed: seed)).contains(.tokenUnfulfilled) {
+			unfulfilledSeeds.append(seed)
+			guard unfulfilledSeeds.count < 3 else { break }
+		}
+
+		#expect(unfulfilledSeeds.count == 3)
+		for seed in unfulfilledSeeds {
+			#expect(GraphFuzzerValueOraclePlan.UnavailableEntryShape(of: GraphFuzzerGenerator.fixture(forSeed: seed)) == nil, "seed \(seed)")
+		}
+	}
+
+	@Test
+	func corpusValueOracleCounts_compareTenUnavailableEntryPairs_whenPinsAreRead() {
+		// The pair stands in for unit tests of the entry's values only while the value oracle compares it in at least ten
+		// graphs the tool accepts, which the corpus runs pin exactly.
+		#expect(SafeDIToolGraphFuzzerTests.corpusValueOracleCounts.unavailableEntryPairCount >= SafeDIToolGraphFuzzerTests.gatingDrawJudgedGraphFloor)
 	}
 
 	// MARK: Private
