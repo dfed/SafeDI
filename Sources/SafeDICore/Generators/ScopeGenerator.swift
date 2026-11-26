@@ -9988,7 +9988,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			#sourceLocation()
 			"""
 		case let .comment(filePath, line):
-			"\(code) // Declared at \(filePath):\(line)"
+			"\(code)\(ReservedName.declarationCommentPrefix)\(filePath):\(line)"
 		}
 	}
 

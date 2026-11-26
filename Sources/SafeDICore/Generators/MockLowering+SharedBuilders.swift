@@ -507,7 +507,7 @@ extension MockLowering {
 	static func sharedBuilderDeclarations(of roots: [LoweredRoot]) -> [String: [String]] {
 		var buildersByKey = [SharedBuilderKey: SharedBuilder]()
 		for root in roots {
-			// Two declarations of one name differ at most in their `#sourceLocation` lines, which the name leaves out: the
+			// Two declarations of one name differ at most in their `#sourceLocation` lines and `// Declared at` comments, which the name leaves out: the
 			// first by their UTF-8 is kept, whichever root lowered it first.
 			for builder in root.lowered.sharedBuilders {
 				let key = SharedBuilderKey(builtType: builder.builtType.asSource, name: builder.name)

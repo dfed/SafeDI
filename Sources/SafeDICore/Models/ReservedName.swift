@@ -174,14 +174,16 @@ public enum ReservedName: Hashable, Sendable {
 
 	/// The declaration of a shared builder spelled `declaration` under `sharedBuilderFunctionName`, renamed after its
 	/// code: `__safeDI_build_` and the 64-bit FNV-1a hash of its lines, sixteen uppercase hexadecimal digits, leaving out
-	/// its `#sourceLocation` lines, whose paths follow where the run reads the files from. Every mock that builds the type
-	/// alike spells one declaration, so it names one function, which no mock's run needs another's to name. Returns the
-	/// name and the renamed declaration.
+	/// what points at a declaration's place in its file, which follows where the run reads the file from and moves with
+	/// every line above the declaration: its `#sourceLocation` lines, and an alias's trailing `// Declared at` comment
+	/// (`ScopeGenerator.referencingDeclaration(of:by:)`). So an edit that moves the declaration renames no function, and
+	/// recompiles no file that calls one. Every mock that builds the type alike spells one declaration, so it names one
+	/// function, which no mock's run needs another's to name. Returns the name and the renamed declaration.
 	static func sharedBuilder(named declaration: String) -> (name: String, declaration: String) {
 		// The hash `SeamSignatureHash` computes, which the macro target, compiling this file alone, cannot name.
 		var hash: UInt64 = 0xCBF29CE484222325
 		for line in declaration.split(separator: "\n", omittingEmptySubsequences: false) where !line.drop(while: { $0 == " " || $0 == "\t" }).hasPrefix("#sourceLocation") {
-			for byte in line.utf8 {
+			for byte in codeBeforeDeclarationComment(of: line).utf8 {
 				hash = (hash ^ UInt64(byte)) &* 0x00000100000001B3
 			}
 			hash = (hash ^ 0xFF) &* 0x00000100000001B3
@@ -190,6 +192,20 @@ public enum ReservedName: Hashable, Sendable {
 		let name = "\(sharedBuilderFunctionName)_\(String(repeating: "0", count: 16 - digits.count))\(digits)"
 		guard let range = declaration.range(of: "func \(sharedBuilderFunctionName)(") else { return (name, declaration) }
 		return (name, declaration.replacingCharacters(in: range, with: "func \(name)("))
+	}
+
+	/// The comment `ScopeGenerator.referencingDeclaration(of:by:)` puts after an alias's assignment, before the path and
+	/// line of the alias's declaration.
+	static let declarationCommentPrefix = " // Declared at "
+
+	/// `line` without the `declarationCommentPrefix` comment that ends it, which is a path, `:` and a line number.
+	private static func codeBeforeDeclarationComment(of line: Substring) -> Substring {
+		guard let comment = line.range(of: declarationCommentPrefix, options: .backwards),
+		      let colon = line[comment.upperBound...].lastIndex(of: ":"),
+		      case let lineNumber = line[line.index(after: colon)...],
+		      !lineNumber.isEmpty, lineNumber.allSatisfy({ ("0"..."9").contains($0) })
+		else { return line }
+		return line[..<comment.lowerBound]
 	}
 
 	/// The name of the struct a generated mock declares for the overrides of its tree, which its `mock()` takes as
