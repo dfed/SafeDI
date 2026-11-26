@@ -67,8 +67,8 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 
 - ``Instantiable(isRoot:generateDependencyTree:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedInitializerAttributes:mockAttributes:generateMock:customMockName:)``
 - ``Instantiable(isRoot:generateDependencyTree:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedAttributes:generateMock:customMockName:)``
-- ``Instantiated()``
-- ``Instantiated(fulfilledByType:erasedToConcreteExistential:)``
+- ``Instantiated(onlyIfAvailable:)``
+- ``Instantiated(fulfilledByType:erasedToConcreteExistential:onlyIfAvailable:)``
 - ``Received(onlyIfAvailable:)``
 - ``Received(fulfilledByDependencyNamed:ofType:erasedToConcreteExistential:onlyIfAvailable:)``
 - ``Forwarded()``

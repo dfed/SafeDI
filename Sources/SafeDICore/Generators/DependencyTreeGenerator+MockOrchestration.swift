@@ -955,6 +955,10 @@ extension DependencyTreeGenerator {
 							instantiatedScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
+					} else if dependency.isInstantiatedOnlyIfAvailable {
+						// No declaration the module sees fulfills the type, fake included: the mock binds the property to
+						// `nil`, as production does, and takes no parameter, override or builder for it.
+						scope.propertiesToGenerate.append(Self.unavailableDependency(dependency))
 					} else if buildsHoles, Self.canBeHole(dependency) {
 						// No declaration the module sees fulfills the type, fake included: a public mock takes a builder for
 						// it, which this site calls with the values in scope here.

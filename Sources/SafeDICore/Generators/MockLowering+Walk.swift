@@ -239,10 +239,16 @@ extension ScopeGenerator {
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
-		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-		lines.append(parameterLines.joined(separator: ",\n"))
 		// The type the mocked type's hand-written mock returns.
-		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
+		let returnType = MockLowering.rootReturnType(of: instantiable)
+		if parameterLines.isEmpty {
+			// A tree that only binds properties to `nil`, each instantiated only if available with nothing to fulfill it.
+			lines.append("\(indent)\(mockAttributesPrefix)static func mock() -> \(returnType) {")
+		} else {
+			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
+			lines.append(parameterLines.joined(separator: ",\n"))
+			lines.append("\(indent)) -> \(returnType) {")
+		}
 		lines.append(contentsOf: bindingLines)
 		// The mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
@@ -664,6 +670,20 @@ extension MockLowering {
 		) async throws -> TreeNode? {
 			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = generator.scopeData {
 				return aliasNode(of: generator, property: property, fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, onlyIfAvailable: onlyIfAvailable, declarationReference: declarationReference, bindingName: bindingName, inScope: scope, indent: indent, lines: &lines)
+			} else if case let .property(_, property, _, _, _, _) = generator.scopeData, generator.isUnavailableDependency {
+				// A property instantiated only if available that nothing fulfills is bound to `nil`, as production binds it.
+				let binding = AliasBinding(
+					property: property,
+					bindingName: bindingName ?? property.label,
+					fulfillingProperty: property,
+					fulfillingName: property.label,
+					isErased: false,
+					isOnlyIfAvailable: true,
+					isBoundToNil: true,
+					declarationReference: nil,
+				)
+				lines.append(binding.bindingLines(indent: indent))
+				return .alias(binding)
 			} else {
 				// A hole site and a fill, the kinds of node a public mock's tree holds besides properties
 				// and aliases, and a call of another module's public mock (`MockLowering+PublicMocks.swift`).

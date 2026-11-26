@@ -7035,10 +7035,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_592,
+		.constantProperty: 2_609,
 		.erasedConstantProperty: 450,
-		.instantiatorProperty: 2_168,
-		.sendableInstantiatorProperty: 916,
+		.instantiatorProperty: 2_173,
+		.sendableInstantiatorProperty: 917,
 		.erasedInstantiatorProperty: 1_382,
 		.sendableErasedInstantiatorProperty: 493,
 		.lazilyInstantiatedProperty: 408,
@@ -7049,8 +7049,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedProperty: 1_686,
 		.optionalForwardedProperty: 889,
 		.requiredReceive: 2_487,
-		.requiredOptionalReceive: 215,
-		.onlyIfAvailableReceive: 2_230,
+		.requiredOptionalReceive: 371,
+		.onlyIfAvailableReceive: 2_283,
 		.requiredAlias: 1_097,
 		.onlyIfAvailableAlias: 1_033,
 		.aliasOfOnlyIfAvailableAlias: 78,
@@ -7080,8 +7080,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedTupleKeywordLabel: 173,
 		.forwardedPropertiesTypealiasArgument: 156,
 		.forwardedTupleBuilderReceivedByMockedType: 137,
-		.multipleRoots: 1_765,
-		.generateMock: 2_455,
+		.multipleRoots: 1_912,
+		.generateMock: 2_462,
 		.lazyCycle: 1_374,
 		.constantCycleCloser: 157,
 		.builderReceivedInsideItsTree: 179,
@@ -7256,15 +7256,15 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 5_248,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x5892AF524297D9FB),
-		mirroredPairCount: 4_733,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xD32945DE68E7FB94),
+		rootPairCount: 5_681,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0xBEDAD385901E9C61),
+		mirroredPairCount: 4_829,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x948F85F70C9472AC),
 		skipCounts: [
 			.requiredParameter: 1_666,
 			.twoFormsOfOneLabel: 182,
-			.requiredOptionalReceiveOfNonOptionalDeclaration: 5,
-			.requiredReceiveOfUncreatedAlias: 19,
+			.requiredOptionalReceiveOfNonOptionalDeclaration: 49,
+			.requiredReceiveOfUncreatedAlias: 40,
 		],
 		shapeCounts: [
 			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_784,
@@ -7276,14 +7276,14 @@ struct SafeDIToolGraphFuzzerTests {
 			.instanceOfPromotedWrapperPassedToMockedType: 4,
 			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 723,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 786,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 5_808,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x94535DAD56C1113E),
+		overridePairCount: 6_321,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x8890D3DE10089217),
 		overrideFieldKindCounts: [
-			.builder: 4_094,
-			.configuration: 1_714,
+			.builder: 4_230,
+			.configuration: 2_091,
 		],
 		pinnedPlacePairCount: 105,
 	)
@@ -8805,7 +8805,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// base corpus only. Seed 1329 failed the remedy oracle's seam fill shape that forwards a value into a lazy wrapper's type
 	/// instead, which the fill error's advice to declare that wrapper as an instantiator fixed. The hole draw's value outside a `@Sendable` function lands
 	/// in 338, 1042, 1072 and 1492, which the tool rejects, 338 and 1072 with that draw's error: 338 failed its inherited
-	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer.
+	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer. Seed 1649 fails the compile-time
+	/// assertions' shape in the base corpus only, whose partition no other corpus runs.
 	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [
 		7, 14, 21, 27, 35, 45, 51, 107, 114, 116, 157, 167, 204, 264, 265, 272, 281, 300, 309, 323, 338, 342, 364,
 		371, 381, 383, 431, 434, 455, 461, 476, 508, 525, 527, 545, 548, 567, 577, 593, 595, 617, 624, 628, 632, 634,
@@ -8813,7 +8814,7 @@ struct SafeDIToolGraphFuzzerTests {
 		948, 953, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_081, 1_084, 1_092, 1_139, 1_145, 1_147,
 		1_149, 1_163, 1_300, 1_301, 1_322, 1_329, 1_335, 1_352, 1_362, 1_366, 1_369, 1_372, 1_432, 1_433, 1_434, 1_436,
 		1_447, 1_464, 1_483, 1_492, 1_504, 1_521, 1_524, 1_525, 1_531, 1_559, 1_561, 1_563, 1_567, 1_572, 1_580, 1_602,
-		1_633, 1_646, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
+		1_633, 1_646, 1_649, 1_659, 1_664, 1_724, 1_742, 1_758, 1_784, 1_804, 1_805, 1_816, 1_832, 1_857, 1_864, 1_867, 1_896,
 		1_898, 1_935, 1_959, 1_970,
 	]
 
@@ -9630,7 +9631,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [2_787, 4_622],
+			seeds: [1_649, 2_787, 4_622],
 		),
 	]
 

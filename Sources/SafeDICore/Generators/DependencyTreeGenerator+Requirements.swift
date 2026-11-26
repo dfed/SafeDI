@@ -271,6 +271,8 @@ extension DependencyTreeGenerator {
 				reason: reason(forReceived: property),
 			))
 		}
+		// A dependency instantiated only if available that nothing fulfills is none of these: a mock binds it to `nil`, as
+		// production does (`DependencyTreeGenerator.unavailableDependency(_:)`).
 		for uncoveredParameter in parameters.flatUncoveredParameters {
 			requiredParameters.append(TypeRequirements.RequiredParameter(
 				label: uncoveredParameter.label,
