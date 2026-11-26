@@ -863,11 +863,9 @@ public actor DependencyTreeGenerator {
 								todaysTree = scopeGenerator
 							}
 						}
-					} else if let todaysTree {
-						tree = .perPath(todaysTree)
 					} else {
-						// Abandoned, and not laid out from a plan: today's tree, whatever its size.
-						let scopeGenerator = try record.createScopeGenerator(
+						// Today's tree, built again whatever its size where it was abandoned and no plan lays the root out.
+						let scopeGenerator = try todaysTree ?? record.createScopeGenerator(
 							in: table,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
