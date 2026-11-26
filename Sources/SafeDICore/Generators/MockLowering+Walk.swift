@@ -59,6 +59,7 @@ extension ScopeGenerator {
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
 		walk.sendableAutoclosureBindings = signature.sendableAutoclosureBindings
 		walk.rootOverrideNames = Set(signature.onlyIfAvailableOverrides.map(\.name))
+		walk.unavailableDependencyOverrideNames = signature.unavailableDependencyOverrideNames
 		let mockedTypeUncoveredProperties = instantiable.dependencies.compactMap { dependency -> Property? in
 			guard case .instantiated = dependency.source, signature.uncoveredProperties.contains(dependency.property) else { return nil }
 			return dependency.property
@@ -149,7 +150,9 @@ extension ScopeGenerator {
 		// receives beneath read.
 		// A public mock takes each as a parameter of `mock()` under the override's name, which binds it.
 		if instantiable.generateMock != .public {
-			bindingLines.append(contentsOf: signature.onlyIfAvailableOverrides.map { override in
+			// The override of a property instantiated only if available that nothing fulfills is bound by the type that declares
+			// the property, where production binds it.
+			bindingLines.append(contentsOf: signature.onlyIfAvailableOverrides.lazy.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] == nil }.map { override in
 				"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
 			})
 		}
@@ -337,6 +340,9 @@ extension MockLowering {
 		/// The names `mock()` binds its overrides of what its tree receives only if available under, which a builder
 		/// function beneath the root may declare again: the emitter names an override apart only at the root's level.
 		var rootOverrideNames = Set<String>()
+		/// The name of the override of each property instantiated only if available that nothing fulfills, which the type that
+		/// declares the property binds it from (`RootSignature.unavailableDependencyOverrideNames`).
+		var unavailableDependencyOverrideNames = [Property: String]()
 
 		/// The declarations built around the node the walk is at, by label, innermost last: a node of a label one of them
 		/// has binds it again in its own builder function, which hides the farther one, as Swift's lookup does.
@@ -671,15 +677,18 @@ extension MockLowering {
 			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = generator.scopeData {
 				return aliasNode(of: generator, property: property, fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, onlyIfAvailable: onlyIfAvailable, declarationReference: declarationReference, bindingName: bindingName, inScope: scope, indent: indent, lines: &lines)
 			} else if case let .property(_, property, _, _, _, _) = generator.scopeData, generator.isUnavailableDependency {
-				// A property instantiated only if available that nothing fulfills is bound to `nil`, as production binds it.
+				// A property instantiated only if available that nothing fulfills is bound where production binds it to `nil`,
+				// from the override `mock()` takes of it, so it reads no declaration above its type. It is `nil` inside a
+				// `@Sendable` builder function, which could not capture the override, and where `mock()` takes none.
+				let overrideName = isInsideSendableFunction ? nil : unavailableDependencyOverrideNames[property]
 				let binding = AliasBinding(
 					property: property,
 					bindingName: bindingName ?? property.label,
 					fulfillingProperty: property,
-					fulfillingName: property.label,
+					fulfillingName: overrideName.map { "\(ReservedName.mockOverridesParameterName).\($0)" } ?? property.label,
 					isErased: false,
 					isOnlyIfAvailable: true,
-					isBoundToNil: true,
+					isBoundToNil: overrideName == nil,
 					declarationReference: nil,
 				)
 				lines.append(binding.bindingLines(indent: indent))
