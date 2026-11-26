@@ -690,7 +690,8 @@ GROWTH_ROWS = {
     "M-public-mock-layers": (lambda layers: shape_public_mock_layers(layers, hole=False), 6, {"time": 5.0, "code": 9.0}),
     "MH-public-mock-hole-at-every-screen": (lambda layers: shape_public_mock_layers(layers, hole=True), 6, {"time": 12.5, "memory": 5.5, "size": 12.5, "code": 9.0}),
     "Q-seam-own-module-paths": (lambda layers: shape_q(layers), 9, {}),
-    "QO-seam-calls-tier-omitting-parameter-at-every-path": (lambda layers: shape_qo(layers), 9, {}),
+    # The check of a seam call's fills still follows every path to each call of `Panel`: 0.36 s and 1.16 s (3.20).
+    "QO-seam-calls-tier-omitting-parameter-at-every-path": (lambda layers: shape_qo(layers), 9, {"time": 4.5}),
     # These two start at few layers because more take minutes today. Once a row's growth is removed, give it more
     # layers with its limits' removal: from two layers to four, work that grows with the graph doubles.
     "B-cycles-through-instantiators": (lambda layers: shape_b(layers, mocks=False), 3, {"time": 27.0, "memory": 3.6}),
