@@ -200,21 +200,11 @@ struct ConstructionMemo {
 		}
 		guard let draw else {
 			// The places of one key differ mostly in what a cycle closes on or passes, the reads `answeredAlike(in:)` asks first,
-			// which `context` answers the same for every candidate: so each is answered once per lookup, and the candidates
-			// are found by following those answers (`Candidates.entries(answeredAlikeBy:)`) rather than by asking each one. A
-			// candidate whose recorded answer to one differs is never asked, as `answeredAlike(in:)` would set it aside at that
-			// read. The first candidate in the order they were stored that `context` answers alike is reused, as before.
-			var contextAnswers = [ConstructionLog.Read: ConstructionLog.Answer]()
-			func contextAnswer(_ read: ConstructionLog.Read) -> ConstructionLog.Answer {
-				if let answer = contextAnswers[read] {
-					return answer
-				} else {
-					let answer = context.answer(read).answer
-					contextAnswers[read] = answer
-					return answer
-				}
-			}
-			let entries = candidates.entries(answeredAlikeBy: contextAnswer)
+			// which `context` answers the same for every candidate: so the candidates are found by following those answers
+			// (`Candidates.entries(answeredAlikeBy:)`) rather than by asking each one. A candidate whose recorded answer to one
+			// differs is never asked, as `answeredAlike(in:)` would set it aside at that read. The first candidate in the order
+			// they were stored that `context` answers alike is reused, as before.
+			let entries = candidates.entries(answeredAlikeBy: { context.answer($0).answer })
 			GenerationWork.record(entries.count, by: .askingMemoCandidates)
 			for entry in entries {
 				if let reuse = reuse(of: entry) {

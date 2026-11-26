@@ -7036,7 +7036,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x953DA76ED58A3D60
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x4A19E441CED3943D
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7046,15 +7046,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xC6B732D2AA53AC05
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x5765175878DB985A
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x1FF29AEFB259C2C7
+	static let corpusFixtureHash: UInt64 = 0x4F4EA806B778AFA8
 
-	static let corpusPartitionHash: UInt64 = 0x5D933B50BDB4FF45
+	static let corpusPartitionHash: UInt64 = 0x81EC3D0151263B20
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7066,22 +7066,22 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_609,
+		.constantProperty: 2_616,
 		.erasedConstantProperty: 450,
-		.instantiatorProperty: 2_173,
+		.instantiatorProperty: 2_187,
 		.sendableInstantiatorProperty: 917,
 		.erasedInstantiatorProperty: 1_382,
 		.sendableErasedInstantiatorProperty: 493,
-		.lazilyInstantiatedProperty: 408,
+		.lazilyInstantiatedProperty: 555,
 		.sendableLazilyInstantiatedProperty: 149,
 		.erasedLazilyInstantiatedProperty: 216,
 		.forwardedLazilyInstantiatedProperty: 328,
 		.receivedLazilyInstantiatedInstance: 277,
 		.forwardedProperty: 1_686,
 		.optionalForwardedProperty: 889,
-		.requiredReceive: 2_487,
+		.requiredReceive: 2_501,
 		.requiredOptionalReceive: 371,
-		.onlyIfAvailableReceive: 2_283,
+		.onlyIfAvailableReceive: 2_287,
 		.requiredAlias: 1_097,
 		.onlyIfAvailableAlias: 1_033,
 		.aliasOfOnlyIfAvailableAlias: 78,
@@ -7111,9 +7111,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedTupleKeywordLabel: 173,
 		.forwardedPropertiesTypealiasArgument: 156,
 		.forwardedTupleBuilderReceivedByMockedType: 137,
-		.multipleRoots: 1_912,
-		.generateMock: 2_462,
-		.lazyCycle: 1_374,
+		.multipleRoots: 1_935,
+		.generateMock: 2_490,
+		.lazyCycle: 1_420,
 		.constantCycleCloser: 157,
 		.builderReceivedInsideItsTree: 179,
 		.sendableBuilderReceivedInsideItsTree: 68,
@@ -7128,7 +7128,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 267,
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 68,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 567,
+		.sendableAndNonSendableWrappers: 574,
 		.mockedTypeOnLazyCycle: 704,
 		.typesReceivingEachOtherOnlyIfAvailable: 298,
 		.labelReceivedAsInstanceAndAsInstantiator: 244,
@@ -7287,10 +7287,10 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 5_681,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0xBEDAD385901E9C61),
-		mirroredPairCount: 4_829,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x948F85F70C9472AC),
+		rootPairCount: 5_773,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x21D60FFE6D4DA739),
+		mirroredPairCount: 5_290,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x10EC6065CFF8BC10),
 		skipCounts: [
 			.requiredParameter: 1_666,
 			.twoFormsOfOneLabel: 182,
@@ -7310,13 +7310,14 @@ struct SafeDIToolGraphFuzzerTests {
 		drawnMocksMatchingOnlyAfterNormalizationCount: 945,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 6_321,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x8890D3DE10089217),
+		overridePairCount: 6_849,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xE1FAE895B9AEFAA1),
 		overrideFieldKindCounts: [
-			.builder: 4_230,
-			.configuration: 2_091,
+			.builder: 4_536,
+			.configuration: 2_313,
 		],
 		pinnedPlacePairCount: 105,
+		nestedCyclePairCount: 92,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
@@ -7413,14 +7414,14 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
 	/// derived on CI.
-	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 260, judgedWithNamed: 220, named: 2_140, conversions: 0, fills: 439)
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 260, judgedWithNamed: 220, named: 2_126, conversions: 0, fills: 439)
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
-	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 608, judgedWithNamed: 399, named: 1_075, conversions: 0, fills: 504)
+	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 640, judgedWithNamed: 399, named: 1_075, conversions: 0, fills: 504)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 681, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
 	static let seamCorpusFixtureHash: UInt64 = 0x73DB6B30F8B623A5
@@ -7589,15 +7590,15 @@ struct SafeDIToolGraphFuzzerTests {
 		.carrierDrawKeySplitFamilies: 38,
 		.carrierDrawLoopLevelReadByFill: 87,
 		.carrierDrawLoopLevelReadByFillThreeMembers: 40,
-		.optionalPlace: 0,
-		.optionalPlaceFilled: 0,
-		.optionalPlaceUnfilled: 0,
-		.optionalPlaceOnSeam: 0,
-		.optionalPlaceThroughInstantiator: 0,
-		.optionalPlacePassedUp: 0,
-		.optionalPlaceBesideRequiredPlace: 0,
-		.optionalPlaceReceivedRequired: 0,
-		.optionalPlaceSeamMocked: 0,
+		.optionalPlace: 161,
+		.optionalPlaceFilled: 98,
+		.optionalPlaceUnfilled: 63,
+		.optionalPlaceOnSeam: 49,
+		.optionalPlaceThroughInstantiator: 45,
+		.optionalPlacePassedUp: 58,
+		.optionalPlaceBesideRequiredPlace: 38,
+		.optionalPlaceReceivedRequired: 62,
+		.optionalPlaceSeamMocked: 16,
 		.carrierDrawMixedInnerSeamFillAndPassUp: 62,
 		.carrierDrawMixedInnerSeamFillAndPassUpThroughInstantiator: 30,
 		.carrierDrawUnequalSiblings: 72,
@@ -9003,6 +9004,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalPlacePublicMockReceived: 84,
 		.optionalPlacePublicMockPassedUp: 67,
 		.optionalPlacePublicMockPublicConsumer: 45,
+		.outerFulfillerPublicMockCall: 112,
 		.unbuildableValuePublicMockCall: 174,
 		.unbuildableValuePublicMockCallPublicTier: 174,
 		.carrierBeforeSiblingBeneathInternallyConfiguredChild: 26,
@@ -9056,7 +9058,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x61CCC49786C55235
+	static let publicMockCorpusFixtureHash: UInt64 = 0xBBFB2E79AE7331A2
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9118,7 +9120,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xA16ED3BEF7F33D2E
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x69CB45E5EEDAF5F7
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.

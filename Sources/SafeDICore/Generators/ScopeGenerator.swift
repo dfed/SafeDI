@@ -1120,7 +1120,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var foundCycleParameters = [CycleParameter]()
 		var unpassableCycleLabelsInTree = [UnpassableCycleLabel]()
+		// The labels declared between this scope and the scopes that close a cycle on it, where one does. They are declared
+		// between every other cycle-closing scope in this subtree and the scope it closes on, too (see below).
+		var redeclarationsOfOwnCycle = [String: CycleParameter.Redeclaration]()
 		if let property, let declaration, !isPropertyCycle, let redeclarations = cycleClosingRedeclaredLabels.removeRedeclarations(closedOn: declaration) {
+			redeclarationsOfOwnCycle = redeclarations
 			// The property's own label is no parameter: the function's body is passed `nil` for it wherever it is called,
 			// since every call is made inside the tree that builds a declaration of the label – the property itself where
 			// the function is declared, and the cycle-closing scope's own property where it closes the cycle. Nor is a label
@@ -1178,6 +1182,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			for parameter in cycleParameters {
 				redeclarations[parameter.property.label] = redeclarations[parameter.property.label].map { $0.preceding(parameter.redeclaration) } ?? parameter.redeclaration
+			}
+			// A scope in this subtree that closes a cycle on a scope above this one is built inside this scope's builder
+			// function, which the scopes closing a cycle on this scope call again: beneath every declaration between this
+			// scope and them. So the type that scope builds again is built beneath those declarations too, whether or not
+			// this scope's own tree receives their labels: `W` builds `U`, which builds `W` again and `P`, which declares
+			// `l` and builds `U` again, so the `W` that the `U` beneath `P` builds is beneath `P`'s `l`, though no scope on
+			// `W` -> `U` -> `W` declares it. Without them `W`'s function took no `l`, `U`'s tree therefore received none, and
+			// a receiver in `W`'s tree read the `l` above the first `W` wherever it was built.
+			for (label, redeclaration) in redeclarationsOfOwnCycle {
+				redeclarations[label] = redeclarations[label].map { $0.preceding(redeclaration) } ?? redeclaration
 			}
 			cycleClosingRedeclaredLabels.add(redeclarations)
 		}
@@ -4005,13 +4019,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The concrete type of every scope the tree rooted at this scope builds, this one's excepted.
 	func concreteTypesOfTree() async -> Set<TypeDescription> {
 		var concreteTypes = Set<TypeDescription>()
-		// A stack of its own, since a tree can be as deep as the module has types.
-		var generatorsToVisit = [self]
-		while let generator = generatorsToVisit.popLast() {
+		forEachGeneratorOfTree { generator in
 			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
 				concreteTypes.insert(instantiable.concreteInstantiable)
 			}
-			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
 		}
 		return concreteTypes
 	}
@@ -4023,9 +4034,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		// A stack of its own, since a tree can be as deep as the module has types.
-		var generatorsToVisit = [self]
-		while let generator = generatorsToVisit.popLast() {
+		forEachGeneratorOfTree { generator in
 			if case let .property(instantiable, property, _, _, _, _) = generator.scopeData {
 				let propertyType = property.typeDescription.asInstantiatedType
 				fulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
@@ -4034,9 +4043,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callingHandWrittenMock: buildingMock && instantiable.mockReturnTypeIsCompatible(withPropertyType: propertyType),
 				))
 			}
-			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
 		}
 		return fulfillers
+	}
+
+	/// Hands `visit` each generator of the tree rooted at this scope, this one first, once each, however many places of
+	/// the tree hold it: places share a generator (`ConstructionMemo`), whose subtree is the same at each of them, so a
+	/// walk that entered it again at every place visited a tree of layered screens once per path to each screen. The set
+	/// of generators visited is the one kind a walk may keep (`generator-design.md`, "Share work by construction"): it
+	/// holds an identifier per generator of the tree and dies with the walk. It keys a generator by identity, never by
+	/// the type it builds, so one type built for two properties, or two ways, is visited as each.
+	private func forEachGeneratorOfTree(_ visit: (ScopeGenerator) -> Void) {
+		var visitedGenerators = Set<ObjectIdentifier>()
+		// A stack of its own, since a tree can be as deep as the module has types.
+		var generatorsToVisit = [self]
+		var visitCount = 0
+		while let generator = generatorsToVisit.popLast() {
+			guard visitedGenerators.insert(ObjectIdentifier(generator)).inserted else { continue }
+			visitCount += 1
+			visit(generator)
+			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
+		}
+		GenerationWork.record(visitCount, by: .collectingTypesOfATree)
 	}
 
 	/// The types a mock rooted at this scope names that its declarations do not: those its tree builds, those a flat
