@@ -250,7 +250,7 @@ extension ScopeGenerator {
 		} else if walk.isV3 {
 			return Self.v3MockWithTree(of: instantiable, signature: signature, nodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, walk: &walk, context: context)
 		} else {
-			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords, configurationReadForms: walk.configurationReadForms)
 		}
 	}
 
@@ -500,6 +500,23 @@ extension MockLowering {
 		/// configuration: in a public mock, and in `.v3Unstable`, wherever the module configures the type publicly.
 		func buildsPublicly(_ type: TypeDescription) -> Bool {
 			buildsPublicMock || (isV3 && v3ConfigurationNames.isConfiguredPublicly(type))
+		}
+
+		/// The forms in which the walk reads each type's configuration through its read function, by concrete type, from
+		/// which the configuration declares those functions.
+		var configurationReadForms = [TypeDescription: Set<MockLowering.ConfigurationReadForm>]()
+
+		/// Whether a read of the configuration of `type` goes through the configuration's read function: in `.v3Unstable`,
+		/// where the configuration is one `ConfigurationRecord.configurationStruct(amongConfigurationsTypedSendable:readForms:)`
+		/// declares. A public configuration, and a public mock's root `SafeDIOverrides`, keep `?? .init()`, since this
+		/// walk's reads do not reach the writers that declare them.
+		func readsConfigurationThroughFunction(of type: TypeDescription) -> Bool {
+			isV3 && !buildsPublicly(type) && !v3ConfigurationNames.isConfiguredByPublicMockRoot(type)
+		}
+
+		/// Notes a read of the configuration of `type` in `form`, so that its configuration declares the read function.
+		mutating func noteConfigurationRead(of type: TypeDescription, form: MockLowering.ConfigurationReadForm) {
+			configurationReadForms[type, default: []].insert(form)
 		}
 
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
@@ -1422,6 +1439,7 @@ extension MockLowering {
 					fieldName: fieldLabel,
 					parentConfiguration: readsParentConfiguration ? configurationReads.last ?? nil : nil,
 					parentFieldIsOptional: isV3,
+					readsParentFieldThroughFunction: readsConfigurationThroughFunction(of: instantiable.concreteInstantiable),
 					nearestIsProvided: !ownFieldIsRead && nearestConfigurationIsDeclared,
 					pathKeyConfiguration: overrideReachable ? nodePathValue : nil,
 				)

@@ -127,15 +127,21 @@ extension MockLowering {
 		configurationType: TypeDescription?,
 		parentConfiguration: ValuePath?,
 		parentFieldIsOptional: Bool,
+		readsParentFieldThroughFunction: Bool,
 		nearestIsProvided: Bool,
 		staysOutsideSendableFunctions: Bool,
 	) -> [PassedArgument] {
 		guard let parameter = configurationParameter(ofPlaceOf: concreteType, builtWithHandWrittenMock: builtWithHandWrittenMock, configurationType: configurationType) else { return [] }
 		let value: ValuePath = if let parentConfiguration {
-			// A parent's optional field of a configuration struct is read as a configuration built afresh where it is `nil`.
-			parentFieldIsOptional && parameter.readsConfigurationStruct
-				? .spliced([.value(.member(label, of: parentConfiguration)), .text(" ?? .init()")])
-				: .member(label, of: parentConfiguration)
+			// A parent's optional field of a configuration struct is read as a configuration built afresh where it is `nil`,
+			// through the configuration's read function where it declares one.
+			if parentFieldIsOptional, parameter.readsConfigurationStruct {
+				readsParentFieldThroughFunction
+					? configurationRead(.member(label, of: parentConfiguration), of: parameter.type)
+					: .spliced([.value(.member(label, of: parentConfiguration)), .text(" ?? .init()")])
+			} else {
+				.member(label, of: parentConfiguration)
+			}
 		} else {
 			parameter.read(isProvided: nearestIsProvided)
 		}
@@ -179,6 +185,8 @@ extension MockLowering {
 		/// Whether the parent's field of the place is optional, as every field of a `.v3Unstable` configuration is: a field
 		/// of a configuration struct is then read as a configuration built afresh where it is `nil`.
 		let parentFieldIsOptional: Bool
+		/// Whether that read goes through the configuration's read function (`MockLowering.Walk.readsConfigurationThroughFunction(of:)`).
+		let readsParentFieldThroughFunction: Bool
 		/// Whether the place, with no field in its parent's configuration, reads the overrides of the nearest place of its
 		/// type around it built the same way.
 		let nearestIsProvided: Bool
@@ -219,6 +227,7 @@ extension MockLowering {
 			configurationType: configurationType,
 			parentConfiguration: context.parentConfiguration,
 			parentFieldIsOptional: context.parentFieldIsOptional,
+			readsParentFieldThroughFunction: context.readsParentFieldThroughFunction,
 			nearestIsProvided: context.nearestIsProvided,
 			staysOutsideSendableFunctions: staysOutsideSendableFunctions,
 		)
@@ -259,6 +268,9 @@ extension MockLowering.Walk {
 		else { return }
 		let relative = MockLowering.relativeConfiguration(of: node, context: context, alternatives: record.alternatives, hasFunction: record.hasFunction, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
 		record.passedArguments = relative.passedArguments
+		if context.parentConfiguration != nil, context.parentFieldIsOptional, context.readsParentFieldThroughFunction, node.hasConfiguration {
+			noteConfigurationRead(of: node.instantiable.concreteInstantiable, form: .value)
+		}
 		// A place whose `@Sendable` function the walk starts reading overrides into locals for is handed a `Sendable` member
 		// of a configuration that is not, which its call binds before it calls, as the walk binds the locals before the
 		// function, so no `@Sendable` closure around the call captures the configuration.

@@ -973,12 +973,12 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		        func __safeDI_cache(__safeDI_Cache_configuration: __safeDI_App_Cache_MockConfiguration) -> Cache {
 		            if let safeDIBuilder = __safeDI_Cache_configuration.safeDIBuilder { safeDIBuilder(__safeDI_Cache_configuration.capacity, __safeDI_Cache_configuration.name) } else { Cache(capacity: __safeDI_Cache_configuration.capacity, name: __safeDI_Cache_configuration.name) }
 		        }
-		        let cache: Cache = __safeDI_cache(__safeDI_Cache_configuration: safeDIOverrides.cache ?? .init())
+		        let cache: Cache = __safeDI_cache(__safeDI_Cache_configuration: __safeDI_App_Cache_MockConfiguration.__safeDI_read(safeDIOverrides.cache))
 		        func __safeDI_screen(__safeDI_Screen_configuration: __safeDI_App_Screen_MockConfiguration) -> Screen {
-		            let cache: Cache = __safeDI_cache(__safeDI_Cache_configuration: __safeDI_Screen_configuration.cache ?? .init())
+		            let cache: Cache = __safeDI_cache(__safeDI_Cache_configuration: __safeDI_App_Cache_MockConfiguration.__safeDI_read(__safeDI_Screen_configuration.cache))
 		            return if let safeDIBuilder = __safeDI_Screen_configuration.safeDIBuilder { safeDIBuilder(cache) } else { Screen(cache: cache) }
 		        }
-		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: safeDIOverrides.screen ?? .init())
+		        let screen: Screen = __safeDI_screen(__safeDI_Screen_configuration: __safeDI_App_Screen_MockConfiguration.__safeDI_read(safeDIOverrides.screen))
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(cache, screen) } else { Home(cache: cache, screen: screen) }
 		    }
 		}
@@ -1050,6 +1050,8 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		    var safeDIBuilder: ((Int, String?) -> Cache)? { __safeDI_storage.safeDIBuilder }
 
+		    static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
+
 		    private let __safeDI_storage: __safeDI_Storage
 
 		    private final class __safeDI_Storage {
@@ -1091,6 +1093,8 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    var cache: __safeDI_App_Cache_MockConfiguration? { __safeDI_storage.cache }
 		    /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		    var safeDIBuilder: ((Cache) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
 
 		    private let __safeDI_storage: __safeDI_Storage
 
@@ -1391,7 +1395,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		            }
 		            return if let safeDIBuilder = __safeDI_Detail_configuration.safeDIBuilder { safeDIBuilder(listBuilder) } else { Detail(listBuilder: listBuilder) }
 		        }
-		        let list: List = __safeDI_list(__safeDI_List_configuration: safeDIOverrides.list ?? .init(), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations())
+		        let list: List = __safeDI_list(__safeDI_List_configuration: __safeDI_App_List_MockConfiguration.__safeDI_read(safeDIOverrides.list), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations())
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(list) } else { Home(list: list) }
 		    }
 		}
@@ -1454,6 +1458,8 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		    var safeDIBuilder: ((Instantiator<Detail>) -> List)? { __safeDI_storage.safeDIBuilder }
 
+		    static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
+
 		    private let __safeDI_storage: __safeDI_Storage
 
 		    private final class __safeDI_Storage {
@@ -1487,6 +1493,8 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		    var listBuilder: __safeDI_App_List_MockConfiguration? { __safeDI_storage.listBuilder }
 		    /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		    var safeDIBuilder: ((Instantiator<List>) -> Detail)? { __safeDI_storage.safeDIBuilder }
+
+		    static func __safeDI_read(_ value: Self?) -> Self { value ?? Self() }
 
 		    private let __safeDI_storage: __safeDI_Storage
 
@@ -1942,7 +1950,7 @@ struct SafeDIToolPublicMockV3APITests: ~Copyable {
 		            }
 		            return if let safeDIBuilder = __safeDI_Ping_configuration.safeDIBuilder { safeDIBuilder(pongBuilder) } else { Ping(pongBuilder: pongBuilder) }
 		        }
-		        let ping: Ping = __safeDI_ping(__safeDI_Ping_configuration: safeDIOverrides.ping ?? .init(), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations())
+		        let ping: Ping = __safeDI_ping(__safeDI_Ping_configuration: Ping.SafeDIOverrides.__safeDI_read(safeDIOverrides.ping), __safeDI_nearestConfigurations: __safeDI_NearestConfigurations())
 		        return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(ping) } else { Root(ping: ping) }
 		    }
 		}

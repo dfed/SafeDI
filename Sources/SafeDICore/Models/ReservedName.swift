@@ -201,6 +201,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// `mockOverridesParameterName`.
 	static let mockOverridesTypeName = "SafeDIOverrides"
 
+	/// The name of the static function a `.v3Unstable` configuration declares for each form of read the module makes of it
+	/// (`MockLowering.ConfigurationReadForm`), which a call hands its configuration through in place of an operator, which
+	/// cost the type checker an overload disjunction per read.
+	static let configurationReadFunctionName = "\(builderFunctionNamePrefix)read"
+
 	/// The name of the struct a seam's scope type declares for each of its levels, generic over what the builder returns:
 	/// one stored function per member, each called where the seam binds that level.
 	static let builderStructTypeName = "\(builderFunctionNamePrefix)Builder"
