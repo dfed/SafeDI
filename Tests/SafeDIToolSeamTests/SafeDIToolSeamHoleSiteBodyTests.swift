@@ -74,7 +74,6 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		            self.lazyPanel = lazyPanel
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(panel: .init(__safeDI_noScope: __safeDI_builder), panelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) }, lazyPanel: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
@@ -88,7 +87,6 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		            self.api = api
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(api: { __safeDI_builder() })
 		        }

@@ -67,7 +67,6 @@ struct SafeDIToolPublicMockOverridesOrderTests: ~Copyable {
 		            self.payments = payments
 		        }
 
-		        @_alwaysEmitIntoClient
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		            self.init(payments: { __safeDI_builder() })
 		        }
